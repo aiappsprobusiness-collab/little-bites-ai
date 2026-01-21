@@ -260,7 +260,7 @@ export function useShoppingLists() {
       // Создать или получить активный список
       let listId = activeList?.id;
       if (!listId) {
-        const newList = await createList.mutateAsync();
+        const newList = await createList.mutateAsync('Список покупок');
         listId = newList.id;
       }
 

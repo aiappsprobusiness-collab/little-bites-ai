@@ -79,7 +79,7 @@ export default function ShoppingPage() {
   const handleAddItem = async (name: string, amount: string, unit: string, category: string) => {
     try {
       if (!activeList) {
-        await createList();
+        await createList("Список покупок");
       }
       await addItem({
         name,
@@ -154,7 +154,7 @@ export default function ShoppingPage() {
 
   // Создать список, если его нет
   if (!activeList && !isLoadingList) {
-    createList().catch(() => {});
+    createList("Список покупок").catch(() => {});
   }
 
   return (

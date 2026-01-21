@@ -161,6 +161,7 @@ export default function RecipeEditPage() {
           instruction: step.instruction.trim(),
           step_number: index + 1,
           duration_minutes: step.duration ? parseInt(step.duration) : null,
+          image_url: null,
         }));
 
       if (isEditing && existingRecipe) {
