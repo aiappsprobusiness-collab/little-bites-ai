@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Home, Camera, Calendar, ShoppingCart, User } from "lucide-react";
+import { Home, Camera, Calendar, MessageCircle, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -7,7 +7,7 @@ const navItems = [
   { icon: Home, label: "Главная", path: "/" },
   { icon: Calendar, label: "План", path: "/meal-plan" },
   { icon: Camera, label: "", path: "/scan", isMain: true },
-  { icon: ShoppingCart, label: "Покупки", path: "/shopping" },
+  { icon: MessageCircle, label: "Чат", path: "/chat" },
   { icon: User, label: "Профиль", path: "/profile" },
 ];
 
