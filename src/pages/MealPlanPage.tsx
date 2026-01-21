@@ -331,24 +331,32 @@ export default function MealPlanPage() {
   );
 }
 
+// Тип приема пищи для диалога
+interface MealTypeOption {
+  id: string;
+  label: string;
+  emoji: string;
+  time: string;
+}
+
 // Диалог для добавления блюда
 function AddMealDialog({
   recipes,
-  mealTypes,
+  mealTypes: mealTypesOptions,
   selectedMealType,
   onSelectMealType,
   onAdd,
   isLoading,
 }: {
   recipes: any[];
-  mealTypes: typeof mealTypes;
+  mealTypes: MealTypeOption[];
   selectedMealType: string | null;
   onSelectMealType: (type: string) => void;
   onAdd: (recipeId: string, mealType: string) => void;
   isLoading: boolean;
 }) {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
-  const mealType = selectedMealType || mealTypes[0].id;
+  const mealType = selectedMealType || mealTypesOptions[0].id;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -373,7 +381,7 @@ function AddMealDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {mealTypes.map((mt) => (
+              {mealTypesOptions.map((mt) => (
                 <SelectItem key={mt.id} value={mt.id}>
                   {mt.emoji} {mt.label}
                 </SelectItem>

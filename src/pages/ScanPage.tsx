@@ -179,6 +179,7 @@ export default function ScanPage() {
         instruction: step,
         step_number: index + 1,
         duration_minutes: null,
+        image_url: null,
       }));
 
       const newRecipe = await createRecipe({
