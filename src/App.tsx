@@ -12,6 +12,7 @@ import MealPlanPage from "./pages/MealPlanPage";
 import ShoppingPage from "./pages/ShoppingPage";
 import RecipePage from "./pages/RecipePage";
 import RecipeEditPage from "./pages/RecipeEditPage";
+import ChatPage from "./pages/ChatPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 
@@ -87,6 +88,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <RecipeEditPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat"
+              element={
+                <ProtectedRoute>
+                  <ChatPage />
                 </ProtectedRoute>
               }
             />

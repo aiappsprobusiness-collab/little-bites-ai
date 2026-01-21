@@ -14,42 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_history: {
+        Row: {
+          child_id: string | null
+          created_at: string
+          id: string
+          message: string
+          message_type: string | null
+          response: string | null
+          user_id: string
+        }
+        Insert: {
+          child_id?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          message_type?: string | null
+          response?: string | null
+          user_id: string
+        }
+        Update: {
+          child_id?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          message_type?: string | null
+          response?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_history_child_id_fkey"
+            columns: ["child_id"]
+            isOneToOne: false
+            referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       children: {
         Row: {
           allergies: string[] | null
           avatar_url: string | null
           birth_date: string
           created_at: string
+          diet_goals: string[] | null
           dislikes: string[] | null
+          height: number | null
           id: string
           name: string
           preferences: string[] | null
           updated_at: string
           user_id: string
+          weight: number | null
         }
         Insert: {
           allergies?: string[] | null
           avatar_url?: string | null
           birth_date: string
           created_at?: string
+          diet_goals?: string[] | null
           dislikes?: string[] | null
+          height?: number | null
           id?: string
           name: string
           preferences?: string[] | null
           updated_at?: string
           user_id: string
+          weight?: number | null
         }
         Update: {
           allergies?: string[] | null
           avatar_url?: string | null
           birth_date?: string
           created_at?: string
+          diet_goals?: string[] | null
           dislikes?: string[] | null
+          height?: number | null
           id?: string
           name?: string
           preferences?: string[] | null
           updated_at?: string
           user_id?: string
+          weight?: number | null
         }
         Relationships: []
       }
@@ -111,6 +158,7 @@ export type Database = {
           display_name: string | null
           id: string
           notifications_enabled: boolean | null
+          subscription_status: string | null
           telegram_chat_id: string | null
           updated_at: string
           user_id: string
@@ -121,6 +169,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           notifications_enabled?: boolean | null
+          subscription_status?: string | null
           telegram_chat_id?: string | null
           updated_at?: string
           user_id: string
@@ -131,6 +180,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           notifications_enabled?: boolean | null
+          subscription_status?: string | null
           telegram_chat_id?: string | null
           updated_at?: string
           user_id?: string
@@ -222,6 +272,8 @@ export type Database = {
           id: string
           image_url: string | null
           is_favorite: boolean | null
+          is_premium_feature: boolean | null
+          macros: Json | null
           max_age_months: number | null
           min_age_months: number | null
           proteins: number | null
@@ -244,6 +296,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_favorite?: boolean | null
+          is_premium_feature?: boolean | null
+          macros?: Json | null
           max_age_months?: number | null
           min_age_months?: number | null
           proteins?: number | null
@@ -266,6 +320,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_favorite?: boolean | null
+          is_premium_feature?: boolean | null
+          macros?: Json | null
           max_age_months?: number | null
           min_age_months?: number | null
           proteins?: number | null
@@ -386,11 +442,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_usage: {
+        Row: {
+          created_at: string
+          date: string
+          generations: number
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          generations?: number
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          generations?: number
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      check_usage_limit: { Args: { _user_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -398,6 +482,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      increment_usage: { Args: { _user_id: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"
