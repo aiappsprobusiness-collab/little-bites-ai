@@ -10,6 +10,8 @@ import ScanPage from "./pages/ScanPage";
 import ProfilePage from "./pages/ProfilePage";
 import MealPlanPage from "./pages/MealPlanPage";
 import ShoppingPage from "./pages/ShoppingPage";
+import RecipePage from "./pages/RecipePage";
+import RecipeEditPage from "./pages/RecipeEditPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 
@@ -61,6 +63,30 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ShoppingPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recipe/:id"
+              element={
+                <ProtectedRoute>
+                  <RecipePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recipe/:id/edit"
+              element={
+                <ProtectedRoute>
+                  <RecipeEditPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recipe/new"
+              element={
+                <ProtectedRoute>
+                  <RecipeEditPage />
                 </ProtectedRoute>
               }
             />

@@ -1,8 +1,10 @@
-# Welcome to your Lovable project
+# Little Bites AI
+
+AI-powered meal planning application for children with personalized recipes, meal plans, and shopping lists.
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID (update with your actual project ID)
 
 ## How can I edit this code?
 
@@ -10,7 +12,7 @@ There are several ways of editing your application.
 
 **Use Lovable**
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) (update with your actual project ID) and start prompting.
 
 Changes made via Lovable will be committed automatically to this repo.
 
@@ -59,10 +61,24 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Supabase (authentication & database)
+- React Router (routing)
+- React Query (data fetching)
+- **GigaChat AI** (image analysis, recipe generation, recommendations)
+- Capacitor (mobile apps for Android/iOS)
+
+## AI Features (GigaChat)
+
+This app uses GigaChat AI for:
+- 📸 **Image Analysis** - Recognize products from photos
+- 👨‍🍳 **Recipe Generation** - Create recipes based on products, child age, and allergies
+- 💡 **Personalized Recommendations** - Get AI-powered nutrition advice
+
+See [GIGACHAT_SETUP.md](./GIGACHAT_SETUP.md) for setup instructions.
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) (update with your actual project ID) and click on Share -> Publish.
 
 ## Can I connect a custom domain to my Lovable project?
 
