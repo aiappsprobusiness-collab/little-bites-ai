@@ -4,11 +4,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { SelectedChildProvider } from "@/contexts/SelectedChildContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import ScanPage from "./pages/ScanPage";
 import ProfilePage from "./pages/ProfilePage";
 import MealPlanPage from "./pages/MealPlanPage";
+import GeneratePlanPage from "./pages/GeneratePlanPage";
 import ShoppingPage from "./pages/ShoppingPage";
 import RecipePage from "./pages/RecipePage";
 import RecipeEditPage from "./pages/RecipeEditPage";
@@ -23,9 +25,10 @@ const App = () => (
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
-          <Toaster />
-          <Sonner />
-          <Routes>
+          <SelectedChildProvider>
+            <Toaster />
+            <Sonner />
+            <Routes>
             <Route path="/auth" element={<AuthPage />} />
             <Route
               path="/"
@@ -56,6 +59,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <MealPlanPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/generate-plan"
+              element={
+                <ProtectedRoute>
+                  <GeneratePlanPage />
                 </ProtectedRoute>
               }
             />
@@ -99,9 +110,10 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </SelectedChildProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
