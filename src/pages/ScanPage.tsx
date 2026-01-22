@@ -159,7 +159,7 @@ export default function ScanPage() {
           min_age_months: ageMonths || 6,
           max_age_months: ageMonths ? ageMonths + 12 : 36,
           child_id: selectedChild?.id || null,
-          image_url: imagePreview || null,
+          image_url: null, // Не сохраняем фото холодильника - используем тематические заглушки
         },
         ingredients,
         steps,
