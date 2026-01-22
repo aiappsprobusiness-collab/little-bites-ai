@@ -261,21 +261,6 @@ export default function ChatPage() {
 
         {/* Input area */}
         <div className="px-4 py-3 border-t border-border/50 bg-background">
-          {/* Clear history button */}
-          {messages.length > 0 && (
-            <div className="flex justify-center mb-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearHistory}
-                className="text-xs text-muted-foreground"
-              >
-                <Trash2 className="w-3 h-3 mr-1" />
-                Очистить историю
-              </Button>
-            </div>
-          )}
-
           <div className="flex gap-2 items-end">
             <div className="flex-1 relative">
               <Textarea
@@ -307,6 +292,21 @@ export default function ChatPage() {
               )}
             </Button>
           </div>
+
+          {/* Clear history button */}
+          {messages.length > 0 && (
+            <div className="flex justify-center mt-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearHistory}
+                className="text-xs text-muted-foreground"
+              >
+                <Trash2 className="w-3 h-3 mr-1" />
+                Очистить историю
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
