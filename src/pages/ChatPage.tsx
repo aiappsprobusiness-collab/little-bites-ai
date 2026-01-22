@@ -162,21 +162,7 @@ export default function ChatPage() {
   return (
     <MobileLayout 
       title="AI Помощник"
-      headerRight={
-        <div className="flex items-center gap-2">
-          {messages.length > 0 && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClearHistory}
-              className="h-8 w-8 text-muted-foreground"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
-          <UsageBadge onClick={() => setShowPaywall(true)} />
-        </div>
-      }
+      headerRight={<UsageBadge onClick={() => setShowPaywall(true)} />}
     >
       <div className="flex flex-col h-[calc(100vh-140px)]">
         {/* Child selector dropdown */}
@@ -311,19 +297,31 @@ export default function ChatPage() {
                 rows={1}
               />
             </div>
-            <Button
-              variant="mint"
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim() || isChatting}
-              className="h-[52px] w-[52px] rounded-2xl flex-shrink-0"
-            >
-              {isChatting ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="mint"
+                size="icon"
+                onClick={handleSend}
+                disabled={!input.trim() || isChatting}
+                className="h-[52px] w-[52px] rounded-2xl flex-shrink-0"
+              >
+                {isChatting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </Button>
+              {messages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleClearHistory}
+                  className="h-10 w-[52px] rounded-xl text-muted-foreground"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               )}
-            </Button>
+            </div>
           </div>
         </div>
       </div>
