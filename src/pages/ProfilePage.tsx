@@ -13,13 +13,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X, ImagePlus } from "lucide-react";
+import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { useChildren } from "@/hooks/useChildren";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useToast } from "@/hooks/use-toast";
-import { useRecipeImage } from "@/hooks/useRecipeImage";
+
 import type { Tables } from "@/integrations/supabase/types";
 
 const allergyOptions = [
@@ -42,19 +42,19 @@ export default function ProfilePage() {
   } = useChildren();
   const { recipes } = useRecipes();
   const { getMealPlans } = useMealPlans();
-  const { generateImagesForRecipes, isGenerating } = useRecipeImage();
+  
 
   const [selectedChildId, setSelectedChildId] = useState<string | null>(children[0]?.id || null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
-  const [imageProgress, setImageProgress] = useState<{ current: number; total: number } | null>(null);
+  
 
   const selectedChild = children.find(c => c.id === selectedChildId);
 
   // Статистика для выбранного ребенка
   const childRecipes = selectedChild ? recipes.filter(r => r.child_id === selectedChild.id) : [];
   const favoriteRecipes = childRecipes.filter(r => r.is_favorite).length;
-  const recipesWithoutImages = recipes.filter(r => !r.image_url || r.image_url.includes('unsplash'));
+  
   
   // Планы питания (примерно, можно улучшить)
   const today = new Date();
@@ -65,31 +65,6 @@ export default function ProfilePage() {
   const { data: mealPlans = [] } = getMealPlans(weekStart, weekEnd);
   const childMealPlans = selectedChild ? mealPlans.filter(mp => mp.child_id === selectedChild.id) : [];
 
-  const handleGenerateImages = async () => {
-    if (recipesWithoutImages.length === 0) {
-      toast({
-        title: "Все изображения уже есть",
-        description: "У всех рецептов уже есть изображения",
-      });
-      return;
-    }
-
-    setImageProgress({ current: 0, total: recipesWithoutImages.length });
-    
-    await generateImagesForRecipes(
-      recipesWithoutImages.map(r => ({ id: r.id, title: r.title })),
-      (current, total) => setImageProgress({ current, total })
-    );
-
-    setImageProgress(null);
-    toast({
-      title: "Изображения сгенерированы!",
-      description: `Обновлено ${recipesWithoutImages.length} рецептов`,
-    });
-    
-    // Refresh recipes
-    window.location.reload();
-  };
 
   const handleCreateChild = () => {
     setEditingChild(null);
@@ -357,56 +332,6 @@ export default function ProfilePage() {
               </motion.div>
             )}
 
-            {/* Generate Images Button */}
-            {recipesWithoutImages.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.28 }}
-              >
-                <Card variant="mint">
-                  <CardContent className="p-5">
-                    <div className="flex items-center gap-3 mb-3">
-                      <ImagePlus className="w-5 h-5 text-primary" />
-                      <div className="flex-1">
-                        <h3 className="font-bold">Сгенерировать изображения</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {recipesWithoutImages.length} рецептов без фото
-                        </p>
-                      </div>
-                    </div>
-                    
-                    {imageProgress && (
-                      <div className="mb-3 space-y-2">
-                        <Progress value={(imageProgress.current / imageProgress.total) * 100} />
-                        <p className="text-xs text-center text-muted-foreground">
-                          {imageProgress.current} из {imageProgress.total}
-                        </p>
-                      </div>
-                    )}
-                    
-                    <Button
-                      variant="mint"
-                      className="w-full"
-                      onClick={handleGenerateImages}
-                      disabled={isGenerating}
-                    >
-                      {isGenerating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Генерация...
-                        </>
-                      ) : (
-                        <>
-                          <ImagePlus className="w-4 h-4 mr-2" />
-                          Сгенерировать AI фото
-                        </>
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
 
             {/* Delete Button */}
             <motion.div
