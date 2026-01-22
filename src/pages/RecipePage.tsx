@@ -82,22 +82,30 @@ export default function RecipePage() {
   const steps = (recipe as any).steps || [];
 
   return (
-    <MobileLayout title={recipe.title}>
-      <div className="space-y-6">
-        {/* Recipe Image */}
-        {recipe.image_url && (
-          <div className="relative aspect-[4/3] overflow-hidden -mx-4">
-            <img
-              src={recipe.image_url}
-              alt={recipe.title}
-              className="w-full h-full object-cover"
-            />
+    <MobileLayout title="Рецепт">
+      <div className="flex flex-col h-full overflow-y-auto px-4 py-6 space-y-6">
+        {/* Название рецепта */}
+        <section>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-bold text-foreground">{recipe.title}</h1>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleFavorite}
+              className="flex-shrink-0"
+            >
+              <Heart
+                className={`w-5 h-5 ${
+                  recipe.is_favorite
+                    ? "fill-peach-dark text-peach-dark"
+                    : "text-muted-foreground"
+                }`}
+              />
+            </Button>
           </div>
-        )}
-
-        <div className="px-4 space-y-6">
-          {/* Recipe Info */}
-          <div className="flex flex-wrap gap-4 text-sm">
+          
+          {/* Мета-информация */}
+          <div className="flex flex-wrap gap-4 text-sm mt-3">
             {recipe.cooking_time_minutes && (
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-muted-foreground" />
@@ -116,41 +124,28 @@ export default function RecipePage() {
                 <span>{recipe.rating}/5</span>
               </div>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleToggleFavorite}
-              className="ml-auto"
-            >
-              <Heart
-                className={`w-5 h-5 ${
-                  recipe.is_favorite
-                    ? "fill-peach-dark text-peach-dark"
-                    : "text-muted-foreground"
-                }`}
-              />
-            </Button>
           </div>
 
-          {/* Description */}
           {recipe.description && (
-            <p className="text-muted-foreground">{recipe.description}</p>
+            <p className="text-muted-foreground mt-3">{recipe.description}</p>
           )}
+        </section>
 
-          {/* Ingredients */}
-          {ingredients.length > 0 && (
+        {/* Ингредиенты */}
+        {ingredients.length > 0 && (
+          <section>
+            <h2 className="text-lg font-bold text-foreground mb-3">Ингредиенты</h2>
             <Card variant="mint">
-              <CardContent className="p-5">
-                <h2 className="text-lg font-bold mb-4">Ингредиенты</h2>
+              <CardContent className="p-4">
                 <ul className="space-y-2">
                   {ingredients.map((ing: any, index: number) => (
-                    <li key={index} className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-primary" />
-                      <span className="flex-1">
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+                      <span>
                         {ing.name}
                         {ing.amount && ing.unit && (
-                          <span className="text-muted-foreground ml-2">
-                            - {ing.amount} {ing.unit}
+                          <span className="text-muted-foreground ml-1">
+                            — {ing.amount} {ing.unit}
                           </span>
                         )}
                       </span>
@@ -159,20 +154,22 @@ export default function RecipePage() {
                 </ul>
               </CardContent>
             </Card>
-          )}
+          </section>
+        )}
 
-          {/* Steps */}
-          {steps.length > 0 && (
+        {/* Шаги приготовления */}
+        {steps.length > 0 && (
+          <section className="pb-6">
+            <h2 className="text-lg font-bold text-foreground mb-3">Шаги приготовления</h2>
             <Card variant="default">
-              <CardContent className="p-5">
-                <h2 className="text-lg font-bold mb-4">Приготовление</h2>
+              <CardContent className="p-4">
                 <ol className="space-y-4">
                   {steps.map((step: any, index: number) => (
-                    <li key={index} className="flex gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
+                    <li key={index} className="flex gap-3">
+                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
                         {step.step_number || index + 1}
                       </div>
-                      <div className="flex-1 pt-1">
+                      <div className="flex-1 pt-0.5">
                         <p>{step.instruction}</p>
                         {step.duration_minutes && (
                           <p className="text-sm text-muted-foreground mt-1">
@@ -185,9 +182,8 @@ export default function RecipePage() {
                 </ol>
               </CardContent>
             </Card>
-          )}
-
-        </div>
+          </section>
+        )}
       </div>
     </MobileLayout>
   );
