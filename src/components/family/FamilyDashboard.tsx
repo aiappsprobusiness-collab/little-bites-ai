@@ -67,11 +67,11 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
       variants={container}
       initial="hidden"
       animate="show"
-      className="space-y-5"
+      className="space-y-4"
     >
       {/* Child Carousel */}
       <motion.div variants={item}>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-bold flex items-center gap-2">
             👨‍👩‍👧‍👦 Семья
             <span className="text-sm font-normal text-muted-foreground">

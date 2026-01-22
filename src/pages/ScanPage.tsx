@@ -206,15 +206,15 @@ export default function ScanPage() {
 
   return (
     <MobileLayout title="Сканировать продукты">
-      <div className="px-4 pt-6 space-y-6">
+      <div className="px-4 pt-4 space-y-4">
         {step === "capture" && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="space-y-6"
+            className="space-y-4"
           >
             {/* Camera Preview Area */}
-            <div className="relative aspect-[3/4] rounded-3xl bg-gradient-to-br from-mint-light to-secondary overflow-hidden border-2 border-primary/20">
+            <div className="relative aspect-[4/5] rounded-3xl bg-gradient-to-br from-mint-light to-secondary overflow-hidden border-2 border-primary/20">
               {imagePreview ? (
                 <img
                   src={imagePreview}

@@ -108,7 +108,7 @@ export default function HomePage() {
 
   return (
     <MobileLayout>
-      <div className="px-4 pt-6 space-y-6">
+      <div className="px-4 pt-4 space-y-4">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
