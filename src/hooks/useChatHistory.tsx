@@ -40,10 +40,24 @@ export function useChatHistory(childId?: string) {
     await refetch();
   };
 
+  const deleteMessage = async (messageId: string) => {
+    if (!user) return;
+    
+    const { error } = await supabase
+      .from('chat_history')
+      .delete()
+      .eq('id', messageId)
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+    await refetch();
+  };
+
   return {
     messages,
     isLoading,
     refetch,
     clearHistory,
+    deleteMessage,
   };
 }
