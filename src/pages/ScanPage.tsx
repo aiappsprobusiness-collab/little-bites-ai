@@ -9,7 +9,6 @@ import { useDeepSeek } from "@/hooks/useDeepSeek";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
-import { isDeepSeekConfigured } from "@/services/deepseek";
 
 export default function ScanPage() {
   const navigate = useNavigate();
@@ -34,25 +33,6 @@ export default function ScanPage() {
       setImagePreview(e.target?.result as string);
     };
     reader.readAsDataURL(file);
-
-    // Если DeepSeek не настроен, используем mock данные
-    if (!isDeepSeekConfigured()) {
-      toast({
-        title: "DeepSeek не настроен",
-        description: "Используются тестовые данные. Добавьте VITE_DEEPSEEK_API_KEY в .env файл",
-        variant: "default",
-      });
-      
-      // Используем mock данные
-      const mockProducts = [
-        { name: "Тыква", emoji: "🎃", confirmed: true },
-        { name: "Яблоко", emoji: "🍎", confirmed: true },
-        { name: "Морковь", emoji: "🥕", confirmed: true },
-      ];
-      setProducts(mockProducts);
-      setStep("confirm");
-      return;
-    }
 
     // Начинаем анализ
     setStep("detecting");
@@ -93,7 +73,7 @@ export default function ScanPage() {
       if (error.message) {
         errorMessage = error.message;
         if (error.message.includes('токен') || error.message.includes('token') || error.message.includes('401') || error.message.includes('403')) {
-          errorMessage = "Ошибка авторизации DeepSeek. Проверьте API ключ в .env файле.";
+          errorMessage = "Ошибка авторизации DeepSeek. Проверьте секрет DEEPSEEK_API_KEY в Supabase.";
         } else if (error.message.includes('CORS') || error.message.includes('network')) {
           errorMessage = "Проблема с подключением. Проверьте интернет.";
         }
@@ -141,16 +121,6 @@ export default function ScanPage() {
         description: "Выберите хотя бы один продукт",
       });
       setStep("confirm");
-      return;
-    }
-
-    // Если DeepSeek не настроен, переходим на страницу создания рецепта вручную
-    if (!isDeepSeekConfigured()) {
-      navigate("/recipe/new", {
-        state: {
-          sourceProducts: confirmedProducts,
-        }
-      });
       return;
     }
 
@@ -210,7 +180,7 @@ export default function ScanPage() {
         errorMessage = error.message;
         // Улучшаем сообщения для пользователя
         if (error.message.includes('токен') || error.message.includes('token') || error.message.includes('401') || error.message.includes('403')) {
-          errorMessage = "Ошибка авторизации DeepSeek. Проверьте API ключ в .env файле.";
+          errorMessage = "Ошибка авторизации DeepSeek. Проверьте секрет DEEPSEEK_API_KEY в Supabase.";
         } else if (error.message.includes('CORS') || error.message.includes('network')) {
           errorMessage = "Проблема с подключением к DeepSeek. Проверьте интернет-соединение.";
         }
