@@ -167,7 +167,7 @@ export default function ChatPage() {
           <h1 className="text-lg font-bold text-foreground">AI Помощник</h1>
           <button
             onClick={() => setShowPaywall(true)}
-            className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full"
+            className="text-sm font-semibold text-primary bg-primary/15 px-3 py-1.5 rounded-full border border-primary/30"
           >
             {isPremium ? "∞" : `${remaining ?? 0}/${dailyLimit ?? 3}`}
           </button>
@@ -257,11 +257,11 @@ export default function ChatPage() {
             >
               <div className="bg-card shadow-soft rounded-2xl rounded-bl-sm px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm text-muted-foreground">
                     {selectedChild 
-                      ? `DeepSeek думает для ${selectedChild.name}...`
-                      : "DeepSeek думает..."}
+                      ? `Готовим кулинарное чудо для ${selectedChild.name}...`
+                      : "Готовим кулинарное чудо..."}
                   </span>
                 </div>
               </div>
