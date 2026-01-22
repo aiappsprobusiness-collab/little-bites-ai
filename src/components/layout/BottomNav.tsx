@@ -17,7 +17,7 @@ export function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-lg border-t border-border/50 safe-bottom">
-      <div className="flex items-center justify-around h-20 max-w-lg mx-auto px-2">
+      <div className="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
@@ -27,11 +27,11 @@ export function BottomNav() {
               <motion.button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className="relative -mt-8"
+                className="relative -mt-6"
                 whileTap={{ scale: 0.95 }}
               >
-                <div className="w-16 h-16 rounded-full gradient-primary shadow-button flex items-center justify-center">
-                  <Icon className="w-7 h-7 text-primary-foreground" />
+                <div className="w-14 h-14 rounded-full gradient-primary shadow-button flex items-center justify-center">
+                  <Icon className="w-6 h-6 text-primary-foreground" />
                 </div>
               </motion.button>
             );
