@@ -107,44 +107,33 @@ ${childData.allergies?.length ? `ИСКЛЮЧИТЬ: ${childData.allergies.join(
   "macros": { "protein": 10, "carbs": 30, "fat": 8 }
 }`;
     } else if (type === "diet_plan") {
-      systemPrompt = `Ты — эксперт по детскому питанию. Создаёшь недельные планы питания с полными рецептами.
+      systemPrompt = `Ты — эксперт по детскому питанию. Создаёшь недельные планы питания.
 
 ${childData ? `
 Ребенок: ${childData.name}, ${childData.ageMonths} месяцев
-${childData.allergies?.length ? `ИСКЛЮЧИТЬ: ${childData.allergies.join(", ")}` : ""}
+${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}` : ""}
 ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : ""}
 ` : ""}
 
-ВАЖНО: Для каждого блюда указывай полный рецепт с ингредиентами и шагами!
+ВАЖНО: Отвечай СТРОГО в формате JSON без markdown и без дополнительного текста!
+Используй ТОЛЬКО английские ключи для типов приёма пищи: breakfast, lunch, snack, dinner.
 
-Отвечай ТОЛЬКО в формате JSON без дополнительного текста:
 {
   "days": {
     "Понедельник": {
-      "завтрак": {
-        "name": "Овсяная каша с яблоком",
-        "calories": 250,
-        "protein": 8,
-        "carbs": 40,
-        "fat": 5,
-        "cooking_time": 15,
-        "ingredients": [
-          { "name": "Овсяные хлопья", "amount": 50, "unit": "г" },
-          { "name": "Яблоко", "amount": 1, "unit": "шт" },
-          { "name": "Вода", "amount": 200, "unit": "мл" }
-        ],
-        "steps": [
-          "Залить овсянку водой и варить 10 минут",
-          "Натереть яблоко на тёрке",
-          "Добавить яблоко в кашу и перемешать"
-        ]
-      },
-      "обед": { ... },
-      "полдник": { ... },
-      "ужин": { ... }
-    }
+      "breakfast": {"name": "Овсяная каша с яблоком", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Овсяные хлопья", "amount": 50, "unit": "г"}], "steps": ["Залить водой и варить 10 мин"]},
+      "lunch": {"name": "...", "calories": 300, "protein": 15, "carbs": 30, "fat": 10, "cooking_time": 20, "ingredients": [...], "steps": [...]},
+      "snack": {"name": "...", "calories": 100, "protein": 3, "carbs": 15, "fat": 3, "cooking_time": 5, "ingredients": [...], "steps": [...]},
+      "dinner": {"name": "...", "calories": 280, "protein": 12, "carbs": 25, "fat": 8, "cooking_time": 25, "ingredients": [...], "steps": [...]}
+    },
+    "Вторник": {...},
+    "Среда": {...},
+    "Четверг": {...},
+    "Пятница": {...},
+    "Суббота": {...},
+    "Воскресенье": {...}
   },
-  "shopping_list": ["овсяные хлопья 350г", "яблоки 7шт", "курица 1кг"],
+  "shopping_list": ["продукт - количество"],
   "total_calories_week": 8400
 }`;
     }
