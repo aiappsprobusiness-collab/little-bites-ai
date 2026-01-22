@@ -83,33 +83,30 @@ export function ChatMessage({ id, role, content, timestamp, onDelete }: ChatMess
               onClick={() => setShowDelete(false)}
             />
             <motion.div
-              initial={{ opacity: 0, y: 100 }}
+              initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 100 }}
+              exit={{ opacity: 0, y: 50 }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl p-6 pb-8 shadow-xl"
+              className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-2xl px-4 py-4 shadow-xl"
             >
-              <div className="w-12 h-1 bg-muted rounded-full mx-auto mb-6" />
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
-                  <Trash2 className="w-7 h-7 text-destructive" />
+              <div className="w-10 h-1 bg-muted rounded-full mx-auto mb-3" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="w-5 h-5 text-destructive" />
                 </div>
-                <p className="text-center font-medium text-lg">Удалить сообщение?</p>
-                <p className="text-center text-sm text-muted-foreground">Это действие нельзя отменить</p>
-                <div className="flex gap-3 w-full mt-2">
-                  <button
-                    onClick={() => setShowDelete(false)}
-                    className="flex-1 py-3 rounded-xl bg-muted text-foreground font-medium"
-                  >
-                    Отмена
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="flex-1 py-3 rounded-xl bg-destructive text-destructive-foreground font-medium"
-                  >
-                    Удалить
-                  </button>
-                </div>
+                <p className="font-medium flex-1">Удалить сообщение?</p>
+                <button
+                  onClick={() => setShowDelete(false)}
+                  className="px-4 py-2 rounded-xl bg-muted text-foreground font-medium text-sm"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground font-medium text-sm"
+                >
+                  Удалить
+                </button>
               </div>
             </motion.div>
           </>
