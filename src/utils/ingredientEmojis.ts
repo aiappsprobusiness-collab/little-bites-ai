@@ -236,7 +236,6 @@ export const ingredientEmojis: IngredientEmojiMap = {
   'авокадо': '🥑',
   'avocado': '🥑',
   'оливк': '🫒',
-  'olive': '🫒',
 };
 
 /**
