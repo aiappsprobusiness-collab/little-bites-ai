@@ -42,7 +42,7 @@ export default function RecipePage() {
   const steps = (recipe as any).steps || [];
 
   return (
-    <MobileLayout title="Рецепт">
+    <MobileLayout title="">
       <div className="space-y-6 pb-6 px-4">
         {/* Название рецепта */}
         <section>
