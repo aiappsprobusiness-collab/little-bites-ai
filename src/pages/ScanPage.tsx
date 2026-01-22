@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Camera, Image, Sparkles, Loader2, ChevronRight, X } from "lucide-react";
 import { useDeepSeek } from "@/hooks/useDeepSeek";
-import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useChildren } from "@/hooks/useChildren";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
 import { isDeepSeekConfigured } from "@/services/deepseek";
@@ -14,8 +14,9 @@ import { isDeepSeekConfigured } from "@/services/deepseek";
 export default function ScanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedChild } = useSelectedChild();
+  const { children } = useChildren();
   const { createRecipe } = useRecipes();
+  const selectedChild = children[0];
   const { analyzeImage, generateRecipe, isAnalyzing, isGenerating } = useDeepSeek();
 
   const [step, setStep] = useState<"capture" | "detecting" | "confirm" | "generating">("capture");

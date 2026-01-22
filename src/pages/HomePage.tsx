@@ -4,23 +4,12 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RecipeCard } from "@/components/recipes/RecipeCard";
-import { FamilyDashboard } from "@/components/family/FamilyDashboard";
+import { ChildProfileCard } from "@/components/profile/ChildProfileCard";
 import { ChefHat, Sparkles, TrendingUp, Heart, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useChildren } from "@/hooks/useChildren";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useGigaChat } from "@/hooks/useGigaChat";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { useChildren } from "@/hooks/useChildren";
-import { useToast } from "@/hooks/use-toast";
 
 const quickActions = [
   { icon: ChefHat, label: "Новый рецепт", color: "mint", path: "/recipe/new" },
@@ -29,56 +18,13 @@ const quickActions = [
   { icon: Heart, label: "Список покупок", color: "soft-pink", path: "/shopping" },
 ];
 
-const allergyOptions = [
-  "Молоко", "Яйца", "Глютен", "Орехи", "Соя", "Рыба", "Мед", "Цитрусы"
-];
-
 export default function HomePage() {
   const navigate = useNavigate();
-  const { toast } = useToast();
-  const { selectedChild } = useSelectedChild();
+  const { children, isLoading: isLoadingChildren, formatAge } = useChildren();
   const { recentRecipes, isLoading: isLoadingRecipes } = useRecipes();
   const { recommendation, isLoadingRecommendation } = useGigaChat();
-  const { createChild, isCreating } = useChildren();
   
-  const [isAddChildOpen, setIsAddChildOpen] = useState(false);
-  const [newChildName, setNewChildName] = useState("");
-  const [newChildBirthDate, setNewChildBirthDate] = useState("");
-  const [newChildAllergies, setNewChildAllergies] = useState<string[]>([]);
-
-  const handleAddChild = async () => {
-    if (!newChildName.trim() || !newChildBirthDate) return;
-    
-    try {
-      await createChild({
-        name: newChildName.trim(),
-        birth_date: newChildBirthDate,
-        allergies: newChildAllergies,
-        preferences: [],
-        dislikes: [],
-      });
-      toast({
-        title: "Ребенок добавлен",
-        description: `${newChildName} успешно добавлен в семью`,
-      });
-      setIsAddChildOpen(false);
-      setNewChildName("");
-      setNewChildBirthDate("");
-      setNewChildAllergies([]);
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Ошибка",
-        description: error.message || "Не удалось добавить ребенка",
-      });
-    }
-  };
-
-  const toggleAllergy = (allergy: string) => {
-    setNewChildAllergies((prev) =>
-      prev.includes(allergy) ? prev.filter((a) => a !== allergy) : [...prev, allergy]
-    );
-  };
+  const selectedChild = children[0]; // Берем первого ребенка или можно добавить выбор
 
   const container = {
     hidden: { opacity: 0 },
@@ -126,8 +72,36 @@ export default function HomePage() {
           </div>
         </motion.div>
 
-        {/* Family Dashboard with Carousel */}
-        <FamilyDashboard onAddChild={() => setIsAddChildOpen(true)} />
+        {/* Child Profile */}
+        {isLoadingChildren ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : selectedChild ? (
+          <ChildProfileCard
+            name={selectedChild.name}
+            age={formatAge(selectedChild.birth_date)}
+            avatarEmoji={selectedChild.avatar_url || "👶"}
+            allergies={selectedChild.allergies || []}
+            recipesCount={recentRecipes.length}
+            onClick={() => navigate("/profile")}
+          />
+        ) : (
+          <Card variant="mint" className="p-5">
+            <CardContent className="p-0">
+              <p className="text-center text-muted-foreground mb-4">
+                Добавьте профиль ребенка, чтобы начать
+              </p>
+              <Button
+                variant="mint"
+                className="w-full"
+                onClick={() => navigate("/profile")}
+              >
+                Добавить ребенка
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick Actions */}
         <motion.div
@@ -225,7 +199,7 @@ export default function HomePage() {
                     <Sparkles className="w-5 h-5 text-secondary-foreground" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-bold mb-1">Совет от ИИ</h3>
+                    <h3 className="font-bold mb-1">Совет от ИИ (GigaChat)</h3>
                     {isLoadingRecommendation ? (
                       <div className="flex items-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin" />
@@ -254,76 +228,6 @@ export default function HomePage() {
           </motion.div>
         )}
       </div>
-
-      {/* Add Child Dialog */}
-      <Dialog open={isAddChildOpen} onOpenChange={setIsAddChildOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Добавить ребенка</DialogTitle>
-            <DialogDescription>
-              Создайте профиль для вашего ребенка
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Имя</Label>
-              <Input
-                id="name"
-                value={newChildName}
-                onChange={(e) => setNewChildName(e.target.value)}
-                placeholder="Введите имя"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="birthDate">Дата рождения</Label>
-              <Input
-                id="birthDate"
-                type="date"
-                value={newChildBirthDate}
-                onChange={(e) => setNewChildBirthDate(e.target.value)}
-                max={new Date().toISOString().split("T")[0]}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Аллергии (необязательно)</Label>
-              <div className="flex flex-wrap gap-2">
-                {allergyOptions.map((allergy) => (
-                  <button
-                    key={allergy}
-                    type="button"
-                    onClick={() => toggleAllergy(allergy)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      newChildAllergies.includes(allergy)
-                        ? "bg-destructive/20 text-destructive"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                  >
-                    {allergy}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <Button
-              className="w-full"
-              variant="mint"
-              onClick={handleAddChild}
-              disabled={!newChildName.trim() || !newChildBirthDate || isCreating}
-            >
-              {isCreating ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Добавление...
-                </>
-              ) : (
-                "Добавить ребенка"
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </MobileLayout>
   );
 }
