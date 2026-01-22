@@ -19,6 +19,7 @@ import {
   Brain,
   Beef,
   AlertCircle,
+  Pencil,
 } from "lucide-react";
 import { ChildCarousel } from "@/components/family/ChildCarousel";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -30,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { MealEditDialog } from "@/components/meal-plan/MealEditDialog";
 
 // Цели питания
 const dietGoals = [
@@ -113,6 +115,13 @@ export default function GeneratePlanPage() {
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  
+  // Meal editing state
+  const [editingMeal, setEditingMeal] = useState<{
+    dayName: string;
+    mealType: keyof GeneratedDay;
+    meal: GeneratedMeal;
+  } | null>(null);
 
   const toggleGoal = (goalId: string) => {
     setSelectedGoals((prev) =>
@@ -122,6 +131,30 @@ export default function GeneratePlanPage() {
         ? [...prev, goalId]
         : prev
     );
+  };
+
+  // Handle meal update from edit dialog
+  const handleMealUpdate = (updatedMeal: GeneratedMeal) => {
+    if (!generatedPlan || !editingMeal) return;
+
+    setGeneratedPlan((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [editingMeal.dayName]: {
+            ...prev.days[editingMeal.dayName],
+            [editingMeal.mealType]: updatedMeal,
+          },
+        },
+      };
+    });
+    setEditingMeal(null);
+  };
+
+  const openMealEdit = (dayName: string, mealType: keyof GeneratedDay, meal: GeneratedMeal) => {
+    setEditingMeal({ dayName, mealType, meal });
   };
 
   const generatePlan = async () => {
@@ -528,39 +561,53 @@ export default function GeneratePlanPage() {
                 </Card>
               </div>
 
-              {/* Days Preview */}
+              {/* Days Preview - Editable */}
               <div className="px-4 space-y-3">
-                <h3 className="font-bold">Меню на неделю</h3>
-                {Object.entries(generatedPlan.days).slice(0, 3).map(([day, meals]) => (
+                <h3 className="font-bold flex items-center gap-2">
+                  Меню на неделю
+                  <Badge variant="outline" className="text-xs font-normal">
+                    <Pencil className="w-3 h-3 mr-1" />
+                    Нажмите на блюдо для замены
+                  </Badge>
+                </h3>
+                {Object.entries(generatedPlan.days).map(([day, meals]) => (
                   <Card key={day} variant="default">
                     <CardContent className="p-3">
                       <p className="font-semibold mb-2">{day}</p>
                       <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => meals.breakfast && openMealEdit(day, "breakfast", meals.breakfast)}
+                          className="flex items-center gap-1 p-1.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
                           <span>🌅</span>
-                          <span className="truncate">{meals.breakfast?.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
+                          <span className="truncate flex-1">{meals.breakfast?.name}</span>
+                          <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                        </button>
+                        <button
+                          onClick={() => meals.lunch && openMealEdit(day, "lunch", meals.lunch)}
+                          className="flex items-center gap-1 p-1.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
                           <span>☀️</span>
-                          <span className="truncate">{meals.lunch?.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
+                          <span className="truncate flex-1">{meals.lunch?.name}</span>
+                        </button>
+                        <button
+                          onClick={() => meals.snack && openMealEdit(day, "snack", meals.snack)}
+                          className="flex items-center gap-1 p-1.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
                           <span>🍎</span>
-                          <span className="truncate">{meals.snack?.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
+                          <span className="truncate flex-1">{meals.snack?.name}</span>
+                        </button>
+                        <button
+                          onClick={() => meals.dinner && openMealEdit(day, "dinner", meals.dinner)}
+                          className="flex items-center gap-1 p-1.5 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                        >
                           <span>🌙</span>
-                          <span className="truncate">{meals.dinner?.name}</span>
-                        </div>
+                          <span className="truncate flex-1">{meals.dinner?.name}</span>
+                        </button>
                       </div>
                     </CardContent>
                   </Card>
                 ))}
-                {Object.keys(generatedPlan.days).length > 3 && (
-                  <p className="text-sm text-muted-foreground text-center">
-                    + ещё {Object.keys(generatedPlan.days).length - 3} дней
-                  </p>
-                )}
               </div>
 
               {/* Shopping List Preview */}
@@ -640,6 +687,22 @@ export default function GeneratePlanPage() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Meal Edit Dialog */}
+        <MealEditDialog
+          open={!!editingMeal}
+          onOpenChange={(open) => !open && setEditingMeal(null)}
+          meal={editingMeal?.meal || null}
+          mealType={editingMeal?.mealType || "breakfast"}
+          dayName={editingMeal?.dayName || ""}
+          childData={{
+            name: selectedChild?.name || "",
+            ageMonths: selectedChild ? calculateAgeInMonths(selectedChild.birth_date) : 0,
+            allergies: selectedChild?.allergies || [],
+            goals: selectedGoals.map((g) => dietGoals.find((dg) => dg.id === g)?.label || g),
+          }}
+          onSave={handleMealUpdate}
+        />
       </div>
     </MobileLayout>
   );
