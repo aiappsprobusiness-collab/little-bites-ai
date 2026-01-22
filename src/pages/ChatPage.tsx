@@ -162,9 +162,23 @@ export default function ChatPage() {
   return (
     <MobileLayout 
       title="AI Помощник"
-      headerRight={<UsageBadge onClick={() => setShowPaywall(true)} />}
+      headerRight={
+        <div className="flex items-center gap-2">
+          {messages.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleClearHistory}
+              className="h-8 w-8 text-muted-foreground"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+          <UsageBadge onClick={() => setShowPaywall(true)} />
+        </div>
+      }
     >
-      <div className="flex flex-col h-[calc(100vh-180px)]">
+      <div className="flex flex-col h-[calc(100vh-140px)]">
         {/* Child selector dropdown */}
         <div className="px-4 py-3 border-b border-border/50">
           <Select 
@@ -277,20 +291,6 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Clear history button */}
-        {messages.length > 0 && (
-          <div className="flex justify-center py-2 border-t border-border/50">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearHistory}
-              className="text-sm text-muted-foreground"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Очистить историю
-            </Button>
-          </div>
-        )}
 
         {/* Input area */}
         <div className="px-4 py-3 bg-background">
