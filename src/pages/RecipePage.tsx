@@ -45,7 +45,7 @@ export default function RecipePage() {
     <MobileLayout title="">
       <div className="space-y-6 pb-6 px-4">
         {/* Название рецепта */}
-        <section>
+        <section className="text-center pt-2">
           <h1 className="text-2xl font-bold">{recipe.title}</h1>
           {recipe.description && !recipe.description.startsWith("Сгенерировано") && (
             <p className="text-muted-foreground mt-2">{recipe.description}</p>
@@ -54,45 +54,46 @@ export default function RecipePage() {
 
         {/* Ингредиенты */}
         {ingredients.length > 0 && (
-          <section>
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
-              Ингредиенты
-            </h2>
-            <ul className="space-y-2">
-              {ingredients.map((ing: any, index: number) => (
-                <li key={index} className="flex items-start gap-3">
-                  <span className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
-                  <span>
-                    {ing.name}
+          <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+            <CardContent className="p-4">
+              <h2 className="text-sm font-semibold text-primary uppercase tracking-wide mb-4 text-center">
+                🥗 Ингредиенты
+              </h2>
+              <ul className="space-y-3">
+                {ingredients.map((ing: any, index: number) => (
+                  <li key={index} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                    <span className="font-medium">{ing.name}</span>
                     {ing.amount && ing.unit && (
-                      <span className="text-muted-foreground ml-1">
-                        — {ing.amount} {ing.unit}
+                      <span className="text-muted-foreground text-sm bg-muted/50 px-2 py-1 rounded-full">
+                        {ing.amount} {ing.unit}
                       </span>
                     )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         )}
 
         {/* Шаги приготовления */}
         {steps.length > 0 && (
-          <section>
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-3">
-              Шаги приготовления
-            </h2>
-            <ol className="space-y-4">
-              {steps.map((step: any, index: number) => (
-                <li key={index} className="flex gap-4">
-                  <span className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-semibold">
-                    {step.step_number || index + 1}
-                  </span>
-                  <p className="pt-0.5">{step.instruction}</p>
-                </li>
-              ))}
-            </ol>
-          </section>
+          <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+            <CardContent className="p-4">
+              <h2 className="text-sm font-semibold text-primary uppercase tracking-wide mb-4 text-center">
+                👨‍🍳 Приготовление
+              </h2>
+              <ol className="space-y-4">
+                {steps.map((step: any, index: number) => (
+                  <li key={index} className="flex gap-4 items-start">
+                    <span className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground flex items-center justify-center text-sm font-bold shadow-md">
+                      {step.step_number || index + 1}
+                    </span>
+                    <p className="pt-1 text-foreground/90 leading-relaxed">{step.instruction}</p>
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
         )}
       </div>
     </MobileLayout>
