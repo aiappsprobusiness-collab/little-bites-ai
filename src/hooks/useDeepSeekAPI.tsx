@@ -51,6 +51,7 @@ export function useDeepSeekAPI() {
       messages: ChatMessage[];
       type?: 'chat' | 'recipe' | 'diet_plan';
     }) => {
+      // Проверка лимита (для аккаунтов с неограниченным доступом пропускается)
       if (!canGenerate) {
         throw new Error('usage_limit_exceeded');
       }

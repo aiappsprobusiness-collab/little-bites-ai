@@ -9,11 +9,13 @@ import { useDeepSeek } from "@/hooks/useDeepSeek";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
+import { useChildren } from "@/hooks/useChildren";
 
 export default function ScanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedChild } = useSelectedChild();
+  const { calculateAgeInMonths } = useChildren();
   const { createRecipe } = useRecipes();
   const { analyzeImage, generateRecipe, isAnalyzing, isGenerating } = useDeepSeek();
 
@@ -125,14 +127,27 @@ export default function ScanPage() {
     }
 
     try {
+      // Правильно вычисляем возраст ребенка в месяцах
       const ageMonths = selectedChild 
-        ? Math.floor((new Date().getTime() - new Date(selectedChild.birth_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44))
+        ? calculateAgeInMonths(selectedChild.birth_date)
         : undefined;
+
+      // Получаем аллергии, фильтруя null и пустые значения
+      const allergies = selectedChild?.allergies 
+        ? selectedChild.allergies.filter(a => a && a.trim().length > 0)
+        : undefined;
+
+      console.log('Generating recipe with:', {
+        products: confirmedProducts,
+        ageMonths,
+        allergies,
+        childName: selectedChild?.name
+      });
 
       const recipe = await generateRecipe({
         products: confirmedProducts,
         childAgeMonths: ageMonths,
-        allergies: selectedChild?.allergies || undefined,
+        allergies: allergies && allergies.length > 0 ? allergies : undefined,
       });
 
       // Создаем рецепт в базе данных
@@ -282,7 +297,7 @@ export default function ScanPage() {
             <Card variant="lavender">
               <CardContent className="p-4">
                 <p className="text-sm text-accent-foreground/80">
-                  💡 <strong>Совет:</strong> Разложите продукты на светлом фоне для лучшего распознавания. DeepSeek AI проанализирует фото и найдет все продукты.
+                  💡 <strong>Совет:</strong> Разложите продукты на светлом фоне для лучшего распознавания.
                 </p>
               </CardContent>
             </Card>
@@ -304,7 +319,6 @@ export default function ScanPage() {
             </motion.div>
             <div className="text-center">
               <h2 className="text-xl font-bold mb-2">Анализируем фото...</h2>
-              <p className="text-muted-foreground">DeepSeek AI распознает продукты</p>
             </div>
           </motion.div>
         )}
@@ -408,7 +422,7 @@ export default function ScanPage() {
                   disabled={products.filter(p => p.confirmed).length === 0}
                 >
                   <Sparkles className="w-5 h-5 mr-2" />
-                  Создать рецепт с DeepSeek
+                  Создать рецепт
                   <ChevronRight className="w-5 h-5 ml-2" />
                 </Button>
               </>
@@ -440,9 +454,6 @@ export default function ScanPage() {
             </motion.div>
             <div className="text-center">
               <h2 className="text-xl font-bold mb-2">Создаем рецепт...</h2>
-              <p className="text-muted-foreground">
-                DeepSeek AI подбирает лучший рецепт для вашего малыша
-              </p>
             </div>
             <div className="flex gap-2">
               {products.filter(p => p.confirmed).slice(0, 3).map((product, i) => (

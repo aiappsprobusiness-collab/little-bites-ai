@@ -106,9 +106,41 @@ export function useChildren() {
   const calculateAgeInMonths = (birthDate: string): number => {
     const birth = new Date(birthDate);
     const now = new Date();
-    const years = now.getFullYear() - birth.getFullYear();
-    const months = now.getMonth() - birth.getMonth();
-    return years * 12 + months;
+    
+    // Проверяем корректность даты
+    if (isNaN(birth.getTime())) {
+      console.error('Invalid birth date:', birthDate);
+      return 0;
+    }
+    
+    // Вычисляем разницу в годах и месяцах с учетом дня месяца
+    let years = now.getFullYear() - birth.getFullYear();
+    let months = now.getMonth() - birth.getMonth();
+    
+    // Если день рождения еще не наступил в этом году, вычитаем год
+    if (now.getDate() < birth.getDate()) {
+      months--;
+    }
+    
+    // Если месяц рождения еще не наступил в этом году, вычитаем месяц
+    if (months < 0) {
+      months += 12;
+      years--;
+    }
+    
+    const totalMonths = years * 12 + months;
+    
+    console.log('calculateAgeInMonths:', {
+      birthDate,
+      birth: birth.toISOString(),
+      now: now.toISOString(),
+      years,
+      months,
+      totalMonths,
+      formatted: `${years} лет ${months} мес (${totalMonths} месяцев)`
+    });
+    
+    return totalMonths;
   };
 
   // Форматировать возраст для отображения

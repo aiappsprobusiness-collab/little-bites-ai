@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { ChildCarousel } from "@/components/family/ChildCarousel";
+import { useChatRecipes } from "@/hooks/useChatRecipes";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ export default function MealPlanPage() {
   const { selectedChild } = useSelectedChild();
   const { recipes } = useRecipes(selectedChild?.id);
   const { getMealPlansByDate, createMealPlan, deleteMealPlan, isCreating } = useMealPlans(selectedChild?.id);
+  const { getTodayChatRecipes } = useChatRecipes();
 
   const [selectedDay, setSelectedDay] = useState(0);
   const [currentWeek, setCurrentWeek] = useState(new Date());
@@ -62,6 +64,15 @@ export default function MealPlanPage() {
   const weekDates = getWeekDates();
   const selectedDate = weekDates[selectedDay];
   const { data: dayMealPlans = [], isLoading } = getMealPlansByDate(selectedDate);
+  
+  // Получаем рецепты из чата за сегодня (всегда, независимо от выбранного дня)
+  const isToday = selectedDate.toDateString() === new Date().toDateString();
+  // ВАЖНО: хук должен вызываться всегда, иначе нарушаются правила React Hooks
+  const todayChatRecipesQuery = getTodayChatRecipes();
+  // Всегда получаем рецепты из чата за сегодня для показа в диалоге
+  const todayChatRecipes = todayChatRecipesQuery?.data || [];
+  
+  console.log('MealPlanPage - isToday:', isToday, 'todayChatRecipes count:', todayChatRecipes.length, 'recipes:', todayChatRecipes);
 
   const getPlannedMealRecipe = (plannedMeal: any) => {
     // В зависимости от select в Supabase джойн может прийти как `recipe` или `recipes`
@@ -100,6 +111,14 @@ export default function MealPlanPage() {
         title: "Ошибка",
         description: error.message || "Не удалось добавить блюдо",
       });
+    }
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsAddDialogOpen(open);
+    if (!open) {
+      // Сбрасываем выбранный тип при закрытии диалога
+      setSelectedMealType(null);
     }
   };
 
@@ -226,15 +245,23 @@ export default function MealPlanPage() {
                 month: "long",
               })}
             </h2>
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <Dialog open={isAddDialogOpen} onOpenChange={handleDialogOpenChange}>
               <DialogTrigger asChild>
-                <Button variant="ghost" size="sm">
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    // При открытии из общей кнопки сбрасываем тип (будет использован первый по умолчанию)
+                    setSelectedMealType(null);
+                  }}
+                >
                   <Plus className="w-4 h-4 mr-1" />
                   Добавить
                 </Button>
               </DialogTrigger>
               <AddMealDialog
                 recipes={recipes}
+                chatRecipes={todayChatRecipes}
                 mealTypes={mealTypes}
                 selectedMealType={selectedMealType}
                 onSelectMealType={setSelectedMealType}
@@ -312,25 +339,17 @@ export default function MealPlanPage() {
                             <X className="w-5 h-5" />
                           </Button>
                         ) : (
-                          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-                            <DialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => setSelectedMealType(meal.id)}
-                              >
-                                <Plus className="w-5 h-5" />
-                              </Button>
-                            </DialogTrigger>
-                            <AddMealDialog
-                              recipes={recipes}
-                              mealTypes={mealTypes}
-                              selectedMealType={meal.id}
-                              onSelectMealType={setSelectedMealType}
-                              onAdd={handleAddMeal}
-                              isLoading={isCreating}
-                            />
-                          </Dialog>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              // Устанавливаем тип приема пищи и открываем диалог
+                              setSelectedMealType(meal.id);
+                              setIsAddDialogOpen(true);
+                            }}
+                          >
+                            <Plus className="w-5 h-5" />
+                          </Button>
                         )}
                       </div>
                     </CardContent>
@@ -375,14 +394,16 @@ interface MealTypeOption {
 
 // Диалог для добавления блюда
 function AddMealDialog({
-  recipes,
+  recipes = [],
+  chatRecipes = [],
   mealTypes: mealTypesOptions,
   selectedMealType,
   onSelectMealType,
   onAdd,
   isLoading,
 }: {
-  recipes: any[];
+  recipes?: any[];
+  chatRecipes?: any[];
   mealTypes: MealTypeOption[];
   selectedMealType: string | null;
   onSelectMealType: (type: string) => void;
@@ -390,12 +411,77 @@ function AddMealDialog({
   isLoading: boolean;
 }) {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
-  const mealType = selectedMealType || mealTypesOptions[0].id;
+  // Используем selectedMealType напрямую, с fallback на первый тип (Завтрак)
+  // Важно: используем вычисляемое значение, которое обновляется при изменении selectedMealType
+  const currentMealType = selectedMealType || mealTypesOptions[0]?.id || "breakfast";
+  
+  // Фильтруем рецепты из чата - показываем все рецепты с тегом 'chat'
+  // независимо от типа приема пищи (пользователь может выбрать любой тип)
+  const filteredChatRecipes = (chatRecipes || []).filter(recipe => {
+    if (!recipe) {
+      console.log('Recipe filtered out - no recipe');
+      return false;
+    }
+    
+    if (!recipe.tags || !Array.isArray(recipe.tags)) {
+      console.log('Recipe filtered out - no tags:', recipe?.title);
+      return false;
+    }
+    
+    const hasChatTag = recipe.tags.includes('chat');
+    if (!hasChatTag) {
+      console.log('Recipe filtered out - no chat tag:', recipe.title);
+      return false;
+    }
+    
+    // Показываем все рецепты из чата, независимо от типа приема пищи
+    // Пользователь может выбрать любой тип приема пищи для любого рецепта
+    return true;
+  });
+  
+  console.log('=== AddMealDialog - Recipe filtering ===');
+  console.log('chatRecipes total:', (chatRecipes || []).length);
+  console.log('chatRecipes details:', (chatRecipes || []).map(r => ({
+    title: r.title,
+    tags: r.tags,
+    created_at: r.created_at
+  })));
+  console.log('filteredChatRecipes count:', filteredChatRecipes.length);
+  console.log('filteredChatRecipes details:', filteredChatRecipes.map(r => ({
+    title: r.title,
+    tags: r.tags
+  })));
+  console.log('currentMealType:', currentMealType);
+  
+  // Объединяем обычные рецепты и рецепты из чата
+  // Рецепты из чата показываем первыми
+  const regularRecipes = (recipes || []).filter(r => !r.tags || !Array.isArray(r.tags) || !r.tags.includes('chat'));
+  const allRecipes = [...filteredChatRecipes, ...regularRecipes];
+  
+  console.log('=== AddMealDialog - Final recipe list ===');
+  console.log('filteredChatRecipes:', filteredChatRecipes.length);
+  console.log('regularRecipes:', regularRecipes.length);
+  console.log('total allRecipes:', allRecipes.length);
+  console.log('chatRecipeTitles:', filteredChatRecipes.map(r => r.title));
+  console.log('allRecipeTitles:', allRecipes.map(r => r.title));
+
+  // Сбрасываем выбранный рецепт при изменении типа приема пищи
+  useEffect(() => {
+    setSelectedRecipeId("");
+  }, [selectedMealType]);
+
+  // Логируем для отладки
+  useEffect(() => {
+    console.log('AddMealDialog - selectedMealType:', selectedMealType, 'currentMealType:', currentMealType, 'chatRecipes:', chatRecipes.length, 'filteredChatRecipes:', filteredChatRecipes.length);
+  }, [selectedMealType, currentMealType, chatRecipes, filteredChatRecipes]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedRecipeId) {
-      onAdd(selectedRecipeId, mealType);
+      // Используем текущее значение типа приема пищи
+      onAdd(selectedRecipeId, currentMealType);
+      // Сбрасываем форму после отправки
+      setSelectedRecipeId("");
     }
   };
 
@@ -410,7 +496,13 @@ function AddMealDialog({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Тип приема пищи</label>
-          <Select value={mealType} onValueChange={onSelectMealType}>
+          <Select 
+            value={currentMealType} 
+            onValueChange={(value) => {
+              console.log('Meal type changed to:', value);
+              onSelectMealType(value);
+            }}
+          >
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -431,12 +523,31 @@ function AddMealDialog({
               <SelectValue placeholder="Выберите рецепт" />
             </SelectTrigger>
             <SelectContent>
-              {recipes.length > 0 ? (
-                recipes.map((recipe) => (
-                  <SelectItem key={recipe.id} value={recipe.id}>
-                    {recipe.title}
-                  </SelectItem>
-                ))
+              {allRecipes.length > 0 ? (
+                <>
+                  {filteredChatRecipes.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
+                        Из чата (сегодня)
+                      </div>
+                      {filteredChatRecipes.map((recipe) => (
+                        <SelectItem key={recipe.id} value={recipe.id}>
+                          💬 {recipe.title}
+                        </SelectItem>
+                      ))}
+                      {regularRecipes.length > 0 && (
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t border-b mt-1">
+                          Мои рецепты
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {regularRecipes.map((recipe) => (
+                    <SelectItem key={recipe.id} value={recipe.id}>
+                      {recipe.title}
+                    </SelectItem>
+                  ))}
+                </>
               ) : (
                 <div className="p-4 text-center text-sm text-muted-foreground">
                   Нет доступных рецептов

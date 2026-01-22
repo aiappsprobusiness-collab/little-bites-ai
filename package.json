@@ -17,7 +17,8 @@
     "cap:open:ios": "cap open ios",
     "build:android": "npm run build && npm run cap:sync",
     "prepare:android": "npm run build:android && npm run cap:open:android",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "supabase:deploy:chat": "npx supabase functions deploy deepseek-chat"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",
@@ -100,6 +101,7 @@
     "lovable-tagger": "^1.1.13",
     "patch-package": "^8.0.1",
     "postcss": "^8.5.6",
+    "supabase": "^2.72.8",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",

@@ -4,8 +4,9 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { RecipeCard } from "@/components/recipes/RecipeCard";
+import { RecipeListItem } from "@/components/recipes/RecipeListItem";
 import { FamilyDashboard } from "@/components/family/FamilyDashboard";
-import { ChefHat, Sparkles, TrendingUp, Heart, Loader2 } from "lucide-react";
+import { ChefHat, Sparkles, TrendingUp, Heart, Loader2, LayoutGrid, List, Grid3x3, Square } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
@@ -32,21 +33,24 @@ const allergyOptions = [
   "Молоко", "Яйца", "Глютен", "Орехи", "Соя", "Рыба", "Мед", "Цитрусы"
 ];
 
+type ViewMode = 'list' | 'large' | 'medium' | 'small';
+
 export default function HomePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedChild } = useSelectedChild();
   const { recentRecipes, isLoading: isLoadingRecipes } = useRecipes();
   const { createChild, isCreating } = useChildren();
-  
+
   const [isAddChildOpen, setIsAddChildOpen] = useState(false);
   const [newChildName, setNewChildName] = useState("");
   const [newChildBirthDate, setNewChildBirthDate] = useState("");
   const [newChildAllergies, setNewChildAllergies] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('medium');
 
   const handleAddChild = async () => {
     if (!newChildName.trim() || !newChildBirthDate) return;
-    
+
     try {
       await createChild({
         name: newChildName.trim(),
@@ -93,13 +97,16 @@ export default function HomePage() {
     show: { opacity: 1, y: 0 },
   };
 
+  // Фильтруем рецепты - исключаем рецепты из чата (они показываются только в плане питания)
+  const recipesWithoutChat = (recentRecipes || []).filter(r => !r.tags || !Array.isArray(r.tags) || !r.tags.includes('chat'));
+
   // Форматируем рецепты для отображения
-  const formattedRecipes = recentRecipes.slice(0, 4).map((recipe) => ({
+  const formattedRecipes = recipesWithoutChat.slice(0, 4).map((recipe) => ({
     id: recipe.id,
     title: recipe.title,
     image: recipe.image_url || "https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?w=400&h=300&fit=crop",
     cookTime: recipe.cooking_time_minutes ? `${recipe.cooking_time_minutes} мин` : "—",
-    ageRange: recipe.min_age_months ? `${recipe.min_age_months}+ мес` : "—",
+    childName: selectedChild?.name || "—",
     rating: recipe.rating ? recipe.rating / 1 : undefined,
     isFavorite: recipe.is_favorite || false,
   }));
@@ -141,15 +148,14 @@ export default function HomePage() {
                 className="w-full flex flex-col items-center gap-1.5 p-2 rounded-xl bg-card shadow-soft hover:shadow-card transition-all"
               >
                 <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    action.color === "mint"
-                      ? "gradient-primary"
-                      : action.color === "peach"
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${action.color === "mint"
+                    ? "gradient-primary"
+                    : action.color === "peach"
                       ? "gradient-peach"
                       : action.color === "lavender"
-                      ? "gradient-lavender"
-                      : "bg-soft-pink"
-                  }`}
+                        ? "gradient-lavender"
+                        : "bg-soft-pink"
+                    }`}
                 >
                   <action.icon className="w-5 h-5 text-foreground/80" />
                 </div>
@@ -165,11 +171,61 @@ export default function HomePage() {
         <div>
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold">Недавние рецепты</h2>
-            {recentRecipes.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => navigate("/recipes")}>
-                Все →
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              {recipesWithoutChat.length > 0 && (
+                <>
+                  <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('list')}
+                      className={`h-7 px-2 rounded transition-colors ${
+                        viewMode === 'list'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <List className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('large')}
+                      className={`h-7 px-2 rounded transition-colors ${
+                        viewMode === 'large'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Square className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('medium')}
+                      className={`h-7 px-2 rounded transition-colors ${
+                        viewMode === 'medium'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('small')}
+                      className={`h-7 px-2 rounded transition-colors ${
+                        viewMode === 'small'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Grid3x3 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/recipes")}>
+                    Все →
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
           {isLoadingRecipes ? (
             <div className="flex items-center justify-center py-8">
@@ -180,14 +236,36 @@ export default function HomePage() {
               variants={container}
               initial="hidden"
               animate="show"
-              className="grid grid-cols-2 gap-3"
+              className={
+                viewMode === 'list'
+                  ? 'space-y-2'
+                  : viewMode === 'large'
+                  ? 'grid grid-cols-1 gap-4'
+                  : viewMode === 'medium'
+                  ? 'grid grid-cols-2 gap-3'
+                  : 'grid grid-cols-3 gap-2'
+              }
             >
               {formattedRecipes.map((recipe) => (
                 <motion.div key={recipe.id} variants={item}>
-                  <RecipeCard
-                    {...recipe}
-                    onClick={() => navigate(`/recipe/${recipe.id}`)}
-                  />
+                  {viewMode === 'list' ? (
+                    <RecipeListItem
+                      {...recipe}
+                      onClick={() => navigate(`/recipe/${recipe.id}`)}
+                    />
+                  ) : (
+                    <RecipeCard
+                      {...recipe}
+                      size={
+                        viewMode === 'large'
+                          ? 'large'
+                          : viewMode === 'small'
+                          ? 'small'
+                          : 'medium'
+                      }
+                      onClick={() => navigate(`/recipe/${recipe.id}`)}
+                    />
+                  )}
                 </motion.div>
               ))}
             </motion.div>
@@ -250,11 +328,10 @@ export default function HomePage() {
                     key={allergy}
                     type="button"
                     onClick={() => toggleAllergy(allergy)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      newChildAllergies.includes(allergy)
-                        ? "bg-destructive/20 text-destructive"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${newChildAllergies.includes(allergy)
+                      ? "bg-destructive/20 text-destructive"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      }`}
                   >
                     {allergy}
                   </button>

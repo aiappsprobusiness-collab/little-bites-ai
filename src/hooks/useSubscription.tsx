@@ -32,11 +32,26 @@ export function useSubscription() {
     enabled: !!user,
   });
 
+  // Список email-адресов с неограниченным доступом
+  const UNLIMITED_ACCESS_EMAILS = ['alesah007@gmail.com'];
+  const hasUnlimitedAccess = user?.email && UNLIMITED_ACCESS_EMAILS.includes(user.email);
+
   // Получить лимиты использования
   const { data: usageData, isLoading: isLoadingUsage, refetch: refetchUsage } = useQuery({
     queryKey: ['usage-limit', user?.id],
     queryFn: async (): Promise<UsageData | null> => {
       if (!user) return null;
+      
+      // Для аккаунтов с неограниченным доступом возвращаем специальные значения
+      if (hasUnlimitedAccess) {
+        return {
+          can_generate: true,
+          remaining: 999999,
+          is_premium: true,
+          used_today: 0,
+          daily_limit: 999999,
+        };
+      }
       
       const { data, error } = await supabase.rpc('check_usage_limit', {
         _user_id: user.id,
@@ -53,6 +68,11 @@ export function useSubscription() {
   const incrementUsage = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error('User not authenticated');
+      
+      // Для аккаунтов с неограниченным доступом не увеличиваем счетчик
+      if (hasUnlimitedAccess) {
+        return;
+      }
       
       const { error } = await supabase.rpc('increment_usage', {
         _user_id: user.id,
@@ -83,12 +103,13 @@ export function useSubscription() {
     },
   });
 
-  const isPremium = profile?.subscription_status === 'premium';
+  const isPremium = profile?.subscription_status === 'premium' || hasUnlimitedAccess;
   const isTrial = profile?.subscription_status === 'trial';
-  const canGenerate = usageData?.can_generate ?? true;
-  const remaining = usageData?.remaining ?? 5;
+  // Для аккаунтов с неограниченным доступом всегда разрешаем генерацию
+  const canGenerate = hasUnlimitedAccess ? true : (usageData?.can_generate ?? true);
+  const remaining = hasUnlimitedAccess ? 999999 : (usageData?.remaining ?? 5);
   const usedToday = usageData?.used_today ?? 0;
-  const dailyLimit = usageData?.daily_limit ?? 5;
+  const dailyLimit = hasUnlimitedAccess ? 999999 : (usageData?.daily_limit ?? 5);
 
   return {
     // Status

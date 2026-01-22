@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -134,6 +134,277 @@ export default function GeneratePlanPage() {
     meal: GeneratedMeal;
   } | null>(null);
 
+  // Refs для сохранения состояния генерации
+  const generationStateRef = useRef<{
+    isGenerating: boolean;
+    generatedDays: Record<string, GeneratedDay>;
+    currentDayIndex: number;
+    childData: any;
+    goalsText: string;
+    accessToken: string;
+    step?: string;
+    progress?: number;
+    selectedGoals?: string[];
+    generatedPlan?: GeneratedPlan;
+  } | null>(null);
+
+  // Сохранение состояния в localStorage
+  const saveGenerationState = (state: typeof generationStateRef.current) => {
+    if (state) {
+      try {
+        const stateToSave = {
+          ...state,
+          step: step,
+          progress: progress,
+          selectedGoals: selectedGoals,
+          timestamp: Date.now(),
+        };
+        localStorage.setItem('mealPlanGeneration', JSON.stringify(stateToSave));
+        console.log('Saved generation state:', stateToSave);
+      } catch (e) {
+        console.error('Failed to save generation state:', e);
+      }
+    }
+  };
+
+  // Загрузка состояния из localStorage
+  const loadGenerationState = () => {
+    try {
+      const saved = localStorage.getItem('mealPlanGeneration');
+      if (saved) {
+        const state = JSON.parse(saved);
+        // Проверяем, что состояние не старше 10 минут
+        if (Date.now() - state.timestamp < 10 * 60 * 1000) {
+          return state;
+        } else {
+          localStorage.removeItem('mealPlanGeneration');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load generation state:', e);
+    }
+    return null;
+  };
+
+  // Очистка сохраненного состояния
+  const clearGenerationState = () => {
+    localStorage.removeItem('mealPlanGeneration');
+    generationStateRef.current = null;
+    console.log('Cleared generation state');
+  };
+
+  // Автоматическое сохранение состояния при изменении step или progress во время генерации
+  useEffect(() => {
+    if (step === "generating" && generationStateRef.current) {
+      // Обновляем сохраненное состояние при изменении step или progress
+      // Проверяем, что значения действительно изменились, чтобы избежать лишних сохранений
+      if (generationStateRef.current.step !== step || generationStateRef.current.progress !== progress) {
+        generationStateRef.current.step = step;
+        generationStateRef.current.progress = progress;
+        saveGenerationState(generationStateRef.current);
+      }
+    }
+  }, [step, progress]);
+
+  // Продолжение генерации с сохраненного места
+  const continueGeneration = useCallback(async () => {
+    if (!generationStateRef.current) return;
+
+    const state = generationStateRef.current;
+    const daysOfWeek = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
+    const generatedDays = { ...state.generatedDays };
+    let currentIndex = state.currentDayIndex;
+
+    setStep("generating");
+    const initialProgress = Math.round((currentIndex / daysOfWeek.length) * 90);
+    setProgress(initialProgress);
+    
+    // Обновляем состояние сразу после установки step
+    if (generationStateRef.current) {
+      generationStateRef.current.step = "generating";
+      generationStateRef.current.progress = initialProgress;
+      saveGenerationState(generationStateRef.current);
+    }
+
+    try {
+      // Продолжаем с того дня, где остановились
+      for (let i = currentIndex; i < daysOfWeek.length; i++) {
+        const dayName = daysOfWeek[i];
+        
+        // Пропускаем уже сгенерированные дни
+        if (generatedDays[dayName]) {
+          continue;
+        }
+
+        try {
+          const dayPlan = await generateDayPlan(dayName, state.childData, state.goalsText, state.accessToken);
+          generatedDays[dayName] = dayPlan;
+          
+          // Обновляем состояние
+          if (generationStateRef.current) {
+            generationStateRef.current.generatedDays = generatedDays;
+            generationStateRef.current.currentDayIndex = i + 1;
+            generationStateRef.current.progress = Math.round(((i + 1) / daysOfWeek.length) * 90);
+            saveGenerationState(generationStateRef.current);
+          }
+          
+          // Update progress (each day is ~14% of total)
+          setProgress(Math.round(((i + 1) / daysOfWeek.length) * 90));
+        } catch (dayError) {
+          console.error(`Error generating ${dayName}:`, dayError);
+          // Continue with other days, skip failed one
+          toast({
+            variant: "destructive",
+            title: `Ошибка для ${dayName}`,
+            description: "День будет пропущен",
+          });
+        }
+        
+        // Small delay between requests to avoid rate limiting
+        if (i < daysOfWeek.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      if (Object.keys(generatedDays).length === 0) {
+        throw new Error("Не удалось сгенерировать ни одного дня");
+      }
+
+      // Generate shopping list from collected ingredients
+      const shoppingList = await generateShoppingList(generatedDays, state.accessToken);
+      
+      // Calculate total weekly calories
+      let totalCalories = 0;
+      for (const dayPlan of Object.values(generatedDays)) {
+        for (const meal of Object.values(dayPlan)) {
+          totalCalories += meal?.calories || 0;
+        }
+      }
+
+      setProgress(100);
+
+      const plan: GeneratedPlan = {
+        days: generatedDays,
+        shopping_list: shoppingList,
+        total_calories_week: totalCalories,
+      };
+
+      setGeneratedPlan(plan);
+      // Обновляем состояние перед очисткой (но не очищаем сразу, чтобы можно было восстановить)
+      if (generationStateRef.current) {
+        generationStateRef.current.progress = 100;
+        generationStateRef.current.step = "preview";
+        generationStateRef.current.generatedPlan = plan;
+        generationStateRef.current.isGenerating = false; // Генерация завершена
+        saveGenerationState(generationStateRef.current);
+      }
+      setStep("preview");
+    } catch (err: any) {
+      setError(err.message || "Ошибка генерации");
+      setStep("goals");
+      clearGenerationState();
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: err.message || "Не удалось сгенерировать план",
+      });
+    }
+  }, [toast]);
+
+  // Восстановление генерации при возврате на вкладку
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // Проверяем, есть ли сохраненное состояние генерации
+        const savedState = loadGenerationState();
+        console.log('Visibility change - savedState:', savedState);
+        
+        if (savedState) {
+          // Проверяем, что генерация в процессе (по step или isGenerating)
+          const isGenerating = savedState.step === "generating" || savedState.isGenerating;
+          
+          if (isGenerating) {
+            console.log('Restoring generation state:', savedState);
+            
+            // Восстанавливаем состояние UI
+            generationStateRef.current = savedState;
+            
+            // Восстанавливаем step и progress
+            if (savedState.step) {
+              setStep(savedState.step as typeof step);
+            }
+            if (savedState.progress !== undefined) {
+              setProgress(savedState.progress);
+            }
+            if (savedState.selectedGoals) {
+              setSelectedGoals(savedState.selectedGoals);
+            }
+            
+            // Если генерация еще не завершена, продолжаем
+            if (savedState.step === "generating" && savedState.currentDayIndex < 7) {
+              console.log('Continuing generation from day:', savedState.currentDayIndex);
+              // Небольшая задержка для плавного восстановления UI
+              setTimeout(() => {
+                continueGeneration();
+              }, 300);
+            } else if (savedState.step === "preview" && savedState.generatedPlan) {
+              // Если генерация завершена, восстанавливаем план
+              console.log('Restoring completed plan');
+              setGeneratedPlan(savedState.generatedPlan);
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [step, continueGeneration]);
+
+  // Проверка сохраненного состояния при монтировании компонента
+  useEffect(() => {
+    const savedState = loadGenerationState();
+    console.log('Component mount - savedState:', savedState);
+    
+    if (savedState) {
+      // Проверяем, что генерация в процессе (по step или isGenerating)
+      const isGenerating = savedState.step === "generating" || savedState.isGenerating;
+      
+      if (isGenerating) {
+        console.log('Restoring generation on mount:', savedState);
+        
+        // Автоматически восстанавливаем состояние генерации
+        generationStateRef.current = savedState;
+        
+        // Восстанавливаем UI состояние
+        if (savedState.step) {
+          setStep(savedState.step as typeof step);
+        }
+        if (savedState.progress !== undefined) {
+          setProgress(savedState.progress);
+        }
+        if (savedState.selectedGoals) {
+          setSelectedGoals(savedState.selectedGoals);
+        }
+        
+        // Если генерация еще не завершена, продолжаем
+        if (savedState.step === "generating" && savedState.currentDayIndex < 7) {
+          console.log('Continuing generation on mount from day:', savedState.currentDayIndex);
+          // Небольшая задержка для инициализации компонента
+          setTimeout(() => {
+            continueGeneration();
+          }, 500);
+        } else if (savedState.step === "preview" && savedState.generatedPlan) {
+          // Если генерация завершена, восстанавливаем план
+          console.log('Restoring completed plan on mount');
+          setGeneratedPlan(savedState.generatedPlan);
+        }
+      }
+    }
+  }, [continueGeneration]);
+
   const toggleGoal = (goalId: string) => {
     setSelectedGoals((prev) =>
       prev.includes(goalId)
@@ -219,6 +490,8 @@ export default function GeneratePlanPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`,
         },
+        // Добавляем keepalive для продолжения запроса при переключении вкладок
+        keepalive: true,
         body: JSON.stringify({
           type: "single_day",
           childData,
@@ -312,6 +585,7 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
     setStep("generating");
     setProgress(0);
     setError(null);
+    // НЕ очищаем состояние здесь - оно будет перезаписано новым
 
     const daysOfWeek = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
@@ -332,6 +606,22 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
       const { data: session } = await supabase.auth.getSession();
       const accessToken = session?.session?.access_token || "";
 
+      // Сохраняем начальное состояние СРАЗУ после установки step
+      generationStateRef.current = {
+        isGenerating: true,
+        generatedDays: {},
+        currentDayIndex: 0,
+        childData,
+        goalsText,
+        accessToken,
+        step: "generating",
+        progress: 0,
+        selectedGoals,
+      };
+      // Сохраняем состояние сразу, чтобы оно было доступно при переключении вкладок
+      saveGenerationState(generationStateRef.current);
+      console.log('Initial generation state saved:', generationStateRef.current);
+
       const generatedDays: Record<string, GeneratedDay> = {};
       
       // Generate each day sequentially with progress updates
@@ -341,6 +631,14 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
         try {
           const dayPlan = await generateDayPlan(dayName, childData, goalsText, accessToken);
           generatedDays[dayName] = dayPlan;
+          
+          // Обновляем сохраненное состояние
+          if (generationStateRef.current) {
+            generationStateRef.current.generatedDays = generatedDays;
+            generationStateRef.current.currentDayIndex = i + 1;
+            generationStateRef.current.progress = Math.round(((i + 1) / daysOfWeek.length) * 90);
+            saveGenerationState(generationStateRef.current);
+          }
           
           // Update progress (each day is ~14% of total)
           setProgress(Math.round(((i + 1) / daysOfWeek.length) * 90));
@@ -384,10 +682,19 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
       };
 
       setGeneratedPlan(plan);
+      // Обновляем состояние перед очисткой (но не очищаем сразу, чтобы можно было восстановить)
+      if (generationStateRef.current) {
+        generationStateRef.current.progress = 100;
+        generationStateRef.current.step = "preview";
+        generationStateRef.current.generatedPlan = plan;
+        generationStateRef.current.isGenerating = false; // Генерация завершена
+        saveGenerationState(generationStateRef.current);
+      }
       setStep("preview");
     } catch (err: any) {
       setError(err.message || "Ошибка генерации");
       setStep("goals");
+      clearGenerationState();
       toast({
         variant: "destructive",
         title: "Ошибка",
@@ -506,6 +813,9 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
         title: "План сохранен!",
         description: `Создано ${totalMeals} блюд и список покупок`,
       });
+
+      // Очищаем состояние после успешного сохранения
+      clearGenerationState();
 
       navigate("/meal-plan");
     } catch (err: any) {

@@ -1,6 +1,6 @@
 import { useState, useRef, forwardRef } from "react";
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
-import { Trash2 } from "lucide-react";
+import { Trash2, ChefHat, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ChatMessageProps {
@@ -11,6 +11,100 @@ interface ChatMessageProps {
   onDelete: (id: string) => void;
 }
 
+interface Recipe {
+  title: string;
+  description?: string;
+  ingredients?: string[];
+  steps?: string[];
+  cookingTime?: number;
+}
+
+/**
+ * Парсит JSON рецепт из текста сообщения
+ */
+function parseRecipeFromContent(content: string): Recipe | null {
+  try {
+    // Ищем JSON в code blocks
+    const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      const parsed = JSON.parse(codeBlockMatch[1]);
+      // Если это один рецепт
+      if (parsed.title || parsed.name) {
+        return {
+          title: parsed.title || parsed.name,
+          description: parsed.description,
+          ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+          steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+          cookingTime: parsed.cookingTime || parsed.cooking_time,
+        };
+      }
+      // Если это массив рецептов, берем первый
+      if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
+        const recipe = parsed.recipes[0];
+        return {
+          title: recipe.title || recipe.name,
+          description: recipe.description,
+          ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+          steps: Array.isArray(recipe.steps) ? recipe.steps : [],
+          cookingTime: recipe.cookingTime || recipe.cooking_time,
+        };
+      }
+    }
+
+    // Если не нашли в code block, ищем обычный JSON объект
+    const simpleMatch = content.match(/\{[\s\S]*\}/);
+    if (simpleMatch) {
+      const parsed = JSON.parse(simpleMatch[0]);
+      if (parsed.title || parsed.name) {
+        return {
+          title: parsed.title || parsed.name,
+          description: parsed.description,
+          ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+          steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+          cookingTime: parsed.cookingTime || parsed.cooking_time,
+        };
+      }
+    }
+  } catch (e) {
+    // Не JSON или невалидный JSON - возвращаем null
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Форматирует рецепт в красивый вид
+ */
+function formatRecipe(recipe: Recipe): string {
+  let formatted = `🍽️ **${recipe.title}**\n\n`;
+
+  if (recipe.description) {
+    formatted += `${recipe.description}\n\n`;
+  }
+
+  if (recipe.cookingTime) {
+    formatted += `⏱️ Время приготовления: ${recipe.cookingTime} мин\n\n`;
+  }
+
+  if (recipe.ingredients && recipe.ingredients.length > 0) {
+    formatted += `**Ингредиенты:**\n`;
+    recipe.ingredients.forEach((ingredient, index) => {
+      formatted += `${index + 1}. ${ingredient}\n`;
+    });
+    formatted += `\n`;
+  }
+
+  if (recipe.steps && recipe.steps.length > 0) {
+    formatted += `**Приготовление:**\n`;
+    recipe.steps.forEach((step, index) => {
+      formatted += `${index + 1}. ${step}\n`;
+    });
+  }
+
+  return formatted;
+}
+
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
   ({ id, role, content, timestamp, onDelete }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
@@ -18,6 +112,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
     const constraintsRef = useRef(null);
+
+    // Парсим рецепт из контента (только для сообщений ассистента)
+    const recipe = role === "assistant" ? parseRecipeFromContent(content) : null;
+    const displayContent = recipe ? formatRecipe(recipe) : content;
 
     const handleDragEnd = (_: any, info: PanInfo) => {
       if (info.offset.x < -80) {
@@ -31,7 +129,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     };
 
     return (
-      <div 
+      <div
         ref={ref}
         className={`relative flex ${role === "user" ? "justify-end" : "justify-start"}`}
       >
@@ -57,13 +155,86 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           className={`relative max-w-[85%] cursor-grab active:cursor-grabbing`}
         >
           <div
-            className={`rounded-2xl px-4 py-3 ${
-              role === "user"
+            className={`rounded-2xl px-4 py-3 ${role === "user"
                 ? "bg-primary text-primary-foreground rounded-br-sm"
                 : "bg-card shadow-soft rounded-bl-sm"
-            }`}
+              }`}
           >
-            <p className="text-base whitespace-pre-wrap select-none">{content}</p>
+            {recipe ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <ChefHat className="w-4 h-4 text-primary" />
+                  <h3 className="font-semibold text-base">{recipe.title}</h3>
+                </div>
+                {recipe.description && (
+                  <p className="text-sm text-muted-foreground italic">{recipe.description}</p>
+                )}
+                {recipe.cookingTime && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    <span>Время приготовления: {recipe.cookingTime} мин</span>
+                  </div>
+                )}
+                {recipe.ingredients && recipe.ingredients.length > 0 && (
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">🥘</span>
+                      <p className="font-semibold text-sm">Ингредиенты:</p>
+                    </div>
+                    <ul className="space-y-2 text-sm">
+                      {recipe.ingredients.map((ingredient, index) => {
+                        // Определяем эмодзи для разных типов ингредиентов
+                        const getIngredientEmoji = (ing: string): string => {
+                          const lowerIng = ing.toLowerCase();
+                          if (lowerIng.includes('молоко') || lowerIng.includes('сливки') || lowerIng.includes('кефир')) return '🥛';
+                          if (lowerIng.includes('яйц') || lowerIng.includes('яиц')) return '🥚';
+                          if (lowerIng.includes('мясо') || lowerIng.includes('куриц') || lowerIng.includes('говядин') || lowerIng.includes('свинин')) return '🍗';
+                          if (lowerIng.includes('рыб') || lowerIng.includes('лосос') || lowerIng.includes('треск')) return '🐟';
+                          if (lowerIng.includes('овощ') || lowerIng.includes('морков') || lowerIng.includes('лук') || lowerIng.includes('помидор') || lowerIng.includes('огур')) return '🥕';
+                          if (lowerIng.includes('фрукт') || lowerIng.includes('яблок') || lowerIng.includes('банан') || lowerIng.includes('груш')) return '🍎';
+                          if (lowerIng.includes('ягода') || lowerIng.includes('клубник') || lowerIng.includes('малин') || lowerIng.includes('черник')) return '🫐';
+                          if (lowerIng.includes('крупа') || lowerIng.includes('рис') || lowerIng.includes('гречк') || lowerIng.includes('овсян')) return '🌾';
+                          if (lowerIng.includes('масло') || lowerIng.includes('жир')) return '🧈';
+                          if (lowerIng.includes('сыр') || lowerIng.includes('творог')) return '🧀';
+                          if (lowerIng.includes('хлеб') || lowerIng.includes('булка')) return '🍞';
+                          if (lowerIng.includes('сахар') || lowerIng.includes('мед') || lowerIng.includes('сироп')) return '🍯';
+                          if (lowerIng.includes('соль') || lowerIng.includes('перец') || lowerIng.includes('специ')) return '🧂';
+                          if (lowerIng.includes('вода')) return '💧';
+                          return '🥄'; // Дефолтный эмодзи
+                        };
+
+                        return (
+                          <li key={index} className="flex items-start gap-2">
+                            <span className="text-base flex-shrink-0">{getIngredientEmoji(ingredient)}</span>
+                            <span className="flex-1">{ingredient}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {recipe.steps && recipe.steps.length > 0 && (
+                  <div className="bg-muted/20 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">👨‍🍳</span>
+                      <p className="font-semibold text-sm">Приготовление:</p>
+                    </div>
+                    <ol className="space-y-2 text-sm">
+                      {recipe.steps.map((step, index) => (
+                        <li key={index} className="flex items-start gap-2">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                          <span className="flex-1 pt-0.5">{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-base whitespace-pre-wrap select-none">{displayContent}</p>
+            )}
             <p className="text-[10px] opacity-60 mt-1">
               {timestamp.toLocaleTimeString("ru-RU", {
                 hour: "2-digit",

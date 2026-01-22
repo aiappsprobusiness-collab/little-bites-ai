@@ -14,6 +14,7 @@ import GeneratePlanPage from "./pages/GeneratePlanPage";
 import ShoppingPage from "./pages/ShoppingPage";
 import RecipePage from "./pages/RecipePage";
 import RecipeEditPage from "./pages/RecipeEditPage";
+import RecipesPage from "./pages/RecipesPage";
 import ChatPage from "./pages/ChatPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
@@ -99,6 +100,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <RecipeEditPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/recipes"
+              element={
+                <ProtectedRoute>
+                  <RecipesPage />
                 </ProtectedRoute>
               }
             />

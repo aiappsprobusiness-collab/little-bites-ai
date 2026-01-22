@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
-import { Star, Clock, Baby } from "lucide-react";
+import { Star, Clock } from "lucide-react";
 import { RecipePlaceholder } from "./RecipePlaceholder";
 
 interface RecipeCardProps {
@@ -8,10 +8,12 @@ interface RecipeCardProps {
   title: string;
   image?: string | null;
   cookTime: string;
-  ageRange: string;
+  ageRange?: string;
+  childName?: string;
   rating?: number;
   isFavorite?: boolean;
   onClick?: () => void;
+  size?: 'small' | 'medium' | 'large';
 }
 
 // Check if image URL is valid (not placeholder or empty)
@@ -27,11 +29,46 @@ export function RecipeCard({
   image,
   cookTime,
   ageRange,
+  childName,
   rating,
   isFavorite,
   onClick,
+  size = 'medium',
 }: RecipeCardProps) {
   const hasValidImage = isValidImageUrl(image);
+
+  // Размеры в зависимости от пропса size
+  const sizeClasses = {
+    small: {
+      grid: 'grid-cols-3',
+      padding: 'p-2',
+      title: 'text-xs',
+      icon: 'w-3 h-3',
+      text: 'text-xs',
+      star: 'w-6 h-6',
+      starIcon: 'w-3 h-3',
+    },
+    medium: {
+      grid: 'grid-cols-2',
+      padding: 'p-4',
+      title: 'text-base',
+      icon: 'w-4 h-4',
+      text: 'text-sm',
+      star: 'w-8 h-8',
+      starIcon: 'w-4 h-4',
+    },
+    large: {
+      grid: 'grid-cols-1',
+      padding: 'p-5',
+      title: 'text-lg',
+      icon: 'w-5 h-5',
+      text: 'text-base',
+      star: 'w-10 h-10',
+      starIcon: 'w-5 h-5',
+    },
+  };
+
+  const classes = sizeClasses[size];
 
   return (
     <motion.div
@@ -59,25 +96,21 @@ export function RecipeCard({
             />
           )}
           {isFavorite && (
-            <div className="absolute top-3 right-3 w-8 h-8 rounded-full bg-card/90 backdrop-blur-sm flex items-center justify-center">
-              <Star className="w-4 h-4 text-peach-dark fill-peach-dark" />
+            <div className={`absolute top-3 right-3 ${classes.star} rounded-full bg-card/90 backdrop-blur-sm flex items-center justify-center`}>
+              <Star className={`${classes.starIcon} text-peach-dark fill-peach-dark`} />
             </div>
           )}
         </div>
-        <CardContent className="p-4">
-          <h3 className="font-bold text-base mb-2 line-clamp-2">{title}</h3>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <CardContent className={classes.padding}>
+          <h3 className={`font-bold ${classes.title} mb-2 line-clamp-2`}>{title}</h3>
+          <div className={`flex items-center gap-3 ${classes.text} text-muted-foreground`}>
             <div className="flex items-center gap-1">
-              <Clock className="w-4 h-4" />
+              <Clock className={classes.icon} />
               <span>{cookTime}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Baby className="w-4 h-4" />
-              <span>{ageRange}</span>
             </div>
             {rating && (
               <div className="flex items-center gap-1 ml-auto">
-                <Star className="w-4 h-4 text-peach-dark fill-peach-dark" />
+                <Star className={`${classes.icon} text-peach-dark fill-peach-dark`} />
                 <span className="font-medium text-foreground">{rating}</span>
               </div>
             )}

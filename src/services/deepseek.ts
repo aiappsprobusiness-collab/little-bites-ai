@@ -306,25 +306,67 @@ class DeepSeekService {
     allergies?: string[]
   ): Promise<RecipeSuggestion> {
     try {
-      const ageInfo = childAgeMonths
-        ? `Ребенку ${childAgeMonths} месяцев. `
-        : '';
+      // Правильно форматируем возраст для промпта
+      let ageInfo = '';
+      if (childAgeMonths) {
+        const years = Math.floor(childAgeMonths / 12);
+        const months = childAgeMonths % 12;
+        if (years > 0) {
+          if (months > 0) {
+            ageInfo = `ВАЖНО: Ребенку ${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} ${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'} (${childAgeMonths} месяцев). `;
+          } else {
+            ageInfo = `ВАЖНО: Ребенку ${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} (${childAgeMonths} месяцев). `;
+          }
+        } else {
+          ageInfo = `ВАЖНО: Ребенку ${childAgeMonths} ${childAgeMonths === 1 ? 'месяц' : childAgeMonths < 5 ? 'месяца' : 'месяцев'}. `;
+        }
+      }
+      
+      console.log('DeepSeek generateRecipe - ageInfo:', ageInfo, 'childAgeMonths:', childAgeMonths);
       const allergyInfo = allergies && allergies.length > 0
-        ? `У ребенка аллергия на: ${allergies.join(', ')}. `
+        ? `КРИТИЧЕСКИ ВАЖНО: У ребенка аллергия на следующие продукты: ${allergies.join(', ')}. НИ В КОЕМ СЛУЧАЕ не используй эти продукты и их производные в рецепте. `
         : '';
 
+      // Форматируем возраст для ageRange
+      const years = Math.floor(childAgeMonths / 12);
+      const months = childAgeMonths % 12;
+      let ageRangeText = '';
+      if (childAgeMonths) {
+        if (years > 0) {
+          if (months > 0) {
+            ageRangeText = `${years} г. ${months} мес`;
+          } else {
+            ageRangeText = `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`;
+          }
+        } else {
+          ageRangeText = `${childAgeMonths} мес`;
+        }
+      } else {
+        ageRangeText = '6+ мес';
+      }
+
       const systemPrompt = `Ты эксперт по детскому питанию. Создай рецепт блюда для ребенка на основе указанных продуктов.
+
 ${ageInfo}${allergyInfo}
-Верни ответ в формате JSON:
+${ageInfo ? `КРИТИЧЕСКИ ВАЖНО: Учти возраст ребенка - рецепт должен быть подходящим для указанного возраста. ` : ''}
+${allergyInfo ? `СТРОГО ИСКЛЮЧИ из рецепта все продукты, на которые у ребенка аллергия: ${allergies.join(', ')}. ` : ''}
+
+Верни ответ ТОЛЬКО в формате JSON без дополнительного текста:
 {
   "title": "Название рецепта",
-  "description": "Краткое описание",
+  "description": "Краткое описание с учетом возраста и ограничений",
   "ingredients": ["ингредиент 1", "ингредиент 2"],
   "steps": ["шаг 1", "шаг 2"],
   "cookingTime": 20,
-  "ageRange": "6+ мес"
+  "ageRange": "${ageRangeText}"
 }
-Учти возраст ребенка и аллергии. Рецепт должен быть безопасным и полезным. НЕ используй продукты, на которые у ребенка аллергия.`;
+
+Требования:
+- Рецепт должен быть безопасным и подходящим для указанного возраста ребенка
+- ${allergyInfo ? `КРИТИЧЕСКИ ВАЖНО: НЕ используй продукты: ${allergies.join(', ')}. Проверь каждый ингредиент на наличие аллергенов.` : 'Используй только безопасные продукты для детского питания'}
+- Ингредиенты должны быть подходящими для указанного возраста
+- Шаги приготовления должны быть простыми и безопасными
+- Если указаны аллергии, полностью исключи эти продукты из рецепта`;
 
       const userPrompt = `Создай рецепт из следующих продуктов: ${products.join(', ')}`;
 
@@ -337,12 +379,25 @@ ${ageInfo}${allergyInfo}
 
       // Парсим JSON ответ
       try {
-        const jsonMatch = response.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]);
+        // Пробуем разные паттерны для поиска JSON
+        const jsonPatterns = [
+          /\{[\s\S]*\}/,  // Обычный JSON объект
+          /```json\s*(\{[\s\S]*?\})\s*```/,  // JSON в code block
+          /```\s*(\{[\s\S]*?\})\s*```/,  // JSON в code block без json
+        ];
+        
+        let jsonMatch = null;
+        for (const pattern of jsonPatterns) {
+          jsonMatch = response.match(pattern);
+          if (jsonMatch) {
+            const jsonString = jsonMatch[1] || jsonMatch[0];
+            const parsed = JSON.parse(jsonString);
+            console.log('Successfully parsed recipe JSON:', parsed);
+            return parsed;
+          }
         }
       } catch (e) {
-        console.warn('Failed to parse recipe JSON, using fallback');
+        console.warn('Failed to parse recipe JSON:', e, 'Response:', response.substring(0, 200));
       }
 
       // Fallback: создаем простой рецепт

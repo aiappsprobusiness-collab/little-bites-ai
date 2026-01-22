@@ -1,9 +1,11 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Loader2 } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { getIngredientEmoji } from "@/utils/ingredientEmojis";
 
 export default function RecipePage() {
   const { id } = useParams<{ id: string }>();
@@ -56,20 +58,34 @@ export default function RecipePage() {
         {ingredients.length > 0 && (
           <Card className="bg-card/50 backdrop-blur-sm border-border/50">
             <CardContent className="p-4">
-              <h2 className="text-sm font-semibold text-primary uppercase tracking-wide mb-4 text-center">
-                🥗 Ингредиенты
+              <h2 className="text-sm font-semibold text-primary uppercase tracking-wide mb-4 text-center flex items-center justify-center gap-2">
+                <span className="text-xl">🥗</span>
+                <span>Ингредиенты</span>
+                <span className="text-xl">🥗</span>
               </h2>
-              <ul className="space-y-3">
-                {ingredients.map((ing: any, index: number) => (
-                  <li key={index} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
-                    <span className="font-medium">{ing.name}</span>
-                    {ing.amount && ing.unit && (
-                      <span className="text-muted-foreground text-sm bg-muted/50 px-2 py-1 rounded-full">
-                        {ing.amount} {ing.unit}
+              <ul className="space-y-2.5">
+                {ingredients.map((ing: any, index: number) => {
+                  const emoji = getIngredientEmoji(ing.name);
+                  return (
+                    <motion.li
+                      key={index}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-gradient-to-r from-card/80 to-card/40 border border-border/30 hover:border-primary/30 transition-all"
+                    >
+                      <span className="text-2xl flex-shrink-0" role="img" aria-label={ing.name}>
+                        {emoji}
                       </span>
-                    )}
-                  </li>
-                ))}
+                      <span className="font-medium flex-1 text-foreground/90">{ing.name}</span>
+                      {ing.amount && ing.unit && (
+                        <span className="text-muted-foreground text-sm bg-primary/10 text-primary font-semibold px-3 py-1 rounded-full border border-primary/20">
+                          {ing.amount} {ing.unit}
+                        </span>
+                      )}
+                    </motion.li>
+                  );
+                })}
               </ul>
             </CardContent>
           </Card>

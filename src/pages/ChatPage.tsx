@@ -11,6 +11,8 @@ import { useChatHistory } from "@/hooks/useChatHistory";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
+import { useChatRecipes } from "@/hooks/useChatRecipes";
+import { detectMealType } from "@/utils/parseChatRecipes";
 import {
   Select,
   SelectContent,
@@ -39,6 +41,7 @@ export default function ChatPage() {
   const { canGenerate, isPremium, remaining, dailyLimit } = useSubscription();
   const { chat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage } = useChatHistory();
+  const { saveRecipesFromChat } = useChatRecipes();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
@@ -118,6 +121,29 @@ export default function ChatPage() {
         response: response.message,
         childId: selectedChild?.id,
       });
+
+      // Пытаемся сохранить рецепты из ответа AI
+      try {
+        const mealType = detectMealType(userMessage.content);
+        console.log('ChatPage - Detected meal type:', mealType, 'from message:', userMessage.content);
+        const savedRecipes = await saveRecipesFromChat({
+          userMessage: userMessage.content,
+          aiResponse: response.message,
+          childId: selectedChildId || undefined,
+          mealType,
+        });
+
+        console.log('ChatPage - Saved recipes:', savedRecipes);
+        if (savedRecipes && savedRecipes.length > 0) {
+          toast({
+            title: "Рецепты сохранены",
+            description: `${savedRecipes.length} рецепт(ов) добавлено в ваш список`,
+          });
+        }
+      } catch (error) {
+        // Показываем ошибку для отладки
+        console.error('Failed to save recipes from chat:', error);
+      }
     } catch (error: any) {
       console.error("Chat error:", error);
       

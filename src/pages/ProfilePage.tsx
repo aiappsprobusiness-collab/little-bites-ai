@@ -42,20 +42,20 @@ export default function ProfilePage() {
   } = useChildren();
   const { recipes } = useRecipes();
   const { getMealPlans } = useMealPlans();
-  
+
 
   const [selectedChildId, setSelectedChildId] = useState<string | null>(children[0]?.id || null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
-  
+
 
   const selectedChild = children.find(c => c.id === selectedChildId);
 
   // Статистика для выбранного ребенка
   const childRecipes = selectedChild ? recipes.filter(r => r.child_id === selectedChild.id) : [];
   const favoriteRecipes = childRecipes.filter(r => r.is_favorite).length;
-  
-  
+
+
   // Планы питания (примерно, можно улучшить)
   const today = new Date();
   const weekStart = new Date(today);
@@ -162,11 +162,10 @@ export default function ProfilePage() {
               key={child.id}
               whileTap={{ scale: 0.95 }}
               onClick={() => setSelectedChildId(child.id)}
-              className={`flex-shrink-0 flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${
-                selectedChildId === child.id
+              className={`flex-shrink-0 flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${selectedChildId === child.id
                   ? "bg-primary text-primary-foreground shadow-button"
                   : "bg-card shadow-soft"
-              }`}
+                }`}
             >
               <span className="text-2xl">{child.avatar_url || "👶"}</span>
               <div className="text-left">
@@ -461,7 +460,7 @@ function ChildEditDialog({
 
         <div className="space-y-2">
           <Label>Аллергии и ограничения</Label>
-          
+
           {/* Предустановленные аллергии */}
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">Выберите из списка:</p>
@@ -471,11 +470,10 @@ function ChildEditDialog({
                   key={allergy}
                   type="button"
                   onClick={() => toggleAllergy(allergy)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    allergies.includes(allergy)
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${allergies.includes(allergy)
                       ? "bg-destructive text-destructive-foreground"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
+                    }`}
                 >
                   {allergy}
                 </button>
