@@ -211,18 +211,10 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
       )}
 
       {/* Quick Actions */}
-      <motion.div variants={item} className="flex gap-2">
-        <Button
-          variant="outline"
-          className="flex-1"
-          onClick={() => navigate('/meal-plan')}
-        >
-          <Calendar className="w-4 h-4 mr-2" />
-          План питания
-        </Button>
+      <motion.div variants={item}>
         <Button
           variant="mint"
-          className="flex-1"
+          className="w-full"
           onClick={() => navigate('/scan')}
         >
           <ChefHat className="w-4 h-4 mr-2" />
