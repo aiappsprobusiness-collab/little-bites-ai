@@ -163,7 +163,7 @@ export default function MealPlanPage() {
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <div className="text-center">
-              <p className="font-bold">
+              <p className="text-base font-bold">
                 {weekDates[0].toLocaleDateString("ru-RU", { month: "long" })}
               </p>
               <p className="text-sm text-muted-foreground">
@@ -268,7 +268,7 @@ export default function MealPlanPage() {
                         <div className="text-3xl">{meal.emoji}</div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold">{meal.label}</span>
+                            <span className="text-base font-semibold">{meal.label}</span>
                             <span className="text-xs text-muted-foreground">{meal.time}</span>
                           </div>
                           {plannedMeal ? (

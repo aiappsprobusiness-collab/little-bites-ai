@@ -9,7 +9,6 @@ import { ChefHat, Sparkles, TrendingUp, Heart, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
-import { useGigaChat } from "@/hooks/useGigaChat";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +37,6 @@ export default function HomePage() {
   const { toast } = useToast();
   const { selectedChild } = useSelectedChild();
   const { recentRecipes, isLoading: isLoadingRecipes } = useRecipes();
-  const { recommendation, isLoadingRecommendation } = useGigaChat();
   const { createChild, isCreating } = useChildren();
   
   const [isAddChildOpen, setIsAddChildOpen] = useState(false);
@@ -117,7 +115,7 @@ export default function HomePage() {
         >
           <div>
             <h1 className="text-2xl font-bold">Привет! 👋</h1>
-            <p className="text-muted-foreground">
+            <p className="text-base text-muted-foreground">
               Что приготовим сегодня для малыша?
             </p>
           </div>
@@ -211,48 +209,6 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* AI Tip Card */}
-        {selectedChild && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <Card variant="peach" className="overflow-hidden">
-              <CardContent className="p-5">
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-card/50 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-secondary-foreground" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold mb-1">Совет от ИИ</h3>
-                    {isLoadingRecommendation ? (
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <p className="text-sm text-secondary-foreground/80">Загружаем рекомендацию...</p>
-                      </div>
-                    ) : recommendation ? (
-                      <p className="text-sm text-secondary-foreground/80">{recommendation}</p>
-                    ) : (
-                      <p className="text-sm text-secondary-foreground/80">
-                        {(() => {
-                          const ageMonths = selectedChild ? Math.floor((new Date().getTime() - new Date(selectedChild.birth_date).getTime()) / (1000 * 60 * 60 * 24 * 30.44)) : 0;
-                          if (ageMonths < 6) {
-                            return "Для малышей до 6 месяцев идеально подходит грудное молоко или смесь. Скоро можно будет вводить первый прикорм!";
-                          } else if (ageMonths < 12) {
-                            return "В этом возрасте отлично подойдут пюреобразные блюда. Начните с овощных и фруктовых пюре!";
-                          } else {
-                            return "В этом возрасте отлично подойдут текстурные блюда. Попробуйте мягкие кусочки овощей для развития жевательных навыков!";
-                          }
-                        })()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
       </div>
 
       {/* Add Child Dialog */}
