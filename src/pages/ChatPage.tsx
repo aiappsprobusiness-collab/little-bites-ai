@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, Trash2, Sparkles } from "lucide-react";
+import { Send, Loader2, Trash2, Sparkles, MessageSquarePlus, ChevronUp } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,6 +13,13 @@ import { useChatHistory } from "@/hooks/useChatHistory";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 interface Message {
   id: string;
@@ -38,6 +45,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [showPaywall, setShowPaywall] = useState(false);
+  const [isInputSheetOpen, setIsInputSheetOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -87,6 +95,7 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setIsInputSheetOpen(false);
 
     try {
       const chatMessages = messages.map((m) => ({
@@ -259,54 +268,91 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input area */}
+        {/* Floating button to open input sheet */}
         <div className="px-4 py-3 border-t border-border/50 bg-background">
-          <div className="flex gap-2 items-end">
-            <div className="flex-1 relative">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder="Спросите о рецепте или питании..."
-                className="min-h-[48px] max-h-[120px] resize-none pr-12"
-                rows={1}
-              />
-            </div>
-            <Button
-              variant="mint"
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim() || isChatting}
-              className="h-12 w-12 rounded-xl flex-shrink-0"
-            >
-              {isChatting ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
-            </Button>
-          </div>
-
-          {/* Clear history button */}
-          {messages.length > 0 && (
-            <div className="flex justify-center mt-3">
+          <Sheet open={isInputSheetOpen} onOpenChange={setIsInputSheetOpen}>
+            <SheetTrigger asChild>
               <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearHistory}
-                className="text-xs text-muted-foreground"
+                variant="mint"
+                size="lg"
+                className="w-full"
               >
-                <Trash2 className="w-3 h-3 mr-1" />
-                Очистить историю
+                <MessageSquarePlus className="w-5 h-5 mr-2" />
+                Написать сообщение
+                <ChevronUp className="w-4 h-4 ml-2" />
               </Button>
-            </div>
-          )}
+            </SheetTrigger>
+            <SheetContent side="bottom" className="rounded-t-3xl px-4 pb-8">
+              <SheetHeader className="pb-4">
+                <SheetTitle className="text-center">Задать вопрос ассистенту</SheetTitle>
+              </SheetHeader>
+              
+              {/* Quick prompts in sheet */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {quickPrompts.map((prompt) => (
+                  <Button
+                    key={prompt}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setInput(prompt);
+                      textareaRef.current?.focus();
+                    }}
+                    className="text-sm"
+                  >
+                    {prompt}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 relative">
+                  <Textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder="Спросите о рецепте или питании..."
+                    className="min-h-[80px] max-h-[200px] resize-none text-base"
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  variant="mint"
+                  size="icon"
+                  onClick={handleSend}
+                  disabled={!input.trim() || isChatting}
+                  className="h-12 w-12 rounded-xl flex-shrink-0"
+                >
+                  {isChatting ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Send className="w-5 h-5" />
+                  )}
+                </Button>
+              </div>
+
+              {/* Clear history button */}
+              {messages.length > 0 && (
+                <div className="flex justify-center mt-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearHistory}
+                    className="text-xs text-muted-foreground"
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" />
+                    Очистить историю
+                  </Button>
+                </div>
+              )}
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
 
