@@ -38,68 +38,95 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    // Initialize speech recognition
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognitionClass();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'ru-RU';
-
-      recognitionRef.current.onresult = (event: any) => {
-        let interimTranscript = '';
-        let newFinalTranscript = '';
-
-        // Обрабатываем все результаты
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            newFinalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        // Обновляем финальный текст
-        if (newFinalTranscript) {
-          finalTranscriptRef.current += newFinalTranscript;
-        }
-
-        // Показываем финальный текст + промежуточный
-        setInput((finalTranscriptRef.current + interimTranscript).trim());
-      };
-
-      recognitionRef.current.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
-        setIsRecording(false);
-        
-        // Обрабатываем различные типы ошибок
-        if (event.error === 'no-speech') {
-          // Пользователь не говорил - это нормально, просто останавливаем
-          setIsRecording(false);
-        } else if (event.error === 'audio-capture') {
-          // Нет микрофона
-          alert('Микрофон не найден. Проверьте настройки браузера.');
-        } else if (event.error === 'not-allowed') {
-          // Разрешение не предоставлено
-          alert('Разрешение на использование микрофона не предоставлено. Проверьте настройки браузера.');
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsRecording(false);
-        // Сохраняем финальный текст при остановке
-        if (finalTranscriptRef.current) {
-          setInput(finalTranscriptRef.current.trim());
-        }
-      };
-
-      recognitionRef.current.onstart = () => {
-        finalTranscriptRef.current = '';
-        setInput('');
-      };
+  // Функция для создания нового экземпляра распознавания речи
+  const createRecognition = () => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      return null;
     }
+
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognitionClass();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'ru-RU';
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let newFinalTranscript = '';
+
+      // Обрабатываем все результаты
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          newFinalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Обновляем финальный текст
+      if (newFinalTranscript) {
+        finalTranscriptRef.current += newFinalTranscript;
+      }
+
+      // Показываем финальный текст + промежуточный
+      setInput((finalTranscriptRef.current + interimTranscript).trim());
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error, event);
+      
+      // Обрабатываем различные типы ошибок
+      if (event.error === 'no-speech') {
+        // Пользователь не говорил - это нормально, просто останавливаем
+        setIsRecording(false);
+      } else if (event.error === 'audio-capture') {
+        // Нет микрофона
+        setIsRecording(false);
+        alert('Микрофон не найден. Проверьте настройки браузера.');
+      } else if (event.error === 'not-allowed') {
+        // Разрешение не предоставлено
+        setIsRecording(false);
+        alert('Разрешение на использование микрофона не предоставлено. Проверьте настройки браузера.');
+      } else if (event.error === 'aborted') {
+        // Распознавание было прервано - это нормально
+        setIsRecording(false);
+      } else if (event.error === 'network') {
+        // Ошибка сети - пытаемся переподключиться один раз
+        console.warn('Network error in speech recognition, will retry once');
+        setIsRecording(false);
+        // Не показываем alert сразу, так как это может быть временная проблема
+        // Пользователь может попробовать еще раз
+      } else {
+        console.error('Unknown speech recognition error:', event.error);
+        setIsRecording(false);
+        // Показываем alert только для критических ошибок
+        if (event.error !== 'service-not-allowed') {
+          alert(`Ошибка распознавания речи: ${event.error}. Проверьте подключение к интернету и попробуйте еще раз.`);
+        }
+      }
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      // Сохраняем финальный текст при остановке
+      if (finalTranscriptRef.current) {
+        setInput(finalTranscriptRef.current.trim());
+      }
+    };
+
+    recognition.onstart = () => {
+      console.log('Speech recognition started');
+      finalTranscriptRef.current = '';
+      setInput('');
+    };
+
+    return recognition;
+  };
+
+  useEffect(() => {
+    // Инициализируем распознавание речи при монтировании компонента
+    recognitionRef.current = createRecognition();
 
     return () => {
       if (recognitionRef.current) {
@@ -108,33 +135,58 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
         } catch (e) {
           // Игнорируем ошибки при остановке
         }
+        recognitionRef.current = null;
       }
     };
   }, []);
 
   const toggleRecording = () => {
-    if (!recognitionRef.current) {
-      // Проверяем поддержку API
-      if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-        alert('Голосовой ввод не поддерживается в вашем браузере. Используйте Chrome, Edge или Safari.');
-        return;
-      }
-      console.error('Speech recognition not initialized');
+    // Проверяем поддержку API
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert('Голосовой ввод не поддерживается в вашем браузере. Используйте Chrome, Edge или Safari.');
+      return;
+    }
+
+    // Проверяем HTTPS (кроме localhost)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      alert('Распознавание речи требует HTTPS соединения. Используйте HTTPS или localhost.');
       return;
     }
 
     if (isRecording) {
-      try {
-        recognitionRef.current.stop();
-        setIsRecording(false);
-      } catch (error) {
-        console.error('Error stopping recognition:', error);
-        setIsRecording(false);
+      // Останавливаем запись
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+          setIsRecording(false);
+        } catch (error) {
+          console.error('Error stopping recognition:', error);
+          setIsRecording(false);
+        }
       }
     } else {
+      // Начинаем запись
       try {
+        // Пересоздаем экземпляр распознавания для надежности
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.stop();
+          } catch (e) {
+            // Игнорируем ошибки при остановке старого экземпляра
+          }
+        }
+        
+        recognitionRef.current = createRecognition();
+        
+        if (!recognitionRef.current) {
+          alert('Не удалось инициализировать распознавание речи.');
+          return;
+        }
+
         // Очищаем предыдущий текст при новом начале записи
+        finalTranscriptRef.current = '';
         setInput('');
+        
         recognitionRef.current.start();
         setIsRecording(true);
       } catch (error: any) {
@@ -146,8 +198,21 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
           alert('Разрешение на использование микрофона не предоставлено. Проверьте настройки браузера.');
         } else if (error.name === 'NotFoundError' || error.message?.includes('not found')) {
           alert('Микрофон не найден. Проверьте подключение микрофона.');
+        } else if (error.name === 'InvalidStateError' || error.message?.includes('already started')) {
+          // Распознавание уже запущено - пересоздаем
+          console.log('Recognition already started, recreating...');
+          recognitionRef.current = createRecognition();
+          if (recognitionRef.current) {
+            try {
+              recognitionRef.current.start();
+              setIsRecording(true);
+            } catch (e: any) {
+              console.error('Error restarting recognition:', e);
+              alert(`Не удалось запустить распознавание речи: ${e.message || e.name || 'Неизвестная ошибка'}`);
+            }
+          }
         } else {
-          alert('Не удалось запустить распознавание речи. Попробуйте еще раз.');
+          alert(`Не удалось запустить распознавание речи: ${error.message || error.name || 'Неизвестная ошибка'}. Попробуйте еще раз.`);
         }
       }
     }
