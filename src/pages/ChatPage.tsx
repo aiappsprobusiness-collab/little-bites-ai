@@ -280,7 +280,7 @@ export default function ChatPage() {
 
         {/* Input area */}
         <div className="px-4 py-3 bg-background">
-          <div className="flex gap-3 items-end">
+          <div className="flex gap-2 items-center">
             <div className="flex-1 relative">
               <Textarea
                 ref={textareaRef}
@@ -293,17 +293,17 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder="Спросите о рецепте или питании..."
-                className="min-h-[52px] max-h-[120px] resize-none text-base rounded-2xl bg-card border-border/50"
+                className="min-h-[44px] max-h-[100px] resize-none text-base rounded-2xl bg-card border-border/50 py-2.5"
                 rows={1}
               />
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex gap-1.5 items-center">
               <Button
                 variant="mint"
                 size="icon"
                 onClick={handleSend}
                 disabled={!input.trim() || isChatting}
-                className="h-[52px] w-[52px] rounded-2xl flex-shrink-0"
+                className="h-11 w-11 rounded-xl flex-shrink-0"
               >
                 {isChatting ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -316,9 +316,9 @@ export default function ChatPage() {
                   variant="ghost"
                   size="icon"
                   onClick={handleClearHistory}
-                  className="h-10 w-[52px] rounded-xl text-muted-foreground"
+                  className="h-11 w-11 rounded-xl text-muted-foreground hover:text-destructive"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-5 h-5" />
                 </Button>
               )}
             </div>
