@@ -43,12 +43,9 @@ export default function RecipePage() {
 
   return (
     <MobileLayout title="Рецепт">
-      <div className="space-y-6 pb-6">
+      <div className="space-y-6 pb-6 px-4">
         {/* Название рецепта */}
         <section>
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">
-            Название рецепта
-          </h2>
           <h1 className="text-2xl font-bold">{recipe.title}</h1>
           {recipe.description && !recipe.description.startsWith("Сгенерировано") && (
             <p className="text-muted-foreground mt-2">{recipe.description}</p>
