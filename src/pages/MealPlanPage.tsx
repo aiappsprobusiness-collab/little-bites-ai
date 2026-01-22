@@ -320,15 +320,23 @@ export default function MealPlanPage() {
           )}
         </div>
 
-        {/* Generate Shopping List */}
-        <div className="px-4 pb-6">
+        {/* Actions */}
+        <div className="px-4 pb-6 space-y-3">
+          <Button
+            variant="mint"
+            size="lg"
+            className="w-full"
+            onClick={() => navigate("/generate-plan")}
+          >
+            ✨ Сгенерировать план на неделю
+          </Button>
           <Button
             variant="peach"
             size="lg"
             className="w-full"
             onClick={() => navigate("/shopping")}
           >
-            🛒 Создать список покупок
+            🛒 Список покупок
           </Button>
         </div>
       </div>
