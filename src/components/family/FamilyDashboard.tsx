@@ -92,14 +92,14 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
       {selectedChild && (
         <motion.div variants={item}>
           <Card variant="mint" className="overflow-hidden">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-8 h-8 rounded-lg bg-card/50 flex items-center justify-center text-lg">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-card/50 flex items-center justify-center text-xl">
                   {selectedChild.avatar_url || "👶"}
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm">{selectedChild.name}</h3>
-                  <p className="text-xs text-muted-foreground">
+                  <h3 className="font-bold text-base">{selectedChild.name}</h3>
+                  <p className="text-sm text-muted-foreground">
                     Меню на сегодня
                   </p>
                 </div>
@@ -120,23 +120,23 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
                     return (
                       <div
                         key={mealType}
-                        className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-card/50"
+                        className="flex items-start gap-3 py-2 px-3 rounded-xl bg-card/50"
                       >
-                        <div className={`w-6 h-6 rounded-md ${config.color} flex items-center justify-center`}>
-                          <config.icon className="w-3 h-3 text-foreground/80" />
+                        <div className={`w-8 h-8 rounded-lg ${config.color} flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                          <config.icon className="w-4 h-4 text-foreground/80" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs text-muted-foreground">{config.label}</p>
+                          <p className="text-sm text-muted-foreground">{config.label}</p>
                           {meal ? (
-                            <p className="font-medium text-sm truncate">
+                            <p className="font-semibold text-base leading-tight line-clamp-2">
                               {meal.recipe?.title || 'Рецепт'}
                             </p>
                           ) : (
-                            <p className="text-sm text-muted-foreground italic">Не запланировано</p>
+                            <p className="text-base text-muted-foreground italic">Не запланировано</p>
                           )}
                         </div>
                         {meal?.is_completed && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium">
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium flex-shrink-0">
                             ✓
                           </span>
                         )}
