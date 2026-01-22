@@ -46,7 +46,7 @@ export default function RecipeEditPage() {
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [childId, setChildId] = useState<string>("");
+  const [childId, setChildId] = useState<string>("none");
   const [ingredients, setIngredients] = useState<
     Array<{ name: string; amount: string; unit: string; category: string }>
   >([]);
@@ -72,7 +72,7 @@ export default function RecipeEditPage() {
       setMinAge(existingRecipe.min_age_months?.toString() || "");
       setMaxAge(existingRecipe.max_age_months?.toString() || "");
       setImageUrl(existingRecipe.image_url || "");
-      setChildId(existingRecipe.child_id || "");
+      setChildId(existingRecipe.child_id || "none");
 
       const existingIngredients = (existingRecipe as any).ingredients || [];
       setIngredients(
@@ -142,7 +142,7 @@ export default function RecipeEditPage() {
         min_age_months: minAge ? parseInt(minAge) : null,
         max_age_months: maxAge ? parseInt(maxAge) : null,
         image_url: imageUrl.trim() || null,
-        child_id: childId || null,
+        child_id: childId && childId !== "none" ? childId : null,
       };
 
       const ingredientsData = ingredients
@@ -277,7 +277,7 @@ export default function RecipeEditPage() {
                       <SelectValue placeholder="Выберите ребенка (необязательно)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Не указано</SelectItem>
+                      <SelectItem value="none">Не указано</SelectItem>
                       {children.map((child) => (
                         <SelectItem key={child.id} value={child.id}>
                           {child.name}
