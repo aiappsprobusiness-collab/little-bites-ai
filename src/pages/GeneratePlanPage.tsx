@@ -168,6 +168,142 @@ export default function GeneratePlanPage() {
     setEditingMeal({ dayName, mealType, meal });
   };
 
+  // Retry logic with exponential backoff
+  const fetchWithRetry = async (
+    url: string,
+    options: RequestInit,
+    maxRetries = 5,
+    baseDelay = 1000
+  ): Promise<Response> => {
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await fetch(url, options);
+        
+        // If rate limited, retry with backoff
+        if (response.status === 429) {
+          const delay = Math.min(baseDelay * Math.pow(2, attempt), 30000);
+          console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        return response;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        
+        if (attempt < maxRetries - 1) {
+          const delay = Math.min(baseDelay * Math.pow(2, attempt), 30000);
+          console.log(`Fetch failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    throw lastError || new Error("Max retries exceeded");
+  };
+
+  // Generate single day plan
+  const generateDayPlan = async (
+    dayName: string,
+    childData: any,
+    goalsText: string,
+    accessToken: string
+  ): Promise<GeneratedDay> => {
+    const response = await fetchWithRetry(
+      `https://hidgiyyunigqazssnydm.supabase.co/functions/v1/deepseek-chat`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          type: "single_day",
+          childData,
+          messages: [
+            {
+              role: "user",
+              content: `Создай план питания на ${dayName} для ребенка ${childData.name} (${childData.ageMonths} месяцев).
+
+Цели питания: ${goalsText || "Сбалансированное питание"}
+${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (аллергия): ${childData.allergies.join(", ")}` : "Аллергий нет"}
+
+Верни ТОЛЬКО JSON без markdown:
+{
+  "breakfast": {"name": "Название", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Продукт", "amount": 100, "unit": "г"}], "steps": ["Шаг 1"]},
+  "lunch": {"name": "Название", "calories": 320, "protein": 15, "carbs": 25, "fat": 10, "cooking_time": 20, "ingredients": [...], "steps": [...]},
+  "snack": {"name": "Название", "calories": 100, "protein": 2, "carbs": 20, "fat": 2, "cooking_time": 5, "ingredients": [...], "steps": [...]},
+  "dinner": {"name": "Название", "calories": 280, "protein": 12, "carbs": 30, "fat": 8, "cooking_time": 25, "ingredients": [...], "steps": [...]}
+}`,
+            },
+          ],
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `Ошибка генерации для ${dayName}`);
+    }
+
+    const data = await response.json();
+    const messageText = data.message || "";
+    
+    // Extract JSON
+    const jsonMatch = messageText.match(/```json\s*([\s\S]*?)\s*```/) || 
+                      messageText.match(/```\s*([\s\S]*?)\s*```/) ||
+                      messageText.match(/(\{[\s\S]*\})/);
+    
+    if (!jsonMatch) {
+      throw new Error(`Не удалось разобрать план для ${dayName}`);
+    }
+    
+    const jsonStr = (jsonMatch[1] || jsonMatch[0]).trim();
+    const dayPlan = JSON.parse(jsonStr);
+    
+    // Normalize keys
+    const mealTypeMap: Record<string, keyof GeneratedDay> = {
+      "завтрак": "breakfast", "breakfast": "breakfast",
+      "обед": "lunch", "lunch": "lunch",
+      "полдник": "snack", "snack": "snack",
+      "ужин": "dinner", "dinner": "dinner",
+    };
+    
+    const normalizedDay: Partial<GeneratedDay> = {};
+    for (const [mealKey, meal] of Object.entries(dayPlan)) {
+      const englishKey = mealTypeMap[mealKey.toLowerCase()] || mealKey as keyof GeneratedDay;
+      if (["breakfast", "lunch", "snack", "dinner"].includes(englishKey)) {
+        normalizedDay[englishKey] = meal as GeneratedMeal;
+      }
+    }
+    
+    return normalizedDay as GeneratedDay;
+  };
+
+  // Generate shopping list from all meals
+  const generateShoppingList = async (
+    days: Record<string, GeneratedDay>,
+    accessToken: string
+  ): Promise<string[]> => {
+    // Collect all ingredients
+    const allIngredients: string[] = [];
+    for (const dayPlan of Object.values(days)) {
+      for (const meal of Object.values(dayPlan)) {
+        if (meal?.ingredients) {
+          meal.ingredients.forEach(ing => {
+            allIngredients.push(`${ing.name} - ${ing.amount || ""} ${ing.unit || ""}`);
+          });
+        }
+      }
+    }
+
+    // Deduplicate and return
+    const uniqueIngredients = [...new Set(allIngredients.map(i => i.trim().toLowerCase()))];
+    return uniqueIngredients.filter(Boolean);
+  };
+
   const generatePlan = async () => {
     if (!selectedChild || !user) return;
 
@@ -175,12 +311,9 @@ export default function GeneratePlanPage() {
     setProgress(0);
     setError(null);
 
-    try {
-      // Progress simulation
-      const progressInterval = setInterval(() => {
-        setProgress((prev) => Math.min(prev + 5, 90));
-      }, 500);
+    const daysOfWeek = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
+    try {
       const childData = {
         name: selectedChild.name,
         ageMonths: calculateAgeInMonths(selectedChild.birth_date),
@@ -195,119 +328,58 @@ export default function GeneratePlanPage() {
         .join(", ");
 
       const { data: session } = await supabase.auth.getSession();
+      const accessToken = session?.session?.access_token || "";
+
+      const generatedDays: Record<string, GeneratedDay> = {};
       
-      const response = await fetch(
-        `https://hidgiyyunigqazssnydm.supabase.co/functions/v1/deepseek-chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            type: "diet_plan",
-            childData,
-            messages: [
-              {
-                role: "user",
-                content: `Создай недельный план питания для ребенка ${childData.name} (${childData.ageMonths} месяцев).
-
-Цели питания: ${goalsText || "Сбалансированное питание"}
-
-Требования:
-1. Учти возраст ребенка при выборе блюд и текстур
-2. ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (аллергия): ${childData.allergies.join(", ")}` : "Аллергий нет"}
-3. Каждый день: завтрак, обед, полдник, ужин
-4. Указать калории и БЖУ для каждого блюда
-5. Создай полный список покупок на неделю
-
-Верни ответ ТОЛЬКО в JSON формате без markdown:
-{
-  "days": {
-    "Понедельник": {
-      "breakfast": {"name": "Название", "calories": 250, "protein": 8, "carbs": 40, "fat": 5},
-      "lunch": {"name": "Название", "calories": 320, "protein": 15, "carbs": 25, "fat": 10},
-      "snack": {"name": "Название", "calories": 100, "protein": 2, "carbs": 20, "fat": 2},
-      "dinner": {"name": "Название", "calories": 280, "protein": 12, "carbs": 30, "fat": 8}
-    },
-    "Вторник": {...},
-    "Среда": {...},
-    "Четверг": {...},
-    "Пятница": {...},
-    "Суббота": {...},
-    "Воскресенье": {...}
-  },
-  "shopping_list": ["продукт 1 - количество", "продукт 2 - количество"],
-  "total_calories_week": 6500
-}`,
-              },
-            ],
-          }),
+      // Generate each day sequentially with progress updates
+      for (let i = 0; i < daysOfWeek.length; i++) {
+        const dayName = daysOfWeek[i];
+        
+        try {
+          const dayPlan = await generateDayPlan(dayName, childData, goalsText, accessToken);
+          generatedDays[dayName] = dayPlan;
+          
+          // Update progress (each day is ~14% of total)
+          setProgress(Math.round(((i + 1) / daysOfWeek.length) * 90));
+        } catch (dayError) {
+          console.error(`Error generating ${dayName}:`, dayError);
+          // Continue with other days, skip failed one
+          toast({
+            variant: "destructive",
+            title: `Ошибка для ${dayName}`,
+            description: "День будет пропущен",
+          });
         }
-      );
-
-      clearInterval(progressInterval);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        if (response.status === 429) {
-          throw new Error(errorData.message || "Лимит генераций исчерпан");
+        
+        // Small delay between requests to avoid rate limiting
+        if (i < daysOfWeek.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
-        throw new Error("Ошибка генерации плана");
       }
 
-      const data = await response.json();
+      if (Object.keys(generatedDays).length === 0) {
+        throw new Error("Не удалось сгенерировать ни одного дня");
+      }
+
+      // Generate shopping list from collected ingredients
+      const shoppingList = await generateShoppingList(generatedDays, accessToken);
+      
+      // Calculate total weekly calories
+      let totalCalories = 0;
+      for (const dayPlan of Object.values(generatedDays)) {
+        for (const meal of Object.values(dayPlan)) {
+          totalCalories += meal?.calories || 0;
+        }
+      }
+
       setProgress(100);
 
-      // Parse JSON from response
-      let plan: GeneratedPlan;
-      try {
-        const messageText = data.message || "";
-        // Try to extract JSON from markdown code blocks or raw text
-        const jsonMatch = messageText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                          messageText.match(/```\s*([\s\S]*?)\s*```/) ||
-                          messageText.match(/(\{[\s\S]*\})/);
-        
-        if (!jsonMatch) {
-          console.error("No JSON found in response:", messageText);
-          throw new Error("Invalid response format");
-        }
-        
-        const jsonStr = (jsonMatch[1] || jsonMatch[0]).trim();
-        const rawPlan = JSON.parse(jsonStr);
-        
-        // Normalize meal type keys (Russian to English)
-        const mealTypeMap: Record<string, keyof GeneratedDay> = {
-          "завтрак": "breakfast",
-          "breakfast": "breakfast",
-          "обед": "lunch", 
-          "lunch": "lunch",
-          "полдник": "snack",
-          "snack": "snack",
-          "ужин": "dinner",
-          "dinner": "dinner",
-        };
-        
-        // Transform the plan to use English keys
-        const normalizedDays: Record<string, GeneratedDay> = {};
-        for (const [dayName, dayMeals] of Object.entries(rawPlan.days || {})) {
-          const normalizedMeals: Partial<GeneratedDay> = {};
-          for (const [mealKey, meal] of Object.entries(dayMeals as Record<string, GeneratedMeal>)) {
-            const englishKey = mealTypeMap[mealKey.toLowerCase()] || mealKey as keyof GeneratedDay;
-            normalizedMeals[englishKey] = meal as GeneratedMeal;
-          }
-          normalizedDays[dayName] = normalizedMeals as GeneratedDay;
-        }
-        
-        plan = {
-          days: normalizedDays,
-          shopping_list: rawPlan.shopping_list || [],
-          total_calories_week: rawPlan.total_calories_week || 0,
-        };
-      } catch (parseError) {
-        console.error("JSON parse error:", parseError, "Response:", data.message);
-        throw new Error("Не удалось разобрать ответ AI");
-      }
+      const plan: GeneratedPlan = {
+        days: generatedDays,
+        shopping_list: shoppingList,
+        total_calories_week: totalCalories,
+      };
 
       setGeneratedPlan(plan);
       setStep("preview");
