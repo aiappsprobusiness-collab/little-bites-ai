@@ -262,13 +262,50 @@ export default function GeneratePlanPage() {
       // Parse JSON from response
       let plan: GeneratedPlan;
       try {
-        const jsonMatch = data.message.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          plan = JSON.parse(jsonMatch[0]);
-        } else {
+        const messageText = data.message || "";
+        // Try to extract JSON from markdown code blocks or raw text
+        const jsonMatch = messageText.match(/```json\s*([\s\S]*?)\s*```/) || 
+                          messageText.match(/```\s*([\s\S]*?)\s*```/) ||
+                          messageText.match(/(\{[\s\S]*\})/);
+        
+        if (!jsonMatch) {
+          console.error("No JSON found in response:", messageText);
           throw new Error("Invalid response format");
         }
-      } catch {
+        
+        const jsonStr = (jsonMatch[1] || jsonMatch[0]).trim();
+        const rawPlan = JSON.parse(jsonStr);
+        
+        // Normalize meal type keys (Russian to English)
+        const mealTypeMap: Record<string, keyof GeneratedDay> = {
+          "завтрак": "breakfast",
+          "breakfast": "breakfast",
+          "обед": "lunch", 
+          "lunch": "lunch",
+          "полдник": "snack",
+          "snack": "snack",
+          "ужин": "dinner",
+          "dinner": "dinner",
+        };
+        
+        // Transform the plan to use English keys
+        const normalizedDays: Record<string, GeneratedDay> = {};
+        for (const [dayName, dayMeals] of Object.entries(rawPlan.days || {})) {
+          const normalizedMeals: Partial<GeneratedDay> = {};
+          for (const [mealKey, meal] of Object.entries(dayMeals as Record<string, GeneratedMeal>)) {
+            const englishKey = mealTypeMap[mealKey.toLowerCase()] || mealKey as keyof GeneratedDay;
+            normalizedMeals[englishKey] = meal as GeneratedMeal;
+          }
+          normalizedDays[dayName] = normalizedMeals as GeneratedDay;
+        }
+        
+        plan = {
+          days: normalizedDays,
+          shopping_list: rawPlan.shopping_list || [],
+          total_calories_week: rawPlan.total_calories_week || 0,
+        };
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError, "Response:", data.message);
         throw new Error("Не удалось разобрать ответ AI");
       }
 
