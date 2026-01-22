@@ -1,25 +1,23 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, Trash2, Sparkles, MessageSquarePlus, ChevronUp } from "lucide-react";
+import { Send, Loader2, Trash2, Sparkles, ChevronDown } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { UsageBadge } from "@/components/subscription/UsageBadge";
 import { Paywall } from "@/components/subscription/Paywall";
-import { ChildCarousel } from "@/components/family/ChildCarousel";
 import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Message {
   id: string;
@@ -37,7 +35,7 @@ const quickPrompts = [
 
 export default function ChatPage() {
   const { toast } = useToast();
-  const { selectedChild, children } = useSelectedChild();
+  const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
   const { canGenerate, isPremium } = useSubscription();
   const { chat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, clearHistory } = useChatHistory();
@@ -45,7 +43,6 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [showPaywall, setShowPaywall] = useState(false);
-  const [isInputSheetOpen, setIsInputSheetOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -95,7 +92,6 @@ export default function ChatPage() {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
-    setIsInputSheetOpen(false);
 
     try {
       const chatMessages = messages.map((m) => ({
@@ -169,12 +165,25 @@ export default function ChatPage() {
       headerRight={<UsageBadge onClick={() => setShowPaywall(true)} />}
     >
       <div className="flex flex-col h-[calc(100vh-180px)]">
-        {/* Child selector carousel */}
-        {children.length > 0 && (
-          <div className="px-4 py-3 border-b border-border/50">
-            <ChildCarousel compact />
-          </div>
-        )}
+        {/* Child selector dropdown */}
+        <div className="px-4 py-3 border-b border-border/50">
+          <Select 
+            value={selectedChildId || "none"} 
+            onValueChange={(value) => setSelectedChildId(value === "none" ? null : value)}
+          >
+            <SelectTrigger className="w-full bg-card">
+              <SelectValue placeholder="Выберите ребенка для персонализации" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Выберите ребенка для персонализации</SelectItem>
+              {children.map((child) => (
+                <SelectItem key={child.id} value={child.id}>
+                  {child.avatar_url || "👶"} {child.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
@@ -202,7 +211,7 @@ export default function ChatPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleQuickPrompt(prompt)}
-                    className="text-xs"
+                    className="text-sm"
                   >
                     {prompt}
                   </Button>
@@ -268,91 +277,54 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Floating button to open input sheet */}
-        <div className="px-4 py-3 border-t border-border/50 bg-background">
-          <Sheet open={isInputSheetOpen} onOpenChange={setIsInputSheetOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="mint"
-                size="lg"
-                className="w-full"
-              >
-                <MessageSquarePlus className="w-5 h-5 mr-2" />
-                Написать сообщение
-                <ChevronUp className="w-4 h-4 ml-2" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="bottom" className="rounded-t-3xl px-4 pb-8">
-              <SheetHeader className="pb-4">
-                <SheetTitle className="text-center">Задать вопрос ассистенту</SheetTitle>
-              </SheetHeader>
-              
-              {/* Quick prompts in sheet */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                {quickPrompts.map((prompt) => (
-                  <Button
-                    key={prompt}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setInput(prompt);
-                      textareaRef.current?.focus();
-                    }}
-                    className="text-sm"
-                  >
-                    {prompt}
-                  </Button>
-                ))}
-              </div>
+        {/* Clear history button */}
+        {messages.length > 0 && (
+          <div className="flex justify-center py-2 border-t border-border/50">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearHistory}
+              className="text-sm text-muted-foreground"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Очистить историю
+            </Button>
+          </div>
+        )}
 
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 relative">
-                  <Textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    placeholder="Спросите о рецепте или питании..."
-                    className="min-h-[80px] max-h-[200px] resize-none text-base"
-                    rows={3}
-                  />
-                </div>
-                <Button
-                  variant="mint"
-                  size="icon"
-                  onClick={handleSend}
-                  disabled={!input.trim() || isChatting}
-                  className="h-12 w-12 rounded-xl flex-shrink-0"
-                >
-                  {isChatting ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5" />
-                  )}
-                </Button>
-              </div>
-
-              {/* Clear history button */}
-              {messages.length > 0 && (
-                <div className="flex justify-center mt-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearHistory}
-                    className="text-xs text-muted-foreground"
-                  >
-                    <Trash2 className="w-3 h-3 mr-1" />
-                    Очистить историю
-                  </Button>
-                </div>
+        {/* Input area */}
+        <div className="px-4 py-3 bg-background">
+          <div className="flex gap-3 items-end">
+            <div className="flex-1 relative">
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Спросите о рецепте или питании..."
+                className="min-h-[52px] max-h-[120px] resize-none text-base rounded-2xl bg-card border-border/50"
+                rows={1}
+              />
+            </div>
+            <Button
+              variant="mint"
+              size="icon"
+              onClick={handleSend}
+              disabled={!input.trim() || isChatting}
+              className="h-[52px] w-[52px] rounded-2xl flex-shrink-0"
+            >
+              {isChatting ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
               )}
-            </SheetContent>
-          </Sheet>
+            </Button>
+          </div>
         </div>
       </div>
 
