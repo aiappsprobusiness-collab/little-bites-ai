@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 interface ChatMessageProps {
   id: string;
@@ -13,29 +12,14 @@ interface ChatMessageProps {
 
 export function ChatMessage({ id, role, content, timestamp, onDelete }: ChatMessageProps) {
   const [showDelete, setShowDelete] = useState(false);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const x = useMotionValue(0);
+  const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
+  const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
+  const constraintsRef = useRef(null);
 
-  const handleTouchStart = () => {
-    longPressTimer.current = setTimeout(() => {
+  const handleDragEnd = (_: any, info: PanInfo) => {
+    if (info.offset.x < -80) {
       setShowDelete(true);
-    }, 500);
-  };
-
-  const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-    }
-  };
-
-  const handleMouseDown = () => {
-    longPressTimer.current = setTimeout(() => {
-      setShowDelete(true);
-    }, 500);
-  };
-
-  const handleMouseUp = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
     }
   };
 
@@ -45,28 +29,39 @@ export function ChatMessage({ id, role, content, timestamp, onDelete }: ChatMess
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      className={`flex ${role === "user" ? "justify-end" : "justify-start"}`}
+    <div 
+      ref={constraintsRef}
+      className={`relative flex ${role === "user" ? "justify-end" : "justify-start"}`}
     >
-      <div
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        className="relative"
+      {/* Delete button background - visible on swipe */}
+      <motion.div
+        style={{ opacity: deleteOpacity, scale: deleteScale }}
+        className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center justify-center w-16 h-16"
+      >
+        <div className="w-12 h-12 rounded-full bg-destructive/20 flex items-center justify-center">
+          <Trash2 className="w-5 h-5 text-destructive" />
+        </div>
+      </motion.div>
+
+      <motion.div
+        drag="x"
+        dragConstraints={{ left: -100, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={handleDragEnd}
+        style={{ x }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, x: -100 }}
+        className={`relative max-w-[85%] cursor-grab active:cursor-grabbing`}
       >
         <div
-          className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+          className={`rounded-2xl px-4 py-3 ${
             role === "user"
               ? "bg-primary text-primary-foreground rounded-br-sm"
               : "bg-card shadow-soft rounded-bl-sm"
           }`}
         >
-          <p className="text-base whitespace-pre-wrap">{content}</p>
+          <p className="text-base whitespace-pre-wrap select-none">{content}</p>
           <p className="text-[10px] opacity-60 mt-1">
             {timestamp.toLocaleTimeString("ru-RU", {
               hour: "2-digit",
@@ -74,36 +69,47 @@ export function ChatMessage({ id, role, content, timestamp, onDelete }: ChatMess
             })}
           </p>
         </div>
+      </motion.div>
 
-        <AnimatePresence>
-          {showDelete && (
+      {/* Delete confirmation popup */}
+      <AnimatePresence>
+        {showDelete && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/30 z-50"
+              onClick={() => setShowDelete(false)}
+            />
             <motion.div
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className={`absolute top-1/2 -translate-y-1/2 ${
-                role === "user" ? "-left-12" : "-right-12"
-              }`}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-card rounded-2xl p-6 shadow-xl flex flex-col items-center gap-4"
             >
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={handleDelete}
-                className="h-9 w-9 rounded-full shadow-lg"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Trash2 className="w-8 h-8 text-destructive" />
+              </div>
+              <p className="text-center font-medium">Удалить сообщение?</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDelete(false)}
+                  className="px-6 py-2 rounded-xl bg-muted text-muted-foreground font-medium"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="px-6 py-2 rounded-xl bg-destructive text-destructive-foreground font-medium"
+                >
+                  Удалить
+                </button>
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-
-        {showDelete && (
-          <div
-            className="fixed inset-0 z-[-1]"
-            onClick={() => setShowDelete(false)}
-          />
+          </>
         )}
-      </div>
-    </motion.div>
+      </AnimatePresence>
+    </div>
   );
 }
