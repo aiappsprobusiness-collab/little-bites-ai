@@ -63,6 +63,15 @@ export default function MealPlanPage() {
   const selectedDate = weekDates[selectedDay];
   const { data: dayMealPlans = [], isLoading } = getMealPlansByDate(selectedDate);
 
+  const getPlannedMealRecipe = (plannedMeal: any) => {
+    // В зависимости от select в Supabase джойн может прийти как `recipe` или `recipes`
+    return plannedMeal?.recipe ?? plannedMeal?.recipes ?? null;
+  };
+
+  const getPlannedMealRecipeId = (plannedMeal: any) => {
+    return plannedMeal?.recipe_id ?? getPlannedMealRecipe(plannedMeal)?.id ?? null;
+  };
+
   // Группируем планы по типу приема пищи
   const mealsByType = mealTypes.reduce((acc, mealType) => {
     const plan = dayMealPlans.find((mp) => mp.meal_type === mealType.id);
@@ -265,13 +274,25 @@ export default function MealPlanPage() {
                           {plannedMeal ? (
                             <div className="mt-1">
                               <p className="text-sm font-medium">
-                                {plannedMeal.recipe?.title || "Рецепт"}
+                                {getPlannedMealRecipe(plannedMeal)?.title || "Рецепт"}
                               </p>
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="mt-2 h-6 text-xs"
-                                onClick={() => navigate(`/recipe/${plannedMeal.recipe_id}`)}
+                                onClick={() => {
+                                  const recipeId = getPlannedMealRecipeId(plannedMeal);
+                                  if (!recipeId) {
+                                    toast({
+                                      variant: "destructive",
+                                      title: "Рецепт недоступен",
+                                      description:
+                                        "Не удалось определить рецепт для этого приема пищи. Попробуйте удалить блюдо и добавить его снова.",
+                                    });
+                                    return;
+                                  }
+                                  navigate(`/recipe/${recipeId}`);
+                                }}
                               >
                                 Открыть рецепт →
                               </Button>
