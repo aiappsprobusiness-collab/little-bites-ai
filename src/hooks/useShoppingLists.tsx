@@ -217,10 +217,51 @@ export function useShoppingLists() {
     },
   });
 
+  // Функция для автоопределения категории по названию продукта
+  const detectCategory = (name: string): string => {
+    const lowerName = name.toLowerCase();
+    
+    // Овощи
+    const vegetables = ['морковь', 'картофель', 'картошка', 'лук', 'чеснок', 'капуста', 'брокколи', 
+      'цветная капуста', 'кабачок', 'баклажан', 'перец', 'томат', 'помидор', 'огурец', 'свекла', 
+      'тыква', 'шпинат', 'салат', 'петрушка', 'укроп', 'сельдерей', 'редис', 'горох', 'фасоль',
+      'зелень', 'базилик', 'мята', 'кинза', 'зеленый лук', 'порей'];
+    if (vegetables.some(v => lowerName.includes(v))) return 'vegetables';
+    
+    // Фрукты
+    const fruits = ['яблоко', 'яблок', 'груша', 'банан', 'апельсин', 'мандарин', 'лимон', 'лайм',
+      'виноград', 'клубника', 'малина', 'черника', 'голубика', 'смородина', 'вишня', 'черешня',
+      'персик', 'абрикос', 'слива', 'манго', 'ананас', 'киви', 'дыня', 'арбуз', 'гранат', 
+      'хурма', 'инжир', 'финик', 'курага', 'изюм', 'чернослив', 'ягод', 'фрукт'];
+    if (fruits.some(f => lowerName.includes(f))) return 'fruits';
+    
+    // Молочные продукты
+    const dairy = ['молоко', 'кефир', 'йогурт', 'сметана', 'творог', 'сыр', 'масло сливочное',
+      'сливки', 'ряженка', 'простокваша', 'брынза', 'моцарелла', 'пармезан', 'молочн'];
+    if (dairy.some(d => lowerName.includes(d))) return 'dairy';
+    
+    // Мясо и рыба
+    const meat = ['мясо', 'говядина', 'свинина', 'курица', 'куриц', 'индейка', 'кролик', 'баранина',
+      'фарш', 'колбаса', 'сосиски', 'ветчина', 'бекон', 'печень', 'сердце', 'язык',
+      'рыба', 'лосось', 'семга', 'форель', 'треска', 'минтай', 'скумбрия', 'сельдь', 'тунец',
+      'креветки', 'кальмар', 'морепродукт', 'филе', 'грудка', 'бедро', 'крыло', 'окорок'];
+    if (meat.some(m => lowerName.includes(m))) return 'meat';
+    
+    // Крупы и злаки
+    const grains = ['рис', 'гречка', 'гречневая', 'овсянка', 'овсяные', 'пшено', 'перловка',
+      'манка', 'манная', 'кускус', 'булгур', 'киноа', 'крупа', 'хлопья', 'мука', 'макароны',
+      'спагетти', 'лапша', 'вермишель', 'хлеб', 'батон', 'булка', 'сухари', 'кукурузн'];
+    if (grains.some(g => lowerName.includes(g))) return 'grains';
+    
+    return 'other';
+  };
+
   // Генерировать список покупок из планов питания
   const generateFromMealPlans = useMutation({
     mutationFn: async ({ startDate, endDate }: { startDate: Date; endDate: Date }) => {
       if (!user) throw new Error('User not authenticated');
+
+      console.log('Генерация списка покупок:', { startDate, endDate, userId: user.id });
 
       // Получить планы питания за период
       const { data: mealPlans, error: mealPlansError } = await supabase
@@ -234,7 +275,16 @@ export function useShoppingLists() {
         .gte('planned_date', startDate.toISOString().split('T')[0])
         .lte('planned_date', endDate.toISOString().split('T')[0]);
 
-      if (mealPlansError) throw mealPlansError;
+      if (mealPlansError) {
+        console.error('Ошибка получения планов питания:', mealPlansError);
+        throw mealPlansError;
+      }
+
+      console.log('Найдено планов питания:', mealPlans?.length || 0, mealPlans);
+
+      if (!mealPlans || mealPlans.length === 0) {
+        throw new Error('Нет планов питания на эту неделю. Сначала создайте план питания.');
+      }
 
       // Собрать все ингредиенты
       const ingredientsMap = new Map<string, { amount: number; unit: string; category: string }>();
@@ -243,6 +293,9 @@ export function useShoppingLists() {
         if (plan.recipe?.recipe_ingredients) {
           plan.recipe.recipe_ingredients.forEach((ing: any) => {
             const key = ing.name.toLowerCase();
+            // Автоопределение категории по названию
+            const autoCategory = detectCategory(ing.name);
+            
             if (ingredientsMap.has(key)) {
               const existing = ingredientsMap.get(key)!;
               existing.amount += ing.amount || 0;
@@ -250,12 +303,18 @@ export function useShoppingLists() {
               ingredientsMap.set(key, {
                 amount: ing.amount || 0,
                 unit: ing.unit || '',
-                category: ing.category || 'other',
+                category: autoCategory,
               });
             }
           });
         }
       });
+
+      console.log('Собрано ингредиентов:', ingredientsMap.size);
+
+      if (ingredientsMap.size === 0) {
+        throw new Error('В рецептах не найдено ингредиентов');
+      }
 
       // Создать или получить активный список
       let listId = activeList?.id;
@@ -268,24 +327,31 @@ export function useShoppingLists() {
       const items = Array.from(ingredientsMap.entries()).map(([name, data]) => ({
         shopping_list_id: listId!,
         name: name.charAt(0).toUpperCase() + name.slice(1),
-        amount: data.amount,
-        unit: data.unit,
+        amount: data.amount || null,
+        unit: data.unit || null,
         category: data.category as any,
         is_purchased: false,
       }));
+
+      console.log('Добавляем в список:', items.length, 'продуктов');
 
       if (items.length > 0) {
         const { error: itemsError } = await supabase
           .from('shopping_list_items')
           .insert(items);
 
-        if (itemsError) throw itemsError;
+        if (itemsError) {
+          console.error('Ошибка добавления продуктов:', itemsError);
+          throw itemsError;
+        }
       }
 
       return listId;
     },
-    onSuccess: () => {
+    onSuccess: (listId) => {
+      console.log('Список создан успешно:', listId);
       queryClient.invalidateQueries({ queryKey: ['shopping_lists', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['shopping_list_items', listId] });
     },
   });
 
