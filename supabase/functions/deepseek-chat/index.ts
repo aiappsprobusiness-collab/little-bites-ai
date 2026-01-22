@@ -16,7 +16,7 @@ interface ChatRequest {
     weight?: number;
     height?: number;
   };
-  type?: "chat" | "recipe" | "diet_plan";
+  type?: "chat" | "recipe" | "diet_plan" | "single_day";
 }
 
 serve(async (req) => {
@@ -135,6 +135,24 @@ ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : 
   },
   "shopping_list": ["продукт - количество"],
   "total_calories_week": 8400
+}`;
+    } else if (type === "single_day") {
+      systemPrompt = `Ты — эксперт по детскому питанию. Создаёшь план питания на один день.
+
+${childData ? `
+Ребенок: ${childData.name}, ${childData.ageMonths} месяцев
+${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}` : ""}
+${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : ""}
+` : ""}
+
+ВАЖНО: Отвечай СТРОГО в формате JSON без markdown и без дополнительного текста!
+Используй ТОЛЬКО английские ключи: breakfast, lunch, snack, dinner.
+
+{
+  "breakfast": {"name": "Название блюда", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Продукт", "amount": 50, "unit": "г"}], "steps": ["Шаг 1"]},
+  "lunch": {"name": "...", "calories": 300, "protein": 15, "carbs": 30, "fat": 10, "cooking_time": 20, "ingredients": [...], "steps": [...]},
+  "snack": {"name": "...", "calories": 100, "protein": 3, "carbs": 15, "fat": 3, "cooking_time": 5, "ingredients": [...], "steps": [...]},
+  "dinner": {"name": "...", "calories": 280, "protein": 12, "carbs": 25, "fat": 8, "cooking_time": 25, "ingredients": [...], "steps": [...]}
 }`;
     }
 
