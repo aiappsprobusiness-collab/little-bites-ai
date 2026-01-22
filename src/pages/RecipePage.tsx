@@ -50,7 +50,7 @@ export default function RecipePage() {
             Название рецепта
           </h2>
           <h1 className="text-2xl font-bold">{recipe.title}</h1>
-          {recipe.description && (
+          {recipe.description && !recipe.description.startsWith("Сгенерировано") && (
             <p className="text-muted-foreground mt-2">{recipe.description}</p>
           )}
         </section>
