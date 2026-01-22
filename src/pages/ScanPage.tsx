@@ -257,24 +257,24 @@ export default function ScanPage() {
             />
 
             {/* Action Buttons */}
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                size="lg"
-                className="flex-1"
-                onClick={handleGalleryClick}
-              >
-                <Image className="w-5 h-5 mr-2" />
-                Галерея
-              </Button>
+            <div className="flex flex-col gap-2">
               <Button
                 variant="mint"
                 size="lg"
-                className="flex-[2]"
+                className="w-full"
                 onClick={handleCameraClick}
               >
                 <Camera className="w-5 h-5 mr-2" />
                 Сфотографировать
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={handleGalleryClick}
+              >
+                <Image className="w-5 h-5 mr-2" />
+                Галерея
               </Button>
             </div>
 
