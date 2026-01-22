@@ -230,12 +230,14 @@ export default function GeneratePlanPage() {
 Цели питания: ${goalsText || "Сбалансированное питание"}
 ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (аллергия): ${childData.allergies.join(", ")}` : "Аллергий нет"}
 
+ВАЖНО: Все названия блюд, ингредиенты и шаги приготовления ТОЛЬКО на РУССКОМ языке!
+
 Верни ТОЛЬКО JSON без markdown:
 {
-  "breakfast": {"name": "Название", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Продукт", "amount": 100, "unit": "г"}], "steps": ["Шаг 1"]},
-  "lunch": {"name": "Название", "calories": 320, "protein": 15, "carbs": 25, "fat": 10, "cooking_time": 20, "ingredients": [...], "steps": [...]},
-  "snack": {"name": "Название", "calories": 100, "protein": 2, "carbs": 20, "fat": 2, "cooking_time": 5, "ingredients": [...], "steps": [...]},
-  "dinner": {"name": "Название", "calories": 280, "protein": 12, "carbs": 30, "fat": 8, "cooking_time": 25, "ingredients": [...], "steps": [...]}
+  "breakfast": {"name": "Овсяная каша с яблоком", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Овсяные хлопья", "amount": 100, "unit": "г"}], "steps": ["Залить водой", "Варить 10 минут"]},
+  "lunch": {"name": "Куриный суп", "calories": 320, "protein": 15, "carbs": 25, "fat": 10, "cooking_time": 30, "ingredients": [{"name": "Куриное филе", "amount": 150, "unit": "г"}], "steps": ["Сварить бульон"]},
+  "snack": {"name": "Творожок с бананом", "calories": 100, "protein": 5, "carbs": 20, "fat": 2, "cooking_time": 5, "ingredients": [{"name": "Творог", "amount": 100, "unit": "г"}], "steps": ["Смешать"]},
+  "dinner": {"name": "Рыбные котлеты", "calories": 280, "protein": 18, "carbs": 20, "fat": 8, "cooking_time": 35, "ingredients": [{"name": "Филе рыбы", "amount": 200, "unit": "г"}], "steps": ["Приготовить фарш"]}
 }`,
             },
           ],
