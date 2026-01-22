@@ -48,8 +48,8 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
             whileTap={{ scale: 0.95 }}
             onClick={() => setSelectedChildId(child.id)}
             className={cn(
-              "flex-shrink-0 flex flex-col items-center p-3 rounded-2xl transition-all relative",
-              compact ? "w-16" : "w-20",
+              "flex-shrink-0 flex flex-col items-center p-2 rounded-xl transition-all relative",
+              compact ? "w-14" : "w-16",
               isSelected
                 ? "bg-primary shadow-button"
                 : "bg-card shadow-soft hover:shadow-card"
@@ -66,8 +66,8 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
             )}
             <div
               className={cn(
-                "rounded-xl flex items-center justify-center text-2xl mb-1",
-                compact ? "w-10 h-10" : "w-12 h-12",
+                "rounded-lg flex items-center justify-center text-xl mb-1",
+                compact ? "w-8 h-8" : "w-10 h-10",
                 isSelected ? "bg-primary-foreground/20" : "bg-muted"
               )}
             >
@@ -75,7 +75,7 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
             </div>
             <p
               className={cn(
-                "font-semibold text-sm truncate w-full text-center",
+                "font-semibold text-xs truncate w-full text-center",
                 isSelected && "text-primary-foreground"
               )}
             >
@@ -100,8 +100,8 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
           whileTap={{ scale: 0.95 }}
           onClick={onAddChild}
           className={cn(
-            "flex-shrink-0 flex items-center justify-center rounded-2xl bg-muted border-2 border-dashed border-muted-foreground/30",
-            compact ? "w-16 h-16" : "w-20 h-24"
+            "flex-shrink-0 flex items-center justify-center rounded-xl bg-muted border-2 border-dashed border-muted-foreground/30",
+            compact ? "w-14 h-14" : "w-16 h-20"
           )}
         >
           <Plus className="w-6 h-6 text-muted-foreground" />

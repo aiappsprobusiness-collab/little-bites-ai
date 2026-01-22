@@ -140,10 +140,10 @@ export default function HomePage() {
             <motion.div key={action.label} variants={item}>
               <button
                 onClick={() => navigate(action.path)}
-                className="w-full flex flex-col items-center gap-2 p-3 rounded-2xl bg-card shadow-soft hover:shadow-card transition-all"
+                className="w-full flex flex-col items-center gap-1.5 p-2 rounded-xl bg-card shadow-soft hover:shadow-card transition-all"
               >
                 <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                     action.color === "mint"
                       ? "gradient-primary"
                       : action.color === "peach"
@@ -153,7 +153,7 @@ export default function HomePage() {
                       : "bg-soft-pink"
                   }`}
                 >
-                  <action.icon className="w-6 h-6 text-foreground/80" />
+                  <action.icon className="w-5 h-5 text-foreground/80" />
                 </div>
                 <span className="text-xs font-medium text-center leading-tight">
                   {action.label}
@@ -165,7 +165,7 @@ export default function HomePage() {
 
         {/* Recent Recipes */}
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-bold">Недавние рецепты</h2>
             {recentRecipes.length > 0 && (
               <Button variant="ghost" size="sm" onClick={() => navigate("/recipes")}>

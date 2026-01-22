@@ -92,13 +92,13 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
       {selectedChild && (
         <motion.div variants={item}>
           <Card variant="mint" className="overflow-hidden">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-card/50 flex items-center justify-center text-xl">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-card/50 flex items-center justify-center text-lg">
                   {selectedChild.avatar_url || "👶"}
                 </div>
                 <div>
-                  <h3 className="font-bold">{selectedChild.name}</h3>
+                  <h3 className="font-bold text-sm">{selectedChild.name}</h3>
                   <p className="text-xs text-muted-foreground">
                     Меню на сегодня
                   </p>
@@ -120,10 +120,10 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
                     return (
                       <div
                         key={mealType}
-                        className="flex items-center gap-3 p-2 rounded-xl bg-card/50"
+                        className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-card/50"
                       >
-                        <div className={`w-8 h-8 rounded-lg ${config.color} flex items-center justify-center`}>
-                          <config.icon className="w-4 h-4 text-foreground/80" />
+                        <div className={`w-6 h-6 rounded-md ${config.color} flex items-center justify-center`}>
+                          <config.icon className="w-3 h-3 text-foreground/80" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs text-muted-foreground">{config.label}</p>
@@ -145,8 +145,8 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
                   })}
                 </div>
               ) : (
-                <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground mb-3">
+                <div className="text-center py-2">
+                  <p className="text-sm text-muted-foreground mb-2">
                     Меню на сегодня не запланировано
                   </p>
                   <Button
