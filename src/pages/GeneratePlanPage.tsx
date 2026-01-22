@@ -20,7 +20,6 @@ import {
   Beef,
   AlertCircle,
   Pencil,
-  Download,
 } from "lucide-react";
 import { ChildCarousel } from "@/components/family/ChildCarousel";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -33,7 +32,6 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { MealEditDialog } from "@/components/meal-plan/MealEditDialog";
-import { exportMealPlanToPDF } from "@/utils/pdfExport";
 
 // Цели питания
 const dietGoals = [
@@ -81,21 +79,12 @@ const dietGoals = [
   },
 ];
 
-interface GeneratedIngredient {
-  name: string;
-  amount: number;
-  unit: string;
-}
-
 interface GeneratedMeal {
   name: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
-  cooking_time?: number;
-  ingredients?: GeneratedIngredient[];
-  steps?: string[];
 }
 
 interface GeneratedDay {
@@ -320,22 +309,7 @@ export default function GeneratePlanPage() {
           const mealType = mealTypeMap[mealKey as keyof typeof mealTypeMap];
           if (!mealType || !meal) continue;
 
-          // Create recipe with ingredients and steps
-          const ingredientsData = (meal.ingredients || []).map((ing, idx) => ({
-            name: ing.name,
-            amount: ing.amount || null,
-            unit: ing.unit || null,
-            category: "other" as const,
-            order_index: idx,
-          }));
-
-          const stepsData = (meal.steps || []).map((step, idx) => ({
-            instruction: step,
-            step_number: idx + 1,
-            duration_minutes: null,
-            image_url: null,
-          }));
-
+          // Create recipe
           const recipe = await createRecipe({
             recipe: {
               title: meal.name,
@@ -344,12 +318,11 @@ export default function GeneratePlanPage() {
               proteins: meal.protein,
               carbs: meal.carbs,
               fats: meal.fat,
-              cooking_time_minutes: meal.cooking_time || null,
               description: `Сгенерировано AI для ${selectedChild.name}`,
               tags: selectedGoals,
             },
-            ingredients: ingredientsData,
-            steps: stepsData,
+            ingredients: [],
+            steps: [],
           });
 
           // Create meal plan
@@ -677,24 +650,6 @@ export default function GeneratePlanPage() {
                 </Button>
                 <Button
                   variant="outline"
-                  size="lg"
-                  className="w-full"
-                  onClick={() => {
-                    const goals = selectedGoals.map(
-                      (g) => dietGoals.find((dg) => dg.id === g)?.label || g
-                    );
-                    exportMealPlanToPDF(generatedPlan, selectedChild?.name || "Ребенок", goals);
-                    toast({
-                      title: "PDF экспортирован",
-                      description: "Файл сохранён в папку загрузок",
-                    });
-                  }}
-                >
-                  <Download className="w-5 h-5 mr-2" />
-                  Экспорт в PDF
-                </Button>
-                <Button
-                  variant="ghost"
                   size="lg"
                   className="w-full"
                   onClick={() => {
