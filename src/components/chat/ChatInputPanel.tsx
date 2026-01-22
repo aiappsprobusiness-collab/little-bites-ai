@@ -9,6 +9,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChatInputPanelProps {
   isOpen: boolean;
@@ -26,11 +27,13 @@ declare global {
 }
 
 export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInputPanelProps) {
+  const { toast } = useToast();
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const finalTranscriptRef = useRef<string>('');
+  const networkErrorCountRef = useRef<number>(0);
 
   useEffect(() => {
     if (isOpen) {
@@ -40,88 +43,146 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
 
   // Функция для создания нового экземпляра распознавания речи
   const createRecognition = () => {
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+    // Проверяем поддержку API
+    const hasWebkit = 'webkitSpeechRecognition' in window;
+    const hasStandard = 'SpeechRecognition' in window;
+    
+    if (!hasWebkit && !hasStandard) {
+      console.warn('Speech Recognition API not available');
       return null;
     }
 
-    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionClass();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'ru-RU';
-
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      let newFinalTranscript = '';
-
-      // Обрабатываем все результаты
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          newFinalTranscript += transcript + ' ';
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-
-      // Обновляем финальный текст
-      if (newFinalTranscript) {
-        finalTranscriptRef.current += newFinalTranscript;
-      }
-
-      // Показываем финальный текст + промежуточный
-      setInput((finalTranscriptRef.current + interimTranscript).trim());
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error, event);
+    try {
+      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SpeechRecognitionClass();
       
-      // Обрабатываем различные типы ошибок
-      if (event.error === 'no-speech') {
-        // Пользователь не говорил - это нормально, просто останавливаем
-        setIsRecording(false);
-      } else if (event.error === 'audio-capture') {
-        // Нет микрофона
-        setIsRecording(false);
-        alert('Микрофон не найден. Проверьте настройки браузера.');
-      } else if (event.error === 'not-allowed') {
-        // Разрешение не предоставлено
-        setIsRecording(false);
-        alert('Разрешение на использование микрофона не предоставлено. Проверьте настройки браузера.');
-      } else if (event.error === 'aborted') {
-        // Распознавание было прервано - это нормально
-        setIsRecording(false);
-      } else if (event.error === 'network') {
-        // Ошибка сети - пытаемся переподключиться один раз
-        console.warn('Network error in speech recognition, will retry once');
-        setIsRecording(false);
-        // Не показываем alert сразу, так как это может быть временная проблема
-        // Пользователь может попробовать еще раз
-      } else {
-        console.error('Unknown speech recognition error:', event.error);
-        setIsRecording(false);
-        // Показываем alert только для критических ошибок
-        if (event.error !== 'service-not-allowed') {
-          alert(`Ошибка распознавания речи: ${event.error}. Проверьте подключение к интернету и попробуйте еще раз.`);
+      // Проверяем, что объект создан корректно
+      if (!recognition) {
+        console.error('Failed to create SpeechRecognition instance');
+        return null;
+      }
+      
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'ru-RU';
+      
+      // Добавляем максимальное время ожидания
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let newFinalTranscript = '';
+
+        // Обрабатываем все результаты
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            newFinalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
         }
-      }
-    };
 
-    recognition.onend = () => {
-      setIsRecording(false);
-      // Сохраняем финальный текст при остановке
-      if (finalTranscriptRef.current) {
-        setInput(finalTranscriptRef.current.trim());
-      }
-    };
+        // Обновляем финальный текст
+        if (newFinalTranscript) {
+          finalTranscriptRef.current += newFinalTranscript;
+        }
 
-    recognition.onstart = () => {
-      console.log('Speech recognition started');
-      finalTranscriptRef.current = '';
-      setInput('');
-    };
+        // Показываем финальный текст + промежуточный
+        setInput((finalTranscriptRef.current + interimTranscript).trim());
+      };
 
-    return recognition;
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error, event);
+        
+        // Обрабатываем различные типы ошибок
+        if (event.error === 'no-speech') {
+          // Пользователь не говорил - это нормально, просто останавливаем
+          setIsRecording(false);
+          networkErrorCountRef.current = 0; // Сбрасываем счетчик при нормальной остановке
+        } else if (event.error === 'audio-capture') {
+          // Нет микрофона
+          setIsRecording(false);
+          networkErrorCountRef.current = 0;
+          toast({
+            variant: "destructive",
+            title: "Микрофон не найден",
+            description: "Проверьте настройки браузера и подключение микрофона.",
+          });
+        } else if (event.error === 'not-allowed') {
+          // Разрешение не предоставлено
+          setIsRecording(false);
+          networkErrorCountRef.current = 0;
+          toast({
+            variant: "destructive",
+            title: "Доступ к микрофону запрещен",
+            description: "Разрешите доступ к микрофону в настройках браузера.",
+          });
+        } else if (event.error === 'aborted') {
+          // Распознавание было прервано - это нормально
+          setIsRecording(false);
+          networkErrorCountRef.current = 0;
+        } else if (event.error === 'network') {
+          // Ошибка сети - останавливаем и показываем сообщение
+          networkErrorCountRef.current += 1;
+          setIsRecording(false);
+          
+          // Останавливаем распознавание, чтобы избежать циклов
+          try {
+            recognition.stop();
+          } catch (e) {
+            // Игнорируем ошибки при остановке
+          }
+          
+          // Показываем сообщение только при первой ошибке
+          if (networkErrorCountRef.current === 1) {
+            toast({
+              variant: "destructive",
+              title: "Ошибка подключения",
+              description: "Не удалось подключиться к серверу распознавания речи. Проверьте интернет-соединение. Возможно, требуется VPN для доступа к серверам Google. Также попробуйте включить экспериментальные функции в Chrome: chrome://flags/#enable-experimental-web-platform-features",
+              duration: 8000, // Показываем дольше для важного сообщения
+            });
+          }
+        } else {
+          console.error('Unknown speech recognition error:', event.error);
+          setIsRecording(false);
+          networkErrorCountRef.current = 0;
+          // Показываем toast только для критических ошибок
+          if (event.error !== 'service-not-allowed') {
+            toast({
+              variant: "destructive",
+              title: "Ошибка распознавания речи",
+              description: `Ошибка: ${event.error}. Проверьте подключение к интернету и попробуйте еще раз.`,
+            });
+          }
+        }
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+        // Сохраняем финальный текст при остановке
+        if (finalTranscriptRef.current) {
+          setInput(finalTranscriptRef.current.trim());
+        }
+      };
+
+      recognition.onstart = () => {
+        console.log('Speech recognition started successfully');
+        finalTranscriptRef.current = '';
+        setInput('');
+        networkErrorCountRef.current = 0; // Сбрасываем счетчик при успешном запуске
+      };
+      
+      recognition.onnomatch = () => {
+        console.log('Speech recognition: no match found');
+        // Это не ошибка, просто нет совпадений
+      };
+
+      return recognition;
+    } catch (error: any) {
+      console.error('Error creating SpeechRecognition:', error);
+      return null;
+    }
   };
 
   useEffect(() => {
@@ -142,15 +203,45 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
 
   const toggleRecording = () => {
     // Проверяем поддержку API
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      alert('Голосовой ввод не поддерживается в вашем браузере. Используйте Chrome, Edge или Safari.');
+    const hasWebkit = 'webkitSpeechRecognition' in window;
+    const hasStandard = 'SpeechRecognition' in window;
+    
+    if (!hasWebkit && !hasStandard) {
+      toast({
+        variant: "destructive",
+        title: "Браузер не поддерживается",
+        description: "Голосовой ввод работает только в Chrome, Edge или Safari. В Chrome включите: chrome://flags/#enable-experimental-web-platform-features",
+        duration: 6000,
+      });
       return;
     }
 
     // Проверяем HTTPS (кроме localhost)
     if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      alert('Распознавание речи требует HTTPS соединения. Используйте HTTPS или localhost.');
+      toast({
+        variant: "destructive",
+        title: "Требуется HTTPS",
+        description: "Распознавание речи работает только по HTTPS или на localhost.",
+      });
       return;
+    }
+    
+    // Проверяем, что распознавание может быть создано
+    const testRecognition = createRecognition();
+    if (!testRecognition) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка инициализации",
+        description: "Не удалось инициализировать распознавание речи. Попробуйте перезагрузить страницу или включить экспериментальные функции в Chrome.",
+        duration: 6000,
+      });
+      return;
+    }
+    // Уничтожаем тестовый экземпляр
+    try {
+      testRecognition.abort();
+    } catch (e) {
+      // Игнорируем ошибки
     }
 
     if (isRecording) {
@@ -166,6 +257,9 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
       }
     } else {
       // Начинаем запись
+      // Сбрасываем счетчик ошибок при новой попытке
+      networkErrorCountRef.current = 0;
+      
       try {
         // Пересоздаем экземпляр распознавания для надежности
         if (recognitionRef.current) {
@@ -179,7 +273,11 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
         recognitionRef.current = createRecognition();
         
         if (!recognitionRef.current) {
-          alert('Не удалось инициализировать распознавание речи.');
+          toast({
+            variant: "destructive",
+            title: "Ошибка инициализации",
+            description: "Не удалось инициализировать распознавание речи.",
+          });
           return;
         }
 
@@ -192,12 +290,21 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
       } catch (error: any) {
         console.error('Error starting recognition:', error);
         setIsRecording(false);
+        networkErrorCountRef.current = 0;
         
         // Обрабатываем ошибки запуска
         if (error.name === 'NotAllowedError' || error.message?.includes('not allowed')) {
-          alert('Разрешение на использование микрофона не предоставлено. Проверьте настройки браузера.');
+          toast({
+            variant: "destructive",
+            title: "Доступ запрещен",
+            description: "Разрешите доступ к микрофону в настройках браузера.",
+          });
         } else if (error.name === 'NotFoundError' || error.message?.includes('not found')) {
-          alert('Микрофон не найден. Проверьте подключение микрофона.');
+          toast({
+            variant: "destructive",
+            title: "Микрофон не найден",
+            description: "Проверьте подключение микрофона.",
+          });
         } else if (error.name === 'InvalidStateError' || error.message?.includes('already started')) {
           // Распознавание уже запущено - пересоздаем
           console.log('Recognition already started, recreating...');
@@ -208,11 +315,19 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
               setIsRecording(true);
             } catch (e: any) {
               console.error('Error restarting recognition:', e);
-              alert(`Не удалось запустить распознавание речи: ${e.message || e.name || 'Неизвестная ошибка'}`);
+              toast({
+                variant: "destructive",
+                title: "Ошибка запуска",
+                description: `Не удалось запустить распознавание речи: ${e.message || e.name || 'Неизвестная ошибка'}`,
+              });
             }
           }
         } else {
-          alert(`Не удалось запустить распознавание речи: ${error.message || error.name || 'Неизвестная ошибка'}. Попробуйте еще раз.`);
+          toast({
+            variant: "destructive",
+            title: "Ошибка запуска",
+            description: `Не удалось запустить распознавание речи: ${error.message || error.name || 'Неизвестная ошибка'}. Попробуйте еще раз.`,
+          });
         }
       }
     }
