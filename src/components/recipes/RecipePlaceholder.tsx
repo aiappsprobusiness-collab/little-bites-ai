@@ -8,6 +8,7 @@ interface RecipePlaceholderProps {
 
 // Predefined pastel gradient pairs for food-themed placeholders
 const gradientPairs = [
+  // Original pastel palette
   { from: "from-mint/60", to: "to-mint-dark/40", icon: "🥗" },
   { from: "from-peach/60", to: "to-peach-dark/40", icon: "🍑" },
   { from: "from-lavender/60", to: "to-lavender-dark/40", icon: "🍇" },
@@ -18,6 +19,44 @@ const gradientPairs = [
   { from: "from-yellow-200/60", to: "to-amber-300/40", icon: "🍌" },
   { from: "from-lime-200/60", to: "to-green-300/40", icon: "🥒" },
   { from: "from-fuchsia-200/60", to: "to-purple-300/40", icon: "🍆" },
+  // Extended warm palette
+  { from: "from-orange-200/60", to: "to-red-300/40", icon: "🍅" },
+  { from: "from-red-200/60", to: "to-rose-300/40", icon: "🍎" },
+  { from: "from-amber-100/60", to: "to-yellow-300/40", icon: "🧀" },
+  { from: "from-orange-100/60", to: "to-amber-200/40", icon: "🥐" },
+  { from: "from-yellow-100/60", to: "to-orange-200/40", icon: "🍯" },
+  // Extended cool palette
+  { from: "from-cyan-200/60", to: "to-sky-300/40", icon: "🐟" },
+  { from: "from-teal-200/60", to: "to-emerald-300/40", icon: "🥬" },
+  { from: "from-green-200/60", to: "to-lime-300/40", icon: "🥝" },
+  { from: "from-blue-200/60", to: "to-indigo-300/40", icon: "🫧" },
+  { from: "from-indigo-200/60", to: "to-violet-300/40", icon: "🍠" },
+  // Extended neutral/earthy palette
+  { from: "from-stone-200/60", to: "to-amber-200/40", icon: "🍞" },
+  { from: "from-zinc-200/60", to: "to-stone-300/40", icon: "🍄" },
+  { from: "from-neutral-200/60", to: "to-warm-gray-300/40", icon: "🥜" },
+  { from: "from-slate-200/60", to: "to-gray-300/40", icon: "🧆" },
+  // Extended vibrant palette
+  { from: "from-pink-200/60", to: "to-fuchsia-300/40", icon: "🍧" },
+  { from: "from-violet-200/60", to: "to-purple-300/40", icon: "🍒" },
+  { from: "from-purple-200/60", to: "to-pink-300/40", icon: "🧁" },
+  { from: "from-rose-100/60", to: "to-pink-200/40", icon: "🍰" },
+  // Breakfast/Dairy themed
+  { from: "from-amber-50/70", to: "to-orange-200/50", icon: "🥚" },
+  { from: "from-blue-100/60", to: "to-cyan-200/40", icon: "🥛" },
+  { from: "from-yellow-50/70", to: "to-amber-200/50", icon: "🧇" },
+  // Protein themed
+  { from: "from-red-100/60", to: "to-orange-200/40", icon: "🍖" },
+  { from: "from-orange-50/70", to: "to-red-200/50", icon: "🍗" },
+  { from: "from-rose-100/60", to: "to-red-200/40", icon: "🥩" },
+  // Sweet treats
+  { from: "from-pink-100/60", to: "to-rose-200/40", icon: "🍪" },
+  { from: "from-amber-100/70", to: "to-orange-200/50", icon: "🥮" },
+  { from: "from-fuchsia-100/60", to: "to-pink-200/40", icon: "🎂" },
+  // Grain/Carbs themed
+  { from: "from-amber-200/50", to: "to-yellow-300/40", icon: "🍚" },
+  { from: "from-orange-100/60", to: "to-amber-300/40", icon: "🍜" },
+  { from: "from-yellow-200/50", to: "to-lime-200/40", icon: "🌽" },
 ];
 
 // Generate a consistent hash from string (same name = same hash = same gradient)
