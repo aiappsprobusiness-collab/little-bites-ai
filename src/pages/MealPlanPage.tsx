@@ -5,10 +5,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Loader2, X } from "lucide-react";
 import { useMealPlans } from "@/hooks/useMealPlans";
-import { useChildren } from "@/hooks/useChildren";
+import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { ChildCarousel } from "@/components/family/ChildCarousel";
 import {
   Dialog,
   DialogContent,
@@ -36,8 +37,7 @@ const mealTypes = [
 export default function MealPlanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { children } = useChildren();
-  const selectedChild = children[0];
+  const { selectedChild } = useSelectedChild();
   const { recipes } = useRecipes(selectedChild?.id);
   const { getMealPlansByDate, createMealPlan, deleteMealPlan, isCreating } = useMealPlans(selectedChild?.id);
 
@@ -134,8 +134,13 @@ export default function MealPlanPage() {
   return (
     <MobileLayout title="План питания">
       <div className="space-y-6">
-        {/* Week Navigation */}
+        {/* Child Carousel */}
         <div className="px-4 pt-4">
+          <ChildCarousel compact />
+        </div>
+
+        {/* Week Navigation */}
+        <div className="px-4">
           <div className="flex items-center justify-between mb-4">
             <Button
               variant="ghost"

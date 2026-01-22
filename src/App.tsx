@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { SelectedChildProvider } from "@/contexts/SelectedChildContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import ScanPage from "./pages/ScanPage";
@@ -23,9 +24,10 @@ const App = () => (
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
-          <Toaster />
-          <Sonner />
-          <Routes>
+          <SelectedChildProvider>
+            <Toaster />
+            <Sonner />
+            <Routes>
             <Route path="/auth" element={<AuthPage />} />
             <Route
               path="/"
@@ -99,9 +101,10 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </SelectedChildProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
