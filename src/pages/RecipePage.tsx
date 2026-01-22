@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Star, Clock, Baby, Loader2, Edit2, Heart, Trash2 } from "lucide-react";
+import { Star, Clock, Baby, Loader2, Heart } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -82,82 +82,70 @@ export default function RecipePage() {
   const steps = (recipe as any).steps || [];
 
   return (
-    <MobileLayout title={recipe.title}>
-      <div className="space-y-6">
-        {/* Recipe Image */}
-        {recipe.image_url && (
-          <div className="relative aspect-[4/3] overflow-hidden -mx-4">
-            <img
-              src={recipe.image_url}
-              alt={recipe.title}
-              className="w-full h-full object-cover"
-            />
+    <MobileLayout title="Рецепт">
+      <div className="flex flex-col h-full overflow-y-auto px-4 py-6 space-y-6">
+        {/* Название рецепта */}
+        <section>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl font-bold text-foreground">{recipe.title}</h1>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleFavorite}
+              className="flex-shrink-0"
+            >
+              <Heart
+                className={`w-5 h-5 ${
+                  recipe.is_favorite
+                    ? "fill-peach-dark text-peach-dark"
+                    : "text-muted-foreground"
+                }`}
+              />
+            </Button>
           </div>
-        )}
-
-        <div className="px-4 space-y-6">
-          {/* Recipe Header */}
-          <div>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <h1 className="text-2xl font-bold mb-2">{recipe.title}</h1>
-                {recipe.description && (
-                  <p className="text-muted-foreground">{recipe.description}</p>
-                )}
+          
+          {/* Мета-информация */}
+          <div className="flex flex-wrap gap-4 text-sm mt-3">
+            {recipe.cooking_time_minutes && (
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <span>{recipe.cooking_time_minutes} мин</span>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleToggleFavorite}
-                className="flex-shrink-0"
-              >
-                <Heart
-                  className={`w-6 h-6 ${
-                    recipe.is_favorite
-                      ? "fill-peach-dark text-peach-dark"
-                      : "text-muted-foreground"
-                  }`}
-                />
-              </Button>
-            </div>
-
-            {/* Recipe Info */}
-            <div className="flex flex-wrap gap-4 text-sm">
-              {recipe.cooking_time_minutes && (
-                <div className="flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span>{recipe.cooking_time_minutes} мин</span>
-                </div>
-              )}
-              {recipe.min_age_months && (
-                <div className="flex items-center gap-2">
-                  <Baby className="w-4 h-4 text-muted-foreground" />
-                  <span>С {recipe.min_age_months} мес</span>
-                </div>
-              )}
-              {recipe.rating && (
-                <div className="flex items-center gap-2">
-                  <Star className="w-4 h-4 text-peach-dark fill-peach-dark" />
-                  <span>{recipe.rating}/5</span>
-                </div>
-              )}
-            </div>
+            )}
+            {recipe.min_age_months && (
+              <div className="flex items-center gap-2">
+                <Baby className="w-4 h-4 text-muted-foreground" />
+                <span>С {recipe.min_age_months} мес</span>
+              </div>
+            )}
+            {recipe.rating && (
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-peach-dark fill-peach-dark" />
+                <span>{recipe.rating}/5</span>
+              </div>
+            )}
           </div>
 
-          {/* Ingredients */}
-          {ingredients.length > 0 && (
+          {recipe.description && (
+            <p className="text-muted-foreground mt-3">{recipe.description}</p>
+          )}
+        </section>
+
+        {/* Ингредиенты */}
+        {ingredients.length > 0 && (
+          <section>
+            <h2 className="text-lg font-bold text-foreground mb-3">Ингредиенты</h2>
             <Card variant="mint">
-              <CardContent className="p-5">
-                <h2 className="text-lg font-bold mb-4">Ингредиенты</h2>
+              <CardContent className="p-4">
                 <ul className="space-y-2">
                   {ingredients.map((ing: any, index: number) => (
-                    <li key={index} className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-primary" />
-                      <span className="flex-1">
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="w-2 h-2 rounded-full bg-primary mt-2 flex-shrink-0" />
+                      <span>
                         {ing.name}
                         {ing.amount && ing.unit && (
-                          <span className="text-muted-foreground ml-2">
-                            - {ing.amount} {ing.unit}
+                          <span className="text-muted-foreground ml-1">
+                            — {ing.amount} {ing.unit}
                           </span>
                         )}
                       </span>
@@ -166,20 +154,22 @@ export default function RecipePage() {
                 </ul>
               </CardContent>
             </Card>
-          )}
+          </section>
+        )}
 
-          {/* Steps */}
-          {steps.length > 0 && (
+        {/* Шаги приготовления */}
+        {steps.length > 0 && (
+          <section className="pb-6">
+            <h2 className="text-lg font-bold text-foreground mb-3">Шаги приготовления</h2>
             <Card variant="default">
-              <CardContent className="p-5">
-                <h2 className="text-lg font-bold mb-4">Приготовление</h2>
+              <CardContent className="p-4">
                 <ol className="space-y-4">
                   {steps.map((step: any, index: number) => (
-                    <li key={index} className="flex gap-4">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-bold">
+                    <li key={index} className="flex gap-3">
+                      <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
                         {step.step_number || index + 1}
                       </div>
-                      <div className="flex-1 pt-1">
+                      <div className="flex-1 pt-0.5">
                         <p>{step.instruction}</p>
                         {step.duration_minutes && (
                           <p className="text-sm text-muted-foreground mt-1">
@@ -192,26 +182,8 @@ export default function RecipePage() {
                 </ol>
               </CardContent>
             </Card>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-3 pb-6">
-            <Button
-              variant="mint"
-              className="flex-1"
-              onClick={() => navigate(`/recipe/${recipe.id}/edit`)}
-            >
-              <Edit2 className="w-4 h-4 mr-2" />
-              Редактировать
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
+          </section>
+        )}
       </div>
     </MobileLayout>
   );

@@ -81,12 +81,21 @@ const dietGoals = [
   },
 ];
 
+interface GeneratedIngredient {
+  name: string;
+  amount: number;
+  unit: string;
+}
+
 interface GeneratedMeal {
   name: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
+  cooking_time?: number;
+  ingredients?: GeneratedIngredient[];
+  steps?: string[];
 }
 
 interface GeneratedDay {
@@ -311,7 +320,22 @@ export default function GeneratePlanPage() {
           const mealType = mealTypeMap[mealKey as keyof typeof mealTypeMap];
           if (!mealType || !meal) continue;
 
-          // Create recipe
+          // Create recipe with ingredients and steps
+          const ingredientsData = (meal.ingredients || []).map((ing, idx) => ({
+            name: ing.name,
+            amount: ing.amount || null,
+            unit: ing.unit || null,
+            category: "other" as const,
+            order_index: idx,
+          }));
+
+          const stepsData = (meal.steps || []).map((step, idx) => ({
+            instruction: step,
+            step_number: idx + 1,
+            duration_minutes: null,
+            image_url: null,
+          }));
+
           const recipe = await createRecipe({
             recipe: {
               title: meal.name,
@@ -320,12 +344,14 @@ export default function GeneratePlanPage() {
               proteins: meal.protein,
               carbs: meal.carbs,
               fats: meal.fat,
+              cooking_time_minutes: meal.cooking_time || null,
               description: `Сгенерировано AI для ${selectedChild.name}`,
               tags: selectedGoals,
             },
-            ingredients: [],
-            steps: [],
+            ingredients: ingredientsData,
+            steps: stepsData,
           });
+
 
           // Create meal plan
           await createMealPlan({

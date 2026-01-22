@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.deepseek-analyze]
 verify_jwt = false
+
+[functions.generate-recipe-image]
+verify_jwt = false

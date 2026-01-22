@@ -112,7 +112,6 @@ serve(async (req) => {
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
-
     // Parse JSON from response
     let result;
     try {
