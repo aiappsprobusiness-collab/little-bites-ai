@@ -20,6 +20,7 @@ import {
   Beef,
   AlertCircle,
   Pencil,
+  Download,
 } from "lucide-react";
 import { ChildCarousel } from "@/components/family/ChildCarousel";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -32,6 +33,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { MealEditDialog } from "@/components/meal-plan/MealEditDialog";
+import { exportMealPlanToPDF } from "@/utils/pdfExport";
 
 // Цели питания
 const dietGoals = [
@@ -650,6 +652,24 @@ export default function GeneratePlanPage() {
                 </Button>
                 <Button
                   variant="outline"
+                  size="lg"
+                  className="w-full"
+                  onClick={() => {
+                    const goals = selectedGoals.map(
+                      (g) => dietGoals.find((dg) => dg.id === g)?.label || g
+                    );
+                    exportMealPlanToPDF(generatedPlan, selectedChild?.name || "Ребенок", goals);
+                    toast({
+                      title: "PDF экспортирован",
+                      description: "Файл сохранён в папку загрузок",
+                    });
+                  }}
+                >
+                  <Download className="w-5 h-5 mr-2" />
+                  Экспорт в PDF
+                </Button>
+                <Button
+                  variant="ghost"
                   size="lg"
                   className="w-full"
                   onClick={() => {
