@@ -71,7 +71,7 @@ export function ChatMessage({ id, role, content, timestamp, onDelete }: ChatMess
         </div>
       </motion.div>
 
-      {/* Delete confirmation popup */}
+      {/* Delete confirmation - bottom sheet style */}
       <AnimatePresence>
         {showDelete && (
           <>
@@ -79,32 +79,37 @@ export function ChatMessage({ id, role, content, timestamp, onDelete }: ChatMess
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/30 z-50"
+              className="fixed inset-0 bg-black/40 z-50"
               onClick={() => setShowDelete(false)}
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-card rounded-2xl p-6 shadow-xl flex flex-col items-center gap-4"
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl p-6 pb-8 shadow-xl"
             >
-              <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center">
-                <Trash2 className="w-8 h-8 text-destructive" />
-              </div>
-              <p className="text-center font-medium">Удалить сообщение?</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDelete(false)}
-                  className="px-6 py-2 rounded-xl bg-muted text-muted-foreground font-medium"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={handleDelete}
-                  className="px-6 py-2 rounded-xl bg-destructive text-destructive-foreground font-medium"
-                >
-                  Удалить
-                </button>
+              <div className="w-12 h-1 bg-muted rounded-full mx-auto mb-6" />
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <Trash2 className="w-7 h-7 text-destructive" />
+                </div>
+                <p className="text-center font-medium text-lg">Удалить сообщение?</p>
+                <p className="text-center text-sm text-muted-foreground">Это действие нельзя отменить</p>
+                <div className="flex gap-3 w-full mt-2">
+                  <button
+                    onClick={() => setShowDelete(false)}
+                    className="flex-1 py-3 rounded-xl bg-muted text-foreground font-medium"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    className="flex-1 py-3 rounded-xl bg-destructive text-destructive-foreground font-medium"
+                  >
+                    Удалить
+                  </button>
+                </div>
               </div>
             </motion.div>
           </>
