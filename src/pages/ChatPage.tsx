@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, Trash2, Sparkles, ChevronDown } from "lucide-react";
+import { Send, Loader2, Sparkles } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { UsageBadge } from "@/components/subscription/UsageBadge";
 import { Paywall } from "@/components/subscription/Paywall";
+import { ChatMessage } from "@/components/chat/ChatMessage";
+import { ChatInputPanel } from "@/components/chat/ChatInputPanel";
 import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
@@ -36,15 +36,14 @@ const quickPrompts = [
 export default function ChatPage() {
   const { toast } = useToast();
   const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
-  const { canGenerate, isPremium } = useSubscription();
+  const { canGenerate, isPremium, remaining, dailyLimit } = useSubscription();
   const { chat, saveChat, isChatting } = useDeepSeekAPI();
-  const { messages: historyMessages, isLoading: isLoadingHistory, clearHistory } = useChatHistory();
+  const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage } = useChatHistory();
   
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
   const [showPaywall, setShowPaywall] = useState(false);
+  const [showInputPanel, setShowInputPanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Загружаем историю чата
   useEffect(() => {
@@ -75,7 +74,7 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = async () => {
+  const handleSend = async (input: string) => {
     if (!input.trim() || isChatting) return;
 
     if (!canGenerate && !isPremium) {
@@ -91,7 +90,6 @@ export default function ChatPage() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
 
     try {
       const chatMessages = messages.map((m) => ({
@@ -138,33 +136,45 @@ export default function ChatPage() {
   };
 
   const handleQuickPrompt = (prompt: string) => {
-    setInput(prompt);
-    textareaRef.current?.focus();
+    handleSend(prompt);
   };
 
-  const handleClearHistory = async () => {
+  const handleDeleteMessage = async (messageId: string) => {
+    // Extract the original message ID from our formatted ID
+    const originalId = messageId.replace('-user', '').replace('-assistant', '');
+    
     try {
-      await clearHistory();
-      setMessages([]);
+      await deleteMessage(originalId);
+      // Remove both user and assistant messages with this ID
+      setMessages((prev) => prev.filter((m) => !m.id.startsWith(originalId)));
       toast({
-        title: "История очищена",
-        description: "Все сообщения удалены",
+        title: "Сообщение удалено",
       });
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: "Не удалось очистить историю",
+        description: "Не удалось удалить сообщение",
       });
     }
   };
 
   return (
-    <MobileLayout 
-      title="AI Помощник"
-      headerRight={<UsageBadge onClick={() => setShowPaywall(true)} />}
-    >
-      <div className="flex flex-col h-[calc(100vh-140px)]">
+    <MobileLayout showNav={true}>
+      {/* Custom header */}
+      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border/50 safe-top">
+        <div className="flex items-center justify-between w-full px-4 h-14">
+          <h1 className="text-lg font-bold text-foreground">AI Помощник</h1>
+          <button
+            onClick={() => setShowPaywall(true)}
+            className="text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full"
+          >
+            {isPremium ? "∞" : `${remaining ?? 0}/${dailyLimit ?? 3}`}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col h-[calc(100vh-130px)] relative">
         {/* Child selector dropdown */}
         <div className="px-4 py-3 border-b border-border/50">
           <Select 
@@ -186,7 +196,7 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-20">
           {messages.length === 0 && !isLoadingHistory && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -227,31 +237,15 @@ export default function ChatPage() {
           )}
 
           <AnimatePresence>
-            {messages.map((message, index) => (
-              <motion.div
+            {messages.map((message) => (
+              <ChatMessage
                 key={message.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ delay: index * 0.05 }}
-                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-3 ${
-                    message.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-br-sm"
-                      : "bg-card shadow-soft rounded-bl-sm"
-                  }`}
-                >
-                  <p className="text-base whitespace-pre-wrap">{message.content}</p>
-                  <p className="text-[10px] opacity-60 mt-1">
-                    {message.timestamp.toLocaleTimeString("ru-RU", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-              </motion.div>
+                id={message.id}
+                role={message.role}
+                content={message.content}
+                timestamp={message.timestamp}
+                onDelete={handleDeleteMessage}
+              />
             ))}
           </AnimatePresence>
 
@@ -277,54 +271,23 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-
-        {/* Input area */}
-        <div className="px-4 py-3 bg-background">
-          <div className="flex gap-2 items-center">
-            <div className="flex-1 relative">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                placeholder="Спросите о рецепте или питании..."
-                className="min-h-[44px] max-h-[100px] resize-none text-base rounded-2xl bg-card border-border/50 py-2.5"
-                rows={1}
-              />
-            </div>
-            <div className="flex gap-1.5 items-center">
-              <Button
-                variant="mint"
-                size="icon"
-                onClick={handleSend}
-                disabled={!input.trim() || isChatting}
-                className="h-11 w-11 rounded-xl flex-shrink-0"
-              >
-                {isChatting ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Send className="w-5 h-5" />
-                )}
-              </Button>
-              {messages.length > 0 && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleClearHistory}
-                  className="h-11 w-11 rounded-xl text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        {/* FAB Button */}
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowInputPanel(true)}
+          className="fixed bottom-20 right-4 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center z-30"
+        >
+          <Send className="w-6 h-6" />
+        </motion.button>
       </div>
+
+      {/* Input Panel */}
+      <ChatInputPanel
+        isOpen={showInputPanel}
+        onClose={() => setShowInputPanel(false)}
+        onSend={handleSend}
+        isSending={isChatting}
+      />
 
       <Paywall isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
     </MobileLayout>
