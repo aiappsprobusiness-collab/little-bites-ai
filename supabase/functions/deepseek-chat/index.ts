@@ -145,14 +145,20 @@ ${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childD
 ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : ""}
 ` : ""}
 
-ВАЖНО: Отвечай СТРОГО в формате JSON без markdown и без дополнительного текста!
-Используй ТОЛЬКО английские ключи: breakfast, lunch, snack, dinner.
+КРИТИЧЕСКИ ВАЖНО:
+1. ВСЕ названия блюд должны быть на РУССКОМ языке!
+2. ВСЕ ингредиенты должны быть на РУССКОМ языке!
+3. ВСЕ шаги приготовления должны быть на РУССКОМ языке!
+4. Единицы измерения на русском: г, мл, шт, ст.л., ч.л.
+5. Отвечай СТРОГО в формате JSON без markdown!
+6. Используй ТОЛЬКО английские ключи: breakfast, lunch, snack, dinner, name, calories, protein, carbs, fat, cooking_time, ingredients, steps, amount, unit.
 
+Пример формата:
 {
-  "breakfast": {"name": "Название блюда", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Продукт", "amount": 50, "unit": "г"}], "steps": ["Шаг 1"]},
-  "lunch": {"name": "...", "calories": 300, "protein": 15, "carbs": 30, "fat": 10, "cooking_time": 20, "ingredients": [...], "steps": [...]},
-  "snack": {"name": "...", "calories": 100, "protein": 3, "carbs": 15, "fat": 3, "cooking_time": 5, "ingredients": [...], "steps": [...]},
-  "dinner": {"name": "...", "calories": 280, "protein": 12, "carbs": 25, "fat": 8, "cooking_time": 25, "ingredients": [...], "steps": [...]}
+  "breakfast": {"name": "Овсяная каша с яблоком", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Овсяные хлопья", "amount": 50, "unit": "г"}, {"name": "Яблоко", "amount": 1, "unit": "шт"}], "steps": ["Залить хлопья водой", "Варить 10 минут", "Добавить нарезанное яблоко"]},
+  "lunch": {"name": "Куриный суп с вермишелью", "calories": 300, "protein": 15, "carbs": 30, "fat": 10, "cooking_time": 30, "ingredients": [{"name": "Куриное филе", "amount": 100, "unit": "г"}], "steps": ["Сварить бульон"]},
+  "snack": {"name": "Творожок с бананом", "calories": 150, "protein": 8, "carbs": 20, "fat": 5, "cooking_time": 5, "ingredients": [{"name": "Творог", "amount": 100, "unit": "г"}], "steps": ["Смешать творог с бананом"]},
+  "dinner": {"name": "Рыбные котлеты с пюре", "calories": 280, "protein": 18, "carbs": 25, "fat": 10, "cooking_time": 40, "ingredients": [{"name": "Филе трески", "amount": 150, "unit": "г"}], "steps": ["Приготовить фарш", "Сформировать котлеты"]}
 }`;
     }
 
