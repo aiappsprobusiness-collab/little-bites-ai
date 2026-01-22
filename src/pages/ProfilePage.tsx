@@ -14,12 +14,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X } from "lucide-react";
-import { Progress } from "@/components/ui/progress";
 import { useChildren } from "@/hooks/useChildren";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useToast } from "@/hooks/use-toast";
-
 import type { Tables } from "@/integrations/supabase/types";
 
 const allergyOptions = [
@@ -42,19 +40,16 @@ export default function ProfilePage() {
   } = useChildren();
   const { recipes } = useRecipes();
   const { getMealPlans } = useMealPlans();
-  
 
   const [selectedChildId, setSelectedChildId] = useState<string | null>(children[0]?.id || null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
-  
 
   const selectedChild = children.find(c => c.id === selectedChildId);
 
   // Статистика для выбранного ребенка
   const childRecipes = selectedChild ? recipes.filter(r => r.child_id === selectedChild.id) : [];
   const favoriteRecipes = childRecipes.filter(r => r.is_favorite).length;
-  
   
   // Планы питания (примерно, можно улучшить)
   const today = new Date();
@@ -64,7 +59,6 @@ export default function ProfilePage() {
   weekEnd.setDate(weekStart.getDate() + 6);
   const { data: mealPlans = [] } = getMealPlans(weekStart, weekEnd);
   const childMealPlans = selectedChild ? mealPlans.filter(mp => mp.child_id === selectedChild.id) : [];
-
 
   const handleCreateChild = () => {
     setEditingChild(null);
@@ -331,7 +325,6 @@ export default function ProfilePage() {
                 </Card>
               </motion.div>
             )}
-
 
             {/* Delete Button */}
             <motion.div

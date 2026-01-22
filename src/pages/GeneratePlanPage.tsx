@@ -352,7 +352,6 @@ export default function GeneratePlanPage() {
             steps: stepsData,
           });
 
-
           // Create meal plan
           await createMealPlan({
             child_id: selectedChild.id,
