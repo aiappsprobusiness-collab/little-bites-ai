@@ -179,7 +179,7 @@ export default function ChatPage() {
                 <Sparkles className="w-10 h-10 text-primary-foreground" />
               </div>
               <h2 className="text-xl font-bold mb-2">AI Помощник</h2>
-              <p className="text-muted-foreground mb-6 max-w-xs">
+              <p className="text-base text-muted-foreground mb-6 max-w-xs">
                 {selectedChild 
                   ? `Готов помочь с питанием для ${selectedChild.name}!`
                   : "Задайте вопрос о детском питании или попросите рецепт"}
@@ -225,7 +225,7 @@ export default function ChatPage() {
                       : "bg-card shadow-soft rounded-bl-sm"
                   }`}
                 >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  <p className="text-base whitespace-pre-wrap">{message.content}</p>
                   <p className="text-[10px] opacity-60 mt-1">
                     {message.timestamp.toLocaleTimeString("ru-RU", {
                       hour: "2-digit",
