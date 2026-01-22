@@ -352,6 +352,19 @@ export default function GeneratePlanPage() {
             steps: stepsData,
           });
 
+          // Queue image generation (fire and forget - will update in background)
+          fetch(
+            `https://hidgiyyunigqazssnydm.supabase.co/functions/v1/generate-recipe-image`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+              },
+              body: JSON.stringify({ recipeId: recipe.id, recipeName: meal.name }),
+            }
+          ).catch(console.error);
+
           // Create meal plan
           await createMealPlan({
             child_id: selectedChild.id,
