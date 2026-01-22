@@ -1,24 +1,18 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Camera, Loader2, Trash2, Sparkles, ChevronDown } from "lucide-react";
+import { Send, Loader2, Trash2, Sparkles } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { UsageBadge } from "@/components/subscription/UsageBadge";
 import { Paywall } from "@/components/subscription/Paywall";
+import { ChildCarousel } from "@/components/family/ChildCarousel";
 import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
 import { useChatHistory } from "@/hooks/useChatHistory";
-import { useChildren } from "@/hooks/useChildren";
+import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface Message {
   id: string;
@@ -36,14 +30,13 @@ const quickPrompts = [
 
 export default function ChatPage() {
   const { toast } = useToast();
-  const { children } = useChildren();
+  const { selectedChild, children } = useSelectedChild();
   const { canGenerate, isPremium } = useSubscription();
   const { chat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, clearHistory } = useChatHistory();
   
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [selectedChildId, setSelectedChildId] = useState<string>("");
   const [showPaywall, setShowPaywall] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -120,7 +113,7 @@ export default function ChatPage() {
       await saveChat({
         message: userMessage.content,
         response: response.message,
-        childId: selectedChildId || undefined,
+        childId: selectedChild?.id,
       });
     } catch (error: any) {
       console.error("Chat error:", error);
@@ -161,29 +154,16 @@ export default function ChatPage() {
     }
   };
 
-  const selectedChild = children.find((c) => c.id === selectedChildId) || children[0];
-
   return (
     <MobileLayout 
       title="AI Помощник"
       headerRight={<UsageBadge onClick={() => setShowPaywall(true)} />}
     >
       <div className="flex flex-col h-[calc(100vh-180px)]">
-        {/* Child selector */}
+        {/* Child selector carousel */}
         {children.length > 0 && (
-          <div className="px-4 py-2 border-b border-border/50">
-            <Select value={selectedChildId} onValueChange={setSelectedChildId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Выберите ребенка для персонализации" />
-              </SelectTrigger>
-              <SelectContent>
-                {children.map((child) => (
-                  <SelectItem key={child.id} value={child.id}>
-                    {child.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="px-4 py-3 border-b border-border/50">
+            <ChildCarousel compact />
           </div>
         )}
 
