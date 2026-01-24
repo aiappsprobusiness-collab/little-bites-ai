@@ -34,6 +34,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { MealEditDialog } from "@/components/meal-plan/MealEditDialog";
 import { exportMealPlanToPDF } from "@/utils/pdfExport";
+import { 
+  DailyPlanGenerator, 
+  type ChildData as GeneratorChildData,
+  type GeneratedDay as GeneratorGeneratedDay,
+  type GeneratedPlan as GeneratorGeneratedPlan,
+  type GeneratedMeal as GeneratorGeneratedMeal
+} from "@/services/DailyPlanGenerator";
 
 // Цели питания
 const dietGoals = [
@@ -81,35 +88,16 @@ const dietGoals = [
   },
 ];
 
-interface GeneratedIngredient {
+// Используем типы из DailyPlanGenerator для консистентности
+type GeneratedIngredient = {
   name: string;
   amount: number;
   unit: string;
-}
+};
 
-interface GeneratedMeal {
-  name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  cooking_time?: number;
-  ingredients?: GeneratedIngredient[];
-  steps?: string[];
-}
-
-interface GeneratedDay {
-  breakfast: GeneratedMeal;
-  lunch: GeneratedMeal;
-  snack: GeneratedMeal;
-  dinner: GeneratedMeal;
-}
-
-interface GeneratedPlan {
-  days: Record<string, GeneratedDay>;
-  shopping_list: string[];
-  total_calories_week: number;
-}
+type GeneratedMeal = GeneratorGeneratedMeal;
+type GeneratedDay = GeneratorGeneratedDay;
+type GeneratedPlan = GeneratorGeneratedPlan;
 
 export default function GeneratePlanPage() {
   const navigate = useNavigate();
@@ -126,7 +114,10 @@ export default function GeneratePlanPage() {
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  
+  const [currentGeneratingDay, setCurrentGeneratingDay] = useState<string | null>(null);
+  const [generatedDaysProgress, setGeneratedDaysProgress] = useState<Record<string, boolean>>({});
+  const [isGenerating, setIsGenerating] = useState(false); // Для UI состояния кнопки
+
   // Meal editing state
   const [editingMeal, setEditingMeal] = useState<{
     dayName: string;
@@ -147,25 +138,33 @@ export default function GeneratePlanPage() {
     selectedGoals?: string[];
     generatedPlan?: GeneratedPlan;
   } | null>(null);
+  
+  // Флаг для предотвращения множественных продолжений генерации
+  const isRestoringRef = useRef(false);
+  const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Флаг для отслеживания активной генерации
+  const isGeneratingRef = useRef(false);
+  // Ref для хранения текущего генератора (для отмены)
+  const currentGeneratorRef = useRef<DailyPlanGenerator | null>(null);
 
-  // Сохранение состояния в localStorage
+  // Сохранение состояния в localStorage - ОТКЛЮЧЕНО
   const saveGenerationState = (state: typeof generationStateRef.current) => {
-    if (state) {
-      try {
-        const stateToSave = {
-          ...state,
-          step: step,
-          progress: progress,
-          selectedGoals: selectedGoals,
-          timestamp: Date.now(),
-        };
-        localStorage.setItem('mealPlanGeneration', JSON.stringify(stateToSave));
-        console.log('Saved generation state:', stateToSave);
-      } catch (e) {
-        console.error('Failed to save generation state:', e);
-      }
-    }
+    // Функция сохранения состояния отключена
+    // Состояние больше не сохраняется в localStorage
   };
+
+  // Периодическое автосохранение во время генерации - ОТКЛЮЧЕНО
+  const startAutoSave = useCallback(() => {
+    // Автосохранение отключено для уменьшения нагрузки
+    // Состояние сохраняется только в ключевых точках (начало, завершение дня, завершение генерации)
+  }, []);
+
+  const stopAutoSave = useCallback(() => {
+    if (autoSaveIntervalRef.current) {
+      clearInterval(autoSaveIntervalRef.current);
+      autoSaveIntervalRef.current = null;
+    }
+  }, []);
 
   // Загрузка состояния из localStorage
   const loadGenerationState = () => {
@@ -188,29 +187,52 @@ export default function GeneratePlanPage() {
 
   // Очистка сохраненного состояния
   const clearGenerationState = () => {
+    // Отменяем текущую генерацию если есть
+    if (currentGeneratorRef.current) {
+      currentGeneratorRef.current.abort();
+      currentGeneratorRef.current = null;
+    }
+    
     localStorage.removeItem('mealPlanGeneration');
     generationStateRef.current = null;
+    isGeneratingRef.current = false;
+    setIsGenerating(false);
+    isRestoringRef.current = false;
+    stopAutoSave();
     console.log('Cleared generation state');
   };
 
-  // Автоматическое сохранение состояния при изменении step или progress во время генерации
+  // Автоматическое сохранение состояния при изменении step или progress - ОТКЛЮЧЕНО
+  // Состояние сохраняется только в ключевых точках (начало, завершение дня, завершение генерации)
   useEffect(() => {
+    // Обновляем только ref, но не сохраняем в localStorage автоматически
     if (step === "generating" && generationStateRef.current) {
-      // Обновляем сохраненное состояние при изменении step или progress
-      // Проверяем, что значения действительно изменились, чтобы избежать лишних сохранений
       if (generationStateRef.current.step !== step || generationStateRef.current.progress !== progress) {
         generationStateRef.current.step = step;
         generationStateRef.current.progress = progress;
-        saveGenerationState(generationStateRef.current);
+        // Автосохранение отключено - не сохраняем в localStorage
       }
     }
   }, [step, progress]);
 
   // Продолжение генерации с сохраненного места
   const continueGeneration = useCallback(async () => {
-    if (!generationStateRef.current) return;
+    // Предотвращаем множественные вызовы
+    if (isRestoringRef.current || isGeneratingRef.current) {
+      console.log('Generation already in progress, skipping...');
+      return;
+    }
+    
+    if (!generationStateRef.current) {
+      console.log('No generation state to continue');
+      return;
+    }
 
-    const state = generationStateRef.current;
+              // Устанавливаем флаги
+              isRestoringRef.current = true;
+              isGeneratingRef.current = true;
+              setIsGenerating(true);
+              const state = generationStateRef.current;
     const daysOfWeek = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
     const generatedDays = { ...state.generatedDays };
     let currentIndex = state.currentDayIndex;
@@ -218,7 +240,7 @@ export default function GeneratePlanPage() {
     setStep("generating");
     const initialProgress = Math.round((currentIndex / daysOfWeek.length) * 90);
     setProgress(initialProgress);
-    
+
     // Обновляем состояние сразу после установки step
     if (generationStateRef.current) {
       generationStateRef.current.step = "generating";
@@ -227,19 +249,37 @@ export default function GeneratePlanPage() {
     }
 
     try {
+      // Отменяем предыдущую генерацию если есть
+      if (currentGeneratorRef.current) {
+        currentGeneratorRef.current.abort();
+      }
+      
+      const generator = new DailyPlanGenerator(state.accessToken);
+      currentGeneratorRef.current = generator; // Сохраняем для возможности отмены
+      
       // Продолжаем с того дня, где остановились
       for (let i = currentIndex; i < daysOfWeek.length; i++) {
         const dayName = daysOfWeek[i];
-        
+
         // Пропускаем уже сгенерированные дни
         if (generatedDays[dayName]) {
           continue;
         }
 
         try {
-          const dayPlan = await generateDayPlan(dayName, state.childData, state.goalsText, state.accessToken);
-          generatedDays[dayName] = dayPlan;
+          setCurrentGeneratingDay(dayName);
           
+          // Генерируем план для дня (передаем индекс для разнообразия)
+          const dayPlan = await generator.generateDayPlan(
+            dayName,
+            state.childData,
+            state.goalsText,
+            i // Индекс дня для инструкций о разнообразии
+          );
+          
+          generatedDays[dayName] = dayPlan;
+          setGeneratedDaysProgress(prev => ({ ...prev, [dayName]: true }));
+
           // Обновляем состояние
           if (generationStateRef.current) {
             generationStateRef.current.generatedDays = generatedDays;
@@ -247,19 +287,28 @@ export default function GeneratePlanPage() {
             generationStateRef.current.progress = Math.round(((i + 1) / daysOfWeek.length) * 90);
             saveGenerationState(generationStateRef.current);
           }
-          
+
           // Update progress (each day is ~14% of total)
           setProgress(Math.round(((i + 1) / daysOfWeek.length) * 90));
-        } catch (dayError) {
+        } catch (dayError: any) {
           console.error(`Error generating ${dayName}:`, dayError);
+          
+          // Более информативное сообщение об ошибке
+          const errorMessage = dayError?.message || "Неизвестная ошибка";
+          const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('Timeout');
+          
           // Continue with other days, skip failed one
           toast({
             variant: "destructive",
             title: `Ошибка для ${dayName}`,
-            description: "День будет пропущен",
+            description: isTimeout 
+              ? "Превышено время ожидания ответа от сервера. День будет пропущен. Попробуйте позже."
+              : "День будет пропущен",
           });
+        } finally {
+          setCurrentGeneratingDay(null);
         }
-        
+
         // Small delay between requests to avoid rate limiting
         if (i < daysOfWeek.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -271,8 +320,8 @@ export default function GeneratePlanPage() {
       }
 
       // Generate shopping list from collected ingredients
-      const shoppingList = await generateShoppingList(generatedDays, state.accessToken);
-      
+      const shoppingList = generator.generateShoppingList(generatedDays);
+
       // Calculate total weekly calories
       let totalCalories = 0;
       for (const dayPlan of Object.values(generatedDays)) {
@@ -299,85 +348,138 @@ export default function GeneratePlanPage() {
         saveGenerationState(generationStateRef.current);
       }
       setStep("preview");
+      stopAutoSave();
     } catch (err: any) {
-      setError(err.message || "Ошибка генерации");
+      const errorMessage = err.message || "Ошибка генерации";
+      const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('Timeout');
+      
+      setError(errorMessage);
       setStep("goals");
       clearGenerationState();
+      stopAutoSave();
+      
       toast({
         variant: "destructive",
-        title: "Ошибка",
-        description: err.message || "Не удалось сгенерировать план",
+        title: "Ошибка генерации",
+        description: isTimeout
+          ? "Превышено время ожидания ответа от сервера DeepSeek. Серверы могут быть перегружены. Попробуйте позже."
+          : errorMessage || "Не удалось сгенерировать план",
       });
+    } finally {
+      isRestoringRef.current = false;
+      isGeneratingRef.current = false;
+      setIsGenerating(false);
+      currentGeneratorRef.current = null;
     }
-  }, [toast]);
+  }, [toast, stopAutoSave]);
 
   // Восстановление генерации при возврате на вкладку
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        // Проверяем, есть ли сохраненное состояние генерации
-        const savedState = loadGenerationState();
-        console.log('Visibility change - savedState:', savedState);
-        
-        if (savedState) {
-          // Проверяем, что генерация в процессе (по step или isGenerating)
-          const isGenerating = savedState.step === "generating" || savedState.isGenerating;
-          
-          if (isGenerating) {
-            console.log('Restoring generation state:', savedState);
-            
-            // Восстанавливаем состояние UI
-            generationStateRef.current = savedState;
-            
-            // Восстанавливаем step и progress
-            if (savedState.step) {
-              setStep(savedState.step as typeof step);
-            }
-            if (savedState.progress !== undefined) {
-              setProgress(savedState.progress);
-            }
-            if (savedState.selectedGoals) {
-              setSelectedGoals(savedState.selectedGoals);
-            }
-            
-            // Если генерация еще не завершена, продолжаем
-            if (savedState.step === "generating" && savedState.currentDayIndex < 7) {
-              console.log('Continuing generation from day:', savedState.currentDayIndex);
-              // Небольшая задержка для плавного восстановления UI
-              setTimeout(() => {
-                continueGeneration();
-              }, 300);
-            } else if (savedState.step === "preview" && savedState.generatedPlan) {
-              // Если генерация завершена, восстанавливаем план
-              console.log('Restoring completed plan');
-              setGeneratedPlan(savedState.generatedPlan);
+        // Небольшая задержка для стабилизации после возврата на вкладку
+        setTimeout(() => {
+          // Проверяем, есть ли сохраненное состояние генерации
+          const savedState = loadGenerationState();
+          console.log('Visibility change - savedState:', savedState);
+
+          if (savedState) {
+            // Проверяем, что генерация в процессе (по step или isGenerating)
+            const isGenerating = savedState.step === "generating" || savedState.isGenerating;
+
+            if (isGenerating) {
+              // Предотвращаем множественное восстановление и параллельные генерации
+              if (isRestoringRef.current || isGeneratingRef.current) {
+                console.log('Already restoring or generating, skipping...');
+                return;
+              }
+
+              console.log('Restoring generation state:', savedState);
+
+              // Восстанавливаем состояние UI
+              generationStateRef.current = savedState;
+
+              // Восстанавливаем step и progress
+              if (savedState.step) {
+                setStep(savedState.step as typeof step);
+              }
+              if (savedState.progress !== undefined) {
+                setProgress(savedState.progress);
+              }
+              if (savedState.selectedGoals) {
+                setSelectedGoals(savedState.selectedGoals);
+              }
+              // Восстанавливаем прогресс по дням
+              if (savedState.generatedDays) {
+                const daysProgress: Record<string, boolean> = {};
+                Object.keys(savedState.generatedDays).forEach(day => {
+                  daysProgress[day] = true;
+                });
+                setGeneratedDaysProgress(daysProgress);
+              }
+
+              // Если генерация еще не завершена, продолжаем
+              if (savedState.step === "generating" && savedState.currentDayIndex < 7) {
+                console.log('Continuing generation from day:', savedState.currentDayIndex);
+                // Небольшая задержка для плавного восстановления UI
+                setTimeout(() => {
+                  continueGeneration();
+                }, 500);
+              } else if (savedState.step === "preview" && savedState.generatedPlan) {
+                // Если генерация завершена, восстанавливаем план
+                console.log('Restoring completed plan');
+                setGeneratedPlan(savedState.generatedPlan);
+              }
             }
           }
+        }, 100);
+      } else {
+        // При уходе со вкладки - сохраняем состояние
+        if (generationStateRef.current && step === "generating") {
+          saveGenerationState(generationStateRef.current);
         }
       }
     };
 
+    // Обработка beforeunload для сохранения перед закрытием
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (generationStateRef.current && step === "generating") {
+        saveGenerationState(generationStateRef.current);
+        // Не блокируем закрытие, только сохраняем
+      }
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      stopAutoSave();
     };
-  }, [step, continueGeneration]);
+  }, [step, continueGeneration, startAutoSave, stopAutoSave]);
 
   // Проверка сохраненного состояния при монтировании компонента
   useEffect(() => {
     const savedState = loadGenerationState();
     console.log('Component mount - savedState:', savedState);
-    
+
     if (savedState) {
       // Проверяем, что генерация в процессе (по step или isGenerating)
       const isGenerating = savedState.step === "generating" || savedState.isGenerating;
-      
+
       if (isGenerating) {
+        // Предотвращаем параллельные генерации
+        if (isGeneratingRef.current) {
+          console.log('Generation already in progress on mount, skipping restore');
+          return;
+        }
+
         console.log('Restoring generation on mount:', savedState);
-        
+
         // Автоматически восстанавливаем состояние генерации
         generationStateRef.current = savedState;
-        
+
         // Восстанавливаем UI состояние
         if (savedState.step) {
           setStep(savedState.step as typeof step);
@@ -388,7 +490,15 @@ export default function GeneratePlanPage() {
         if (savedState.selectedGoals) {
           setSelectedGoals(savedState.selectedGoals);
         }
-        
+        // Восстанавливаем прогресс по дням
+        if (savedState.generatedDays) {
+          const daysProgress: Record<string, boolean> = {};
+          Object.keys(savedState.generatedDays).forEach(day => {
+            daysProgress[day] = true;
+          });
+          setGeneratedDaysProgress(daysProgress);
+        }
+
         // Если генерация еще не завершена, продолжаем
         if (savedState.step === "generating" && savedState.currentDayIndex < 7) {
           console.log('Continuing generation on mount from day:', savedState.currentDayIndex);
@@ -403,15 +513,15 @@ export default function GeneratePlanPage() {
         }
       }
     }
-  }, [continueGeneration]);
+  }, [continueGeneration, startAutoSave, stopAutoSave]);
 
   const toggleGoal = (goalId: string) => {
     setSelectedGoals((prev) =>
       prev.includes(goalId)
         ? prev.filter((id) => id !== goalId)
         : prev.length < 3
-        ? [...prev, goalId]
-        : prev
+          ? [...prev, goalId]
+          : prev
     );
   };
 
@@ -439,153 +549,41 @@ export default function GeneratePlanPage() {
     setEditingMeal({ dayName, mealType, meal });
   };
 
-  // Retry logic with exponential backoff
-  const fetchWithRetry = async (
-    url: string,
-    options: RequestInit,
-    maxRetries = 5,
-    baseDelay = 1000
-  ): Promise<Response> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const response = await fetch(url, options);
-        
-        // If rate limited, retry with backoff
-        if (response.status === 429) {
-          const delay = Math.min(baseDelay * Math.pow(2, attempt), 30000);
-          console.log(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-        
-        return response;
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        
-        if (attempt < maxRetries - 1) {
-          const delay = Math.min(baseDelay * Math.pow(2, attempt), 30000);
-          console.log(`Fetch failed, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-    }
-    
-    throw lastError || new Error("Max retries exceeded");
-  };
-
-  // Generate single day plan
-  const generateDayPlan = async (
-    dayName: string,
-    childData: any,
-    goalsText: string,
-    accessToken: string
-  ): Promise<GeneratedDay> => {
-    const response = await fetchWithRetry(
-      `https://hidgiyyunigqazssnydm.supabase.co/functions/v1/deepseek-chat`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        // Добавляем keepalive для продолжения запроса при переключении вкладок
-        keepalive: true,
-        body: JSON.stringify({
-          type: "single_day",
-          childData,
-          messages: [
-            {
-              role: "user",
-              content: `Создай план питания на ${dayName} для ребенка ${childData.name} (${childData.ageMonths} месяцев).
-
-Цели питания: ${goalsText || "Сбалансированное питание"}
-${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (аллергия): ${childData.allergies.join(", ")}` : "Аллергий нет"}
-
-ВАЖНО: Все названия блюд, ингредиенты и шаги приготовления ТОЛЬКО на РУССКОМ языке!
-
-Верни ТОЛЬКО JSON без markdown:
-{
-  "breakfast": {"name": "Овсяная каша с яблоком", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Овсяные хлопья", "amount": 100, "unit": "г"}], "steps": ["Залить водой", "Варить 10 минут"]},
-  "lunch": {"name": "Куриный суп", "calories": 320, "protein": 15, "carbs": 25, "fat": 10, "cooking_time": 30, "ingredients": [{"name": "Куриное филе", "amount": 150, "unit": "г"}], "steps": ["Сварить бульон"]},
-  "snack": {"name": "Творожок с бананом", "calories": 100, "protein": 5, "carbs": 20, "fat": 2, "cooking_time": 5, "ingredients": [{"name": "Творог", "amount": 100, "unit": "г"}], "steps": ["Смешать"]},
-  "dinner": {"name": "Рыбные котлеты", "calories": 280, "protein": 18, "carbs": 20, "fat": 8, "cooking_time": 35, "ingredients": [{"name": "Филе рыбы", "amount": 200, "unit": "г"}], "steps": ["Приготовить фарш"]}
-}`,
-            },
-          ],
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || `Ошибка генерации для ${dayName}`);
-    }
-
-    const data = await response.json();
-    const messageText = data.message || "";
-    
-    // Extract JSON
-    const jsonMatch = messageText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                      messageText.match(/```\s*([\s\S]*?)\s*```/) ||
-                      messageText.match(/(\{[\s\S]*\})/);
-    
-    if (!jsonMatch) {
-      throw new Error(`Не удалось разобрать план для ${dayName}`);
-    }
-    
-    const jsonStr = (jsonMatch[1] || jsonMatch[0]).trim();
-    const dayPlan = JSON.parse(jsonStr);
-    
-    // Normalize keys
-    const mealTypeMap: Record<string, keyof GeneratedDay> = {
-      "завтрак": "breakfast", "breakfast": "breakfast",
-      "обед": "lunch", "lunch": "lunch",
-      "полдник": "snack", "snack": "snack",
-      "ужин": "dinner", "dinner": "dinner",
-    };
-    
-    const normalizedDay: Partial<GeneratedDay> = {};
-    for (const [mealKey, meal] of Object.entries(dayPlan)) {
-      const englishKey = mealTypeMap[mealKey.toLowerCase()] || mealKey as keyof GeneratedDay;
-      if (["breakfast", "lunch", "snack", "dinner"].includes(englishKey)) {
-        normalizedDay[englishKey] = meal as GeneratedMeal;
-      }
-    }
-    
-    return normalizedDay as GeneratedDay;
-  };
-
-  // Generate shopping list from all meals
-  const generateShoppingList = async (
-    days: Record<string, GeneratedDay>,
-    accessToken: string
-  ): Promise<string[]> => {
-    // Collect all ingredients
-    const allIngredients: string[] = [];
-    for (const dayPlan of Object.values(days)) {
-      for (const meal of Object.values(dayPlan)) {
-        if (meal?.ingredients) {
-          meal.ingredients.forEach(ing => {
-            allIngredients.push(`${ing.name} - ${ing.amount || ""} ${ing.unit || ""}`);
-          });
-        }
-      }
-    }
-
-    // Deduplicate and return
-    const uniqueIngredients = [...new Set(allIngredients.map(i => i.trim().toLowerCase()))];
-    return uniqueIngredients.filter(Boolean);
-  };
+  // Старые функции удалены - теперь используется DailyPlanGenerator
 
   const generatePlan = async () => {
     if (!selectedChild || !user) return;
 
+    // Проверяем, не идет ли уже генерация
+    if (isGeneratingRef.current) {
+      console.warn('Generation already in progress, ignoring new request');
+      toast({
+        variant: "default",
+        title: "Генерация уже идет",
+        description: "Дождитесь завершения текущей генерации",
+      });
+      return;
+    }
+
+    // Отменяем предыдущую генерацию если есть
+    if (currentGeneratorRef.current) {
+      console.log('Aborting previous generator');
+      currentGeneratorRef.current.abort();
+      currentGeneratorRef.current = null;
+    }
+
+    // Устанавливаем флаги генерации
+    isGeneratingRef.current = true;
+    setIsGenerating(true);
+
     setStep("generating");
     setProgress(0);
     setError(null);
-    // НЕ очищаем состояние здесь - оно будет перезаписано новым
+    setCurrentGeneratingDay(null);
+    setGeneratedDaysProgress({});
+    
+    // Очищаем старое состояние перед новой генерацией
+    clearGenerationState();
 
     const daysOfWeek = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
@@ -618,67 +616,57 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
         progress: 0,
         selectedGoals,
       };
-      // Сохраняем состояние сразу, чтобы оно было доступно при переключении вкладок
+      // Сохраняем состояние только в начале генерации (автосохранение отключено)
       saveGenerationState(generationStateRef.current);
       console.log('Initial generation state saved:', generationStateRef.current);
 
-      const generatedDays: Record<string, GeneratedDay> = {};
+      // Используем оптимизированный DailyPlanGenerator
+      const generator = new DailyPlanGenerator(accessToken);
+      currentGeneratorRef.current = generator; // Сохраняем для возможности отмены
       
-      // Generate each day sequentially with progress updates
-      for (let i = 0; i < daysOfWeek.length; i++) {
-        const dayName = daysOfWeek[i];
-        
-        try {
-          const dayPlan = await generateDayPlan(dayName, childData, goalsText, accessToken);
-          generatedDays[dayName] = dayPlan;
+      const weekPlan = await generator.generateWeekPlan(
+        childData,
+        goalsText,
+        (dayIndex, progress, dayName) => {
+          // Обновляем прогресс для каждого дня
+          setProgress(progress);
+          setCurrentGeneratingDay(dayName);
+          setGeneratedDaysProgress(prev => {
+            const newProgress = { ...prev };
+            if (dayIndex >= 0 && dayIndex < daysOfWeek.length) {
+              newProgress[daysOfWeek[dayIndex]] = true;
+            }
+            return newProgress;
+          });
           
           // Обновляем сохраненное состояние
           if (generationStateRef.current) {
-            generationStateRef.current.generatedDays = generatedDays;
-            generationStateRef.current.currentDayIndex = i + 1;
-            generationStateRef.current.progress = Math.round(((i + 1) / daysOfWeek.length) * 90);
+            generationStateRef.current.currentDayIndex = dayIndex + 1;
+            generationStateRef.current.progress = progress;
             saveGenerationState(generationStateRef.current);
           }
-          
-          // Update progress (each day is ~14% of total)
-          setProgress(Math.round(((i + 1) / daysOfWeek.length) * 90));
-        } catch (dayError) {
-          console.error(`Error generating ${dayName}:`, dayError);
-          // Continue with other days, skip failed one
-          toast({
-            variant: "destructive",
-            title: `Ошибка для ${dayName}`,
-            description: "День будет пропущен",
-          });
+        },
+        (dayIndex, dayPlan) => {
+          // Real-time streaming updates (опционально для UI)
+          // Можно использовать для показа "Генерируется день X..."
+          if (generationStateRef.current) {
+            generationStateRef.current.generatedDays = {
+              ...generationStateRef.current.generatedDays,
+              [daysOfWeek[dayIndex]]: dayPlan,
+            };
+            saveGenerationState(generationStateRef.current);
+          }
         }
-        
-        // Small delay between requests to avoid rate limiting
-        if (i < daysOfWeek.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-
-      if (Object.keys(generatedDays).length === 0) {
-        throw new Error("Не удалось сгенерировать ни одного дня");
-      }
-
-      // Generate shopping list from collected ingredients
-      const shoppingList = await generateShoppingList(generatedDays, accessToken);
-      
-      // Calculate total weekly calories
-      let totalCalories = 0;
-      for (const dayPlan of Object.values(generatedDays)) {
-        for (const meal of Object.values(dayPlan)) {
-          totalCalories += meal?.calories || 0;
-        }
-      }
+      );
 
       setProgress(100);
+      setCurrentGeneratingDay(null);
 
+      // Конвертируем в формат GeneratedPlan (типы совместимы)
       const plan: GeneratedPlan = {
-        days: generatedDays,
-        shopping_list: shoppingList,
-        total_calories_week: totalCalories,
+        days: weekPlan.days as Record<string, GeneratedDay>,
+        shopping_list: weekPlan.shopping_list,
+        total_calories_week: weekPlan.total_calories_week,
       };
 
       setGeneratedPlan(plan);
@@ -691,15 +679,35 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
         saveGenerationState(generationStateRef.current);
       }
       setStep("preview");
+      stopAutoSave();
     } catch (err: any) {
-      setError(err.message || "Ошибка генерации");
+      const errorMessage = err.message || "Ошибка генерации";
+      const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('Timeout');
+      const isAborted = errorMessage.includes('abort') || errorMessage.includes('Abort');
+      
+      // Если генерация была отменена, не показываем ошибку
+      if (isAborted) {
+        console.log('Generation was aborted');
+        return;
+      }
+      
+      setError(errorMessage);
       setStep("goals");
       clearGenerationState();
+      stopAutoSave();
+      
       toast({
         variant: "destructive",
-        title: "Ошибка",
-        description: err.message || "Не удалось сгенерировать план",
+        title: "Ошибка генерации",
+        description: isTimeout
+          ? "Превышено время ожидания ответа от сервера DeepSeek. Серверы могут быть перегружены. Попробуйте позже или уменьшите количество дней."
+          : errorMessage || "Не удалось сгенерировать план",
       });
+    } finally {
+      // Сбрасываем флаги после завершения (успешного или с ошибкой)
+      isGeneratingRef.current = false;
+      setIsGenerating(false);
+      currentGeneratorRef.current = null;
     }
   };
 
@@ -796,7 +804,7 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
         for (const item of generatedPlan.shopping_list) {
           // Parse item like "молоко - 2л" or "яблоки 1 кг"
           const match = item.match(/^(.+?)(?:\s*[-–]\s*|\s+)(\d+(?:[.,]\d+)?)\s*(.+)?$/);
-          
+
           await addItem({
             shopping_list_id: listId,
             name: match ? match[1].trim() : item,
@@ -884,11 +892,10 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
                       key={goal.id}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => toggleGoal(goal.id)}
-                      className={`p-4 rounded-2xl border-2 text-left transition-all ${
-                        isSelected
+                      className={`p-4 rounded-2xl border-2 text-left transition-all ${isSelected
                           ? "border-primary bg-primary/5"
                           : "border-border bg-card"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start gap-3">
                         <div
@@ -939,10 +946,20 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
                   size="lg"
                   className="w-full"
                   onClick={generatePlan}
+                  disabled={isGenerating || step === "generating"}
                 >
-                  <Sparkles className="w-5 h-5 mr-2" />
-                  Сгенерировать план на неделю
-                  <ChevronRight className="w-5 h-5 ml-2" />
+                  {isGenerating || step === "generating" ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Генерация...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 mr-2" />
+                      Сгенерировать план на неделю
+                      <ChevronRight className="w-5 h-5 ml-2" />
+                    </>
+                  )}
                 </Button>
               </div>
             </motion.div>
@@ -955,27 +972,87 @@ ${childData.allergies?.length ? `ИСКЛЮЧИ эти продукты (алл�
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="px-4 py-12"
+              className="px-4 py-6 space-y-6"
             >
-              <Card variant="elevated" className="p-8 text-center">
+              <Card variant="elevated" className="p-6 text-center">
                 <CardContent className="p-0">
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                    className="w-16 h-16 mx-auto mb-6 rounded-full gradient-primary flex items-center justify-center"
+                    className="w-16 h-16 mx-auto mb-4 rounded-full gradient-primary flex items-center justify-center"
                   >
                     <Sparkles className="w-8 h-8 text-primary-foreground" />
                   </motion.div>
                   <h3 className="text-lg font-bold mb-2">
                     Генерируем план питания
                   </h3>
-                  <p className="text-muted-foreground text-sm mb-6">
-                    AI составляет меню с учётом целей и аллергий
-                  </p>
-                  <Progress value={progress} className="h-2" />
-                  <p className="text-xs text-muted-foreground mt-2">
+                  {currentGeneratingDay && (
+                    <p className="text-muted-foreground text-sm mb-4">
+                      Создаём меню на {currentGeneratingDay}...
+                    </p>
+                  )}
+                  <Progress value={progress} className="h-2 mb-2" />
+                  <p className="text-xs text-muted-foreground">
                     {progress}%
                   </p>
+                </CardContent>
+              </Card>
+
+              {/* Days Progress List */}
+              <Card variant="default">
+                <CardContent className="p-4">
+                  <h4 className="font-semibold mb-3 text-sm">Прогресс по дням</h4>
+                  <div className="space-y-2">
+                    {["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"].map((dayName, index) => {
+                      const isCompleted = generatedDaysProgress[dayName];
+                      const isGenerating = currentGeneratingDay === dayName;
+                      
+                      return (
+                        <motion.div
+                          key={dayName}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className={`flex items-center gap-3 p-2 rounded-lg transition-colors ${
+                            isGenerating 
+                              ? "bg-primary/10 border border-primary/30" 
+                              : isCompleted 
+                              ? "bg-green-500/10 border border-green-500/30"
+                              : "bg-muted/30"
+                          }`}
+                        >
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center">
+                            {isGenerating ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                            ) : isCompleted ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30" />
+                            )}
+                          </div>
+                          <span className={`text-sm flex-1 ${
+                            isGenerating 
+                              ? "font-semibold text-primary" 
+                              : isCompleted 
+                              ? "text-green-700 dark:text-green-400"
+                              : "text-muted-foreground"
+                          }`}>
+                            {dayName}
+                          </span>
+                          {isGenerating && (
+                            <Badge variant="default" className="text-xs">
+                              Генерируется...
+                            </Badge>
+                          )}
+                          {isCompleted && !isGenerating && (
+                            <Badge variant="secondary" className="text-xs bg-green-500/20 text-green-700 dark:text-green-400">
+                              Готово
+                            </Badge>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>

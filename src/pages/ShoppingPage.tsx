@@ -69,12 +69,21 @@ export default function ShoppingPage() {
   const checkedCount = items.filter((i) => i.is_purchased).length;
   const progress = items.length > 0 ? (checkedCount / items.length) * 100 : 0;
 
-  const groupedItems = categories
-    .map((cat) => ({
-      ...cat,
-      items: filteredItems.filter((item) => item.category === cat.id),
-    }))
-    .filter((cat) => cat.items.length > 0);
+  // Если выбрана категория, показываем только её. Иначе показываем все категории
+  const groupedItems = selectedCategory
+    ? categories
+        .filter((cat) => cat.id === selectedCategory)
+        .map((cat) => ({
+          ...cat,
+          items: filteredItems.filter((item) => item.category === cat.id),
+        }))
+        .filter((cat) => cat.items.length > 0)
+    : categories
+        .map((cat) => ({
+          ...cat,
+          items: filteredItems.filter((item) => item.category === cat.id),
+        }))
+        .filter((cat) => cat.items.length > 0);
 
   const handleAddItem = async (name: string, amount: string, unit: string, category: string) => {
     try {
