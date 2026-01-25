@@ -10,6 +10,7 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
 import { useChildren } from "@/hooks/useChildren";
+import { resolveUnit } from "@/utils/productUtils";
 
 export default function ScanPage() {
   const navigate = useNavigate();
@@ -150,11 +151,11 @@ export default function ScanPage() {
         allergies: allergies && allergies.length > 0 ? allergies : undefined,
       });
 
-      // Создаем рецепт в базе данных
+      // Создаем рецепт в базе данных (единица измерения обязательна)
       const ingredients = recipe.ingredients.map((ing, index) => ({
         name: ing,
         amount: null,
-        unit: null,
+        unit: resolveUnit(null, ing),
         category: "other" as const,
         order_index: index,
       }));

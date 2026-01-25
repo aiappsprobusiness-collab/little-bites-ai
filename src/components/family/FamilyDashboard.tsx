@@ -37,7 +37,8 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
   const { toast } = useToast();
   const { children, selectedChild, formatAge } = useSelectedChild();
   const { getMealPlansByDate, createMealPlan, isCreating } = useMealPlans(selectedChild?.id);
-  const { recipes } = useRecipes(selectedChild?.id);
+  // Для выбора рецепта в план — всегда все рецепты пользователя (любой рецепт можно добавить любому ребёнку)
+  const { recipes } = useRecipes();
   const { getTodayChatRecipes } = useChatRecipes();
 
   const today = new Date();

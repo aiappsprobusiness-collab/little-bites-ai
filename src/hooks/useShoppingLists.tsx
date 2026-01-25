@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { detectCategory, resolveUnit } from '@/utils/productUtils';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 type ShoppingList = Tables<'shopping_lists'>;
@@ -138,11 +139,57 @@ export function useShoppingLists() {
     return name.toLowerCase().trim();
   };
 
+  // Нормализовать и конвертировать единицы измерения для сравнения
+  const normalizeUnit = (unit: string | null | undefined): { normalized: string; multiplier: number } => {
+    if (!unit) return { normalized: '', multiplier: 1 };
+    
+    const lowerUnit = unit.toLowerCase().trim();
+    
+    // Весовые единицы
+    if (lowerUnit.includes('кг') || lowerUnit.includes('килограмм')) {
+      return { normalized: 'кг', multiplier: 1000 }; // конвертируем в граммы
+    }
+    if (lowerUnit.includes('г') || lowerUnit.includes('грамм')) {
+      return { normalized: 'г', multiplier: 1 };
+    }
+    
+    // Объемные единицы
+    if (lowerUnit.includes('л') || lowerUnit.includes('литр')) {
+      return { normalized: 'л', multiplier: 1000 }; // конвертируем в миллилитры
+    }
+    if (lowerUnit.includes('мл') || lowerUnit.includes('миллилитр')) {
+      return { normalized: 'мл', multiplier: 1 };
+    }
+    
+    // Штуки
+    if (lowerUnit.includes('шт') || lowerUnit.includes('штук')) {
+      return { normalized: 'шт', multiplier: 1 };
+    }
+    
+    // По умолчанию возвращаем как есть
+    return { normalized: lowerUnit, multiplier: 1 };
+  };
+
+  // Конвертировать количество в базовую единицу
+  const convertToBaseUnit = (amount: number | null, unit: string | null | undefined): number => {
+    if (!amount) return 0;
+    const normalized = normalizeUnit(unit);
+    return amount * normalized.multiplier;
+  };
+
   // Добавить элемент в список (с объединением одинаковых продуктов)
   const addItem = useMutation({
     mutationFn: async (item: Omit<ShoppingListItemInsert, 'shopping_list_id'> & { shopping_list_id?: string }) => {
       const listId = item.shopping_list_id || activeList?.id;
       if (!listId) throw new Error('No active shopping list');
+
+      // Автоматически определяем категорию, если она не указана или равна "other"
+      const finalCategory = item.category && item.category !== 'other' 
+        ? item.category 
+        : detectCategory(item.name);
+
+      // Единица измерения обязательна: берём переданную или определяем по названию
+      const finalUnit = resolveUnit(item.unit, item.name);
 
       // Нормализуем название для поиска
       const normalizedName = normalizeProductName(item.name);
@@ -156,23 +203,54 @@ export function useShoppingLists() {
 
       if (searchError) throw searchError;
 
-      // Ищем существующий продукт с таким же нормализованным названием и единицей измерения
+      // Нормализуем единицы измерения для сравнения
+      const itemUnitNormalized = normalizeUnit(finalUnit);
+      
+      // Ищем существующий продукт с таким же нормализованным названием
+      // Проверяем, можно ли объединить единицы измерения (граммы/килограммы, миллилитры/литры)
       const existingItem = existingItems?.find(
-        (existing) =>
-          normalizeProductName(existing.name) === normalizedName &&
-          existing.unit === item.unit
+        (existing) => {
+          const existingNormalizedName = normalizeProductName(existing.name);
+          if (existingNormalizedName !== normalizedName) return false;
+          
+          const existingUnitResolved = resolveUnit(existing.unit, existing.name);
+          const existingUnitNormalized = normalizeUnit(existingUnitResolved);
+          
+          // Если единицы одинаковые (после нормализации) - объединяем
+          if (itemUnitNormalized.normalized === existingUnitNormalized.normalized) {
+            return true;
+          }
+          
+          return false;
+        }
       );
 
       if (existingItem) {
-        // Если продукт уже есть, суммируем количество
-        const newAmount = (existingItem.amount || 0) + (item.amount || 0);
+        // Если продукт уже есть, суммируем количество с учетом единиц измерения
+        const existingUnitResolved = resolveUnit(existingItem.unit, existingItem.name);
+        const existingUnitNormalized = normalizeUnit(existingUnitResolved);
+        
+        // Конвертируем оба количества в базовые единицы
+        const existingAmountBase = convertToBaseUnit(existingItem.amount, existingUnitResolved);
+        const newAmountBase = convertToBaseUnit(item.amount, finalUnit);
+        const totalAmountBase = existingAmountBase + newAmountBase;
+        
+        // Конвертируем обратно в исходную единицу существующего продукта
+        let newAmount: number;
+        if (existingUnitNormalized.multiplier > 1) {
+          // Если единица была в килограммах/литрах, конвертируем обратно
+          newAmount = totalAmountBase / existingUnitNormalized.multiplier;
+        } else {
+          newAmount = totalAmountBase;
+        }
         
         const { data, error } = await supabase
           .from('shopping_list_items')
           .update({
             amount: newAmount,
-            // Обновляем категорию, если она была определена автоматически
-            category: item.category || existingItem.category,
+            category: finalCategory as any,
+            // Исправляем unit, если у существующего продукта не было меры
+            unit: existingItem.unit ?? existingUnitResolved,
           })
           .eq('id', existingItem.id)
           .select()
@@ -181,12 +259,14 @@ export function useShoppingLists() {
         if (error) throw error;
         return data as ShoppingListItem;
       } else {
-        // Если продукта нет, добавляем новый
+        // Если продукта нет, добавляем новый с категорией и единицей измерения
         const { data, error } = await supabase
           .from('shopping_list_items')
           .insert({
             ...item,
             shopping_list_id: listId,
+            category: finalCategory as any,
+            unit: finalUnit,
           })
           .select()
           .single();
@@ -277,59 +357,6 @@ export function useShoppingLists() {
     },
   });
 
-  // Функция для автоопределения категории по названию продукта
-  const detectCategory = (name: string): string => {
-    const lowerName = name.toLowerCase();
-    
-    // Овощи
-    const vegetables = ['морковь', 'картофель', 'картошка', 'лук', 'чеснок', 'капуста', 'брокколи', 
-      'цветная капуста', 'кабачок', 'баклажан', 'перец', 'томат', 'помидор', 'огурец', 'свекла', 
-      'тыква', 'шпинат', 'салат', 'петрушка', 'укроп', 'сельдерей', 'редис', 'горох', 'фасоль',
-      'зелень', 'базилик', 'мята', 'кинза', 'зеленый лук', 'порей', 'авокадо', 'цуккини',
-      'патиссон', 'брюссельская капуста', 'кольраби', 'репа', 'брюква', 'дайкон', 'редиска',
-      'руккола', 'кресс-салат', 'щавель', 'ревень', 'спаржа', 'артишок', 'баклажан', 'кабачок'];
-    if (vegetables.some(v => lowerName.includes(v))) return 'vegetables';
-    
-    // Фрукты
-    const fruits = ['яблоко', 'яблок', 'груша', 'банан', 'апельсин', 'мандарин', 'лимон', 'лайм',
-      'виноград', 'клубника', 'малина', 'черника', 'голубика', 'смородина', 'вишня', 'черешня',
-      'персик', 'абрикос', 'слива', 'манго', 'ананас', 'киви', 'дыня', 'арбуз', 'гранат', 
-      'хурма', 'инжир', 'финик', 'курага', 'изюм', 'чернослив', 'ягод', 'фрукт', 'помело',
-      'грейпфрут', 'папайя', 'маракуйя', 'личи', 'рамбутан', 'дуриан', 'кокос', 'финик',
-      'фейхоа', 'киви', 'нектарин', 'айва', 'айва', 'крыжовник', 'облепиха', 'жимолость',
-      'барбарис', 'рябина', 'калина', 'брусника', 'клюква', 'брусника'];
-    if (fruits.some(f => lowerName.includes(f))) return 'fruits';
-    
-    // Молочные продукты
-    const dairy = ['молоко', 'кефир', 'йогурт', 'сметана', 'творог', 'сыр', 'масло сливочное',
-      'сливки', 'ряженка', 'простокваша', 'брынза', 'моцарелла', 'пармезан', 'молочн',
-      'творожок', 'сырок', 'сметанка', 'йогурт', 'кефирчик', 'простокваша', 'варенец',
-      'айран', 'тан', 'катык', 'кумыс', 'мацони', 'лактоза', 'сливочное масло'];
-    if (dairy.some(d => lowerName.includes(d))) return 'dairy';
-    
-    // Мясо и рыба
-    const meat = ['мясо', 'говядина', 'свинина', 'курица', 'куриц', 'индейка', 'кролик', 'баранина',
-      'фарш', 'колбаса', 'сосиски', 'ветчина', 'бекон', 'печень', 'сердце', 'язык',
-      'рыба', 'лосось', 'семга', 'форель', 'треска', 'минтай', 'скумбрия', 'сельдь', 'тунец',
-      'креветки', 'кальмар', 'морепродукт', 'филе', 'грудка', 'бедро', 'крыло', 'окорок',
-      'телятина', 'баранина', 'козлятина', 'оленина', 'конина', 'утка', 'гусь', 'перепелка',
-      'цесарка', 'фазан', 'краб', 'мидии', 'устрицы', 'осьминог', 'каракатица', 'икра',
-      'красная рыба', 'белая рыба', 'речная рыба', 'морская рыба'];
-    if (meat.some(m => lowerName.includes(m))) return 'meat';
-    
-    // Крупы и злаки
-    const grains = ['рис', 'гречка', 'гречневая', 'овсянка', 'овсяные', 'пшено', 'перловка',
-      'манка', 'манная', 'кускус', 'булгур', 'киноа', 'крупа', 'хлопья', 'мука', 'макароны',
-      'спагетти', 'лапша', 'вермишель', 'хлеб', 'батон', 'булка', 'сухари', 'кукурузн',
-      'пшеница', 'рожь', 'ячмень', 'овес', 'пшеничная крупа', 'ячневая крупа', 'перловая',
-      'пшенная', 'кукурузная крупа', 'рисовая крупа', 'гороховая крупа', 'чечевица',
-      'нут', 'фасоль', 'бобы', 'соя', 'тофу', 'сейтан', 'хлебцы', 'крекеры', 'печенье',
-      'вафли', 'пряники', 'сушки', 'баранки', 'бублики'];
-    if (grains.some(g => lowerName.includes(g))) return 'grains';
-    
-    return 'other';
-  };
-
   // Генерировать список покупок из планов питания
   const generateFromMealPlans = useMutation({
     mutationFn: async ({ startDate, endDate }: { startDate: Date; endDate: Date }) => {
@@ -366,24 +393,23 @@ export function useShoppingLists() {
       mealPlans.forEach((plan: any) => {
         if (plan.recipe?.recipe_ingredients) {
           plan.recipe.recipe_ingredients.forEach((ing: any) => {
-            // Используем нормализованное название + единицу измерения как ключ
+            const resolvedUnit = resolveUnit(ing.unit, ing.name);
             const normalizedName = normalizeProductName(ing.name);
-            const unit = ing.unit || '';
-            const key = `${normalizedName}|${unit}`;
-            
-            // Автоопределение категории по названию
+            const unitNormalized = normalizeUnit(resolvedUnit);
+            const key = `${normalizedName}|${unitNormalized.normalized}`;
             const autoCategory = detectCategory(ing.name);
-            
+
             if (ingredientsMap.has(key)) {
-              // Если продукт уже есть, суммируем количество
               const existing = ingredientsMap.get(key)!;
-              existing.amount += ing.amount || 0;
+              const existingAmountBase = convertToBaseUnit(existing.amount, existing.unit);
+              const newAmountBase = convertToBaseUnit(ing.amount, resolvedUnit);
+              const totalAmountBase = existingAmountBase + newAmountBase;
+              existing.amount = totalAmountBase / unitNormalized.multiplier;
             } else {
-              // Добавляем новый продукт
               ingredientsMap.set(key, {
                 name: ing.name,
                 amount: ing.amount || 0,
-                unit: unit,
+                unit: resolvedUnit,
                 category: autoCategory,
               });
             }
@@ -404,22 +430,92 @@ export function useShoppingLists() {
         listId = newList.id;
       }
 
-      // Добавить ингредиенты в список
-      const items = Array.from(ingredientsMap.values()).map((data) => ({
-        shopping_list_id: listId!,
-        name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
-        amount: data.amount || null,
-        unit: data.unit || null,
-        category: data.category as any,
-        is_purchased: false,
-      }));
+      // Получаем существующие продукты из списка (не купленные)
+      const { data: existingItems, error: existingError } = await supabase
+        .from('shopping_list_items')
+        .select('*')
+        .eq('shopping_list_id', listId)
+        .eq('is_purchased', false);
 
-      console.log('Добавляем в список:', items.length, 'продуктов');
+      if (existingError) {
+        console.error('Ошибка получения существующих продуктов:', existingError);
+        throw existingError;
+      }
 
-      if (items.length > 0) {
+      // Создаем Map для существующих продуктов (ключ: название + единица; для null unit используем resolveUnit)
+      const existingItemsMap = new Map<string, ShoppingListItem>();
+      if (existingItems) {
+        existingItems.forEach((item) => {
+          const resolved = resolveUnit(item.unit, item.name);
+          const unitNormalized = normalizeUnit(resolved);
+          const key = `${normalizeProductName(item.name)}|${unitNormalized.normalized}`;
+          existingItemsMap.set(key, item);
+        });
+      }
+
+      const itemsToInsert: any[] = [];
+      const itemsToUpdate: Array<{ id: string; amount: number; category: string; unit: string }> = [];
+
+      Array.from(ingredientsMap.values()).forEach((data) => {
+        const normalizedName = normalizeProductName(data.name);
+        const unitNormalized = normalizeUnit(data.unit);
+        const key = `${normalizedName}|${unitNormalized.normalized}`;
+        const existingItem = existingItemsMap.get(key);
+
+        if (existingItem) {
+          const existingUnitResolved = resolveUnit(existingItem.unit, existingItem.name);
+          const existingAmountBase = convertToBaseUnit(existingItem.amount, existingUnitResolved);
+          const newAmountBase = convertToBaseUnit(data.amount, data.unit);
+          const totalAmountBase = existingAmountBase + newAmountBase;
+          const existingUnitNormalized = normalizeUnit(existingUnitResolved);
+          let newAmount: number;
+          if (existingUnitNormalized.multiplier > 1) {
+            newAmount = totalAmountBase / existingUnitNormalized.multiplier;
+          } else {
+            newAmount = totalAmountBase;
+          }
+          itemsToUpdate.push({
+            id: existingItem.id,
+            amount: newAmount,
+            category: data.category,
+            unit: existingItem.unit ?? existingUnitResolved,
+          });
+        } else {
+          itemsToInsert.push({
+            shopping_list_id: listId!,
+            name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
+            amount: data.amount || null,
+            unit: data.unit,
+            category: data.category as any,
+            is_purchased: false,
+          });
+        }
+      });
+
+      console.log('Обновляем:', itemsToUpdate.length, 'продуктов');
+      console.log('Добавляем:', itemsToInsert.length, 'новых продуктов');
+
+      for (const item of itemsToUpdate) {
+        const { error: updateError } = await supabase
+          .from('shopping_list_items')
+          .update({
+            amount: item.amount,
+            category: item.category as any,
+            unit: item.unit,
+          })
+          .eq('id', item.id);
+
+        if (updateError) {
+          console.error('Ошибка обновления продукта:', updateError);
+          throw updateError;
+        }
+      }
+
+      // Добавляем новые продукты
+      if (itemsToInsert.length > 0) {
         const { error: itemsError } = await supabase
           .from('shopping_list_items')
-          .insert(items);
+          .insert(itemsToInsert);
 
         if (itemsError) {
           console.error('Ошибка добавления продуктов:', itemsError);

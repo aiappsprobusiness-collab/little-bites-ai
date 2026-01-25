@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useRecipes } from './useRecipes';
 import { parseRecipesFromChat, type ParsedRecipe } from '@/utils/parseChatRecipes';
+import { resolveUnit } from '@/utils/productUtils';
 import type { Tables } from '@/integrations/supabase/types';
 
 type Recipe = Tables<'recipes'>;
@@ -189,7 +190,7 @@ export function useChatRecipes() {
             ingredients: parsedRecipe.ingredients.map((ing, index) => ({
               name: ing,
               amount: null,
-              unit: null,
+              unit: resolveUnit(null, ing),
               category: 'other' as const,
               order_index: index,
             })),

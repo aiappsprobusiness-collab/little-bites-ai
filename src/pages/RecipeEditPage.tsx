@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { resolveUnit } from "@/utils/productUtils";
 
 const productCategories = [
   { id: "vegetables", label: "Овощи" },
@@ -59,7 +60,7 @@ export default function RecipeEditPage() {
         sourceProducts.map((product: string) => ({
           name: product,
           amount: "",
-          unit: "",
+          unit: resolveUnit(null, product),
           category: "other",
         }))
       );
@@ -150,7 +151,7 @@ export default function RecipeEditPage() {
         .map((ing, index) => ({
           name: ing.name.trim(),
           amount: ing.amount ? parseFloat(ing.amount) : null,
-          unit: ing.unit.trim() || null,
+          unit: resolveUnit(ing.unit.trim() || null, ing.name.trim()),
           category: ing.category as any,
           order_index: index,
         }));

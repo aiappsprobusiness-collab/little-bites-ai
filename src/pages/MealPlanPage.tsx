@@ -40,7 +40,8 @@ export default function MealPlanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedChild } = useSelectedChild();
-  const { recipes } = useRecipes(selectedChild?.id);
+  // Для выбора рецепта в план — всегда все рецепты пользователя (любой рецепт можно добавить любому ребёнку)
+  const { recipes } = useRecipes();
   const { getMealPlansByDate, createMealPlan, deleteMealPlan, isCreating } = useMealPlans(selectedChild?.id);
   const { getTodayChatRecipes } = useChatRecipes();
 

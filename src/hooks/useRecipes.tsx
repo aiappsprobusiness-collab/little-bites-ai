@@ -13,19 +13,20 @@ export function useRecipes(childId?: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Получить все рецепты пользователя
+  // Получить все рецепты пользователя.
+  // Если указан childId (план питания для ребёнка): показываем общие (child_id = null) и рецепты этого ребёнка.
   const { data: recipes = [], isLoading, error } = useQuery({
     queryKey: ['recipes', user?.id, childId],
     queryFn: async () => {
       if (!user) return [];
-      
+
       let query = supabase
         .from('recipes')
         .select('*')
         .eq('user_id', user.id);
 
       if (childId) {
-        query = query.eq('child_id', childId);
+        query = query.or(`child_id.is.null,child_id.eq.${childId}`);
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
