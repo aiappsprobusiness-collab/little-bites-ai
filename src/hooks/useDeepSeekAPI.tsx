@@ -66,6 +66,7 @@ export function useDeepSeekAPI() {
           messages,
           childData: getChildData(),
           type,
+          stream: false, // Отключаем streaming для корректного парсинга JSON
         }),
       });
 
