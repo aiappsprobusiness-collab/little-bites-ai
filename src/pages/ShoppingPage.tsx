@@ -333,13 +333,17 @@ export default function ShoppingPage() {
                               {item.name}
                             </p>
                           </div>
-                          <span className="text-sm text-muted-foreground">
-                            {item.amount && item.unit
-                              ? `${item.amount} ${item.unit}`
-                              : item.amount
-                              ? `${item.amount}`
-                              : ""}
-                          </span>
+                          {(item.amount || item.unit) && (
+                            <span className="text-sm font-medium text-foreground bg-muted px-2 py-1 rounded-md">
+                              {item.amount && item.unit
+                                ? `${item.amount} ${item.unit}`
+                                : item.amount
+                                ? `${item.amount}`
+                                : item.unit
+                                ? item.unit
+                                : ""}
+                            </span>
+                          )}
                           <button
                             onClick={() => handleDeleteItem(item.id)}
                             className="p-1 text-muted-foreground hover:text-destructive"

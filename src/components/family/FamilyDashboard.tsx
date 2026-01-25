@@ -20,16 +20,13 @@ const mealTypeConfig: Record<MealType, { icon: typeof Utensils; label: string; c
   breakfast: { icon: Coffee, label: 'Завтрак', color: 'bg-peach', id: 'breakfast', emoji: '🌅', time: '08:00' },
   lunch: { icon: Utensils, label: 'Обед', color: 'bg-primary', id: 'lunch', emoji: '☀️', time: '12:00' },
   dinner: { icon: ChefHat, label: 'Ужин', color: 'bg-lavender', id: 'dinner', emoji: '🌙', time: '18:00' },
-  snack: { icon: Cookie, label: 'Перекус', color: 'bg-soft-pink', id: 'snack', emoji: '🍎', time: '15:00' },
+  snack: { icon: Cookie, label: 'Полдник', color: 'bg-soft-pink', id: 'snack', emoji: '🍎', time: '15:00' },
 };
 
-// Конвертируем config в массив options для диалога
-const mealTypesOptions: MealTypeOption[] = Object.values(mealTypeConfig).map(c => ({
-  id: c.id,
-  label: c.label,
-  emoji: c.emoji,
-  time: c.time
-}));
+// Конвертируем config в массив options для диалога (хронологический порядок: breakfast → lunch → snack → dinner)
+const mealTypesOptions: MealTypeOption[] = Object.values(mealTypeConfig)
+  .map((c) => ({ id: c.id, label: c.label, emoji: c.emoji, time: c.time }))
+  .sort((a, b) => a.time.localeCompare(b.time));
 
 interface FamilyDashboardProps {
   onAddChild?: () => void;
@@ -124,6 +121,14 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
       const recipeId = meal.recipe_id || meal.recipe?.id;
       if (recipeId) {
         navigate(`/recipe/${recipeId}`);
+      } else {
+        // Если рецепт недоступен, показываем сообщение
+        toast({
+          variant: "destructive",
+          title: "Рецепт недоступен",
+          description:
+            "Не удалось определить рецепт для этого приема пищи. Попробуйте удалить блюдо и добавить его снова.",
+        });
       }
     } else {
       // Если блюда нет, открываем диалог добавления

@@ -133,23 +133,67 @@ export function useShoppingLists() {
     },
   });
 
-  // Добавить элемент в список
+  // Нормализовать название продукта для сравнения
+  const normalizeProductName = (name: string): string => {
+    return name.toLowerCase().trim();
+  };
+
+  // Добавить элемент в список (с объединением одинаковых продуктов)
   const addItem = useMutation({
     mutationFn: async (item: Omit<ShoppingListItemInsert, 'shopping_list_id'> & { shopping_list_id?: string }) => {
       const listId = item.shopping_list_id || activeList?.id;
       if (!listId) throw new Error('No active shopping list');
 
-      const { data, error } = await supabase
-        .from('shopping_list_items')
-        .insert({
-          ...item,
-          shopping_list_id: listId,
-        })
-        .select()
-        .single();
+      // Нормализуем название для поиска
+      const normalizedName = normalizeProductName(item.name);
 
-      if (error) throw error;
-      return data as ShoppingListItem;
+      // Проверяем, есть ли уже такой продукт в списке
+      const { data: existingItems, error: searchError } = await supabase
+        .from('shopping_list_items')
+        .select('*')
+        .eq('shopping_list_id', listId)
+        .eq('is_purchased', false);
+
+      if (searchError) throw searchError;
+
+      // Ищем существующий продукт с таким же нормализованным названием и единицей измерения
+      const existingItem = existingItems?.find(
+        (existing) =>
+          normalizeProductName(existing.name) === normalizedName &&
+          existing.unit === item.unit
+      );
+
+      if (existingItem) {
+        // Если продукт уже есть, суммируем количество
+        const newAmount = (existingItem.amount || 0) + (item.amount || 0);
+        
+        const { data, error } = await supabase
+          .from('shopping_list_items')
+          .update({
+            amount: newAmount,
+            // Обновляем категорию, если она была определена автоматически
+            category: item.category || existingItem.category,
+          })
+          .eq('id', existingItem.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data as ShoppingListItem;
+      } else {
+        // Если продукта нет, добавляем новый
+        const { data, error } = await supabase
+          .from('shopping_list_items')
+          .insert({
+            ...item,
+            shopping_list_id: listId,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data as ShoppingListItem;
+      }
     },
     onSuccess: (_, variables) => {
       const listId = variables.shopping_list_id || activeList?.id;
@@ -241,32 +285,46 @@ export function useShoppingLists() {
     const vegetables = ['морковь', 'картофель', 'картошка', 'лук', 'чеснок', 'капуста', 'брокколи', 
       'цветная капуста', 'кабачок', 'баклажан', 'перец', 'томат', 'помидор', 'огурец', 'свекла', 
       'тыква', 'шпинат', 'салат', 'петрушка', 'укроп', 'сельдерей', 'редис', 'горох', 'фасоль',
-      'зелень', 'базилик', 'мята', 'кинза', 'зеленый лук', 'порей'];
+      'зелень', 'базилик', 'мята', 'кинза', 'зеленый лук', 'порей', 'авокадо', 'цуккини',
+      'патиссон', 'брюссельская капуста', 'кольраби', 'репа', 'брюква', 'дайкон', 'редиска',
+      'руккола', 'кресс-салат', 'щавель', 'ревень', 'спаржа', 'артишок', 'баклажан', 'кабачок'];
     if (vegetables.some(v => lowerName.includes(v))) return 'vegetables';
     
     // Фрукты
     const fruits = ['яблоко', 'яблок', 'груша', 'банан', 'апельсин', 'мандарин', 'лимон', 'лайм',
       'виноград', 'клубника', 'малина', 'черника', 'голубика', 'смородина', 'вишня', 'черешня',
       'персик', 'абрикос', 'слива', 'манго', 'ананас', 'киви', 'дыня', 'арбуз', 'гранат', 
-      'хурма', 'инжир', 'финик', 'курага', 'изюм', 'чернослив', 'ягод', 'фрукт'];
+      'хурма', 'инжир', 'финик', 'курага', 'изюм', 'чернослив', 'ягод', 'фрукт', 'помело',
+      'грейпфрут', 'папайя', 'маракуйя', 'личи', 'рамбутан', 'дуриан', 'кокос', 'финик',
+      'фейхоа', 'киви', 'нектарин', 'айва', 'айва', 'крыжовник', 'облепиха', 'жимолость',
+      'барбарис', 'рябина', 'калина', 'брусника', 'клюква', 'брусника'];
     if (fruits.some(f => lowerName.includes(f))) return 'fruits';
     
     // Молочные продукты
     const dairy = ['молоко', 'кефир', 'йогурт', 'сметана', 'творог', 'сыр', 'масло сливочное',
-      'сливки', 'ряженка', 'простокваша', 'брынза', 'моцарелла', 'пармезан', 'молочн'];
+      'сливки', 'ряженка', 'простокваша', 'брынза', 'моцарелла', 'пармезан', 'молочн',
+      'творожок', 'сырок', 'сметанка', 'йогурт', 'кефирчик', 'простокваша', 'варенец',
+      'айран', 'тан', 'катык', 'кумыс', 'мацони', 'лактоза', 'сливочное масло'];
     if (dairy.some(d => lowerName.includes(d))) return 'dairy';
     
     // Мясо и рыба
     const meat = ['мясо', 'говядина', 'свинина', 'курица', 'куриц', 'индейка', 'кролик', 'баранина',
       'фарш', 'колбаса', 'сосиски', 'ветчина', 'бекон', 'печень', 'сердце', 'язык',
       'рыба', 'лосось', 'семга', 'форель', 'треска', 'минтай', 'скумбрия', 'сельдь', 'тунец',
-      'креветки', 'кальмар', 'морепродукт', 'филе', 'грудка', 'бедро', 'крыло', 'окорок'];
+      'креветки', 'кальмар', 'морепродукт', 'филе', 'грудка', 'бедро', 'крыло', 'окорок',
+      'телятина', 'баранина', 'козлятина', 'оленина', 'конина', 'утка', 'гусь', 'перепелка',
+      'цесарка', 'фазан', 'краб', 'мидии', 'устрицы', 'осьминог', 'каракатица', 'икра',
+      'красная рыба', 'белая рыба', 'речная рыба', 'морская рыба'];
     if (meat.some(m => lowerName.includes(m))) return 'meat';
     
     // Крупы и злаки
     const grains = ['рис', 'гречка', 'гречневая', 'овсянка', 'овсяные', 'пшено', 'перловка',
       'манка', 'манная', 'кускус', 'булгур', 'киноа', 'крупа', 'хлопья', 'мука', 'макароны',
-      'спагетти', 'лапша', 'вермишель', 'хлеб', 'батон', 'булка', 'сухари', 'кукурузн'];
+      'спагетти', 'лапша', 'вермишель', 'хлеб', 'батон', 'булка', 'сухари', 'кукурузн',
+      'пшеница', 'рожь', 'ячмень', 'овес', 'пшеничная крупа', 'ячневая крупа', 'перловая',
+      'пшенная', 'кукурузная крупа', 'рисовая крупа', 'гороховая крупа', 'чечевица',
+      'нут', 'фасоль', 'бобы', 'соя', 'тофу', 'сейтан', 'хлебцы', 'крекеры', 'печенье',
+      'вафли', 'пряники', 'сушки', 'баранки', 'бублики'];
     if (grains.some(g => lowerName.includes(g))) return 'grains';
     
     return 'other';
@@ -302,23 +360,30 @@ export function useShoppingLists() {
         throw new Error('Нет планов питания на эту неделю. Сначала создайте план питания.');
       }
 
-      // Собрать все ингредиенты
-      const ingredientsMap = new Map<string, { amount: number; unit: string; category: string }>();
+      // Собрать все ингредиенты (объединяем одинаковые продукты с одинаковыми единицами)
+      const ingredientsMap = new Map<string, { amount: number; unit: string; category: string; name: string }>();
 
       mealPlans.forEach((plan: any) => {
         if (plan.recipe?.recipe_ingredients) {
           plan.recipe.recipe_ingredients.forEach((ing: any) => {
-            const key = ing.name.toLowerCase();
+            // Используем нормализованное название + единицу измерения как ключ
+            const normalizedName = normalizeProductName(ing.name);
+            const unit = ing.unit || '';
+            const key = `${normalizedName}|${unit}`;
+            
             // Автоопределение категории по названию
             const autoCategory = detectCategory(ing.name);
             
             if (ingredientsMap.has(key)) {
+              // Если продукт уже есть, суммируем количество
               const existing = ingredientsMap.get(key)!;
               existing.amount += ing.amount || 0;
             } else {
+              // Добавляем новый продукт
               ingredientsMap.set(key, {
+                name: ing.name,
                 amount: ing.amount || 0,
-                unit: ing.unit || '',
+                unit: unit,
                 category: autoCategory,
               });
             }
@@ -340,9 +405,9 @@ export function useShoppingLists() {
       }
 
       // Добавить ингредиенты в список
-      const items = Array.from(ingredientsMap.entries()).map(([name, data]) => ({
+      const items = Array.from(ingredientsMap.values()).map((data) => ({
         shopping_list_id: listId!,
-        name: name.charAt(0).toUpperCase() + name.slice(1),
+        name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
         amount: data.amount || null,
         unit: data.unit || null,
         category: data.category as any,
