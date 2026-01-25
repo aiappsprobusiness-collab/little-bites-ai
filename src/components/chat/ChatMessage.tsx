@@ -24,45 +24,61 @@ interface Recipe {
  */
 function parseRecipeFromContent(content: string): Recipe | null {
   try {
-    // Ищем JSON в code blocks
-    const codeBlockMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    // Ищем JSON в code blocks - используем greedy quantifier для захвата всего содержимого
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (codeBlockMatch && codeBlockMatch[1]) {
-      const parsed = JSON.parse(codeBlockMatch[1]);
-      // Если это один рецепт
-      if (parsed.title || parsed.name) {
-        return {
-          title: parsed.title || parsed.name,
-          description: parsed.description,
-          ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
-          steps: Array.isArray(parsed.steps) ? parsed.steps : [],
-          cookingTime: parsed.cookingTime || parsed.cooking_time,
-        };
-      }
-      // Если это массив рецептов, берем первый
-      if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
-        const recipe = parsed.recipes[0];
-        return {
-          title: recipe.title || recipe.name,
-          description: recipe.description,
-          ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
-          steps: Array.isArray(recipe.steps) ? recipe.steps : [],
-          cookingTime: recipe.cookingTime || recipe.cooking_time,
-        };
+      const jsonStr = codeBlockMatch[1].trim();
+      // Проверяем что это JSON объект
+      if (jsonStr.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(jsonStr);
+          // Если это один рецепт
+          if (parsed.title || parsed.name) {
+            return {
+              title: parsed.title || parsed.name,
+              description: parsed.description,
+              ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+              steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+              cookingTime: parsed.cookingTime || parsed.cooking_time,
+            };
+          }
+          // Если это массив рецептов, берем первый
+          if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
+            const recipe = parsed.recipes[0];
+            return {
+              title: recipe.title || recipe.name,
+              description: recipe.description,
+              ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+              steps: Array.isArray(recipe.steps) ? recipe.steps : [],
+              cookingTime: recipe.cookingTime || recipe.cooking_time,
+            };
+          }
+        } catch {
+          // JSON невалидный - пробуем "исправить" обрезанный JSON
+          const fixedJson = tryFixTruncatedJson(jsonStr);
+          if (fixedJson) {
+            return fixedJson;
+          }
+        }
       }
     }
 
     // Если не нашли в code block, ищем обычный JSON объект
     const simpleMatch = content.match(/\{[\s\S]*\}/);
     if (simpleMatch) {
-      const parsed = JSON.parse(simpleMatch[0]);
-      if (parsed.title || parsed.name) {
-        return {
-          title: parsed.title || parsed.name,
-          description: parsed.description,
-          ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
-          steps: Array.isArray(parsed.steps) ? parsed.steps : [],
-          cookingTime: parsed.cookingTime || parsed.cooking_time,
-        };
+      try {
+        const parsed = JSON.parse(simpleMatch[0]);
+        if (parsed.title || parsed.name) {
+          return {
+            title: parsed.title || parsed.name,
+            description: parsed.description,
+            ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+            steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+            cookingTime: parsed.cookingTime || parsed.cooking_time,
+          };
+        }
+      } catch {
+        // Невалидный JSON
       }
     }
   } catch (e) {
@@ -71,6 +87,52 @@ function parseRecipeFromContent(content: string): Recipe | null {
   }
 
   return null;
+}
+
+/**
+ * Пытается исправить обрезанный JSON рецепта
+ */
+function tryFixTruncatedJson(jsonStr: string): Recipe | null {
+  try {
+    // Извлекаем title
+    const titleMatch = jsonStr.match(/"title"\s*:\s*"([^"]+)"/);
+    const title = titleMatch ? titleMatch[1] : null;
+    if (!title) return null;
+
+    // Извлекаем description
+    const descMatch = jsonStr.match(/"description"\s*:\s*"([^"]+)"/);
+    const description = descMatch ? descMatch[1] : undefined;
+
+    // Извлекаем ingredients
+    const ingredientsMatch = jsonStr.match(/"ingredients"\s*:\s*\[([\s\S]*?)\]/);
+    let ingredients: string[] = [];
+    if (ingredientsMatch) {
+      const ingStr = ingredientsMatch[1];
+      const ingMatches = ingStr.match(/"([^"]+)"/g);
+      if (ingMatches) {
+        ingredients = ingMatches.map(s => s.replace(/"/g, ''));
+      }
+    }
+
+    // Извлекаем steps (даже если массив обрезан)
+    const stepsMatch = jsonStr.match(/"steps"\s*:\s*\[([\s\S]*)/);
+    let steps: string[] = [];
+    if (stepsMatch) {
+      const stepsStr = stepsMatch[1];
+      const stepMatches = stepsStr.match(/"([^"]+)"/g);
+      if (stepMatches) {
+        steps = stepMatches.map(s => s.replace(/"/g, ''));
+      }
+    }
+
+    // Извлекаем cookingTime
+    const timeMatch = jsonStr.match(/"(?:cookingTime|cooking_time)"\s*:\s*(\d+)/);
+    const cookingTime = timeMatch ? parseInt(timeMatch[1]) : undefined;
+
+    return { title, description, ingredients, steps, cookingTime };
+  } catch {
+    return null;
+  }
 }
 
 /**
