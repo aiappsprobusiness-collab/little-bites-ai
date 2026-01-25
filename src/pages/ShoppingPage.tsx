@@ -229,33 +229,50 @@ export default function ShoppingPage() {
 
         {/* Category Filter */}
         <div className="px-4">
-          <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4">
-            <Button
-              variant={selectedCategory === null ? "mint" : "outline"}
-              size="sm"
-              onClick={() => setSelectedCategory(null)}
-            >
-              Все
-            </Button>
-            {mainCategories.map((cat) => (
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex gap-2 overflow-x-auto pb-2 flex-1">
               <Button
-                key={cat.id}
-                variant={selectedCategory === cat.id ? "mint" : "outline"}
+                variant={selectedCategory === null ? "mint" : "outline"}
                 size="sm"
-                onClick={() => setSelectedCategory(cat.id)}
+                onClick={() => setSelectedCategory(null)}
+              >
+                Все
+              </Button>
+              {mainCategories.map((cat) => (
+                <Button
+                  key={cat.id}
+                  variant={selectedCategory === cat.id ? "mint" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className="whitespace-nowrap"
+                >
+                  {cat.emoji} {cat.label}
+                </Button>
+              ))}
+              <Button
+                variant={selectedCategory === "other" ? "mint" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory("other")}
                 className="whitespace-nowrap"
               >
-                {cat.emoji} {cat.label}
+                {otherCategory.emoji} {otherCategory.label}
               </Button>
-            ))}
-            <Button
-              variant={selectedCategory === "other" ? "mint" : "outline"}
-              size="sm"
-              onClick={() => setSelectedCategory("other")}
-              className="whitespace-nowrap"
-            >
-              {otherCategory.emoji} {otherCategory.label}
-            </Button>
+            </div>
+            {items.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearAll}
+                disabled={isClearing}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+              >
+                {isClearing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -393,27 +410,6 @@ export default function ShoppingPage() {
               </>
             )}
           </Button>
-          {items.length > 0 && (
-            <Button
-              variant="destructive"
-              size="lg"
-              className="w-full"
-              onClick={handleClearAll}
-              disabled={isClearing}
-            >
-              {isClearing ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Очистка...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-5 h-5 mr-2" />
-                  Очистить список
-                </>
-              )}
-            </Button>
-          )}
         </div>
       </div>
     </MobileLayout>
