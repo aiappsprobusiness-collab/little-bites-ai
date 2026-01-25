@@ -246,7 +246,8 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
         </motion.div>
       )}
 
-      {/* Family Overview - All Children's Meals */}
+      {/* Family Overview - All Children's Meals - Hidden for cleaner UI */}
+      {/* 
       {children.length > 1 && (
         <motion.div variants={item}>
           <h3 className="font-bold mb-3 flex items-center gap-2">
@@ -290,18 +291,7 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
           </div>
         </motion.div>
       )}
-
-      {/* Quick Actions */}
-      <motion.div variants={item}>
-        <Button
-          variant="mint"
-          className="w-full"
-          onClick={() => navigate('/scan')}
-        >
-          <ChefHat className="w-4 h-4 mr-2" />
-          Новый рецепт
-        </Button>
-      </motion.div>
+      */}
     </motion.div>
   );
 }
