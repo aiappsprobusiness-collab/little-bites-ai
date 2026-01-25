@@ -138,9 +138,10 @@ export function useChatRecipes() {
       // Проверка, что название валидное
       const isValidTitle = (title: string): boolean => {
         if (!title || title.trim().length < 3) return false;
-        if (title.length > 60) return false; // Слишком длинные названия обычно описания
-        if (title.split(' ').length > 6) return false; // Слишком много слов
-        if (title.includes(',')) return false; // Запятые обычно в описаниях
+        if (title.length > 80) return false; // Слишком длинные названия обычно описания
+        // До 10 слов: «Фруктовый мусс из банана, манго и папайи», «Салат из огурцов, помидоров и зелени»
+        if (title.split(/\s+/).length > 10) return false;
+        // Запятые допустимы в названиях с перечислением: «из банана, манго и папайи»
 
         // Проверяем паттерны
         for (const pattern of invalidTitlePatterns) {

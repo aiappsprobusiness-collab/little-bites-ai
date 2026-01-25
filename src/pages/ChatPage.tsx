@@ -13,6 +13,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { detectMealType } from "@/utils/parseChatRecipes";
+import { formatRecipeResponse, hasRecipeJson } from "@/utils/formatRecipeResponse";
 import {
   Select,
   SelectContent,
@@ -106,29 +107,32 @@ export default function ChatPage() {
         type: "chat",
       });
 
+      const rawMessage = response.message;
+      const displayMessage = hasRecipeJson(rawMessage) ? formatRecipeResponse(rawMessage) : rawMessage;
+
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: response.message,
+        content: displayMessage,
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // Сохраняем в историю
+      // Сохраняем в историю (форматированный текст с эмодзи для рецептов)
       await saveChat({
         message: userMessage.content,
-        response: response.message,
+        response: displayMessage,
         childId: selectedChild?.id,
       });
 
-      // Пытаемся сохранить рецепты из ответа AI
+      // Парсим и сохраняем рецепты из сырого ответа (JSON)
       try {
         const mealType = detectMealType(userMessage.content);
         console.log('ChatPage - Detected meal type:', mealType, 'from message:', userMessage.content);
         const savedRecipes = await saveRecipesFromChat({
           userMessage: userMessage.content,
-          aiResponse: response.message,
+          aiResponse: rawMessage,
           childId: selectedChildId || undefined,
           mealType,
         });

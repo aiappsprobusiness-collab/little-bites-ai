@@ -1,22 +1,15 @@
-import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useChildren } from './useChildren';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { useSubscription } from './useSubscription';
+import { buildChatContextFromProfiles } from '@/utils/buildChatContextFromProfiles';
+import { checkChatAllergyBlock } from '@/utils/chatAllergyCheck';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
-}
-
-interface ChildData {
-  name: string;
-  ageMonths: number;
-  allergies?: string[];
-  dietGoals?: string[];
-  weight?: number;
-  height?: number;
 }
 
 const SUPABASE_URL = "https://hidgiyyunigqazssnydm.supabase.co";
@@ -24,23 +17,9 @@ const SUPABASE_URL = "https://hidgiyyunigqazssnydm.supabase.co";
 export function useDeepSeekAPI() {
   const { user, session } = useAuth();
   const { children, calculateAgeInMonths } = useChildren();
+  const { selectedChild } = useSelectedChild();
   const { canGenerate, refetchUsage } = useSubscription();
   const queryClient = useQueryClient();
-  
-  const selectedChild = children[0];
-
-  const getChildData = (): ChildData | undefined => {
-    if (!selectedChild) return undefined;
-    
-    return {
-      name: selectedChild.name,
-      ageMonths: calculateAgeInMonths(selectedChild.birth_date),
-      allergies: selectedChild.allergies || undefined,
-      dietGoals: (selectedChild as any).diet_goals || undefined,
-      weight: (selectedChild as any).weight || undefined,
-      height: (selectedChild as any).height || undefined,
-    };
-  };
 
   // Chat with DeepSeek
   const chatMutation = useMutation({
@@ -56,6 +35,22 @@ export function useDeepSeekAPI() {
         throw new Error('usage_limit_exceeded');
       }
 
+      const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+
+      // Жёсткое правило аллергий (только ЧАТ): профиль по умолчанию = selectedChild
+      const allergyCheck = checkChatAllergyBlock(lastUserMessage, selectedChild?.allergies);
+      if (allergyCheck.blocked && allergyCheck.found.length > 0) {
+        const text = `У нас аллергия на ${allergyCheck.found.join(', ')}, давайте приготовим что-то другое`;
+        return { message: text };
+      }
+
+      const { childData } = buildChatContextFromProfiles({
+        userMessage: lastUserMessage,
+        children,
+        selectedChild: selectedChild ?? null,
+        calculateAgeInMonths,
+      });
+
       const response = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
         method: 'POST',
         headers: {
@@ -64,7 +59,7 @@ export function useDeepSeekAPI() {
         },
         body: JSON.stringify({
           messages,
-          childData: getChildData(),
+          childData,
           type,
           stream: false, // Отключаем streaming для корректного парсинга JSON
         }),

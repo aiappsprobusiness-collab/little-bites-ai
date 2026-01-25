@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
@@ -112,6 +112,7 @@ export default function ProfilePage() {
         });
       }
       setIsEditDialogOpen(false);
+      setEditingChild(null);
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -174,7 +175,10 @@ export default function ProfilePage() {
               </div>
             </motion.button>
           ))}
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setEditingChild(null);
+          }}>
             <DialogTrigger asChild>
               <motion.button
                 whileTap={{ scale: 0.95 }}
@@ -185,6 +189,7 @@ export default function ProfilePage() {
               </motion.button>
             </DialogTrigger>
             <ChildEditDialog
+              key={editingChild?.id || 'new'}
               child={editingChild}
               onSave={handleSaveChild}
               isLoading={isCreating || isUpdating}
@@ -213,7 +218,10 @@ export default function ProfilePage() {
                       <Baby className="w-4 h-4" />
                       {formatAge(selectedChild.birth_date)}
                     </p>
-                    <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                    <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setEditingChild(null);
+          }}>
                       <DialogTrigger asChild>
                         <Button
                           variant="ghost"
@@ -226,7 +234,8 @@ export default function ProfilePage() {
                         </Button>
                       </DialogTrigger>
                       <ChildEditDialog
-                        child={selectedChild}
+                        key={editingChild?.id || 'new'}
+                        child={editingChild}
                         onSave={handleSaveChild}
                         isLoading={isCreating || isUpdating}
                       />
@@ -271,7 +280,10 @@ export default function ProfilePage() {
                       <AlertTriangle className="w-5 h-5 text-destructive" />
                       <h3 className="font-bold">Аллергии и ограничения</h3>
                     </div>
-                    <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                    <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setEditingChild(null);
+          }}>
                       <DialogTrigger asChild>
                         <Button
                           variant="ghost"
@@ -283,7 +295,8 @@ export default function ProfilePage() {
                         </Button>
                       </DialogTrigger>
                       <ChildEditDialog
-                        child={selectedChild}
+                        key={editingChild?.id || 'new'}
+                        child={editingChild}
                         onSave={handleSaveChild}
                         isLoading={isCreating || isUpdating}
                       />
@@ -355,7 +368,10 @@ export default function ProfilePage() {
               <p className="text-muted-foreground mb-4">
                 Добавьте профиль ребенка, чтобы начать использовать приложение
               </p>
-              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+              <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setEditingChild(null);
+          }}>
                 <DialogTrigger asChild>
                   <Button variant="mint" onClick={handleCreateChild}>
                     <Plus className="w-4 h-4 mr-2" />
@@ -363,7 +379,8 @@ export default function ProfilePage() {
                   </Button>
                 </DialogTrigger>
                 <ChildEditDialog
-                  child={null}
+                  key={editingChild?.id || 'new'}
+                  child={editingChild}
                   onSave={handleSaveChild}
                   isLoading={isCreating}
                 />
@@ -400,6 +417,25 @@ function ChildEditDialog({
   const [preferences, setPreferences] = useState<string[]>(child?.preferences || []);
   const [dislikes, setDislikes] = useState<string[]>(child?.dislikes || []);
   const [newAllergy, setNewAllergy] = useState("");
+
+  // Синхронизируем состояние с пропсом child при его изменении
+  useEffect(() => {
+    if (child) {
+      setName(child.name || "");
+      setBirthDate(child.birth_date || new Date().toISOString().split("T")[0]);
+      setAllergies(child.allergies || []);
+      setPreferences(child.preferences || []);
+      setDislikes(child.dislikes || []);
+    } else {
+      // Сброс для создания нового профиля
+      setName("");
+      setBirthDate(new Date().toISOString().split("T")[0]);
+      setAllergies([]);
+      setPreferences([]);
+      setDislikes([]);
+    }
+    setNewAllergy("");
+  }, [child]);
 
   const toggleAllergy = (allergy: string) => {
     setAllergies((prev) =>

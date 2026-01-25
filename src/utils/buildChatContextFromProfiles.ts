@@ -1,0 +1,166 @@
+/**
+ * Парсинг имён из текста чата, поиск в профилях детей и формирование контекста для DeepSeek.
+ *
+ * Логика:
+ * 1. Парсим текст на имена из наших профилей (любое склонение).
+ * 2. Если имена найдены → общий рецепт для этих детей: возраст/аллергии ВСЕХ найденных.
+ * 3. Если имён нет → используем текущий выбранный профиль (возраст + аллергии).
+ *
+ * Камера/фото: всегда текущий профиль (эта функция не используется для сканера).
+ */
+
+export interface ChildProfile {
+  id: string;
+  name: string;
+  birth_date: string;
+  allergies?: string[] | null;
+  diet_goals?: string[] | null;
+  weight?: number | null;
+  height?: number | null;
+}
+
+export interface ChatContextChildData {
+  name: string;
+  ageMonths: number;
+  allergies?: string[];
+  dietGoals?: string[];
+  weight?: number;
+  height?: number;
+  /** Описание возраста для нескольких детей, если применимо */
+  ageDescription?: string;
+}
+
+export interface BuildChatContextInput {
+  userMessage: string;
+  children: ChildProfile[];
+  selectedChild: ChildProfile | null | undefined;
+  calculateAgeInMonths: (birthDate: string) => number;
+}
+
+export interface BuildChatContextResult {
+  childData: ChatContextChildData | undefined;
+  /** id профилей, по имени которых нашли совпадения (для общего рецепта) */
+  matchedChildIds: string[];
+}
+
+const PUNCT = /[\s,.\-!?;:()]+/;
+/** Окончания склонений: основа + суффикс даёт допустимое слово */
+const DECLENSION_SUFFIXES = ['а', 'я', 'и', 'е', 'у', 'ю', 'ой', 'ей', 'ью', 'ем', 'ом', ''] as const;
+
+function normalizedWords(text: string): string[] {
+  return text
+    .split(PUNCT)
+    .map((w) => w.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Проверяет, встречается ли имя (или его склонение) в тексте.
+ * Учитываем типичные окончания: -а/-я → -и/-е/-у/-ой/-ей, -й → -я/-ю и т.д.
+ * Избегаем ложных совпадений: "Марина" не должна матчить "Маша".
+ */
+function nameMatchesInText(name: string, words: string[]): boolean {
+  const n = name.trim();
+  if (!n) return false;
+  const lower = n.toLowerCase();
+  const stem = lower.length > 1 ? lower.slice(0, -1) : lower;
+
+  for (const w of words) {
+    if (w === lower) return true;
+    if (!w.startsWith(stem) || w.length < stem.length) continue;
+    const rest = w.slice(stem.length);
+    if (DECLENSION_SUFFIXES.includes(rest as any) || (rest.length <= 2 && /^[а-яё]+$/.test(rest))) return true;
+  }
+  return false;
+}
+
+/**
+ * Находит профили, имена которых (в любом склонении) встречаются в сообщении.
+ */
+function matchProfilesInMessage(
+  message: string,
+  children: ChildProfile[]
+): ChildProfile[] {
+  const words = normalizedWords(message);
+  const matched: ChildProfile[] = [];
+
+  for (const child of children) {
+    if (!child.name?.trim()) continue;
+    if (nameMatchesInText(child.name, words)) {
+      matched.push(child);
+    }
+  }
+
+  return matched;
+}
+
+/**
+ * Парсинг имён → поиск в профилях → сбор особенностей (возраст, аллергии).
+ * Нет совпадений → текущий выбранный профиль.
+ * Результат готов для формирования промпта DeepSeek (childData).
+ */
+export function buildChatContextFromProfiles({
+  userMessage,
+  children,
+  selectedChild,
+  calculateAgeInMonths,
+}: BuildChatContextInput): BuildChatContextResult {
+  const matched = matchProfilesInMessage(userMessage, children);
+
+  if (matched.length > 0) {
+    const ages = matched.map((c) => calculateAgeInMonths(c.birth_date));
+    const ageMonths = Math.min(...ages);
+    const allAllergies = new Set<string>();
+    const allDietGoals = new Set<string>();
+    let weight: number | undefined;
+    let height: number | undefined;
+
+    for (const c of matched) {
+      (c.allergies || []).forEach((a) => a?.trim() && allAllergies.add(a.trim()));
+      ((c as any).diet_goals || []).forEach((g: string) => g?.trim() && allDietGoals.add(g.trim()));
+      if (c.weight != null) weight = c.weight;
+      if (c.height != null) height = c.height;
+    }
+
+    const names = matched.map((c) => c.name).join(", ");
+    const ageParts = matched.map((c) => {
+      const m = calculateAgeInMonths(c.birth_date);
+      if (m < 12) return `${m} мес`;
+      const y = Math.floor(m / 12);
+      const rest = m % 12;
+      return rest ? `${y} г. ${rest} мес` : `${y} ${y === 1 ? "год" : y < 5 ? "года" : "лет"}`;
+    });
+    const ageDescription = ageParts.join(", ");
+
+    return {
+      childData: {
+        name: names,
+        ageMonths,
+        allergies: allAllergies.size ? Array.from(allAllergies) : undefined,
+        dietGoals: allDietGoals.size ? Array.from(allDietGoals) : undefined,
+        weight,
+        height,
+        ageDescription,
+      },
+      matchedChildIds: matched.map((c) => c.id),
+    };
+  }
+
+  if (selectedChild) {
+    const m = calculateAgeInMonths(selectedChild.birth_date);
+    const allergies = (selectedChild.allergies || []).filter((a) => a?.trim());
+    return {
+      childData: {
+        name: selectedChild.name,
+        ageMonths: m,
+        allergies: allergies.length ? allergies : undefined,
+        dietGoals: (selectedChild as any).diet_goals || undefined,
+        weight: selectedChild.weight ?? undefined,
+        height: selectedChild.height ?? undefined,
+      },
+      matchedChildIds: [],
+    };
+  }
+
+  return { childData: undefined, matchedChildIds: [] };
+}

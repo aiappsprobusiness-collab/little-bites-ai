@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { detectCategory, resolveUnit } from '@/utils/productUtils';
+import { detectCategory, resolveUnit, usePiecesFallback, shouldUsePiecesByDescription } from '@/utils/productUtils';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 type ShoppingList = Tables<'shopping_lists'>;
@@ -142,9 +142,9 @@ export function useShoppingLists() {
   // Нормализовать и конвертировать единицы измерения для сравнения
   const normalizeUnit = (unit: string | null | undefined): { normalized: string; multiplier: number } => {
     if (!unit) return { normalized: '', multiplier: 1 };
-    
+
     const lowerUnit = unit.toLowerCase().trim();
-    
+
     // Весовые единицы
     if (lowerUnit.includes('кг') || lowerUnit.includes('килограмм')) {
       return { normalized: 'кг', multiplier: 1000 }; // конвертируем в граммы
@@ -152,7 +152,7 @@ export function useShoppingLists() {
     if (lowerUnit.includes('г') || lowerUnit.includes('грамм')) {
       return { normalized: 'г', multiplier: 1 };
     }
-    
+
     // Объемные единицы
     if (lowerUnit.includes('л') || lowerUnit.includes('литр')) {
       return { normalized: 'л', multiplier: 1000 }; // конвертируем в миллилитры
@@ -160,12 +160,12 @@ export function useShoppingLists() {
     if (lowerUnit.includes('мл') || lowerUnit.includes('миллилитр')) {
       return { normalized: 'мл', multiplier: 1 };
     }
-    
+
     // Штуки
     if (lowerUnit.includes('шт') || lowerUnit.includes('штук')) {
       return { normalized: 'шт', multiplier: 1 };
     }
-    
+
     // По умолчанию возвращаем как есть
     return { normalized: lowerUnit, multiplier: 1 };
   };
@@ -184,12 +184,19 @@ export function useShoppingLists() {
       if (!listId) throw new Error('No active shopping list');
 
       // Автоматически определяем категорию, если она не указана или равна "other"
-      const finalCategory = item.category && item.category !== 'other' 
-        ? item.category 
+      const finalCategory = item.category && item.category !== 'other'
+        ? item.category
         : detectCategory(item.name);
 
       // Единица измерения обязательна: берём переданную или определяем по названию
-      const finalUnit = resolveUnit(item.unit, item.name);
+      let finalUnit = resolveUnit(item.unit, item.name);
+      let effectiveNewAmount: number | null = item.amount ?? (finalUnit === "шт" ? 1 : null);
+
+      // Пюре, творог: г/мл без числа → шт. Описания с «или»/«— 2-3 ст.л.» и т.п. → тоже шт.
+      if (usePiecesFallback(finalUnit, item.amount) || shouldUsePiecesByDescription(item.name)) {
+        finalUnit = 'шт';
+        effectiveNewAmount = 1;
+      }
 
       // Нормализуем название для поиска
       const normalizedName = normalizeProductName(item.name);
@@ -205,52 +212,65 @@ export function useShoppingLists() {
 
       // Нормализуем единицы измерения для сравнения
       const itemUnitNormalized = normalizeUnit(finalUnit);
-      
-      // Ищем существующий продукт с таким же нормализованным названием
-      // Проверяем, можно ли объединить единицы измерения (граммы/килограммы, миллилитры/литры)
-      const existingItem = existingItems?.find(
-        (existing) => {
-          const existingNormalizedName = normalizeProductName(existing.name);
-          if (existingNormalizedName !== normalizedName) return false;
-          
-          const existingUnitResolved = resolveUnit(existing.unit, existing.name);
-          const existingUnitNormalized = normalizeUnit(existingUnitResolved);
-          
-          // Если единицы одинаковые (после нормализации) - объединяем
-          if (itemUnitNormalized.normalized === existingUnitNormalized.normalized) {
-            return true;
-          }
-          
-          return false;
-        }
-      );
+
+      // Ищем существующий продукт: по имени + одинаковой единице ИЛИ fallback (шт) + существующий г/мл с 0
+      const existingBySameUnit = existingItems?.find((existing) => {
+        const existingNormalizedName = normalizeProductName(existing.name);
+        if (existingNormalizedName !== normalizedName) return false;
+        const existingUnitResolved = resolveUnit(existing.unit, existing.name);
+        const existingUnitNormalized = normalizeUnit(existingUnitResolved);
+        return itemUnitNormalized.normalized === existingUnitNormalized.normalized;
+      });
+
+      const existingGmlZero = !existingBySameUnit && existingItems?.find((existing) => {
+        const existingNormalizedName = normalizeProductName(existing.name);
+        if (existingNormalizedName !== normalizedName) return false;
+        const existingUnitResolved = resolveUnit(existing.unit, existing.name);
+        const u = existingUnitResolved?.toLowerCase().trim() || '';
+        const isGml = u === 'г' || u === 'мл' || u === 'кг' || u === 'л';
+        const amt = existing.amount ?? 0;
+        return isGml && (amt === 0 || amt == null);
+      });
+
+      const existingItem = existingBySameUnit ?? existingGmlZero;
 
       if (existingItem) {
-        // Если продукт уже есть, суммируем количество с учетом единиц измерения
         const existingUnitResolved = resolveUnit(existingItem.unit, existingItem.name);
         const existingUnitNormalized = normalizeUnit(existingUnitResolved);
-        
-        // Конвертируем оба количества в базовые единицы
-        const existingAmountBase = convertToBaseUnit(existingItem.amount, existingUnitResolved);
-        const newAmountBase = convertToBaseUnit(item.amount, finalUnit);
-        const totalAmountBase = existingAmountBase + newAmountBase;
-        
-        // Конвертируем обратно в исходную единицу существующего продукта
+        const effectiveExisting = existingItem.amount ?? (existingUnitResolved === "шт" ? 1 : 0);
+
         let newAmount: number;
-        if (existingUnitNormalized.multiplier > 1) {
-          // Если единица была в килограммах/литрах, конвертируем обратно
-          newAmount = totalAmountBase / existingUnitNormalized.multiplier;
+        let newUnit: string;
+
+        if (existingGmlZero) {
+          // Слияние fallback (шт 1) с существующим "г/мл" 0 → переводим в "шт", считаем штуками
+          newUnit = 'шт';
+          newAmount = 1 + (effectiveNewAmount ?? 1);
+        } else if (
+          (existingUnitNormalized.normalized === 'г' || existingUnitNormalized.normalized === 'мл' || existingUnitNormalized.normalized === 'л' || existingUnitNormalized.normalized === 'кг') &&
+          effectiveExisting === 0 && (effectiveNewAmount ?? 0) === 0
+        ) {
+          // Оба г/мл с 0 → переводим в "шт" 2
+          newUnit = 'шт';
+          newAmount = 2;
         } else {
-          newAmount = totalAmountBase;
+          const existingAmountBase = convertToBaseUnit(effectiveExisting, existingUnitResolved);
+          const newAmountBase = convertToBaseUnit(effectiveNewAmount ?? 0, finalUnit);
+          const totalAmountBase = existingAmountBase + newAmountBase;
+          newUnit = existingItem.unit ?? existingUnitResolved;
+          if (existingUnitNormalized.multiplier > 1) {
+            newAmount = totalAmountBase / existingUnitNormalized.multiplier;
+          } else {
+            newAmount = totalAmountBase;
+          }
         }
-        
+
         const { data, error } = await supabase
           .from('shopping_list_items')
           .update({
             amount: newAmount,
             category: finalCategory as any,
-            // Исправляем unit, если у существующего продукта не было меры
-            unit: existingItem.unit ?? existingUnitResolved,
+            unit: newUnit,
           })
           .eq('id', existingItem.id)
           .select()
@@ -259,7 +279,7 @@ export function useShoppingLists() {
         if (error) throw error;
         return data as ShoppingListItem;
       } else {
-        // Если продукта нет, добавляем новый с категорией и единицей измерения
+        const insertAmount = effectiveNewAmount ?? (finalUnit === "шт" ? 1 : null);
         const { data, error } = await supabase
           .from('shopping_list_items')
           .insert({
@@ -267,6 +287,7 @@ export function useShoppingLists() {
             shopping_list_id: listId,
             category: finalCategory as any,
             unit: finalUnit,
+            amount: insertAmount,
           })
           .select()
           .single();
@@ -357,6 +378,29 @@ export function useShoppingLists() {
     },
   });
 
+  // Очистить элементы списка по категории
+  const clearCategoryItems = useMutation({
+    mutationFn: async ({ listId, category }: { listId: string; category: string }) => {
+      let query = supabase
+        .from('shopping_list_items')
+        .delete()
+        .eq('shopping_list_id', listId);
+
+      if (category === 'other') {
+        query = query.or('category.eq.other,category.is.null');
+      } else {
+        query = query.eq('category', category);
+      }
+
+      const { error } = await query;
+      if (error) throw error;
+      return { listId, category };
+    },
+    onSuccess: ({ listId }) => {
+      queryClient.invalidateQueries({ queryKey: ['shopping_list_items', listId] });
+    },
+  });
+
   // Генерировать список покупок из планов питания
   const generateFromMealPlans = useMutation({
     mutationFn: async ({ startDate, endDate }: { startDate: Date; endDate: Date }) => {
@@ -393,7 +437,12 @@ export function useShoppingLists() {
       mealPlans.forEach((plan: any) => {
         if (plan.recipe?.recipe_ingredients) {
           plan.recipe.recipe_ingredients.forEach((ing: any) => {
-            const resolvedUnit = resolveUnit(ing.unit, ing.name);
+            let resolvedUnit = resolveUnit(ing.unit, ing.name);
+            let amt = ing.amount != null ? ing.amount : (resolvedUnit === "шт" ? 1 : 0);
+            if (usePiecesFallback(resolvedUnit, ing.amount) || shouldUsePiecesByDescription(ing.name)) {
+              resolvedUnit = 'шт';
+              amt = 1;
+            }
             const normalizedName = normalizeProductName(ing.name);
             const unitNormalized = normalizeUnit(resolvedUnit);
             const key = `${normalizedName}|${unitNormalized.normalized}`;
@@ -402,13 +451,13 @@ export function useShoppingLists() {
             if (ingredientsMap.has(key)) {
               const existing = ingredientsMap.get(key)!;
               const existingAmountBase = convertToBaseUnit(existing.amount, existing.unit);
-              const newAmountBase = convertToBaseUnit(ing.amount, resolvedUnit);
+              const newAmountBase = convertToBaseUnit(amt, resolvedUnit);
               const totalAmountBase = existingAmountBase + newAmountBase;
               existing.amount = totalAmountBase / unitNormalized.multiplier;
             } else {
               ingredientsMap.set(key, {
                 name: ing.name,
-                amount: ing.amount || 0,
+                amount: amt,
                 unit: resolvedUnit,
                 category: autoCategory,
               });
@@ -444,41 +493,70 @@ export function useShoppingLists() {
 
       // Создаем Map для существующих продуктов (ключ: название + единица; для null unit используем resolveUnit)
       const existingItemsMap = new Map<string, ShoppingListItem>();
+      const existingGmlZeroMap = new Map<string, ShoppingListItem>();
       if (existingItems) {
         existingItems.forEach((item) => {
           const resolved = resolveUnit(item.unit, item.name);
           const unitNormalized = normalizeUnit(resolved);
-          const key = `${normalizeProductName(item.name)}|${unitNormalized.normalized}`;
+          const n = normalizeProductName(item.name);
+          const key = `${n}|${unitNormalized.normalized}`;
           existingItemsMap.set(key, item);
+          const u = (resolved || '').toLowerCase().trim();
+          const isGml = u === 'г' || u === 'мл' || u === 'кг' || u === 'л';
+          const amt = item.amount ?? 0;
+          if (isGml && (amt === 0 || item.amount == null)) {
+            if (!existingGmlZeroMap.has(n)) existingGmlZeroMap.set(n, item);
+          }
         });
       }
 
       const itemsToInsert: any[] = [];
       const itemsToUpdate: Array<{ id: string; amount: number; category: string; unit: string }> = [];
+      const updatedIds = new Set<string>();
 
       Array.from(ingredientsMap.values()).forEach((data) => {
         const normalizedName = normalizeProductName(data.name);
         const unitNormalized = normalizeUnit(data.unit);
         const key = `${normalizedName}|${unitNormalized.normalized}`;
-        const existingItem = existingItemsMap.get(key);
+        let existingItem = existingItemsMap.get(key);
+        if (!existingItem && data.unit === 'шт') {
+          const gmlZero = existingGmlZeroMap.get(normalizedName);
+          if (gmlZero && !updatedIds.has(gmlZero.id)) {
+            existingItem = gmlZero;
+          }
+        }
 
         if (existingItem) {
           const existingUnitResolved = resolveUnit(existingItem.unit, existingItem.name);
-          const existingAmountBase = convertToBaseUnit(existingItem.amount, existingUnitResolved);
-          const newAmountBase = convertToBaseUnit(data.amount, data.unit);
-          const totalAmountBase = existingAmountBase + newAmountBase;
           const existingUnitNormalized = normalizeUnit(existingUnitResolved);
+          const u = (existingUnitResolved || '').toLowerCase().trim();
+          const isGmlZero = (u === 'г' || u === 'мл' || u === 'кг' || u === 'л') &&
+            ((existingItem.amount ?? 0) === 0 || existingItem.amount == null);
+
           let newAmount: number;
-          if (existingUnitNormalized.multiplier > 1) {
-            newAmount = totalAmountBase / existingUnitNormalized.multiplier;
+          let newUnit: string;
+
+          if (isGmlZero) {
+            newUnit = 'шт';
+            newAmount = 1 + data.amount;
           } else {
-            newAmount = totalAmountBase;
+            const existingAmountBase = convertToBaseUnit(existingItem.amount, existingUnitResolved);
+            const newAmountBase = convertToBaseUnit(data.amount, data.unit);
+            const totalAmountBase = existingAmountBase + newAmountBase;
+            newUnit = existingItem.unit ?? existingUnitResolved;
+            if (existingUnitNormalized.multiplier > 1) {
+              newAmount = totalAmountBase / existingUnitNormalized.multiplier;
+            } else {
+              newAmount = totalAmountBase;
+            }
           }
+
+          updatedIds.add(existingItem.id);
           itemsToUpdate.push({
             id: existingItem.id,
             amount: newAmount,
             category: data.category,
-            unit: existingItem.unit ?? existingUnitResolved,
+            unit: newUnit,
           });
         } else {
           itemsToInsert.push({
@@ -546,8 +624,10 @@ export function useShoppingLists() {
     toggleItemPurchased: toggleItemPurchased.mutateAsync,
     generateFromMealPlans: generateFromMealPlans.mutateAsync,
     clearAllItems: clearAllItems.mutateAsync,
+    clearCategoryItems: clearCategoryItems.mutateAsync,
     isCreating: createList.isPending,
     isGenerating: generateFromMealPlans.isPending,
     isClearing: clearAllItems.isPending,
+    isClearingCategory: clearCategoryItems.isPending,
   };
 }

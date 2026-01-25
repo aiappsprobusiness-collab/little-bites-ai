@@ -21,7 +21,7 @@ export default function ScanPage() {
   const { analyzeImage, generateRecipe, isAnalyzing, isGenerating } = useDeepSeek();
 
   const [step, setStep] = useState<"capture" | "detecting" | "confirm" | "generating">("capture");
-  const [products, setProducts] = useState<Array<{ name: string; emoji: string; confirmed: boolean }>>([]);
+  const [products, setProducts] = useState<Array<{ name: string; emoji: string; confirmed: boolean; isAllergy?: boolean }>>([]);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,13 +43,24 @@ export default function ScanPage() {
     try {
       const analysis = await analyzeImage(file);
       console.log('Analysis result:', analysis);
-      
-      const detectedProducts = analysis.products.map(p => ({
+
+      const allergies = (selectedChild?.allergies ?? []).filter((a) => a?.trim());
+      const isAllergen = (productName: string) => {
+        if (!productName || productName.includes('не распознаны')) return false;
+        const n = productName.toLowerCase().trim();
+        return allergies.some((a) => {
+          const t = a.trim().toLowerCase();
+          return t && (n.includes(t) || t.includes(n));
+        });
+      };
+
+      const detectedProducts = analysis.products.map((p) => ({
         name: p.name,
         emoji: p.emoji || "🥘",
         confirmed: true,
+        isAllergy: isAllergen(p.name),
       }));
-      
+
       if (detectedProducts.length > 0) {
         setProducts(detectedProducts);
         setStep("confirm");
@@ -65,7 +76,7 @@ export default function ScanPage() {
           variant: "default",
         });
         setProducts([
-          { name: "Продукты не распознаны автоматически", emoji: "❓", confirmed: false },
+          { name: "Продукты не распознаны автоматически", emoji: "❓", confirmed: false, isAllergy: false },
         ]);
         setStep("confirm");
       }
@@ -114,35 +125,37 @@ export default function ScanPage() {
 
   const handleGenerate = async () => {
     setStep("generating");
-    
-    const confirmedProducts = products.filter(p => p.confirmed).map(p => p.name);
-    
+
+    const confirmedProducts = products
+      .filter((p) => p.confirmed && !p.isAllergy)
+      .map((p) => p.name);
+
     if (confirmedProducts.length === 0) {
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: "Выберите хотя бы один продукт",
+        description: products.some((p) => p.confirmed && p.isAllergy)
+          ? "Выберите хотя бы один продукт без аллергии"
+          : "Выберите хотя бы один продукт",
       });
       setStep("confirm");
       return;
     }
 
     try {
-      // Правильно вычисляем возраст ребенка в месяцах
-      const ageMonths = selectedChild 
+      const ageMonths = selectedChild
         ? calculateAgeInMonths(selectedChild.birth_date)
         : undefined;
 
-      // Получаем аллергии, фильтруя null и пустые значения
-      const allergies = selectedChild?.allergies 
-        ? selectedChild.allergies.filter(a => a && a.trim().length > 0)
+      const allergies = selectedChild?.allergies
+        ? selectedChild.allergies.filter((a) => a && a.trim().length > 0)
         : undefined;
 
       console.log('Generating recipe with:', {
         products: confirmedProducts,
         ageMonths,
         allergies,
-        childName: selectedChild?.name
+        childName: selectedChild?.name,
       });
 
       const recipe = await generateRecipe({
@@ -383,7 +396,9 @@ export default function ScanPage() {
                       >
                         <CardContent className="p-4 flex items-center gap-4">
                           <span className="text-3xl">{product.emoji}</span>
-                          <span className="font-semibold flex-1">{product.name}</span>
+                          <span className="font-semibold flex-1">
+                            {product.isAllergy ? `${product.name} (Аллергия)` : product.name}
+                          </span>
                           <div
                             className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
                               product.confirmed

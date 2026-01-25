@@ -50,6 +50,8 @@ interface ChatRequest {
     dietGoals?: string[];
     weight?: number;
     height?: number;
+    /** Для нескольких детей: "18 мес., 2 года" */
+    ageDescription?: string;
   };
   type?: "chat" | "recipe" | "diet_plan" | "single_day";
   stream?: boolean;
@@ -120,9 +122,9 @@ serve(async (req) => {
 Отвечай на русском языке. Будь дружелюбным, понятным и практичным.
 
 ${childData ? `
-Данные о ребенке:
+Данные о ребенке/детях:
 - Имя: ${childData.name}
-- Возраст: ${childData.ageMonths} месяцев
+- Возраст: ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
 ${childData.allergies?.length ? `- Аллергии: ${childData.allergies.join(", ")}` : ""}
 ${childData.dietGoals?.length ? `- Цели питания: ${childData.dietGoals.join(", ")}` : ""}
 ${childData.weight ? `- Вес: ${childData.weight} кг` : ""}
@@ -181,7 +183,7 @@ ${childData.height ? `- Рост: ${childData.height} см` : ""}
       systemPrompt = `Ты — детский диетолог. Создаёшь рецепты для детей с учётом возраста и аллергий.
 
 ${childData ? `
-Ребенок: ${childData.name}, ${childData.ageMonths} месяцев
+Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
 ${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}` : ""}
 ${childData.dietGoals?.length ? `Цели питания: ${childData.dietGoals.join(", ")}` : ""}
 ` : ""}
@@ -242,7 +244,7 @@ ${childData.dietGoals?.length ? `Цели питания: ${childData.dietGoals.
       systemPrompt = `Ты — эксперт по детскому питанию. Создаёшь недельные планы питания.
 
 ${childData ? `
-Ребенок: ${childData.name}, ${childData.ageMonths} месяцев
+Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
 ${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}` : ""}
 ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : ""}
 ` : ""}

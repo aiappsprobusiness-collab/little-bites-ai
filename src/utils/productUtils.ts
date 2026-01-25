@@ -53,7 +53,7 @@ export function detectCategory(name: string): string {
   const vegetables = [
     'морковь', 'картофель', 'картошка', 'лук', 'чеснок', 'капуста', 'брокколи',
     'цветная капуста', 'кабачок', 'баклажан', 'перец', 'томат', 'помидор', 'огурец', 'свекла',
-    'тыква', 'шпинат', 'салат', 'петрушка', 'укроп', 'сельдерей', 'редис', 'горох', 'фасоль',
+    'тыква', 'тыквенное', 'шпинат', 'салат', 'петрушка', 'укроп', 'сельдерей', 'редис', 'горох', 'фасоль',
     'зелень', 'базилик', 'мята', 'кинза', 'зеленый лук', 'порей', 'цуккини',
     'патиссон', 'брюссельская капуста', 'кольраби', 'репа', 'брюква', 'дайкон', 'редиска',
     'руккола', 'кресс-салат', 'щавель', 'ревень', 'спаржа', 'артишок',
@@ -61,7 +61,7 @@ export function detectCategory(name: string): string {
   if (vegetables.some((v) => lowerName.includes(v))) return 'vegetables';
 
   const fruits = [
-    'яблоко', 'яблок', 'груша', 'банан', 'апельсин', 'мандарин', 'лимон', 'лайм',
+    'яблоко', 'яблок', 'яблочное', 'груша', 'банан', 'апельсин', 'мандарин', 'лимон', 'лайм',
     'виноград', 'клубника', 'малина', 'черника', 'голубика', 'смородина', 'вишня', 'черешня',
     'персик', 'абрикос', 'слива', 'манго', 'ананас', 'киви', 'дыня', 'арбуз', 'гранат',
     'хурма', 'инжир', 'финик', 'курага', 'изюм', 'чернослив', 'ягод', 'фрукт', 'помело',
@@ -127,4 +127,61 @@ export function detectUnit(name: string): string {
 export function resolveUnit(unit: string | null | undefined, productName: string): string {
   const u = typeof unit === 'string' ? unit.trim() : '';
   return u || detectUnit(productName);
+}
+
+/**
+ * Невозможно применить числовое значение (г/мл) — использовать «шт» с количеством.
+ * Для пюре, творога и т.п. при amount null/0 при создании и слиянии считаем штуками.
+ */
+export function usePiecesFallback(
+  unit: string | null | undefined,
+  amount: number | null | undefined
+): boolean {
+  const u = typeof unit === 'string' ? unit.trim().toLowerCase() : '';
+  const isWeightOrVolume = u === 'г' || u === 'мл' || u === 'кг' || u === 'л';
+  const noAmount = amount == null || Number(amount) === 0;
+  return !!(isWeightOrVolume && noAmount);
+}
+
+/**
+ * Продукты с описаниями-альтернативами или дробными мерами в названии:
+ * «Вода или детский сок (яблочный/грушевый) — 2-3 ст.л.», «Желатин — 5 г (или агар-агар — 2 г)».
+ * Добавлять как 1 шт, 2 шт и т.д.
+ */
+export function shouldUsePiecesByDescription(name: string): boolean {
+  if (!name || typeof name !== 'string') return false;
+  const s = name.trim();
+  if (s.includes(' или ')) return true;
+  if (s.includes('(или ')) return true;
+  const hasDash = s.includes('—') || s.includes('–');
+  const hasMeasure = /ст\.л\.|ч\.л\.|г\s*\)|мл\s*\)|\sг\b|\sмл\b/.test(s);
+  return !!(hasDash && hasMeasure);
+}
+
+/**
+ * Краткая форма единицы для отображения (например, «щепотка» → «щеп.»).
+ */
+export function formatUnitForDisplay(unit: string | null | undefined): string {
+  if (!unit || typeof unit !== 'string') return '';
+  const u = unit.trim().toLowerCase();
+  if (u === 'щепотка' || u === 'щепотки' || u === 'щепотку') return 'щеп.';
+  return unit.trim();
+}
+
+/**
+ * Форматирует «количество + единица» для отображения в списке покупок.
+ * Всегда показывает число, когда оно есть (2 банана → «2 шт»); «щепотка» → «щеп.».
+ */
+export function formatAmountUnit(
+  amount: number | null | undefined,
+  unit: string | null | undefined
+): string {
+  const u = formatUnitForDisplay(unit);
+  if (!u && (amount == null || amount === '')) return '';
+  if (amount != null && amount !== '' && !Number.isNaN(Number(amount))) {
+    const n = Number(amount);
+    const str = n % 1 === 0 ? String(Math.round(n)) : String(n);
+    return u ? `${str} ${u}` : str;
+  }
+  return u || '';
 }
