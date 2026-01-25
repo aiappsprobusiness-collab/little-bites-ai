@@ -178,44 +178,40 @@ export default function HomePage() {
                     <button
                       type="button"
                       onClick={() => setViewMode('list')}
-                      className={`h-7 px-2 rounded transition-colors ${
-                        viewMode === 'list'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={`h-7 px-2 rounded transition-colors ${viewMode === 'list'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                        }`}
                     >
                       <List className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('large')}
-                      className={`h-7 px-2 rounded transition-colors ${
-                        viewMode === 'large'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={`h-7 px-2 rounded transition-colors ${viewMode === 'large'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                        }`}
                     >
                       <Square className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('medium')}
-                      className={`h-7 px-2 rounded transition-colors ${
-                        viewMode === 'medium'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={`h-7 px-2 rounded transition-colors ${viewMode === 'medium'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                        }`}
                     >
                       <LayoutGrid className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('small')}
-                      className={`h-7 px-2 rounded transition-colors ${
-                        viewMode === 'small'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
+                      className={`h-7 px-2 rounded transition-colors ${viewMode === 'small'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                        }`}
                     >
                       <Grid3x3 className="w-3.5 h-3.5" />
                     </button>
@@ -240,10 +236,10 @@ export default function HomePage() {
                 viewMode === 'list'
                   ? 'space-y-2'
                   : viewMode === 'large'
-                  ? 'grid grid-cols-1 gap-4'
-                  : viewMode === 'medium'
-                  ? 'grid grid-cols-2 gap-3'
-                  : 'grid grid-cols-3 gap-2'
+                    ? 'grid grid-cols-1 gap-4'
+                    : viewMode === 'medium'
+                      ? 'grid grid-cols-2 gap-3'
+                      : 'grid grid-cols-3 gap-2'
               }
             >
               {formattedRecipes.map((recipe) => (
@@ -260,8 +256,8 @@ export default function HomePage() {
                         viewMode === 'large'
                           ? 'large'
                           : viewMode === 'small'
-                          ? 'small'
-                          : 'medium'
+                            ? 'small'
+                            : 'medium'
                       }
                       onClick={() => navigate(`/recipe/${recipe.id}`)}
                     />

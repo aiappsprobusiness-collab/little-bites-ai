@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -5,17 +6,30 @@ import { Button } from '@/components/ui/button';
 import { ChefHat, Clock, Utensils, Coffee, Cookie, Plus, Calendar } from 'lucide-react';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { useMealPlans } from '@/hooks/useMealPlans';
+import { useRecipes } from '@/hooks/useRecipes';
+import { useChatRecipes } from '@/hooks/useChatRecipes';
+import { useToast } from '@/hooks/use-toast';
+import { Dialog } from "@/components/ui/dialog";
+import { AddMealDialog, MealTypeOption } from "@/components/meal-plan/AddMealDialog";
 import { ChildCarousel } from './ChildCarousel';
 import type { Tables } from '@/integrations/supabase/types';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
-const mealTypeConfig: Record<MealType, { icon: typeof Utensils; label: string; color: string }> = {
-  breakfast: { icon: Coffee, label: 'Завтрак', color: 'bg-peach' },
-  lunch: { icon: Utensils, label: 'Обед', color: 'bg-primary' },
-  dinner: { icon: ChefHat, label: 'Ужин', color: 'bg-lavender' },
-  snack: { icon: Cookie, label: 'Перекус', color: 'bg-soft-pink' },
+const mealTypeConfig: Record<MealType, { icon: typeof Utensils; label: string; color: string; id: string; emoji: string; time: string }> = {
+  breakfast: { icon: Coffee, label: 'Завтрак', color: 'bg-peach', id: 'breakfast', emoji: '🌅', time: '08:00' },
+  lunch: { icon: Utensils, label: 'Обед', color: 'bg-primary', id: 'lunch', emoji: '☀️', time: '12:00' },
+  dinner: { icon: ChefHat, label: 'Ужин', color: 'bg-lavender', id: 'dinner', emoji: '🌙', time: '18:00' },
+  snack: { icon: Cookie, label: 'Перекус', color: 'bg-soft-pink', id: 'snack', emoji: '🍎', time: '15:00' },
 };
+
+// Конвертируем config в массив options для диалога
+const mealTypesOptions: MealTypeOption[] = Object.values(mealTypeConfig).map(c => ({
+  id: c.id,
+  label: c.label,
+  emoji: c.emoji,
+  time: c.time
+}));
 
 interface FamilyDashboardProps {
   onAddChild?: () => void;
@@ -23,15 +37,26 @@ interface FamilyDashboardProps {
 
 export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const { children, selectedChild, formatAge } = useSelectedChild();
-  const { getMealPlansByDate } = useMealPlans(selectedChild?.id);
-  
+  const { getMealPlansByDate, createMealPlan, isCreating } = useMealPlans(selectedChild?.id);
+  const { recipes } = useRecipes(selectedChild?.id);
+  const { getTodayChatRecipes } = useChatRecipes();
+
   const today = new Date();
   const { data: todayMeals = [], isLoading: isLoadingMeals } = getMealPlansByDate(today);
 
   // Get all children's meals for today (family overview)
   const allChildrenMealsHook = useMealPlans();
   const { data: allMeals = [] } = allChildrenMealsHook.getMealPlansByDate(today);
+
+  // State for dialog
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
+
+  // Get chat recipes for today
+  const todayChatRecipesQuery = getTodayChatRecipes();
+  const todayChatRecipes = todayChatRecipesQuery?.data || [];
 
   const container = {
     hidden: { opacity: 0 },
@@ -55,11 +80,56 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
   }, {} as Record<string, typeof allMeals>);
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('ru-RU', { 
-      weekday: 'long', 
-      day: 'numeric', 
-      month: 'long' 
+    return date.toLocaleDateString('ru-RU', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long'
     });
+  };
+
+  const handleDialogOpenChange = (open: boolean) => {
+    setIsAddDialogOpen(open);
+    if (!open) {
+      setSelectedMealType(null);
+    }
+  };
+
+  const handleAddMeal = async (recipeId: string, mealType: string) => {
+    try {
+      await createMealPlan({
+        child_id: selectedChild?.id || null,
+        recipe_id: recipeId,
+        planned_date: today.toISOString().split('T')[0],
+        meal_type: mealType as any,
+        is_completed: false,
+      });
+      setIsAddDialogOpen(false);
+      setSelectedMealType(null);
+      toast({
+        title: 'Блюдо добавлено',
+        description: 'Рецепт успешно добавлен в план питания',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Ошибка',
+        description: error.message || 'Не удалось добавить блюдо',
+      });
+    }
+  };
+
+  const handleMealClick = (mealType: MealType, meal: typeof todayMeals[0] | undefined) => {
+    if (meal) {
+      // Если есть блюдо, переходим к рецепту
+      const recipeId = meal.recipe_id || meal.recipe?.id;
+      if (recipeId) {
+        navigate(`/recipe/${recipeId}`);
+      }
+    } else {
+      // Если блюда нет, открываем диалог добавления
+      setSelectedMealType(mealType);
+      setIsAddDialogOpen(true);
+    }
   };
 
   return (
@@ -105,22 +175,35 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
                 </div>
               </div>
 
+              <Dialog open={isAddDialogOpen} onOpenChange={handleDialogOpenChange}>
+                <AddMealDialog
+                  recipes={recipes}
+                  chatRecipes={todayChatRecipes}
+                  mealTypes={mealTypesOptions}
+                  selectedMealType={selectedMealType}
+                  onSelectMealType={setSelectedMealType}
+                  onAdd={handleAddMeal}
+                  isLoading={isCreating}
+                />
+              </Dialog>
+
               {isLoadingMeals ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="h-12 bg-card/30 rounded-lg animate-pulse" />
                   ))}
                 </div>
-              ) : todayMeals.length > 0 ? (
+              ) : (
                 <div className="space-y-2">
                   {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map((mealType) => {
                     const meal = todayMeals.find((m) => m.meal_type === mealType);
                     const config = mealTypeConfig[mealType];
-                    
+
                     return (
                       <div
                         key={mealType}
-                        className="flex items-start gap-3 py-2 px-3 rounded-xl bg-card/50"
+                        onClick={() => handleMealClick(mealType, meal)}
+                        className={`flex items-start gap-3 py-2 px-3 rounded-xl bg-card/50 transition-colors cursor-pointer hover:bg-card/80 active:scale-[0.98] ${!meal ? 'opacity-80' : ''}`}
                       >
                         <div className={`w-8 h-8 rounded-lg ${config.color} flex items-center justify-center flex-shrink-0 mt-0.5`}>
                           <config.icon className="w-4 h-4 text-foreground/80" />
@@ -143,21 +226,19 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
                       </div>
                     );
                   })}
-                </div>
-              ) : (
-                <div className="text-center py-2">
-                  <p className="text-sm text-muted-foreground mb-2">
-                    Меню на сегодня не запланировано
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate('/meal-plan')}
-                    className="bg-card/50"
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Запланировать
-                  </Button>
+
+                  {todayMeals.length === 0 && (
+                    <div className="text-center py-2 mt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate('/meal-plan')}
+                        className="bg-card/50 w-full"
+                      >
+                        Перейти к плану питания
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -176,7 +257,7 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
             {children.slice(0, 10).map((child) => {
               const childMeals = mealsByChild[child.id] || [];
               const completedCount = childMeals.filter(m => m.is_completed).length;
-              
+
               return (
                 <motion.div
                   key={child.id}

@@ -10,7 +10,6 @@ import HomePage from "./pages/HomePage";
 import ScanPage from "./pages/ScanPage";
 import ProfilePage from "./pages/ProfilePage";
 import MealPlanPage from "./pages/MealPlanPage";
-import GeneratePlanPage from "./pages/GeneratePlanPage";
 import ShoppingPage from "./pages/ShoppingPage";
 import RecipePage from "./pages/RecipePage";
 import RecipeEditPage from "./pages/RecipeEditPage";
@@ -65,14 +64,6 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <MealPlanPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/generate-plan"
-              element={
-                <ProtectedRoute>
-                  <GeneratePlanPage />
                 </ProtectedRoute>
               }
             />
