@@ -260,16 +260,19 @@ export default function ShoppingPage() {
             </div>
             {items.length > 0 && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={handleClearAll}
                 disabled={isClearing}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                className="text-destructive border-destructive/30 hover:text-destructive hover:bg-destructive/10 shrink-0 gap-1.5"
               >
                 {isClearing ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Trash2 className="w-4 h-4" />
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Очистить</span>
+                  </>
                 )}
               </Button>
             )}
