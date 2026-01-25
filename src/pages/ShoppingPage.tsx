@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, forwardRef } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,14 +26,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const categories = [
+// Основные категории (без "Все" - это специальный фильтр)
+const mainCategories = [
   { id: "vegetables", label: "Овощи", emoji: "🥬" },
   { id: "fruits", label: "Фрукты", emoji: "🍎" },
   { id: "dairy", label: "Молочное", emoji: "🥛" },
   { id: "meat", label: "Мясо", emoji: "🍖" },
   { id: "grains", label: "Крупы", emoji: "🌾" },
-  { id: "other", label: "Другое", emoji: "📦" },
 ];
+
+// Категория "Другое" для продуктов без определённой категории
+const otherCategory = { id: "other", label: "Другое", emoji: "📦" };
+
+// Все категории для отображения
+const allCategories = [...mainCategories, otherCategory];
 
 export default function ShoppingPage() {
   const { toast } = useToast();
@@ -51,8 +57,10 @@ export default function ShoppingPage() {
     deleteItem,
     toggleItemPurchased,
     generateFromMealPlans,
+    clearAllItems,
     isCreating,
     isGenerating,
+    isClearing,
   } = useShoppingLists();
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -62,26 +70,38 @@ export default function ShoppingPage() {
     activeList?.id || ""
   );
 
-  const filteredItems = selectedCategory
-    ? items.filter((item) => item.category === selectedCategory)
-    : items;
+  // Фильтрация элементов в зависимости от выбранной категории
+  // null = "Все" - показываем все элементы
+  // "other" = "Другое" - показываем только элементы с category === 'other' или без категории
+  // другие категории - показываем только элементы этой категории
+  const filteredItems = selectedCategory === null
+    ? items // "Все" - показываем всё
+    : selectedCategory === "other"
+      ? items.filter((item) => item.category === "other" || !item.category)
+      : items.filter((item) => item.category === selectedCategory);
 
   const checkedCount = items.filter((i) => i.is_purchased).length;
   const progress = items.length > 0 ? (checkedCount / items.length) * 100 : 0;
 
-  // Если выбрана категория, показываем только её. Иначе показываем все категории
-  const groupedItems = selectedCategory
-    ? categories
+  // Группировка элементов для отображения
+  const groupedItems = selectedCategory === null
+    ? // "Все" - группируем по всем категориям
+      allCategories
+        .map((cat) => ({
+          ...cat,
+          items: items.filter((item) => 
+            cat.id === "other" 
+              ? (item.category === "other" || !item.category)
+              : item.category === cat.id
+          ),
+        }))
+        .filter((cat) => cat.items.length > 0)
+    : // Конкретная категория - показываем только её
+      allCategories
         .filter((cat) => cat.id === selectedCategory)
         .map((cat) => ({
           ...cat,
-          items: filteredItems.filter((item) => item.category === cat.id),
-        }))
-        .filter((cat) => cat.items.length > 0)
-    : categories
-        .map((cat) => ({
-          ...cat,
-          items: filteredItems.filter((item) => item.category === cat.id),
+          items: filteredItems,
         }))
         .filter((cat) => cat.items.length > 0);
 
@@ -161,6 +181,23 @@ export default function ShoppingPage() {
     }
   };
 
+  const handleClearAll = async () => {
+    if (!activeList) return;
+    try {
+      await clearAllItems(activeList.id);
+      toast({
+        title: "Список очищен",
+        description: "Все продукты удалены из списка",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error.message || "Не удалось очистить список",
+      });
+    }
+  };
+
   // Создать список, если его нет
   if (!activeList && !isLoadingList) {
     createList("Список покупок").catch(() => {});
@@ -200,7 +237,7 @@ export default function ShoppingPage() {
             >
               Все
             </Button>
-            {categories.map((cat) => (
+            {mainCategories.map((cat) => (
               <Button
                 key={cat.id}
                 variant={selectedCategory === cat.id ? "mint" : "outline"}
@@ -211,6 +248,14 @@ export default function ShoppingPage() {
                 {cat.emoji} {cat.label}
               </Button>
             ))}
+            <Button
+              variant={selectedCategory === "other" ? "mint" : "outline"}
+              size="sm"
+              onClick={() => setSelectedCategory("other")}
+              className="whitespace-nowrap"
+            >
+              {otherCategory.emoji} {otherCategory.label}
+            </Button>
           </div>
         </div>
 
@@ -348,6 +393,27 @@ export default function ShoppingPage() {
               </>
             )}
           </Button>
+          {items.length > 0 && (
+            <Button
+              variant="destructive"
+              size="lg"
+              className="w-full"
+              onClick={handleClearAll}
+              disabled={isClearing}
+            >
+              {isClearing ? (
+                <>
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Очистка...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-5 h-5 mr-2" />
+                  Очистить список
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </MobileLayout>
@@ -355,13 +421,13 @@ export default function ShoppingPage() {
 }
 
 // Диалог для добавления продукта
-function AddItemDialog({
-  onAdd,
-  isLoading,
-}: {
-  onAdd: (name: string, amount: string, unit: string, category: string) => void;
-  isLoading: boolean;
-}) {
+const AddItemDialog = forwardRef<
+  HTMLDivElement,
+  {
+    onAdd: (name: string, amount: string, unit: string, category: string) => void;
+    isLoading: boolean;
+  }
+>(({ onAdd, isLoading }, ref) => {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [unit, setUnit] = useState("");
@@ -429,7 +495,7 @@ function AddItemDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((cat) => (
+              {allCategories.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>
                   {cat.emoji} {cat.label}
                 </SelectItem>
@@ -456,4 +522,6 @@ function AddItemDialog({
       </form>
     </DialogContent>
   );
-}
+});
+
+AddItemDialog.displayName = "AddItemDialog";
