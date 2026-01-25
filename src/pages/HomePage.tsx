@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { RecipeCard } from "@/components/recipes/RecipeCard";
 import { RecipeListItem } from "@/components/recipes/RecipeListItem";
 import { FamilyDashboard } from "@/components/family/FamilyDashboard";
-import { ChefHat, Sparkles, TrendingUp, Heart, Loader2, LayoutGrid, List, Grid3x3, Square } from "lucide-react";
+import { ChefHat, Loader2, LayoutGrid, List, Grid3x3, Square, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
@@ -21,13 +21,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useChildren } from "@/hooks/useChildren";
 import { useToast } from "@/hooks/use-toast";
-
-const quickActions = [
-  { icon: ChefHat, label: "Новый рецепт", color: "mint", path: "/recipe/new" },
-  { icon: Sparkles, label: "Сканировать", color: "peach", path: "/scan" },
-  { icon: TrendingUp, label: "План питания", color: "lavender", path: "/meal-plan" },
-  { icon: Heart, label: "Список покупок", color: "soft-pink", path: "/shopping" },
-];
 
 const allergyOptions = [
   "Молоко", "Яйца", "Глютен", "Орехи", "Соя", "Рыба", "Мед", "Цитрусы"
@@ -112,7 +105,16 @@ export default function HomePage() {
   }));
 
   return (
-    <MobileLayout>
+    <MobileLayout
+      headerRight={
+        <button
+          onClick={() => navigate("/profile")}
+          className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
+        >
+          <User className="w-5 h-5 text-foreground" />
+        </button>
+      }
+    >
       <div className="px-4 pt-4 space-y-4">
         {/* Header */}
         <motion.div
@@ -126,46 +128,16 @@ export default function HomePage() {
               Что приготовим сегодня для малыша?
             </p>
           </div>
-          <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-2xl">
-            🍼
-          </div>
+          <button
+            onClick={() => navigate("/profile")}
+            className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
+          >
+            <User className="w-6 h-6 text-foreground" />
+          </button>
         </motion.div>
 
         {/* Family Dashboard with Carousel */}
         <FamilyDashboard onAddChild={() => setIsAddChildOpen(true)} />
-
-        {/* Quick Actions */}
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate="show"
-          className="grid grid-cols-4 gap-3"
-        >
-          {quickActions.map((action) => (
-            <motion.div key={action.label} variants={item}>
-              <button
-                onClick={() => navigate(action.path)}
-                className="w-full flex flex-col items-center gap-1.5 p-2 rounded-xl bg-card shadow-soft hover:shadow-card transition-all"
-              >
-                <div
-                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${action.color === "mint"
-                    ? "gradient-primary"
-                    : action.color === "peach"
-                      ? "gradient-peach"
-                      : action.color === "lavender"
-                        ? "gradient-lavender"
-                        : "bg-soft-pink"
-                    }`}
-                >
-                  <action.icon className="w-5 h-5 text-foreground/80" />
-                </div>
-                <span className="text-xs font-medium text-center leading-tight">
-                  {action.label}
-                </span>
-              </button>
-            </motion.div>
-          ))}
-        </motion.div>
 
         {/* Recent Recipes */}
         <div>
