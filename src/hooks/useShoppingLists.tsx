@@ -217,6 +217,22 @@ export function useShoppingLists() {
     },
   });
 
+  // Очистить все элементы списка
+  const clearAllItems = useMutation({
+    mutationFn: async (listId: string) => {
+      const { error } = await supabase
+        .from('shopping_list_items')
+        .delete()
+        .eq('shopping_list_id', listId);
+
+      if (error) throw error;
+      return listId;
+    },
+    onSuccess: (listId) => {
+      queryClient.invalidateQueries({ queryKey: ['shopping_list_items', listId] });
+    },
+  });
+
   // Функция для автоопределения категории по названию продукта
   const detectCategory = (name: string): string => {
     const lowerName = name.toLowerCase();
@@ -368,7 +384,9 @@ export function useShoppingLists() {
     deleteItem: deleteItem.mutateAsync,
     toggleItemPurchased: toggleItemPurchased.mutateAsync,
     generateFromMealPlans: generateFromMealPlans.mutateAsync,
+    clearAllItems: clearAllItems.mutateAsync,
     isCreating: createList.isPending,
     isGenerating: generateFromMealPlans.isPending,
+    isClearing: clearAllItems.isPending,
   };
 }
