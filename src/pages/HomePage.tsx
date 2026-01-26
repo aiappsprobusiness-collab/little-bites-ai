@@ -105,16 +105,7 @@ export default function HomePage() {
   }));
 
   return (
-    <MobileLayout
-      headerRight={
-        <button
-          onClick={() => navigate("/profile")}
-          className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
-        >
-          <User className="w-5 h-5 text-foreground" />
-        </button>
-      }
-    >
+    <MobileLayout>
       <div className="px-4 pt-4 space-y-4">
         {/* Header */}
         <motion.div
