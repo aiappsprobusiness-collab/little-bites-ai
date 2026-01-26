@@ -362,23 +362,9 @@ export default function ShoppingPage() {
           <div className="px-4">
             <Card variant="default" className="p-8 text-center">
               <CardContent className="p-0">
-                <p className="text-muted-foreground mb-4">
+                <p className="text-muted-foreground">
                   Список покупок пуст
                 </p>
-                <Button
-                  variant="mint"
-                  onClick={handleGenerateFromMealPlans}
-                  disabled={isGenerating}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Создание...
-                    </>
-                  ) : (
-                    "Создать из планов питания"
-                  )}
-                </Button>
               </CardContent>
             </Card>
           </div>

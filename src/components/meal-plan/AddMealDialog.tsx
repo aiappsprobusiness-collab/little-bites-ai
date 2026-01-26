@@ -129,7 +129,7 @@ export function AddMealDialog({
                   {filteredChatRecipes.length > 0 && (
                     <>
                       <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
-                        Из чата (сегодня)
+                        Из чата (недавние)
                       </div>
                       {filteredChatRecipes.map((recipe) => (
                         <SelectItem key={recipe.id} value={recipe.id}>

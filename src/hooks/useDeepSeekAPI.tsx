@@ -37,19 +37,19 @@ export function useDeepSeekAPI() {
 
       const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
 
-      // Жёсткое правило аллергий (только ЧАТ): профиль по умолчанию = selectedChild
-      const allergyCheck = checkChatAllergyBlock(lastUserMessage, selectedChild?.allergies);
-      if (allergyCheck.blocked && allergyCheck.found.length > 0) {
-        const text = `У нас аллергия на ${allergyCheck.found.join(', ')}, давайте приготовим что-то другое`;
-        return { message: text };
-      }
-
       const { childData } = buildChatContextFromProfiles({
         userMessage: lastUserMessage,
         children,
         selectedChild: selectedChild ?? null,
         calculateAgeInMonths,
       });
+
+      // Блок по аллергиям: используем те же аллергии, что и в промпте (выбранный / все при «для всех» / matched)
+      const allergyCheck = checkChatAllergyBlock(lastUserMessage, childData?.allergies);
+      if (allergyCheck.blocked && allergyCheck.found.length > 0) {
+        const text = `У нас аллергия на ${allergyCheck.found.join(', ')}, давайте приготовим что-то другое`;
+        return { message: text };
+      }
 
       const response = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
         method: 'POST',

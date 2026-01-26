@@ -94,10 +94,71 @@ function matchProfilesInMessage(
   return matched;
 }
 
+/** Фразы «для всех / семейный» → рецепт на всю семью, учитывать ВСЕХ детей и все аллергии */
+const FAMILY_INTENT_PATTERNS = [
+  /\bна\s+всех\b/i,
+  /\bдля\s+всех\b/i,
+  /\bсемейн/i,        // семейный, семейное, семейный ужин
+  /\bвсей\s+семьей\b/i,
+  /\bвсем\s+детям\b/i,
+  /\bвсех\s+детей\b/i,
+  /\bвся\s+семья\b/i,
+  /\bобщий\s+(ужин|обед|завтрак|рецепт|полдник)\b/i,
+];
+
+function isFamilyIntent(message: string): boolean {
+  const s = (message || '').trim();
+  if (!s) return false;
+  return FAMILY_INTENT_PATTERNS.some((re) => re.test(s));
+}
+
+function buildChildDataFromProfiles(
+  profiles: ChildProfile[],
+  calculateAgeInMonths: (birthDate: string) => number
+): { childData: ChatContextChildData; matchedChildIds: string[] } {
+  const ages = profiles.map((c) => calculateAgeInMonths(c.birth_date));
+  const ageMonths = Math.min(...ages);
+  const allAllergies = new Set<string>();
+  const allDietGoals = new Set<string>();
+  let weight: number | undefined;
+  let height: number | undefined;
+
+  for (const c of profiles) {
+    (c.allergies || []).forEach((a) => a?.trim() && allAllergies.add(a.trim()));
+    ((c as any).diet_goals || []).forEach((g: string) => g?.trim() && allDietGoals.add(g.trim()));
+    if (c.weight != null) weight = c.weight;
+    if (c.height != null) height = c.height;
+  }
+
+  const names = profiles.map((c) => c.name).join(', ');
+  const ageParts = profiles.map((c) => {
+    const m = calculateAgeInMonths(c.birth_date);
+    if (m < 12) return `${m} мес`;
+    const y = Math.floor(m / 12);
+    const rest = m % 12;
+    return rest ? `${y} г. ${rest} мес` : `${y} ${y === 1 ? 'год' : y < 5 ? 'года' : 'лет'}`;
+  });
+  const ageDescription = ageParts.join(', ');
+
+  return {
+    childData: {
+      name: names,
+      ageMonths,
+      allergies: allAllergies.size ? Array.from(allAllergies) : undefined,
+      dietGoals: allDietGoals.size ? Array.from(allDietGoals) : undefined,
+      weight,
+      height,
+      ageDescription,
+    },
+    matchedChildIds: profiles.map((c) => c.id),
+  };
+}
+
 /**
  * Парсинг имён → поиск в профилях → сбор особенностей (возраст, аллергии).
- * Нет совпадений → текущий выбранный профиль.
- * Результат готов для формирования промпта DeepSeek (childData).
+ * 1. Имена в сообщении → общий рецепт для найденных детей (все их аллергии).
+ * 2. «Для всех»/«семейный» и несколько детей → все дети, все аллергии.
+ * 3. Иначе → текущий выбранный профиль.
  */
 export function buildChatContextFromProfiles({
   userMessage,
@@ -108,42 +169,11 @@ export function buildChatContextFromProfiles({
   const matched = matchProfilesInMessage(userMessage, children);
 
   if (matched.length > 0) {
-    const ages = matched.map((c) => calculateAgeInMonths(c.birth_date));
-    const ageMonths = Math.min(...ages);
-    const allAllergies = new Set<string>();
-    const allDietGoals = new Set<string>();
-    let weight: number | undefined;
-    let height: number | undefined;
+    return buildChildDataFromProfiles(matched, calculateAgeInMonths);
+  }
 
-    for (const c of matched) {
-      (c.allergies || []).forEach((a) => a?.trim() && allAllergies.add(a.trim()));
-      ((c as any).diet_goals || []).forEach((g: string) => g?.trim() && allDietGoals.add(g.trim()));
-      if (c.weight != null) weight = c.weight;
-      if (c.height != null) height = c.height;
-    }
-
-    const names = matched.map((c) => c.name).join(", ");
-    const ageParts = matched.map((c) => {
-      const m = calculateAgeInMonths(c.birth_date);
-      if (m < 12) return `${m} мес`;
-      const y = Math.floor(m / 12);
-      const rest = m % 12;
-      return rest ? `${y} г. ${rest} мес` : `${y} ${y === 1 ? "год" : y < 5 ? "года" : "лет"}`;
-    });
-    const ageDescription = ageParts.join(", ");
-
-    return {
-      childData: {
-        name: names,
-        ageMonths,
-        allergies: allAllergies.size ? Array.from(allAllergies) : undefined,
-        dietGoals: allDietGoals.size ? Array.from(allDietGoals) : undefined,
-        weight,
-        height,
-        ageDescription,
-      },
-      matchedChildIds: matched.map((c) => c.id),
-    };
+  if (isFamilyIntent(userMessage) && children.length > 1) {
+    return buildChildDataFromProfiles(children, calculateAgeInMonths);
   }
 
   if (selectedChild) {

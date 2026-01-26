@@ -125,12 +125,12 @@ ${childData ? `
 Данные о ребенке/детях:
 - Имя: ${childData.name}
 - Возраст: ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
-${childData.allergies?.length ? `- Аллергии: ${childData.allergies.join(", ")}` : ""}
+${childData.allergies?.length ? `- ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ предлагай рецепты и блюда с этими продуктами!` : ""}
 ${childData.dietGoals?.length ? `- Цели питания: ${childData.dietGoals.join(", ")}` : ""}
 ${childData.weight ? `- Вес: ${childData.weight} кг` : ""}
 ${childData.height ? `- Рост: ${childData.height} см` : ""}
 
-ВАЖНО: Учитывай аллергии при любых рекомендациях!
+ВАЖНО: Аллергены из списка выше строго исключить из рецептов и рекомендаций.
 ` : ""}
 
 КРИТИЧЕСКИ ВАЖНО - ФОРМАТ ОТВЕТА ДЛЯ РЕЦЕПТОВ:
@@ -305,8 +305,8 @@ ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : 
         { role: "system", content: systemPrompt },
         ...messages,
       ],
-      // Для single_day нужен больший лимит токенов для полного JSON (4 приема пищи с ingredients и steps)
-      max_tokens: type === "single_day" ? 2000 : 512,
+      // Лимит токенов: single_day — план на день; chat — рецепты и ответы без ограничения по длине
+      max_tokens: type === "single_day" ? 2000 : 8192,
       top_p: 0.8,
       temperature: 0.3,
       repetition_penalty: 1.1,

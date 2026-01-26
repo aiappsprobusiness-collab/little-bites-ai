@@ -145,7 +145,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <MobileLayout title="Профиль">
+      <MobileLayout title="Семья">
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
@@ -154,7 +154,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <MobileLayout title="Профиль">
+    <MobileLayout title="Семья">
       <div className="px-4 pt-6 space-y-6">
         {/* Child Selector */}
         <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">

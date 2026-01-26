@@ -17,39 +17,35 @@ export function useChatRecipes() {
   const queryClient = useQueryClient();
 
   /**
-   * Получить рецепты из чата за текущий день
+   * Получить рецепты из чата за последние 48 часов (в т.ч. «семейный ужин», только что сгенерированные).
+   * Окно 48ч устраняет расхождения по timezone и гарантирует появление недавних рецептов в плане.
    */
   const getTodayChatRecipes = (mealType?: 'breakfast' | 'lunch' | 'snack' | 'dinner') => {
     return useQuery({
-      queryKey: ['chat_recipes', user?.id, 'today', mealType],
+      queryKey: ['chat_recipes', user?.id, 'recent', mealType],
       queryFn: async () => {
         if (!user) return [];
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const now = new Date();
+        const since = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-        // Получаем все рецепты пользователя за сегодня
-        const { data: todayRecipes, error: recipesError } = await supabase
+        const { data: recentRecipes, error: recipesError } = await supabase
           .from('recipes')
           .select('*')
           .eq('user_id', user.id)
-          .gte('created_at', today.toISOString())
-          .lt('created_at', tomorrow.toISOString())
+          .gte('created_at', since.toISOString())
           .order('created_at', { ascending: false });
 
         if (recipesError) throw recipesError;
 
-        console.log('getTodayChatRecipes - All recipes today:', todayRecipes?.length);
-        console.log('getTodayChatRecipes - Sample recipes:', todayRecipes?.slice(0, 3).map(r => ({
+        console.log('getTodayChatRecipes - Recent chat recipes (48h):', recentRecipes?.length);
+        console.log('getTodayChatRecipes - Sample:', recentRecipes?.slice(0, 3).map(r => ({
           title: r.title,
           tags: r.tags,
           created_at: r.created_at
         })));
 
-        // Фильтруем ТОЛЬКО рецепты из чата (с тегом 'chat')
-        const chatRecipes = todayRecipes?.filter(recipe => {
+        const chatRecipes = recentRecipes?.filter(recipe => {
           if (!recipe.tags || !Array.isArray(recipe.tags)) {
             return false;
           }

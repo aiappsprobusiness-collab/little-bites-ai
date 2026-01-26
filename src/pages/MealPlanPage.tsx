@@ -67,14 +67,9 @@ export default function MealPlanPage() {
   const selectedDate = weekDates[selectedDay];
   const { data: dayMealPlans = [], isLoading } = getMealPlansByDate(selectedDate);
   
-  // Получаем рецепты из чата за сегодня (всегда, независимо от выбранного дня)
   const isToday = selectedDate.toDateString() === new Date().toDateString();
-  // ВАЖНО: хук должен вызываться всегда, иначе нарушаются правила React Hooks
   const todayChatRecipesQuery = getTodayChatRecipes();
-  // Всегда получаем рецепты из чата за сегодня для показа в диалоге
   const todayChatRecipes = todayChatRecipesQuery?.data || [];
-  
-  console.log('MealPlanPage - isToday:', isToday, 'todayChatRecipes count:', todayChatRecipes.length, 'recipes:', todayChatRecipes);
 
   const getPlannedMealRecipe = (plannedMeal: any) => {
     // В зависимости от select в Supabase джойн может прийти как `recipe` или `recipes`
@@ -280,6 +275,10 @@ export default function MealPlanPage() {
           ) : (
             mealTypes.map((meal, index) => {
               const plannedMeal = mealsByType[meal.id];
+              const openAddForMeal = () => {
+                setSelectedMealType(meal.id);
+                setIsAddDialogOpen(true);
+              };
 
               return (
                 <motion.div
@@ -290,12 +289,13 @@ export default function MealPlanPage() {
                 >
                   <Card
                     variant={plannedMeal ? "mint" : "default"}
-                    className={`${!plannedMeal ? "border-dashed border-2" : ""}`}
+                    className={`${!plannedMeal ? "border-dashed border-2 cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
+                    onClick={!plannedMeal ? openAddForMeal : undefined}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center gap-4">
                         <div className="text-3xl">{meal.emoji}</div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="text-base font-semibold">{meal.label}</span>
                             <span className="text-xs text-muted-foreground">{meal.time}</span>
@@ -309,7 +309,8 @@ export default function MealPlanPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="mt-2 h-6 text-xs"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   const recipeId = getPlannedMealRecipeId(plannedMeal);
                                   if (!recipeId) {
                                     toast({
@@ -336,22 +337,23 @@ export default function MealPlanPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => handleDeleteMeal(plannedMeal.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteMeal(plannedMeal.id);
+                            }}
                           >
                             <X className="w-5 h-5" />
                           </Button>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              // Устанавливаем тип приема пищи и открываем диалог
-                              setSelectedMealType(meal.id);
-                              setIsAddDialogOpen(true);
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground border-2 border-dashed border-muted-foreground/30 shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAddForMeal();
                             }}
                           >
                             <Plus className="w-5 h-5" />
-                          </Button>
+                          </div>
                         )}
                       </div>
                     </CardContent>
