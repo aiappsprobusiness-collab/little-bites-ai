@@ -190,11 +190,15 @@ export function buildChatContextFromProfiles({
   if (selectedChild) {
     const m = calculateAgeInMonths(selectedChild.birth_date);
     const allergies = (selectedChild.allergies || []).filter((a) => a?.trim());
+    const likes = (selectedChild.likes || []).filter((l) => l?.trim());
+    const dislikes = (selectedChild.dislikes || []).filter((d) => d?.trim());
     return {
       childData: {
         name: selectedChild.name,
         ageMonths: m,
         allergies: allergies.length ? allergies : undefined,
+        likes: likes.length ? likes : undefined,
+        dislikes: dislikes.length ? dislikes : undefined,
         dietGoals: (selectedChild as any).diet_goals || undefined,
         weight: selectedChild.weight ?? undefined,
         height: selectedChild.height ?? undefined,

@@ -44,10 +44,16 @@ export default function ProfilePage() {
   const { getMealPlans } = useMealPlans();
 
 
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(children[0]?.id || null);
+  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
 
+  // Обновляем selectedChildId когда загружаются children
+  useEffect(() => {
+    if (children.length > 0 && !selectedChildId) {
+      setSelectedChildId(children[0].id);
+    }
+  }, [children, selectedChildId]);
 
   const selectedChild = children.find(c => c.id === selectedChildId);
 
@@ -85,15 +91,21 @@ export default function ProfilePage() {
     preferences: string[];
   }) => {
     try {
+      // Убеждаемся, что передаем массивы строк, а не строки
+      const likesArray = Array.isArray(formData.likes) ? formData.likes.filter(l => l?.trim()) : [];
+      const dislikesArray = Array.isArray(formData.dislikes) ? formData.dislikes.filter(d => d?.trim()) : [];
+      const allergiesArray = Array.isArray(formData.allergies) ? formData.allergies.filter(a => a?.trim()) : [];
+      const preferencesArray = Array.isArray(formData.preferences) ? formData.preferences.filter(p => p?.trim()) : [];
+      
       if (editingChild) {
         await updateChild({
           id: editingChild.id,
           name: formData.name,
           birth_date: formData.birthDate,
-          likes: formData.likes,
-          dislikes: formData.dislikes,
-          allergies: formData.allergies,
-          preferences: formData.preferences,
+          likes: likesArray,
+          dislikes: dislikesArray,
+          allergies: allergiesArray,
+          preferences: preferencesArray,
         });
         toast({
           title: "Профиль обновлен",
@@ -103,10 +115,10 @@ export default function ProfilePage() {
         const newChild = await createChild({
           name: formData.name,
           birth_date: formData.birthDate,
-          likes: formData.likes,
-          dislikes: formData.dislikes,
-          allergies: formData.allergies,
-          preferences: formData.preferences,
+          likes: likesArray,
+          dislikes: dislikesArray,
+          allergies: allergiesArray,
+          preferences: preferencesArray,
         });
         setSelectedChildId(newChild.id);
         toast({
@@ -230,7 +242,7 @@ export default function ProfilePage() {
                           variant="ghost"
                           size="sm"
                           className="mt-2"
-                          onClick={() => handleEditChild(selectedChild)}
+                          onClick={() => selectedChild && handleEditChild(selectedChild)}
                         >
                           <Edit2 className="w-4 h-4 mr-2" />
                           Редактировать
@@ -291,7 +303,7 @@ export default function ProfilePage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEditChild(selectedChild)}
+                          onClick={() => selectedChild && handleEditChild(selectedChild)}
                         >
                           <Edit2 className="w-4 h-4 mr-1" />
                           Редактировать
@@ -306,15 +318,16 @@ export default function ProfilePage() {
                     </Dialog>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(selectedChild.likes || []).map((like) => (
-                      <span
-                        key={like}
-                        className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium"
-                      >
-                        {like}
-                      </span>
-                    ))}
-                    {(selectedChild.likes || []).length === 0 && (
+                    {Array.isArray(selectedChild.likes) && selectedChild.likes.length > 0 ? (
+                      selectedChild.likes.map((like) => (
+                        <span
+                          key={like}
+                          className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium"
+                        >
+                          {like}
+                        </span>
+                      ))
+                    ) : (
                       <p className="text-sm text-muted-foreground">Не указано</p>
                     )}
                   </div>
@@ -343,7 +356,7 @@ export default function ProfilePage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEditChild(selectedChild)}
+                          onClick={() => selectedChild && handleEditChild(selectedChild)}
                         >
                           <Edit2 className="w-4 h-4 mr-1" />
                           Редактировать
@@ -358,15 +371,16 @@ export default function ProfilePage() {
                     </Dialog>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(selectedChild.dislikes || []).map((dislike) => (
-                      <span
-                        key={dislike}
-                        className="px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-sm font-medium"
-                      >
-                        {dislike}
-                      </span>
-                    ))}
-                    {(selectedChild.dislikes || []).length === 0 && (
+                    {Array.isArray(selectedChild.dislikes) && selectedChild.dislikes.length > 0 ? (
+                      selectedChild.dislikes.map((dislike) => (
+                        <span
+                          key={dislike}
+                          className="px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-sm font-medium"
+                        >
+                          {dislike}
+                        </span>
+                      ))
+                    ) : (
                       <p className="text-sm text-muted-foreground">Не указано</p>
                     )}
                   </div>
@@ -395,7 +409,7 @@ export default function ProfilePage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEditChild(selectedChild)}
+                          onClick={() => selectedChild && handleEditChild(selectedChild)}
                         >
                           <Edit2 className="w-4 h-4 mr-1" />
                           Редактировать
@@ -410,15 +424,16 @@ export default function ProfilePage() {
                     </Dialog>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(selectedChild.allergies || []).map((allergy) => (
-                      <span
-                        key={allergy}
-                        className="px-3 py-1.5 rounded-full bg-destructive/10 text-destructive text-sm font-medium"
-                      >
-                        {allergy}
-                      </span>
-                    ))}
-                    {(selectedChild.allergies || []).length === 0 && (
+                    {Array.isArray(selectedChild.allergies) && selectedChild.allergies.length > 0 ? (
+                      selectedChild.allergies.map((allergy) => (
+                        <span
+                          key={allergy}
+                          className="px-3 py-1.5 rounded-full bg-destructive/10 text-destructive text-sm font-medium"
+                        >
+                          {allergy}
+                        </span>
+                      ))
+                    ) : (
                       <p className="text-sm text-muted-foreground">Нет аллергий</p>
                     )}
                   </div>
@@ -427,7 +442,7 @@ export default function ProfilePage() {
             </motion.div>
 
             {/* Preferences */}
-            {(selectedChild.preferences || []).length > 0 && (
+            {Array.isArray(selectedChild.preferences) && selectedChild.preferences.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -437,7 +452,7 @@ export default function ProfilePage() {
                   <CardContent className="p-5">
                     <h3 className="font-bold mb-4">Предпочтения</h3>
                     <div className="flex flex-wrap gap-2">
-                      {selectedChild.preferences!.map((pref) => (
+                      {selectedChild.preferences.map((pref) => (
                         <span
                           key={pref}
                           className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium"
@@ -458,13 +473,13 @@ export default function ProfilePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-              <Button
-                variant="destructive"
-                className="w-full"
-                onClick={() => handleDeleteChild(selectedChild.id)}
-              >
-                Удалить профиль
-              </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={() => selectedChild && handleDeleteChild(selectedChild.id)}
+            >
+              Удалить профиль
+            </Button>
             </motion.div>
           </>
         ) : (
@@ -517,14 +532,53 @@ function ChildEditDialog({
   }) => void;
   isLoading: boolean;
 }) {
+  // Безопасная функция для преобразования в массив строк
+  const ensureStringArray = (value: any): string[] => {
+    if (Array.isArray(value)) {
+      // Если это массив, проверяем каждый элемент
+      return value
+        .map((item) => {
+          // Если элемент - строка, которая является JSON-массивом, парсим её
+          if (typeof item === 'string' && item.trim().startsWith('[') && item.trim().endsWith(']')) {
+            try {
+              const parsed = JSON.parse(item);
+              return Array.isArray(parsed) ? parsed : [item];
+            } catch {
+              return item;
+            }
+          }
+          return item;
+        })
+        .flat()
+        .filter((item) => typeof item === 'string' && item.trim())
+        .map((item) => item.trim());
+    }
+    if (typeof value === 'string' && value.trim()) {
+      // Если это строка, которая является JSON-массивом, парсим её
+      if (value.trim().startsWith('[') && value.trim().endsWith(']')) {
+        try {
+          const parsed = JSON.parse(value);
+          if (Array.isArray(parsed)) {
+            return parsed.filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim());
+          }
+        } catch {
+          // Если не JSON, разбиваем по запятым
+        }
+      }
+      // Если не JSON-массив, разбиваем по запятым
+      return value.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  };
+
   const [name, setName] = useState(child?.name || "");
   const [birthDate, setBirthDate] = useState(
     child?.birth_date || new Date().toISOString().split("T")[0]
   );
-  const [likes, setLikes] = useState<string[]>(child?.likes || []);
-  const [dislikes, setDislikes] = useState<string[]>(child?.dislikes || []);
-  const [allergies, setAllergies] = useState<string[]>(child?.allergies || []);
-  const [preferences, setPreferences] = useState<string[]>(child?.preferences || []);
+  const [likes, setLikes] = useState<string[]>(() => ensureStringArray(child?.likes));
+  const [dislikes, setDislikes] = useState<string[]>(() => ensureStringArray(child?.dislikes));
+  const [allergies, setAllergies] = useState<string[]>(() => ensureStringArray(child?.allergies));
+  const [preferences, setPreferences] = useState<string[]>(() => ensureStringArray(child?.preferences));
   const [newAllergy, setNewAllergy] = useState("");
   const [newLike, setNewLike] = useState("");
   const [newDislike, setNewDislike] = useState("");
@@ -534,10 +588,11 @@ function ChildEditDialog({
     if (child) {
       setName(child.name || "");
       setBirthDate(child.birth_date || new Date().toISOString().split("T")[0]);
-      setLikes(child.likes || []);
-      setDislikes(child.dislikes || []);
-      setAllergies(child.allergies || []);
-      setPreferences(child.preferences || []);
+      // Убеждаемся, что likes/dislikes/allergies - это массивы (безопасное преобразование)
+      setLikes(ensureStringArray(child.likes));
+      setDislikes(ensureStringArray(child.dislikes));
+      setAllergies(ensureStringArray(child.allergies));
+      setPreferences(ensureStringArray(child.preferences));
     } else {
       // Сброс для создания нового профиля
       setName("");
@@ -572,31 +627,48 @@ function ChildEditDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ name, birthDate, likes, dislikes, allergies, preferences });
+    // Убеждаемся, что передаем массивы, а не строки
+    const likesArray = Array.isArray(likes) ? likes.filter(l => l?.trim()) : [];
+    const dislikesArray = Array.isArray(dislikes) ? dislikes.filter(d => d?.trim()) : [];
+    const allergiesArray = Array.isArray(allergies) ? allergies.filter(a => a?.trim()) : [];
+    const preferencesArray = Array.isArray(preferences) ? preferences.filter(p => p?.trim()) : [];
+    
+    onSave({ 
+      name, 
+      birthDate, 
+      likes: likesArray, 
+      dislikes: dislikesArray, 
+      allergies: allergiesArray, 
+      preferences: preferencesArray 
+    });
   };
 
   const addLike = () => {
     const trimmed = newLike.trim();
-    if (trimmed && !likes.includes(trimmed)) {
-      setLikes([...likes, trimmed]);
+    const safeLikes = Array.isArray(likes) ? likes : [];
+    if (trimmed && !safeLikes.includes(trimmed)) {
+      setLikes([...safeLikes, trimmed]);
       setNewLike("");
     }
   };
 
   const removeLike = (like: string) => {
-    setLikes(likes.filter((l) => l !== like));
+    const safeLikes = Array.isArray(likes) ? likes : [];
+    setLikes(safeLikes.filter((l) => l !== like));
   };
 
   const addDislike = () => {
     const trimmed = newDislike.trim();
-    if (trimmed && !dislikes.includes(trimmed)) {
-      setDislikes([...dislikes, trimmed]);
+    const safeDislikes = Array.isArray(dislikes) ? dislikes : [];
+    if (trimmed && !safeDislikes.includes(trimmed)) {
+      setDislikes([...safeDislikes, trimmed]);
       setNewDislike("");
     }
   };
 
   const removeDislike = (dislike: string) => {
-    setDislikes(dislikes.filter((d) => d !== dislike));
+    const safeDislikes = Array.isArray(dislikes) ? dislikes : [];
+    setDislikes(safeDislikes.filter((d) => d !== dislike));
   };
 
   return (
@@ -652,12 +724,12 @@ function ChildEditDialog({
                 type="button"
                 variant="outline"
                 onClick={addLike}
-                disabled={!newLike.trim() || likes.includes(newLike.trim())}
+                disabled={!newLike.trim() || (Array.isArray(likes) && likes.includes(newLike.trim()))}
               >
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
-            {likes.length > 0 && (
+            {Array.isArray(likes) && likes.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {likes.map((like) => (
                   <span
@@ -698,12 +770,12 @@ function ChildEditDialog({
                 type="button"
                 variant="outline"
                 onClick={addDislike}
-                disabled={!newDislike.trim() || dislikes.includes(newDislike.trim())}
+                disabled={!newDislike.trim() || (Array.isArray(dislikes) && dislikes.includes(newDislike.trim()))}
               >
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
-            {dislikes.length > 0 && (
+            {Array.isArray(dislikes) && dislikes.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {dislikes.map((dislike) => (
                   <span

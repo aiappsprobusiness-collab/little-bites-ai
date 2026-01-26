@@ -66,45 +66,65 @@ export default function ShoppingPage() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [clearingCategoryId, setClearingCategoryId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"byCategory" | "byRecipe">("byCategory");
 
   const { data: items = [], isLoading: isLoadingItems } = getListItems(
     activeList?.id || ""
   );
 
-  // Фильтрация элементов в зависимости от выбранной категории
-  // null = "Все" - показываем все элементы
-  // "other" = "Другое" - показываем только элементы с category === 'other' или без категории
-  // другие категории - показываем только элементы этой категории
-  const filteredItems = selectedCategory === null
-    ? items // "Все" - показываем всё
-    : selectedCategory === "other"
-      ? items.filter((item) => item.category === "other" || !item.category)
-      : items.filter((item) => item.category === selectedCategory);
+  // Фильтрация элементов в зависимости от выбранной категории (только для режима "по категориям")
+  const filteredItems = viewMode === "byCategory"
+    ? (selectedCategory === null
+        ? items // "Все" - показываем всё
+        : selectedCategory === "other"
+          ? items.filter((item) => item.category === "other" || !item.category)
+          : items.filter((item) => item.category === selectedCategory))
+    : items; // В режиме "по рецептам" показываем все элементы
 
   const checkedCount = items.filter((i) => i.is_purchased).length;
   const progress = items.length > 0 ? (checkedCount / items.length) * 100 : 0;
 
   // Группировка элементов для отображения
-  const groupedItems = selectedCategory === null
-    ? // "Все" - группируем по всем категориям
-    allCategories
-      .map((cat) => ({
-        ...cat,
-        items: items.filter((item) =>
-          cat.id === "other"
-            ? (item.category === "other" || !item.category)
-            : item.category === cat.id
-        ),
-      }))
-      .filter((cat) => cat.items.length > 0)
-    : // Конкретная категория - показываем только её
-    allCategories
-      .filter((cat) => cat.id === selectedCategory)
-      .map((cat) => ({
-        ...cat,
-        items: filteredItems,
-      }))
-      .filter((cat) => cat.items.length > 0);
+  const groupedItems = viewMode === "byCategory"
+    ? // Режим "по категориям"
+      (selectedCategory === null
+        ? // "Все" - группируем по всем категориям
+          allCategories
+            .map((cat) => ({
+              ...cat,
+              items: items.filter((item) =>
+                cat.id === "other"
+                  ? (item.category === "other" || !item.category)
+                  : item.category === cat.id
+              ),
+            }))
+            .filter((cat) => cat.items.length > 0)
+        : // Конкретная категория - показываем только её
+          allCategories
+            .filter((cat) => cat.id === selectedCategory)
+            .map((cat) => ({
+              ...cat,
+              items: filteredItems,
+            }))
+            .filter((cat) => cat.items.length > 0))
+    : // Режим "по рецептам" - группируем по названиям рецептов
+      (() => {
+        const recipeGroups = new Map<string, typeof items>();
+        items.forEach((item: any) => {
+          const recipeTitle = item.recipeTitle || "Без рецепта";
+          if (!recipeGroups.has(recipeTitle)) {
+            recipeGroups.set(recipeTitle, []);
+          }
+          recipeGroups.get(recipeTitle)!.push(item);
+        });
+        
+        return Array.from(recipeGroups.entries()).map(([title, items]) => ({
+          id: title,
+          label: title,
+          emoji: "🍽️",
+          items,
+        }));
+      })();
 
   const handleAddItem = async (name: string, amount: string, unit: string, category: string) => {
     try {
@@ -235,37 +255,61 @@ export default function ShoppingPage() {
           </Card>
         </div>
 
-        {/* Category Filter */}
+        {/* View Mode Toggle */}
         <div className="px-4">
-          <div className="flex gap-2 overflow-x-auto pb-2">
+          <div className="flex gap-2 mb-4">
             <Button
-              variant={selectedCategory === null ? "mint" : "outline"}
+              variant={viewMode === "byCategory" ? "mint" : "outline"}
               size="sm"
-              onClick={() => setSelectedCategory(null)}
+              onClick={() => setViewMode("byCategory")}
+              className="flex-1"
             >
-              Все
+              По категориям
             </Button>
-            {mainCategories.map((cat) => (
-              <Button
-                key={cat.id}
-                variant={selectedCategory === cat.id ? "mint" : "outline"}
-                size="sm"
-                onClick={() => setSelectedCategory(cat.id)}
-                className="whitespace-nowrap"
-              >
-                {cat.emoji} {cat.label}
-              </Button>
-            ))}
             <Button
-              variant={selectedCategory === "other" ? "mint" : "outline"}
+              variant={viewMode === "byRecipe" ? "mint" : "outline"}
               size="sm"
-              onClick={() => setSelectedCategory("other")}
-              className="whitespace-nowrap"
+              onClick={() => setViewMode("byRecipe")}
+              className="flex-1"
             >
-              {otherCategory.emoji} {otherCategory.label}
+              По рецептам
             </Button>
           </div>
         </div>
+
+        {/* Category Filter - только для режима "по категориям" */}
+        {viewMode === "byCategory" && (
+          <div className="px-4">
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              <Button
+                variant={selectedCategory === null ? "mint" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory(null)}
+              >
+                Все
+              </Button>
+              {mainCategories.map((cat) => (
+                <Button
+                  key={cat.id}
+                  variant={selectedCategory === cat.id ? "mint" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className="whitespace-nowrap"
+                >
+                  {cat.emoji} {cat.label}
+                </Button>
+              ))}
+              <Button
+                variant={selectedCategory === "other" ? "mint" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory("other")}
+                className="whitespace-nowrap"
+              >
+                {otherCategory.emoji} {otherCategory.label}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Items by Category */}
         {isLoadingItems ? (
@@ -284,22 +328,24 @@ export default function ShoppingPage() {
                       ({category.items.length})
                     </span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleClearCategory(category.id)}
-                    disabled={clearingCategoryId !== null}
-                    className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0 gap-1 h-8"
-                  >
-                    {clearingCategoryId === category.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <>
-                        <Trash2 className="w-4 h-4" />
-                        <span>Очистить</span>
-                      </>
-                    )}
-                  </Button>
+                  {viewMode === "byCategory" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleClearCategory(category.id)}
+                      disabled={clearingCategoryId !== null}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0 gap-1 h-8"
+                    >
+                      {clearingCategoryId === category.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Trash2 className="w-4 h-4" />
+                          <span>Очистить</span>
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {category.items.map((item, index) => {

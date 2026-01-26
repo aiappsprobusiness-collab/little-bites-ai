@@ -20,6 +20,7 @@ interface Recipe {
   ingredients?: string[];
   steps?: string[];
   cookingTime?: number;
+  ageRange?: string;
 }
 
 /**
@@ -43,6 +44,7 @@ function parseRecipeFromContent(content: string): Recipe | null {
               ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
               steps: Array.isArray(parsed.steps) ? parsed.steps : [],
               cookingTime: parsed.cookingTime || parsed.cooking_time,
+              ageRange: parsed.ageRange || '',
             };
           }
           // Если это массив рецептов, берем первый
@@ -54,6 +56,7 @@ function parseRecipeFromContent(content: string): Recipe | null {
               ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
               steps: Array.isArray(recipe.steps) ? recipe.steps : [],
               cookingTime: recipe.cookingTime || recipe.cooking_time,
+              ageRange: recipe.ageRange || '',
             };
           }
         } catch {
@@ -78,6 +81,7 @@ function parseRecipeFromContent(content: string): Recipe | null {
             ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
             steps: Array.isArray(parsed.steps) ? parsed.steps : [],
             cookingTime: parsed.cookingTime || parsed.cooking_time,
+            ageRange: parsed.ageRange || '',
           };
         }
       } catch {
@@ -132,7 +136,11 @@ function tryFixTruncatedJson(jsonStr: string): Recipe | null {
     const timeMatch = jsonStr.match(/"(?:cookingTime|cooking_time)"\s*:\s*(\d+)/);
     const cookingTime = timeMatch ? parseInt(timeMatch[1]) : undefined;
 
-    return { title, description, ingredients, steps, cookingTime };
+    // Извлекаем ageRange
+    const ageRangeMatch = jsonStr.match(/"ageRange"\s*:\s*"([^"]+)"/);
+    const ageRange = ageRangeMatch ? ageRangeMatch[1] : '';
+
+    return { title, description, ingredients, steps, cookingTime, ageRange };
   } catch {
     return null;
   }
@@ -194,7 +202,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           ingredients: recipe.ingredients || [],
           steps: recipe.steps || [],
           cookingTime: recipe.cookingTime || 0,
-          ageRange: '', // Можно извлечь из контента, если есть
+          ageRange: recipe.ageRange || '',
         };
         
         await addFavorite({ recipe: recipeSuggestion, memberIds: [] });

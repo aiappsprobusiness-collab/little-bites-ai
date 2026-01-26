@@ -24,7 +24,50 @@ export function useChildren() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as Child[];
+      
+      // Нормализуем likes/dislikes: если пришли как JSON-строки, парсим их
+      const normalized = (data || []).map((child) => {
+        const normalizeArray = (arr: any): string[] => {
+          if (Array.isArray(arr)) {
+            // Проверяем, не является ли элемент массива JSON-строкой
+            return arr
+              .map((item) => {
+                if (typeof item === 'string' && item.trim().startsWith('[') && item.trim().endsWith(']')) {
+                  try {
+                    const parsed = JSON.parse(item);
+                    return Array.isArray(parsed) ? parsed : [item];
+                  } catch {
+                    return item;
+                  }
+                }
+                return item;
+              })
+              .flat()
+              .filter((item) => typeof item === 'string' && item.trim())
+              .map((item) => item.trim());
+          }
+          if (typeof arr === 'string' && arr.trim()) {
+            if (arr.trim().startsWith('[') && arr.trim().endsWith(']')) {
+              try {
+                const parsed = JSON.parse(arr);
+                return Array.isArray(parsed) ? parsed.filter((i) => typeof i === 'string').map((i) => i.trim()) : [];
+              } catch {
+                return arr.split(',').map((s) => s.trim()).filter(Boolean);
+              }
+            }
+            return arr.split(',').map((s) => s.trim()).filter(Boolean);
+          }
+          return [];
+        };
+        
+        return {
+          ...child,
+          likes: normalizeArray(child.likes),
+          dislikes: normalizeArray(child.dislikes),
+        } as Child;
+      });
+      
+      return normalized;
     },
     enabled: !!user,
   });
@@ -129,16 +172,6 @@ export function useChildren() {
     }
     
     const totalMonths = years * 12 + months;
-    
-    console.log('calculateAgeInMonths:', {
-      birthDate,
-      birth: birth.toISOString(),
-      now: now.toISOString(),
-      years,
-      months,
-      totalMonths,
-      formatted: `${years} лет ${months} мес (${totalMonths} месяцев)`
-    });
     
     return totalMonths;
   };

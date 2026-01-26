@@ -48,9 +48,10 @@ export default function HomePage() {
       await createChild({
         name: newChildName.trim(),
         birth_date: newChildBirthDate,
+        likes: [],
+        dislikes: [],
         allergies: newChildAllergies,
         preferences: [],
-        dislikes: [],
       });
       toast({
         title: "Ребенок добавлен",

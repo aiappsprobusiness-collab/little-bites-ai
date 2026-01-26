@@ -126,11 +126,15 @@ ${childData ? `
 - Имя: ${childData.name}
 - Возраст: ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
 ${childData.allergies?.length ? `- ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ предлагай рецепты и блюда с этими продуктами!` : ""}
+${childData.likes?.length ? `- Любит: ${childData.likes.join(", ")}. Учитывай предпочтения при выборе рецептов.` : ""}
+${childData.dislikes?.length ? `- Не любит: ${childData.dislikes.join(", ")}. Избегай этих продуктов, если есть безопасная альтернатива.` : ""}
 ${childData.dietGoals?.length ? `- Цели питания: ${childData.dietGoals.join(", ")}` : ""}
 ${childData.weight ? `- Вес: ${childData.weight} кг` : ""}
 ${childData.height ? `- Рост: ${childData.height} см` : ""}
 
-ВАЖНО: Аллергены из списка выше строго исключить из рецептов и рекомендаций.
+КРИТИЧЕСКИ ВАЖНО:
+- Аллергены из списка выше СТРОГО исключить из рецептов и рекомендаций.
+- Учитывай предпочтения (любит/не любит) при выборе рецептов: если кто-то не любит продукт, избегай его, если есть безопасная альтернатива.
 ` : ""}
 
 КРИТИЧЕСКИ ВАЖНО - ФОРМАТ ОТВЕТА ДЛЯ РЕЦЕПТОВ:
@@ -184,7 +188,9 @@ ${childData.height ? `- Рост: ${childData.height} см` : ""}
 
 ${childData ? `
 Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
-${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}` : ""}
+${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ используй эти продукты!` : ""}
+${childData.likes?.length ? `Любит: ${childData.likes.join(", ")}. Учитывай предпочтения.` : ""}
+${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")}. Избегай этих продуктов, если есть альтернатива.` : ""}
 ${childData.dietGoals?.length ? `Цели питания: ${childData.dietGoals.join(", ")}` : ""}
 ` : ""}
 
@@ -245,7 +251,9 @@ ${childData.dietGoals?.length ? `Цели питания: ${childData.dietGoals.
 
 ${childData ? `
 Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
-${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}` : ""}
+${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ используй эти продукты!` : ""}
+${childData.likes?.length ? `Любит: ${childData.likes.join(", ")}. Учитывай предпочтения.` : ""}
+${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")}. Избегай этих продуктов, если есть альтернатива.` : ""}
 ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : ""}
 ` : ""}
 

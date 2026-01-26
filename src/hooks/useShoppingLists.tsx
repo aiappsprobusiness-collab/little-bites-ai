@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { detectCategory, resolveUnit, usePiecesFallback, shouldUsePiecesByDescription } from '@/utils/productUtils';
+import { parseIngredient } from '@/utils/parseIngredient';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 type ShoppingList = Tables<'shopping_lists'>;
@@ -52,19 +53,27 @@ export function useShoppingLists() {
     enabled: !!user,
   });
 
-  // Получить элементы списка покупок
+  // Получить элементы списка покупок с названиями рецептов
   const getListItems = (listId: string) => {
     return useQuery({
       queryKey: ['shopping_list_items', listId],
       queryFn: async () => {
         const { data, error } = await supabase
           .from('shopping_list_items')
-          .select('*')
+          .select(`
+            *,
+            recipe:recipes(id, title)
+          `)
           .eq('shopping_list_id', listId)
           .order('created_at', { ascending: true });
 
         if (error) throw error;
-        return data as ShoppingListItem[];
+        
+        // Расширяем тип для включения названия рецепта
+        return (data || []).map((item: any) => ({
+          ...item,
+          recipeTitle: item.recipe?.title || null,
+        })) as (ShoppingListItem & { recipeTitle?: string | null })[];
       },
       enabled: !!listId,
     });
@@ -413,6 +422,8 @@ export function useShoppingLists() {
         .from('meal_plans')
         .select(`
           recipe:recipes(
+            id,
+            title,
             recipe_ingredients(*)
           )
         `)
@@ -432,21 +443,43 @@ export function useShoppingLists() {
       }
 
       // Собрать все ингредиенты (объединяем одинаковые продукты с одинаковыми единицами)
-      const ingredientsMap = new Map<string, { amount: number; unit: string; category: string; name: string }>();
+      // Ключ: normalizedName|normalizedUnit, значение: данные + список рецептов
+      const ingredientsMap = new Map<string, { 
+        amount: number; 
+        unit: string; 
+        category: string; 
+        name: string;
+        recipeIds: string[];
+        recipeTitles: string[];
+      }>();
 
       mealPlans.forEach((plan: any) => {
         if (plan.recipe?.recipe_ingredients) {
+          const recipeId = plan.recipe.id;
+          const recipeTitle = plan.recipe.title || 'Без названия';
+          
           plan.recipe.recipe_ingredients.forEach((ing: any) => {
-            let resolvedUnit = resolveUnit(ing.unit, ing.name);
-            let amt = ing.amount != null ? ing.amount : (resolvedUnit === "шт" ? 1 : 0);
-            if (usePiecesFallback(resolvedUnit, ing.amount) || shouldUsePiecesByDescription(ing.name)) {
+            // Парсим ингредиент из сырой строки
+            const parsed = parseIngredient(ing.name);
+            
+            // Используем распарсенные данные
+            const cleanName = parsed.name || ing.name;
+            const parsedQuantity = parsed.quantity;
+            const parsedUnit = parsed.unit;
+            
+            // Определяем финальные значения
+            let resolvedUnit = resolveUnit(parsedUnit || ing.unit, cleanName);
+            let amt = parsedQuantity ?? (ing.amount != null ? ing.amount : (resolvedUnit === "шт" ? 1 : 0));
+            
+            if (usePiecesFallback(resolvedUnit, amt) || shouldUsePiecesByDescription(cleanName)) {
               resolvedUnit = 'шт';
-              amt = 1;
+              amt = amt || 1;
             }
-            const normalizedName = normalizeProductName(ing.name);
+            
+            const normalizedName = normalizeProductName(cleanName);
             const unitNormalized = normalizeUnit(resolvedUnit);
             const key = `${normalizedName}|${unitNormalized.normalized}`;
-            const autoCategory = detectCategory(ing.name);
+            const autoCategory = detectCategory(cleanName);
 
             if (ingredientsMap.has(key)) {
               const existing = ingredientsMap.get(key)!;
@@ -454,12 +487,19 @@ export function useShoppingLists() {
               const newAmountBase = convertToBaseUnit(amt, resolvedUnit);
               const totalAmountBase = existingAmountBase + newAmountBase;
               existing.amount = totalAmountBase / unitNormalized.multiplier;
+              // Добавляем рецепт в список, если его еще нет
+              if (!existing.recipeIds.includes(recipeId)) {
+                existing.recipeIds.push(recipeId);
+                existing.recipeTitles.push(recipeTitle);
+              }
             } else {
               ingredientsMap.set(key, {
-                name: ing.name,
+                name: cleanName,
                 amount: amt,
                 unit: resolvedUnit,
                 category: autoCategory,
+                recipeIds: [recipeId],
+                recipeTitles: [recipeTitle],
               });
             }
           });
@@ -559,6 +599,7 @@ export function useShoppingLists() {
             unit: newUnit,
           });
         } else {
+          // Используем первый recipe_id из списка (если есть несколько рецептов с одинаковым продуктом)
           itemsToInsert.push({
             shopping_list_id: listId!,
             name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
@@ -566,6 +607,7 @@ export function useShoppingLists() {
             unit: data.unit,
             category: data.category as any,
             is_purchased: false,
+            recipe_id: data.recipeIds.length > 0 ? data.recipeIds[0] : null,
           });
         }
       });

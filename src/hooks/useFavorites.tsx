@@ -31,7 +31,7 @@ export function useFavorites() {
       return (data || []).map((f) => ({
         id: f.id,
         recipe: f.recipe as RecipeSuggestion,
-        memberIds: (f.member_ids || []) as string[],
+        memberIds: [], // Убрано из схемы, оставляем пустой массив для обратной совместимости
         createdAt: f.created_at,
       })) as SavedFavorite[];
     },
@@ -54,7 +54,6 @@ export function useFavorites() {
         .insert({
           user_id: user.id,
           recipe: recipe as any,
-          member_ids: memberIds,
         })
         .select()
         .single();
