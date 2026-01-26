@@ -107,7 +107,7 @@ export default function ChatPage() {
         type: "chat",
       });
 
-      const rawMessage = response.message;
+      const rawMessage = typeof response?.message === "string" ? response.message : "";
       const displayMessage = hasRecipeJson(rawMessage) ? formatRecipeResponse(rawMessage) : rawMessage;
 
       const assistantMessage: Message = {
