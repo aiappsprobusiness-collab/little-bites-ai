@@ -62,6 +62,7 @@ export type Database = {
           dislikes: string[] | null
           height: number | null
           id: string
+          likes: string[] | null
           name: string
           preferences: string[] | null
           updated_at: string
@@ -77,6 +78,7 @@ export type Database = {
           dislikes?: string[] | null
           height?: number | null
           id?: string
+          likes?: string[] | null
           name: string
           preferences?: string[] | null
           updated_at?: string
@@ -92,6 +94,7 @@ export type Database = {
           dislikes?: string[] | null
           height?: number | null
           id?: string
+          likes?: string[] | null
           name?: string
           preferences?: string[] | null
           updated_at?: string
@@ -418,6 +421,30 @@ export type Database = {
           name?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      favorites: {
+        Row: {
+          id: string
+          user_id: string
+          recipe: Json
+          member_ids: string[] | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          recipe: Json
+          member_ids?: string[] | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          recipe?: Json
+          member_ids?: string[] | null
+          created_at?: string
         }
         Relationships: []
       }

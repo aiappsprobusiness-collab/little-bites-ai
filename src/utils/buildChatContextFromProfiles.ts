@@ -14,6 +14,8 @@ export interface ChildProfile {
   name: string;
   birth_date: string;
   allergies?: string[] | null;
+  likes?: string[] | null;
+  dislikes?: string[] | null;
   diet_goals?: string[] | null;
   weight?: number | null;
   height?: number | null;
@@ -23,6 +25,8 @@ export interface ChatContextChildData {
   name: string;
   ageMonths: number;
   allergies?: string[];
+  likes?: string[];
+  dislikes?: string[];
   dietGoals?: string[];
   weight?: number;
   height?: number;
@@ -120,12 +124,16 @@ function buildChildDataFromProfiles(
   const ageMonths = Math.min(...ages);
   const allAllergies = new Set<string>();
   const allDietGoals = new Set<string>();
+  const allLikes = new Set<string>();
+  const allDislikes = new Set<string>();
   let weight: number | undefined;
   let height: number | undefined;
 
   for (const c of profiles) {
     (c.allergies || []).forEach((a) => a?.trim() && allAllergies.add(a.trim()));
     ((c as any).diet_goals || []).forEach((g: string) => g?.trim() && allDietGoals.add(g.trim()));
+    (c.likes || []).forEach((l: string) => l?.trim() && allLikes.add(l.trim()));
+    (c.dislikes || []).forEach((d: string) => d?.trim() && allDislikes.add(d.trim()));
     if (c.weight != null) weight = c.weight;
     if (c.height != null) height = c.height;
   }
@@ -149,7 +157,10 @@ function buildChildDataFromProfiles(
       weight,
       height,
       ageDescription,
-    },
+      // Добавляем likes и dislikes в childData для использования в промптах
+      likes: allLikes.size ? Array.from(allLikes) : undefined,
+      dislikes: allDislikes.size ? Array.from(allDislikes) : undefined,
+    } as any,
     matchedChildIds: profiles.map((c) => c.id),
   };
 }

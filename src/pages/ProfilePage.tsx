@@ -79,9 +79,10 @@ export default function ProfilePage() {
   const handleSaveChild = async (formData: {
     name: string;
     birthDate: string;
+    likes: string[];
+    dislikes: string[];
     allergies: string[];
     preferences: string[];
-    dislikes: string[];
   }) => {
     try {
       if (editingChild) {
@@ -89,9 +90,10 @@ export default function ProfilePage() {
           id: editingChild.id,
           name: formData.name,
           birth_date: formData.birthDate,
+          likes: formData.likes,
+          dislikes: formData.dislikes,
           allergies: formData.allergies,
           preferences: formData.preferences,
-          dislikes: formData.dislikes,
         });
         toast({
           title: "Профиль обновлен",
@@ -101,9 +103,10 @@ export default function ProfilePage() {
         const newChild = await createChild({
           name: formData.name,
           birth_date: formData.birthDate,
+          likes: formData.likes,
+          dislikes: formData.dislikes,
           allergies: formData.allergies,
           preferences: formData.preferences,
-          dislikes: formData.dislikes,
         });
         setSelectedChildId(newChild.id);
         toast({
@@ -267,11 +270,115 @@ export default function ProfilePage() {
               ))}
             </motion.div>
 
-            {/* Allergies */}
+            {/* Likes */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
+            >
+              <Card variant="default">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-5 h-5 text-primary" />
+                      <h3 className="font-bold">Любит</h3>
+                    </div>
+                    <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setEditingChild(null);
+          }}>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditChild(selectedChild)}
+                        >
+                          <Edit2 className="w-4 h-4 mr-1" />
+                          Редактировать
+                        </Button>
+                      </DialogTrigger>
+                      <ChildEditDialog
+                        key={editingChild?.id || 'new'}
+                        child={editingChild}
+                        onSave={handleSaveChild}
+                        isLoading={isCreating || isUpdating}
+                      />
+                    </Dialog>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(selectedChild.likes || []).map((like) => (
+                      <span
+                        key={like}
+                        className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium"
+                      >
+                        {like}
+                      </span>
+                    ))}
+                    {(selectedChild.likes || []).length === 0 && (
+                      <p className="text-sm text-muted-foreground">Не указано</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Dislikes */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+            >
+              <Card variant="default">
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <X className="w-5 h-5 text-muted-foreground" />
+                      <h3 className="font-bold">Не любит</h3>
+                    </div>
+                    <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
+            setIsEditDialogOpen(open);
+            if (!open) setEditingChild(null);
+          }}>
+                      <DialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditChild(selectedChild)}
+                        >
+                          <Edit2 className="w-4 h-4 mr-1" />
+                          Редактировать
+                        </Button>
+                      </DialogTrigger>
+                      <ChildEditDialog
+                        key={editingChild?.id || 'new'}
+                        child={editingChild}
+                        onSave={handleSaveChild}
+                        isLoading={isCreating || isUpdating}
+                      />
+                    </Dialog>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {(selectedChild.dislikes || []).map((dislike) => (
+                      <span
+                        key={dislike}
+                        className="px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-sm font-medium"
+                      >
+                        {dislike}
+                      </span>
+                    ))}
+                    {(selectedChild.dislikes || []).length === 0 && (
+                      <p className="text-sm text-muted-foreground">Не указано</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Allergies */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
             >
               <Card variant="default">
                 <CardContent className="p-5">
@@ -403,9 +510,10 @@ function ChildEditDialog({
   onSave: (data: {
     name: string;
     birthDate: string;
+    likes: string[];
+    dislikes: string[];
     allergies: string[];
     preferences: string[];
-    dislikes: string[];
   }) => void;
   isLoading: boolean;
 }) {
@@ -413,28 +521,35 @@ function ChildEditDialog({
   const [birthDate, setBirthDate] = useState(
     child?.birth_date || new Date().toISOString().split("T")[0]
   );
+  const [likes, setLikes] = useState<string[]>(child?.likes || []);
+  const [dislikes, setDislikes] = useState<string[]>(child?.dislikes || []);
   const [allergies, setAllergies] = useState<string[]>(child?.allergies || []);
   const [preferences, setPreferences] = useState<string[]>(child?.preferences || []);
-  const [dislikes, setDislikes] = useState<string[]>(child?.dislikes || []);
   const [newAllergy, setNewAllergy] = useState("");
+  const [newLike, setNewLike] = useState("");
+  const [newDislike, setNewDislike] = useState("");
 
   // Синхронизируем состояние с пропсом child при его изменении
   useEffect(() => {
     if (child) {
       setName(child.name || "");
       setBirthDate(child.birth_date || new Date().toISOString().split("T")[0]);
+      setLikes(child.likes || []);
+      setDislikes(child.dislikes || []);
       setAllergies(child.allergies || []);
       setPreferences(child.preferences || []);
-      setDislikes(child.dislikes || []);
     } else {
       // Сброс для создания нового профиля
       setName("");
       setBirthDate(new Date().toISOString().split("T")[0]);
+      setLikes([]);
+      setDislikes([]);
       setAllergies([]);
       setPreferences([]);
-      setDislikes([]);
     }
     setNewAllergy("");
+    setNewLike("");
+    setNewDislike("");
   }, [child]);
 
   const toggleAllergy = (allergy: string) => {
@@ -457,7 +572,31 @@ function ChildEditDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave({ name, birthDate, allergies, preferences, dislikes });
+    onSave({ name, birthDate, likes, dislikes, allergies, preferences });
+  };
+
+  const addLike = () => {
+    const trimmed = newLike.trim();
+    if (trimmed && !likes.includes(trimmed)) {
+      setLikes([...likes, trimmed]);
+      setNewLike("");
+    }
+  };
+
+  const removeLike = (like: string) => {
+    setLikes(likes.filter((l) => l !== like));
+  };
+
+  const addDislike = () => {
+    const trimmed = newDislike.trim();
+    if (trimmed && !dislikes.includes(trimmed)) {
+      setDislikes([...dislikes, trimmed]);
+      setNewDislike("");
+    }
+  };
+
+  const removeDislike = (dislike: string) => {
+    setDislikes(dislikes.filter((d) => d !== dislike));
   };
 
   return (
@@ -492,6 +631,98 @@ function ChildEditDialog({
             required
             max={new Date().toISOString().split("T")[0]}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Любит</Label>
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Введите продукт, который любит"
+                value={newLike}
+                onChange={(e) => setNewLike(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addLike();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addLike}
+                disabled={!newLike.trim() || likes.includes(newLike.trim())}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            {likes.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {likes.map((like) => (
+                  <span
+                    key={like}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium"
+                  >
+                    {like}
+                    <button
+                      type="button"
+                      onClick={() => removeLike(like)}
+                      className="ml-1 hover:bg-primary/20 rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Не любит</Label>
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Введите продукт, который не любит"
+                value={newDislike}
+                onChange={(e) => setNewDislike(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addDislike();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addDislike}
+                disabled={!newDislike.trim() || dislikes.includes(newDislike.trim())}
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            {dislikes.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {dislikes.map((dislike) => (
+                  <span
+                    key={dislike}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-muted text-muted-foreground text-sm font-medium"
+                  >
+                    {dislike}
+                    <button
+                      type="button"
+                      onClick={() => removeDislike(dislike)}
+                      className="ml-1 hover:bg-muted/80 rounded-full p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">

@@ -1,4 +1,4 @@
-import { useState, forwardRef } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -410,13 +410,13 @@ export default function ShoppingPage() {
 }
 
 // Диалог для добавления продукта
-const AddItemDialog = forwardRef<
-  HTMLDivElement,
-  {
-    onAdd: (name: string, amount: string, unit: string, category: string) => void;
-    isLoading: boolean;
-  }
->(({ onAdd, isLoading }, ref) => {
+function AddItemDialog({
+  onAdd,
+  isLoading,
+}: {
+  onAdd: (name: string, amount: string, unit: string, category: string) => void;
+  isLoading: boolean;
+}) {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [unit, setUnit] = useState("");
@@ -511,6 +511,4 @@ const AddItemDialog = forwardRef<
       </form>
     </DialogContent>
   );
-});
-
-AddItemDialog.displayName = "AddItemDialog";
+}

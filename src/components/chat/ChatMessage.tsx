@@ -1,7 +1,10 @@
 import { useState, useRef, forwardRef } from "react";
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
-import { Trash2, ChefHat, Clock } from "lucide-react";
+import { Trash2, ChefHat, Clock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useFavorites } from "@/hooks/useFavorites";
+import { useToast } from "@/hooks/use-toast";
+import type { RecipeSuggestion } from "@/services/deepseek";
 
 interface ChatMessageProps {
   id: string;
@@ -174,10 +177,39 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
     const constraintsRef = useRef(null);
+    const { addFavorite, isAdding } = useFavorites();
+    const { toast } = useToast();
 
     // Парсим рецепт из контента (только для сообщений ассистента)
     const recipe = role === "assistant" ? parseRecipeFromContent(content) : null;
     const displayContent = recipe ? formatRecipe(recipe) : content;
+
+    const handleAddToFavorites = async () => {
+      if (!recipe) return;
+      
+      try {
+        const recipeSuggestion: RecipeSuggestion = {
+          title: recipe.title,
+          description: recipe.description || '',
+          ingredients: recipe.ingredients || [],
+          steps: recipe.steps || [],
+          cookingTime: recipe.cookingTime || 0,
+          ageRange: '', // Можно извлечь из контента, если есть
+        };
+        
+        await addFavorite({ recipe: recipeSuggestion, memberIds: [] });
+        toast({
+          title: "Добавлено в избранное",
+          description: `Рецепт "${recipe.title}" добавлен в избранное`,
+        });
+      } catch (error: any) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: error.message || "Не удалось добавить в избранное",
+        });
+      }
+    };
 
     const handleDragEnd = (_: any, info: PanInfo) => {
       if (info.offset.x < -80) {
@@ -224,9 +256,21 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           >
             {recipe ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <ChefHat className="w-4 h-4 text-primary" />
-                  <h3 className="font-semibold text-base">{recipe.title}</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <ChefHat className="w-4 h-4 text-primary" />
+                    <h3 className="font-semibold text-base">{recipe.title}</h3>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleAddToFavorites}
+                    disabled={isAdding}
+                    className="h-8 w-8 p-0"
+                    title="Добавить в избранное"
+                  >
+                    <Star className="w-4 h-4" />
+                  </Button>
                 </div>
                 {recipe.description && (
                   <p className="text-sm text-muted-foreground italic">{recipe.description}</p>

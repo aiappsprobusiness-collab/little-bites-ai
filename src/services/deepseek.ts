@@ -298,6 +298,55 @@ class DeepSeekService {
   }
 
   /**
+   * Форматирует контекст для одного ребёнка (возраст и аллергии)
+   */
+  private buildSingleChildContext(
+    childAgeMonths?: number,
+    allergies?: string[]
+  ): {
+    ageInfo: string;
+    ageRange: string;
+    allergyLine: string;
+  } {
+    let ageInfo = '';
+    let ageRange = '6+ мес';
+
+    if (childAgeMonths) {
+      const years = Math.floor(childAgeMonths / 12);
+      const months = childAgeMonths % 12;
+
+      // Формируем ageInfo для промпта
+      if (years > 0) {
+        if (months > 0) {
+          ageInfo = `Ребёнку ${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} ${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'} (${childAgeMonths} месяцев). `;
+        } else {
+          ageInfo = `Ребёнку ${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} (${childAgeMonths} месяцев). `;
+        }
+      } else {
+        ageInfo = `Ребёнку ${childAgeMonths} ${childAgeMonths === 1 ? 'месяц' : childAgeMonths < 5 ? 'месяца' : 'месяцев'}. `;
+      }
+
+      // Формируем ageRange для RecipeSuggestion
+      if (years > 0) {
+        if (months > 0) {
+          ageRange = `${years} г. ${months} мес`;
+        } else {
+          ageRange = `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`;
+        }
+      } else {
+        ageRange = `${childAgeMonths} мес`;
+      }
+    }
+
+    const allergyLine =
+      allergies && allergies.length > 0
+        ? `У ребёнка аллергия на: ${allergies.join(', ')}. Не используй эти продукты и их производные.`
+        : '';
+
+    return { ageInfo, ageRange, allergyLine };
+  }
+
+  /**
    * Генерация рецепта на основе продуктов
    */
   async generateRecipe(
@@ -306,69 +355,31 @@ class DeepSeekService {
     allergies?: string[]
   ): Promise<RecipeSuggestion> {
     try {
-      // Правильно форматируем возраст для промпта
-      let ageInfo = '';
-      if (childAgeMonths) {
-        const years = Math.floor(childAgeMonths / 12);
-        const months = childAgeMonths % 12;
-        if (years > 0) {
-          if (months > 0) {
-            ageInfo = `ВАЖНО: Ребенку ${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} ${months} ${months === 1 ? 'месяц' : months < 5 ? 'месяца' : 'месяцев'} (${childAgeMonths} месяцев). `;
-          } else {
-            ageInfo = `ВАЖНО: Ребенку ${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'} (${childAgeMonths} месяцев). `;
-          }
-        } else {
-          ageInfo = `ВАЖНО: Ребенку ${childAgeMonths} ${childAgeMonths === 1 ? 'месяц' : childAgeMonths < 5 ? 'месяца' : 'месяцев'}. `;
-        }
-      }
-      
-      console.log('DeepSeek generateRecipe - ageInfo:', ageInfo, 'childAgeMonths:', childAgeMonths);
-      const allergyInfo = allergies && allergies.length > 0
-        ? `КРИТИЧЕСКИ ВАЖНО: У ребенка аллергия на следующие продукты: ${allergies.join(', ')}. НИ В КОЕМ СЛУЧАЕ не используй эти продукты и их производные в рецепте. `
-        : '';
+      const { ageInfo, ageRange, allergyLine } = this.buildSingleChildContext(
+        childAgeMonths,
+        allergies
+      );
 
-      // Форматируем возраст для ageRange
-      const years = Math.floor(childAgeMonths / 12);
-      const months = childAgeMonths % 12;
-      let ageRangeText = '';
-      if (childAgeMonths) {
-        if (years > 0) {
-          if (months > 0) {
-            ageRangeText = `${years} г. ${months} мес`;
-          } else {
-            ageRangeText = `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`;
-          }
-        } else {
-          ageRangeText = `${childAgeMonths} мес`;
-        }
-      } else {
-        ageRangeText = '6+ мес';
-      }
+      const systemPrompt = `Ты эксперт по детскому питанию и аллергиям.
+Создай ОДИН рецепт блюда для ребёнка на основе указанных продуктов.
 
-      const systemPrompt = `Ты эксперт по детскому питанию. Создай рецепт блюда для ребенка на основе указанных продуктов.
-
-${ageInfo}${allergyInfo}
-${ageInfo ? `КРИТИЧЕСКИ ВАЖНО: Учти возраст ребенка - рецепт должен быть подходящим для указанного возраста. ` : ''}
-${allergyInfo ? `СТРОГО ИСКЛЮЧИ из рецепта все продукты, на которые у ребенка аллергия: ${allergies.join(', ')}. ` : ''}
-
-Верни ответ ТОЛЬКО в формате JSON без дополнительного текста:
-{
-  "title": "Название рецепта",
-  "description": "Краткое описание с учетом возраста и ограничений",
-  "ingredients": ["ингредиент 1", "ингредиент 2"],
-  "steps": ["шаг 1", "шаг 2"],
-  "cookingTime": 20,
-  "ageRange": "${ageRangeText}"
-}
+${ageInfo}${allergyLine || 'Используй только продукты, безопасные для детского питания.'}
 
 Требования:
-- Рецепт должен быть безопасным и подходящим для указанного возраста ребенка
-- ${allergyInfo ? `КРИТИЧЕСКИ ВАЖНО: НЕ используй продукты: ${allergies.join(', ')}. Проверь каждый ингредиент на наличие аллергенов.` : 'Используй только безопасные продукты для детского питания'}
-- Ингредиенты должны быть подходящими для указанного возраста
-- Шаги приготовления должны быть простыми и безопасными
-- Если указаны аллергии, полностью исключи эти продукты из рецепта`;
+- Рецепт должен быть безопасным и подходящим для возраста ребёнка.
+- Если есть аллергии, полностью исключи эти продукты и их производные.
+- Формат ответа: ТОЛЬКО один JSON-объект без дополнительного текста:
+{
+  "title": "...",
+  "description": "...",
+  "ingredients": ["..."],
+  "steps": ["..."],
+  "cookingTime": 20,
+  "ageRange": "${ageRange}"
+}`;
 
-      const userPrompt = `Создай рецепт из следующих продуктов: ${products.join(', ')}`;
+      const userPrompt = `Создай рецепт из следующих продуктов: ${products.join(', ')}.
+Если какой-то продукт не подходит по возрасту или по аллергии, НЕ используй его, замени безопасной альтернативой.`;
 
       const messages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
@@ -410,7 +421,7 @@ ${allergyInfo ? `СТРОГО ИСКЛЮЧИ из рецепта все прод
           'Приготовьте согласно возрасту ребенка',
         ],
         cookingTime: 20,
-        ageRange: childAgeMonths ? `${childAgeMonths}+ мес` : '6+ мес',
+        ageRange,
       };
     } catch (error: any) {
       console.error('Recipe generation error:', error);
@@ -418,6 +429,180 @@ ${allergyInfo ? `СТРОГО ИСКЛЮЧИ из рецепта все прод
         throw new Error(`Ошибка генерации рецепта: ${error.message}`);
       }
       throw new Error('Не удалось создать рецепт. Проверьте подключение к интернету и настройки DeepSeek.');
+    }
+  }
+
+  /**
+   * Генерация семейного рецепта на основе текста и профилей членов семьи
+   */
+  async generateFamilyRecipeFromText(
+    userText: string,
+    members: Array<{
+      name: string;
+      ageMonths: number | null;
+      isChild: boolean;
+      allergies: string[];
+      likes: string[];
+      dislikes: string[];
+    }>,
+    products?: string[]
+  ): Promise<RecipeSuggestion> {
+    try {
+      // Строим контекст семьи
+      const allAllergies = new Set<string>();
+      const allLikes = new Set<string>();
+      const allDislikes = new Set<string>();
+      const childAges: number[] = [];
+
+      members.forEach((member) => {
+        (member.allergies || []).forEach((a) => a?.trim() && allAllergies.add(a.trim()));
+        (member.likes || []).forEach((l) => l?.trim() && allLikes.add(l.trim()));
+        (member.dislikes || []).forEach((d) => d?.trim() && allDislikes.add(d.trim()));
+        if (member.isChild && member.ageMonths != null) {
+          childAges.push(member.ageMonths);
+        }
+      });
+
+      const minChildAgeMonths = childAges.length > 0 ? Math.min(...childAges) : undefined;
+
+      // Формируем описание членов семьи
+      const memberDescriptions = members.map((m) => {
+        const agePart =
+          m.ageMonths != null
+            ? `${m.ageMonths} мес`
+            : m.isChild
+              ? 'ребёнок'
+              : 'взрослый';
+        const allergiesPart =
+          m.allergies && m.allergies.length > 0 ? m.allergies.join(', ') : 'нет';
+        const likesPart =
+          m.likes && m.likes.length > 0 ? m.likes.join(', ') : 'не указано';
+        const dislikesPart =
+          m.dislikes && m.dislikes.length > 0 ? m.dislikes.join(', ') : 'не указано';
+        return `${m.name} (${agePart}, аллергии: ${allergiesPart}, любит: ${likesPart}, не любит: ${dislikesPart})`;
+      });
+
+      const familyDescription = memberDescriptions.join('\n');
+      const allAllergiesList = Array.from(allAllergies);
+      const likesSummary = Array.from(allLikes).join(', ') || 'не указано';
+      const dislikesSummary = Array.from(allDislikes).join(', ') || 'не указано';
+
+      // Формируем возраст для ageRange
+      let ageRangeText = '';
+      if (minChildAgeMonths) {
+        const years = Math.floor(minChildAgeMonths / 12);
+        const months = minChildAgeMonths % 12;
+        if (years > 0) {
+          if (months > 0) {
+            ageRangeText = `${years} г. ${months} мес`;
+          } else {
+            ageRangeText = `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`;
+          }
+        } else {
+          ageRangeText = `${minChildAgeMonths} мес`;
+        }
+      } else {
+        ageRangeText = 'семейный';
+      }
+
+      const allergyInfo =
+        allAllergiesList.length > 0
+          ? `КРИТИЧЕСКИ ВАЖНО: НЕ используй продукты, на которые есть аллергия у КОГО-ЛИБО из участников: ${allAllergiesList.join(', ')}. `
+          : '';
+
+      const likesInfo =
+        allLikes.size > 0
+          ? `Учитывай предпочтения: участники любят ${likesSummary}. `
+          : '';
+
+      const dislikesInfo =
+        allDislikes.size > 0
+          ? `Избегай продуктов, которые кто-то не любит: ${dislikesSummary}. Если есть безопасная альтернатива, используй её. `
+          : '';
+
+      const ageInfo = minChildAgeMonths
+        ? `ВАЖНО: Основная часть блюда должна быть безопасной для самого маленького ребёнка (${minChildAgeMonths} месяцев). `
+        : '';
+
+      const productsInfo = products && products.length > 0
+        ? `Используй по возможности следующие продукты: ${products.join(', ')}. Если какой-то из них не подходит по возрасту или по аллергии, НЕ используй его. `
+        : '';
+
+      const systemPrompt = `Ты эксперт по семейному питанию и детским аллергиям.
+Создай ОДИН общий рецепт для следующих членов семьи:
+
+${familyDescription}
+
+ОБЩИЕ ПРАВИЛА:
+${allergyInfo}${ageInfo}${likesInfo}${dislikesInfo}${productsInfo}
+- Блюдо должны есть все участники: избегай продуктов, которые кто-то явно не любит, если есть безопасная альтернатива.
+- Если есть маленькие дети, основная часть блюда должна быть безопасной для самого маленького ребёнка по возрасту; взрослым можно добавить специи/острое отдельно.
+
+Верни ответ ТОЛЬКО в формате JSON без дополнительного текста:
+{
+  "title": "Название рецепта",
+  "description": "Краткое описание с учетом всех участников, возраста и ограничений",
+  "ingredients": ["ингредиент 1", "ингредиент 2"],
+  "steps": ["шаг 1", "шаг 2"],
+  "cookingTime": 20,
+  "ageRange": "${ageRangeText}"
+}
+
+Требования:
+- Рецепт должен быть безопасным и подходящим для всех участников
+- ${allergyInfo ? `КРИТИЧЕСКИ ВАЖНО: НЕ используй продукты: ${allAllergiesList.join(', ')}. Проверь каждый ингредиент на наличие аллергенов.` : 'Используй только безопасные продукты'}
+- Ингредиенты должны быть подходящими для указанного возраста
+- Шаги приготовления должны быть простыми и безопасными`;
+
+      const userPrompt = `Запрос пользователя: ${userText}`;
+
+      const messages: ChatMessage[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ];
+
+      const response = await this.chat(messages);
+
+      // Парсим JSON ответ
+      try {
+        const jsonPatterns = [
+          /\{[\s\S]*\}/,
+          /```json\s*(\{[\s\S]*?\})\s*```/,
+          /```\s*(\{[\s\S]*?\})\s*```/,
+        ];
+
+        let jsonMatch = null;
+        for (const pattern of jsonPatterns) {
+          jsonMatch = response.match(pattern);
+          if (jsonMatch) {
+            const jsonString = jsonMatch[1] || jsonMatch[0];
+            const parsed = JSON.parse(jsonString);
+            console.log('Successfully parsed family recipe JSON:', parsed);
+            return parsed;
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse family recipe JSON:', e, 'Response:', response.substring(0, 200));
+      }
+
+      // Fallback: создаем простой рецепт
+      return {
+        title: `Семейное блюдо`,
+        description: `Вкусное и полезное блюдо для всей семьи`,
+        ingredients: products || ['Ингредиенты по запросу'],
+        steps: [
+          'Подготовьте все ингредиенты',
+          'Приготовьте согласно возрасту самого маленького участника',
+        ],
+        cookingTime: 30,
+        ageRange: ageRangeText || 'семейный',
+      };
+    } catch (error: any) {
+      console.error('Family recipe generation error:', error);
+      if (error.message) {
+        throw new Error(`Ошибка генерации семейного рецепта: ${error.message}`);
+      }
+      throw new Error('Не удалось создать семейный рецепт. Проверьте подключение к интернету и настройки DeepSeek.');
     }
   }
 
