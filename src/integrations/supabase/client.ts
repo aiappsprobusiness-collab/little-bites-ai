@@ -13,5 +13,41 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+    detectSessionInUrl: false, // Отключаем для мобильных приложений
+  },
+  global: {
+    // Увеличиваем таймаут для мобильных приложений
+    fetch: (url, options = {}) => {
+      // Увеличиваем таймаут до 60 секунд для мобильных приложений
+      const timeout = 60000; // 60 секунд
+      
+      // Создаём AbortController для отмены запроса при таймауте
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      // Добавляем signal к опциям, если его ещё нет
+      const fetchOptions = {
+        ...options,
+        signal: options.signal || controller.signal,
+      };
+      
+      return fetch(url, fetchOptions)
+        .then((response) => {
+          clearTimeout(timeoutId);
+          return response;
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId);
+          
+          // Улучшаем сообщение об ошибке для мобильных приложений
+          if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+            throw new Error('Превышено время ожидания ответа от сервера. Проверьте интернет-соединение.');
+          }
+          if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+            throw new Error('Не удалось подключиться к серверу. Проверьте интернет-соединение.');
+          }
+          throw error;
+        });
+    },
+  },
 });

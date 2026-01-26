@@ -59,17 +59,27 @@ export default function AuthPage() {
 
   const onLogin = async (data: LoginFormData) => {
     setIsLoading(true);
-    const { error } = await signIn(data.email, data.password);
-    setIsLoading(false);
+    try {
+      const { error } = await signIn(data.email, data.password);
+      setIsLoading(false);
 
-    if (error) {
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка входа",
+          description: error.message || "Не удалось войти. Проверьте email и пароль.",
+        });
+      } else {
+        navigate("/");
+      }
+    } catch (err) {
+      setIsLoading(false);
+      const errorMessage = err instanceof Error ? err.message : "Произошла непредвиденная ошибка";
       toast({
         variant: "destructive",
         title: "Ошибка входа",
-        description: error.message,
+        description: errorMessage,
       });
-    } else {
-      navigate("/");
     }
   };
 

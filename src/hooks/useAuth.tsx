@@ -68,11 +68,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        // Улучшаем сообщения об ошибках для пользователя
+        let userMessage = error.message;
+        if (error.message?.includes('Invalid login credentials')) {
+          userMessage = 'Неверный email или пароль';
+        } else if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+          userMessage = 'Превышено время ожидания. Проверьте интернет-соединение.';
+        } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+          userMessage = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+        }
+        
+        return { 
+          error: {
+            ...error,
+            message: userMessage,
+          } as Error
+        };
+      }
+      
+      return { error: null };
+    } catch (err) {
+      // Обрабатываем сетевые ошибки
+      const error = err as Error;
+      let userMessage = 'Произошла ошибка при входе';
+      
+      if (error.message?.includes('timeout') || error.message?.includes('timed out')) {
+        userMessage = 'Превышено время ожидания. Проверьте интернет-соединение.';
+      } else if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        userMessage = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+      } else if (error.message) {
+        userMessage = error.message;
+      }
+      
+      return { 
+        error: new Error(userMessage)
+      };
+    }
   };
 
   const signOut = async () => {
