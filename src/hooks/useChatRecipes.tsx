@@ -2,11 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useRecipes } from './useRecipes';
-import { parseRecipesFromChat, type ParsedRecipe } from '@/utils/parseChatRecipes';
+import { parseRecipesFromChat } from '@/utils/parseChatRecipes';
 import { resolveUnit } from '@/utils/productUtils';
 import type { Tables } from '@/integrations/supabase/types';
+import { RECIPES_LIST_SELECT, RECIPES_PAGE_SIZE } from '@/lib/supabase-constants';
+import mockRecipes from '@/mocks/mockRecipes.json';
 
 type Recipe = Tables<'recipes'>;
+const IS_DEV = import.meta.env.DEV;
 
 /**
  * Хук для работы с рецептами из чата
@@ -26,57 +29,47 @@ export function useChatRecipes() {
       queryFn: async () => {
         if (!user) return [];
 
+        if (IS_DEV) {
+          const chat = (mockRecipes as unknown[]).filter(
+            (r: { tags?: string[] }) => r.tags && Array.isArray(r.tags) && r.tags.includes('chat')
+          ) as Recipe[];
+          const filtered = mealType
+            ? chat.filter((r: { tags?: string[] }) => {
+              const has = r.tags?.includes(`chat_${mealType}`);
+              const any = r.tags?.some((t: string) => t.startsWith('chat_'));
+              return has || !any;
+            })
+            : chat;
+          return filtered.slice(0, RECIPES_PAGE_SIZE);
+        }
+
         const now = new Date();
         const since = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
         const { data: recentRecipes, error: recipesError } = await supabase
           .from('recipes')
-          .select('*')
+          .select(RECIPES_LIST_SELECT)
           .eq('user_id', user.id)
           .gte('created_at', since.toISOString())
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(50);
 
         if (recipesError) throw recipesError;
 
-        console.log('getTodayChatRecipes - Recent chat recipes (48h):', recentRecipes?.length);
-        console.log('getTodayChatRecipes - Sample:', recentRecipes?.slice(0, 3).map(r => ({
-          title: r.title,
-          tags: r.tags,
-          created_at: r.created_at
-        })));
+        const chatRecipes = (recentRecipes ?? []).filter((recipe) => {
+          if (!recipe.tags || !Array.isArray(recipe.tags)) return false;
+          return recipe.tags.includes('chat');
+        });
 
-        const chatRecipes = recentRecipes?.filter(recipe => {
-          if (!recipe.tags || !Array.isArray(recipe.tags)) {
-            return false;
-          }
-          const hasChatTag = recipe.tags.includes('chat');
-          if (!hasChatTag) {
-            return false;
-          }
-          return true;
-        }) || [];
-
-        console.log('getTodayChatRecipes - Chat recipes (with chat tag):', chatRecipes.length);
-        console.log('getTodayChatRecipes - Chat recipe titles:', chatRecipes.map(r => ({
-          title: r.title,
-          tags: r.tags,
-          mealTypeTags: r.tags?.filter((t: string) => t.startsWith('chat_'))
-        })));
-
-        // Фильтруем по типу приема пищи, если указан
-        const filteredRecipes = mealType
-          ? chatRecipes.filter(recipe => {
+        const filtered = mealType
+          ? chatRecipes.filter((recipe) => {
             const hasMealTypeTag = recipe.tags?.includes(`chat_${mealType}`);
-            const hasAnyMealTypeTag = recipe.tags?.some((tag: string) => tag.startsWith('chat_'));
-            // Показываем если есть тег с типом, либо нет типа вообще (универсальные рецепты)
+            const hasAnyMealTypeTag = recipe.tags?.some((t: string) => t.startsWith('chat_'));
             return hasMealTypeTag || !hasAnyMealTypeTag;
           })
           : chatRecipes;
 
-        console.log('getTodayChatRecipes - Filtered recipes:', filteredRecipes.length, 'mealType:', mealType);
-        console.log('getTodayChatRecipes - Filtered recipe titles:', filteredRecipes.map(r => r.title));
-
-        return filteredRecipes as Recipe[];
+        return filtered.slice(0, RECIPES_PAGE_SIZE) as Recipe[];
       },
       enabled: !!user,
     });

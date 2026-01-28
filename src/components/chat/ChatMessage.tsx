@@ -1,9 +1,12 @@
 import { useState, useRef, forwardRef } from "react";
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
-import { Trash2, ChefHat, Clock, Star } from "lucide-react";
+import { Trash2, ChefHat, Clock, Star, Share2, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
+import { parseIngredient } from "@/utils/parseIngredient";
+import { detectCategory, resolveUnit } from "@/utils/productUtils";
 import type { RecipeSuggestion } from "@/services/deepseek";
 
 interface ChatMessageProps {
@@ -11,6 +14,7 @@ interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  rawContent?: string;
   onDelete: (id: string) => void;
 }
 
@@ -179,22 +183,22 @@ function formatRecipe(recipe: Recipe): string {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, onDelete }, ref) => {
+  ({ id, role, content, timestamp, rawContent, onDelete }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const x = useMotionValue(0);
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
     const constraintsRef = useRef(null);
     const { addFavorite, isAdding } = useFavorites();
+    const { addItem, createList, activeList } = useShoppingLists();
     const { toast } = useToast();
 
-    // Парсим рецепт из контента (только для сообщений ассистента)
-    const recipe = role === "assistant" ? parseRecipeFromContent(content) : null;
+    const sourceForParse = (rawContent ?? content).trim();
+    const recipe = role === "assistant" ? parseRecipeFromContent(sourceForParse) : null;
     const displayContent = recipe ? formatRecipe(recipe) : content;
 
     const handleAddToFavorites = async () => {
       if (!recipe) return;
-      
       try {
         const recipeSuggestion: RecipeSuggestion = {
           title: recipe.title,
@@ -204,18 +208,39 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           cookingTime: recipe.cookingTime || 0,
           ageRange: recipe.ageRange || '',
         };
-        
         await addFavorite({ recipe: recipeSuggestion, memberIds: [] });
-        toast({
-          title: "Добавлено в избранное",
-          description: `Рецепт "${recipe.title}" добавлен в избранное`,
-        });
-      } catch (error: any) {
-        toast({
-          variant: "destructive",
-          title: "Ошибка",
-          description: error.message || "Не удалось добавить в избранное",
-        });
+        toast({ title: "Добавлено в избранное", description: `Рецепт «${recipe.title}» добавлен в избранное` });
+      } catch (e: any) {
+        toast({ variant: "destructive", title: "Ошибка", description: e.message || "Не удалось добавить в избранное" });
+      }
+    };
+
+    const handleAddToList = async () => {
+      if (!recipe?.ingredients?.length) return;
+      try {
+        let listId = activeList?.id;
+        if (!listId) {
+          const list = await createList("Список покупок");
+          listId = list?.id;
+        }
+        if (!listId) throw new Error("Нет активного списка");
+        for (const raw of recipe.ingredients) {
+          const { name, quantity, unit } = parseIngredient(raw);
+          if (!name) continue;
+          const u = resolveUnit(unit, name);
+          const cat = detectCategory(name);
+          await addItem({
+            name,
+            amount: quantity,
+            unit: u,
+            category: cat as any,
+            is_purchased: false,
+            shopping_list_id: listId,
+          });
+        }
+        toast({ title: "В список покупок", description: `Ингредиенты «${recipe.title}» добавлены` });
+      } catch (e: any) {
+        toast({ variant: "destructive", title: "Ошибка", description: e.message || "Не удалось добавить в список" });
       }
     };
 
@@ -258,27 +283,15 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         >
           <div
             className={`rounded-2xl px-4 py-3 ${role === "user"
-                ? "bg-primary text-primary-foreground rounded-br-sm"
-                : "bg-card shadow-soft rounded-bl-sm"
+              ? "bg-primary text-primary-foreground rounded-br-sm"
+              : "bg-card shadow-soft rounded-bl-sm"
               }`}
           >
             {recipe ? (
               <div className="space-y-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <ChefHat className="w-4 h-4 text-primary" />
-                    <h3 className="font-semibold text-base">{recipe.title}</h3>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleAddToFavorites}
-                    disabled={isAdding}
-                    className="h-8 w-8 p-0"
-                    title="Добавить в избранное"
-                  >
-                    <Star className="w-4 h-4" />
-                  </Button>
+                <div className="flex items-center gap-2 mb-2">
+                  <ChefHat className="w-4 h-4 text-primary" />
+                  <h3 className="font-semibold text-base">{recipe.title}</h3>
                 </div>
                 {recipe.description && (
                   <p className="text-sm text-muted-foreground italic">{recipe.description}</p>
@@ -345,6 +358,30 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     </ol>
                   </div>
                 )}
+                <div className="flex items-center gap-2 pt-2 border-t border-border/30">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleAddToFavorites}
+                    disabled={isAdding}
+                    className="h-8 px-2"
+                    title="Добавить в избранное"
+                  >
+                    <Star className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm" className="h-8 px-2" disabled title="Поделиться">
+                    <Share2 className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleAddToList}
+                    className="h-8 px-2"
+                    title="Добавить в список покупок"
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             ) : (
               <p className="text-base whitespace-pre-wrap select-none">{displayContent}</p>

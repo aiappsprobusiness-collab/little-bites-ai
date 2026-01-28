@@ -21,17 +21,17 @@ function getCachedSystemPrompt(type: string, childData?: any): string | null {
   const key = getCacheKey(type, childData);
   const cached = systemPromptCache.get(key);
   const timestamp = cacheTimestamps.get(key);
-  
+
   if (cached && timestamp && Date.now() - timestamp < CACHE_TTL) {
     return cached;
   }
-  
+
   // Удаляем устаревший кэш
   if (cached) {
     systemPromptCache.delete(key);
     cacheTimestamps.delete(key);
   }
-  
+
   return null;
 }
 
@@ -112,79 +112,47 @@ serve(async (req) => {
 
     // Проверяем кэш системного промпта (оптимизация для повторных запросов)
     let systemPrompt = getCachedSystemPrompt(type, childData);
-    
+
     // Build system prompt based on type (если не в кэше)
     if (!systemPrompt) {
 
-    if (type === "chat") {
-      systemPrompt = `Ты — умный ИИ-помощник для мам. Специализируешься на детском питании, рецептах и советах по здоровью детей.
-      
-Отвечай на русском языке. Будь дружелюбным, понятным и практичным.
+      if (type === "chat") {
+        const age = childData
+          ? (childData.ageDescription ?? (childData.ageMonths < 12
+            ? `${childData.ageMonths} мес.`
+            : `${Math.floor(childData.ageMonths / 12)} ${childData.ageMonths % 12 ? `г. ${childData.ageMonths % 12} мес.` : "лет"}`))
+          : "";
+        const allergies = childData?.allergies?.length ? childData.allergies.join(", ") : "";
+        const likes = childData?.likes?.length ? childData.likes.join(", ") : "";
+        const dislikes = childData?.dislikes?.length ? childData.dislikes.join(", ") : "";
 
-${childData ? `
-Данные о ребенке/детях:
-- Имя: ${childData.name}
-- Возраст: ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
-${childData.allergies?.length ? `- ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ предлагай рецепты и блюда с этими продуктами!` : ""}
-${childData.likes?.length ? `- Любит: ${childData.likes.join(", ")}. Учитывай предпочтения при выборе рецептов.` : ""}
-${childData.dislikes?.length ? `- Не любит: ${childData.dislikes.join(", ")}. Избегай этих продуктов, если есть безопасная альтернатива.` : ""}
-${childData.dietGoals?.length ? `- Цели питания: ${childData.dietGoals.join(", ")}` : ""}
-${childData.weight ? `- Вес: ${childData.weight} кг` : ""}
-${childData.height ? `- Рост: ${childData.height} см` : ""}
+        systemPrompt = `Ты — ИИ‑ассистент по семейному питанию для мам. Отвечай кратко, без вступлений и лишних слов.
 
-КРИТИЧЕСКИ ВАЖНО:
-- Аллергены из списка выше СТРОГО исключить из рецептов и рекомендаций.
-- Учитывай предпочтения (любит/не любит) при выборе рецептов: если кто-то не любит продукт, избегай его, если есть безопасная альтернатива.
-` : ""}
+У тебя есть активный профиль: возраст ${age}, аллергии ${allergies}, любит ${likes}, не любит ${dislikes}.
 
-КРИТИЧЕСКИ ВАЖНО - ФОРМАТ ОТВЕТА ДЛЯ РЕЦЕПТОВ:
-Если пользователь просит рецепт, предложение рецепта, варианты блюд или что-то связанное с приготовлением еды, 
-ОБЯЗАТЕЛЬНО верни ответ в формате JSON. Это необходимо для автоматического сохранения рецептов в приложении.
+Правила:
+1. Предлагай только разовые идеи блюд или одного приёма пищи. Не составляй меню на несколько дней.
+2. Строго избегай продуктов из списка аллергий (${allergies || "не указаны"}).
+3. Старайся включать продукты из «любит» (${likes || "не указаны"}).
+4. Избегай «не любит» (${dislikes || "не указаны"}). Если нельзя — предложи способ «замаскировать», но не настаивай.
+5. Учитывай возраст при выборе блюд и консистенции.
+6. На общий запрос («ужин», «завтрак») давай 1–3 варианта.
 
-Формат JSON для рецепта (один рецепт):
+Формат каждого варианта:
+- [Краткое название блюда]
+- Ингредиенты: [список, очень кратко]
+- Приготовление: [3–5 шагов, кратко]
+
+Если даёшь рецепт(ы), в конце ответа ОБЯЗАТЕЛЬНО добавь JSON для сохранения в приложении. Один рецепт:
 \`\`\`json
-{
-  "title": "Название рецепта на русском языке",
-  "description": "Краткое описание блюда",
-  "ingredients": ["ингредиент 1", "ингредиент 2", "ингредиент 3"],
-  "steps": ["шаг приготовления 1", "шаг приготовления 2", "шаг приготовления 3"],
-  "cookingTime": 20
-}
+{"title":"Название","description":"Кратко","ingredients":["ингредиент 1","ингредиент 2"],"steps":["шаг 1","шаг 2","шаг 3"],"cookingTime":20}
 \`\`\`
-
-Формат JSON для нескольких рецептов:
-\`\`\`json
-{
-  "recipes": [
-    {
-      "title": "Название первого рецепта",
-      "description": "Описание",
-      "ingredients": ["ингредиент 1", "ингредиент 2"],
-      "steps": ["шаг 1", "шаг 2"],
-      "cookingTime": 15
-    },
-    {
-      "title": "Название второго рецепта",
-      "description": "Описание",
-      "ingredients": ["ингредиент 1", "ингредиент 2"],
-      "steps": ["шаг 1", "шаг 2"],
-      "cookingTime": 20
-    }
-  ]
-}
+Несколько рецептов: \`\`\`json
+{"recipes":[{"title":"...","description":"...","ingredients":[...],"steps":[...],"cookingTime":15},...]}
 \`\`\`
-
-ПРАВИЛА:
-1. Если пользователь просит рецепт - ВСЕГДА используй JSON формат
-2. Название рецепта должно быть коротким (3-40 символов), конкретным и понятным
-3. НЕ используй описания или инструкции как названия (например, "яркое и нравится детям" - это НЕ название)
-4. НЕ используй шаги приготовления как названия (например, "Мякоть картофеля размять вилкой" - это НЕ название)
-5. Название должно быть существительным или существительным с прилагательным (например: "Овсяная каша", "Куриный суп", "Творожная запеканка")
-6. Все ингредиенты и шаги должны быть на русском языке
-7. Если это просто общий вопрос или совет (не про конкретный рецепт), отвечай обычным текстом без JSON
-8. Если предлагаешь несколько вариантов рецептов, используй формат с массивом recipes`;
-    } else if (type === "recipe") {
-      systemPrompt = `Ты — детский диетолог. Создаёшь рецепты для детей с учётом возраста и аллергий.
+Название — короткое (3–40 символов), существительное. Ингредиенты и шаги на русском.`;
+      } else if (type === "recipe") {
+        systemPrompt = `Ты — детский диетолог. Создаёшь рецепты для детей с учётом возраста и аллергий.
 
 ${childData ? `
 Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
@@ -246,8 +214,8 @@ ${childData.dietGoals?.length ? `Цели питания: ${childData.dietGoals.
 - Все названия, ингредиенты и шаги должны быть на РУССКОМ языке
 - Название рецепта должно быть валидным (не описание, не инструкция, не общая фраза)
 - Если не можешь придумать хорошее название - лучше не создавать рецепт`;
-    } else if (type === "diet_plan") {
-      systemPrompt = `Ты — эксперт по детскому питанию. Создаёшь недельные планы питания.
+      } else if (type === "diet_plan") {
+        systemPrompt = `Ты — эксперт по детскому питанию. Создаёшь недельные планы питания.
 
 ${childData ? `
 Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
@@ -278,9 +246,9 @@ ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : 
   "shopping_list": ["продукт - количество"],
   "total_calories_week": 8400
 }`;
-    } else if (type === "single_day") {
-      // Оптимизированный промпт: пример JSON в system, короткий user prompt
-      systemPrompt = `Детский диетолог. Создаёшь план питания на день.
+      } else if (type === "single_day") {
+        // Оптимизированный промпт: пример JSON в system, короткий user prompt
+        systemPrompt = `Детский диетолог. Создаёшь план питания на день.
 
 КРИТИЧЕСКИ ВАЖНО - РАЗНООБРАЗИЕ:
 - Каждый день недели должен иметь УНИКАЛЬНЫЕ блюда
@@ -301,7 +269,7 @@ ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : 
 
 Все названия, ингредиенты и шаги на русском языке. Ключи: breakfast, lunch, snack, dinner, name, calories, protein, carbs, fat, cooking_time, ingredients, steps, amount, unit.`;
       }
-      
+
       // Кэшируем системный промпт для будущих запросов
       cacheSystemPrompt(type, systemPrompt, childData);
     }

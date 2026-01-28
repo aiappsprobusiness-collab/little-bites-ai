@@ -30,7 +30,7 @@ export default function RecipePage() {
           <Card variant="default" className="p-8 text-center">
             <CardContent className="p-0">
               <p className="text-muted-foreground mb-4">Рецепт не найден</p>
-              <Button variant="mint" onClick={() => navigate("/")}>
+              <Button variant="mint" onClick={() => navigate("/home")}>
                 Вернуться на главную
               </Button>
             </CardContent>

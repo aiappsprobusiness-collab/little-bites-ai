@@ -1,0 +1,222 @@
+[
+  {
+    "id": "mock-1",
+    "title": "Творожная запеканка",
+    "description": "Нежная запеканка для малышей",
+    "image_url": null,
+    "created_at": "2025-01-20T12:00:00Z",
+    "cooking_time_minutes": 40,
+    "is_favorite": false,
+    "tags": [],
+    "child_id": null,
+    "rating": null,
+    "ingredients": [
+      {
+        "name": "творог",
+        "amount": 400,
+        "unit": "г"
+      },
+      {
+        "name": "яйцо",
+        "amount": 2,
+        "unit": "шт"
+      },
+      {
+        "name": "манка",
+        "amount": 2,
+        "unit": "ст.л"
+      },
+      {
+        "name": "сахар",
+        "amount": 1,
+        "unit": "ст.л"
+      },
+      {
+        "name": "ванилин",
+        "amount": null,
+        "unit": null
+      }
+    ],
+    "steps": [
+      {
+        "instruction": "Смешать творог, яйца, манку и сахар.",
+        "step_number": 1
+      },
+      {
+        "instruction": "Выложить в форму, смазанную маслом.",
+        "step_number": 2
+      },
+      {
+        "instruction": "Выпекать 35–40 минут при 180 °C.",
+        "step_number": 3
+      }
+    ]
+  },
+  {
+    "id": "mock-2",
+    "title": "Овощное пюре из кабачка и моркови",
+    "description": "Первый прикорм",
+    "image_url": null,
+    "created_at": "2025-01-19T10:00:00Z",
+    "cooking_time_minutes": 25,
+    "is_favorite": true,
+    "tags": [],
+    "child_id": null,
+    "rating": null,
+    "ingredients": [
+      {
+        "name": "кабачок",
+        "amount": 1,
+        "unit": "шт"
+      },
+      {
+        "name": "морковь",
+        "amount": 1,
+        "unit": "шт"
+      },
+      {
+        "name": "вода",
+        "amount": 50,
+        "unit": "мл"
+      }
+    ],
+    "steps": [
+      {
+        "instruction": "Очистить овощи, нарезать кубиками.",
+        "step_number": 1
+      },
+      {
+        "instruction": "Отварить на пару или в воде до мягкости.",
+        "step_number": 2
+      },
+      {
+        "instruction": "Измельчить блендером до однородности.",
+        "step_number": 3
+      }
+    ]
+  },
+  {
+    "id": "mock-3",
+    "title": "Банановые оладьи",
+    "description": "Без сахара, с бананом",
+    "image_url": null,
+    "created_at": "2025-01-18T08:00:00Z",
+    "cooking_time_minutes": 20,
+    "is_favorite": false,
+    "tags": [
+      "chat",
+      "chat_breakfast"
+    ],
+    "child_id": null,
+    "rating": null,
+    "ingredients": [
+      {
+        "name": "банан",
+        "amount": 1,
+        "unit": "шт"
+      },
+      {
+        "name": "яйцо",
+        "amount": 1,
+        "unit": "шт"
+      },
+      {
+        "name": "мука",
+        "amount": 2,
+        "unit": "ст.л"
+      }
+    ],
+    "steps": [
+      {
+        "instruction": "Размять банан вилкой, смешать с яйцом и мукой.",
+        "step_number": 1
+      },
+      {
+        "instruction": "Жарить на антипригарной сковороде с двух сторон.",
+        "step_number": 2
+      }
+    ]
+  },
+  {
+    "id": "mock-4",
+    "title": "Куриный суп с лапшой",
+    "description": "Лёгкий суп для детей",
+    "image_url": null,
+    "created_at": "2025-01-17T14:00:00Z",
+    "cooking_time_minutes": 45,
+    "is_favorite": false,
+    "tags": [],
+    "child_id": null,
+    "rating": null,
+    "ingredients": [
+      {
+        "name": "куриная грудка",
+        "amount": 200,
+        "unit": "г"
+      },
+      {
+        "name": "лапша",
+        "amount": 50,
+        "unit": "г"
+      },
+      {
+        "name": "морковь",
+        "amount": 0.5,
+        "unit": "шт"
+      },
+      {
+        "name": "лук",
+        "amount": 0.25,
+        "unit": "шт"
+      }
+    ],
+    "steps": [
+      {
+        "instruction": "Сварить бульон из грудки, достать мясо.",
+        "step_number": 1
+      },
+      {
+        "instruction": "Добавить нарезанные овощи, варить 10 минут.",
+        "step_number": 2
+      },
+      {
+        "instruction": "Добавить лапшу и мелко нарезанное мясо, варить до готовности.",
+        "step_number": 3
+      }
+    ]
+  },
+  {
+    "id": "mock-5",
+    "title": "Яблочное пюре",
+    "description": "Домашнее пюре из запечённых яблок",
+    "image_url": null,
+    "created_at": "2025-01-16T09:00:00Z",
+    "cooking_time_minutes": 35,
+    "is_favorite": true,
+    "tags": [],
+    "child_id": null,
+    "rating": null,
+    "ingredients": [
+      {
+        "name": "яблоки",
+        "amount": 2,
+        "unit": "шт"
+      },
+      {
+        "name": "вода",
+        "amount": 2,
+        "unit": "ст.л"
+      }
+    ],
+    "steps": [
+      {
+        "instruction": "Запечь яблоки в духовке до мягкости.",
+        "step_number": 1
+      },
+      {
+        "instruction": "Извлечь мякоть, измельчить блендером.",
+        "step_number": 2
+      }
+    ]
+  }
+]

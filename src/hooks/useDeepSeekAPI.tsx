@@ -17,7 +17,7 @@ const SUPABASE_URL = "https://hidgiyyunigqazssnydm.supabase.co";
 export function useDeepSeekAPI() {
   const { user, session } = useAuth();
   const { children, calculateAgeInMonths } = useChildren();
-  const { selectedChild } = useSelectedChild();
+  const { selectedChild, selectedChildId } = useSelectedChild();
   const { canGenerate, refetchUsage } = useSubscription();
   const queryClient = useQueryClient();
 
@@ -41,6 +41,7 @@ export function useDeepSeekAPI() {
         userMessage: lastUserMessage,
         children,
         selectedChild: selectedChild ?? null,
+        selectedChildId,
         calculateAgeInMonths,
       });
 

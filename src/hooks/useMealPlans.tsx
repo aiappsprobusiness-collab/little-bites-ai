@@ -2,17 +2,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { RECIPES_LIST_SELECT } from '@/lib/supabase-constants';
 
 type MealPlan = Tables<'meal_plans'>;
 type MealPlanInsert = TablesInsert<'meal_plans'>;
 type MealPlanUpdate = TablesUpdate<'meal_plans'>;
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
+const MEAL_PLANS_RECIPE_SELECT = `*, recipe:recipes(${RECIPES_LIST_SELECT})`;
+
 export function useMealPlans(childId?: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Получить планы питания за период
   const getMealPlans = (startDate: Date, endDate: Date) => {
     return useQuery({
       queryKey: ['meal_plans', user?.id, childId, startDate.toISOString(), endDate.toISOString()],
@@ -21,19 +23,14 @@ export function useMealPlans(childId?: string) {
 
         let query = supabase
           .from('meal_plans')
-          .select(`
-            *,
-            recipe:recipes(*)
-          `)
+          .select(MEAL_PLANS_RECIPE_SELECT)
           .eq('user_id', user.id)
           .gte('planned_date', startDate.toISOString().split('T')[0])
           .lte('planned_date', endDate.toISOString().split('T')[0]);
 
-        if (childId) {
-          query = query.eq('child_id', childId);
-        }
+        if (childId) query = query.eq('child_id', childId);
 
-        const { data, error } = await query.order('planned_date', { ascending: true });
+        const { data, error } = await query.order('planned_date', { ascending: true }).limit(7 * 4 * 2);
 
         if (error) throw error;
         return data as (MealPlan & { recipe: Tables<'recipes'> })[];
@@ -42,7 +39,6 @@ export function useMealPlans(childId?: string) {
     });
   };
 
-  // Получить планы питания на конкретную дату
   const getMealPlansByDate = (date: Date) => {
     return useQuery({
       queryKey: ['meal_plans', user?.id, childId, date.toISOString().split('T')[0]],
@@ -50,21 +46,15 @@ export function useMealPlans(childId?: string) {
         if (!user) return [];
 
         const dateStr = date.toISOString().split('T')[0];
-
         let query = supabase
           .from('meal_plans')
-          .select(`
-            *,
-            recipe:recipes(*)
-          `)
+          .select(MEAL_PLANS_RECIPE_SELECT)
           .eq('user_id', user.id)
           .eq('planned_date', dateStr);
 
-        if (childId) {
-          query = query.eq('child_id', childId);
-        }
+        if (childId) query = query.eq('child_id', childId);
 
-        const { data, error } = await query.order('meal_type', { ascending: true });
+        const { data, error } = await query.order('meal_type', { ascending: true }).limit(10);
 
         if (error) throw error;
         return data as (MealPlan & { recipe: Tables<'recipes'> })[];

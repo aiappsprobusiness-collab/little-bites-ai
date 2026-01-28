@@ -24,8 +24,8 @@ export function SelectedChildProvider({ children: childrenProp }: { children: Re
     if (children.length > 0 && !selectedChildId) {
       setSelectedChildId(children[0].id);
     }
-    // If selected child was deleted, select first available
-    if (selectedChildId && children.length > 0 && !children.find(c => c.id === selectedChildId)) {
+    // If selected child was deleted, select first available ("family" is never a child id)
+    if (selectedChildId && selectedChildId !== "family" && children.length > 0 && !children.find(c => c.id === selectedChildId)) {
       setSelectedChildId(children[0].id);
     }
   }, [children, selectedChildId]);

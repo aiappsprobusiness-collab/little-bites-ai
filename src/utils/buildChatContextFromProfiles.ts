@@ -38,6 +38,8 @@ export interface BuildChatContextInput {
   userMessage: string;
   children: ChildProfile[];
   selectedChild: ChildProfile | null | undefined;
+  /** Когда "family", использовать всех детей для контекста. */
+  selectedChildId?: string | null;
   calculateAgeInMonths: (birthDate: string) => number;
 }
 
@@ -175,12 +177,17 @@ export function buildChatContextFromProfiles({
   userMessage,
   children,
   selectedChild,
+  selectedChildId,
   calculateAgeInMonths,
 }: BuildChatContextInput): BuildChatContextResult {
   const matched = matchProfilesInMessage(userMessage, children);
 
   if (matched.length > 0) {
     return buildChildDataFromProfiles(matched, calculateAgeInMonths);
+  }
+
+  if (selectedChildId === "family" && children.length > 0) {
+    return buildChildDataFromProfiles(children, calculateAgeInMonths);
   }
 
   if (isFamilyIntent(userMessage) && children.length > 1) {

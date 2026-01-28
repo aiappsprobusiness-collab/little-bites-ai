@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SelectedChildProvider } from "@/contexts/SelectedChildContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -35,95 +35,96 @@ const App = () => (
             <Toaster />
             <Sonner />
             <Routes>
-            <Route path="/auth" element={<AuthPage />} />
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <HomePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/scan"
-              element={
-                <ProtectedRoute>
-                  <ScanPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute>
-                  <ProfilePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/meal-plan"
-              element={
-                <ProtectedRoute>
-                  <MealPlanPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/shopping"
-              element={
-                <ProtectedRoute>
-                  <ShoppingPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/recipe/:id"
-              element={
-                <ProtectedRoute>
-                  <RecipePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/recipe/:id/edit"
-              element={
-                <ProtectedRoute>
-                  <RecipeEditPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/recipe/new"
-              element={
-                <ProtectedRoute>
-                  <RecipeEditPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/recipes"
-              element={
-                <ProtectedRoute>
-                  <RecipesPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/chat"
-              element={
-                <ProtectedRoute>
-                  <ChatPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/favorites"
-              element={
-                <ProtectedRoute>
-                  <FavoritesPage />
-                </ProtectedRoute>
-              }
-            />
+              <Route path="/auth" element={<AuthPage />} />
+              <Route path="/" element={<Navigate to="/chat" replace />} />
+              <Route
+                path="/home"
+                element={
+                  <ProtectedRoute>
+                    <HomePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/scan"
+                element={
+                  <ProtectedRoute>
+                    <ScanPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/meal-plan"
+                element={
+                  <ProtectedRoute>
+                    <MealPlanPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/shopping"
+                element={
+                  <ProtectedRoute>
+                    <ShoppingPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/recipe/:id"
+                element={
+                  <ProtectedRoute>
+                    <RecipePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/recipe/:id/edit"
+                element={
+                  <ProtectedRoute>
+                    <RecipeEditPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/recipe/new"
+                element={
+                  <ProtectedRoute>
+                    <RecipeEditPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/recipes"
+                element={
+                  <ProtectedRoute>
+                    <RecipesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/chat"
+                element={
+                  <ProtectedRoute>
+                    <ChatPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/favorites"
+                element={
+                  <ProtectedRoute>
+                    <FavoritesPage />
+                  </ProtectedRoute>
+                }
+              />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
