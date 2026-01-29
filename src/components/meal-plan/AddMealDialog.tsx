@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { FavoriteItem } from "@/store/useAppStore";
 
 export interface MealTypeOption {
   id: string;
@@ -25,67 +26,73 @@ export interface MealTypeOption {
 interface AddMealDialogProps {
   recipes?: any[];
   chatRecipes?: any[];
+  favorites?: FavoriteItem[];
   mealTypes: MealTypeOption[];
   selectedMealType: string | null;
   onSelectMealType: (type: string) => void;
   onAdd: (recipeId: string, mealType: string) => void;
+  onAddFromFavorite?: (favoriteId: string, mealType: string) => void;
   isLoading: boolean;
 }
 
 export function AddMealDialog({
   recipes = [],
   chatRecipes = [],
+  favorites = [],
   mealTypes: mealTypesOptions,
   selectedMealType,
   onSelectMealType,
   onAdd,
+  onAddFromFavorite,
   isLoading,
 }: AddMealDialogProps) {
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
+  const [selectedFavoriteId, setSelectedFavoriteId] = useState<string>("");
   // Используем selectedMealType напрямую, с fallback на первый тип (Завтрак)
   // Важно: используем вычисляемое значение, которое обновляется при изменении selectedMealType
   const currentMealType = selectedMealType || mealTypesOptions[0]?.id || "breakfast";
-  
+
   // Фильтруем рецепты из чата - показываем все рецепты с тегом 'chat'
   // независимо от типа приема пищи (пользователь может выбрать любой тип)
   const filteredChatRecipes = (chatRecipes || []).filter(recipe => {
     if (!recipe) {
       return false;
     }
-    
+
     if (!recipe.tags || !Array.isArray(recipe.tags)) {
       return false;
     }
-    
+
     const hasChatTag = recipe.tags.includes('chat');
     if (!hasChatTag) {
       return false;
     }
-    
+
     // Показываем все рецепты из чата, независимо от типа приема пищи
     // Пользователь может выбрать любой тип приема пищи для любого рецепта
     return true;
   });
-  
-  // Объединяем обычные рецепты и рецепты из чата
-  // Рецепты из чата показываем первыми
-  const regularRecipes = (recipes || []).filter(r => !r.tags || !Array.isArray(r.tags) || !r.tags.includes('chat'));
-  const allRecipes = [...filteredChatRecipes, ...regularRecipes];
 
   // Сбрасываем выбранный рецепт при изменении типа приема пищи
   useEffect(() => {
     setSelectedRecipeId("");
+    setSelectedFavoriteId("");
   }, [selectedMealType]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedRecipeId) {
-      // Используем текущее значение типа приема пищи
+    if (selectedFavoriteId && onAddFromFavorite) {
+      // Добавляем из избранного
+      onAddFromFavorite(selectedFavoriteId, currentMealType);
+      setSelectedFavoriteId("");
+    } else if (selectedRecipeId) {
+      // Добавляем обычный рецепт
       onAdd(selectedRecipeId, currentMealType);
-      // Сбрасываем форму после отправки
       setSelectedRecipeId("");
     }
   };
+
+  const hasSelection = selectedRecipeId || selectedFavoriteId;
 
   return (
     <DialogContent>
@@ -98,8 +105,8 @@ export function AddMealDialog({
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <label className="text-sm font-medium">Тип приема пищи</label>
-          <Select 
-            value={currentMealType} 
+          <Select
+            value={currentMealType}
             onValueChange={(value) => {
               onSelectMealType(value);
             }}
@@ -119,35 +126,58 @@ export function AddMealDialog({
 
         <div className="space-y-2">
           <label className="text-sm font-medium">Рецепт</label>
-          <Select value={selectedRecipeId} onValueChange={setSelectedRecipeId}>
+          <Select
+            value={selectedFavoriteId ? `favorite_${selectedFavoriteId}` : selectedRecipeId}
+            onValueChange={(value) => {
+              if (value.startsWith('favorite_')) {
+                setSelectedFavoriteId(value.replace('favorite_', ''));
+                setSelectedRecipeId("");
+              } else {
+                setSelectedRecipeId(value);
+                setSelectedFavoriteId("");
+              }
+            }}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Выберите рецепт" />
             </SelectTrigger>
             <SelectContent>
-              {allRecipes.length > 0 ? (
+              {favorites.length > 0 || filteredChatRecipes.length > 0 ? (
                 <>
-                  {filteredChatRecipes.length > 0 && (
+                  {/* Избранное */}
+                  {favorites.length > 0 && (
                     <>
                       <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
-                        Из чата (недавние)
+                        ❤️ Избранное
                       </div>
-                      {filteredChatRecipes.map((recipe) => (
-                        <SelectItem key={recipe.id} value={recipe.id}>
-                          💬 {recipe.title}
+                      {favorites.map((favorite) => (
+                        <SelectItem key={favorite.id} value={`favorite_${favorite.id}`}>
+                          {favorite.recipe.title}
                         </SelectItem>
                       ))}
-                      {regularRecipes.length > 0 && (
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t border-b mt-1">
-                          Мои рецепты
-                        </div>
-                      )}
                     </>
                   )}
-                  {regularRecipes.map((recipe) => (
-                    <SelectItem key={recipe.id} value={recipe.id}>
-                      {recipe.title}
-                    </SelectItem>
-                  ))}
+
+                  {/* История генераций чата */}
+                  {filteredChatRecipes.length > 0 && (
+                    <>
+                      {favorites.length > 0 && (
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t border-b mt-1">
+                          💬 История генераций чата
+                        </div>
+                      )}
+                      {!favorites.length && (
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
+                          💬 История генераций чата
+                        </div>
+                      )}
+                      {filteredChatRecipes.map((recipe) => (
+                        <SelectItem key={recipe.id} value={recipe.id}>
+                          {recipe.title}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </>
               ) : (
                 <div className="p-4 text-center text-sm text-muted-foreground">
@@ -162,7 +192,7 @@ export function AddMealDialog({
           type="submit"
           variant="mint"
           className="w-full"
-          disabled={isLoading || !selectedRecipeId}
+          disabled={isLoading || !hasSelection}
         >
           {isLoading ? (
             <>
