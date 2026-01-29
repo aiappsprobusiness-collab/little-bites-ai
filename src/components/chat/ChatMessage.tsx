@@ -351,7 +351,16 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           });
           toast({ title: "Поделиться", description: "Рецепт отправлен" });
         } else {
-          await navigator.clipboard?.writeText(shareText);
+          const canCopy = typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function";
+          if (!canCopy) {
+            toast({
+              variant: "destructive",
+              title: "Копирование недоступно",
+              description: "В этом браузере нельзя скопировать рецепт. Скопируйте вручную.",
+            });
+            return;
+          }
+          await navigator.clipboard.writeText(shareText);
           toast({ title: "Рецепт скопирован для отправки" });
         }
       } catch (e: any) {
