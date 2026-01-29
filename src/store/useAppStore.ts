@@ -7,6 +7,7 @@ const STORAGE_KEY = "little-bites-app-store";
 
 export interface FavoriteItem {
   id: string;
+  remoteId?: string;
   recipe: RecipeSuggestion;
   createdAt: string;
 }
@@ -24,8 +25,9 @@ interface AppState {
   favorites: FavoriteItem[];
   shoppingList: ShoppingListItem[];
 
-  addFavorite: (recipe: RecipeSuggestion) => void;
+  addFavorite: (recipe: RecipeSuggestion) => string;
   removeFavorite: (id: string) => void;
+  setFavoriteRemoteId: (localId: string, remoteId: string) => void;
 
   /** Добавляет ингредиенты в список покупок (строки парсятся через parseIngredient). Без дубликатов по name. */
   addToShoppingList: (ingredients: string[], sourceRecipe?: string) => void;
@@ -44,21 +46,31 @@ export const useAppStore = create<AppState>()(
       favorites: [],
       shoppingList: [],
 
-      addFavorite: (recipe) =>
+      addFavorite: (recipe) => {
+        const id = generateId();
         set((state) => ({
           favorites: [
             {
-              id: generateId(),
+              id,
               recipe,
               createdAt: new Date().toISOString(),
             },
             ...state.favorites,
           ],
-        })),
+        }));
+        return id;
+      },
 
       removeFavorite: (id) =>
         set((state) => ({
           favorites: state.favorites.filter((f) => f.id !== id),
+        })),
+
+      setFavoriteRemoteId: (localId, remoteId) =>
+        set((state) => ({
+          favorites: state.favorites.map((favorite) =>
+            favorite.id === localId ? { ...favorite, remoteId } : favorite
+          ),
         })),
 
       addToShoppingList: (ingredients, sourceRecipe) =>

@@ -248,6 +248,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const { addItem, createList, activeList } = useShoppingLists();
     const favorites = useAppStore((s) => s.favorites);
     const addToAppStoreFavorite = useAppStore((s) => s.addFavorite);
+    const setFavoriteRemoteId = useAppStore((s) => s.setFavoriteRemoteId);
     const addToAppStoreShoppingList = useAppStore((s) => s.addToShoppingList);
     const { toast } = useToast();
 
@@ -272,9 +273,12 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         cookingTime: recipe.cookingTime || 0,
         ageRange: recipe.ageRange || "",
       };
-      addToAppStoreFavorite(recipeSuggestion);
+      const localId = addToAppStoreFavorite(recipeSuggestion);
       try {
-        await addFavorite({ recipe: recipeSuggestion, memberIds: [] });
+        const saved = await addFavorite({ recipe: recipeSuggestion, memberIds: [] });
+        if (saved?.id) {
+          setFavoriteRemoteId(localId, saved.id);
+        }
       } catch {
         // локально уже добавлен
       }

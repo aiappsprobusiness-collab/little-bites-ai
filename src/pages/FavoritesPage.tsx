@@ -4,16 +4,52 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trash2, ChefHat, ShoppingCart, MessageCircle, Clock } from "lucide-react";
-import { useAppStore } from "@/store/useAppStore";
+import { useAuth } from "@/hooks/useAuth";
+import { useFavorites } from "@/hooks/useFavorites";
+import { useAppStore, type FavoriteItem } from "@/store/useAppStore";
 import { useToast } from "@/hooks/use-toast";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const normalizeTitle = (title?: string) => title?.toLowerCase().trim() ?? "";
 
 export default function FavoritesPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { favorites, removeFavorite, addToShoppingList } = useAppStore();
+  const { user } = useAuth();
+  const { favorites, removeFavorite: removeFavoriteLocal, addToShoppingList } = useAppStore();
+  const { favorites: remoteFavorites, removeFavorite: removeFavoriteRemote } = useFavorites();
 
-  const handleRemove = (id: string) => {
-    removeFavorite(id);
+  const getRemoteFavoriteId = (favorite: FavoriteItem) => {
+    if (favorite.remoteId && UUID_PATTERN.test(favorite.remoteId)) {
+      return favorite.remoteId;
+    }
+    if (UUID_PATTERN.test(favorite.id)) {
+      return favorite.id;
+    }
+    const titleKey = normalizeTitle(favorite.recipe.title);
+    if (!titleKey) return null;
+    const match = remoteFavorites.find(
+      (remote) => normalizeTitle(remote.recipe.title) === titleKey
+    );
+    return match?.id ?? null;
+  };
+
+  const handleRemove = async (favorite: FavoriteItem) => {
+    const remoteId = user ? getRemoteFavoriteId(favorite) : null;
+    if (remoteId) {
+      try {
+        await removeFavoriteRemote(remoteId);
+      } catch (error) {
+        toast({
+          title: "Не удалось удалить из избранного",
+          description: "Проверьте соединение и попробуйте снова",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    removeFavoriteLocal(favorite.id);
     toast({ title: "Удалено из избранного" });
   };
 
@@ -58,7 +94,7 @@ export default function FavoritesPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleRemove(favorite.id)}
+                      onClick={() => handleRemove(favorite)}
                       className="text-destructive hover:text-destructive shrink-0"
                       aria-label="Удалить из избранного"
                     >
