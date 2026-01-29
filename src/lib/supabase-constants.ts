@@ -8,8 +8,7 @@ export const RECIPES_LIST_SELECT =
   'id, title, image_url, created_at, cooking_time_minutes, is_favorite, tags, child_id, description, rating';
 
 /**
- * Select для одного рецепта с ингредиентами и шагами.
- * Лимиты embed: recipe_ingredients 5, recipe_steps 3 — через .limit(..., { referencedTable }).
+ * Select для одного рецепта с ингредиентами и шагами (без лимита по количеству).
  */
 export const RECIPES_DETAIL_SELECT = `${RECIPES_LIST_SELECT}, ingredients:recipe_ingredients(name, amount, unit), steps:recipe_steps(instruction, step_number)`;
 

@@ -62,7 +62,8 @@ export function useDeepSeekAPI() {
           messages,
           childData,
           type,
-          stream: false, // Отключаем streaming для корректного парсинга JSON
+          stream: false,
+          maxRecipes: 1,
         }),
       });
 

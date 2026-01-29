@@ -32,9 +32,10 @@ export function parseIngredient(raw: string): ParsedIngredient {
   if (dashMatch) {
     const beforeDash = dashMatch[1].trim();
     const afterDash = dashMatch[2].trim();
-    
+
     // Если после тире есть число + единица, это количество
-    const quantityMatch = afterDash.match(/^(\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?)\s*([а-яё]+\.?|шт|г|кг|мл|л|ст\.л\.|ч\.л\.)/i);
+    // Важно: конкретные единицы (мл, л, ст.л., ч.л.) идут перед общим паттерном [а-яё]+
+    const quantityMatch = afterDash.match(/^(\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.|[а-яё]+\.?)/i);
     if (quantityMatch) {
       cleaned = `${beforeDash} ${afterDash}`;
     } else {
@@ -45,9 +46,10 @@ export function parseIngredient(raw: string): ParsedIngredient {
 
   // Извлекаем количество и единицу измерения
   // Паттерны: "6-8 шт", "1 шт", "100 г", "2 ст.л.", "по вкусу"
+  // Важно: конкретные единицы (мл, л, ст.л., ч.л.) идут перед общим паттерном [а-яё]+
   const quantityPatterns = [
-    /(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*([а-яё]+\.?|шт|г|кг|мл|л|ст\.л\.|ч\.л\.)/i, // "6-8 шт"
-    /(\d+(?:[.,]\d+)?)\s*([а-яё]+\.?|шт|г|кг|мл|л|ст\.л\.|ч\.л\.)/i, // "1 шт", "100 г"
+    /(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.|[а-яё]+\.?)/i, // "6-8 шт"
+    /(\d+(?:[.,]\d+)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.|[а-яё]+\.?)/i, // "1 шт", "100 г"
     /по\s+вкусу/i, // "по вкусу"
   ];
 
@@ -89,6 +91,12 @@ export function parseIngredient(raw: string): ParsedIngredient {
     .replace(/\s+/g, ' ') // Множественные пробелы в один
     .trim();
 
+  // Убираем лишние символы в конце: пробел и точка, пробел и цифра (например "Помидоры .", "Лук 1/.")
+  name = name
+    .replace(/\s+\.\s*$/, '') // пробел и точка в конце
+    .replace(/\s+\d[\d/.]*$/, '') // пробел и цифра (и слэш/точка) в конце
+    .trim();
+
   // Если название пустое, возвращаем исходную строку без парсинга
   if (!name) {
     return { name: raw.trim(), quantity: null, unit: null };
@@ -101,25 +109,54 @@ export function parseIngredient(raw: string): ParsedIngredient {
 }
 
 /**
+ * Убирает лишние символы в конце названия продукта (пробел+точка, пробел+цифра).
+ * Использовать при отображении названий из БД.
+ */
+export function cleanProductNameDisplay(name: string): string {
+  if (!name || typeof name !== 'string') return name;
+  return name
+    .replace(/\s+\.\s*$/, '')
+    .replace(/\s+\d[\d/.]*$/, '')
+    .trim();
+}
+
+/**
  * Нормализует единицу измерения к стандартному виду
  */
 function normalizeUnit(unit: string): string {
   const u = unit.toLowerCase().trim();
-  
+
   // Штуки
   if (u.includes('шт') || u.includes('штук')) return 'шт';
-  
+
   // Вес
   if (u.includes('кг') || u.includes('килограмм')) return 'кг';
   if (u.includes('г') || u.includes('грамм')) return 'г';
-  
-  // Объем
-  if (u.includes('л') || u.includes('литр')) return 'л';
+
+  // Объем: проверяем мл ПЕРЕД л, иначе "мл" матчится на "л"
   if (u.includes('мл') || u.includes('миллилитр')) return 'мл';
-  
+  if (u === 'л' || u.includes('литр')) return 'л';
+
   // Столовые/чайные ложки
   if (u.includes('ст.л') || u.includes('столовая')) return 'ст.л.';
   if (u.includes('ч.л') || u.includes('чайная')) return 'ч.л.';
-  
+
   return u;
+}
+
+/**
+ * Извлекает из текста строки, похожие на ингредиенты (с тире или цифрами).
+ * Разбивает по переносам строк и запятым, возвращает отфильтрованные непустые строки.
+ */
+export function parseIngredients(text: string): string[] {
+  if (!text || typeof text !== 'string') return [];
+  const lines = text
+    .split(/[\n,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return lines.filter((line) => {
+    const hasDash = /[—\-]/.test(line);
+    const hasDigit = /\d/.test(line);
+    return hasDash || hasDigit;
+  });
 }

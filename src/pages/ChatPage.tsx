@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, ChevronDown, Pencil } from "lucide-react";
+import { useLocation } from "react-router-dom";
+import { Send, Loader2, Pencil, Plus } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -31,28 +32,10 @@ interface Message {
   rawContent?: string;
 }
 
-const SCENARIO_CHIPS = [
-  "Придумать ужин на сегодня",
-  "Быстрый завтрак ребёнку 2–3 года",
-  "Идея перекуса в дорогу",
-  "Что приготовить из...",
-];
-
-const HINTS = [
-  "Напишите, что у вас есть дома, или для кого вы готовите – я подберу идеи.",
-  "Ужин, ребёнок 2 года, мало времени.",
-  "Что есть в холодильнике? Напишите продукты – предложу варианты ужина.",
-  "Напишите возраст ребёнка и сколько у вас времени – подберу быстрый ужин.",
-  "Остались вчерашние макароны или каши? Напишите, придумаю, как вкусно их использовать.",
-  "Нет сил готовить долго? Напишите 3–4 продукта, которые точно есть, сделаем ужин из них.",
-  "Нужен ужин без духовки и сложных шагов – расскажите, что у вас есть на кухне.",
-  "Малыш привередничает? Напишите, что он сейчас ест/отказывается есть – предложу идеи.",
-  "Нужны блюда без сахара/глютена/лактозы? Уточните ограничения в профиле – адаптирую рецепты.",
-];
-
 const STARTER_MESSAGE = "Я помогу с идеями, что приготовить для вашей семьи. Выберите, для кого готовим, и задайте вопрос.";
 
 export default function ChatPage() {
+  const location = useLocation();
   const { toast } = useToast();
   const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
   const { canGenerate, isPremium, remaining, dailyLimit } = useSubscription();
@@ -63,10 +46,11 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [sheetCreateMode, setSheetCreateMode] = useState(false);
   const [input, setInput] = useState("");
-  const [hint] = useState(() => HINTS[Math.floor(Math.random() * HINTS.length)]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const prefillSentRef = useRef(false);
 
   const childIdForSave = selectedChildId && selectedChildId !== "family" ? selectedChildId : undefined;
 
@@ -172,10 +156,22 @@ export default function ChatPage() {
     }
   };
 
-  const handleScenarioChip = (text: string) => {
-    setInput(text);
-    textareaRef.current?.focus();
-  };
+  // Обработка предзаполненного сообщения из ScanPage (после загрузки истории и определения handleSend)
+  useEffect(() => {
+    const state = location.state as { prefillMessage?: string; sourceProducts?: string[] } | null;
+    if (state?.prefillMessage && !prefillSentRef.current && !isLoadingHistory && messages.length === 0) {
+      prefillSentRef.current = true;
+      const prefillText = state.prefillMessage;
+      setInput(prefillText);
+      // Автоматически отправляем сообщение после небольшой задержки
+      const timer = setTimeout(() => {
+        handleSend(prefillText);
+        // Очищаем state после использования
+        window.history.replaceState({}, document.title);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [location.state, isLoadingHistory, messages.length, handleSend]);
 
   const handleDeleteMessage = async (messageId: string) => {
     const originalId = messageId.replace(/-user$/, "").replace(/-assistant$/, "");
@@ -224,7 +220,6 @@ export default function ChatPage() {
             >
               <SelectTrigger className="w-[180px] bg-card">
                 <SelectValue />
-                <ChevronDown className="h-4 w-4 opacity-50" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="family">Семья</SelectItem>
@@ -235,35 +230,33 @@ export default function ChatPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => {
+                setSheetCreateMode(true);
+                setShowProfileSheet(true);
+              }}
+              title="Добавить профиль"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
             {selectedChild && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setShowProfileSheet(true)}
+                onClick={() => {
+                  setSheetCreateMode(false);
+                  setShowProfileSheet(true);
+                }}
                 title="Редактировать профиль"
               >
                 <Pencil className="w-4 h-4" />
               </Button>
             )}
           </div>
-          {children.length > 0 && (
-            <div className="w-full overflow-x-auto">
-              <div className="flex gap-2 pb-1 min-w-0">
-                {children.map((c) => (
-                  <Button
-                    key={c.id}
-                    variant={selectedChildId === c.id ? "default" : "outline"}
-                    size="sm"
-                    className="rounded-full shrink-0"
-                    onClick={() => setSelectedChildId(c.id)}
-                  >
-                    {c.name}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Messages */}
@@ -314,32 +307,16 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Chips, hint, input */}
-        <div className="border-t border-border/50 bg-background/95 backdrop-blur px-4 py-3 space-y-2 safe-bottom">
-          <div className="w-full overflow-x-auto">
-            <div className="flex gap-2 pb-1 min-w-0">
-              {SCENARIO_CHIPS.map((text) => (
-                <Button
-                  key={text}
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full shrink-0"
-                  onClick={() => handleScenarioChip(text)}
-                >
-                  {text}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">{hint}</p>
+        {/* Input */}
+        <div className="border-t border-border/50 bg-background/95 backdrop-blur px-4 py-3 safe-bottom">
           <div className="flex gap-2">
             <Textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Опишите, что приготовить или что у вас есть дома…"
-              className="min-h-[44px] max-h-[120px] resize-none rounded-2xl bg-card border-border/50 py-3"
+              placeholder="Что приготовить?"
+              className="min-h-[44px] max-h-[120px] resize-none rounded-2xl bg-card border-border/50 py-3 pb-4"
               rows={1}
             />
             <Button
@@ -362,8 +339,14 @@ export default function ChatPage() {
       <Paywall isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
       <ProfileEditSheet
         open={showProfileSheet}
-        onOpenChange={setShowProfileSheet}
-        child={selectedChild}
+        onOpenChange={(open) => {
+          setShowProfileSheet(open);
+          if (!open) setSheetCreateMode(false);
+        }}
+        child={sheetCreateMode ? null : selectedChild ?? null}
+        createMode={sheetCreateMode}
+        onAddNew={() => setSheetCreateMode(true)}
+        onCreated={(childId) => setSelectedChildId(childId)}
       />
     </MobileLayout>
   );

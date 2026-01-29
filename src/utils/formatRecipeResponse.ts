@@ -83,7 +83,7 @@ export function formatRecipeResponse(aiResponse: string): string {
     return formatOne(extracted.single).trim();
   }
   if (extracted.multi && extracted.multi.length > 0) {
-    return extracted.multi.map((r) => formatOne(r)).join('\n---\n\n').trim();
+    return formatOne(extracted.multi[0]).trim();
   }
 
   return aiResponse;

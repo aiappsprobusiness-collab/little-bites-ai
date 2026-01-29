@@ -1,13 +1,13 @@
 import { motion } from "framer-motion";
-import { Home, Camera, Calendar, MessageCircle, ShoppingCart } from "lucide-react";
+import { Heart, Camera, Calendar, MessageCircle, ShoppingCart } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { icon: MessageCircle, label: "Чат", path: "/chat" },
-  { icon: Home, label: "Главная", path: "/home" },
-  { icon: Calendar, label: "План", path: "/meal-plan" },
+  { icon: Heart, label: "Избранное", path: "/favorites" },
   { icon: Camera, label: "", path: "/scan", isMain: true },
+  { icon: Calendar, label: "План", path: "/meal-plan" },
   { icon: ShoppingCart, label: "Покупки", path: "/shopping" },
 ];
 

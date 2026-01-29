@@ -1,10 +1,19 @@
-import { useState, useRef, forwardRef } from "react";
+import { useState, useRef, forwardRef, useMemo } from "react";
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
-import { Trash2, ChefHat, Clock, Star, Share2, ShoppingCart } from "lucide-react";
+import { Trash2, ChefHat, Clock, Heart, ShoppingCart, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
+import { useAppStore } from "@/store/useAppStore";
 import { parseIngredient } from "@/utils/parseIngredient";
 import { detectCategory, resolveUnit } from "@/utils/productUtils";
 import type { RecipeSuggestion } from "@/services/deepseek";
@@ -92,12 +101,56 @@ function parseRecipeFromContent(content: string): Recipe | null {
         // Невалидный JSON
       }
     }
+
+    // Fallback: парсим форматированный текст (как от formatRecipeResponse) — для сообщений из истории
+    const fromFormatted = parseRecipeFromFormattedText(content);
+    if (fromFormatted) return fromFormatted;
   } catch (e) {
     // Не JSON или невалидный JSON - возвращаем null
     return null;
   }
 
   return null;
+}
+
+/**
+ * Парсит рецепт из форматированного текста (🍽️ **Title**, 🥘 **Ингредиенты:**, 👨‍🍳 **Приготовление:**).
+ * Нужно для сообщений из истории, где сохраняется только отформатированный текст.
+ */
+function parseRecipeFromFormattedText(text: string): Recipe | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const titleMatch = trimmed.match(/(?:🍽️\s*)?\*\*([^*]+)\*\*/);
+  const title = titleMatch ? titleMatch[1].trim() : null;
+  if (!title) return null;
+
+  const timeMatch = trimmed.match(/⏱️\s*Время приготовления:\s*(\d+)\s*мин/);
+  const cookingTime = timeMatch ? parseInt(timeMatch[1], 10) : undefined;
+
+  const ingredients: string[] = [];
+  const ingsSection = trimmed.match(/(?:🥘\s*)?\*\*Ингредиенты:\*\*\s*\n([\s\S]*?)(?=(?:👨‍🍳\s*)?\*\*Приготовление:\*\*|$)/i);
+  if (ingsSection && ingsSection[1]) {
+    ingsSection[1].trim().split(/\n/).forEach((line) => {
+      const cleaned = line.replace(/^\d+\.\s*/, '').replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, '').trim();
+      if (cleaned) ingredients.push(cleaned);
+    });
+  }
+
+  const steps: string[] = [];
+  const stepsSection = trimmed.match(/(?:👨‍🍳\s*)?\*\*Приготовление:\*\*\s*\n([\s\S]*?)$/i);
+  if (stepsSection && stepsSection[1]) {
+    stepsSection[1].trim().split(/\n/).forEach((line) => {
+      const cleaned = line.replace(/^\d+\.\s*/, '').trim();
+      if (cleaned) steps.push(cleaned);
+    });
+  }
+
+  return {
+    title,
+    ingredients: ingredients.length ? ingredients : undefined,
+    steps: steps.length ? steps : undefined,
+    cookingTime,
+  };
 }
 
 /**
@@ -185,38 +238,73 @@ function formatRecipe(recipe: Recipe): string {
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
   ({ id, role, content, timestamp, rawContent, onDelete }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
+    const [showShoppingModal, setShowShoppingModal] = useState(false);
+    const [selectedIngredients, setSelectedIngredients] = useState<Set<number>>(new Set());
     const x = useMotionValue(0);
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
     const constraintsRef = useRef(null);
     const { addFavorite, isAdding } = useFavorites();
     const { addItem, createList, activeList } = useShoppingLists();
+    const favorites = useAppStore((s) => s.favorites);
+    const addToAppStoreFavorite = useAppStore((s) => s.addFavorite);
+    const addToAppStoreShoppingList = useAppStore((s) => s.addToShoppingList);
     const { toast } = useToast();
 
     const sourceForParse = (rawContent ?? content).trim();
     const recipe = role === "assistant" ? parseRecipeFromContent(sourceForParse) : null;
     const displayContent = recipe ? formatRecipe(recipe) : content;
 
+    const isFavorite =
+      !!recipe &&
+      favorites.some(
+        (f) => f.recipe.title?.toLowerCase().trim() === recipe.title?.toLowerCase().trim()
+      );
+
     const handleAddToFavorites = async () => {
       if (!recipe) return;
+      if (isFavorite) return;
+      const recipeSuggestion: RecipeSuggestion = {
+        title: recipe.title,
+        description: recipe.description || "",
+        ingredients: recipe.ingredients || [],
+        steps: recipe.steps || [],
+        cookingTime: recipe.cookingTime || 0,
+        ageRange: recipe.ageRange || "",
+      };
+      console.log("[ChatMessage] Добавить в избранное", recipe.title);
+      addToAppStoreFavorite(recipeSuggestion);
       try {
-        const recipeSuggestion: RecipeSuggestion = {
-          title: recipe.title,
-          description: recipe.description || '',
-          ingredients: recipe.ingredients || [],
-          steps: recipe.steps || [],
-          cookingTime: recipe.cookingTime || 0,
-          ageRange: recipe.ageRange || '',
-        };
         await addFavorite({ recipe: recipeSuggestion, memberIds: [] });
-        toast({ title: "Добавлено в избранное", description: `Рецепт «${recipe.title}» добавлен в избранное` });
-      } catch (e: any) {
-        toast({ variant: "destructive", title: "Ошибка", description: e.message || "Не удалось добавить в избранное" });
+      } catch {
+        // локально уже добавлен
       }
+      toast({ title: "Добавлено в избранное" });
+    };
+
+    const openShoppingModal = () => {
+      if (!recipe?.ingredients?.length) return;
+      setSelectedIngredients(new Set(recipe.ingredients.map((_, i) => i)));
+      setShowShoppingModal(true);
+    };
+
+    const toggleIngredient = (index: number) => {
+      setSelectedIngredients((prev) => {
+        const next = new Set(prev);
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
+        return next;
+      });
     };
 
     const handleAddToList = async () => {
       if (!recipe?.ingredients?.length) return;
+      const toAdd = recipe.ingredients.filter((_, i) => selectedIngredients.has(i));
+      if (toAdd.length === 0) {
+        toast({ title: "Выберите ингредиенты", variant: "destructive" });
+        return;
+      }
+      addToAppStoreShoppingList(toAdd, recipe.title);
       try {
         let listId = activeList?.id;
         if (!listId) {
@@ -224,7 +312,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           listId = list?.id;
         }
         if (!listId) throw new Error("Нет активного списка");
-        for (const raw of recipe.ingredients) {
+        for (const raw of toAdd) {
           const { name, quantity, unit } = parseIngredient(raw);
           if (!name) continue;
           const u = resolveUnit(unit, name);
@@ -238,9 +326,38 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             shopping_list_id: listId,
           });
         }
-        toast({ title: "В список покупок", description: `Ингредиенты «${recipe.title}» добавлены` });
+        setShowShoppingModal(false);
+        toast({ title: "В список покупок", description: `Добавлено ${toAdd.length} ингредиент(ов) из «${recipe.title}»` });
       } catch (e: any) {
-        toast({ variant: "destructive", title: "Ошибка", description: e.message || "Не удалось добавить в список" });
+        setShowShoppingModal(false);
+        toast({ title: "В список покупок", description: `Добавлено ${toAdd.length} ингредиент(ов) в локальный список` });
+      }
+    };
+
+    const shareText = useMemo(() => {
+      const base = recipe ? formatRecipe(recipe) : typeof content === "string" ? content : "";
+      const title = recipe?.title ?? "Рецепт";
+      const appMention = "\n\n— Рецепт из приложения Little Bites";
+      return `${title}\n\n${base}${appMention}`;
+    }, [recipe, content]);
+
+    const handleShare = async () => {
+      if (!shareText) return;
+      try {
+        if (typeof navigator !== "undefined" && navigator.share) {
+          await navigator.share({
+            title: recipe?.title ?? "Рецепт",
+            text: shareText,
+          });
+          toast({ title: "Поделиться", description: "Рецепт отправлен" });
+        } else {
+          await navigator.clipboard?.writeText(shareText);
+          toast({ title: "Рецепт скопирован для отправки" });
+        }
+      } catch (e: any) {
+        if (e?.name !== "AbortError") {
+          toast({ variant: "destructive", title: "Ошибка", description: e.message || "Не удалось поделиться" });
+        }
       }
     };
 
@@ -282,7 +399,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           className={`relative max-w-[85%] cursor-grab active:cursor-grabbing`}
         >
           <div
-            className={`rounded-2xl px-4 py-3 ${role === "user"
+            className={`rounded-2xl px-4 py-3 relative ${role === "user"
               ? "bg-primary text-primary-foreground rounded-br-sm"
               : "bg-card shadow-soft rounded-bl-sm"
               }`}
@@ -358,30 +475,36 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     </ol>
                   </div>
                 )}
-                <div className="flex items-center gap-2 pt-2 border-t border-border/30">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleAddToFavorites}
-                    disabled={isAdding}
-                    className="h-8 px-2"
-                    title="Добавить в избранное"
-                  >
-                    <Star className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 px-2" disabled title="Поделиться">
-                    <Share2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleAddToList}
-                    className="h-8 px-2"
-                    title="Добавить в список покупок"
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                  </Button>
-                </div>
+                <Dialog open={showShoppingModal} onOpenChange={setShowShoppingModal}>
+                  <DialogContent className="max-w-sm max-h-[80vh] flex flex-col">
+                    <DialogHeader>
+                      <DialogTitle>Добавить в список покупок</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground">Выберите ингредиенты для добавления</p>
+                    <div className="overflow-y-auto space-y-2 py-2">
+                      {recipe?.ingredients?.map((ing, i) => (
+                        <label
+                          key={i}
+                          className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
+                        >
+                          <Checkbox
+                            checked={selectedIngredients.has(i)}
+                            onCheckedChange={() => toggleIngredient(i)}
+                          />
+                          <span className="text-sm flex-1">{ing}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowShoppingModal(false)}>
+                        Отмена
+                      </Button>
+                      <Button onClick={handleAddToList}>
+                        Добавить выбранное
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             ) : (
               <p className="text-base whitespace-pre-wrap select-none">{displayContent}</p>
@@ -392,6 +515,63 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 minute: "2-digit",
               })}
             </p>
+            {role === "assistant" && recipe && (
+              <div
+                className="flex flex-row gap-2 mt-2 pt-2 min-h-[44px] border-t border-border/50 shrink-0"
+                style={{ touchAction: "manipulation" }}
+                onClick={(e) => e.stopPropagation()}
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerDownCapture={(e) => e.stopPropagation()}
+              >
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddToFavorites();
+                  }}
+                  disabled={isAdding}
+                  className={`h-9 w-9 rounded-full shrink-0 shadow-sm ${isFavorite ? "text-red-600 bg-red-100 dark:bg-red-950/50 fill-red-600" : ""}`}
+                  title="Избранное"
+                >
+                  <Heart
+                    className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
+                  />
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openShoppingModal();
+                  }}
+                  disabled={!recipe?.ingredients?.length}
+                  className="h-9 w-9 rounded-full shrink-0 shadow-sm"
+                  title="В список покупок"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleShare();
+                  }}
+                  disabled={!shareText}
+                  className="h-9 w-9 rounded-full shrink-0 shadow-sm"
+                  title="Поделиться"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </motion.div>
 

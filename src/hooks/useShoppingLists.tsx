@@ -68,7 +68,7 @@ export function useShoppingLists() {
           .order('created_at', { ascending: true });
 
         if (error) throw error;
-        
+
         // Расширяем тип для включения названия рецепта
         return (data || []).map((item: any) => ({
           ...item,
@@ -162,12 +162,12 @@ export function useShoppingLists() {
       return { normalized: 'г', multiplier: 1 };
     }
 
-    // Объемные единицы
-    if (lowerUnit.includes('л') || lowerUnit.includes('литр')) {
-      return { normalized: 'л', multiplier: 1000 }; // конвертируем в миллилитры
-    }
+    // Объемные единицы: проверяем мл ПЕРЕД л, иначе "мл" матчится на "л"
     if (lowerUnit.includes('мл') || lowerUnit.includes('миллилитр')) {
       return { normalized: 'мл', multiplier: 1 };
+    }
+    if (lowerUnit === 'л' || lowerUnit.includes('литр')) {
+      return { normalized: 'л', multiplier: 1000 }; // конвертируем в миллилитры
     }
 
     // Штуки
@@ -444,10 +444,10 @@ export function useShoppingLists() {
 
       // Собрать все ингредиенты (объединяем одинаковые продукты с одинаковыми единицами)
       // Ключ: normalizedName|normalizedUnit, значение: данные + список рецептов
-      const ingredientsMap = new Map<string, { 
-        amount: number; 
-        unit: string; 
-        category: string; 
+      const ingredientsMap = new Map<string, {
+        amount: number;
+        unit: string;
+        category: string;
         name: string;
         recipeIds: string[];
         recipeTitles: string[];
@@ -457,25 +457,25 @@ export function useShoppingLists() {
         if (plan.recipe?.recipe_ingredients) {
           const recipeId = plan.recipe.id;
           const recipeTitle = plan.recipe.title || 'Без названия';
-          
+
           plan.recipe.recipe_ingredients.forEach((ing: any) => {
             // Парсим ингредиент из сырой строки
             const parsed = parseIngredient(ing.name);
-            
+
             // Используем распарсенные данные
             const cleanName = parsed.name || ing.name;
             const parsedQuantity = parsed.quantity;
             const parsedUnit = parsed.unit;
-            
+
             // Определяем финальные значения
             let resolvedUnit = resolveUnit(parsedUnit || ing.unit, cleanName);
             let amt = parsedQuantity ?? (ing.amount != null ? ing.amount : (resolvedUnit === "шт" ? 1 : 0));
-            
+
             if (usePiecesFallback(resolvedUnit, amt) || shouldUsePiecesByDescription(cleanName)) {
               resolvedUnit = 'шт';
               amt = amt || 1;
             }
-            
+
             const normalizedName = normalizeProductName(cleanName);
             const unitNormalized = normalizeUnit(resolvedUnit);
             const key = `${normalizedName}|${unitNormalized.normalized}`;

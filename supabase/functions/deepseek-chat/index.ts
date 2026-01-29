@@ -13,12 +13,12 @@ const systemPromptCache = new Map<string, string>();
 const CACHE_TTL = 60 * 60 * 1000; // 1 час
 const cacheTimestamps = new Map<string, number>();
 
-function getCacheKey(type: string, childData?: any): string {
-  return `${type}_${JSON.stringify(childData || {})}`;
+function getCacheKey(type: string, childData?: any, maxRecipes?: number): string {
+  return `${type}_${maxRecipes ?? 1}_${JSON.stringify(childData || {})}`;
 }
 
-function getCachedSystemPrompt(type: string, childData?: any): string | null {
-  const key = getCacheKey(type, childData);
+function getCachedSystemPrompt(type: string, childData?: any, maxRecipes?: number): string | null {
+  const key = getCacheKey(type, childData, maxRecipes);
   const cached = systemPromptCache.get(key);
   const timestamp = cacheTimestamps.get(key);
 
@@ -35,8 +35,8 @@ function getCachedSystemPrompt(type: string, childData?: any): string | null {
   return null;
 }
 
-function cacheSystemPrompt(type: string, prompt: string, childData?: any): void {
-  const key = getCacheKey(type, childData);
+function cacheSystemPrompt(type: string, prompt: string, childData?: any, maxRecipes?: number): void {
+  const key = getCacheKey(type, childData, maxRecipes);
   systemPromptCache.set(key, prompt);
   cacheTimestamps.set(key, Date.now());
 }
@@ -55,6 +55,8 @@ interface ChatRequest {
   };
   type?: "chat" | "recipe" | "diet_plan" | "single_day";
   stream?: boolean;
+  /** Жёсткое ограничение: сколько рецептов возвращать (для type=chat). */
+  maxRecipes?: number;
 }
 
 serve(async (req) => {
@@ -108,10 +110,10 @@ serve(async (req) => {
       }
     }
 
-    const { messages, childData, type = "chat", stream = true }: ChatRequest = await req.json(); // Streaming по умолчанию
+    const { messages, childData, type = "chat", stream = true, maxRecipes = 1 }: ChatRequest = await req.json();
 
     // Проверяем кэш системного промпта (оптимизация для повторных запросов)
-    let systemPrompt = getCachedSystemPrompt(type, childData);
+    let systemPrompt = getCachedSystemPrompt(type, childData, maxRecipes);
 
     // Build system prompt based on type (если не в кэше)
     if (!systemPrompt) {
@@ -132,25 +134,22 @@ serve(async (req) => {
 
 Правила:
 1. Предлагай только разовые идеи блюд или одного приёма пищи. Не составляй меню на несколько дней.
-2. Строго избегай продуктов из списка аллергий (${allergies || "не указаны"}).
+2. КРИТИЧНО: Строго избегай продуктов из списка аллергий (${allergies || "не указаны"}). Никаких исключений — если аллергия указана, этот продукт не должен присутствовать в рецепте.
 3. Старайся включать продукты из «любит» (${likes || "не указаны"}).
 4. Избегай «не любит» (${dislikes || "не указаны"}). Если нельзя — предложи способ «замаскировать», но не настаивай.
 5. Учитывай возраст при выборе блюд и консистенции.
-6. На общий запрос («ужин», «завтрак») давай 1–3 варианта.
+6. На любой запрос возвращай СТРОГО ОДИН рецепт. ЗАПРЕЩЕНО предлагать 2 или 3 варианта. ЗАПРЕЩЕНО использовать формат {"recipes": [...]} — только один JSON-объект с полями title, description, ingredients, steps, cookingTime.
 
-Формат каждого варианта:
+Формат:
 - [Краткое название блюда]
-- Ингредиенты: [список, очень кратко]
-- Приготовление: [3–5 шагов, кратко]
+- Ингредиенты: [полный список]
+- Приготовление: [все шаги по порядку]
 
-Если даёшь рецепт(ы), в конце ответа ОБЯЗАТЕЛЬНО добавь JSON для сохранения в приложении. Один рецепт:
+В конце ответа ОБЯЗАТЕЛЬНО добавь JSON ровно одного рецепта (не массив, не поле recipes):
 \`\`\`json
-{"title":"Название","description":"Кратко","ingredients":["ингредиент 1","ингредиент 2"],"steps":["шаг 1","шаг 2","шаг 3"],"cookingTime":20}
+{"title":"Название","description":"Кратко","ingredients":["ингредиент 1","ингредиент 2", ...],"steps":["шаг 1","шаг 2", ...],"cookingTime":20}
 \`\`\`
-Несколько рецептов: \`\`\`json
-{"recipes":[{"title":"...","description":"...","ingredients":[...],"steps":[...],"cookingTime":15},...]}
-\`\`\`
-Название — короткое (3–40 символов), существительное. Ингредиенты и шаги на русском.`;
+Название — короткое (3–40 символов), существительное. Ингредиенты и шаги на русском, без ограничения по количеству. Количество рецептов в ответе: строго ${maxRecipes ?? 1}.`;
       } else if (type === "recipe") {
         systemPrompt = `Ты — детский диетолог. Создаёшь рецепты для детей с учётом возраста и аллергий.
 
@@ -271,7 +270,7 @@ ${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : 
       }
 
       // Кэшируем системный промпт для будущих запросов
-      cacheSystemPrompt(type, systemPrompt, childData);
+      cacheSystemPrompt(type, systemPrompt, childData, maxRecipes);
     }
 
     // Call DeepSeek API with streaming support

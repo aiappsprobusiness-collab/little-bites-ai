@@ -3,23 +3,17 @@ import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Loader2, X } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Loader2, X, Pencil } from "lucide-react";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { ChildCarousel } from "@/components/family/ChildCarousel";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { AddMealDialog } from "@/components/meal-plan/AddMealDialog";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
+import { useAppStore } from "@/store/useAppStore";
+import { resolveUnit } from "@/utils/productUtils";
 import {
   Select,
   SelectContent,
@@ -27,6 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const mealTypes = [
@@ -39,34 +37,43 @@ const mealTypes = [
 export default function MealPlanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedChild } = useSelectedChild();
+  const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
   // Для выбора рецепта в план — всегда все рецепты пользователя (любой рецепт можно добавить любому ребёнку)
-  const { recipes } = useRecipes();
+  const { recipes, createRecipe } = useRecipes();
   const { getMealPlansByDate, createMealPlan, deleteMealPlan, isCreating } = useMealPlans(selectedChild?.id);
   const { getTodayChatRecipes } = useChatRecipes();
+  const favorites = useAppStore((s) => s.favorites);
 
-  const [selectedDay, setSelectedDay] = useState(0);
-  const [currentWeek, setCurrentWeek] = useState(new Date());
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [sheetCreateMode, setSheetCreateMode] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<string | null>(null);
 
-  const getWeekDates = () => {
+  // Вычисляем текущую неделю и находим индекс текущего дня
+  const getCurrentWeekDates = () => {
     const dates = [];
-    const startOfWeek = new Date(currentWeek);
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Понедельник
 
     for (let i = 0; i < 7; i++) {
       const date = new Date(startOfWeek);
-      date.setDate(date.getDate() + i);
+      date.setDate(startOfWeek.getDate() + i);
       dates.push(date);
     }
     return dates;
   };
 
-  const weekDates = getWeekDates();
+  const weekDates = getCurrentWeekDates();
+  // Находим индекс текущего дня в неделе
+  const todayIndex = weekDates.findIndex(
+    (date) => date.toDateString() === new Date().toDateString()
+  );
+  const [selectedDay, setSelectedDay] = useState(todayIndex >= 0 ? todayIndex : 0);
+
   const selectedDate = weekDates[selectedDay];
   const { data: dayMealPlans = [], isLoading } = getMealPlansByDate(selectedDate);
-  
+
   const isToday = selectedDate.toDateString() === new Date().toDateString();
   const todayChatRecipesQuery = getTodayChatRecipes();
   const todayChatRecipes = todayChatRecipesQuery?.data || [];
@@ -107,6 +114,65 @@ export default function MealPlanPage() {
         variant: "destructive",
         title: "Ошибка",
         description: error.message || "Не удалось добавить блюдо",
+      });
+    }
+  };
+
+  const handleAddFromFavorite = async (favoriteId: string, mealType: string) => {
+    try {
+      const favorite = favorites.find((f) => f.id === favoriteId);
+      if (!favorite) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: "Избранный рецепт не найден",
+        });
+        return;
+      }
+
+      // Создаем рецепт из избранного
+      const newRecipe = await createRecipe({
+        recipe: {
+          title: favorite.recipe.title,
+          description: favorite.recipe.description || "",
+          cooking_time_minutes: favorite.recipe.cookingTime || null,
+          child_id: selectedChild?.id || null,
+        },
+        ingredients: (favorite.recipe.ingredients || []).map((ing, index) => ({
+          name: ing,
+          amount: null,
+          unit: resolveUnit(null, ing),
+          category: "other" as const,
+          order_index: index,
+        })),
+        steps: (favorite.recipe.steps || []).map((step, index) => ({
+          instruction: step,
+          step_number: index + 1,
+          duration_minutes: null,
+          image_url: null,
+        })),
+      });
+
+      // Добавляем созданный рецепт в план
+      await createMealPlan({
+        child_id: selectedChild?.id || null,
+        recipe_id: newRecipe.id,
+        planned_date: selectedDate.toISOString().split("T")[0],
+        meal_type: mealType as any,
+        is_completed: false,
+      });
+
+      setIsAddDialogOpen(false);
+      setSelectedMealType(null);
+      toast({
+        title: "Блюдо добавлено",
+        description: "Рецепт из избранного успешно добавлен в план питания",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error.message || "Не удалось добавить блюдо из избранного",
       });
     }
   };
@@ -159,46 +225,57 @@ export default function MealPlanPage() {
   return (
     <MobileLayout title="План питания">
       <div className="space-y-6">
-        {/* Child Carousel */}
-        <div className="px-4 pt-4">
-          <ChildCarousel compact />
+        {/* Готовим для */}
+        <div className="px-4 pt-4 pb-3 border-b border-border/50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Готовим для:</span>
+            <Select
+              value={selectedChildId ?? "family"}
+              onValueChange={(v) => setSelectedChildId(v)}
+            >
+              <SelectTrigger className="w-[180px] bg-card">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="family">Семья</SelectItem>
+                {children.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => {
+                setSheetCreateMode(true);
+                setShowProfileSheet(true);
+              }}
+              title="Добавить профиль"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+            {selectedChild && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => {
+                  setSheetCreateMode(false);
+                  setShowProfileSheet(true);
+                }}
+                title="Редактировать профиль"
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Week Navigation */}
+        {/* Week Strip */}
         <div className="px-4">
-          <div className="flex items-center justify-between mb-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                const prev = new Date(currentWeek);
-                prev.setDate(prev.getDate() - 7);
-                setCurrentWeek(prev);
-              }}
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <div className="text-center">
-              <p className="text-base font-bold">
-                {weekDates[0].toLocaleDateString("ru-RU", { month: "long" })}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {weekDates[0].getDate()} - {weekDates[6].getDate()}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                const next = new Date(currentWeek);
-                next.setDate(next.getDate() + 7);
-                setCurrentWeek(next);
-              }}
-            >
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-          </div>
-
           {/* Day Selector */}
           <div className="grid grid-cols-7 gap-2">
             {weekDays.map((day, index) => {
@@ -213,13 +290,12 @@ export default function MealPlanPage() {
                   key={day}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setSelectedDay(index)}
-                  className={`flex flex-col items-center py-3 rounded-2xl transition-all ${
-                    isSelected
+                  className={`flex flex-col items-center py-3 rounded-2xl transition-all ${isSelected
                       ? "gradient-primary text-primary-foreground shadow-button"
                       : isToday
-                      ? "bg-primary/10 border-2 border-primary"
-                      : "bg-card shadow-soft"
-                  }`}
+                        ? "bg-primary/10 border-2 border-primary"
+                        : "bg-card shadow-soft"
+                    }`}
                 >
                   <span className="text-xs font-medium opacity-80">{day}</span>
                   <span className="text-lg font-bold">{date.getDate()}</span>
@@ -231,6 +307,20 @@ export default function MealPlanPage() {
             })}
           </div>
         </div>
+
+        {/* Profile Edit Sheet */}
+        <ProfileEditSheet
+          open={showProfileSheet}
+          onOpenChange={setShowProfileSheet}
+          child={selectedChild}
+          createMode={sheetCreateMode}
+          onAddNew={() => {
+            setSheetCreateMode(true);
+          }}
+          onCreated={(childId) => {
+            setSelectedChildId(childId);
+          }}
+        />
 
         {/* Meals for Selected Day */}
         <div className="px-4 space-y-3">
@@ -244,8 +334,8 @@ export default function MealPlanPage() {
             </h2>
             <Dialog open={isAddDialogOpen} onOpenChange={handleDialogOpenChange}>
               <DialogTrigger asChild>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
                   onClick={() => {
                     // При открытии из общей кнопки сбрасываем тип (будет использован первый по умолчанию)
@@ -259,10 +349,12 @@ export default function MealPlanPage() {
               <AddMealDialog
                 recipes={recipes}
                 chatRecipes={todayChatRecipes}
+                favorites={favorites}
                 mealTypes={mealTypes}
                 selectedMealType={selectedMealType}
                 onSelectMealType={setSelectedMealType}
                 onAdd={handleAddMeal}
+                onAddFromFavorite={handleAddFromFavorite}
                 isLoading={isCreating}
               />
             </Dialog>

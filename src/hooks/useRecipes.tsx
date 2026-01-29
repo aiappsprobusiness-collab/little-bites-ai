@@ -99,8 +99,6 @@ export function useRecipes(childId?: string) {
           .from('recipes')
           .select(RECIPES_DETAIL_SELECT)
           .eq('id', id)
-          .limit(5, { referencedTable: 'recipe_ingredients' })
-          .limit(3, { referencedTable: 'recipe_steps' })
           .single();
 
         if (recipeError) throw recipeError;

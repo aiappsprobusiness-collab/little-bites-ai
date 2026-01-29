@@ -5,12 +5,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Plus, Trash2, Share2, Loader2 } from "lucide-react";
+import { Check, Plus, Trash2, Share2, Loader2, Heart } from "lucide-react";
 import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
-import { formatAmountUnit, resolveUnit } from "@/utils/productUtils";
+import { formatAmountUnit, resolveUnit, detectCategory } from "@/utils/productUtils";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useChildren } from "@/hooks/useChildren";
+import { useAppStore } from "@/store/useAppStore";
+import { parseIngredient, cleanProductNameDisplay } from "@/utils/parseIngredient";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +50,7 @@ export default function ShoppingPage() {
   const { children } = useChildren();
   const selectedChild = children[0];
   const { getMealPlans } = useMealPlans(selectedChild?.id);
+  const favorites = useAppStore((s) => s.favorites);
 
   const {
     activeList,
@@ -65,6 +69,9 @@ export default function ShoppingPage() {
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isFavoritesSheetOpen, setIsFavoritesSheetOpen] = useState(false);
+  const [isEditAmountDialogOpen, setIsEditAmountDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any | null>(null);
   const [clearingCategoryId, setClearingCategoryId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"byCategory" | "byRecipe">("byCategory");
 
@@ -75,11 +82,11 @@ export default function ShoppingPage() {
   // Фильтрация элементов в зависимости от выбранной категории (только для режима "по категориям")
   const filteredItems = viewMode === "byCategory"
     ? (selectedCategory === null
-        ? items // "Все" - показываем всё
-        : selectedCategory === "other"
-          ? items.filter((item) => item.category === "other" || !item.category)
-          : items.filter((item) => item.category === selectedCategory))
-    : items; // В режиме "по рецептам" показываем все элементы
+      ? items // "Все" - показываем всё
+      : selectedCategory === "other"
+        ? items.filter((item) => item.category === "other" || !item.category)
+        : items.filter((item) => item.category === selectedCategory))
+    : items; // В режиме "по рецептам" показываем все элементы (фильтрация по рецептам будет в groupedItems)
 
   const checkedCount = items.filter((i) => i.is_purchased).length;
   const progress = items.length > 0 ? (checkedCount / items.length) * 100 : 0;
@@ -87,44 +94,46 @@ export default function ShoppingPage() {
   // Группировка элементов для отображения
   const groupedItems = viewMode === "byCategory"
     ? // Режим "по категориям"
-      (selectedCategory === null
-        ? // "Все" - группируем по всем категориям
-          allCategories
-            .map((cat) => ({
-              ...cat,
-              items: items.filter((item) =>
-                cat.id === "other"
-                  ? (item.category === "other" || !item.category)
-                  : item.category === cat.id
-              ),
-            }))
-            .filter((cat) => cat.items.length > 0)
-        : // Конкретная категория - показываем только её
-          allCategories
-            .filter((cat) => cat.id === selectedCategory)
-            .map((cat) => ({
-              ...cat,
-              items: filteredItems,
-            }))
-            .filter((cat) => cat.items.length > 0))
+    (selectedCategory === null
+      ? // "Все" - группируем по всем категориям
+      allCategories
+        .map((cat) => ({
+          ...cat,
+          items: items.filter((item) =>
+            cat.id === "other"
+              ? (item.category === "other" || !item.category)
+              : item.category === cat.id
+          ),
+        }))
+        .filter((cat) => cat.items.length > 0)
+      : // Конкретная категория - показываем только её
+      allCategories
+        .filter((cat) => cat.id === selectedCategory)
+        .map((cat) => ({
+          ...cat,
+          items: filteredItems,
+        }))
+        .filter((cat) => cat.items.length > 0))
     : // Режим "по рецептам" - группируем по названиям рецептов
-      (() => {
-        const recipeGroups = new Map<string, typeof items>();
-        items.forEach((item: any) => {
-          const recipeTitle = item.recipeTitle || "Без рецепта";
-          if (!recipeGroups.has(recipeTitle)) {
-            recipeGroups.set(recipeTitle, []);
-          }
-          recipeGroups.get(recipeTitle)!.push(item);
-        });
-        
-        return Array.from(recipeGroups.entries()).map(([title, items]) => ({
-          id: title,
-          label: title,
-          emoji: "🍽️",
-          items,
-        }));
-      })();
+    (() => {
+      const recipeGroups = new Map<string, typeof items>();
+      items.forEach((item: any) => {
+        // Используем recipeTitle из маппинга или проверяем recipe напрямую
+        const recipeTitle = item.recipeTitle || item.recipe?.title || "Без рецепта";
+        if (!recipeGroups.has(recipeTitle)) {
+          recipeGroups.set(recipeTitle, []);
+        }
+        recipeGroups.get(recipeTitle)!.push(item);
+      });
+
+      // Секции по рецептам: название рецепта → список продуктов (как "По категориям")
+      return Array.from(recipeGroups.entries()).map(([title, groupItems]) => ({
+        id: title,
+        label: title,
+        emoji: "🍽️",
+        items: groupItems,
+      }));
+    })();
 
   const handleAddItem = async (name: string, amount: string, unit: string, category: string) => {
     try {
@@ -205,6 +214,69 @@ export default function ShoppingPage() {
     }
   };
 
+  const handleGenerateFromFavorites = async (favoriteId: string) => {
+    try {
+      const favorite = favorites.find((f) => f.id === favoriteId);
+      if (!favorite) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: "Избранный рецепт не найден",
+        });
+        return;
+      }
+
+      if (!activeList) {
+        await createList("Список покупок");
+      }
+
+      const ingredients = favorite.recipe.ingredients || [];
+      if (ingredients.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: "В рецепте нет ингредиентов",
+        });
+        return;
+      }
+
+      // Парсим и добавляем ингредиенты
+      for (const rawIngredient of ingredients) {
+        const { name, quantity, unit } = parseIngredient(rawIngredient);
+        if (!name || !name.trim()) continue;
+
+        const resolvedUnitValue = resolveUnit(unit, name);
+        const category = detectCategory(name);
+        const amount = quantity ?? (resolvedUnitValue === "шт" ? 1 : null);
+
+        try {
+          await addItem({
+            name: name.trim(),
+            amount,
+            unit: resolvedUnitValue,
+            category: category as any,
+            is_purchased: false,
+          });
+        } catch (error) {
+          // Продолжаем добавлять остальные ингредиенты даже если один не удался
+          console.error("Ошибка добавления ингредиента:", name, error);
+        }
+      }
+
+      setIsFavoritesSheetOpen(false);
+      toast({
+        title: "Список создан",
+        description: `Ингредиенты из «${favorite.recipe.title}» добавлены в список покупок`,
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error.message || "Не удалось создать список из избранного",
+      });
+    }
+  };
+
   const handleClearCategory = async (categoryId: string) => {
     if (!activeList) return;
     setClearingCategoryId(categoryId);
@@ -223,6 +295,34 @@ export default function ShoppingPage() {
       });
     } finally {
       setClearingCategoryId(null);
+    }
+  };
+
+  const handleEditAmount = (item: any) => {
+    setEditingItem(item);
+    setIsEditAmountDialogOpen(true);
+  };
+
+  const handleSaveAmount = async (amount: number | null, unit: string) => {
+    if (!editingItem) return;
+    try {
+      await updateItem({
+        id: editingItem.id,
+        amount,
+        unit,
+      });
+      setIsEditAmountDialogOpen(false);
+      setEditingItem(null);
+      toast({
+        title: "Обновлено",
+        description: "Количество и единица измерения обновлены",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Ошибка",
+        description: error.message || "Не удалось обновить",
+      });
     }
   };
 
@@ -311,7 +411,7 @@ export default function ShoppingPage() {
           </div>
         )}
 
-        {/* Items by Category */}
+        {/* Items by Category / by Recipe (секции: название → список продуктов) */}
         {isLoadingItems ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -368,8 +468,8 @@ export default function ShoppingPage() {
                                 handleTogglePurchased(item.id, item.is_purchased || false)
                               }
                               className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${item.is_purchased
-                                  ? "bg-primary border-primary"
-                                  : "border-muted-foreground/30"
+                                ? "bg-primary border-primary"
+                                : "border-muted-foreground/30"
                                 }`}
                             >
                               {item.is_purchased && (
@@ -381,14 +481,24 @@ export default function ShoppingPage() {
                                 className={`font-medium ${item.is_purchased ? "line-through" : ""
                                   }`}
                               >
-                                {item.name}
+                                {cleanProductNameDisplay(item.name)}
                               </p>
                             </div>
                             {amountUnit ? (
-                              <span className="text-sm font-medium text-foreground bg-muted px-2 py-1 rounded-md">
+                              <button
+                                onClick={() => handleEditAmount(item)}
+                                className="text-sm font-medium text-foreground bg-muted px-2 py-1 rounded-md hover:bg-muted/80 transition-colors cursor-pointer"
+                              >
                                 {amountUnit}
-                              </span>
-                            ) : null}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleEditAmount(item)}
+                                className="text-sm font-medium text-muted-foreground bg-muted/50 px-2 py-1 rounded-md hover:bg-muted transition-colors cursor-pointer"
+                              >
+                                Добавить количество
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDeleteItem(item.id)}
                               className="p-1 text-muted-foreground hover:text-destructive"
@@ -449,9 +559,151 @@ export default function ShoppingPage() {
               </>
             )}
           </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            className="w-full"
+            onClick={() => setIsFavoritesSheetOpen(true)}
+            disabled={favorites.length === 0}
+          >
+            <Heart className="w-5 h-5 mr-2" />
+            Создать из Избранного
+          </Button>
         </div>
       </div>
+
+      {/* BottomSheet для выбора избранного */}
+      <Sheet open={isFavoritesSheetOpen} onOpenChange={setIsFavoritesSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-3xl flex flex-col max-h-[85vh]">
+          <SheetHeader>
+            <SheetTitle>Выберите рецепт из избранного</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto py-4 space-y-2">
+            {favorites.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Heart className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>Нет избранных рецептов</p>
+              </div>
+            ) : (
+              favorites.map((favorite) => (
+                <motion.div
+                  key={favorite.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <Card
+                    variant="elevated"
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleGenerateFromFavorites(favorite.id)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-base">{favorite.recipe.title}</h3>
+                          {favorite.recipe.ingredients && favorite.recipe.ingredients.length > 0 && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {favorite.recipe.ingredients.length} ингредиент(ов)
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleGenerateFromFavorites(favorite.id);
+                          }}
+                        >
+                          Добавить
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Диалог редактирования количества/единицы */}
+      <Dialog open={isEditAmountDialogOpen} onOpenChange={setIsEditAmountDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Редактировать количество</DialogTitle>
+            <DialogDescription>
+              {editingItem ? cleanProductNameDisplay(editingItem.name) : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <EditAmountDialog
+            item={editingItem}
+            onSave={handleSaveAmount}
+            onCancel={() => {
+              setIsEditAmountDialogOpen(false);
+              setEditingItem(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </MobileLayout>
+  );
+}
+
+// Диалог для редактирования количества и единицы
+function EditAmountDialog({
+  item,
+  onSave,
+  onCancel,
+}: {
+  item: any;
+  onSave: (amount: number | null, unit: string) => void;
+  onCancel: () => void;
+}) {
+  const [amount, setAmount] = useState<string>(
+    item?.amount != null ? String(item.amount) : ""
+  );
+  const [unit, setUnit] = useState<string>(item?.unit || "");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = amount.trim() ? parseFloat(amount.replace(",", ".")) : null;
+    const finalUnit = unit.trim() || resolveUnit(null, item?.name || "");
+    onSave(amountNum, finalUnit);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="edit-amount">Количество</Label>
+          <Input
+            id="edit-amount"
+            type="number"
+            step="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="200"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="edit-unit">Единица</Label>
+          <Input
+            id="edit-unit"
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="г, мл, шт"
+          />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+          Отмена
+        </Button>
+        <Button type="submit" variant="mint" className="flex-1">
+          Сохранить
+        </Button>
+      </div>
+    </form>
   );
 }
 
