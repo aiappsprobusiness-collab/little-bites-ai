@@ -272,7 +272,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         cookingTime: recipe.cookingTime || 0,
         ageRange: recipe.ageRange || "",
       };
-      console.log("[ChatMessage] Добавить в избранное", recipe.title);
       addToAppStoreFavorite(recipeSuggestion);
       try {
         await addFavorite({ recipe: recipeSuggestion, memberIds: [] });

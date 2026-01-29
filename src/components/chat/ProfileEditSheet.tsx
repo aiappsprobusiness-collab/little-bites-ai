@@ -139,7 +139,6 @@ export function ProfileEditSheet({
     }
     if (!child) return;
     try {
-      console.log("[ProfileEditSheet] Сохранить изменения вызван", { id: child.id, totalAgeMonths, allergies: allergies.length });
       await updateChild({
         id: child.id,
         birth_date: birthDateFromAgeMonths(totalAgeMonths),
