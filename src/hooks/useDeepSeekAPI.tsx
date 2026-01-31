@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useChildren } from './useChildren';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
@@ -11,8 +11,6 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
-
-const SUPABASE_URL = "https://hidgiyyunigqazssnydm.supabase.co";
 
 export function useDeepSeekAPI() {
   const { user, session } = useAuth();

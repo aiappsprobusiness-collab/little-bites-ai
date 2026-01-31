@@ -31,7 +31,7 @@ const ACTION_VERBS = [
 // Фразы-маркеры инструкции (не продукт для покупки)
 const INSTRUCTION_PHRASES = ['перед подачей', 'по вкусу', 'по желанию', 'для подачи', 'при подаче'];
 
-function isInstruction(content: string): boolean {
+export function isInstruction(content: string): boolean {
   const t = content.trim();
   if (t.length <= 50) return false;
   // Запятая в середине — признак инструкции (перечисление действий)
@@ -39,12 +39,12 @@ function isInstruction(content: string): boolean {
   return false;
 }
 
-function containsActionVerb(content: string): boolean {
+export function containsActionVerb(content: string): boolean {
   const lower = content.toLowerCase();
   return ACTION_VERBS.some((v) => lower.includes(v));
 }
 
-function looksLikeInstructionPhrase(content: string): boolean {
+export function looksLikeInstructionPhrase(content: string): boolean {
   const lower = content.toLowerCase();
   return INSTRUCTION_PHRASES.some((p) => lower.includes(p));
 }
@@ -54,7 +54,7 @@ function looksLikeInstructionPhrase(content: string): boolean {
  * Ингредиенты — ТОЛЬКО из раздела "Ингредиенты"/"Список продуктов" или короткие строки с цифрой/буллетом без глаголов действия.
  * Длинные строки с запятыми и глаголы действия — в шаги, не в список покупок.
  */
-function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
+export function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
   const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return null;
 
@@ -107,10 +107,13 @@ function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
     const isInstructionPhrase = looksLikeInstructionPhrase(content);
 
     if (numberedMatch || bulletMatch) {
+      // Инструкции (глаголы: варить, жарить и т.д.) — только в шаги, не в список продуктов
       if (inStepsSection || isInstructionLine || hasAction || isInstructionPhrase || content.length > 60) {
         steps.push(content);
       } else if (inIngredientsSection || (!inStepsSection && content.length <= 50 && !hasAction && !isInstructionPhrase)) {
-        ingredients.push(content);
+        // Ограничение длины названия ингредиента (макс 50 символов)
+        const trimmed = content.trim().slice(0, 50);
+        if (trimmed) ingredients.push(trimmed);
       }
       continue;
     }

@@ -125,26 +125,28 @@ export default function ShoppingPage() {
           items: filteredItems.filter((item) => !looksLikeInstruction(item.name)),
         }))
         .filter((cat) => cat.items.length > 0))
-    : // Режим "по рецептам" — только товары с recipe_id, заголовок группы из recipes.title (join)
+    : // Режим "по рецептам" — только товары с recipe_id и заголовком из recipes.title (join); без recipes продукт не показываем
     (() => {
       const itemsWithRecipe = items.filter(
-        (i: any) => i.recipe_id != null && String(i.recipe_id).trim() !== ""
+        (i: any) =>
+          i.recipe_id != null &&
+          String(i.recipe_id).trim() !== "" &&
+          (i.recipes?.title != null || i.recipeTitle != null || i.recipe_title != null)
       );
       const recipeGroups = new Map<string, { title: string; items: typeof items }>();
       itemsWithRecipe.forEach((item: any) => {
         const rid = String(item.recipe_id).trim();
-        // Заголовок группы — из join recipes.title, иначе сохранённый recipe_title
         const title =
           item.recipes?.title ??
           item.recipeTitle ??
           item.recipe?.title ??
           item.recipe_title ??
-          (item.recipe_id ? `Рецепт (${String(item.recipe_id).slice(0, 8)}…)` : "Рецепт");
+          `Рецепт (${String(item.recipe_id).slice(0, 8)}…)`;
         if (!recipeGroups.has(rid)) {
           recipeGroups.set(rid, { title, items: [] });
         }
         const group = recipeGroups.get(rid)!;
-        if (!group.title && title !== "Рецепт") group.title = title;
+        if (!group.title && title) group.title = title;
         group.items.push(item);
       });
 
@@ -152,7 +154,6 @@ export default function ShoppingPage() {
         id: recipeId,
         label: title,
         emoji: "recipe",
-        // Временный фильтр: не показывать "мусор" — длинные инструкции и фразы типа "перед подачей"
         items: groupItems.filter((i: any) => (i.name?.length ?? 0) < 60 && !looksLikeInstruction(i.name)),
       }));
     })();

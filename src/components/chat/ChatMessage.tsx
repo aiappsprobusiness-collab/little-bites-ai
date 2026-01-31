@@ -18,6 +18,7 @@ import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { RecipeSuggestion } from "@/services/deepseek";
+import { parseRecipeFromPlainText } from "@/utils/parseChatRecipes";
 
 interface ChatMessageProps {
   id: string;
@@ -112,99 +113,21 @@ function parseRecipeFromContent(content: string): Recipe | null {
 
     // Fallback: обычный текст без JSON — название (эмодзи/капс) и ингредиенты (1., 2., 3. или -)
     const fromPlain = parseRecipeFromPlainText(content);
-    if (fromPlain) return fromPlain;
+    if (fromPlain)
+      return {
+        title: fromPlain.title,
+        description: fromPlain.description,
+        ingredients: fromPlain.ingredients,
+        steps: fromPlain.steps,
+        cookingTime: fromPlain.cookingTime,
+        ageRange: undefined,
+      };
   } catch (e) {
     // Не JSON или невалидный JSON - возвращаем null
     return null;
   }
 
   return null;
-}
-
-// Глаголы действия — такие строки не считаем ингредиентами (это шаги приготовления)
-const ACTION_VERBS_CHAT = [
-  "нарезать", "варить", "обжарить", "тушить", "добавить", "смешать", "залить", "положить",
-  "взять", "нагреть", "готовить", "размять", "запечь", "выложить", "посолить", "поперчить",
-  "помешать", "довести", "остудить", "подавать", "украсить", "промыть", "очистить", "натереть",
-  "измельчить", "отварить", "пассеровать", "запекать", "выпекать", "обжаривать",
-  "посыпать", "полить", "смазать", "подать",
-];
-
-const INSTRUCTION_PHRASES_CHAT = ["перед подачей", "по вкусу", "по желанию", "для подачи", "при подаче"];
-
-function isInstructionLine(content: string): boolean {
-  const t = content.trim();
-  if (t.length <= 50) return false;
-  if (/,.{2,},/.test(t) || (t.includes(",") && t.length > 50)) return true;
-  return false;
-}
-
-function hasActionVerb(content: string): boolean {
-  const lower = content.toLowerCase();
-  return ACTION_VERBS_CHAT.some((v) => lower.includes(v));
-}
-
-function looksLikeInstructionPhrase(content: string): boolean {
-  const lower = content.toLowerCase();
-  return INSTRUCTION_PHRASES_CHAT.some((p) => lower.includes(p));
-}
-
-/**
- * Парсит рецепт из обычного текста (без JSON).
- * Ингредиенты — ТОЛЬКО из раздела "Ингредиенты"/"Список продуктов" или короткие строки без глаголов действия.
- * Длинные строки с запятыми и глаголы действия — не добавляем в список покупок.
- */
-function parseRecipeFromPlainText(text: string): Recipe | null {
-  const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length === 0) return null;
-
-  let title = "";
-  const ingredients: string[] = [];
-  let foundTitle = false;
-  let inIngredientsSection = false;
-  let inStepsSection = false;
-
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-    if (!foundTitle && line.length >= 2 && line.length <= 80) {
-      const hasEmoji = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]/u.test(line);
-      const startsWithCaps = /^[А-ЯЁA-Z]/.test(line);
-      const notNumbered = !/^\d+[\.\)]\s*/.test(line);
-      const notExcluded = !["ингредиент", "приготовление", "шаг", "способ", "рецепт", "блюдо"].some((w) => lower.startsWith(w));
-      if ((hasEmoji || (startsWithCaps && notNumbered)) && notExcluded && !line.includes(":")) {
-        title = line.replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, "").trim() || line;
-        foundTitle = true;
-        continue;
-      }
-    }
-
-    if (/^(ингредиенты|ингредиент|список продуктов)[:\s]*$/i.test(lower)) {
-      inIngredientsSection = true;
-      inStepsSection = false;
-      continue;
-    }
-    if (/^(приготовление|шаги|способ приготовления)[:\s]*$/i.test(lower)) {
-      inStepsSection = true;
-      inIngredientsSection = false;
-      continue;
-    }
-
-    const numbered = line.match(/^\d+[\.\)]\s*(.+)$/);
-    const bullet = line.match(/^[-•*]\s*(.+)$/);
-    const content = (numbered?.[1] ?? bullet?.[1] ?? "").trim();
-    if (content.length === 0) continue;
-
-    if (inStepsSection || isInstructionLine(content) || hasActionVerb(content) || looksLikeInstructionPhrase(content) || content.length > 60) continue;
-    if (inIngredientsSection || (!inStepsSection && content.length <= 50)) ingredients.push(content);
-  }
-
-  if (!title && lines[0] && lines[0].length >= 2 && lines[0].length <= 80 && !/^\d+[\.\)]/.test(lines[0])) {
-    title = lines[0].replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, "").trim() || lines[0];
-  }
-  if (!title) title = "Рецепт из чата";
-  if (title.length < 2) return null;
-
-  return { title: title.slice(0, 200), ingredients, steps: [] };
 }
 
 /**
@@ -340,7 +263,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
     const constraintsRef = useRef(null);
-const queryClient = useQueryClient();
+    const queryClient = useQueryClient();
     const { user } = useAuth();
     const { favorites, addFavorite, removeFavorite, isAdding, isRemoving } = useFavorites();
     const { addItemsFromRecipe, createList, activeList } = useShoppingLists();
@@ -458,6 +381,8 @@ const queryClient = useQueryClient();
         queryClient.invalidateQueries({ queryKey: ["shopping_list"] });
         queryClient.invalidateQueries({ queryKey: ["shopping_lists"] });
         queryClient.invalidateQueries({ queryKey: ["shopping_list_items"] });
+        await queryClient.refetchQueries({ queryKey: ["shopping_list_items"] });
+        await queryClient.refetchQueries({ queryKey: ["shopping_lists"] });
 
         setShowShoppingModal(false);
         toast({ title: "В список покупок", description: `Добавлено ${toAdd.length} ингредиент(ов) из «${recipeTitle}»` });

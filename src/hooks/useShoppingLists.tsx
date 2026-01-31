@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { detectCategory, ensureProductCategory, resolveUnit, usePiecesFallback, shouldUsePiecesByDescription } from '@/utils/productUtils';
+import type { ProductCategory } from '@/utils/productUtils';
 import { parseIngredient } from '@/utils/parseIngredient';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
@@ -58,10 +59,10 @@ export function useShoppingLists() {
     return useQuery({
       queryKey: ['shopping_list_items', listId],
       queryFn: async () => {
-        // Join с recipes для имён рецептов во вкладке «По рецептам»: без join нет заголовков
+        // Join с recipes для имён рецептов во вкладке «По рецептам»
         const { data, error } = await supabase
           .from('shopping_list_items')
-          .select('*, recipes(id, title)')
+          .select('*, recipes(title)')
           .eq('shopping_list_id', listId)
           .order('created_at', { ascending: true });
 
@@ -69,7 +70,7 @@ export function useShoppingLists() {
 
         // recipeTitle: из join recipes.title, иначе сохранённый recipe_title (фоллбек для чата)
         return (data || []).map((item: any) => {
-          const fromRecipes = item.recipes?.title ?? item.recipe?.title;
+          const fromRecipes = item.recipes?.title ?? (item.recipe && item.recipe.title);
           const recipeTitle = fromRecipes ?? item.recipe_title ?? null;
           return {
             ...item,
@@ -404,25 +405,23 @@ export function useShoppingLists() {
     },
   });
 
+  /** Variables for addItemsFromRecipe — single object so React Query passes it as mutation variables. */
+  type AddItemsFromRecipeVariables = {
+    ingredients: string[];
+    listId?: string;
+    recipeId?: string | null;
+    recipeTitle?: string;
+    /** Рецепт из чата (ИИ): создаём запись в recipes и подставляем её id в shopping_list_items */
+    createRecipeFromChat?: { title: string; description?: string; cookingTime?: number };
+  };
+
   // Добавить ингредиенты рецепта в список одним батч-запросом (из избранного/рецепта/чата)
   const addItemsFromRecipe = useMutation({
-    mutationFn: async ({
-      ingredients,
-      listId: optionListId,
-      recipeId: optionRecipeId,
-      recipeTitle,
-      createRecipeFromChat,
-    }: {
-      ingredients: string[];
-      listId?: string;
-      recipeId?: string | null;
-      recipeTitle?: string;
-      /** Рецепт из чата (ИИ): создаём запись в recipes и подставляем её id в shopping_list_items */
-      createRecipeFromChat?: { title: string; description?: string; cookingTime?: number };
-    }) => {
+    mutationFn: async (variables: AddItemsFromRecipeVariables) => {
+      const { ingredients, listId: optListId, recipeId: optRecipeId, recipeTitle: optRecipeTitle, createRecipeFromChat } = variables;
       if (!user) throw new Error('User not authenticated');
 
-      let listId = optionListId ?? activeList?.id;
+      let listId = optListId ?? activeList?.id;
       if (!listId) {
         await supabase.from('shopping_lists').update({ is_active: false }).eq('user_id', user.id).eq('is_active', true);
         const { data: newListData, error: createErr } = await supabase
@@ -438,7 +437,7 @@ export function useShoppingLists() {
         queryClient.invalidateQueries({ queryKey: ['shopping_lists', user?.id] });
       }
 
-      let recipeId: string | null = optionRecipeId ?? null;
+      let recipeId: string | null = optRecipeId ?? null;
       if (!recipeId && createRecipeFromChat) {
         const { title, description, cookingTime } = createRecipeFromChat;
         const { data: newRecipe, error: recipeErr } = await supabase
@@ -537,8 +536,8 @@ export function useShoppingLists() {
             category,
             is_purchased: false,
             // recipe_id — UUID из таблицы recipes (при добавлении со страницы рецепта); иначе null (чат/избранное)
-            recipe_id: isValidRecipeUuid(recipeId ?? optionRecipeId) ? (recipeId ?? optionRecipeId!) : null,
-            recipe_title: recipeTitle ?? null,
+            recipe_id: isValidRecipeUuid(recipeId) ? recipeId : null,
+            recipe_title: optRecipeTitle ?? null,
           });
         }
       }
@@ -569,7 +568,7 @@ export function useShoppingLists() {
 
   // Очистить элементы списка по категории
   const clearCategoryItems = useMutation({
-    mutationFn: async ({ listId, category }: { listId: string; category: string }) => {
+    mutationFn: async ({ listId, category }: { listId: string; category: ProductCategory }) => {
       let query = supabase
         .from('shopping_list_items')
         .delete()
