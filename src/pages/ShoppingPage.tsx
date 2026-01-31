@@ -45,6 +45,15 @@ const otherCategory = { id: "other", label: "Другое", emoji: "📦" };
 // Все категории для отображения
 const allCategories = [...mainCategories, otherCategory];
 
+// Временный фильтр: не показывать в списке строки-инструкции (уже попавшие в БД)
+function looksLikeInstruction(name: string | null | undefined): boolean {
+  if (!name || name.length >= 60) return true;
+  const lower = name.toLowerCase();
+  const phrases = ["перед подачей", "по вкусу", "по желанию", "для подачи", "при подаче"];
+  const verbs = ["посыпать", "полить", "смазать", "нарезать", "варить", "обжарить", "добавить", "смешать", "залить", "положить", "тушить", "запечь", "выложить"];
+  return phrases.some((p) => lower.includes(p)) || verbs.some((v) => lower.includes(v));
+}
+
 export default function ShoppingPage() {
   const { toast } = useToast();
   const { children } = useChildren();
@@ -100,22 +109,23 @@ export default function ShoppingPage() {
       allCategories
         .map((cat) => ({
           ...cat,
-          items: items.filter((item) =>
-            cat.id === "other"
-              ? (item.category === "other" || !item.category)
-              : item.category === cat.id
+          items: items.filter(
+            (item) =>
+              (cat.id === "other"
+                ? (item.category === "other" || !item.category)
+                : item.category === cat.id) && !looksLikeInstruction(item.name)
           ),
         }))
         .filter((cat) => cat.items.length > 0)
-      : // Конкретная категория - показываем только её
+      : // Конкретная категория - показываем только её (без строк-инструкций)
       allCategories
         .filter((cat) => cat.id === selectedCategory)
         .map((cat) => ({
           ...cat,
-          items: filteredItems,
+          items: filteredItems.filter((item) => !looksLikeInstruction(item.name)),
         }))
         .filter((cat) => cat.items.length > 0))
-    : // Режим "по рецептам" — только товары с recipe_id, группировка по recipe_id, заголовок из join или фоллбек
+    : // Режим "по рецептам" — только товары с recipe_id, заголовок группы из recipes.title (join)
     (() => {
       const itemsWithRecipe = items.filter(
         (i: any) => i.recipe_id != null && String(i.recipe_id).trim() !== ""
@@ -123,10 +133,10 @@ export default function ShoppingPage() {
       const recipeGroups = new Map<string, { title: string; items: typeof items }>();
       itemsWithRecipe.forEach((item: any) => {
         const rid = String(item.recipe_id).trim();
-        // item.recipes?.title — из join; иначе сохранённый recipe_title; для отладки — ID
+        // Заголовок группы — из join recipes.title, иначе сохранённый recipe_title
         const title =
-          item.recipeTitle ??
           item.recipes?.title ??
+          item.recipeTitle ??
           item.recipe?.title ??
           item.recipe_title ??
           (item.recipe_id ? `Рецепт (${String(item.recipe_id).slice(0, 8)}…)` : "Рецепт");
@@ -142,7 +152,8 @@ export default function ShoppingPage() {
         id: recipeId,
         label: title,
         emoji: "recipe",
-        items: groupItems,
+        // Временный фильтр: не показывать "мусор" — длинные инструкции и фразы типа "перед подачей"
+        items: groupItems.filter((i: any) => (i.name?.length ?? 0) < 60 && !looksLikeInstruction(i.name)),
       }));
     })();
 

@@ -18,8 +18,41 @@ function generateTempRecipeId(): string {
     : `temp-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
+// Глаголы действия — такие строки считаем шагами приготовления, не ингредиентами
+const ACTION_VERBS = [
+  'нарезать', 'варить', 'обжарить', 'тушить', 'добавить', 'смешать', 'залить', 'положить',
+  'взять', 'нагреть', 'готовить', 'размять', 'запечь', 'выложить', 'посолить', 'поперчить',
+  'помешать', 'довести', 'остудить', 'подавать', 'украсить', 'промыть', 'очистить', 'натереть',
+  'измельчить', 'отварить', 'пассеровать', 'запекать', 'выпекать', 'обжаривать', 'тушить',
+  'довести до кипения', 'снять с огня', 'оставить на', 'перемешать', 'взбить', 'нарезать',
+  'посыпать', 'полить', 'смазать', 'выложить', 'подать',
+];
+
+// Фразы-маркеры инструкции (не продукт для покупки)
+const INSTRUCTION_PHRASES = ['перед подачей', 'по вкусу', 'по желанию', 'для подачи', 'при подаче'];
+
+function isInstruction(content: string): boolean {
+  const t = content.trim();
+  if (t.length <= 50) return false;
+  // Запятая в середине — признак инструкции (перечисление действий)
+  if (/,.{2,},/.test(t) || (t.includes(',') && t.length > 50)) return true;
+  return false;
+}
+
+function containsActionVerb(content: string): boolean {
+  const lower = content.toLowerCase();
+  return ACTION_VERBS.some((v) => lower.includes(v));
+}
+
+function looksLikeInstructionPhrase(content: string): boolean {
+  const lower = content.toLowerCase();
+  return INSTRUCTION_PHRASES.some((p) => lower.includes(p));
+}
+
 /**
- * Парсит один рецепт из обычного текста (без JSON): название (эмодзи/капс) и ингредиенты (1., 2., 3. или -).
+ * Парсит один рецепт из обычного текста (без JSON).
+ * Ингредиенты — ТОЛЬКО из раздела "Ингредиенты"/"Список продуктов" или короткие строки с цифрой/буллетом без глаголов действия.
+ * Длинные строки с запятыми и глаголы действия — в шаги, не в список покупок.
  */
 function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
   const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
@@ -29,8 +62,8 @@ function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
   const ingredients: string[] = [];
   const steps: string[] = [];
   let foundTitle = false;
-  let inIngredients = false;
-  let inSteps = false;
+  let inIngredientsSection = false;
+  let inStepsSection = false;
 
   const excludeTitleWords = ['ингредиент', 'приготовление', 'шаг', 'способ', 'рецепт', 'блюдо', 'вариант', 'для'];
 
@@ -38,7 +71,7 @@ function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
     const line = lines[i];
     const lower = line.toLowerCase();
 
-    // Название: первая строка с эмодзи, капсом в начале или короткая строка без цифры в начале
+    // Название: первая строка с эмодзи, капсом или короткая без цифры в начале
     if (!foundTitle && line.length >= 2 && line.length <= 80) {
       const hasEmoji = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]/u.test(line);
       const startsWithCaps = /^[А-ЯЁA-Z]/.test(line);
@@ -51,34 +84,34 @@ function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
       }
     }
 
-    // Ингредиенты: строки вида "1. ...", "2. ..." или "- ...", "• ..."
-    const numberedIng = line.match(/^\d+[\.\)]\s*(.+)$/);
-    const bulletIng = line.match(/^[-•*]\s*(.+)$/);
-    if (numberedIng && numberedIng[1].trim().length > 0) {
-      if (!inSteps && numberedIng[1].length < 150) {
-        ingredients.push(numberedIng[1].trim());
-        inIngredients = true;
-      } else {
-        steps.push(numberedIng[1].trim());
-        inSteps = true;
-      }
+    // Раздел "Ингредиенты" / "Список продуктов" — дальше идут только ингредиенты до "Приготовление"
+    if (/^(ингредиенты|ингредиент|список продуктов)[:\s]*$/i.test(lower)) {
+      inIngredientsSection = true;
+      inStepsSection = false;
       continue;
     }
-    if (bulletIng && bulletIng[1].trim().length > 0 && bulletIng[1].length < 150) {
-      if (!inSteps) ingredients.push(bulletIng[1].trim());
-      else steps.push(bulletIng[1].trim());
+    if (/^(приготовление|шаги|способ приготовления)[:\s]*$/i.test(lower)) {
+      inStepsSection = true;
+      inIngredientsSection = false;
       continue;
     }
 
-    // После заголовка "Ингредиенты:" / "Приготовление:"
-    if (/^(ингредиенты|ингредиент)[:\s]*$/i.test(lower)) {
-      inIngredients = true;
-      inSteps = false;
-      continue;
-    }
-    if (/^(приготовление|шаги|способ)[:\s]*$/i.test(lower)) {
-      inSteps = true;
-      inIngredients = false;
+    // Строки вида "1. ..." или "- ..." / "• ..."
+    const numberedMatch = line.match(/^\d+[\.\)]\s*(.+)$/);
+    const bulletMatch = line.match(/^[-•*]\s*(.+)$/);
+    const content = (numberedMatch?.[1] ?? bulletMatch?.[1] ?? '').trim();
+    if (content.length === 0) continue;
+
+    const isInstructionLine = isInstruction(content);
+    const hasAction = containsActionVerb(content);
+    const isInstructionPhrase = looksLikeInstructionPhrase(content);
+
+    if (numberedMatch || bulletMatch) {
+      if (inStepsSection || isInstructionLine || hasAction || isInstructionPhrase || content.length > 60) {
+        steps.push(content);
+      } else if (inIngredientsSection || (!inStepsSection && content.length <= 50 && !hasAction && !isInstructionPhrase)) {
+        ingredients.push(content);
+      }
       continue;
     }
   }

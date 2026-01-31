@@ -121,16 +121,48 @@ function parseRecipeFromContent(content: string): Recipe | null {
   return null;
 }
 
+// Глаголы действия — такие строки не считаем ингредиентами (это шаги приготовления)
+const ACTION_VERBS_CHAT = [
+  "нарезать", "варить", "обжарить", "тушить", "добавить", "смешать", "залить", "положить",
+  "взять", "нагреть", "готовить", "размять", "запечь", "выложить", "посолить", "поперчить",
+  "помешать", "довести", "остудить", "подавать", "украсить", "промыть", "очистить", "натереть",
+  "измельчить", "отварить", "пассеровать", "запекать", "выпекать", "обжаривать",
+  "посыпать", "полить", "смазать", "подать",
+];
+
+const INSTRUCTION_PHRASES_CHAT = ["перед подачей", "по вкусу", "по желанию", "для подачи", "при подаче"];
+
+function isInstructionLine(content: string): boolean {
+  const t = content.trim();
+  if (t.length <= 50) return false;
+  if (/,.{2,},/.test(t) || (t.includes(",") && t.length > 50)) return true;
+  return false;
+}
+
+function hasActionVerb(content: string): boolean {
+  const lower = content.toLowerCase();
+  return ACTION_VERBS_CHAT.some((v) => lower.includes(v));
+}
+
+function looksLikeInstructionPhrase(content: string): boolean {
+  const lower = content.toLowerCase();
+  return INSTRUCTION_PHRASES_CHAT.some((p) => lower.includes(p));
+}
+
 /**
- * Парсит рецепт из обычного текста (без JSON): название и ингредиенты по номерам (1., 2., 3.) или маркерам (-, •).
+ * Парсит рецепт из обычного текста (без JSON).
+ * Ингредиенты — ТОЛЬКО из раздела "Ингредиенты"/"Список продуктов" или короткие строки без глаголов действия.
+ * Длинные строки с запятыми и глаголы действия — не добавляем в список покупок.
  */
 function parseRecipeFromPlainText(text: string): Recipe | null {
   const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return null;
 
-  let title = '';
+  let title = "";
   const ingredients: string[] = [];
   let foundTitle = false;
+  let inIngredientsSection = false;
+  let inStepsSection = false;
 
   for (const line of lines) {
     const lower = line.toLowerCase();
@@ -138,22 +170,38 @@ function parseRecipeFromPlainText(text: string): Recipe | null {
       const hasEmoji = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]/u.test(line);
       const startsWithCaps = /^[А-ЯЁA-Z]/.test(line);
       const notNumbered = !/^\d+[\.\)]\s*/.test(line);
-      const notExcluded = !['ингредиент', 'приготовление', 'шаг', 'способ', 'рецепт', 'блюдо'].some((w) => lower.startsWith(w));
-      if ((hasEmoji || (startsWithCaps && notNumbered)) && notExcluded && !line.includes(':')) {
-        title = line.replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, '').trim() || line;
+      const notExcluded = !["ингредиент", "приготовление", "шаг", "способ", "рецепт", "блюдо"].some((w) => lower.startsWith(w));
+      if ((hasEmoji || (startsWithCaps && notNumbered)) && notExcluded && !line.includes(":")) {
+        title = line.replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, "").trim() || line;
         foundTitle = true;
         continue;
       }
     }
+
+    if (/^(ингредиенты|ингредиент|список продуктов)[:\s]*$/i.test(lower)) {
+      inIngredientsSection = true;
+      inStepsSection = false;
+      continue;
+    }
+    if (/^(приготовление|шаги|способ приготовления)[:\s]*$/i.test(lower)) {
+      inStepsSection = true;
+      inIngredientsSection = false;
+      continue;
+    }
+
     const numbered = line.match(/^\d+[\.\)]\s*(.+)$/);
     const bullet = line.match(/^[-•*]\s*(.+)$/);
-    if (numbered && numbered[1].trim().length > 0 && numbered[1].length < 150) ingredients.push(numbered[1].trim());
-    else if (bullet && bullet[1].trim().length > 0 && bullet[1].length < 150) ingredients.push(bullet[1].trim());
+    const content = (numbered?.[1] ?? bullet?.[1] ?? "").trim();
+    if (content.length === 0) continue;
+
+    if (inStepsSection || isInstructionLine(content) || hasActionVerb(content) || looksLikeInstructionPhrase(content) || content.length > 60) continue;
+    if (inIngredientsSection || (!inStepsSection && content.length <= 50)) ingredients.push(content);
   }
+
   if (!title && lines[0] && lines[0].length >= 2 && lines[0].length <= 80 && !/^\d+[\.\)]/.test(lines[0])) {
-    title = lines[0].replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, '').trim() || lines[0];
+    title = lines[0].replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, "").trim() || lines[0];
   }
-  if (!title) title = 'Рецепт из чата';
+  if (!title) title = "Рецепт из чата";
   if (title.length < 2) return null;
 
   return { title: title.slice(0, 200), ingredients, steps: [] };
