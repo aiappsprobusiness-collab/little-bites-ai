@@ -13,8 +13,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X } from "lucide-react";
+import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X, LogOut } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
+import { useAuth } from "@/hooks/useAuth";
 import { useChildren } from "@/hooks/useChildren";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -30,6 +32,8 @@ type Child = Tables<'children'>;
 
 export default function ProfilePage() {
   const { toast } = useToast();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const {
     children,
     isLoading,
@@ -505,6 +509,26 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Выйти из аккаунта */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
+          className="pt-4 pb-8"
+        >
+          <Button
+            variant="outline"
+            className="w-full text-muted-foreground border-muted-foreground/30"
+            onClick={async () => {
+              await signOut();
+              navigate("/auth", { replace: true });
+            }}
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Выйти из аккаунта
+          </Button>
+        </motion.div>
       </div>
     </MobileLayout>
   );

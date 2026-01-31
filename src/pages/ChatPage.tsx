@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation } from "react-router-dom";
-import { Send, Loader2, Pencil, Plus } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Send, Loader2, Pencil, Plus, LogOut } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -13,6 +13,7 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
+import { useAuth } from "@/hooks/useAuth";
 import { detectMealType } from "@/utils/parseChatRecipes";
 import { formatRecipeResponse, hasRecipeJson } from "@/utils/formatRecipeResponse";
 import {
@@ -36,6 +37,8 @@ const STARTER_MESSAGE = "Я помогу с идеями, что пригото�
 
 export default function ChatPage() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const { toast } = useToast();
   const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
   const { canGenerate, isPremium, remaining, dailyLimit } = useSubscription();
@@ -199,12 +202,24 @@ export default function ChatPage() {
       <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border/50 safe-top">
         <div className="flex items-center justify-between w-full px-4 h-14">
           <h1 className="text-lg font-bold text-foreground">AI Помощник</h1>
-          <button
-            onClick={() => setShowPaywall(true)}
-            className="text-sm font-semibold text-primary bg-primary/15 px-3 py-1.5 rounded-full border border-primary/30"
-          >
-            {isPremium ? "∞" : `${remaining ?? 0}/${dailyLimit ?? 3}`}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowPaywall(true)}
+              className="text-sm font-semibold text-primary bg-primary/15 px-3 py-1.5 rounded-full border border-primary/30"
+            >
+              {isPremium ? "∞" : `${remaining ?? 0}/${dailyLimit ?? 3}`}
+            </button>
+            <button
+              onClick={async () => {
+                await signOut();
+                navigate("/auth", { replace: true });
+              }}
+              title="Выйти из аккаунта"
+              className="w-9 h-9 rounded-full bg-primary text-primary-foreground shadow-md flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 

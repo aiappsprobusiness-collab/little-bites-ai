@@ -19,9 +19,14 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Навигация (document): при 404 отдаём index.html, чтобы SPA работало после кэша
+  const isNav = event.request.mode === 'navigate';
   event.respondWith(
     fetch(event.request)
       .then((response) => {
+        if (isNav && !response.ok) {
+          return caches.match('/index.html').then((cached) => cached || response);
+        }
         const clone = response.clone();
         if (response.ok && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.startsWith('/assets/'))) {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
