@@ -1,8 +1,13 @@
 /* PWA Service Worker - Little Bites AI */
-const CACHE_NAME = 'little-bites-v1';
+const CACHE_NAME = 'little-bites-v2';
 
+// Precache shell: без этого на мобильных при сбое сети respondWith отдавал undefined → белый экран
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.add('/index.html'))
+      .then(() => self.skipWaiting())
+      .catch(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -14,12 +19,19 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Минимальная HTML-страница, если кэша нет (не передаём undefined в respondWith)
+function offlinePage() {
+  return new Response(
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Little Bites</title></head><body><p>Нет соединения.</p><button onclick="location.reload()">Обновить</button></body></html>',
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+  );
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Навигация (document): при 404 отдаём index.html, чтобы SPA работало после кэша
   const isNav = event.request.mode === 'navigate';
   event.respondWith(
     fetch(event.request)
@@ -33,6 +45,10 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+      .catch(() =>
+        caches.match(event.request)
+          .then((cached) => cached || caches.match('/index.html'))
+          .then((cached) => cached || offlinePage())
+      )
   );
 });
