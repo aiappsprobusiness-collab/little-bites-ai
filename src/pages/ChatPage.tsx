@@ -122,7 +122,6 @@ export default function ChatPage() {
       await saveChat({
         message: userMessage.content,
         response: displayMessage,
-        childId: selectedChild?.id ?? undefined,
       });
 
       try {
@@ -289,6 +288,8 @@ export default function ChatPage() {
                 timestamp={m.timestamp}
                 rawContent={m.rawContent}
                 onDelete={handleDeleteMessage}
+                childId={selectedChild?.id}
+                childName={selectedChild?.name}
               />
             ))}
           </AnimatePresence>

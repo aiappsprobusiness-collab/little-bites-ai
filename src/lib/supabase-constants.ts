@@ -16,5 +16,6 @@ export const RECIPES_DETAIL_SELECT = `${RECIPES_LIST_SELECT}, ingredients:recipe
 export const CHAT_HISTORY_SELECT = 'id, message, response, created_at, user_id, child_id, message_type';
 
 export const RECIPES_PAGE_SIZE = 10;
-export const CHAT_LAST_MESSAGES = 5;
+/** Лимит чата: храним только последние 20 записей (карусель). */
+export const CHAT_LAST_MESSAGES = 20;
 export const SUPABASE_DEBOUNCE_MS = 200;

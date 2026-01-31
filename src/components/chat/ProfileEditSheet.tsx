@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { X, Plus } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useChildren } from "@/hooks/useChildren";
 import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
@@ -59,28 +60,41 @@ export function ProfileEditSheet({
   onCreated,
 }: ProfileEditSheetProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { updateChild, createChild, deleteChild, calculateAgeInMonths, isUpdating, isCreating, isDeleting } = useChildren();
   const [name, setName] = useState("");
   const [ageYears, setAgeYears] = useState(0);
   const [ageMonths, setAgeMonths] = useState(0);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [allergyInput, setAllergyInput] = useState("");
-  const [likesStr, setLikesStr] = useState("");
-  const [dislikesStr, setDislikesStr] = useState("");
+  const [likes, setLikes] = useState<string[]>([]);
+  const [likeInput, setLikeInput] = useState("");
+  const [dislikes, setDislikes] = useState<string[]>([]);
+  const [dislikeInput, setDislikeInput] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const initializedForOpenRef = useRef(false);
 
   const isCreate = createMode || (open && !child);
 
+  // Синхронизируем форму с профилем только один раз при открытии шторки, чтобы не сбрасывать ввод при каждом обновлении child
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedForOpenRef.current = false;
+      return;
+    }
+    if (initializedForOpenRef.current) return;
+    initializedForOpenRef.current = true;
+
     if (isCreate) {
       setName("");
       setAgeYears(0);
       setAgeMonths(0);
       setAllergies([]);
       setAllergyInput("");
-      setLikesStr("");
-      setDislikesStr("");
+      setLikes([]);
+      setLikeInput("");
+      setDislikes([]);
+      setDislikeInput("");
       return;
     }
     if (!child) return;
@@ -89,9 +103,11 @@ export function ProfileEditSheet({
     setAgeMonths(totalMonths % 12);
     setAllergies(child.allergies ?? []);
     setAllergyInput("");
-    setLikesStr((child.likes ?? []).join(", "));
-    setDislikesStr((child.dislikes ?? []).join(", "));
-  }, [child, open, createMode, isCreate, calculateAgeInMonths]);
+    setLikes(child.likes ?? []);
+    setLikeInput("");
+    setDislikes(child.dislikes ?? []);
+    setDislikeInput("");
+  }, [open, isCreate, child, calculateAgeInMonths]);
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 
@@ -110,6 +126,28 @@ export function ProfileEditSheet({
     removeAllergy(index);
   };
 
+  const addLike = (raw: string) => {
+    const toAdd = parseTags(raw);
+    if (toAdd.length) setLikes((prev) => [...new Set([...prev, ...toAdd])]);
+    setLikeInput("");
+  };
+  const removeLike = (index: number) => setLikes((prev) => prev.filter((_, i) => i !== index));
+  const editLike = (value: string, index: number) => {
+    setLikeInput(value);
+    removeLike(index);
+  };
+
+  const addDislike = (raw: string) => {
+    const toAdd = parseTags(raw);
+    if (toAdd.length) setDislikes((prev) => [...new Set([...prev, ...toAdd])]);
+    setDislikeInput("");
+  };
+  const removeDislike = (index: number) => setDislikes((prev) => prev.filter((_, i) => i !== index));
+  const editDislike = (value: string, index: number) => {
+    setDislikeInput(value);
+    removeDislike(index);
+  };
+
   const handleSave = async () => {
     if (isCreate) {
       const trimmedName = name.trim();
@@ -117,14 +155,16 @@ export function ProfileEditSheet({
         toast({ variant: "destructive", title: "Введите имя" });
         return;
       }
+      const createPayload = {
+        name: trimmedName,
+        birth_date: birthDateFromAgeMonths(totalAgeMonths),
+        allergies: Array.isArray(allergies) ? allergies : (typeof allergies === 'string' ? allergies.split(',').map((s) => s.trim()).filter(Boolean) : []),
+        likes: Array.isArray(likes) ? likes : (typeof likes === 'string' ? parseTags(likes) : []),
+        dislikes: Array.isArray(dislikes) ? dislikes : (typeof dislikes === 'string' ? parseTags(dislikes) : []),
+      };
+      console.log("Payload to Supabase (create):", createPayload);
       try {
-        const newChild = await createChild({
-          name: trimmedName,
-          birth_date: birthDateFromAgeMonths(totalAgeMonths),
-          allergies,
-          likes: parseTags(likesStr),
-          dislikes: parseTags(dislikesStr),
-        });
+        const newChild = await createChild(createPayload);
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
         onOpenChange(false);
         onCreated?.(newChild.id);
@@ -138,22 +178,26 @@ export function ProfileEditSheet({
       return;
     }
     if (!child) return;
+    const updatePayload = {
+      id: child.id,
+      birth_date: birthDateFromAgeMonths(totalAgeMonths),
+      allergies: Array.isArray(allergies) ? allergies : (typeof allergies === 'string' ? allergies.split(',').map((s) => s.trim()).filter(Boolean) : []),
+      likes: Array.isArray(likes) ? likes : (typeof likes === 'string' ? parseTags(likes) : []),
+      dislikes: Array.isArray(dislikes) ? dislikes : (typeof dislikes === 'string' ? parseTags(dislikes) : []),
+    };
+    console.log("Payload to Supabase (update):", updatePayload);
     try {
-      await updateChild({
-        id: child.id,
-        birth_date: birthDateFromAgeMonths(totalAgeMonths),
-        allergies,
-        likes: parseTags(likesStr),
-        dislikes: parseTags(dislikesStr),
-      });
+      await updateChild(updatePayload);
+      await queryClient.refetchQueries({ queryKey: ["children"] });
+      initializedForOpenRef.current = false;
       toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
       onOpenChange(false);
-    } catch (e: any) {
-      console.error("[ProfileEditSheet] Ошибка сохранения", e);
+    } catch (e: unknown) {
+      console.error("SYNC ERROR:", (e as Error)?.message, (e as { details?: unknown })?.details);
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: e.message || "Не удалось сохранить",
+        description: (e as Error)?.message || "Не удалось сохранить",
       });
     }
   };
@@ -178,7 +222,8 @@ export function ProfileEditSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl flex flex-col max-h-[85vh]">
+      <SheetContent side="bottom" className="rounded-t-3xl flex flex-col max-h-[85vh]" aria-describedby="profile-sheet-desc">
+        <p id="profile-sheet-desc" className="sr-only">Редактирование профиля ребенка</p>
         <SheetHeader>
           <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать профиль — ${child?.name ?? ""}`}</SheetTitle>
         </SheetHeader>
@@ -267,23 +312,81 @@ export function ProfileEditSheet({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="likes" className="text-sm font-medium">Любит (через запятую)</Label>
+            <Label className="text-sm font-medium">Любит</Label>
+            <p className="text-xs text-muted-foreground">Нажмите на чип для редактирования, крестик — удалить</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {likes.map((item, i) => (
+                <Badge
+                  key={i}
+                  variant="secondary"
+                  className="cursor-pointer gap-1 pr-1"
+                  onClick={() => editLike(item, i)}
+                >
+                  {item}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeLike(i);
+                    }}
+                    className="rounded-full p-0.5 hover:bg-muted"
+                    aria-label="Удалить"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
             <Input
-              id="likes"
-              value={likesStr}
-              onChange={(e) => setLikesStr(e.target.value)}
-              placeholder="Банан, каша, творог"
+              value={likeInput}
+              onChange={(e) => setLikeInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === ",") {
+                  e.preventDefault();
+                  addLike(likeInput);
+                }
+              }}
+              placeholder="Добавить (запятая или Enter)"
               className="h-11 border-2"
               readOnly={false}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="dislikes" className="text-sm font-medium">Не любит (через запятую)</Label>
+            <Label className="text-sm font-medium">Не любит</Label>
+            <p className="text-xs text-muted-foreground">Нажмите на чип для редактирования, крестик — удалить</p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {dislikes.map((item, i) => (
+                <Badge
+                  key={i}
+                  variant="secondary"
+                  className="cursor-pointer gap-1 pr-1"
+                  onClick={() => editDislike(item, i)}
+                >
+                  {item}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeDislike(i);
+                    }}
+                    className="rounded-full p-0.5 hover:bg-muted"
+                    aria-label="Удалить"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
             <Input
-              id="dislikes"
-              value={dislikesStr}
-              onChange={(e) => setDislikesStr(e.target.value)}
-              placeholder="Лук, брокколи"
+              value={dislikeInput}
+              onChange={(e) => setDislikeInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === ",") {
+                  e.preventDefault();
+                  addDislike(dislikeInput);
+                }
+              }}
+              placeholder="Добавить (запятая или Enter)"
               className="h-11 border-2"
               readOnly={false}
             />

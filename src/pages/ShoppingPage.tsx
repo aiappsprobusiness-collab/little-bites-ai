@@ -5,13 +5,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Plus, Trash2, Share2, Loader2, Heart } from "lucide-react";
+import { Check, Plus, Trash2, Share2, Loader2, Heart, ChefHat } from "lucide-react";
 import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
 import { formatAmountUnit, resolveUnit, detectCategory } from "@/utils/productUtils";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useChildren } from "@/hooks/useChildren";
-import { useAppStore } from "@/store/useAppStore";
+import { useFavorites } from "@/hooks/useFavorites";
 import { parseIngredient, cleanProductNameDisplay } from "@/utils/parseIngredient";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -50,7 +50,7 @@ export default function ShoppingPage() {
   const { children } = useChildren();
   const selectedChild = children[0];
   const { getMealPlans } = useMealPlans(selectedChild?.id);
-  const favorites = useAppStore((s) => s.favorites);
+  const { favorites } = useFavorites();
 
   const {
     activeList,
@@ -58,6 +58,7 @@ export default function ShoppingPage() {
     isLoadingList,
     createList,
     addItem,
+    addItemsFromRecipe,
     updateItem,
     deleteItem,
     toggleItemPurchased,
@@ -86,7 +87,7 @@ export default function ShoppingPage() {
       : selectedCategory === "other"
         ? items.filter((item) => item.category === "other" || !item.category)
         : items.filter((item) => item.category === selectedCategory))
-    : items; // В режиме "по рецептам" показываем все элементы (фильтрация по рецептам будет в groupedItems)
+    : items;
 
   const checkedCount = items.filter((i) => i.is_purchased).length;
   const progress = items.length > 0 ? (checkedCount / items.length) * 100 : 0;
@@ -114,23 +115,33 @@ export default function ShoppingPage() {
           items: filteredItems,
         }))
         .filter((cat) => cat.items.length > 0))
-    : // Режим "по рецептам" - группируем по названиям рецептов
+    : // Режим "по рецептам" — только товары с recipe_id, группировка по recipe_id, заголовок из join или фоллбек
     (() => {
-      const recipeGroups = new Map<string, typeof items>();
-      items.forEach((item: any) => {
-        // Используем recipeTitle из маппинга или проверяем recipe напрямую
-        const recipeTitle = item.recipeTitle || item.recipe?.title || "Без рецепта";
-        if (!recipeGroups.has(recipeTitle)) {
-          recipeGroups.set(recipeTitle, []);
+      const itemsWithRecipe = items.filter(
+        (i: any) => i.recipe_id != null && String(i.recipe_id).trim() !== ""
+      );
+      const recipeGroups = new Map<string, { title: string; items: typeof items }>();
+      itemsWithRecipe.forEach((item: any) => {
+        const rid = String(item.recipe_id).trim();
+        // item.recipes?.title — из join; иначе сохранённый recipe_title; для отладки — ID
+        const title =
+          item.recipeTitle ??
+          item.recipes?.title ??
+          item.recipe?.title ??
+          item.recipe_title ??
+          (item.recipe_id ? `Рецепт (${String(item.recipe_id).slice(0, 8)}…)` : "Рецепт");
+        if (!recipeGroups.has(rid)) {
+          recipeGroups.set(rid, { title, items: [] });
         }
-        recipeGroups.get(recipeTitle)!.push(item);
+        const group = recipeGroups.get(rid)!;
+        if (!group.title && title !== "Рецепт") group.title = title;
+        group.items.push(item);
       });
 
-      // Секции по рецептам: название рецепта → список продуктов (как "По категориям")
-      return Array.from(recipeGroups.entries()).map(([title, groupItems]) => ({
-        id: title,
+      return Array.from(recipeGroups.entries()).map(([recipeId, { title, items: groupItems }]) => ({
+        id: recipeId,
         label: title,
-        emoji: "🍽️",
+        emoji: "recipe",
         items: groupItems,
       }));
     })();
@@ -226,10 +237,6 @@ export default function ShoppingPage() {
         return;
       }
 
-      if (!activeList) {
-        await createList("Список покупок");
-      }
-
       const ingredients = favorite.recipe.ingredients || [];
       if (ingredients.length === 0) {
         toast({
@@ -240,39 +247,22 @@ export default function ShoppingPage() {
         return;
       }
 
-      // Парсим и добавляем ингредиенты
-      for (const rawIngredient of ingredients) {
-        const { name, quantity, unit } = parseIngredient(rawIngredient);
-        if (!name || !name.trim()) continue;
-
-        const resolvedUnitValue = resolveUnit(unit, name);
-        const category = detectCategory(name);
-        const amount = quantity ?? (resolvedUnitValue === "шт" ? 1 : null);
-
-        try {
-          await addItem({
-            name: name.trim(),
-            amount,
-            unit: resolvedUnitValue,
-            category: category as any,
-            is_purchased: false,
-          });
-        } catch (error) {
-          // Продолжаем добавлять остальные ингредиенты даже если один не удался
-          console.error("Ошибка добавления ингредиента:", name, error);
-        }
-      }
+      await addItemsFromRecipe(ingredients, {
+        listId: activeList?.id,
+        recipeTitle: favorite.recipe.title,
+      });
 
       setIsFavoritesSheetOpen(false);
       toast({
         title: "Список создан",
         description: `Ингредиенты из «${favorite.recipe.title}» добавлены в список покупок`,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      console.error("DB Error in handleGenerateFromFavorites:", (error as Error).message);
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: error.message || "Не удалось создать список из избранного",
+        description: (error as Error).message || "Не удалось создать список из избранного",
       });
     }
   };
@@ -411,7 +401,7 @@ export default function ShoppingPage() {
           </div>
         )}
 
-        {/* Items by Category / by Recipe (секции: название → список продуктов) */}
+        {/* Items: по категориям (Мясо, Фрукты…) или по рецептам (название рецепта → плоский список продуктов) */}
         {isLoadingItems ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -422,11 +412,19 @@ export default function ShoppingPage() {
               <div key={category.id}>
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl">{category.emoji}</span>
-                    <h3 className="font-bold">{category.label}</h3>
-                    <span className="text-sm text-muted-foreground">
-                      ({category.items.length})
-                    </span>
+                    {viewMode === "byRecipe" && category.emoji === "recipe" ? (
+                      <ChefHat className="w-5 h-5 text-muted-foreground shrink-0" />
+                    ) : (
+                      <span className="text-xl">{category.emoji}</span>
+                    )}
+                    <h3 className="font-bold">
+                      {viewMode === "byRecipe" ? `${category.label} (${category.items.length})` : category.label}
+                    </h3>
+                    {viewMode !== "byRecipe" && (
+                      <span className="text-sm text-muted-foreground">
+                        ({category.items.length})
+                      </span>
+                    )}
                   </div>
                   {viewMode === "byCategory" && (
                     <Button
@@ -447,6 +445,7 @@ export default function ShoppingPage() {
                     </Button>
                   )}
                 </div>
+                {/* Плоский список продуктов без подразделения по категориям */}
                 <div className="space-y-2">
                   {category.items.map((item, index) => {
                     const amountUnit = formatAmountUnit(item.amount, item.unit);
@@ -519,7 +518,9 @@ export default function ShoppingPage() {
             <Card variant="default" className="p-8 text-center">
               <CardContent className="p-0">
                 <p className="text-muted-foreground">
-                  Список покупок пуст
+                  {viewMode === "byRecipe"
+                    ? "Добавьте ингредиенты из рецептов, чтобы увидеть их здесь"
+                    : "Список покупок пуст"}
                 </p>
               </CardContent>
             </Card>

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -136,7 +137,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md mx-auto">
+      <DialogContent className="max-w-md mx-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="text-lg">
@@ -146,6 +147,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
               • {dayName}
             </span>
           </DialogTitle>
+          <DialogDescription>Измените блюдо или удалите его из плана</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

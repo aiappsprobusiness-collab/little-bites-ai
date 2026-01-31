@@ -88,15 +88,12 @@ export default function ProfilePage() {
     likes: string[];
     dislikes: string[];
     allergies: string[];
-    preferences: string[];
   }) => {
     try {
-      // Убеждаемся, что передаем массивы строк, а не строки
       const likesArray = Array.isArray(formData.likes) ? formData.likes.filter(l => l?.trim()) : [];
       const dislikesArray = Array.isArray(formData.dislikes) ? formData.dislikes.filter(d => d?.trim()) : [];
       const allergiesArray = Array.isArray(formData.allergies) ? formData.allergies.filter(a => a?.trim()) : [];
-      const preferencesArray = Array.isArray(formData.preferences) ? formData.preferences.filter(p => p?.trim()) : [];
-      
+
       if (editingChild) {
         await updateChild({
           id: editingChild.id,
@@ -105,7 +102,6 @@ export default function ProfilePage() {
           likes: likesArray,
           dislikes: dislikesArray,
           allergies: allergiesArray,
-          preferences: preferencesArray,
         });
         toast({
           title: "Профиль обновлен",
@@ -118,7 +114,6 @@ export default function ProfilePage() {
           likes: likesArray,
           dislikes: dislikesArray,
           allergies: allergiesArray,
-          preferences: preferencesArray,
         });
         setSelectedChildId(newChild.id);
         toast({
@@ -128,11 +123,12 @@ export default function ProfilePage() {
       }
       setIsEditDialogOpen(false);
       setEditingChild(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      console.error("SYNC ERROR:", (error as Error).message, (error as Error).message);
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: error.message || "Не удалось сохранить данные",
+        description: (error as Error).message || "Не удалось сохранить данные",
       });
     }
   };
@@ -441,8 +437,8 @@ export default function ProfilePage() {
               </Card>
             </motion.div>
 
-            {/* Preferences */}
-            {Array.isArray(selectedChild.preferences) && selectedChild.preferences.length > 0 && (
+            {/* Не любит */}
+            {Array.isArray(selectedChild.dislikes) && selectedChild.dislikes.length > 0 && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -450,14 +446,14 @@ export default function ProfilePage() {
               >
                 <Card variant="default">
                   <CardContent className="p-5">
-                    <h3 className="font-bold mb-4">Предпочтения</h3>
+                    <h3 className="font-bold mb-4">Не любит</h3>
                     <div className="flex flex-wrap gap-2">
-                      {selectedChild.preferences.map((pref) => (
+                      {selectedChild.dislikes.map((d) => (
                         <span
-                          key={pref}
+                          key={d}
                           className="px-3 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium"
                         >
-                          {pref}
+                          {d}
                         </span>
                       ))}
                     </div>
@@ -465,7 +461,6 @@ export default function ProfilePage() {
                 </Card>
               </motion.div>
             )}
-
 
             {/* Delete Button */}
             <motion.div
@@ -516,6 +511,13 @@ export default function ProfilePage() {
 }
 
 // Компонент диалога для создания/редактирования ребенка
+function birthDateFromYearsMonths(years: number, months: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  d.setMonth(d.getMonth() - months);
+  return d.toISOString().slice(0, 10);
+}
+
 function ChildEditDialog({
   child,
   onSave,
@@ -528,7 +530,6 @@ function ChildEditDialog({
     likes: string[];
     dislikes: string[];
     allergies: string[];
-    preferences: string[];
   }) => void;
   isLoading: boolean;
 }) {
@@ -572,35 +573,42 @@ function ChildEditDialog({
   };
 
   const [name, setName] = useState(child?.name || "");
-  const [birthDate, setBirthDate] = useState(
-    child?.birth_date || new Date().toISOString().split("T")[0]
-  );
   const [likes, setLikes] = useState<string[]>(() => ensureStringArray(child?.likes));
   const [dislikes, setDislikes] = useState<string[]>(() => ensureStringArray(child?.dislikes));
   const [allergies, setAllergies] = useState<string[]>(() => ensureStringArray(child?.allergies));
-  const [preferences, setPreferences] = useState<string[]>(() => ensureStringArray(child?.preferences));
+  const [ageYears, setAgeYears] = useState(0);
+  const [ageMonths, setAgeMonths] = useState(0);
   const [newAllergy, setNewAllergy] = useState("");
   const [newLike, setNewLike] = useState("");
   const [newDislike, setNewDislike] = useState("");
+
+  // Вычислить годы и месяцы из birth_date
+  const birthDateToYearsMonths = (birthDate: string): { years: number; months: number } => {
+    if (!birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { years: 0, months: 0 };
+    const birth = new Date(birthDate);
+    const now = new Date();
+    let months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+    if (now.getDate() < birth.getDate()) months--;
+    return { years: Math.floor(months / 12), months: months % 12 };
+  };
 
   // Синхронизируем состояние с пропсом child при его изменении
   useEffect(() => {
     if (child) {
       setName(child.name || "");
-      setBirthDate(child.birth_date || new Date().toISOString().split("T")[0]);
-      // Убеждаемся, что likes/dislikes/allergies - это массивы (безопасное преобразование)
+      const { years, months } = birthDateToYearsMonths(child.birth_date);
+      setAgeYears(years);
+      setAgeMonths(months);
       setLikes(ensureStringArray(child.likes));
       setDislikes(ensureStringArray(child.dislikes));
       setAllergies(ensureStringArray(child.allergies));
-      setPreferences(ensureStringArray(child.preferences));
     } else {
-      // Сброс для создания нового профиля
       setName("");
-      setBirthDate(new Date().toISOString().split("T")[0]);
+      setAgeYears(0);
+      setAgeMonths(0);
       setLikes([]);
       setDislikes([]);
       setAllergies([]);
-      setPreferences([]);
     }
     setNewAllergy("");
     setNewLike("");
@@ -627,19 +635,16 @@ function ChildEditDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Убеждаемся, что передаем массивы, а не строки
     const likesArray = Array.isArray(likes) ? likes.filter(l => l?.trim()) : [];
     const dislikesArray = Array.isArray(dislikes) ? dislikes.filter(d => d?.trim()) : [];
     const allergiesArray = Array.isArray(allergies) ? allergies.filter(a => a?.trim()) : [];
-    const preferencesArray = Array.isArray(preferences) ? preferences.filter(p => p?.trim()) : [];
-    
-    onSave({ 
-      name, 
-      birthDate, 
-      likes: likesArray, 
-      dislikes: dislikesArray, 
-      allergies: allergiesArray, 
-      preferences: preferencesArray 
+    const birthDateToSave = birthDateFromYearsMonths(ageYears, ageMonths);
+    onSave({
+      name,
+      birthDate: birthDateToSave,
+      likes: likesArray,
+      dislikes: dislikesArray,
+      allergies: allergiesArray,
     });
   };
 
@@ -693,16 +698,31 @@ function ChildEditDialog({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="birthDate">Дата рождения</Label>
-          <Input
-            id="birthDate"
-            type="date"
-            value={birthDate}
-            onChange={(e) => setBirthDate(e.target.value)}
-            required
-            max={new Date().toISOString().split("T")[0]}
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="ageYears">Возраст: годы</Label>
+            <Input
+              id="ageYears"
+              type="number"
+              min={0}
+              max={20}
+              value={ageYears === 0 ? "" : ageYears}
+              onChange={(e) => setAgeYears(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              placeholder="0"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="ageMonths">Месяцы (0–11)</Label>
+            <Input
+              id="ageMonths"
+              type="number"
+              min={0}
+              max={11}
+              value={ageMonths === 0 ? "" : ageMonths}
+              onChange={(e) => setAgeMonths(Math.max(0, Math.min(11, parseInt(e.target.value, 10) || 0)))}
+              placeholder="0"
+            />
+          </div>
         </div>
 
         <div className="space-y-2">

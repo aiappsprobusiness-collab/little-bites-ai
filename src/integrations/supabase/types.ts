@@ -355,6 +355,7 @@ export type Database = {
           is_purchased: boolean | null
           name: string
           recipe_id: string | null
+          recipe_title: string | null
           shopping_list_id: string
           unit: string | null
         }
@@ -366,6 +367,7 @@ export type Database = {
           is_purchased?: boolean | null
           name: string
           recipe_id?: string | null
+          recipe_title?: string | null
           shopping_list_id: string
           unit?: string | null
         }
@@ -377,6 +379,7 @@ export type Database = {
           is_purchased?: boolean | null
           name?: string
           recipe_id?: string | null
+          recipe_title?: string | null
           shopping_list_id?: string
           unit?: string | null
         }

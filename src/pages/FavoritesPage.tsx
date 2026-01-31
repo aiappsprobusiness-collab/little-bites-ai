@@ -4,62 +4,38 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trash2, ChefHat, ShoppingCart, MessageCircle, Clock } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useAppStore, type FavoriteItem } from "@/store/useAppStore";
+import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-const normalizeTitle = (title?: string) => title?.toLowerCase().trim() ?? "";
 
 export default function FavoritesPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
-  const { favorites, removeFavorite: removeFavoriteLocal, addToShoppingList } = useAppStore();
-  const { favorites: remoteFavorites, removeFavorite: removeFavoriteRemote } = useFavorites();
+  const { favorites, removeFavorite } = useFavorites();
+  const { addItemsFromRecipe } = useShoppingLists();
 
-  const getRemoteFavoriteId = (favorite: FavoriteItem) => {
-    if (favorite.remoteId && UUID_PATTERN.test(favorite.remoteId)) {
-      return favorite.remoteId;
+  const handleRemove = async (id: string) => {
+    try {
+      await removeFavorite(id);
+      toast({ title: "Удалено из избранного" });
+    } catch (e: unknown) {
+      console.error("DB Error in FavoritesPage handleRemove:", (e as Error).message);
+      toast({ title: "Не удалось удалить", variant: "destructive" });
     }
-    if (UUID_PATTERN.test(favorite.id)) {
-      return favorite.id;
-    }
-    const titleKey = normalizeTitle(favorite.recipe.title);
-    if (!titleKey) return null;
-    const match = remoteFavorites.find(
-      (remote) => normalizeTitle(remote.recipe.title) === titleKey
-    );
-    return match?.id ?? null;
   };
 
-  const handleRemove = async (favorite: FavoriteItem) => {
-    const remoteId = user ? getRemoteFavoriteId(favorite) : null;
-    if (remoteId) {
-      try {
-        await removeFavoriteRemote(remoteId);
-      } catch (error) {
-        toast({
-          title: "Не удалось удалить из избранного",
-          description: "Проверьте соединение и попробуйте снова",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-    removeFavoriteLocal(favorite.id);
-    toast({ title: "Удалено из избранного" });
-  };
-
-  const handleAddToShoppingList = (ingredients: string[], title: string) => {
+  const handleAddToShoppingList = async (ingredients: string[], title: string) => {
     if (!ingredients?.length) {
       toast({ title: "Нет ингредиентов", variant: "destructive" });
       return;
     }
-    addToShoppingList(ingredients, title);
-    toast({ title: "Добавлено в список покупок", description: `Ингредиенты «${title}» добавлены` });
+    try {
+      await addItemsFromRecipe(ingredients, { recipeTitle: title });
+      toast({ title: "Добавлено в список покупок", description: `Ингредиенты «${title}» добавлены` });
+    } catch (e: unknown) {
+      console.error("DB Error in FavoritesPage handleAddToShoppingList:", (e as Error).message);
+      toast({ title: "Не удалось добавить в список", variant: "destructive" });
+    }
   };
 
   return (
@@ -90,11 +66,16 @@ export default function FavoritesPage() {
               <Card variant="elevated" className="overflow-hidden">
                 <CardContent className="p-4 space-y-4">
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-bold text-lg">{favorite.recipe.title}</h3>
+                    <div>
+                      <h3 className="font-bold text-lg">{favorite.recipe.title}</h3>
+                      {favorite.recipe.child_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">Для: {favorite.recipe.child_name}</p>
+                      )}
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleRemove(favorite)}
+                      onClick={() => handleRemove(favorite.id)}
                       className="text-destructive hover:text-destructive shrink-0"
                       aria-label="Удалить из избранного"
                     >

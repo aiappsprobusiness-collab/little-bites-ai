@@ -136,14 +136,20 @@ export default function RecipeEditPage() {
     }
 
     try {
+      const parseOptionalInt = (v: string): number | null => {
+        if (!v?.trim()) return null;
+        const n = parseInt(v, 10);
+        return Number.isFinite(n) ? Math.floor(n) : null;
+      };
+      const rawChildId = childId && childId !== "none" ? childId : null;
       const recipeData = {
         title: title.trim(),
         description: description.trim() || null,
-        cooking_time_minutes: cookingTime ? parseInt(cookingTime) : null,
-        min_age_months: minAge ? parseInt(minAge) : null,
-        max_age_months: maxAge ? parseInt(maxAge) : null,
+        cooking_time_minutes: parseOptionalInt(cookingTime),
+        min_age_months: parseOptionalInt(minAge),
+        max_age_months: parseOptionalInt(maxAge),
         image_url: imageUrl.trim() || null,
-        child_id: childId && childId !== "none" ? childId : null,
+        child_id: rawChildId,
       };
 
       const ingredientsData = ingredients

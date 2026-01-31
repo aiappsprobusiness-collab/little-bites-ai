@@ -37,12 +37,25 @@ export function useDeepSeekAPI() {
 
       const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
 
+      // Всегда берём свежие данные профиля из БД перед запросом к ИИ (аллергии, любит, не любит)
+      await queryClient.refetchQueries({ queryKey: ['children', user?.id] });
+      const freshChildren = (queryClient.getQueryData(['children', user?.id]) as typeof children) ?? children;
+      const freshSelectedChild = selectedChildId && selectedChildId !== 'family'
+        ? freshChildren.find((c) => c.id === selectedChildId)
+        : freshChildren[0] ?? null;
+
       const { childData } = buildChatContextFromProfiles({
         userMessage: lastUserMessage,
-        children,
-        selectedChild: selectedChild ?? null,
+        children: freshChildren,
+        selectedChild: freshSelectedChild ?? null,
         selectedChildId,
         calculateAgeInMonths,
+      });
+
+      console.log('AI Context Sent:', {
+        childData,
+        allergies: childData?.allergies,
+        allergiesStr: childData?.allergies?.length ? `Аллергии ребенка: ${childData.allergies.join(', ')}` : '(не указаны)',
       });
 
       // Блок по аллергиям: используем те же аллергии, что и в промпте (выбранный / все при «для всех» / matched)
@@ -111,32 +124,49 @@ export function useDeepSeekAPI() {
     },
   });
 
-  // Save chat to history
+  // Save chat to history (без привязки к ребёнку). После вставки — карусель: оставляем только последние 20.
+  const CHAT_HISTORY_LIMIT = 20;
   const saveChatMutation = useMutation({
     mutationFn: async ({
       message,
       response,
-      childId,
       messageType = 'text',
     }: {
       message: string;
       response: string;
-      childId?: string;
       messageType?: 'text' | 'image' | 'recipe';
     }) => {
       if (!user) throw new Error('Not authenticated');
 
-      const { error } = await supabase
+      const { error: insertError } = await supabase
         .from('chat_history')
         .insert({
           user_id: user.id,
-          child_id: childId || null,
+          child_id: null,
           message,
           response,
           message_type: messageType,
         });
 
-      if (error) throw error;
+      if (insertError) {
+        console.error('SYNC ERROR:', insertError.message, insertError.details);
+        throw insertError;
+      }
+
+      // Карусель: удалить самые старые записи, если больше лимита
+      const { data: rows } = await supabase
+        .from('chat_history')
+        .select('id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true });
+      if (rows && rows.length > CHAT_HISTORY_LIMIT) {
+        const toDelete = rows.slice(0, rows.length - CHAT_HISTORY_LIMIT).map((r) => r.id);
+        const { error: deleteError } = await supabase
+          .from('chat_history')
+          .delete()
+          .in('id', toDelete);
+        if (deleteError) console.error('SYNC ERROR (trim history):', deleteError.message, deleteError.details);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chat_history'] });

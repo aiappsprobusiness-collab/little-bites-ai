@@ -7,6 +7,33 @@ type Child = Tables<'children'>;
 type ChildInsert = TablesInsert<'children'>;
 type ChildUpdate = TablesUpdate<'children'>;
 
+/** Привести значение к text[] (схема children). Без дублей и пустых строк. */
+function ensureStringArray(v: unknown): string[] {
+  let arr: string[] = [];
+  if (Array.isArray(v)) {
+    arr = v.map((x) => (typeof x === 'string' ? x.trim() : String(x))).filter(Boolean);
+  } else if (typeof v === 'string' && v.trim()) {
+    arr = v.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+  return [...new Set(arr)];
+}
+
+/** Нормализовать payload для insert/update. Схема children: только name, birth_date, allergies, likes, dislikes (все массивы — text[]). */
+function normalizeChildPayload<T extends Record<string, unknown>>(payload: T): T {
+  const out = { ...payload };
+  const arrayKeys = ['allergies', 'dislikes', 'likes'] as const;
+  for (const key of arrayKeys) {
+    if (key in out && out[key] !== undefined) {
+      (out as Record<string, unknown>)[key] = ensureStringArray(out[key]);
+    }
+  }
+  if ('birth_date' in out && typeof out.birth_date === 'string') {
+    const d = out.birth_date.trim();
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) (out as Record<string, unknown>).birth_date = d;
+  }
+  return out;
+}
+
 export function useChildren() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -77,16 +104,22 @@ export function useChildren() {
     mutationFn: async (childData: Omit<ChildInsert, 'user_id'>) => {
       if (!user) throw new Error('User not authenticated');
 
+      const payload = normalizeChildPayload({
+        ...childData,
+        user_id: user.id,
+      } as Record<string, unknown>) as ChildInsert;
+
       const { data, error } = await supabase
         .from('children')
-        .insert({
-          ...childData,
-          user_id: user.id,
-        })
+        .insert(payload)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase Error Details:', error.message, error.details, error.hint);
+        alert(`Ошибка сохранения: ${error.message}`);
+        throw error;
+      }
       return data as Child;
     },
     onSuccess: () => {
@@ -94,21 +127,48 @@ export function useChildren() {
     },
   });
 
-  // Обновить ребенка
+  const childrenQueryKey = ['children', user?.id] as const;
+
+  // Обновить ребенка: id не попадает в тело update — только в .eq('id', id). Оптимистичное обновление кэша.
   const updateChild = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string } & ChildUpdate) => {
+    mutationFn: async (payload: { id: string } & ChildUpdate) => {
+      const { id, ...rest } = payload;
+      if (!id || typeof id !== 'string') {
+        const err = new Error('childId must be a valid UUID');
+        console.error(err.message);
+        throw err;
+      }
+      const normalized = normalizeChildPayload(rest as Record<string, unknown>) as Record<string, unknown>;
+      const { id: _, ...updateData } = normalized;
+
       const { data, error } = await supabase
         .from('children')
-        .update(updates)
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('SYNC ERROR:', error.message);
+        throw error;
+      }
       return data as Child;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['children', user?.id] });
+    onMutate: async (payload) => {
+      await queryClient.cancelQueries({ queryKey: childrenQueryKey });
+      const previousChildren = queryClient.getQueryData(childrenQueryKey);
+      queryClient.setQueryData(childrenQueryKey, (old: Child[] | undefined) =>
+        (old ?? []).map((c) => (c.id === payload.id ? { ...c, ...payload } : c))
+      );
+      return { previousChildren };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.previousChildren != null) {
+        queryClient.setQueryData(childrenQueryKey, context.previousChildren);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['children'] });
     },
   });
 
@@ -120,7 +180,10 @@ export function useChildren() {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('SYNC ERROR:', error.message, error.details);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['children', user?.id] });
@@ -176,7 +239,7 @@ export function useChildren() {
     return totalMonths;
   };
 
-  // Форматировать возраст для отображения
+  // Форматировать возраст для отображения. До 3 лет всегда показываем месяцы (2 г. 5 мес.), чтобы было видно сохранение.
   const formatAge = (birthDate: string): string => {
     const months = calculateAgeInMonths(birthDate);
     if (months < 12) {
@@ -184,6 +247,9 @@ export function useChildren() {
     }
     const years = Math.floor(months / 12);
     const remainingMonths = months % 12;
+    if (years < 3) {
+      return `${years} г. ${remainingMonths} мес`;
+    }
     if (remainingMonths === 0) {
       return `${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`;
     }

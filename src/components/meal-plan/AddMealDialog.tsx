@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { FavoriteItem } from "@/store/useAppStore";
+import type { SavedFavorite } from "@/hooks/useFavorites";
 
 export interface MealTypeOption {
   id: string;
@@ -26,7 +26,7 @@ export interface MealTypeOption {
 interface AddMealDialogProps {
   recipes?: any[];
   chatRecipes?: any[];
-  favorites?: FavoriteItem[];
+  favorites?: SavedFavorite[];
   mealTypes: MealTypeOption[];
   selectedMealType: string | null;
   onSelectMealType: (type: string) => void;

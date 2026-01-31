@@ -47,7 +47,6 @@ interface ChatRequest {
     name: string;
     ageMonths: number;
     allergies?: string[];
-    dietGoals?: string[];
     weight?: number;
     height?: number;
     /** Для нескольких детей: "18 мес., 2 года" */
@@ -130,15 +129,14 @@ serve(async (req) => {
 
         systemPrompt = `Ты — ИИ‑ассистент по семейному питанию для мам. Отвечай кратко, без вступлений и лишних слов.
 
-У тебя есть активный профиль: возраст ${age}, аллергии ${allergies}, любит ${likes}, не любит ${dislikes}.
+У тебя есть активный профиль: возраст ${age}, аллергии ${allergies || "не указаны"}, любит ${likes || "не указаны"}, не любит ${dislikes || "не указаны"}.
 
 Правила:
 1. Предлагай только разовые идеи блюд или одного приёма пищи. Не составляй меню на несколько дней.
-2. КРИТИЧНО: Строго избегай продуктов из списка аллергий (${allergies || "не указаны"}). Никаких исключений — если аллергия указана, этот продукт не должен присутствовать в рецепте.
+2. КРИТИЧНО (медицинское требование): Строго исключи из рецепта любые продукты из списка аллергий и списка «не любит». Аллергии: ${allergies || "не указаны"}. Не любит: ${dislikes || "не указаны"}. Никаких исключений — если продукт указан в аллергиях или не любит, он НЕ должен присутствовать в рецепте. Strictly exclude ingredients listed in allergies and dislikes. This is a medical requirement.
 3. Старайся включать продукты из «любит» (${likes || "не указаны"}).
-4. Избегай «не любит» (${dislikes || "не указаны"}). Если нельзя — предложи способ «замаскировать», но не настаивай.
-5. Учитывай возраст при выборе блюд и консистенции.
-6. На любой запрос возвращай СТРОГО ОДИН рецепт. ЗАПРЕЩЕНО предлагать 2 или 3 варианта. ЗАПРЕЩЕНО использовать формат {"recipes": [...]} — только один JSON-объект с полями title, description, ingredients, steps, cookingTime.
+4. Учитывай возраст при выборе блюд и консистенции.
+5. На любой запрос возвращай СТРОГО ОДИН рецепт. ЗАПРЕЩЕНО предлагать 2 или 3 варианта. ЗАПРЕЩЕНО использовать формат {"recipes": [...]} — только один JSON-объект с полями title, description, ingredients, steps, cookingTime.
 
 Формат:
 - [Краткое название блюда]
@@ -155,10 +153,9 @@ serve(async (req) => {
 
 ${childData ? `
 Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
-${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ используй эти продукты!` : ""}
+${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ используй эти продукты! Strictly exclude — medical requirement.` : ""}
 ${childData.likes?.length ? `Любит: ${childData.likes.join(", ")}. Учитывай предпочтения.` : ""}
-${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")}. Избегай этих продуктов, если есть альтернатива.` : ""}
-${childData.dietGoals?.length ? `Цели питания: ${childData.dietGoals.join(", ")}` : ""}
+${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")}. Строго исключи эти продукты. Strictly exclude — medical requirement.` : ""}
 ` : ""}
 
 КРИТИЧЕСКИ ВАЖНО - ФОРМАТ ОТВЕТА:
@@ -221,7 +218,6 @@ ${childData ? `
 ${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ используй эти продукты!` : ""}
 ${childData.likes?.length ? `Любит: ${childData.likes.join(", ")}. Учитывай предпочтения.` : ""}
 ${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")}. Избегай этих продуктов, если есть альтернатива.` : ""}
-${childData.dietGoals?.length ? `Цели: ${childData.dietGoals.join(", ")}` : ""}
 ` : ""}
 
 ВАЖНО: Отвечай СТРОГО в формате JSON без markdown и без дополнительного текста!

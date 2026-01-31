@@ -168,14 +168,25 @@ export function useChatRecipes() {
           console.log('Ingredients count:', parsedRecipe.ingredients.length);
           console.log('Steps count:', parsedRecipe.steps.length);
 
-          // Создаем рецепт
+          // Схема recipes: cooking_time_minutes — integer; child_id — UUID или null; tags — text[]
+          const cookingMinutes =
+            parsedRecipe.cookingTime != null
+              ? (typeof parsedRecipe.cookingTime === 'number'
+                ? Math.floor(parsedRecipe.cookingTime)
+                : parseInt(String(parsedRecipe.cookingTime), 10))
+              : null;
+          const validChildId =
+            childId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(childId)
+              ? childId
+              : null;
+
           const newRecipe = await createRecipe({
             recipe: {
               title: parsedRecipe.title,
               description: parsedRecipe.description || 'Рецепт предложен AI ассистентом',
-              cooking_time_minutes: parsedRecipe.cookingTime || null,
-              child_id: childId || null,
-              tags,
+              cooking_time_minutes: Number.isFinite(cookingMinutes) ? cookingMinutes : null,
+              child_id: validChildId,
+              tags: Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map((t) => t.trim()) : []),
             },
             ingredients: parsedRecipe.ingredients.map((ing, index) => ({
               name: ing,

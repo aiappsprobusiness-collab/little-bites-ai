@@ -1,21 +1,22 @@
 import { useState, useRef, forwardRef, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
 import { Trash2, ChefHat, Clock, Heart, ShoppingCart, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
-import { useAppStore } from "@/store/useAppStore";
-import { parseIngredient } from "@/utils/parseIngredient";
-import { detectCategory, resolveUnit } from "@/utils/productUtils";
+import { supabase } from "@/integrations/supabase/client";
 import type { RecipeSuggestion } from "@/services/deepseek";
 
 interface ChatMessageProps {
@@ -25,6 +26,9 @@ interface ChatMessageProps {
   timestamp: Date;
   rawContent?: string;
   onDelete: (id: string) => void;
+  /** Контекст ребёнка для сохранения в избранное (отображается в меню «Избранное») */
+  childId?: string;
+  childName?: string;
 }
 
 interface Recipe {
@@ -105,12 +109,54 @@ function parseRecipeFromContent(content: string): Recipe | null {
     // Fallback: парсим форматированный текст (как от formatRecipeResponse) — для сообщений из истории
     const fromFormatted = parseRecipeFromFormattedText(content);
     if (fromFormatted) return fromFormatted;
+
+    // Fallback: обычный текст без JSON — название (эмодзи/капс) и ингредиенты (1., 2., 3. или -)
+    const fromPlain = parseRecipeFromPlainText(content);
+    if (fromPlain) return fromPlain;
   } catch (e) {
     // Не JSON или невалидный JSON - возвращаем null
     return null;
   }
 
   return null;
+}
+
+/**
+ * Парсит рецепт из обычного текста (без JSON): название и ингредиенты по номерам (1., 2., 3.) или маркерам (-, •).
+ */
+function parseRecipeFromPlainText(text: string): Recipe | null {
+  const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return null;
+
+  let title = '';
+  const ingredients: string[] = [];
+  let foundTitle = false;
+
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (!foundTitle && line.length >= 2 && line.length <= 80) {
+      const hasEmoji = /[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]/u.test(line);
+      const startsWithCaps = /^[А-ЯЁA-Z]/.test(line);
+      const notNumbered = !/^\d+[\.\)]\s*/.test(line);
+      const notExcluded = !['ингредиент', 'приготовление', 'шаг', 'способ', 'рецепт', 'блюдо'].some((w) => lower.startsWith(w));
+      if ((hasEmoji || (startsWithCaps && notNumbered)) && notExcluded && !line.includes(':')) {
+        title = line.replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, '').trim() || line;
+        foundTitle = true;
+        continue;
+      }
+    }
+    const numbered = line.match(/^\d+[\.\)]\s*(.+)$/);
+    const bullet = line.match(/^[-•*]\s*(.+)$/);
+    if (numbered && numbered[1].trim().length > 0 && numbered[1].length < 150) ingredients.push(numbered[1].trim());
+    else if (bullet && bullet[1].trim().length > 0 && bullet[1].length < 150) ingredients.push(bullet[1].trim());
+  }
+  if (!title && lines[0] && lines[0].length >= 2 && lines[0].length <= 80 && !/^\d+[\.\)]/.test(lines[0])) {
+    title = lines[0].replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, '').trim() || lines[0];
+  }
+  if (!title) title = 'Рецепт из чата';
+  if (title.length < 2) return null;
+
+  return { title: title.slice(0, 200), ingredients, steps: [] };
 }
 
 /**
@@ -236,35 +282,43 @@ function formatRecipe(recipe: Recipe): string {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, onDelete }, ref) => {
+  ({ id, role, content, timestamp, rawContent, onDelete, childId, childName }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [showShoppingModal, setShowShoppingModal] = useState(false);
     const [selectedIngredients, setSelectedIngredients] = useState<Set<number>>(new Set());
+    /** Рецепт, распарсенный при открытии модалки (стабильно при клике), для отображения ингредиентов даже если recipe фликает */
+    const [modalRecipe, setModalRecipe] = useState<Recipe | null>(null);
     const x = useMotionValue(0);
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
     const constraintsRef = useRef(null);
-    const { addFavorite, isAdding } = useFavorites();
-    const { addItem, createList, activeList } = useShoppingLists();
-    const favorites = useAppStore((s) => s.favorites);
-    const addToAppStoreFavorite = useAppStore((s) => s.addFavorite);
-    const setFavoriteRemoteId = useAppStore((s) => s.setFavoriteRemoteId);
-    const addToAppStoreShoppingList = useAppStore((s) => s.addToShoppingList);
+const queryClient = useQueryClient();
+    const { user } = useAuth();
+    const { favorites, addFavorite, removeFavorite, isAdding, isRemoving } = useFavorites();
+    const { addItemsFromRecipe, createList, activeList } = useShoppingLists();
     const { toast } = useToast();
 
     const sourceForParse = (rawContent ?? content).trim();
     const recipe = role === "assistant" ? parseRecipeFromContent(sourceForParse) : null;
     const displayContent = recipe ? formatRecipe(recipe) : content;
 
-    const isFavorite =
-      !!recipe &&
-      favorites.some(
-        (f) => f.recipe.title?.toLowerCase().trim() === recipe.title?.toLowerCase().trim()
-      );
+    const favoriteEntry = recipe
+      ? favorites.find((f) => f.recipe.title?.toLowerCase().trim() === recipe.title?.toLowerCase().trim())
+      : null;
+    const isFavorite = !!favoriteEntry;
 
-    const handleAddToFavorites = async () => {
+    const handleToggleFavorite = async () => {
       if (!recipe) return;
-      if (isFavorite) return;
+      if (isFavorite && favoriteEntry) {
+        try {
+          await removeFavorite(favoriteEntry.id);
+          toast({ title: "Удалено из избранного" });
+        } catch (e: unknown) {
+          console.error("DB Error in ChatMessage removeFavorite:", (e as Error).message);
+          toast({ title: "Не удалось удалить из избранного", variant: "destructive" });
+        }
+        return;
+      }
       const recipeSuggestion: RecipeSuggestion = {
         title: recipe.title,
         description: recipe.description || "",
@@ -273,21 +327,24 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         cookingTime: recipe.cookingTime || 0,
         ageRange: recipe.ageRange || "",
       };
-      const localId = addToAppStoreFavorite(recipeSuggestion);
       try {
-        const saved = await addFavorite({ recipe: recipeSuggestion, memberIds: [] });
-        if (saved?.id) {
-          setFavoriteRemoteId(localId, saved.id);
-        }
-      } catch {
-        // локально уже добавлен
+        await addFavorite({ recipe: recipeSuggestion, memberIds: [], childId, childName });
+        toast({ title: "Добавлено в избранное" });
+      } catch (e: unknown) {
+        console.error("DB Error in ChatMessage handleAddToFavorites:", (e as Error).message);
+        toast({ title: "Не удалось добавить в избранное", variant: "destructive" });
       }
-      toast({ title: "Добавлено в избранное" });
     };
 
     const openShoppingModal = () => {
-      if (!recipe?.ingredients?.length) return;
-      setSelectedIngredients(new Set(recipe.ingredients.map((_, i) => i)));
+      const source = (rawContent ?? content).trim();
+      const parsed = parseRecipeFromPlainText(source) ?? parseRecipeFromContent(source);
+      if (!parsed?.ingredients?.length) {
+        toast({ title: "Не удалось распознать ингредиенты", variant: "destructive" });
+        return;
+      }
+      setModalRecipe(parsed);
+      setSelectedIngredients(new Set(parsed.ingredients.map((_, i) => i)));
       setShowShoppingModal(true);
     };
 
@@ -300,40 +357,65 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       });
     };
 
+    /** Иконка корзины: при клике парсим текст в момент клика, сохраняем рецепт в БД, добавляем продукты с recipe_id. */
     const handleAddToList = async () => {
-      if (!recipe?.ingredients?.length) return;
-      const toAdd = recipe.ingredients.filter((_, i) => selectedIngredients.has(i));
+      const source = (rawContent ?? content).trim();
+      const parsedRecipe = parseRecipeFromPlainText(source) ?? parseRecipeFromContent(source);
+      if (!parsedRecipe || !parsedRecipe.ingredients?.length) {
+        toast({ title: "Не удалось распознать рецепт или ингредиенты", variant: "destructive" });
+        return;
+      }
+      const toAdd = parsedRecipe.ingredients.filter((_, i) => selectedIngredients.has(i));
       if (toAdd.length === 0) {
         toast({ title: "Выберите ингредиенты", variant: "destructive" });
         return;
       }
-      addToAppStoreShoppingList(toAdd, recipe.title);
+      const recipeTitle = parsedRecipe.title ?? "Рецепт из чата";
+      if (!user?.id) {
+        toast({ title: "Войдите в аккаунт", variant: "destructive" });
+        return;
+      }
       try {
-        let listId = activeList?.id;
-        if (!listId) {
-          const list = await createList("Список покупок");
-          listId = list?.id;
+        // Шаг А: сохранить распарсенный рецепт в БД
+        const { data: newRecipe, error: recipeError } = await supabase
+          .from("recipes")
+          .insert([
+            {
+              title: recipeTitle,
+              user_id: user.id,
+              description: parsedRecipe.description ?? null,
+              cooking_time_minutes: parsedRecipe.cookingTime != null ? Math.round(Number(parsedRecipe.cookingTime)) : null,
+            },
+          ])
+          .select("id")
+          .single();
+
+        if (recipeError || !newRecipe?.id) {
+          console.error("RECIPE SAVE FATAL ERROR:", recipeError);
+          alert("ОШИБКА: Рецепт не сохранился в БД. Причина: " + (recipeError?.message ?? "нет id"));
+          return;
         }
-        if (!listId) throw new Error("Нет активного списка");
-        for (const raw of toAdd) {
-          const { name, quantity, unit } = parseIngredient(raw);
-          if (!name) continue;
-          const u = resolveUnit(unit, name);
-          const cat = detectCategory(name);
-          await addItem({
-            name,
-            amount: quantity,
-            unit: u,
-            category: cat as any,
-            is_purchased: false,
-            shopping_list_id: listId,
-          });
-        }
+
+        // Шаг Б: получить ID
+        const recipeId = newRecipe.id;
+
+        // Шаг В: добавить ингредиенты в shopping_list_items с этим recipe_id
+        await addItemsFromRecipe(toAdd, {
+          listId: activeList?.id,
+          recipeId,
+          recipeTitle,
+        });
+
+        queryClient.invalidateQueries({ queryKey: ["shopping_list"] });
+        queryClient.invalidateQueries({ queryKey: ["shopping_lists"] });
+        queryClient.invalidateQueries({ queryKey: ["shopping_list_items"] });
+
         setShowShoppingModal(false);
-        toast({ title: "В список покупок", description: `Добавлено ${toAdd.length} ингредиент(ов) из «${recipe.title}»` });
-      } catch (e: any) {
+        toast({ title: "В список покупок", description: `Добавлено ${toAdd.length} ингредиент(ов) из «${recipeTitle}»` });
+      } catch (e: unknown) {
+        console.error("DB Error in ChatMessage handleAddToList:", (e as Error).message);
         setShowShoppingModal(false);
-        toast({ title: "В список покупок", description: `Добавлено ${toAdd.length} ингредиент(ов) в локальный список` });
+        toast({ title: "Не удалось добавить в список", variant: "destructive" });
       }
     };
 
@@ -487,36 +569,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     </ol>
                   </div>
                 )}
-                <Dialog open={showShoppingModal} onOpenChange={setShowShoppingModal}>
-                  <DialogContent className="max-w-sm max-h-[80vh] flex flex-col">
-                    <DialogHeader>
-                      <DialogTitle>Добавить в список покупок</DialogTitle>
-                    </DialogHeader>
-                    <p className="text-sm text-muted-foreground">Выберите ингредиенты для добавления</p>
-                    <div className="overflow-y-auto space-y-2 py-2">
-                      {recipe?.ingredients?.map((ing, i) => (
-                        <label
-                          key={i}
-                          className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
-                        >
-                          <Checkbox
-                            checked={selectedIngredients.has(i)}
-                            onCheckedChange={() => toggleIngredient(i)}
-                          />
-                          <span className="text-sm flex-1">{ing}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setShowShoppingModal(false)}>
-                        Отмена
-                      </Button>
-                      <Button onClick={handleAddToList}>
-                        Добавить выбранное
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
               </div>
             ) : (
               <p className="text-base whitespace-pre-wrap select-none">{displayContent}</p>
@@ -527,7 +579,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 minute: "2-digit",
               })}
             </p>
-            {role === "assistant" && recipe && (
+            {role === "assistant" && (
               <div
                 className="flex flex-row gap-2 mt-2 pt-2 min-h-[44px] border-t border-border/50 shrink-0"
                 style={{ touchAction: "manipulation" }}
@@ -542,9 +594,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleAddToFavorites();
+                    handleToggleFavorite();
                   }}
-                  disabled={isAdding}
+                  disabled={isAdding || isRemoving}
                   className={`h-9 w-9 rounded-full shrink-0 shadow-sm ${isFavorite ? "text-red-600 bg-red-100 dark:bg-red-950/50 fill-red-600" : ""}`}
                   title="Избранное"
                 >
@@ -561,7 +613,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     e.stopPropagation();
                     openShoppingModal();
                   }}
-                  disabled={!recipe?.ingredients?.length}
                   className="h-9 w-9 rounded-full shrink-0 shadow-sm"
                   title="В список покупок"
                 >
@@ -583,6 +634,40 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   <Share2 className="h-4 w-4" />
                 </Button>
               </div>
+            )}
+            {role === "assistant" && (
+              <Dialog open={showShoppingModal} onOpenChange={setShowShoppingModal}>
+                <DialogContent className="max-w-sm max-h-[80vh] flex flex-col" aria-describedby={undefined}>
+                  <DialogHeader>
+                    <DialogTitle>Добавить в список покупок</DialogTitle>
+                    <DialogDescription>
+                      Рецепт: {(modalRecipe ?? recipe)?.title ?? ""}. Выберите ингредиенты для добавления в список покупок.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="overflow-y-auto space-y-2 py-2">
+                    {((modalRecipe ?? recipe)?.ingredients ?? []).map((ing, i) => (
+                      <label
+                        key={i}
+                        className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          checked={selectedIngredients.has(i)}
+                          onCheckedChange={() => toggleIngredient(i)}
+                        />
+                        <span className="text-sm flex-1">{ing}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowShoppingModal(false)}>
+                      Отмена
+                    </Button>
+                    <Button onClick={handleAddToList}>
+                      Добавить выбранное
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
         </motion.div>

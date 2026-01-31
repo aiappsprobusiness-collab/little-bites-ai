@@ -12,7 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { AddMealDialog } from "@/components/meal-plan/AddMealDialog";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
-import { useAppStore } from "@/store/useAppStore";
+import { useFavorites } from "@/hooks/useFavorites";
 import { resolveUnit } from "@/utils/productUtils";
 import {
   Select,
@@ -42,7 +42,7 @@ export default function MealPlanPage() {
   const { recipes, createRecipe } = useRecipes();
   const { getMealPlansByDate, createMealPlan, deleteMealPlan, isCreating } = useMealPlans(selectedChild?.id);
   const { getTodayChatRecipes } = useChatRecipes();
-  const favorites = useAppStore((s) => s.favorites);
+  const { favorites } = useFavorites();
 
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [sheetCreateMode, setSheetCreateMode] = useState(false);

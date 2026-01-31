@@ -51,7 +51,6 @@ export default function HomePage() {
         likes: [],
         dislikes: [],
         allergies: newChildAllergies,
-        preferences: [],
       });
       toast({
         title: "Ребенок добавлен",

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { detectCategory, resolveUnit, usePiecesFallback, shouldUsePiecesByDescription } from '@/utils/productUtils';
+import { detectCategory, ensureProductCategory, resolveUnit, usePiecesFallback, shouldUsePiecesByDescription } from '@/utils/productUtils';
 import { parseIngredient } from '@/utils/parseIngredient';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
@@ -58,22 +58,26 @@ export function useShoppingLists() {
     return useQuery({
       queryKey: ['shopping_list_items', listId],
       queryFn: async () => {
+        // Join с recipes для имён рецептов во вкладке «По рецептам»: без join нет заголовков
         const { data, error } = await supabase
           .from('shopping_list_items')
-          .select(`
-            *,
-            recipe:recipes(id, title)
-          `)
+          .select('*, recipes(id, title)')
           .eq('shopping_list_id', listId)
           .order('created_at', { ascending: true });
 
         if (error) throw error;
 
-        // Расширяем тип для включения названия рецепта
-        return (data || []).map((item: any) => ({
-          ...item,
-          recipeTitle: item.recipe?.title || null,
-        })) as (ShoppingListItem & { recipeTitle?: string | null })[];
+        // recipeTitle: из join recipes.title, иначе сохранённый recipe_title (фоллбек для чата)
+        return (data || []).map((item: any) => {
+          const fromRecipes = item.recipes?.title ?? item.recipe?.title;
+          const recipeTitle = fromRecipes ?? item.recipe_title ?? null;
+          return {
+            ...item,
+            recipe_id: item.recipe_id ?? null,
+            recipe_title: item.recipe_title ?? null,
+            recipeTitle,
+          };
+        }) as (ShoppingListItem & { recipeTitle?: string | null })[];
       },
       enabled: !!listId,
     });
@@ -143,6 +147,11 @@ export function useShoppingLists() {
     },
   });
 
+  // В shopping_list_items подставляем только реальный UUID из таблицы recipes (не temp-* и не произвольные строки)
+  const isValidRecipeUuid = (id: string | null | undefined): id is string =>
+    typeof id === 'string' && id.length > 0 && !id.startsWith('temp-') &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
   // Нормализовать название продукта для сравнения
   const normalizeProductName = (name: string): string => {
     return name.toLowerCase().trim();
@@ -192,10 +201,9 @@ export function useShoppingLists() {
       const listId = item.shopping_list_id || activeList?.id;
       if (!listId) throw new Error('No active shopping list');
 
-      // Автоматически определяем категорию, если она не указана или равна "other"
-      const finalCategory = item.category && item.category !== 'other'
-        ? item.category
-        : detectCategory(item.name);
+      // Категория строго enum product_category
+      const rawCategory = item.category && item.category !== 'other' ? item.category : detectCategory(item.name);
+      const finalCategory = ensureProductCategory(rawCategory);
 
       // Единица измерения обязательна: берём переданную или определяем по названию
       let finalUnit = resolveUnit(item.unit, item.name);
@@ -278,14 +286,17 @@ export function useShoppingLists() {
           .from('shopping_list_items')
           .update({
             amount: newAmount,
-            category: finalCategory as any,
+            category: finalCategory,
             unit: newUnit,
           })
           .eq('id', existingItem.id)
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('DB Error in addItem (update):', error.message, 'Details:', error.details);
+          throw error;
+        }
         return data as ShoppingListItem;
       } else {
         const insertAmount = effectiveNewAmount ?? (finalUnit === "шт" ? 1 : null);
@@ -294,14 +305,17 @@ export function useShoppingLists() {
           .insert({
             ...item,
             shopping_list_id: listId,
-            category: finalCategory as any,
+            category: finalCategory,
             unit: finalUnit,
             amount: insertAmount,
           })
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error('DB Error in addItem (insert):', error.message, 'Details:', error.details);
+          throw error;
+        }
         return data as ShoppingListItem;
       }
     },
@@ -379,7 +393,169 @@ export function useShoppingLists() {
         .delete()
         .eq('shopping_list_id', listId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('SYNC ERROR:', error.message, error.details);
+        throw error;
+      }
+      return listId;
+    },
+    onSuccess: (listId) => {
+      queryClient.invalidateQueries({ queryKey: ['shopping_list_items', listId] });
+    },
+  });
+
+  // Добавить ингредиенты рецепта в список одним батч-запросом (из избранного/рецепта/чата)
+  const addItemsFromRecipe = useMutation({
+    mutationFn: async (
+      ingredients: string[],
+      options?: {
+        listId?: string;
+        recipeId?: string | null;
+        recipeTitle?: string;
+        /** Рецепт из чата (ИИ): создаём запись в recipes и подставляем её id в shopping_list_items */
+        createRecipeFromChat?: { title: string; description?: string; cookingTime?: number };
+      }
+    ) => {
+      if (!user) throw new Error('User not authenticated');
+
+      let listId = options?.listId ?? activeList?.id;
+      if (!listId) {
+        await supabase.from('shopping_lists').update({ is_active: false }).eq('user_id', user.id).eq('is_active', true);
+        const { data: newListData, error: createErr } = await supabase
+          .from('shopping_lists')
+          .insert({ user_id: user.id, name: 'Список покупок', is_active: true })
+          .select()
+          .single();
+        if (createErr) {
+          console.error('DB Error in addItemsFromRecipe (createList):', createErr.message, 'Details:', createErr.details);
+          throw createErr;
+        }
+        listId = newListData.id;
+        queryClient.invalidateQueries({ queryKey: ['shopping_lists', user?.id] });
+      }
+
+      let recipeId: string | null = options?.recipeId ?? null;
+      if (!recipeId && options?.createRecipeFromChat) {
+        const { title, description, cookingTime } = options.createRecipeFromChat;
+        const { data: newRecipe, error: recipeErr } = await supabase
+          .from('recipes')
+          .insert({
+            user_id: user.id,
+            title: title || 'Рецепт из чата',
+            description: description ?? null,
+            cooking_time_minutes: cookingTime != null ? Math.round(Number(cookingTime)) : null,
+          })
+          .select('id')
+          .single();
+        if (recipeErr) {
+          console.error('DB Error in addItemsFromRecipe (createRecipe):', recipeErr.message, 'Details:', recipeErr.details);
+          throw recipeErr;
+        }
+        recipeId = newRecipe?.id != null ? String(newRecipe.id) : null;
+        if (recipeId) {
+          queryClient.invalidateQueries({ queryKey: ['recipes', user.id] });
+          console.log('Saving items for Recipe ID:', recipeId);
+        }
+      }
+
+      if (!ingredients?.length) return listId;
+
+      const { data: existingItems, error: existingError } = await supabase
+        .from('shopping_list_items')
+        .select('*')
+        .eq('shopping_list_id', listId)
+        .eq('is_purchased', false);
+      if (existingError) {
+        console.error('DB Error in addItemsFromRecipe (select):', existingError.message, 'Details:', existingError.details);
+        throw existingError;
+      }
+
+      const existingMap = new Map<string, ShoppingListItem>();
+      const existingGmlZeroMap = new Map<string, ShoppingListItem>();
+      (existingItems || []).forEach((item) => {
+        const resolved = resolveUnit(item.unit, item.name);
+        const unitNorm = normalizeUnit(resolved);
+        const n = normalizeProductName(item.name);
+        existingMap.set(`${n}|${unitNorm.normalized}`, item);
+        const u = (resolved || '').toLowerCase().trim();
+        const isGml = u === 'г' || u === 'мл' || u === 'кг' || u === 'л';
+        if (isGml && (item.amount ?? 0) === 0) existingGmlZeroMap.set(n, item);
+      });
+
+      const toInsert: ShoppingListItemInsert[] = [];
+      const toUpdate: Array<{ id: string; amount: number; unit: string; category: import('@/utils/productUtils').ProductCategory }> = [];
+      const updatedIds = new Set<string>();
+
+      for (const raw of ingredients) {
+        const parsed = parseIngredient(raw);
+        const name = parsed.name?.trim();
+        if (!name) continue;
+        let resolvedUnit = resolveUnit(parsed.unit, name);
+        let amount = parsed.quantity ?? (resolvedUnit === 'шт' ? 1 : null);
+        if (usePiecesFallback(resolvedUnit, amount) || shouldUsePiecesByDescription(name)) {
+          resolvedUnit = 'шт';
+          amount = 1;
+        }
+        const category = ensureProductCategory(detectCategory(name));
+        const normalizedName = normalizeProductName(name);
+        const unitNorm = normalizeUnit(resolvedUnit);
+        const key = `${normalizedName}|${unitNorm.normalized}`;
+        let existing = existingMap.get(key);
+        if (!existing && resolvedUnit === 'шт') {
+          const gmlZero = existingGmlZeroMap.get(normalizedName);
+          if (gmlZero && !updatedIds.has(gmlZero.id)) existing = gmlZero;
+        }
+        if (existing) {
+          const existingUnitResolved = resolveUnit(existing.unit, existing.name);
+          const existingUnitNorm = normalizeUnit(existingUnitResolved);
+          const existingAmount = existing.amount ?? (existingUnitResolved === 'шт' ? 1 : 0);
+          let newAmount: number;
+          let newUnit: string;
+          if (existing.amount == null || existing.amount === 0) {
+            newUnit = 'шт';
+            newAmount = (amount ?? 1) + 1;
+          } else {
+            const baseExisting = convertToBaseUnit(existingAmount, existingUnitResolved);
+            const baseNew = convertToBaseUnit(amount ?? 0, resolvedUnit);
+            newUnit = existing.unit ?? existingUnitResolved;
+            const totalBase = baseExisting + baseNew;
+            if (existingUnitNorm.multiplier > 1) newAmount = totalBase / existingUnitNorm.multiplier;
+            else newAmount = totalBase;
+          }
+          updatedIds.add(existing.id);
+          toUpdate.push({ id: existing.id, amount: newAmount, unit: newUnit, category });
+        } else {
+          toInsert.push({
+            shopping_list_id: listId,
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            amount: amount ?? null,
+            unit: resolvedUnit,
+            category,
+            is_purchased: false,
+            // recipe_id — UUID из таблицы recipes (при добавлении со страницы рецепта); иначе null (чат/избранное)
+            recipe_id: isValidRecipeUuid(recipeId ?? options?.recipeId) ? (recipeId ?? options?.recipeId!) : null,
+            recipe_title: options?.recipeTitle ?? null,
+          });
+        }
+      }
+
+      for (const u of toUpdate) {
+        const { error: updateErr } = await supabase
+          .from('shopping_list_items')
+          .update({ amount: u.amount, unit: u.unit, category: u.category })
+          .eq('id', u.id);
+        if (updateErr) {
+          console.error('DB Error in addItemsFromRecipe (update):', updateErr.message, 'Details:', updateErr.details);
+          throw updateErr;
+        }
+      }
+      if (toInsert.length > 0) {
+        const { error: insertErr } = await supabase.from('shopping_list_items').insert(toInsert);
+        if (insertErr) {
+          console.error('DB Error in addItemsFromRecipe (insert):', insertErr.message, 'Details:', insertErr.details);
+          throw insertErr;
+        }
+      }
       return listId;
     },
     onSuccess: (listId) => {
@@ -447,7 +623,7 @@ export function useShoppingLists() {
       const ingredientsMap = new Map<string, {
         amount: number;
         unit: string;
-        category: string;
+        category: import('@/utils/productUtils').ProductCategory;
         name: string;
         recipeIds: string[];
         recipeTitles: string[];
@@ -479,7 +655,7 @@ export function useShoppingLists() {
             const normalizedName = normalizeProductName(cleanName);
             const unitNormalized = normalizeUnit(resolvedUnit);
             const key = `${normalizedName}|${unitNormalized.normalized}`;
-            const autoCategory = detectCategory(cleanName);
+            const autoCategory = ensureProductCategory(detectCategory(cleanName));
 
             if (ingredientsMap.has(key)) {
               const existing = ingredientsMap.get(key)!;
@@ -551,7 +727,7 @@ export function useShoppingLists() {
       }
 
       const itemsToInsert: any[] = [];
-      const itemsToUpdate: Array<{ id: string; amount: number; category: string; unit: string }> = [];
+      const itemsToUpdate: Array<{ id: string; amount: number; category: import('@/utils/productUtils').ProductCategory; unit: string }> = [];
       const updatedIds = new Set<string>();
 
       Array.from(ingredientsMap.values()).forEach((data) => {
@@ -605,7 +781,7 @@ export function useShoppingLists() {
             name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
             amount: data.amount || null,
             unit: data.unit,
-            category: data.category as any,
+            category: ensureProductCategory(data.category),
             is_purchased: false,
             recipe_id: data.recipeIds.length > 0 ? data.recipeIds[0] : null,
           });
@@ -620,7 +796,7 @@ export function useShoppingLists() {
           .from('shopping_list_items')
           .update({
             amount: item.amount,
-            category: item.category as any,
+            category: item.category,
             unit: item.unit,
           })
           .eq('id', item.id);
@@ -667,6 +843,7 @@ export function useShoppingLists() {
     generateFromMealPlans: generateFromMealPlans.mutateAsync,
     clearAllItems: clearAllItems.mutateAsync,
     clearCategoryItems: clearCategoryItems.mutateAsync,
+    addItemsFromRecipe: addItemsFromRecipe.mutateAsync,
     isCreating: createList.isPending,
     isGenerating: generateFromMealPlans.isPending,
     isClearing: clearAllItems.isPending,

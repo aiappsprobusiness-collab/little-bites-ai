@@ -3,6 +3,29 @@
  * Гарантирует, что у каждого продукта есть единица измерения (никогда null).
  */
 
+/** Допустимые значения enum product_category в Supabase */
+export const PRODUCT_CATEGORY_VALUES = [
+  'vegetables',
+  'fruits',
+  'dairy',
+  'meat',
+  'grains',
+  'other',
+] as const;
+
+export type ProductCategory = (typeof PRODUCT_CATEGORY_VALUES)[number];
+
+/**
+ * Приводит строку категории к значению enum product_category.
+ * Невалидные значения заменяются на "other".
+ */
+export function ensureProductCategory(category: string | null | undefined): ProductCategory {
+  if (!category || typeof category !== 'string') return 'other';
+  const lower = category.toLowerCase().trim();
+  if (PRODUCT_CATEGORY_VALUES.includes(lower as ProductCategory)) return lower as ProductCategory;
+  return 'other';
+}
+
 /** Продукты, измеряемые в штуках */
 const COUNTABLE = [
   'яблоко', 'яблок', 'груша', 'банан', 'апельсин', 'мандарин', 'лимон', 'лайм',

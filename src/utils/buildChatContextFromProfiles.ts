@@ -16,9 +16,6 @@ export interface ChildProfile {
   allergies?: string[] | null;
   likes?: string[] | null;
   dislikes?: string[] | null;
-  diet_goals?: string[] | null;
-  weight?: number | null;
-  height?: number | null;
 }
 
 export interface ChatContextChildData {
@@ -27,9 +24,6 @@ export interface ChatContextChildData {
   allergies?: string[];
   likes?: string[];
   dislikes?: string[];
-  dietGoals?: string[];
-  weight?: number;
-  height?: number;
   /** Описание возраста для нескольких детей, если применимо */
   ageDescription?: string;
 }
@@ -125,19 +119,13 @@ function buildChildDataFromProfiles(
   const ages = profiles.map((c) => calculateAgeInMonths(c.birth_date));
   const ageMonths = Math.min(...ages);
   const allAllergies = new Set<string>();
-  const allDietGoals = new Set<string>();
   const allLikes = new Set<string>();
   const allDislikes = new Set<string>();
-  let weight: number | undefined;
-  let height: number | undefined;
 
   for (const c of profiles) {
     (c.allergies || []).forEach((a) => a?.trim() && allAllergies.add(a.trim()));
-    ((c as any).diet_goals || []).forEach((g: string) => g?.trim() && allDietGoals.add(g.trim()));
     (c.likes || []).forEach((l: string) => l?.trim() && allLikes.add(l.trim()));
     (c.dislikes || []).forEach((d: string) => d?.trim() && allDislikes.add(d.trim()));
-    if (c.weight != null) weight = c.weight;
-    if (c.height != null) height = c.height;
   }
 
   const names = profiles.map((c) => c.name).join(', ');
@@ -155,14 +143,10 @@ function buildChildDataFromProfiles(
       name: names,
       ageMonths,
       allergies: allAllergies.size ? Array.from(allAllergies) : undefined,
-      dietGoals: allDietGoals.size ? Array.from(allDietGoals) : undefined,
-      weight,
-      height,
-      ageDescription,
-      // Добавляем likes и dislikes в childData для использования в промптах
       likes: allLikes.size ? Array.from(allLikes) : undefined,
       dislikes: allDislikes.size ? Array.from(allDislikes) : undefined,
-    } as any,
+      ageDescription,
+    },
     matchedChildIds: profiles.map((c) => c.id),
   };
 }
@@ -206,9 +190,6 @@ export function buildChatContextFromProfiles({
         allergies: allergies.length ? allergies : undefined,
         likes: likes.length ? likes : undefined,
         dislikes: dislikes.length ? dislikes : undefined,
-        dietGoals: (selectedChild as any).diet_goals || undefined,
-        weight: selectedChild.weight ?? undefined,
-        height: selectedChild.height ?? undefined,
       },
       matchedChildIds: [],
     };

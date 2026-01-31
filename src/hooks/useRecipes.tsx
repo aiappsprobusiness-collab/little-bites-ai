@@ -18,6 +18,74 @@ type RecipeStep = Tables<'recipe_steps'>;
 
 const IS_DEV = import.meta.env.DEV;
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUUID(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && UUID_REGEX.test(value);
+}
+
+/** Привести к integer (схема recipes: calories, cooking_time_minutes, min_age_months и т.д.). */
+function ensureInteger(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : parseInt(String(v), 10);
+  return Number.isFinite(n) ? Math.floor(n) : null;
+}
+
+/** Привести к numeric (proteins, fats, carbs). */
+function ensureNumber(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = typeof v === 'number' ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Привести к text[] (tags, source_products). Если строка — split по запятой. */
+function ensureStringArray(v: unknown): string[] {
+  if (Array.isArray(v)) {
+    return v.map((x) => (typeof x === 'string' ? x.trim() : String(x))).filter(Boolean);
+  }
+  if (typeof v === 'string' && v.trim()) {
+    return v.split(',').map((t) => t.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+/** Нормализовать payload рецепта под схему: integer, text[], numeric, UUID. */
+function normalizeRecipePayload<T extends Record<string, unknown>>(payload: T): T {
+  const out = { ...payload };
+  const intKeys = ['calories', 'cooking_time_minutes', 'min_age_months', 'max_age_months', 'times_cooked', 'rating'] as const;
+  for (const key of intKeys) {
+    if (key in out && out[key] !== undefined) {
+      (out as Record<string, unknown>)[key] = ensureInteger(out[key]);
+    }
+  }
+  const numKeys = ['proteins', 'fats', 'carbs'] as const;
+  for (const key of numKeys) {
+    if (key in out && out[key] !== undefined) {
+      (out as Record<string, unknown>)[key] = ensureNumber(out[key]);
+    }
+  }
+  if ('tags' in out && out.tags !== undefined) {
+    (out as Record<string, unknown>).tags = ensureStringArray(out.tags);
+  }
+  if ('source_products' in out && out.source_products !== undefined) {
+    (out as Record<string, unknown>).source_products = ensureStringArray(out.source_products);
+  }
+  if ('child_id' in out) {
+    const cid = out.child_id;
+    (out as Record<string, unknown>).child_id = cid != null && isValidUUID(cid) ? cid : null;
+  }
+  if ('user_id' in out && out.user_id !== undefined && !isValidUUID(out.user_id)) {
+    console.warn('recipes: user_id is not a valid UUID', out.user_id);
+  }
+  if ('macros' in out && out.macros !== undefined && out.macros !== null) {
+    const m = out.macros;
+    if (typeof m !== 'object' || Array.isArray(m)) {
+      (out as Record<string, unknown>).macros = null;
+    }
+  }
+  return out;
+}
+
 export function useRecipes(childId?: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -126,10 +194,16 @@ export function useRecipes(childId?: string) {
       steps?: Omit<RecipeStep, 'id' | 'recipe_id'>[];
     }) => {
       if (!user) throw new Error('User not authenticated');
+      if (!isValidUUID(user.id)) throw new Error('Invalid user_id');
+
+      const payload = normalizeRecipePayload({
+        ...recipe,
+        user_id: user.id,
+      } as Record<string, unknown>) as RecipeInsert;
 
       const { data: newRecipe, error: recipeError } = await supabase
         .from('recipes')
-        .insert({ ...recipe, user_id: user.id })
+        .insert(payload)
         .select()
         .single();
 
@@ -158,9 +232,13 @@ export function useRecipes(childId?: string) {
 
   const updateRecipe = useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & RecipeUpdate) => {
+      if (!id || !isValidUUID(id)) throw new Error('Recipe id must be a valid UUID');
+
+      const payload = normalizeRecipePayload(updates as Record<string, unknown>) as RecipeUpdate;
+
       const { data, error } = await supabase
         .from('recipes')
-        .update(updates)
+        .update(payload)
         .eq('id', id)
         .select()
         .single();

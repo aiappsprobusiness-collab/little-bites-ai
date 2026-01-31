@@ -17,9 +17,12 @@ interface RecipeLike {
 
 function extractRecipeJson(raw: string): { single?: RecipeLike; multi?: RecipeLike[] } | null {
   let jsonString: string | null = null;
-  const codeBlock = raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-  if (codeBlock?.[1]) jsonString = codeBlock[1];
-  else {
+  const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlock?.[1]) {
+    const blockContent = codeBlock[1].trim();
+    if (blockContent.startsWith('{') || blockContent.startsWith('[')) jsonString = blockContent;
+  }
+  if (!jsonString) {
     const simple = raw.match(/\{[\s\S]*\}/);
     if (simple) jsonString = simple[0];
   }
