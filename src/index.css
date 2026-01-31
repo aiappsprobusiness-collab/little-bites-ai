@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap');
-
+/* Шрифты: системный стек, без Google Fonts (нет блокировки на momrecipesai.netlify.app) */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -118,7 +117,7 @@
   }
 
   html {
-    font-family: 'Nunito', sans-serif;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   }
 
   body {
