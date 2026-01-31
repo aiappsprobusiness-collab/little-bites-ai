@@ -59,7 +59,7 @@ export default function RecipePage() {
       return;
     }
     try {
-      await addItemsFromRecipe(ingredientStrings, { listId: undefined, recipeId: id || null, recipeTitle: recipe.title });
+      await addItemsFromRecipe({ ingredients: ingredientStrings, listId: undefined, recipeId: id || null, recipeTitle: recipe.title });
       toast({ title: "Добавлено в список покупок", description: `Ингредиенты «${recipe.title}» добавлены` });
     } catch (e: unknown) {
       console.error("DB Error in RecipePage handleAddToShoppingList:", (e as Error).message);

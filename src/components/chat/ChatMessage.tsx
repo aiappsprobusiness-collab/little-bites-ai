@@ -448,7 +448,8 @@ const queryClient = useQueryClient();
         const recipeId = newRecipe.id;
 
         // Шаг В: добавить ингредиенты в shopping_list_items с этим recipe_id
-        await addItemsFromRecipe(toAdd, {
+        await addItemsFromRecipe({
+          ingredients: toAdd,
           listId: activeList?.id,
           recipeId,
           recipeTitle,

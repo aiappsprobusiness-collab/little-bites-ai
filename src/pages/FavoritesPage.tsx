@@ -30,7 +30,7 @@ export default function FavoritesPage() {
       return;
     }
     try {
-      await addItemsFromRecipe(ingredients, { recipeTitle: title });
+      await addItemsFromRecipe({ ingredients, recipeTitle: title });
       toast({ title: "Добавлено в список покупок", description: `Ингредиенты «${title}» добавлены` });
     } catch (e: unknown) {
       console.error("DB Error in FavoritesPage handleAddToShoppingList:", (e as Error).message);

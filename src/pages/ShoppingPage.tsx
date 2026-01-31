@@ -258,7 +258,8 @@ export default function ShoppingPage() {
         return;
       }
 
-      await addItemsFromRecipe(ingredients, {
+      await addItemsFromRecipe({
+        ingredients,
         listId: activeList?.id,
         recipeTitle: favorite.recipe.title,
       });

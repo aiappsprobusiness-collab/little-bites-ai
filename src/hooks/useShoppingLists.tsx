@@ -406,19 +406,23 @@ export function useShoppingLists() {
 
   // Добавить ингредиенты рецепта в список одним батч-запросом (из избранного/рецепта/чата)
   const addItemsFromRecipe = useMutation({
-    mutationFn: async (
-      ingredients: string[],
-      options?: {
-        listId?: string;
-        recipeId?: string | null;
-        recipeTitle?: string;
-        /** Рецепт из чата (ИИ): создаём запись в recipes и подставляем её id в shopping_list_items */
-        createRecipeFromChat?: { title: string; description?: string; cookingTime?: number };
-      }
-    ) => {
+    mutationFn: async ({
+      ingredients,
+      listId: optionListId,
+      recipeId: optionRecipeId,
+      recipeTitle,
+      createRecipeFromChat,
+    }: {
+      ingredients: string[];
+      listId?: string;
+      recipeId?: string | null;
+      recipeTitle?: string;
+      /** Рецепт из чата (ИИ): создаём запись в recipes и подставляем её id в shopping_list_items */
+      createRecipeFromChat?: { title: string; description?: string; cookingTime?: number };
+    }) => {
       if (!user) throw new Error('User not authenticated');
 
-      let listId = options?.listId ?? activeList?.id;
+      let listId = optionListId ?? activeList?.id;
       if (!listId) {
         await supabase.from('shopping_lists').update({ is_active: false }).eq('user_id', user.id).eq('is_active', true);
         const { data: newListData, error: createErr } = await supabase
@@ -434,9 +438,9 @@ export function useShoppingLists() {
         queryClient.invalidateQueries({ queryKey: ['shopping_lists', user?.id] });
       }
 
-      let recipeId: string | null = options?.recipeId ?? null;
-      if (!recipeId && options?.createRecipeFromChat) {
-        const { title, description, cookingTime } = options.createRecipeFromChat;
+      let recipeId: string | null = optionRecipeId ?? null;
+      if (!recipeId && createRecipeFromChat) {
+        const { title, description, cookingTime } = createRecipeFromChat;
         const { data: newRecipe, error: recipeErr } = await supabase
           .from('recipes')
           .insert({
@@ -533,8 +537,8 @@ export function useShoppingLists() {
             category,
             is_purchased: false,
             // recipe_id — UUID из таблицы recipes (при добавлении со страницы рецепта); иначе null (чат/избранное)
-            recipe_id: isValidRecipeUuid(recipeId ?? options?.recipeId) ? (recipeId ?? options?.recipeId!) : null,
-            recipe_title: options?.recipeTitle ?? null,
+            recipe_id: isValidRecipeUuid(recipeId ?? optionRecipeId) ? (recipeId ?? optionRecipeId!) : null,
+            recipe_title: recipeTitle ?? null,
           });
         }
       }
