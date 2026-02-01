@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +16,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X, LogOut } from "lucide-react";
+import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
+import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X, LogOut, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,6 +29,15 @@ import { useToast } from "@/hooks/use-toast";
 import type { Tables } from "@/integrations/supabase/types";
 import { ensureStringArray } from "@/utils/typeUtils";
 
+const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
+function childAvatar(child: Tables<"children">, index: number): React.ReactNode {
+  const url = child.avatar_url?.trim();
+  if (url && (url.startsWith("http") || url.startsWith("/"))) {
+    return <img src={url} alt="" className="w-8 h-8 rounded-full object-cover" />;
+  }
+  return <span className="text-2xl">{VEGETABLE_EMOJIS[index % VEGETABLE_EMOJIS.length]}</span>;
+}
+
 const allergyOptions = [
   "Молоко", "Яйца", "Глютен", "Орехи", "Соя", "Рыба", "Мед", "Цитрусы"
 ];
@@ -33,7 +46,8 @@ type Child = Tables<'children'>;
 
 export default function ProfilePage() {
   const { toast } = useToast();
-  const { signOut } = useAuth();
+  const queryClient = useQueryClient();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const {
     children,
@@ -48,10 +62,39 @@ export default function ProfilePage() {
   const { recipes } = useRecipes();
   const { getMealPlans } = useMealPlans();
 
+  const { data: profile } = useQuery({
+    queryKey: ["profile", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from("profiles").select("display_name").eq("user_id", user.id).single();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
+  useEffect(() => {
+    setDisplayName(profile?.display_name ?? "");
+  }, [profile?.display_name]);
+
+  const saveDisplayName = async () => {
+    if (!user) return;
+    const trimmed = displayName.trim();
+    const { error } = await supabase.from("profiles").upsert({ user_id: user.id, display_name: trimmed || null }, { onConflict: "user_id" });
+    if (error) {
+      toast({ variant: "destructive", title: "Ошибка", description: error.message });
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
+    if (trimmed) toast({ title: "Имя сохранено" });
+  };
 
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingChild, setEditingChild] = useState<Child | null>(null);
+  const [showProfileSheet, setShowProfileSheet] = useState(false);
+  const [sheetChild, setSheetChild] = useState<Child | null>(null);
+  const [sheetCreateMode, setSheetCreateMode] = useState(false);
 
   // Обновляем selectedChildId когда загружаются children
   useEffect(() => {
@@ -170,48 +213,95 @@ export default function ProfilePage() {
   }
 
   return (
-    <MobileLayout title="Семья">
+    <MobileLayout title="Профиль">
       <div className="px-4 pt-6 space-y-6">
-        {/* Child Selector */}
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">
-          {children.map((child) => (
-            <motion.button
-              key={child.id}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setSelectedChildId(child.id)}
-              className={`flex-shrink-0 flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${selectedChildId === child.id
-                ? "bg-primary text-primary-foreground shadow-button"
-                : "bg-card shadow-soft"
-                }`}
-            >
-              <span className="text-2xl">{child.avatar_url || "👶"}</span>
-              <div className="text-left">
-                <p className="font-semibold">{child.name}</p>
-                <p className="text-xs opacity-80">{formatAge(child.birth_date)}</p>
-              </div>
-            </motion.button>
-          ))}
-          <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-            setIsEditDialogOpen(open);
-            if (!open) setEditingChild(null);
-          }}>
-            <DialogTrigger asChild>
+        {/* Top: Имя (редактируемое) + Email (только чтение) */}
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
+            <Input
+              id="profile-name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              onBlur={saveDisplayName}
+              placeholder="Ваше имя"
+              className="h-11 border-2"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Email</Label>
+            <p className="text-sm text-muted-foreground" aria-readonly>{user?.email ?? ""}</p>
+          </div>
+        </div>
+
+        {/* Моя семья: чипсы + Добавить + Редактировать (ProfileEditSheet из ЧАТА) */}
+        <Collapsible defaultOpen>
+          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left font-medium">
+            <span>Моя семья</span>
+            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="flex flex-wrap gap-2 pt-3 pb-2">
+              {children.map((child, index) => (
+                <motion.button
+                  key={child.id}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => {
+                    setSelectedChildId(child.id);
+                    setSheetChild(child);
+                    setSheetCreateMode(false);
+                    setShowProfileSheet(true);
+                  }}
+                  className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${selectedChildId === child.id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"}`}
+                >
+                  {childAvatar(child, index)}
+                  <span className="font-medium">{child.name}</span>
+                  <span className="text-xs opacity-80">{formatAge(child.birth_date)}</span>
+                </motion.button>
+              ))}
               <motion.button
                 whileTap={{ scale: 0.95 }}
-                onClick={handleCreateChild}
-                className="flex-shrink-0 flex items-center justify-center w-14 h-14 rounded-2xl bg-muted border-2 border-dashed border-muted-foreground/30"
+                onClick={() => {
+                  setSheetCreateMode(true);
+                  setSheetChild(null);
+                  setShowProfileSheet(true);
+                }}
+                className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/50"
               >
-                <Plus className="w-6 h-6 text-muted-foreground" />
+                <Plus className="w-5 h-5 text-muted-foreground" />
+                <span className="text-sm font-medium">Добавить</span>
               </motion.button>
-            </DialogTrigger>
-            <ChildEditDialog
-              key={editingChild?.id || 'new'}
-              child={editingChild}
-              onSave={handleSaveChild}
-              isLoading={isCreating || isUpdating}
-            />
-          </Dialog>
-        </div>
+            </div>
+            {children.length > 0 && selectedChild && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mb-2"
+                onClick={() => {
+                  setSheetChild(selectedChild);
+                  setSheetCreateMode(false);
+                  setShowProfileSheet(true);
+                }}
+              >
+                <Edit2 className="w-4 h-4 mr-2" />
+                Редактировать
+              </Button>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
+
+        <ProfileEditSheet
+          open={showProfileSheet}
+          onOpenChange={setShowProfileSheet}
+          child={sheetChild}
+          createMode={sheetCreateMode}
+          onAddNew={() => {
+            setSheetCreateMode(true);
+            setSheetChild(null);
+            setShowProfileSheet(true);
+          }}
+          onCreated={(id) => setSelectedChildId(id)}
+        />
 
         {selectedChild ? (
           <>
@@ -224,8 +314,10 @@ export default function ProfilePage() {
                 <div className="h-24 gradient-primary" />
                 <CardContent className="relative pt-0">
                   <div className="absolute -top-12 left-1/2 -translate-x-1/2">
-                    <div className="w-24 h-24 rounded-3xl bg-card shadow-card flex items-center justify-center text-5xl border-4 border-card">
-                      {selectedChild.avatar_url || "👶"}
+                    <div className="w-24 h-24 rounded-3xl bg-card shadow-card flex items-center justify-center text-5xl border-4 border-card overflow-hidden">
+                      {selectedChild.avatar_url && (selectedChild.avatar_url.startsWith("http") || selectedChild.avatar_url.startsWith("/"))
+                        ? <img src={selectedChild.avatar_url} alt="" className="w-full h-full object-cover" />
+                        : <span>{VEGETABLE_EMOJIS[children.findIndex((c) => c.id === selectedChild.id) % VEGETABLE_EMOJIS.length]}</span>}
                     </div>
                   </div>
                   <div className="pt-14 text-center">
@@ -234,28 +326,15 @@ export default function ProfilePage() {
                       <Baby className="w-4 h-4" />
                       {formatAge(selectedChild.birth_date)}
                     </p>
-                    <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-                      setIsEditDialogOpen(open);
-                      if (!open) setEditingChild(null);
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="mt-2"
-                          onClick={() => selectedChild && handleEditChild(selectedChild)}
-                        >
-                          <Edit2 className="w-4 h-4 mr-2" />
-                          Редактировать
-                        </Button>
-                      </DialogTrigger>
-                      <ChildEditDialog
-                        key={editingChild?.id || 'new'}
-                        child={editingChild}
-                        onSave={handleSaveChild}
-                        isLoading={isCreating || isUpdating}
-                      />
-                    </Dialog>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() => selectedChild && (setSheetChild(selectedChild), setSheetCreateMode(false), setShowProfileSheet(true))}
+                    >
+                      <Edit2 className="w-4 h-4 mr-2" />
+                      Редактировать
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -296,27 +375,14 @@ export default function ProfilePage() {
                       <Heart className="w-5 h-5 text-primary" />
                       <h3 className="font-bold">Любит</h3>
                     </div>
-                    <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-                      setIsEditDialogOpen(open);
-                      if (!open) setEditingChild(null);
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => selectedChild && handleEditChild(selectedChild)}
-                        >
-                          <Edit2 className="w-4 h-4 mr-1" />
-                          Редактировать
-                        </Button>
-                      </DialogTrigger>
-                      <ChildEditDialog
-                        key={editingChild?.id || 'new'}
-                        child={editingChild}
-                        onSave={handleSaveChild}
-                        isLoading={isCreating || isUpdating}
-                      />
-                    </Dialog>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => selectedChild && (setSheetChild(selectedChild), setSheetCreateMode(false), setShowProfileSheet(true))}
+                    >
+                      <Edit2 className="w-4 h-4 mr-1" />
+                      Редактировать
+                    </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {Array.isArray(selectedChild.likes) && selectedChild.likes.length > 0 ? (
@@ -349,27 +415,14 @@ export default function ProfilePage() {
                       <X className="w-5 h-5 text-muted-foreground" />
                       <h3 className="font-bold">Не любит</h3>
                     </div>
-                    <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-                      setIsEditDialogOpen(open);
-                      if (!open) setEditingChild(null);
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => selectedChild && handleEditChild(selectedChild)}
-                        >
-                          <Edit2 className="w-4 h-4 mr-1" />
-                          Редактировать
-                        </Button>
-                      </DialogTrigger>
-                      <ChildEditDialog
-                        key={editingChild?.id || 'new'}
-                        child={editingChild}
-                        onSave={handleSaveChild}
-                        isLoading={isCreating || isUpdating}
-                      />
-                    </Dialog>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => selectedChild && (setSheetChild(selectedChild), setSheetCreateMode(false), setShowProfileSheet(true))}
+                    >
+                      <Edit2 className="w-4 h-4 mr-1" />
+                      Редактировать
+                    </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {Array.isArray(selectedChild.dislikes) && selectedChild.dislikes.length > 0 ? (
@@ -402,27 +455,14 @@ export default function ProfilePage() {
                       <AlertTriangle className="w-5 h-5 text-destructive" />
                       <h3 className="font-bold">Аллергии и ограничения</h3>
                     </div>
-                    <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-                      setIsEditDialogOpen(open);
-                      if (!open) setEditingChild(null);
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => selectedChild && handleEditChild(selectedChild)}
-                        >
-                          <Edit2 className="w-4 h-4 mr-1" />
-                          Редактировать
-                        </Button>
-                      </DialogTrigger>
-                      <ChildEditDialog
-                        key={editingChild?.id || 'new'}
-                        child={editingChild}
-                        onSave={handleSaveChild}
-                        isLoading={isCreating || isUpdating}
-                      />
-                    </Dialog>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => selectedChild && (setSheetChild(selectedChild), setSheetCreateMode(false), setShowProfileSheet(true))}
+                    >
+                      <Edit2 className="w-4 h-4 mr-1" />
+                      Редактировать
+                    </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {Array.isArray(selectedChild.allergies) && selectedChild.allergies.length > 0 ? (
@@ -490,23 +530,13 @@ export default function ProfilePage() {
               <p className="text-muted-foreground mb-4">
                 Добавьте профиль ребенка, чтобы начать использовать приложение
               </p>
-              <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-                setIsEditDialogOpen(open);
-                if (!open) setEditingChild(null);
-              }}>
-                <DialogTrigger asChild>
-                  <Button variant="mint" onClick={handleCreateChild}>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Добавить ребенка
-                  </Button>
-                </DialogTrigger>
-                <ChildEditDialog
-                  key={editingChild?.id || 'new'}
-                  child={editingChild}
-                  onSave={handleSaveChild}
-                  isLoading={isCreating}
-                />
-              </Dialog>
+              <Button
+                variant="mint"
+                onClick={() => (setSheetCreateMode(true), setSheetChild(null), setShowProfileSheet(true))}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Добавить ребенка
+              </Button>
             </CardContent>
           </Card>
         )}
