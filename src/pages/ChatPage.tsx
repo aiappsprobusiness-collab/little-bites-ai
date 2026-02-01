@@ -224,8 +224,8 @@ export default function ChatPage() {
       </div>
 
       <div className="flex flex-col h-[calc(100vh-130px)]">
-        {/* Для кого готовим */}
-        <div className="px-4 py-3 border-b border-border/50 space-y-2">
+        {/* Для кого готовим — закреплён под шапкой, не убегает при скролле */}
+        <div className="sticky top-14 z-30 bg-background/95 backdrop-blur-sm px-4 py-3 border-b border-border/50 space-y-2 shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Готовим для:</span>
             <Select
