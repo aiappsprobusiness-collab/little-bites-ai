@@ -89,6 +89,7 @@ export function useChildren() {
         
         return {
           ...child,
+          allergies: normalizeArray(child.allergies),
           likes: normalizeArray(child.likes),
           dislikes: normalizeArray(child.dislikes),
         } as Child;
