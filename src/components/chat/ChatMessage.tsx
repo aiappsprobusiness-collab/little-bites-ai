@@ -328,10 +328,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       });
     };
 
-    /** Иконка корзины: при клике парсим текст в момент клика, сохраняем рецепт в БД, добавляем продукты с recipe_id. */
+    /** Используем modalRecipe (парсится при открытии модалки), чтобы индексы selectedIngredients совпадали с отображаемыми ингредиентами. */
     const handleAddToList = async () => {
-      const source = (rawContent ?? content).trim();
-      const parsedRecipe = parseRecipeFromPlainText(source) ?? parseRecipeFromContent(source);
+      const parsedRecipe = modalRecipe;
       if (!parsedRecipe || !parsedRecipe.ingredients?.length) {
         toast({ title: "Не удалось распознать рецепт или ингредиенты", variant: "destructive" });
         return;
