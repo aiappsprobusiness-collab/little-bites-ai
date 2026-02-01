@@ -24,6 +24,9 @@ type Child = Tables<"children">;
 
 function birthDateFromAgeMonths(ageMonths: number): string {
   const d = new Date();
+  // Set day to 1 first to avoid day-of-month overflow when subtracting months.
+  // Without this, e.g. March 31 minus 1 month → Feb 31 → rolls to March 3 (wrong).
+  d.setDate(1);
   d.setMonth(d.getMonth() - ageMonths);
   return d.toISOString().slice(0, 10);
 }

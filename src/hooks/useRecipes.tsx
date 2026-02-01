@@ -8,6 +8,7 @@ import {
   RECIPES_PAGE_SIZE,
 } from '@/lib/supabase-constants';
 import { getCachedRecipe, setCachedRecipe, invalidateRecipeCache } from '@/utils/recipeCache';
+import { ensureStringArray } from '@/utils/typeUtils';
 import mockRecipes from '@/mocks/mockRecipes.json';
 
 type Recipe = Tables<'recipes'>;
@@ -36,17 +37,6 @@ function ensureNumber(v: unknown): number | null {
   if (v == null || v === '') return null;
   const n = typeof v === 'number' ? v : parseFloat(String(v));
   return Number.isFinite(n) ? n : null;
-}
-
-/** Привести к text[] (tags, source_products). Если строка — split по запятой. */
-function ensureStringArray(v: unknown): string[] {
-  if (Array.isArray(v)) {
-    return v.map((x) => (typeof x === 'string' ? x.trim() : String(x))).filter(Boolean);
-  }
-  if (typeof v === 'string' && v.trim()) {
-    return v.split(',').map((t) => t.trim()).filter(Boolean);
-  }
-  return [];
 }
 
 /** Нормализовать payload рецепта под схему: integer, text[], numeric, UUID. */

@@ -23,6 +23,7 @@ import { useMealPlans } from "@/hooks/useMealPlans";
 import { useToast } from "@/hooks/use-toast";
 
 import type { Tables } from "@/integrations/supabase/types";
+import { ensureStringArray } from "@/utils/typeUtils";
 
 const allergyOptions = [
   "Молоко", "Яйца", "Глютен", "Орехи", "Соя", "Рыба", "Мед", "Цитрусы"
@@ -179,8 +180,8 @@ export default function ProfilePage() {
               whileTap={{ scale: 0.95 }}
               onClick={() => setSelectedChildId(child.id)}
               className={`flex-shrink-0 flex items-center gap-3 px-4 py-3 rounded-2xl transition-all ${selectedChildId === child.id
-                  ? "bg-primary text-primary-foreground shadow-button"
-                  : "bg-card shadow-soft"
+                ? "bg-primary text-primary-foreground shadow-button"
+                : "bg-card shadow-soft"
                 }`}
             >
               <span className="text-2xl">{child.avatar_url || "👶"}</span>
@@ -234,9 +235,9 @@ export default function ProfilePage() {
                       {formatAge(selectedChild.birth_date)}
                     </p>
                     <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-            setIsEditDialogOpen(open);
-            if (!open) setEditingChild(null);
-          }}>
+                      setIsEditDialogOpen(open);
+                      if (!open) setEditingChild(null);
+                    }}>
                       <DialogTrigger asChild>
                         <Button
                           variant="ghost"
@@ -296,9 +297,9 @@ export default function ProfilePage() {
                       <h3 className="font-bold">Любит</h3>
                     </div>
                     <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-            setIsEditDialogOpen(open);
-            if (!open) setEditingChild(null);
-          }}>
+                      setIsEditDialogOpen(open);
+                      if (!open) setEditingChild(null);
+                    }}>
                       <DialogTrigger asChild>
                         <Button
                           variant="ghost"
@@ -349,9 +350,9 @@ export default function ProfilePage() {
                       <h3 className="font-bold">Не любит</h3>
                     </div>
                     <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-            setIsEditDialogOpen(open);
-            if (!open) setEditingChild(null);
-          }}>
+                      setIsEditDialogOpen(open);
+                      if (!open) setEditingChild(null);
+                    }}>
                       <DialogTrigger asChild>
                         <Button
                           variant="ghost"
@@ -402,9 +403,9 @@ export default function ProfilePage() {
                       <h3 className="font-bold">Аллергии и ограничения</h3>
                     </div>
                     <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-            setIsEditDialogOpen(open);
-            if (!open) setEditingChild(null);
-          }}>
+                      setIsEditDialogOpen(open);
+                      if (!open) setEditingChild(null);
+                    }}>
                       <DialogTrigger asChild>
                         <Button
                           variant="ghost"
@@ -472,13 +473,13 @@ export default function ProfilePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
             >
-            <Button
-              variant="destructive"
-              className="w-full"
-              onClick={() => selectedChild && handleDeleteChild(selectedChild.id)}
-            >
-              Удалить профиль
-            </Button>
+              <Button
+                variant="destructive"
+                className="w-full"
+                onClick={() => selectedChild && handleDeleteChild(selectedChild.id)}
+              >
+                Удалить профиль
+              </Button>
             </motion.div>
           </>
         ) : (
@@ -490,9 +491,9 @@ export default function ProfilePage() {
                 Добавьте профиль ребенка, чтобы начать использовать приложение
               </p>
               <Dialog open={isEditDialogOpen} onOpenChange={(open) => {
-            setIsEditDialogOpen(open);
-            if (!open) setEditingChild(null);
-          }}>
+                setIsEditDialogOpen(open);
+                if (!open) setEditingChild(null);
+              }}>
                 <DialogTrigger asChild>
                   <Button variant="mint" onClick={handleCreateChild}>
                     <Plus className="w-4 h-4 mr-2" />
@@ -557,45 +558,6 @@ function ChildEditDialog({
   }) => void;
   isLoading: boolean;
 }) {
-  // Безопасная функция для преобразования в массив строк
-  const ensureStringArray = (value: any): string[] => {
-    if (Array.isArray(value)) {
-      // Если это массив, проверяем каждый элемент
-      return value
-        .map((item) => {
-          // Если элемент - строка, которая является JSON-массивом, парсим её
-          if (typeof item === 'string' && item.trim().startsWith('[') && item.trim().endsWith(']')) {
-            try {
-              const parsed = JSON.parse(item);
-              return Array.isArray(parsed) ? parsed : [item];
-            } catch {
-              return item;
-            }
-          }
-          return item;
-        })
-        .flat()
-        .filter((item) => typeof item === 'string' && item.trim())
-        .map((item) => item.trim());
-    }
-    if (typeof value === 'string' && value.trim()) {
-      // Если это строка, которая является JSON-массивом, парсим её
-      if (value.trim().startsWith('[') && value.trim().endsWith(']')) {
-        try {
-          const parsed = JSON.parse(value);
-          if (Array.isArray(parsed)) {
-            return parsed.filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim());
-          }
-        } catch {
-          // Если не JSON, разбиваем по запятым
-        }
-      }
-      // Если не JSON-массив, разбиваем по запятым
-      return value.split(',').map((s) => s.trim()).filter(Boolean);
-    }
-    return [];
-  };
-
   const [name, setName] = useState(child?.name || "");
   const [likes, setLikes] = useState<string[]>(() => ensureStringArray(child?.likes));
   const [dislikes, setDislikes] = useState<string[]>(() => ensureStringArray(child?.dislikes));
@@ -854,8 +816,8 @@ function ChildEditDialog({
                   type="button"
                   onClick={() => toggleAllergy(allergy)}
                   className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${allergies.includes(allergy)
-                      ? "bg-destructive text-destructive-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                    ? "bg-destructive text-destructive-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
                     }`}
                 >
                   {allergy}

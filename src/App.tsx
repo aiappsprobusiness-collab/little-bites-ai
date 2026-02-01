@@ -18,6 +18,7 @@ import ChatPage from "./pages/ChatPage";
 import FavoritesPage from "./pages/FavoritesPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
+import { PWAInstall } from "./components/pwa/PWAInstall";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
           <SelectedChildProvider>
             <Toaster />
             <Sonner />
+            <PWAInstall />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/" element={<Navigate to="/chat" replace />} />

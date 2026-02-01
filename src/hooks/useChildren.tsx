@@ -2,21 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { ensureStringArray } from '@/utils/typeUtils';
 
 type Child = Tables<'children'>;
 type ChildInsert = TablesInsert<'children'>;
 type ChildUpdate = TablesUpdate<'children'>;
-
-/** Привести значение к text[] (схема children). Без дублей и пустых строк. */
-function ensureStringArray(v: unknown): string[] {
-  let arr: string[] = [];
-  if (Array.isArray(v)) {
-    arr = v.map((x) => (typeof x === 'string' ? x.trim() : String(x))).filter(Boolean);
-  } else if (typeof v === 'string' && v.trim()) {
-    arr = v.split(',').map((s) => s.trim()).filter(Boolean);
-  }
-  return [...new Set(arr)];
-}
 
 /** Нормализовать payload для insert/update. Схема children: только name, birth_date, allergies, likes, dislikes (все массивы — text[]). */
 function normalizeChildPayload<T extends Record<string, unknown>>(payload: T): T {
@@ -43,7 +33,7 @@ export function useChildren() {
     queryKey: ['children', user?.id],
     queryFn: async () => {
       if (!user) return [];
-      
+
       const { data, error } = await supabase
         .from('children')
         .select('*')
@@ -51,7 +41,7 @@ export function useChildren() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
+
       // Нормализуем likes/dislikes: если пришли как JSON-строки, парсим их
       const normalized = (data || []).map((child) => {
         const normalizeArray = (arr: any): string[] => {
@@ -86,7 +76,7 @@ export function useChildren() {
           }
           return [];
         };
-        
+
         return {
           ...child,
           allergies: normalizeArray(child.allergies),
@@ -94,7 +84,7 @@ export function useChildren() {
           dislikes: normalizeArray(child.dislikes),
         } as Child;
       });
-      
+
       return normalized;
     },
     enabled: !!user,
@@ -213,30 +203,30 @@ export function useChildren() {
   const calculateAgeInMonths = (birthDate: string): number => {
     const birth = new Date(birthDate);
     const now = new Date();
-    
+
     // Проверяем корректность даты
     if (isNaN(birth.getTime())) {
       console.error('Invalid birth date:', birthDate);
       return 0;
     }
-    
+
     // Вычисляем разницу в годах и месяцах с учетом дня месяца
     let years = now.getFullYear() - birth.getFullYear();
     let months = now.getMonth() - birth.getMonth();
-    
+
     // Если день рождения еще не наступил в этом году, вычитаем год
     if (now.getDate() < birth.getDate()) {
       months--;
     }
-    
+
     // Если месяц рождения еще не наступил в этом году, вычитаем месяц
     if (months < 0) {
       months += 12;
       years--;
     }
-    
+
     const totalMonths = years * 12 + months;
-    
+
     return totalMonths;
   };
 

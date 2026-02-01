@@ -266,7 +266,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const queryClient = useQueryClient();
     const { user } = useAuth();
     const { favorites, addFavorite, removeFavorite, isAdding, isRemoving } = useFavorites();
-    const { addItemsFromRecipe, createList, activeList } = useShoppingLists();
+    const { addItemsFromRecipe, activeList } = useShoppingLists();
     const { toast } = useToast();
 
     const sourceForParse = (rawContent ?? content).trim();
@@ -395,9 +395,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const shareText = useMemo(() => {
       const base = recipe ? formatRecipe(recipe) : typeof content === "string" ? content : "";
-      const title = recipe?.title ?? "Рецепт";
       const appMention = "\n\n— Рецепт из приложения Little Bites";
-      return `${title}\n\n${base}${appMention}`;
+      return `${base}${appMention}`;
     }, [recipe, content]);
 
     const handleShare = async () => {

@@ -8,9 +8,17 @@ export interface BeforeInstallPromptEvent extends Event {
 
 const MODAL_DELAY_MS = 5000;
 
+/** Приложение уже запущено с главного экрана (standalone), не показываем предложение установки. */
+function isRunningAsInstalledPWA(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia("(display-mode: standalone)").matches) return true;
+  if ((window.navigator as { standalone?: boolean }).standalone === true) return true; // iOS Safari
+  return false;
+}
+
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(isRunningAsInstalledPWA);
   const [showModal, setShowModal] = useState(false);
   const [modalShownOnce, setModalShownOnce] = useState(false);
   const { toast } = useToast();
