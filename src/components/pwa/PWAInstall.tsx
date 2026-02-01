@@ -10,21 +10,7 @@ export function PWAInstall() {
 
   return (
     <>
-      {/* Фиксированная зелёная кнопка внизу экрана (bottom-8, выше навбара) */}
-      <div className="fixed left-4 right-4 bottom-8 z-[60] flex justify-center pointer-events-none">
-        <div className="pointer-events-auto">
-          <Button
-            size="lg"
-            className="bg-primary text-primary-foreground shadow-button hover:bg-primary/90 font-semibold rounded-full px-6 py-6 text-base"
-            onClick={promptInstall}
-          >
-            <Download className="mr-2 h-5 w-5" />
-            Установить на экран
-          </Button>
-        </div>
-      </div>
-
-      {/* Модалка через 5 сек после загрузки */}
+      {/* Модалка через 5 сек после загрузки (beforeinstallprompt) */}
       <Dialog open={showModal} onOpenChange={(open) => !open && dismissModal()}>
         <DialogContent className="max-w-sm mx-auto" onPointerDownOutside={dismissModal}>
           <DialogHeader>
