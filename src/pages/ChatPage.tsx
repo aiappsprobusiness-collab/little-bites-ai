@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Send, Loader2, Pencil, Plus, LogOut, Square } from "lucide-react";
+import { Send, Loader2, Pencil, Plus, Settings, Square } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -13,7 +13,6 @@ import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
-import { useAuth } from "@/hooks/useAuth";
 import { detectMealType } from "@/utils/parseChatRecipes";
 import { formatRecipeResponse, hasRecipeJson } from "@/utils/formatRecipeResponse";
 import {
@@ -38,7 +37,6 @@ const STARTER_MESSAGE = "Я помогу с идеями, что пригото�
 export default function ChatPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
   const { toast } = useToast();
   const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
   const { canGenerate, isPremium, remaining, dailyLimit } = useSubscription();
@@ -215,14 +213,11 @@ export default function ChatPage() {
               {isPremium ? "∞" : `${remaining ?? 0}/${dailyLimit ?? 3}`}
             </button>
             <button
-              onClick={async () => {
-                await signOut();
-                navigate("/auth", { replace: true });
-              }}
-              title="Выйти из аккаунта"
+              onClick={() => navigate("/profile")}
+              title="Настройки профиля"
               className="w-9 h-9 rounded-full bg-primary text-primary-foreground shadow-md flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
             >
-              <LogOut className="w-4 h-4" />
+              <Settings className="w-4 h-4" />
             </button>
           </div>
         </div>
