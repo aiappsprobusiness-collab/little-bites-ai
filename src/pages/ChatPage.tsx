@@ -315,13 +315,7 @@ export default function ChatPage() {
           </AnimatePresence>
 
           {isChatting && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start items-center gap-2">
-              <div className="rounded-2xl rounded-bl-sm px-4 py-3 bg-card shadow-soft">
-                <div className="flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Готовим кулинарное чудо...</span>
-                </div>
-              </div>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start items-start gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -332,6 +326,12 @@ export default function ChatPage() {
               >
                 <Square className="w-4 h-4" />
               </Button>
+              <div className="rounded-2xl rounded-bl-sm px-4 py-3 bg-card shadow-soft">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-sm text-muted-foreground">Готовим кулинарное чудо...</span>
+                </div>
+              </div>
             </motion.div>
           )}
 
