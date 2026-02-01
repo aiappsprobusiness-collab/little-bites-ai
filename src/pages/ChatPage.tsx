@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Send, Loader2, Pencil, Plus, LogOut } from "lucide-react";
+import { Send, Loader2, Pencil, Plus, LogOut, Square } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -42,7 +42,7 @@ export default function ChatPage() {
   const { toast } = useToast();
   const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
   const { canGenerate, isPremium, remaining, dailyLimit } = useSubscription();
-  const { chat, saveChat, isChatting } = useDeepSeekAPI();
+  const { chat, abortChat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage } = useChatHistory();
   const { saveRecipesFromChat } = useChatRecipes();
 
@@ -145,6 +145,11 @@ export default function ChatPage() {
         console.error("Failed to save recipes from chat:", e);
       }
     } catch (err: any) {
+      if (err?.name === "AbortError") {
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+        toast({ title: "Остановлено" });
+        return;
+      }
       if (err?.message === "usage_limit_exceeded") {
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
@@ -310,7 +315,17 @@ export default function ChatPage() {
           </AnimatePresence>
 
           {isChatting && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start items-start gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-9 w-9 shrink-0"
+                onClick={abortChat}
+                title="Остановить генерацию"
+              >
+                <Square className="w-4 h-4" />
+              </Button>
               <div className="rounded-2xl rounded-bl-sm px-4 py-3 bg-card shadow-soft">
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />

@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -18,6 +19,13 @@ export function useDeepSeekAPI() {
   const { selectedChild, selectedChildId } = useSelectedChild();
   const { canGenerate, refetchUsage } = useSubscription();
   const queryClient = useQueryClient();
+  const chatAbortRef = useRef<AbortController | null>(null);
+
+  const abortChat = () => {
+    if (chatAbortRef.current) {
+      chatAbortRef.current.abort();
+    }
+  };
 
   // Chat with DeepSeek
   const chatMutation = useMutation({
@@ -63,8 +71,10 @@ export function useDeepSeekAPI() {
         return { message: text };
       }
 
+      chatAbortRef.current = new AbortController();
       const response = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
         method: 'POST',
+        signal: chatAbortRef.current.signal,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '',
@@ -173,6 +183,7 @@ export function useDeepSeekAPI() {
 
   return {
     chat: chatMutation.mutateAsync,
+    abortChat,
     analyze: analyzeMutation.mutateAsync,
     saveChat: saveChatMutation.mutateAsync,
     isChatting: chatMutation.isPending,
