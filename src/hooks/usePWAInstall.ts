@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 export interface BeforeInstallPromptEvent extends Event {
@@ -7,6 +7,8 @@ export interface BeforeInstallPromptEvent extends Event {
 }
 
 const MODAL_DELAY_MS = 5000;
+/** Интервал повторного показа модалки после "Позже" или закрытия. */
+const RE_SHOW_DELAY_MS = 15000;
 
 /** Приложение уже запущено с главного экрана (standalone), не показываем предложение установки. */
 function isRunningAsInstalledPWA(): boolean {
@@ -26,6 +28,12 @@ export function usePWAInstall() {
   const [isInstalled, setIsInstalled] = useState(isRunningAsInstalledPWA);
   const [showModal, setShowModal] = useState(false);
   const { toast } = useToast();
+  const isInstalledRef = useRef(isInstalled);
+  const deferredPromptRef = useRef(deferredPrompt);
+  const reShowTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  isInstalledRef.current = isInstalled;
+  deferredPromptRef.current = deferredPrompt;
 
   useEffect(() => {
     const onBeforeInstall = (e: Event) => {
@@ -65,7 +73,25 @@ export function usePWAInstall() {
     await deferredPrompt.userChoice;
   };
 
-  const dismissModal = () => setShowModal(false);
+  const dismissModal = useCallback(() => {
+    setShowModal(false);
+    if (reShowTimeoutRef.current) {
+      clearTimeout(reShowTimeoutRef.current);
+      reShowTimeoutRef.current = null;
+    }
+    reShowTimeoutRef.current = setTimeout(() => {
+      if (!isInstalledRef.current && (deferredPromptRef.current || isIOS())) {
+        setShowModal(true);
+      }
+      reShowTimeoutRef.current = null;
+    }, RE_SHOW_DELAY_MS);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (reShowTimeoutRef.current) clearTimeout(reShowTimeoutRef.current);
+    };
+  }, []);
 
   const canInstall = Boolean(deferredPrompt) && !isInstalled;
   const isIOSDevice = isIOS();

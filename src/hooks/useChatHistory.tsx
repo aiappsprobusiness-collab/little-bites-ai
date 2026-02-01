@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { CHAT_HISTORY_SELECT, CHAT_LAST_MESSAGES } from '@/lib/supabase-constants';
 
-/** История чата без привязки к ребёнку: только user_id. Лимит — последние 20 записей. */
+/** История чата без привязки к ребёнку: только user_id. Лимит — последние 10 записей. */
 export function useChatHistory() {
   const { user } = useAuth();
 

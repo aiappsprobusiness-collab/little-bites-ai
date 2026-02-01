@@ -195,43 +195,144 @@ export function detectMealType(text: string): 'breakfast' | 'lunch' | 'snack' | 
 }
 
 /**
- * Парсит рецепты из ответа AI
- * Ищет структурированные рецепты в формате JSON или текстовом формате
+ * Извлекает первый полный JSON-объект с начала строки (по балансу скобок).
+ */
+export function extractFirstJsonObjectFromStart(str: string): string | null {
+  const trimmed = str.trim();
+  if (!trimmed.startsWith('{')) return null;
+  return extractJsonObjectAt(trimmed, 0);
+}
+
+/**
+ * Извлекает один полный JSON-объект начиная с позиции startIndex (по балансу скобок).
+ * Возвращает { json, endIndex } или null.
+ */
+function extractJsonObjectAt(str: string, startIndex: number): string | null {
+  const i = str.indexOf('{', startIndex);
+  if (i === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  let quote = '';
+  for (let j = i; j < str.length; j++) {
+    const c = str[j];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (inString) {
+      if (c === '\\') escape = true;
+      else if (c === quote) inString = false;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      inString = true;
+      quote = c;
+      continue;
+    }
+    if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return str.slice(i, j + 1);
+    }
+  }
+  return null;
+}
+
+/** Результат парсинга ответа ИИ: рецепты для БД и текст для отображения в чате. */
+export interface ParseRecipesFromChatResult {
+  recipes: ParsedRecipe[];
+  /** Оригинальный текст aiResponse целиком для отображения в чате. Не фильтруется и не обрезается. */
+  displayText: string;
+}
+
+/** Маркеры «человеческого» ответа — при их наличии не запускаем parseRecipeFromPlainText. */
+const HUMAN_TEXT_MARKERS = [
+  'Почему это удобно',
+  'Маленький бонус',
+  'Параметры',
+  'Приготовление',
+  'Ингредиенты',
+  'разбор',
+  'Мама',
+  'Папа',
+  'Ребенок',
+];
+
+function looksLikeHumanText(text: string): boolean {
+  if (!text || text.length < 150) return false;
+  const t = text.trim();
+  return HUMAN_TEXT_MARKERS.some((m) => t.includes(m)) || (t.split(/\n/).length >= 4 && t.length > 300);
+}
+
+/**
+ * Парсит рецепты из ответа AI. Находит JSON через регулярное выражение / извлечение по балансу скобок,
+ * парсит его и сохраняет данные рецепта для БД.
+ * Главное: возвращает оригинальный aiResponse полностью (displayText = aiResponse) для отображения в чате.
+ * Не фильтрует и не удаляет блоки «Почему это удобно», «Описание» и т.д.
  */
 export function parseRecipesFromChat(
   userMessage: string,
   aiResponse: string
-): ParsedRecipe[] {
+): ParseRecipesFromChatResult {
+  console.log('Response Length:', aiResponse.length);
   console.log('parseRecipesFromChat - Starting parse', {
     userMessageLength: userMessage.length,
     aiResponseLength: aiResponse.length,
-    userMessage: userMessage.substring(0, 100),
-    aiResponse: aiResponse.substring(0, 200),
   });
 
   const recipes: ParsedRecipe[] = [];
   const mealType = detectMealType(userMessage) || detectMealType(aiResponse);
 
-  console.log('parseRecipesFromChat - Detected meal type:', mealType);
-
-  // Попытка найти JSON в ответе (ищем более гибко)
   let jsonString: string | null = null;
+  let jsonStartIndex = -1;
+  let jsonEndIndex = -1;
 
-  // Сначала пробуем найти JSON в code blocks — берём всё содержимое между ```, чтобы не обрывать вложенные {}
-  const codeBlockMatch = aiResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlockMatch && codeBlockMatch[1]) {
-    const blockContent = codeBlockMatch[1].trim();
-    if (blockContent.startsWith('{') || blockContent.startsWith('[')) {
-      jsonString = blockContent;
-      console.log('parseRecipesFromChat - Found JSON in code block');
+  // RegExp: поиск начала JSON рецепта (поля title, description, ingredients, steps, cookingTime)
+  const recipeJsonStartRe = /\{\s*"(?:title|description|ingredients|steps|cookingTime)"\s*:/;
+  const regexMatch = aiResponse.match(recipeJsonStartRe);
+  if (regexMatch && regexMatch.index !== undefined) {
+    jsonString = extractJsonObjectAt(aiResponse, regexMatch.index);
+    if (jsonString) {
+      jsonStartIndex = regexMatch.index;
+      jsonEndIndex = jsonStartIndex + jsonString.length;
+      console.log('parseRecipesFromChat - Found JSON via RegExp');
+    }
+  }
+  // JSON в начале строки
+  if (!jsonString && aiResponse.trim().startsWith('{')) {
+    jsonString = extractFirstJsonObjectFromStart(aiResponse);
+    if (jsonString) {
+      jsonStartIndex = aiResponse.indexOf(jsonString);
+      jsonEndIndex = jsonStartIndex + jsonString.length;
+      console.log('parseRecipesFromChat - Found JSON at start');
+    }
+  }
+  // JSON внутри code block
+  if (!jsonString) {
+    const codeBlockMatch = aiResponse.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      const blockContent = codeBlockMatch[1].trim();
+      if (blockContent.startsWith('{') || blockContent.startsWith('[')) {
+        jsonString = blockContent.startsWith('{') ? extractJsonObjectAt(blockContent, 0) : blockContent;
+        if (jsonString) {
+          const fullBlock = codeBlockMatch[0];
+          jsonStartIndex = aiResponse.indexOf(fullBlock);
+          jsonEndIndex = jsonStartIndex + fullBlock.length;
+          console.log('parseRecipesFromChat - Found JSON in code block');
+        }
+      }
     }
   }
   if (!jsonString) {
-    // Если не нашли в code block, ищем обычный JSON объект (жадный — от первой { до последней })
-    const simpleMatch = aiResponse.match(/\{[\s\S]*\}/);
-    if (simpleMatch) {
-      jsonString = simpleMatch[0];
-      console.log('parseRecipesFromChat - Found JSON object');
+    const firstBrace = aiResponse.indexOf('{');
+    if (firstBrace !== -1) {
+      jsonString = extractJsonObjectAt(aiResponse, firstBrace);
+      if (jsonString) {
+        jsonStartIndex = aiResponse.indexOf(jsonString);
+        jsonEndIndex = jsonStartIndex + jsonString.length;
+        console.log('parseRecipesFromChat - Found JSON object in string');
+      }
     }
   }
 
@@ -239,10 +340,8 @@ export function parseRecipesFromChat(
     try {
       const parsed = JSON.parse(jsonString);
 
-      // Если это один рецепт
       if (parsed.title || parsed.name) {
         const title = parsed.title || parsed.name;
-        // Проверяем, что название валидное (не дефолтное и не пустое)
         if (title && title.trim() && title !== 'Рецепт из чата' && title.length >= 3 && title.length <= 80) {
           const ingredients = Array.isArray(parsed.ingredients)
             ? parsed.ingredients
@@ -250,8 +349,6 @@ export function parseRecipesFromChat(
           const steps = Array.isArray(parsed.steps)
             ? parsed.steps
             : parsed.steps?.split('\n').filter((s: string) => s.trim()) || [];
-
-          // Сохраняем только если есть хотя бы ингредиенты или шаги
           if (ingredients.length > 0 || steps.length > 0) {
             recipes.push({
               title: title.trim(),
@@ -265,12 +362,10 @@ export function parseRecipesFromChat(
         }
       }
 
-      // Если это массив рецептов
       if (Array.isArray(parsed) || Array.isArray(parsed.recipes)) {
         const recipeList = Array.isArray(parsed) ? parsed : parsed.recipes;
         recipeList.forEach((recipe: any) => {
           const title = recipe.title || recipe.name;
-          // Проверяем, что название валидное
           if (title && title.trim() && title !== 'Рецепт из чата' && title.length >= 3 && title.length <= 80) {
             const ingredients = Array.isArray(recipe.ingredients)
               ? recipe.ingredients
@@ -278,8 +373,6 @@ export function parseRecipesFromChat(
             const steps = Array.isArray(recipe.steps)
               ? recipe.steps
               : recipe.steps?.split('\n').filter((s: string) => s.trim()) || [];
-
-            // Сохраняем только если есть хотя бы ингредиенты или шаги
             if (ingredients.length > 0 || steps.length > 0) {
               recipes.push({
                 title: title.trim(),
@@ -294,24 +387,25 @@ export function parseRecipesFromChat(
         });
       }
     } catch (e) {
-      // JSON не найден или невалидный, пробуем текстовый парсинг
       console.warn('Failed to parse JSON recipe:', e);
     }
   }
 
-  // Если JSON не найден — парсим обычный текст: название (эмодзи/капс) и ингредиенты (1., 2., 3. или -)
-  if (recipes.length === 0) {
+  // displayText: всегда полный оригинальный aiResponse — не удаляем и не фильтруем блоки текста
+  const displayText = aiResponse;
+
+  // Запрет «Parsed recipe from plain text», если в сообщении есть нормальный человеческий текст
+  if (recipes.length === 0 && !looksLikeHumanText(aiResponse)) {
     const textRecipe = parseRecipeFromPlainText(aiResponse);
     if (textRecipe) {
       textRecipe.id = textRecipe.id ?? generateTempRecipeId();
       recipes.push(textRecipe);
-      console.log('parseRecipesFromChat - Parsed recipe from plain text:', textRecipe.title, 'id:', textRecipe.id);
-    } else {
-      console.log('parseRecipesFromChat - No JSON and no plain text recipe found');
+      console.log('parseRecipesFromChat - Parsed recipe from plain text:', textRecipe.title);
     }
+  } else if (recipes.length === 0) {
+    console.log('parseRecipesFromChat - No JSON; human text preserved, no plain-text parse');
   }
 
-  // Добавляем id тем рецептам, у которых его нет (для согласованности)
   recipes.forEach((r) => {
     if (!r.id) r.id = generateTempRecipeId();
   });
@@ -512,7 +606,7 @@ export function parseRecipesFromChat(
     });
   }
 
-  console.log('parseRecipesFromChat - found recipes:', recipes.map(r => ({ title: r.title, mealType: r.mealType })));
+  console.log('parseRecipesFromChat - found recipes:', recipes.map(r => ({ title: r.title, mealType: r.mealType })), 'displayText length:', displayText.length);
 
-  return recipes;
+  return { recipes, displayText };
 }

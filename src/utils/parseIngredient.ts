@@ -4,6 +4,15 @@
  * Удаляет все комментарии, описания и пояснения в скобках.
  */
 
+/** Проверяет, похожа ли строка на шаг приготовления (инструкцию), а не на продукт для покупки. */
+export function looksLikeInstruction(name: string | null | undefined): boolean {
+  if (!name || name.length >= 60) return true;
+  const lower = name.toLowerCase();
+  const phrases = ["перед подачей", "по вкусу", "по желанию", "для подачи", "при подаче", "каждый кусочек", "каждый кусок"];
+  const verbs = ["посыпать", "полить", "смазать", "нарезать", "варить", "обжарить", "добавить", "смешать", "залить", "положить", "тушить", "запечь", "выложить", "обвалять", "обваливать", "обмакнуть", "обмакивать", "запанировать"];
+  return phrases.some((p) => lower.includes(p)) || verbs.some((v) => lower.includes(v));
+}
+
 export interface ParsedIngredient {
   name: string;
   quantity: number | null;

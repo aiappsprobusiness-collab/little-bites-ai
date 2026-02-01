@@ -14,7 +14,6 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { detectMealType } from "@/utils/parseChatRecipes";
-import { formatRecipeResponse, hasRecipeJson } from "@/utils/formatRecipeResponse";
 import {
   Select,
   SelectContent,
@@ -124,30 +123,30 @@ export default function ChatPage() {
 
       const response = await chat({ messages: chatMessages, type: "chat" });
       const rawMessage = typeof response?.message === "string" ? response.message : "";
-      const displayMessage = hasRecipeJson(rawMessage) ? formatRecipeResponse(rawMessage) : rawMessage;
-
-      const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: displayMessage,
-        timestamp: new Date(),
-        rawContent: hasRecipeJson(rawMessage) ? rawMessage : undefined,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-
-      await saveChat({
-        message: userMessage.content,
-        response: displayMessage,
-      });
 
       try {
         const mealType = detectMealType(userMessage.content);
-        const savedRecipes = await saveRecipesFromChat({
+        const { savedRecipes } = await saveRecipesFromChat({
           userMessage: userMessage.content,
           aiResponse: rawMessage,
           childId: childIdForSave,
           mealType,
         });
+        // В чате и в истории — только сырой ответ API (rawMessage). Парсер не трогает отображаемый текст.
+        const assistantMessage: Message = {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: rawMessage,
+          timestamp: new Date(),
+          rawContent: rawMessage,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+
+        await saveChat({
+          message: userMessage.content,
+          response: rawMessage,
+        });
+
         if (savedRecipes?.length > 0) {
           toast({
             title: "Рецепты сохранены",
@@ -156,6 +155,15 @@ export default function ChatPage() {
         }
       } catch (e) {
         console.error("Failed to save recipes from chat:", e);
+        const assistantMessage: Message = {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: rawMessage,
+          timestamp: new Date(),
+          rawContent: rawMessage,
+        };
+        setMessages((prev) => [...prev, assistantMessage]);
+        await saveChat({ message: userMessage.content, response: rawMessage });
       }
     } catch (err: any) {
       if (err?.name === "AbortError") {

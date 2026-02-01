@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { FREE_PROMPT_TEMPLATE, PREMIUM_PROMPT_TEMPLATE } from "./prompts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,64 +8,139 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Кэш системных промптов в памяти (для оптимизации повторных запросов в рамках одного инстанса)
-// Edge functions stateless, но кэш поможет для нескольких запросов в рамках одного процесса
-const systemPromptCache = new Map<string, string>();
-const CACHE_TTL = 60 * 60 * 1000; // 1 час
-const cacheTimestamps = new Map<string, number>();
+// ——— Кэш: префикс v_template_system, принудительно отключён ———
+const CACHE_KEY_PREFIX = "v_template_system";
 
-function getCacheKey(type: string, childData?: any, maxRecipes?: number): string {
-  return `${type}_${maxRecipes ?? 1}_${JSON.stringify(childData || {})}`;
+function getCacheKey(type: string, childData?: ChildData | null, isPremium?: boolean): string {
+  return `${CACHE_KEY_PREFIX}_${type}_${isPremium ? "premium" : "free"}_${JSON.stringify(childData ?? {})}`;
 }
 
-function getCachedSystemPrompt(type: string, childData?: any, maxRecipes?: number): string | null {
-  const key = getCacheKey(type, childData, maxRecipes);
-  const cached = systemPromptCache.get(key);
-  const timestamp = cacheTimestamps.get(key);
-
-  if (cached && timestamp && Date.now() - timestamp < CACHE_TTL) {
-    return cached;
-  }
-
-  // Удаляем устаревший кэш
-  if (cached) {
-    systemPromptCache.delete(key);
-    cacheTimestamps.delete(key);
-  }
-
+function getCachedSystemPrompt(
+  _type: string,
+  _childData?: ChildData | null,
+  _isPremium?: boolean
+): string | null {
+  // const key = getCacheKey(type, childData, isPremium);
+  // const cached = systemPromptCache.get(key);
+  // if (cached) return cached;  // временно закомментировано
   return null;
 }
 
-function cacheSystemPrompt(type: string, prompt: string, childData?: any, maxRecipes?: number): void {
-  const key = getCacheKey(type, childData, maxRecipes);
-  systemPromptCache.set(key, prompt);
-  cacheTimestamps.set(key, Date.now());
+/** Возраст по birth_date (YYYY-MM-DD) или по ageMonths. */
+function calculateAge(birthDate: string): { years: number; months: number } {
+  const s = (birthDate || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { years: 0, months: 0 };
+  const birth = new Date(s);
+  const today = new Date();
+  let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
+  if (today.getDate() < birth.getDate()) months -= 1;
+  months = Math.max(0, months);
+  return { years: Math.floor(months / 12), months: months % 12 };
+}
+
+function formatAgeString(birthDate: string): string {
+  const { years, months } = calculateAge(birthDate);
+  const total = years * 12 + months;
+  if (total === 0) return "";
+  if (total < 12) return `${total} мес.`;
+  if (months === 0) return `${years} ${years === 1 ? "год" : years < 5 ? "года" : "лет"}`;
+  return `${years} г. ${months} мес.`;
+}
+
+interface ChildData {
+  name?: string;
+  birth_date?: string;
+  age_months?: number;
+  ageMonths?: number;
+  ageDescription?: string;
+  allergies?: string[];
+  likes?: string[];
+  dislikes?: string[];
+}
+
+function getCalculatedAge(childData?: ChildData | null): string {
+  if (!childData) return "";
+  if (childData.birth_date && /^\d{4}-\d{2}-\d{2}$/.test(childData.birth_date.trim())) {
+    return formatAgeString(childData.birth_date);
+  }
+  if (childData.ageDescription) return childData.ageDescription;
+  const m = childData.age_months ?? childData.ageMonths ?? 0;
+  if (m < 12) return `${m} мес.`;
+  const y = Math.floor(m / 12);
+  const rest = m % 12;
+  return rest ? `${y} г. ${rest} мес.` : `${y} ${y === 1 ? "год" : y < 5 ? "года" : "лет"}`;
+}
+
+/** Подставляет в шаблон переменные из childData ({{name}}, {{age}}, {{allergies}}, {{likes}}, {{dislikes}}). */
+function applyPromptTemplate(template: string, childData: ChildData | null | undefined): string {
+  const name = (childData?.name ?? "").trim() || "ребёнок";
+  const age = getCalculatedAge(childData) || "не указан";
+  const allergies = (childData?.allergies?.length ? childData.allergies.join(", ") : "") || "не указаны";
+  const likes = (childData?.likes?.length ? childData.likes.join(", ") : "") || "не указаны";
+  const dislikes = (childData?.dislikes?.length ? childData.dislikes.join(", ") : "") || "не указаны";
+  return template
+    .replace(/\{\{name\}\}/g, name)
+    .replace(/\{\{age\}\}/g, age)
+    .replace(/\{\{allergies\}\}/g, allergies)
+    .replace(/\{\{likes\}\}/g, likes)
+    .replace(/\{\{dislikes\}\}/g, dislikes);
+}
+
+/** Промпт для type === "chat": шаблон из prompts.ts + подстановка данных ребёнка. */
+function generateChatSystemPrompt(isPremium: boolean, childData: ChildData | null | undefined): string {
+  const template = isPremium ? PREMIUM_PROMPT_TEMPLATE : FREE_PROMPT_TEMPLATE;
+  return applyPromptTemplate(template, childData);
+}
+
+function getSystemPromptForType(
+  type: string,
+  childData: ChildData | null | undefined,
+  isPremium: boolean
+): string {
+  if (type === "chat") {
+    return generateChatSystemPrompt(isPremium, childData);
+  }
+
+  const age = getCalculatedAge(childData);
+  const allergies = childData?.allergies?.length ? childData.allergies.join(", ") : "";
+  const likes = childData?.likes?.length ? childData.likes.join(", ") : "";
+  const dislikes = childData?.dislikes?.length ? childData.dislikes.join(", ") : "";
+
+  if (type === "recipe") {
+    return `Ты — детский диетолог. Рецепты с учётом возраста и аллергий.
+Ребенок: ${childData?.name ?? ""}, возраст: ${age || "не указан"}
+${allergies ? `ИСКЛЮЧИТЬ (аллергия): ${allergies}.` : ""}
+${likes ? `Likes: ${likes}.` : ""}
+${dislikes ? `Dislikes: ${dislikes}.` : ""}
+Ответ СТРОГО JSON: {"title","description","cookingTime","ingredients","steps","calories","macros"}. Всё на русском.`;
+  }
+
+  if (type === "diet_plan") {
+    return `Ты — эксперт по детскому питанию. Недельный план.
+Ребенок: ${childData?.name ?? ""}, ${age || "не указан"}
+${allergies ? `ИСКЛЮЧИТЬ: ${allergies}.` : ""}
+Ответ СТРОГО JSON. Ключи: breakfast, lunch, snack, dinner.`;
+  }
+
+  if (type === "single_day") {
+    return `Детский диетолог. План на день. Ответ — только JSON.
+Ключи: breakfast, lunch, snack, dinner. В каждом: name, calories, protein, carbs, fat, cooking_time, ingredients, steps. Всё на русском.`;
+  }
+
+  return "Ты — помощник. Отвечай кратко и по делу.";
 }
 
 interface ChatRequest {
   messages: Array<{ role: string; content: string }>;
-  childData?: {
-    name: string;
-    ageMonths: number;
-    allergies?: string[];
-    weight?: number;
-    height?: number;
-    /** Для нескольких детей: "18 мес., 2 года" */
-    ageDescription?: string;
-  };
+  childData?: ChildData | null;
   type?: "chat" | "recipe" | "diet_plan" | "single_day";
   stream?: boolean;
-  /** Жёсткое ограничение: сколько рецептов возвращать (для type=chat). */
   maxRecipes?: number;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -72,26 +148,21 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!DEEPSEEK_API_KEY) {
-      throw new Error("DEEPSEEK_API_KEY is not configured");
-    }
+    if (!DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY is not configured");
 
-    // Get auth token from request
     const authHeader = req.headers.get("Authorization");
     let userId: string | null = null;
+    type ProfileRow = { subscription_status?: string | null } | null;
+    let profile: ProfileRow = null;
 
     if (authHeader && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const token = authHeader.replace("Bearer ", "");
       const { data: { user } } = await supabase.auth.getUser(token);
-      userId = user?.id || null;
+      userId = user?.id ?? null;
 
-      // Check usage limit for authenticated users
       if (userId) {
-        const { data: usageData } = await supabase.rpc("check_usage_limit", {
-          _user_id: userId,
-        });
-
+        const { data: usageData } = await supabase.rpc("check_usage_limit", { _user_id: userId });
         if (usageData && !usageData.can_generate) {
           return new Response(
             JSON.stringify({
@@ -100,196 +171,49 @@ serve(async (req) => {
               remaining: 0,
               daily_limit: usageData.daily_limit,
             }),
-            {
-              status: 429,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
+        }
+
+        const { data: profileRow, error: profileError } = await supabase
+          .from("profiles")
+          .select("subscription_status")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (profileError) {
+          console.warn("Profile fetch error (treating as free):", profileError.message);
+          profile = null;
+        } else {
+          profile = profileRow as ProfileRow;
         }
       }
     }
 
-    const { messages, childData, type = "chat", stream = true, maxRecipes = 1 }: ChatRequest = await req.json();
+    // Строго: premium только при subscription_status === "premium". Иначе — free (в т.ч. null, undefined, "trial").
+    const subscriptionStatus = profile?.subscription_status ?? "free";
+    const isPremium = subscriptionStatus === "premium";
+    const { messages, childData, type = "chat", stream = true }: ChatRequest = await req.json();
 
-    // Проверяем кэш системного промпта (оптимизация для повторных запросов)
-    let systemPrompt = getCachedSystemPrompt(type, childData, maxRecipes);
-
-    // Build system prompt based on type (если не в кэше)
-    if (!systemPrompt) {
-
-      if (type === "chat") {
-        const age = childData
-          ? (childData.ageDescription ?? (childData.ageMonths < 12
-            ? `${childData.ageMonths} мес.`
-            : `${Math.floor(childData.ageMonths / 12)} ${childData.ageMonths % 12 ? `г. ${childData.ageMonths % 12} мес.` : "лет"}`))
-          : "";
-        const allergies = childData?.allergies?.length ? childData.allergies.join(", ") : "";
-        const likes = childData?.likes?.length ? childData.likes.join(", ") : "";
-        const dislikes = childData?.dislikes?.length ? childData.dislikes.join(", ") : "";
-
-        systemPrompt = `Ты — ИИ‑ассистент по семейному питанию для мам. Отвечай кратко, без вступлений и лишних слов.
-
-У тебя есть активный профиль: возраст ${age}, аллергии ${allergies || "не указаны"}, любит ${likes || "не указаны"}, не любит ${dislikes || "не указаны"}.
-
-Правила:
-1. Предлагай только разовые идеи блюд или одного приёма пищи. Не составляй меню на несколько дней.
-2. КРИТИЧНО (медицинское требование): Строго исключи из рецепта любые продукты из списка аллергий и списка «не любит». Аллергии: ${allergies || "не указаны"}. Не любит: ${dislikes || "не указаны"}. Никаких исключений — если продукт указан в аллергиях или не любит, он НЕ должен присутствовать в рецепте. Strictly exclude ingredients listed in allergies and dislikes. This is a medical requirement.
-3. Старайся включать продукты из «любит» (${likes || "не указаны"}).
-4. Учитывай возраст при выборе блюд и консистенции.
-5. На любой запрос возвращай СТРОГО ОДИН рецепт. ЗАПРЕЩЕНО предлагать 2 или 3 варианта. ЗАПРЕЩЕНО использовать формат {"recipes": [...]} — только один JSON-объект с полями title, description, ingredients, steps, cookingTime.
-
-Формат:
-- [Краткое название блюда]
-- Ингредиенты: [полный список]
-- Приготовление: [все шаги по порядку]
-
-В конце ответа ОБЯЗАТЕЛЬНО добавь JSON ровно одного рецепта (не массив, не поле recipes):
-\`\`\`json
-{"title":"Название","description":"Кратко","ingredients":["ингредиент 1","ингредиент 2", ...],"steps":["шаг 1","шаг 2", ...],"cookingTime":20}
-\`\`\`
-Название — короткое (3–40 символов), существительное. Ингредиенты и шаги на русском, без ограничения по количеству. Количество рецептов в ответе: строго ${maxRecipes ?? 1}.`;
-      } else if (type === "recipe") {
-        systemPrompt = `Ты — детский диетолог. Создаёшь рецепты для детей с учётом возраста и аллергий.
-
-${childData ? `
-Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
-${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ используй эти продукты! Strictly exclude — medical requirement.` : ""}
-${childData.likes?.length ? `Любит: ${childData.likes.join(", ")}. Учитывай предпочтения.` : ""}
-${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")}. Строго исключи эти продукты. Strictly exclude — medical requirement.` : ""}
-` : ""}
-
-КРИТИЧЕСКИ ВАЖНО - ФОРМАТ ОТВЕТА:
-ОБЯЗАТЕЛЬНО верни ответ СТРОГО в формате JSON без дополнительного текста до или после JSON.
-
-ПРАВИЛА ДЛЯ НАЗВАНИЯ РЕЦЕПТА:
-1. Название должно быть коротким (3-40 символов)
-2. Название должно быть конкретным и понятным (например: "Овсяная каша с яблоком", "Куриный суп", "Творожная запеканка")
-3. НЕ используй описания как названия (НЕПРАВИЛЬНО: "яркое и нравится детям", "полезно для здоровья")
-4. НЕ используй инструкции как названия (НЕПРАВИЛЬНО: "Мякоть картофеля размять вилкой", "Варить 10 минут")
-5. НЕ используй общие фразы (НЕПРАВИЛЬНО: "Рецепт из чата", "Блюдо для ребенка")
-6. Название должно быть существительным или существительным с прилагательным
-
-Формат JSON (один рецепт):
-\`\`\`json
-{
-  "title": "Название блюда на русском языке",
-  "description": "Краткое описание блюда",
-  "cookingTime": 20,
-  "ingredients": ["ингредиент 1", "ингредиент 2"],
-  "steps": ["шаг 1", "шаг 2"],
-  "calories": 250,
-  "macros": { "protein": 10, "carbs": 30, "fat": 8 }
-}
-\`\`\`
-
-Формат JSON (несколько рецептов):
-\`\`\`json
-{
-  "recipes": [
-    {
-      "title": "Название первого рецепта",
-      "description": "Описание",
-      "cookingTime": 15,
-      "ingredients": ["ингредиент 1", "ингредиент 2"],
-      "steps": ["шаг 1", "шаг 2"],
-      "calories": 200
-    },
-    {
-      "title": "Название второго рецепта",
-      "description": "Описание",
-      "cookingTime": 25,
-      "ingredients": ["ингредиент 1", "ингредиент 2"],
-      "steps": ["шаг 1", "шаг 2"],
-      "calories": 300
-    }
-  ]
-}
-\`\`\`
-
-ВАЖНО:
-- Все названия, ингредиенты и шаги должны быть на РУССКОМ языке
-- Название рецепта должно быть валидным (не описание, не инструкция, не общая фраза)
-- Если не можешь придумать хорошее название - лучше не создавать рецепт`;
-      } else if (type === "diet_plan") {
-        systemPrompt = `Ты — эксперт по детскому питанию. Создаёшь недельные планы питания.
-
-${childData ? `
-Ребенок: ${childData.name}, ${childData.ageDescription ?? `${childData.ageMonths} месяцев`}
-${childData.allergies?.length ? `ИСКЛЮЧИТЬ (аллергия): ${childData.allergies.join(", ")}. НЕ используй эти продукты!` : ""}
-${childData.likes?.length ? `Любит: ${childData.likes.join(", ")}. Учитывай предпочтения.` : ""}
-${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")}. Избегай этих продуктов, если есть альтернатива.` : ""}
-` : ""}
-
-ВАЖНО: Отвечай СТРОГО в формате JSON без markdown и без дополнительного текста!
-Используй ТОЛЬКО английские ключи для типов приёма пищи: breakfast, lunch, snack, dinner.
-
-{
-  "days": {
-    "Понедельник": {
-      "breakfast": {"name": "Овсяная каша с яблоком", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Овсяные хлопья", "amount": 50, "unit": "г"}], "steps": ["Залить водой и варить 10 мин"]},
-      "lunch": {"name": "...", "calories": 300, "protein": 15, "carbs": 30, "fat": 10, "cooking_time": 20, "ingredients": [...], "steps": [...]},
-      "snack": {"name": "...", "calories": 100, "protein": 3, "carbs": 15, "fat": 3, "cooking_time": 5, "ingredients": [...], "steps": [...]},
-      "dinner": {"name": "...", "calories": 280, "protein": 12, "carbs": 25, "fat": 8, "cooking_time": 25, "ingredients": [...], "steps": [...]}
-    },
-    "Вторник": {...},
-    "Среда": {...},
-    "Четверг": {...},
-    "Пятница": {...},
-    "Суббота": {...},
-    "Воскресенье": {...}
-  },
-  "shopping_list": ["продукт - количество"],
-  "total_calories_week": 8400
-}`;
-      } else if (type === "single_day") {
-        // Оптимизированный промпт: пример JSON в system, короткий user prompt
-        systemPrompt = `Детский диетолог. Создаёшь план питания на день.
-
-КРИТИЧЕСКИ ВАЖНО - РАЗНООБРАЗИЕ:
-- Каждый день недели должен иметь УНИКАЛЬНЫЕ блюда
-- НЕ повторяй одни и те же рецепты в разные дни
-- Используй разные крупы (гречка, овсянка, рис, пшено, манка), разные способы приготовления
-- Для завтрака: чередуй каши, омлеты, запеканки, творожные блюда
-- Для обеда: разные супы, вторые блюда, гарниры
-- Для полдника: разные фрукты, творожные блюда, выпечка
-- Для ужина: разные мясные/рыбные блюда с разными гарнирами
-
-Формат ответа - только валидный JSON без пояснений:
-{
-  "breakfast": {"name": "Название", "calories": 250, "protein": 8, "carbs": 40, "fat": 5, "cooking_time": 15, "ingredients": [{"name": "Продукт", "amount": 50, "unit": "г"}], "steps": ["Шаг"]},
-  "lunch": {"name": "Название", "calories": 300, "protein": 15, "carbs": 30, "fat": 10, "cooking_time": 30, "ingredients": [{"name": "Продукт", "amount": 100, "unit": "г"}], "steps": ["Шаг"]},
-  "snack": {"name": "Название", "calories": 150, "protein": 5, "carbs": 20, "fat": 3, "cooking_time": 5, "ingredients": [{"name": "Продукт", "amount": 100, "unit": "г"}], "steps": ["Шаг"]},
-  "dinner": {"name": "Название", "calories": 280, "protein": 18, "carbs": 25, "fat": 10, "cooking_time": 35, "ingredients": [{"name": "Продукт", "amount": 150, "unit": "г"}], "steps": ["Шаг"]}
-}
-
-Все названия, ингредиенты и шаги на русском языке. Ключи: breakfast, lunch, snack, dinner, name, calories, protein, carbs, fat, cooking_time, ingredients, steps, amount, unit.`;
-      }
-
-      // Кэшируем системный промпт для будущих запросов
-      cacheSystemPrompt(type, systemPrompt, childData, maxRecipes);
+    if (type === "chat") {
+      const templateName = isPremium ? "PREMIUM_PROMPT_TEMPLATE" : "FREE_PROMPT_TEMPLATE";
+      console.log("Template selected:", templateName, "subscription_status:", subscriptionStatus, "userId:", userId ?? "anonymous");
     }
 
-    // Call DeepSeek API with streaming support
-    const apiRequestBody: any = {
+    const cached = getCachedSystemPrompt(type, childData, isPremium);
+    const systemPrompt = cached ?? getSystemPromptForType(type, childData, isPremium);
+
+    const apiRequestBody: Record<string, unknown> = {
       model: "deepseek-chat",
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages,
-      ],
-      // Лимит токенов: single_day — план на день; chat — рецепты и ответы без ограничения по длине
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
       max_tokens: type === "single_day" ? 2000 : 8192,
       top_p: 0.8,
       temperature: 0.3,
       repetition_penalty: 1.1,
-      stream: stream, // Streaming по умолчанию для мгновенной обратной связи
+      stream,
     };
 
-    // Добавляем response_format для JSON режима (только для single_day)
-    if (type === "single_day") {
-      apiRequestBody.response_format = { type: "json_object" };
-    }
+    if (type === "single_day") apiRequestBody.response_format = { type: "json_object" };
 
-    // Таймаут для запроса: 90 секунд для streaming (увеличено для перегруженных серверов), 120 секунд для обычного
     const timeoutMs = stream ? 90000 : 120000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -308,30 +232,23 @@ ${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")
       clearTimeout(timeoutId);
     } catch (error) {
       clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeoutMs}ms`);
-      }
+      if (error instanceof Error && error.name === "AbortError") throw new Error(`Request timeout after ${timeoutMs}ms`);
       throw error;
     }
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("DeepSeek API error:", response.status, errorText);
-
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "rate_limit", message: "Превышен лимит запросов DeepSeek. Попробуйте позже." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
       throw new Error(`DeepSeek API error: ${response.status}`);
     }
 
-    // Handle streaming response
     if (stream && response.body) {
-      // Increment usage after stream completes (will be handled in client)
-      // Return streaming response
       return new Response(response.body, {
         headers: {
           ...corsHeaders,
@@ -342,29 +259,22 @@ ${childData.dislikes?.length ? `Не любит: ${childData.dislikes.join(", ")
       });
     }
 
-    // Handle non-streaming response (backward compatibility)
     const data = await response.json();
-    const assistantMessage = data.choices?.[0]?.message?.content || "";
+    const assistantMessage = data.choices?.[0]?.message?.content ?? "";
 
-    // Increment usage for authenticated users
     if (userId && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       await supabase.rpc("increment_usage", { _user_id: userId });
     }
 
     return new Response(
-      JSON.stringify({
-        message: assistantMessage,
-        usage: data.usage,
-      }),
+      JSON.stringify({ message: assistantMessage, usage: data.usage }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Error in deepseek-chat:", error);
     return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unknown error",
-      }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

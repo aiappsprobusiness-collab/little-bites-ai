@@ -1,7 +1,8 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
 
 export interface TagListEditorProps {
   label: string;
@@ -59,20 +60,39 @@ export function TagListEditor({
           </Badge>
         ))}
       </div>
-      <Input
-        id={inputId}
-        value={inputValue}
-        onChange={(e) => onInputChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            onAdd(inputValue);
-          }
-        }}
-        placeholder={placeholder}
-        className="h-11 border-2"
-        readOnly={false}
-      />
+      <div className="flex gap-2">
+        <Input
+          id={inputId}
+          value={inputValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            onInputChange(v);
+            if (v.includes(",")) {
+              onAdd(v);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              onAdd(inputValue);
+            }
+          }}
+          placeholder={placeholder}
+          className="h-11 border-2 flex-1"
+          readOnly={false}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-11 w-11 shrink-0"
+          onClick={() => onAdd(inputValue)}
+          disabled={!inputValue.trim()}
+          aria-label="Добавить"
+        >
+          <Plus className="w-5 h-5" />
+        </Button>
+      </div>
     </div>
   );
 }

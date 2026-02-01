@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { detectCategory, ensureProductCategory, resolveUnit, usePiecesFallback, shouldUsePiecesByDescription } from '@/utils/productUtils';
 import type { ProductCategory } from '@/utils/productUtils';
-import { parseIngredient } from '@/utils/parseIngredient';
+import { parseIngredient, looksLikeInstruction } from '@/utils/parseIngredient';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 
 type ShoppingList = Tables<'shopping_lists'>;
@@ -493,6 +493,7 @@ export function useShoppingLists() {
         const parsed = parseIngredient(raw);
         const name = parsed.name?.trim();
         if (!name) continue;
+        if (looksLikeInstruction(name)) continue;
         let resolvedUnit = resolveUnit(parsed.unit, name);
         let amount = parsed.quantity ?? (resolvedUnit === 'шт' ? 1 : null);
         if (usePiecesFallback(resolvedUnit, amount) || shouldUsePiecesByDescription(name)) {
@@ -643,6 +644,9 @@ export function useShoppingLists() {
 
             // Используем распарсенные данные
             const cleanName = parsed.name || ing.name;
+
+            // Пропускаем строки-инструкции (шаги приготовления, не продукты)
+            if (looksLikeInstruction(cleanName)) return;
             const parsedQuantity = parsed.quantity;
             const parsedUnit = parsed.unit;
 

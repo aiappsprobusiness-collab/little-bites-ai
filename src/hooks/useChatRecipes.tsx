@@ -89,7 +89,7 @@ export function useChatRecipes() {
       aiResponse: string;
       childId?: string;
       mealType?: 'breakfast' | 'lunch' | 'snack' | 'dinner';
-    }) => {
+    }): Promise<{ savedRecipes: Recipe[]; displayText: string }> => {
       if (!user) throw new Error('User not authenticated');
 
       // Парсим рецепты из ответа
@@ -98,7 +98,7 @@ export function useChatRecipes() {
       console.log('AI response (first 500 chars):', aiResponse.substring(0, 500));
       console.log('AI response length:', aiResponse.length);
 
-      const parsedRecipes = parseRecipesFromChat(userMessage, aiResponse);
+      const { recipes: parsedRecipes, displayText } = parseRecipesFromChat(userMessage, aiResponse);
       console.log('=== Parsed recipes result ===');
       console.log('Number of parsed recipes:', parsedRecipes.length);
       console.log('Parsed recipes details:', parsedRecipes.map(r => ({
@@ -110,7 +110,7 @@ export function useChatRecipes() {
 
       if (parsedRecipes.length === 0) {
         console.warn('No recipes found in chat response');
-        return [];
+        return { savedRecipes: [], displayText };
       }
 
       // Сохраняем каждый рецепт
@@ -218,7 +218,7 @@ export function useChatRecipes() {
       queryClient.invalidateQueries({ queryKey: ['chat_recipes', user.id] });
       queryClient.invalidateQueries({ queryKey: ['recipes', user.id] });
 
-      return savedRecipes;
+      return { savedRecipes, displayText };
     },
   });
 

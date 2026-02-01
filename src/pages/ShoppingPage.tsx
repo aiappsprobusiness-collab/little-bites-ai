@@ -12,7 +12,7 @@ import { formatAmountUnit, resolveUnit, detectCategory } from "@/utils/productUt
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useChildren } from "@/hooks/useChildren";
 import { useFavorites } from "@/hooks/useFavorites";
-import { parseIngredient, cleanProductNameDisplay } from "@/utils/parseIngredient";
+import { parseIngredient, cleanProductNameDisplay, looksLikeInstruction } from "@/utils/parseIngredient";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Dialog,
@@ -44,15 +44,6 @@ const otherCategory = { id: "other", label: "Другое", emoji: "📦" };
 
 // Все категории для отображения
 const allCategories = [...mainCategories, otherCategory];
-
-// Временный фильтр: не показывать в списке строки-инструкции (уже попавшие в БД)
-function looksLikeInstruction(name: string | null | undefined): boolean {
-  if (!name || name.length >= 60) return true;
-  const lower = name.toLowerCase();
-  const phrases = ["перед подачей", "по вкусу", "по желанию", "для подачи", "при подаче"];
-  const verbs = ["посыпать", "полить", "смазать", "нарезать", "варить", "обжарить", "добавить", "смешать", "залить", "положить", "тушить", "запечь", "выложить"];
-  return phrases.some((p) => lower.includes(p)) || verbs.some((v) => lower.includes(v));
-}
 
 export default function ShoppingPage() {
   const { toast } = useToast();

@@ -8,6 +8,27 @@ import { useSubscription } from './useSubscription';
 import { buildChatContextFromProfiles } from '@/utils/buildChatContextFromProfiles';
 import { checkChatAllergyBlock } from '@/utils/chatAllergyCheck';
 
+/** Повтор запроса при сетевой/протокольной ошибке (ERR_HTTP2_PROTOCOL_ERROR, Failed to fetch). */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 1
+): Promise<Response> {
+  try {
+    return await fetch(url, options);
+  } catch (err) {
+    const isNetworkError =
+      err instanceof TypeError && (err.message === 'Failed to fetch' || err.message?.includes('fetch')) ||
+      (err as Error)?.message?.includes('HTTP2') ||
+      (err as Error)?.message?.includes('protocol');
+    if (retries > 0 && isNetworkError) {
+      await new Promise((r) => setTimeout(r, 1500));
+      return fetchWithRetry(url, options, retries - 1);
+    }
+    throw err;
+  }
+}
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -72,24 +93,33 @@ export function useDeepSeekAPI() {
       }
 
       chatAbortRef.current = new AbortController();
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
-        method: 'POST',
-        signal: chatAbortRef.current.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '',
-        },
-        body: JSON.stringify({
-          messages,
-          childData,
-          type,
-          stream: false,
-          maxRecipes: 1,
-        }),
-      });
+      let response: Response;
+      try {
+        response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
+          method: 'POST',
+          signal: chatAbortRef.current.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '',
+          },
+          body: JSON.stringify({
+            messages,
+            childData,
+            type,
+            stream: false,
+            maxRecipes: 1,
+          }),
+        });
+      } catch (err) {
+        const msg = (err as Error)?.message ?? '';
+        if (msg.includes('HTTP2') || msg.includes('protocol') || msg === 'Failed to fetch') {
+          throw new Error('Соединение прервано. Проверьте интернет и попробуйте ещё раз.');
+        }
+        throw err;
+      }
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
         if (response.status === 429 && error.error === 'usage_limit_exceeded') {
           throw new Error('usage_limit_exceeded');
         }
@@ -109,17 +139,26 @@ export function useDeepSeekAPI() {
         throw new Error('usage_limit_exceeded');
       }
 
-      const response = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '',
-        },
-        body: JSON.stringify({ imageBase64, mimeType }),
-      });
+      let response: Response;
+      try {
+        response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/deepseek-analyze`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '',
+          },
+          body: JSON.stringify({ imageBase64, mimeType }),
+        });
+      } catch (err) {
+        const msg = (err as Error)?.message ?? '';
+        if (msg.includes('HTTP2') || msg.includes('protocol') || msg === 'Failed to fetch') {
+          throw new Error('Соединение прервано. Проверьте интернет и попробуйте ещё раз.');
+        }
+        throw err;
+      }
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({}));
         if (response.status === 429) {
           throw new Error('usage_limit_exceeded');
         }
@@ -132,8 +171,8 @@ export function useDeepSeekAPI() {
     },
   });
 
-  // Save chat to history (без привязки к ребёнку). После вставки — карусель: оставляем только последние 20.
-  const CHAT_HISTORY_LIMIT = 20;
+  // Save chat to history (без привязки к ребёнку). После вставки — карусель: оставляем только последние 10.
+  const CHAT_HISTORY_LIMIT = 10;
   const saveChatMutation = useMutation({
     mutationFn: async ({
       message,

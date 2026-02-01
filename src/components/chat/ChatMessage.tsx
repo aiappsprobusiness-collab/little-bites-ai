@@ -18,7 +18,25 @@ import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { RecipeSuggestion } from "@/services/deepseek";
-import { parseRecipeFromPlainText } from "@/utils/parseChatRecipes";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { parseRecipeFromPlainText, extractFirstJsonObjectFromStart } from "@/utils/parseChatRecipes";
+
+/** Убирает ведущий JSON (сырой или в блоке ```json) из ответа ИИ — в чате только читаемый текст. */
+function getTextForDisplay(content: string): string {
+  let t = content.trim();
+  // Удаляем ведущий code block ```json ... ``` или ``` ... ```
+  t = t.replace(/^```(?:json)?\s*\n[\s\S]*?```\s*/i, "").trim();
+  // Удаляем сырой JSON в начале
+  if (t.startsWith("{")) {
+    const jsonStr = extractFirstJsonObjectFromStart(t);
+    if (jsonStr) {
+      const idx = t.indexOf(jsonStr);
+      t = t.slice(idx + jsonStr.length).trim();
+    }
+  }
+  return t || content;
+}
 
 interface ChatMessageProps {
   id: string;
@@ -46,6 +64,39 @@ interface Recipe {
  */
 function parseRecipeFromContent(content: string): Recipe | null {
   try {
+    // Ответ начинается с JSON (формат «сначала JSON, потом текст») — берём только первый объект
+    if (content.trim().startsWith("{")) {
+      const jsonStr = extractFirstJsonObjectFromStart(content);
+      if (jsonStr) {
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (parsed.title || parsed.name) {
+            return {
+              title: parsed.title || parsed.name,
+              description: parsed.description,
+              ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+              steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+              cookingTime: parsed.cookingTime || parsed.cooking_time,
+              ageRange: parsed.ageRange || "",
+            };
+          }
+          if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
+            const r = parsed.recipes[0];
+            return {
+              title: r.title || r.name,
+              description: r.description,
+              ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+              steps: Array.isArray(r.steps) ? r.steps : [],
+              cookingTime: r.cookingTime || r.cooking_time,
+              ageRange: r.ageRange || "",
+            };
+          }
+        } catch {
+          // fallback ниже
+        }
+      }
+    }
+
     // Ищем JSON в code blocks - используем greedy quantifier для захвата всего содержимого
     const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (codeBlockMatch && codeBlockMatch[1]) {
@@ -271,7 +322,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const sourceForParse = (rawContent ?? content).trim();
     const recipe = role === "assistant" ? parseRecipeFromContent(sourceForParse) : null;
-    const displayContent = recipe ? formatRecipe(recipe) : content;
+    // Для отображения: убираем ведущий JSON, чтобы в чате был только читаемый текст с Markdown
+    const displayContent = role === "assistant" ? getTextForDisplay(content) : content;
 
     const favoriteEntry = recipe
       ? favorites.find((f) => f.recipe.title?.toLowerCase().trim() === recipe.title?.toLowerCase().trim())
@@ -474,77 +526,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               : "bg-card shadow-soft rounded-bl-sm"
               }`}
           >
-            {recipe ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2 mb-2">
-                  <ChefHat className="w-4 h-4 text-primary" />
-                  <h3 className="font-semibold text-base">{recipe.title}</h3>
-                </div>
-                {recipe.description && (
-                  <p className="text-sm text-muted-foreground italic">{recipe.description}</p>
-                )}
-                {recipe.cookingTime && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    <span>Время приготовления: {recipe.cookingTime} мин</span>
-                  </div>
-                )}
-                {recipe.ingredients && recipe.ingredients.length > 0 && (
-                  <div className="bg-muted/30 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">🥘</span>
-                      <p className="font-semibold text-sm">Ингредиенты:</p>
-                    </div>
-                    <ul className="space-y-2 text-sm">
-                      {recipe.ingredients.map((ingredient, index) => {
-                        // Определяем эмодзи для разных типов ингредиентов
-                        const getIngredientEmoji = (ing: string): string => {
-                          const lowerIng = ing.toLowerCase();
-                          if (lowerIng.includes('молоко') || lowerIng.includes('сливки') || lowerIng.includes('кефир')) return '🥛';
-                          if (lowerIng.includes('яйц') || lowerIng.includes('яиц')) return '🥚';
-                          if (lowerIng.includes('мясо') || lowerIng.includes('куриц') || lowerIng.includes('говядин') || lowerIng.includes('свинин')) return '🍗';
-                          if (lowerIng.includes('рыб') || lowerIng.includes('лосос') || lowerIng.includes('треск')) return '🐟';
-                          if (lowerIng.includes('овощ') || lowerIng.includes('морков') || lowerIng.includes('лук') || lowerIng.includes('помидор') || lowerIng.includes('огур')) return '🥕';
-                          if (lowerIng.includes('фрукт') || lowerIng.includes('яблок') || lowerIng.includes('банан') || lowerIng.includes('груш')) return '🍎';
-                          if (lowerIng.includes('ягода') || lowerIng.includes('клубник') || lowerIng.includes('малин') || lowerIng.includes('черник')) return '🫐';
-                          if (lowerIng.includes('крупа') || lowerIng.includes('рис') || lowerIng.includes('гречк') || lowerIng.includes('овсян')) return '🌾';
-                          if (lowerIng.includes('масло') || lowerIng.includes('жир')) return '🧈';
-                          if (lowerIng.includes('сыр') || lowerIng.includes('творог')) return '🧀';
-                          if (lowerIng.includes('хлеб') || lowerIng.includes('булка')) return '🍞';
-                          if (lowerIng.includes('сахар') || lowerIng.includes('мед') || lowerIng.includes('сироп')) return '🍯';
-                          if (lowerIng.includes('соль') || lowerIng.includes('перец') || lowerIng.includes('специ')) return '🧂';
-                          if (lowerIng.includes('вода')) return '💧';
-                          return '🥄'; // Дефолтный эмодзи
-                        };
-
-                        return (
-                          <li key={index} className="flex items-start gap-2">
-                            <span className="text-base flex-shrink-0">{getIngredientEmoji(ingredient)}</span>
-                            <span className="flex-1">{ingredient}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                )}
-                {recipe.steps && recipe.steps.length > 0 && (
-                  <div className="bg-muted/20 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">👨‍🍳</span>
-                      <p className="font-semibold text-sm">Приготовление:</p>
-                    </div>
-                    <ol className="space-y-2 text-sm">
-                      {recipe.steps.map((step, index) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center">
-                            {index + 1}
-                          </span>
-                          <span className="flex-1 pt-0.5">{step}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
+            {/* Ответы ассистента рендерятся как Markdown (жирный, списки); ведущий JSON скрыт. */}
+            {role === "assistant" ? (
+              <div className="chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-sm prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-sm prose-strong:text-sm [&>*]:text-sm">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
               </div>
             ) : (
               <p className="text-base whitespace-pre-wrap select-none">{displayContent}</p>
