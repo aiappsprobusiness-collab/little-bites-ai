@@ -16,11 +16,15 @@ function isRunningAsInstalledPWA(): boolean {
   return false;
 }
 
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator as { platform?: string }).platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(isRunningAsInstalledPWA);
   const [showModal, setShowModal] = useState(false);
-  const [modalShownOnce, setModalShownOnce] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -45,15 +49,15 @@ export function usePWAInstall() {
     };
   }, [toast]);
 
-  // Модалка через 5 сек после загрузки, если есть prompt и ещё не показывали
+  // Модалка через 5 сек при каждом открытии в браузере (не standalone): Android (beforeinstallprompt) или iOS
   useEffect(() => {
-    if (!deferredPrompt || isInstalled || modalShownOnce) return;
-    const t = setTimeout(() => {
-      setShowModal(true);
-      setModalShownOnce(true);
-    }, MODAL_DELAY_MS);
+    if (isInstalled) return;
+    const hasPrompt = Boolean(deferredPrompt);
+    const ios = isIOS();
+    if (!hasPrompt && !ios) return;
+    const t = setTimeout(() => setShowModal(true), MODAL_DELAY_MS);
     return () => clearTimeout(t);
-  }, [deferredPrompt, isInstalled, modalShownOnce]);
+  }, [deferredPrompt, isInstalled]);
 
   const promptInstall = async () => {
     if (!deferredPrompt) return;
@@ -64,6 +68,7 @@ export function usePWAInstall() {
   const dismissModal = () => setShowModal(false);
 
   const canInstall = Boolean(deferredPrompt) && !isInstalled;
+  const isIOSDevice = isIOS();
 
-  return { canInstall, promptInstall, showModal, dismissModal };
+  return { canInstall, promptInstall, showModal, dismissModal, isIOSDevice };
 }

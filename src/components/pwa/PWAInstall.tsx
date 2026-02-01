@@ -4,25 +4,34 @@ import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { Download, Puzzle } from "lucide-react";
 
 export function PWAInstall() {
-  const { canInstall, promptInstall, showModal, dismissModal } = usePWAInstall();
+  const { canInstall, promptInstall, showModal, dismissModal, isIOSDevice } = usePWAInstall();
 
-  if (!canInstall) return null;
+  if (!showModal) return null;
 
   return (
-    <>
-      {/* Модалка через 5 сек после загрузки (beforeinstallprompt) */}
-      <Dialog open={showModal} onOpenChange={(open) => !open && dismissModal()}>
-        <DialogContent className="max-w-sm mx-auto" onPointerDownOutside={dismissModal}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Puzzle className="h-6 w-6 text-primary" />
-              Little Bites — на главный экран
-            </DialogTitle>
-            <DialogDescription>
-              Установите приложение, чтобы открывать его с иконки и пользоваться офлайн.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3 pt-2">
+    <Dialog open={showModal} onOpenChange={(open) => !open && dismissModal()}>
+      <DialogContent className="max-w-sm mx-auto" onPointerDownOutside={dismissModal}>
+        <DialogHeader>
+          <div className="flex justify-center mb-2">
+            <img src="/icon-192.png" alt="" width={64} height={64} className="rounded-2xl" />
+          </div>
+          <DialogTitle className="flex items-center justify-center gap-2 text-center">
+            <Puzzle className="h-6 w-6 text-primary shrink-0" />
+            Установить Momrecipes на экран?
+          </DialogTitle>
+          <DialogDescription asChild>
+            <div className="space-y-2 text-center">
+              <p>Установите приложение, чтобы открывать его с иконки и пользоваться офлайн.</p>
+              {isIOSDevice && (
+                <p className="text-sm font-medium text-foreground/90">
+                  На iPhone: нажмите «Поделиться» в Safari → «На экран Домой».
+                </p>
+              )}
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3 pt-2">
+          {canInstall && (
             <Button
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
               onClick={() => {
@@ -33,12 +42,12 @@ export function PWAInstall() {
               <Download className="mr-2 h-4 w-4" />
               Установить
             </Button>
-            <Button variant="ghost" size="sm" onClick={dismissModal}>
-              Позже
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+          )}
+          <Button variant="ghost" size="sm" onClick={dismissModal} className={canInstall ? "" : "w-full"}>
+            Позже
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
