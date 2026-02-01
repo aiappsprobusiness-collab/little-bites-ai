@@ -142,12 +142,26 @@ export function AddMealDialog({
               <SelectValue placeholder="Выберите рецепт" />
             </SelectTrigger>
             <SelectContent>
-              {favorites.length > 0 || filteredChatRecipes.length > 0 ? (
+              {recipes.length > 0 || favorites.length > 0 || filteredChatRecipes.length > 0 ? (
                 <>
+                  {/* Сохранённые рецепты */}
+                  {recipes.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
+                        📖 Сохранённые рецепты
+                      </div>
+                      {recipes.map((recipe) => (
+                        <SelectItem key={recipe.id} value={recipe.id}>
+                          {recipe.title}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+
                   {/* Избранное */}
                   {favorites.length > 0 && (
                     <>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
+                      <div className={`px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b ${recipes.length > 0 ? 'border-t mt-1' : ''}`}>
                         ❤️ Избранное
                       </div>
                       {favorites.map((favorite) => (
@@ -161,16 +175,9 @@ export function AddMealDialog({
                   {/* История генераций чата */}
                   {filteredChatRecipes.length > 0 && (
                     <>
-                      {favorites.length > 0 && (
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t border-b mt-1">
-                          💬 История генераций чата
-                        </div>
-                      )}
-                      {!favorites.length && (
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
-                          💬 История генераций чата
-                        </div>
-                      )}
+                      <div className={`px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b ${(recipes.length > 0 || favorites.length > 0) ? 'border-t mt-1' : ''}`}>
+                        💬 История генераций чата
+                      </div>
                       {filteredChatRecipes.map((recipe) => (
                         <SelectItem key={recipe.id} value={recipe.id}>
                           {recipe.title}

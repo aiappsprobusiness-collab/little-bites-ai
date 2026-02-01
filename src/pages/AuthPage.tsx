@@ -112,10 +112,10 @@ export default function AuthPage() {
         <div className="w-20 h-20 mx-auto mb-4 rounded-3xl gradient-primary flex items-center justify-center shadow-button">
           <ChefHat className="w-10 h-10 text-primary-foreground" />
         </div>
-        <h1 className="text-3xl font-bold mb-2">Детское Меню</h1>
+        <h1 className="text-3xl font-bold mb-2">Ваш персональный ИИ-повар</h1>
         <p className="text-muted-foreground flex items-center justify-center gap-1">
           <Sparkles className="w-4 h-4" />
-          Рецепты для вашего малыша
+          Умное и безопасное меню для вашей семьи
         </p>
       </motion.div>
 

@@ -362,7 +362,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
         if (recipeError || !newRecipe?.id) {
           console.error("RECIPE SAVE FATAL ERROR:", recipeError);
-          alert("ОШИБКА: Рецепт не сохранился в БД. Причина: " + (recipeError?.message ?? "нет id"));
+          toast({
+            title: "Не удалось сохранить рецепт",
+            description: recipeError?.message ?? "Не удалось добавить в список",
+            variant: "destructive",
+          });
           return;
         }
 

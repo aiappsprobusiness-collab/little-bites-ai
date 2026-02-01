@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
+import { TagListEditor } from "@/components/ui/tag-list-editor";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { X, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useChildren } from "@/hooks/useChildren";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +40,28 @@ function parseTags(s: string): string[] {
     .split(/[,;]+/)
     .map((x) => x.trim())
     .filter(Boolean);
+}
+
+type SetList = Dispatch<SetStateAction<string[]>>;
+type SetInput = Dispatch<SetStateAction<string>>;
+
+function createTagListHandlers(
+  setList: SetList,
+  setInput: SetInput
+): { add: (raw: string) => void; remove: (index: number) => void; edit: (value: string, index: number) => void } {
+  const remove = (index: number) => setList((prev) => prev.filter((_, i) => i !== index));
+  return {
+    add: (raw: string) => {
+      const toAdd = parseTags(raw);
+      if (toAdd.length) setList((prev) => [...new Set([...prev, ...toAdd])]);
+      setInput("");
+    },
+    remove,
+    edit: (value: string, index: number) => {
+      setInput(value);
+      remove(index);
+    },
+  };
 }
 
 interface ProfileEditSheetProps {
@@ -114,42 +136,9 @@ export function ProfileEditSheet({
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 
-  const addAllergy = (raw: string) => {
-    const toAdd = parseTags(raw);
-    if (toAdd.length) setAllergies((prev) => [...new Set([...prev, ...toAdd])]);
-    setAllergyInput("");
-  };
-
-  const removeAllergy = (index: number) => {
-    setAllergies((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const editAllergy = (value: string, index: number) => {
-    setAllergyInput(value);
-    removeAllergy(index);
-  };
-
-  const addLike = (raw: string) => {
-    const toAdd = parseTags(raw);
-    if (toAdd.length) setLikes((prev) => [...new Set([...prev, ...toAdd])]);
-    setLikeInput("");
-  };
-  const removeLike = (index: number) => setLikes((prev) => prev.filter((_, i) => i !== index));
-  const editLike = (value: string, index: number) => {
-    setLikeInput(value);
-    removeLike(index);
-  };
-
-  const addDislike = (raw: string) => {
-    const toAdd = parseTags(raw);
-    if (toAdd.length) setDislikes((prev) => [...new Set([...prev, ...toAdd])]);
-    setDislikeInput("");
-  };
-  const removeDislike = (index: number) => setDislikes((prev) => prev.filter((_, i) => i !== index));
-  const editDislike = (value: string, index: number) => {
-    setDislikeInput(value);
-    removeDislike(index);
-  };
+  const allergiesHandlers = createTagListHandlers(setAllergies, setAllergyInput);
+  const likesHandlers = createTagListHandlers(setLikes, setLikeInput);
+  const dislikesHandlers = createTagListHandlers(setDislikes, setDislikeInput);
 
   const handleSave = async () => {
     if (isCreate) {
@@ -161,9 +150,9 @@ export function ProfileEditSheet({
       const createPayload = {
         name: trimmedName,
         birth_date: birthDateFromAgeMonths(totalAgeMonths),
-        allergies: Array.isArray(allergies) ? allergies : (typeof allergies === 'string' ? allergies.split(',').map((s) => s.trim()).filter(Boolean) : []),
-        likes: Array.isArray(likes) ? likes : (typeof likes === 'string' ? parseTags(likes) : []),
-        dislikes: Array.isArray(dislikes) ? dislikes : (typeof dislikes === 'string' ? parseTags(dislikes) : []),
+        allergies,
+        likes,
+        dislikes,
       };
       console.log("Payload to Supabase (create):", createPayload);
       try {
@@ -185,9 +174,9 @@ export function ProfileEditSheet({
     const updatePayload = {
       id: child.id,
       birth_date: birthDateFromAgeMonths(totalAgeMonths),
-      allergies: Array.isArray(allergies) ? allergies : (typeof allergies === 'string' ? allergies.split(',').map((s) => s.trim()).filter(Boolean) : []),
-      likes: Array.isArray(likes) ? likes : (typeof likes === 'string' ? parseTags(likes) : []),
-      dislikes: Array.isArray(dislikes) ? dislikes : (typeof dislikes === 'string' ? parseTags(dislikes) : []),
+      allergies,
+      likes,
+      dislikes,
     };
     console.log("Payload to Supabase (update):", updatePayload);
     try {
@@ -276,126 +265,34 @@ export function ProfileEditSheet({
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Аллергии</Label>
-            <p className="text-xs text-muted-foreground">Нажмите на чип для редактирования, крестик — удалить</p>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {allergies.map((a, i) => (
-                <Badge
-                  key={i}
-                  variant="secondary"
-                  className="cursor-pointer gap-1 pr-1"
-                  onClick={() => editAllergy(a, i)}
-                >
-                  {a}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeAllergy(i);
-                    }}
-                    className="rounded-full p-0.5 hover:bg-muted"
-                    aria-label="Удалить"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <Input
-              value={allergyInput}
-              onChange={(e) => setAllergyInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  addAllergy(allergyInput);
-                }
-              }}
-              placeholder="Добавить аллергию (запятая или Enter)"
-              className="h-11 border-2"
-              readOnly={false}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Любит</Label>
-            <p className="text-xs text-muted-foreground">Нажмите на чип для редактирования, крестик — удалить</p>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {likes.map((item, i) => (
-                <Badge
-                  key={i}
-                  variant="secondary"
-                  className="cursor-pointer gap-1 pr-1"
-                  onClick={() => editLike(item, i)}
-                >
-                  {item}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeLike(i);
-                    }}
-                    className="rounded-full p-0.5 hover:bg-muted"
-                    aria-label="Удалить"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <Input
-              value={likeInput}
-              onChange={(e) => setLikeInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  addLike(likeInput);
-                }
-              }}
-              placeholder="Добавить (запятая или Enter)"
-              className="h-11 border-2"
-              readOnly={false}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Не любит</Label>
-            <p className="text-xs text-muted-foreground">Нажмите на чип для редактирования, крестик — удалить</p>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {dislikes.map((item, i) => (
-                <Badge
-                  key={i}
-                  variant="secondary"
-                  className="cursor-pointer gap-1 pr-1"
-                  onClick={() => editDislike(item, i)}
-                >
-                  {item}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeDislike(i);
-                    }}
-                    className="rounded-full p-0.5 hover:bg-muted"
-                    aria-label="Удалить"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-            <Input
-              value={dislikeInput}
-              onChange={(e) => setDislikeInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === ",") {
-                  e.preventDefault();
-                  addDislike(dislikeInput);
-                }
-              }}
-              placeholder="Добавить (запятая или Enter)"
-              className="h-11 border-2"
-              readOnly={false}
-            />
-          </div>
+          <TagListEditor
+            label="Аллергии"
+            items={allergies}
+            inputValue={allergyInput}
+            onInputChange={setAllergyInput}
+            onAdd={allergiesHandlers.add}
+            onEdit={allergiesHandlers.edit}
+            onRemove={allergiesHandlers.remove}
+            placeholder="Добавить аллергию (запятая или Enter)"
+          />
+          <TagListEditor
+            label="Любит"
+            items={likes}
+            inputValue={likeInput}
+            onInputChange={setLikeInput}
+            onAdd={likesHandlers.add}
+            onEdit={likesHandlers.edit}
+            onRemove={likesHandlers.remove}
+          />
+          <TagListEditor
+            label="Не любит"
+            items={dislikes}
+            inputValue={dislikeInput}
+            onInputChange={setDislikeInput}
+            onAdd={dislikesHandlers.add}
+            onEdit={dislikesHandlers.edit}
+            onRemove={dislikesHandlers.remove}
+          />
         </div>
         <div className="flex flex-col gap-2 mt-auto pt-2">
           <Button

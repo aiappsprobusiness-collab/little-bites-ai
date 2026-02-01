@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Send, Loader2, Pencil, Plus, Settings, Square } from "lucide-react";
+import { Send, Loader2, Pencil, Plus, Settings, Square, HelpCircle } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -22,7 +22,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+
+const CHAT_HINT_PHRASES = [
+  "Придумай ужин из того, что сейчас есть в холодильнике",
+  "Составь меню на завтра без глютена и молока для ребенка",
+  "Что приготовить за 15 минут, чтобы понравилось и мужу, и детям",
+  "Найди рецепт полезного десерта без сахара для малыша",
+  "Что приготовить на десерт с учетом аллергии?",
+];
 
 interface Message {
   id: string;
@@ -48,6 +62,7 @@ export default function ChatPage() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [sheetCreateMode, setSheetCreateMode] = useState(false);
+  const [showHintsModal, setShowHintsModal] = useState(false);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -345,6 +360,14 @@ export default function ChatPage() {
               className="min-h-[44px] max-h-[120px] resize-none rounded-2xl bg-card border-border/50 py-3 pb-4"
               rows={1}
             />
+            <button
+              type="button"
+              onClick={() => setShowHintsModal(true)}
+              title="Подсказки"
+              className="h-11 w-11 shrink-0 rounded-full bg-muted text-muted-foreground flex items-center justify-center hover:bg-muted/80 active:scale-95 transition-all"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
             <Button
               variant="mint"
               size="icon"
@@ -374,6 +397,29 @@ export default function ChatPage() {
         onAddNew={() => setSheetCreateMode(true)}
         onCreated={(childId) => setSelectedChildId(childId)}
       />
+      <Dialog open={showHintsModal} onOpenChange={setShowHintsModal}>
+        <DialogContent className="max-w-[320px] p-4">
+          <DialogHeader className="space-y-1 pb-2">
+            <DialogTitle className="text-base">Подсказки</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-1.5">
+            {CHAT_HINT_PHRASES.map((phrase, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  setInput(phrase);
+                  setShowHintsModal(false);
+                  textareaRef.current?.focus();
+                }}
+                className="text-left px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs leading-tight transition-colors"
+              >
+                {phrase}
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </MobileLayout>
   );
 }
