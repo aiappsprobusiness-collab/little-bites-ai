@@ -165,7 +165,8 @@ export function ProfileEditSheet({
       console.log("Payload to Supabase (create):", createPayload);
       try {
         const newChild = await createChild(createPayload);
-        toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
+        const { dismiss } = toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
+        setTimeout(dismiss, 2000);
         onOpenChange(false);
         onCreated?.(newChild.id);
       } catch (e: any) {
@@ -190,7 +191,8 @@ export function ProfileEditSheet({
       await updateChild(updatePayload);
       await queryClient.refetchQueries({ queryKey: ["children"] });
       initializedForOpenRef.current = false;
-      toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
+      const { dismiss } = toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
+      setTimeout(dismiss, 2000);
       onOpenChange(false);
     } catch (e: unknown) {
       console.error("SYNC ERROR:", (e as Error)?.message, (e as { details?: unknown })?.details);
