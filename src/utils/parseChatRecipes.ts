@@ -18,7 +18,8 @@ function generateTempRecipeId(): string {
     : `temp-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-// Глаголы действия — такие строки считаем шагами приготовления, не ингредиентами
+// Глаголы действия — такие строки считаем шагами приготовления, не ингредиентами.
+// Проверка по целым словам, чтобы "для жарки" в "Растительное масло — для жарки" не считалась шагом.
 const ACTION_VERBS = [
   'нарезать', 'варить', 'обжарить', 'тушить', 'добавить', 'смешать', 'залить', 'положить',
   'взять', 'нагреть', 'готовить', 'размять', 'запечь', 'выложить', 'посолить', 'поперчить',
@@ -26,10 +27,15 @@ const ACTION_VERBS = [
   'измельчить', 'отварить', 'пассеровать', 'запекать', 'выпекать', 'обжаривать', 'тушить',
   'довести до кипения', 'снять с огня', 'оставить на', 'перемешать', 'взбить', 'нарезать',
   'посыпать', 'полить', 'смазать', 'выложить', 'подать',
+  'очисть', 'натри', 'отожми', 'сформируй', 'выкладывай', 'перемешай', 'разогрей',
+  'подавай', 'посыпь',
 ];
 
 // Фразы-маркеры инструкции (не продукт для покупки)
 const INSTRUCTION_PHRASES = ['перед подачей', 'по вкусу', 'по желанию', 'для подачи', 'при подаче'];
+
+// Предлоги/назначение: "Масло — для жарки" не должно считаться шагом
+const PREPOSITION_PURPOSE = ['для жарки', 'для подачи', 'по вкусу', 'по желанию'];
 
 export function isInstruction(content: string): boolean {
   const t = content.trim();
@@ -39,9 +45,32 @@ export function isInstruction(content: string): boolean {
   return false;
 }
 
+/** Проверка по целым словам: глагол должен быть отдельным словом (чтобы "для жарки" не матчилось). */
 export function containsActionVerb(content: string): boolean {
+  const lower = content.toLowerCase().trim();
+  const words: string[] = lower.match(/[\p{L}\-]+/gu) ?? [];
+  return ACTION_VERBS.some((v) => words.includes(v as string));
+}
+
+/** Строка начинается с повелительного глагола (команда) — гарантированно шаг. */
+function startsWithActionVerb(content: string): boolean {
+  const lower = content.toLowerCase().trim();
+  const firstWord = lower.match(/^[\p{L}\-]+/u)?.[0] ?? '';
+  return firstWord.length > 0 && ACTION_VERBS.includes(firstWord);
+}
+
+/** Глагол действия есть в первой половине предложения — это команда, шаг. */
+function hasActionVerbInFirstHalf(content: string): boolean {
+  const half = content.slice(0, Math.ceil(content.length / 2));
+  return containsActionVerb(half);
+}
+
+/** Строка с "—" или ":" и только назначением (для жарки, по вкусу) — ингредиент, не шаг. */
+function isIngredientWithPrepositionPurpose(content: string): boolean {
   const lower = content.toLowerCase();
-  return ACTION_VERBS.some((v) => lower.includes(v));
+  const hasDashOrColon = content.includes('—') || content.includes(':');
+  const hasPurposePhrase = PREPOSITION_PURPOSE.some((p) => lower.includes(p));
+  return hasDashOrColon && hasPurposePhrase && !startsWithActionVerb(content);
 }
 
 export function looksLikeInstructionPhrase(content: string): boolean {
@@ -104,15 +133,35 @@ export function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
 
     const isInstructionLine = isInstruction(content);
     const hasAction = containsActionVerb(content);
+    const startsWithCommand = startsWithActionVerb(content);
+    const hasVerbInFirstHalf = hasActionVerbInFirstHalf(content);
     const isInstructionPhrase = looksLikeInstructionPhrase(content);
+    const isPrepositionPurpose = isIngredientWithPrepositionPurpose(content);
+
+    // Глагол-команда в начале или в первой половине — строго steps (например "Отожми лишний сок", "Подавай, посыпав...")
+    if (startsWithCommand || hasVerbInFirstHalf || hasAction) {
+      // Исключение: "Масло — для жарки" — тире/двоеточие и только назначение (для жарки, по вкусу) → ингредиент
+      if (isPrepositionPurpose && content.length <= 40) {
+        const trimmed = content.trim().slice(0, 40);
+        if (trimmed) ingredients.push(trimmed);
+      } else {
+        steps.push(content);
+      }
+      continue;
+    }
 
     if (numberedMatch || bulletMatch) {
-      // Инструкции (глаголы: варить, жарить и т.д.) — только в шаги, не в список продуктов
-      if (inStepsSection || isInstructionLine || hasAction || isInstructionPhrase || content.length > 60) {
+      // Лимит 40 символов для ингредиента; длиннее — автоматически шаг
+      if (inStepsSection || isInstructionLine || isInstructionPhrase || content.length > 40) {
         steps.push(content);
-      } else if (inIngredientsSection || (!inStepsSection && content.length <= 50 && !hasAction && !isInstructionPhrase)) {
-        // Ограничение длины названия ингредиента (макс 50 символов)
-        const trimmed = content.trim().slice(0, 50);
+      } else if (
+        inIngredientsSection ||
+        (!inStepsSection && content.length <= 40 && (content.includes('—') || content.includes(':')))
+      ) {
+        const trimmed = content.trim().slice(0, 40);
+        if (trimmed) ingredients.push(trimmed);
+      } else if (!inStepsSection && content.length <= 40 && !isInstructionPhrase) {
+        const trimmed = content.trim().slice(0, 40);
         if (trimmed) ingredients.push(trimmed);
       }
       continue;
@@ -128,9 +177,14 @@ export function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
   if (!title) title = 'Рецепт из чата';
   if (title.length < 2) return null;
 
+  // Очистка: убрать из списка покупок строки-инструкции (начинаются с большой буквы + глагол действия, например "Подавай, посыпав...")
+  const cleanedIngredients = ingredients.filter(
+    (item) => !(/^[А-ЯЁA-Z]/.test(item) && containsActionVerb(item))
+  );
+
   return {
     title: title.slice(0, 200),
-    ingredients,
+    ingredients: cleanedIngredients,
     steps,
     mealType: detectMealType(text),
   };
@@ -242,13 +296,97 @@ function extractJsonObjectAt(str: string, startIndex: number): string | null {
 /** Результат парсинга ответа ИИ: рецепты для БД и текст для отображения в чате. */
 export interface ParseRecipesFromChatResult {
   recipes: ParsedRecipe[];
-  /** Оригинальный текст aiResponse целиком для отображения в чате. Не фильтруется и не обрезается. */
+  /** Текст для отображения в чате: оформленный рецепт без сырого JSON или текст после JSON. */
   displayText: string;
+}
+
+/** Форматирует рецепт для отображения в чате (без сырого JSON): название, описание, ингредиенты, шаги. */
+function formatRecipeForDisplay(recipe: ParsedRecipe): string {
+  const lines: string[] = [];
+  lines.push(`🍽️ **${recipe.title}**`);
+  if (recipe.description?.trim()) {
+    lines.push('');
+    lines.push(recipe.description.trim());
+  }
+  if (recipe.cookingTime != null && recipe.cookingTime > 0) {
+    lines.push('');
+    lines.push(`⏱️ ${recipe.cookingTime} мин`);
+  }
+  if (recipe.ingredients?.length) {
+    lines.push('');
+    lines.push('🥘 **Ингредиенты:**');
+    recipe.ingredients.forEach((ing) => lines.push(`- ${ing}`));
+  }
+  if (recipe.steps?.length) {
+    lines.push('');
+    lines.push('👨‍🍳 **Приготовление:**');
+    recipe.steps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
+  }
+  return lines.join('\n');
+}
+
+/** Убирает ведущий JSON (или блок \`\`\`json ... \`\`\`) из ответа ИИ и возвращает оставшийся текст. */
+function getTextAfterJson(text: string): string {
+  let t = text.trim();
+  t = t.replace(/^```(?:json)?\s*\n[\s\S]*?```\s*/i, '').trim();
+  if (t.startsWith('{')) {
+    const jsonStr = extractJsonObjectAt(t, 0);
+    if (jsonStr) {
+      const idx = t.indexOf(jsonStr);
+      t = t.slice(idx + jsonStr.length).trim();
+    }
+  }
+  return t;
+}
+
+/** Возвращает текст после блока JSON, полностью убирая сырой JSON, блоки кода и дубли рецепта. Оставляет ТОЛЬКО бонусные блоки: «Секрет», «Польза», «Семейная подача». */
+function getTextAfterJsonBlock(aiResponse: string, jsonEndIndex: number): string {
+  if (jsonEndIndex <= 0 || jsonEndIndex >= aiResponse.length) return '';
+  let t = aiResponse.slice(jsonEndIndex).trim();
+
+  // Убираем остатки code block
+  t = t.replace(/^\s*```\s*(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/m, '').trim();
+
+  // Убираем JSON-объекты в начале
+  if (t.startsWith('{')) {
+    const jsonStr = extractJsonObjectAt(t, 0);
+    if (jsonStr) t = t.slice(jsonStr.length).trim();
+  }
+
+  // Фильтруем: оставляем только бонусные блоки (строки с emoji или ключевыми словами)
+  const bonusMarkers = ['👨‍👩‍👧‍👦', '✨', '💡', '💪', 'Семейная подача', 'Польза для развития', 'Секрет', 'КБЖУ', 'Маленький секрет', 'Секрет шефа'];
+  const lines = t.split('\n');
+  const bonusLines: string[] = [];
+  let inBonusBlock = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Пропускаем пустые строки между бонусами
+    if (!trimmed) {
+      if (inBonusBlock) bonusLines.push('');
+      continue;
+    }
+    // Проверяем, начинается ли строка с бонусного маркера
+    const isBonus = bonusMarkers.some(m => trimmed.includes(m));
+    if (isBonus) {
+      inBonusBlock = true;
+      bonusLines.push(trimmed);
+    } else if (inBonusBlock && !trimmed.startsWith('🍽️') && !trimmed.startsWith('🥘') && !trimmed.startsWith('👨‍🍳') && !trimmed.startsWith('⏱️')) {
+      // Продолжаем бонусный блок, если это не дубль рецепта
+      bonusLines.push(trimmed);
+    } else {
+      // Это дубль рецепта (🍽️, 🥘, 👨‍🍳, ⏱️) — пропускаем и сбрасываем флаг
+      inBonusBlock = false;
+    }
+  }
+
+  return bonusLines.join('\n').trim();
 }
 
 /** Маркеры «человеческого» ответа — при их наличии не запускаем parseRecipeFromPlainText. */
 const HUMAN_TEXT_MARKERS = [
   'Почему это удобно',
+  'Почему удобно',
   'Маленький бонус',
   'Параметры',
   'Приготовление',
@@ -257,6 +395,8 @@ const HUMAN_TEXT_MARKERS = [
   'Мама',
   'Папа',
   'Ребенок',
+  'Для каждого',
+  'Совет от шефа',
 ];
 
 function looksLikeHumanText(text: string): boolean {
@@ -336,6 +476,7 @@ export function parseRecipesFromChat(
     }
   }
 
+  let jsonParsedSuccessfully = false;
   if (jsonString) {
     try {
       const parsed = JSON.parse(jsonString);
@@ -355,7 +496,7 @@ export function parseRecipesFromChat(
               description: parsed.description || parsed.desc,
               ingredients,
               steps,
-              cookingTime: parsed.cookingTime || parsed.cooking_time || parsed.time,
+              cookingTime: parsed.cookingTime ?? parsed.cooking_time ?? parsed.time,
               mealType,
             });
           }
@@ -379,23 +520,24 @@ export function parseRecipesFromChat(
                 description: recipe.description || recipe.desc,
                 ingredients,
                 steps,
-                cookingTime: recipe.cookingTime || recipe.cooking_time || recipe.time,
+                cookingTime: recipe.cookingTime ?? recipe.cooking_time ?? recipe.time,
                 mealType: recipe.mealType || mealType,
               });
             }
           }
         });
       }
+      jsonParsedSuccessfully = true;
     } catch (e) {
       console.warn('Failed to parse JSON recipe:', e);
     }
   }
 
-  // displayText: всегда полный оригинальный aiResponse — не удаляем и не фильтруем блоки текста
-  const displayText = aiResponse;
-
-  // Запрет «Parsed recipe from plain text», если в сообщении есть нормальный человеческий текст
-  if (recipes.length === 0 && !looksLikeHumanText(aiResponse)) {
+  // Приоритет JSON: при успешном JSON и непустом списке рецептов полностью пропускаем parseRecipeFromPlainText
+  // (доверяем только чистому JSON — шаги приготовления не попадут в список покупок)
+  if (jsonParsedSuccessfully && recipes.length > 0) {
+    // не вызываем parseRecipeFromPlainText
+  } else if (recipes.length === 0 && !looksLikeHumanText(aiResponse)) {
     const textRecipe = parseRecipeFromPlainText(aiResponse);
     if (textRecipe) {
       textRecipe.id = textRecipe.id ?? generateTempRecipeId();
@@ -604,6 +746,22 @@ export function parseRecipesFromChat(
         : aiResponse.split('\n').filter(line => line.trim().length > 20).slice(0, 5),
       mealType,
     });
+  }
+
+  let displayText: string;
+  if (recipes.length > 0) {
+    const formattedRecipe = formatRecipeForDisplay(recipes[0]);
+    const textAfterJsonBlock =
+      jsonString && jsonEndIndex >= 0 ? getTextAfterJsonBlock(aiResponse, jsonEndIndex) : '';
+    displayText = textAfterJsonBlock ? `${formattedRecipe}\n\n${textAfterJsonBlock}` : formattedRecipe;
+    if (recipes.length > 1) {
+      recipes.slice(1).forEach((r) => {
+        displayText += '\n\n---\n\n' + formatRecipeForDisplay(r);
+      });
+    }
+  } else {
+    const textAfterJson = getTextAfterJson(aiResponse);
+    displayText = textAfterJson.length > 0 ? textAfterJson : aiResponse;
   }
 
   console.log('parseRecipesFromChat - found recipes:', recipes.map(r => ({ title: r.title, mealType: r.mealType })), 'displayText length:', displayText.length);

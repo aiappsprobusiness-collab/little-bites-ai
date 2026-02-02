@@ -1,8 +1,10 @@
+import { useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useRecipes } from './useRecipes';
 import { parseRecipesFromChat } from '@/utils/parseChatRecipes';
+import type { ParseRecipesFromChatResult } from '@/utils/parseChatRecipes';
 import { resolveUnit } from '@/utils/productUtils';
 import type { Tables } from '@/integrations/supabase/types';
 import { RECIPES_LIST_SELECT, RECIPES_PAGE_SIZE } from '@/lib/supabase-constants';
@@ -10,6 +12,8 @@ import mockRecipes from '@/mocks/mockRecipes.json';
 
 type Recipe = Tables<'recipes'>;
 const IS_DEV = import.meta.env.DEV;
+const UI_SETTLE_MS = 300;
+const INVALIDATE_DELAY_MS = 300;
 
 /**
  * Хук для работы с рецептами из чата
@@ -18,6 +22,7 @@ export function useChatRecipes() {
   const { user } = useAuth();
   const { createRecipe } = useRecipes();
   const queryClient = useQueryClient();
+  const lastProcessedRef = useRef<{ aiResponse: string; result: Promise<{ savedRecipes: Recipe[]; displayText: string }> } | null>(null);
 
   /**
    * Получить рецепты из чата за последние 48 часов (в т.ч. «семейный ужин», только что сгенерированные).
@@ -84,35 +89,30 @@ export function useChatRecipes() {
       aiResponse,
       childId,
       mealType,
+      parsedResult: parsedResultIn,
     }: {
       userMessage: string;
       aiResponse: string;
       childId?: string;
       mealType?: 'breakfast' | 'lunch' | 'snack' | 'dinner';
+      /** Предраспарсенный результат — чат может сразу показать displayText, без повторного парсинга */
+      parsedResult?: ParseRecipesFromChatResult;
     }): Promise<{ savedRecipes: Recipe[]; displayText: string }> => {
       if (!user) throw new Error('User not authenticated');
 
-      // Парсим рецепты из ответа
-      console.log('=== Parsing recipes from chat ===');
-      console.log('User message:', userMessage);
-      console.log('AI response (first 500 chars):', aiResponse.substring(0, 500));
-      console.log('AI response length:', aiResponse.length);
-
-      const { recipes: parsedRecipes, displayText } = parseRecipesFromChat(userMessage, aiResponse);
-      console.log('=== Parsed recipes result ===');
-      console.log('Number of parsed recipes:', parsedRecipes.length);
-      console.log('Parsed recipes details:', parsedRecipes.map(r => ({
-        title: r.title,
-        mealType: r.mealType,
-        ingredientsCount: r.ingredients.length,
-        stepsCount: r.steps.length
-      })));
-
-      if (parsedRecipes.length === 0) {
-        console.warn('No recipes found in chat response');
-        return { savedRecipes: [], displayText };
+      if (lastProcessedRef.current?.aiResponse === aiResponse) {
+        return lastProcessedRef.current.result;
       }
 
+      await new Promise((resolve) => setTimeout(resolve, UI_SETTLE_MS));
+
+      const parsed = parsedResultIn ?? parseRecipesFromChat(userMessage, aiResponse);
+      const { recipes: parsedRecipes, displayText } = parsed;
+
+      if (parsedRecipes.length === 0) {
+        lastProcessedRef.current = { aiResponse, result: Promise.resolve({ savedRecipes: [], displayText }) };
+        return { savedRecipes: [], displayText };
+      }
       // Сохраняем каждый рецепт
       const savedRecipes: Recipe[] = [];
 
@@ -186,7 +186,7 @@ export function useChatRecipes() {
               description: parsedRecipe.description || 'Рецепт предложен AI ассистентом',
               cooking_time_minutes: Number.isFinite(cookingMinutes) ? cookingMinutes : null,
               child_id: validChildId,
-              tags: Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',').map((t) => t.trim()) : []),
+              tags,
             },
             ingredients: parsedRecipe.ingredients.map((ing, index) => ({
               name: ing,
@@ -214,11 +214,16 @@ export function useChatRecipes() {
         }
       }
 
-      // Инвалидируем кэш
-      queryClient.invalidateQueries({ queryKey: ['chat_recipes', user.id] });
-      queryClient.invalidateQueries({ queryKey: ['recipes', user.id] });
+      const result = { savedRecipes, displayText };
+      lastProcessedRef.current = { aiResponse, result: Promise.resolve(result) };
 
-      return { savedRecipes, displayText };
+      // Один отложенный блок инвалидации — меньше перерисовок подряд
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['chat_recipes', user.id] });
+        queryClient.invalidateQueries({ queryKey: ['recipes', user.id] });
+      }, INVALIDATE_DELAY_MS);
+
+      return result;
     },
   });
 

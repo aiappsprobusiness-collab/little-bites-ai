@@ -108,6 +108,7 @@ export function useDeepSeekAPI() {
             type,
             stream: false,
             maxRecipes: 1,
+            targetIsFamily: selectedChildId === 'family',
           }),
         });
       } catch (err) {

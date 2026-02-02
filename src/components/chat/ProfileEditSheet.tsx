@@ -97,18 +97,27 @@ export function ProfileEditSheet({
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [dislikeInput, setDislikeInput] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const initializedForOpenRef = useRef(false);
+  /** Last (isCreate, childId) we initialized for — re-init when switching edit ↔ create or to another child. */
+  const lastInitRef = useRef<{ isCreate: boolean; childId: string | null } | null>(null);
 
   const isCreate = createMode || (open && !child);
 
-  // Синхронизируем форму с профилем только один раз при открытии шторки, чтобы не сбрасывать ввод при каждом обновлении child
+  // Синхронизируем форму с профилем при открытии и при переключении режима (редактирование ↔ новый профиль) или смене ребёнка
   useEffect(() => {
     if (!open) {
-      initializedForOpenRef.current = false;
+      lastInitRef.current = null;
       return;
     }
-    if (initializedForOpenRef.current) return;
-    initializedForOpenRef.current = true;
+    const childId = child?.id ?? null;
+    const key = { isCreate, childId };
+    if (
+      lastInitRef.current &&
+      lastInitRef.current.isCreate === key.isCreate &&
+      lastInitRef.current.childId === key.childId
+    ) {
+      return;
+    }
+    lastInitRef.current = key;
 
     if (isCreate) {
       setName("");
@@ -182,7 +191,6 @@ export function ProfileEditSheet({
     try {
       await updateChild(updatePayload);
       await queryClient.refetchQueries({ queryKey: ["children"] });
-      initializedForOpenRef.current = false;
       const { dismiss } = toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
       setTimeout(dismiss, 2000);
       onOpenChange(false);

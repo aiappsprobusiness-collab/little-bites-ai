@@ -20,6 +20,8 @@ export interface ChildProfile {
 
 export interface ChatContextChildData {
   name: string;
+  /** Дата рождения YYYY-MM-DD (для одного ребёнка) */
+  birth_date?: string;
   ageMonths: number;
   allergies?: string[];
   likes?: string[];
@@ -186,6 +188,7 @@ export function buildChatContextFromProfiles({
     return {
       childData: {
         name: selectedChild.name,
+        birth_date: selectedChild.birth_date || undefined,
         ageMonths: m,
         allergies: allergies.length ? allergies : undefined,
         likes: likes.length ? likes : undefined,
