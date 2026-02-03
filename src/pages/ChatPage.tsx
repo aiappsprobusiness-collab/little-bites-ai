@@ -123,7 +123,13 @@ export default function ChatPage() {
       const chatMessages = messages.map((m) => ({ role: m.role, content: m.content }));
       chatMessages.push({ role: "user", content: userMessage.content });
 
-      const response = await chat({ messages: chatMessages, type: "chat" });
+      const response = await chat({
+        messages: chatMessages,
+        type: "chat",
+        overrideSelectedChildId: selectedChildId,
+        overrideSelectedChild: selectedChild,
+        overrideChildren: children,
+      });
       const rawMessage = typeof response?.message === "string" ? response.message : "";
 
       const parsed = parseRecipesFromChat(userMessage.content, rawMessage);

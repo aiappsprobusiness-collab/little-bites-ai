@@ -72,12 +72,22 @@ function getCalculatedAge(childData?: ChildData | null): string {
   return rest ? `${y} г. ${rest} мес.` : `${y} ${y === 1 ? "год" : y < 5 ? "года" : "лет"}`;
 }
 
-/** Находит самого младшего ребенка из списка */
+/** Возвращает возраст в месяцах для ChildData; при отсутствии age_months вычисляет из birth_date. */
+function getAgeMonths(child: ChildData): number {
+  const m = child.age_months ?? child.ageMonths;
+  if (m != null) return m;
+  const s = (child.birth_date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return 999;
+  const { years, months } = calculateAge(s);
+  return years * 12 + months;
+}
+
+/** Находит самого младшего ребенка из списка (учитывает birth_date, если age_months отсутствует). */
 function findYoungestChild(children: ChildData[]): ChildData | null {
   if (children.length === 0) return null;
   return children.reduce((youngest, child) => {
-    const childMonths = child.age_months ?? child.ageMonths ?? 999;
-    const youngestMonths = youngest.age_months ?? youngest.ageMonths ?? 999;
+    const childMonths = getAgeMonths(child);
+    const youngestMonths = getAgeMonths(youngest);
     return childMonths < youngestMonths ? child : youngest;
   }, children[0]);
 }
@@ -335,14 +345,22 @@ serve(async (req) => {
         .eq("user_id", userId);
 
       if (!childrenError && childrenData) {
-        allChildren = childrenData.map((child: any) => ({
-          name: child.name,
-          birth_date: child.birth_date,
-          age_months: child.age_months,
-          allergies: child.allergies,
-          likes: child.likes,
-          dislikes: child.dislikes,
-        }));
+        allChildren = childrenData.map((child: any) => {
+          const birth = child.birth_date || "";
+          let age_months = child.age_months;
+          if (age_months == null && /^\d{4}-\d{2}-\d{2}$/.test(String(birth).trim())) {
+            const { years, months } = calculateAge(birth);
+            age_months = years * 12 + months;
+          }
+          return {
+            name: child.name,
+            birth_date: child.birth_date,
+            age_months: age_months ?? 0,
+            allergies: child.allergies,
+            likes: child.likes,
+            dislikes: child.dislikes,
+          };
+        });
       }
     }
 

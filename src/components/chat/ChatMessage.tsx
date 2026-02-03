@@ -361,7 +361,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const openShoppingModal = () => {
       const source = (rawContent ?? content).trim();
-      const parsed = parseRecipeFromPlainText(source) ?? parseRecipeFromContent(source);
+      // Приоритет: уже распарсенный recipe (JSON) → parseRecipeFromContent → parseRecipeFromPlainText
+      const parsed =
+        (recipe?.ingredients?.length ? recipe : null) ??
+        parseRecipeFromContent(source) ??
+        parseRecipeFromPlainText(source);
       if (!parsed?.ingredients?.length) {
         toast({ title: "Не удалось распознать ингредиенты", variant: "destructive" });
         return;

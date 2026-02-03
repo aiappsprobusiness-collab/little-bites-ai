@@ -53,9 +53,16 @@ export function useDeepSeekAPI() {
     mutationFn: async ({
       messages,
       type = 'chat',
+      /** Контекст профиля на момент отправки — избегает stale closure при быстром переключении вкладок */
+      overrideSelectedChildId,
+      overrideSelectedChild,
+      overrideChildren,
     }: {
       messages: ChatMessage[];
       type?: 'chat' | 'recipe' | 'diet_plan';
+      overrideSelectedChildId?: string | null;
+      overrideSelectedChild?: typeof selectedChild;
+      overrideChildren?: typeof children;
     }) => {
       // Проверка лимита (для аккаунтов с неограниченным доступом пропускается)
       if (!canGenerate) {
@@ -64,18 +71,22 @@ export function useDeepSeekAPI() {
 
       const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
 
+      // Используем контекст на момент отправки (переданный явно) или из хука
+      const currentSelectedChildId = overrideSelectedChildId ?? selectedChildId;
+      const currentChildren = overrideChildren ?? children;
+
       // Всегда берём свежие данные профиля из БД перед запросом к ИИ (аллергии, любит, не любит)
       await queryClient.refetchQueries({ queryKey: ['children', user?.id] });
-      const freshChildren = (queryClient.getQueryData(['children', user?.id]) as typeof children) ?? children;
-      const freshSelectedChild = selectedChildId && selectedChildId !== 'family'
-        ? freshChildren.find((c) => c.id === selectedChildId)
+      const freshChildren = (queryClient.getQueryData(['children', user?.id]) as typeof children) ?? currentChildren;
+      const freshSelectedChild = currentSelectedChildId && currentSelectedChildId !== 'family'
+        ? (freshChildren.find((c) => c.id === currentSelectedChildId) ?? overrideSelectedChild ?? null)
         : freshChildren[0] ?? null;
 
       const { childData } = buildChatContextFromProfiles({
         userMessage: lastUserMessage,
         children: freshChildren,
         selectedChild: freshSelectedChild ?? null,
-        selectedChildId,
+        selectedChildId: currentSelectedChildId,
         calculateAgeInMonths,
       });
 
@@ -108,7 +119,7 @@ export function useDeepSeekAPI() {
             type,
             stream: false,
             maxRecipes: 1,
-            targetIsFamily: selectedChildId === 'family',
+            targetIsFamily: currentSelectedChildId === 'family',
           }),
         });
       } catch (err) {
