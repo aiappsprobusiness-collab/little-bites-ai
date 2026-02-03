@@ -102,7 +102,8 @@ export function ProfileEditSheet({
 
   const isCreate = createMode || (open && !child);
 
-  // Синхронизируем форму с профилем при открытии и при переключении режима (редактирование ↔ новый профиль) или смене ребёнка
+  // Синхронизируем форму с профилем при открытии и при переключении режима (редактирование ↔ новый профиль) или смене ребёнка.
+  // При переключении на создание («Добавить») всегда сбрасываем форму — не пропускаем инициализацию по ref.
   useEffect(() => {
     if (!open) {
       lastInitRef.current = null;
@@ -110,13 +111,10 @@ export function ProfileEditSheet({
     }
     const childId = child?.id ?? null;
     const key = { isCreate, childId };
-    if (
-      lastInitRef.current &&
-      lastInitRef.current.isCreate === key.isCreate &&
-      lastInitRef.current.childId === key.childId
-    ) {
-      return;
-    }
+    const sameKey =
+      lastInitRef.current?.isCreate === key.isCreate &&
+      lastInitRef.current?.childId === key.childId;
+    if (sameKey && !isCreate) return;
     lastInitRef.current = key;
 
     if (isCreate) {
@@ -163,7 +161,6 @@ export function ProfileEditSheet({
         likes,
         dislikes,
       };
-      console.log("Payload to Supabase (create):", createPayload);
       try {
         const newChild = await createChild(createPayload);
         const { dismiss } = toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
@@ -187,7 +184,6 @@ export function ProfileEditSheet({
       likes,
       dislikes,
     };
-    console.log("Payload to Supabase (update):", updatePayload);
     try {
       await updateChild(updatePayload);
       await queryClient.refetchQueries({ queryKey: ["children"] });

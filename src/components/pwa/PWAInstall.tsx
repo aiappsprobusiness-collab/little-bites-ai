@@ -13,7 +13,7 @@ export function PWAInstall() {
       <DialogContent className="max-w-sm mx-auto" onPointerDownOutside={dismissModal}>
         <DialogHeader>
           <div className="flex justify-center mb-2">
-            <img src="/icon-192.svg" alt="" width={64} height={64} className="rounded-2xl" />
+            <img src="/icon-192.png" alt="" width={64} height={64} className="rounded-2xl" />
           </div>
           <DialogTitle className="flex items-center justify-center gap-2 text-center">
             <Puzzle className="h-6 w-6 text-primary shrink-0" />
