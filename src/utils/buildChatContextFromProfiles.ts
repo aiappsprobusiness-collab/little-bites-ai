@@ -9,10 +9,12 @@
  * Камера/фото: всегда текущий профиль (эта функция не используется для сканера).
  */
 
+/** V2: профиль из members (age_months). birth_date опционален для обратной совместимости. */
 export interface ChildProfile {
   id: string;
   name: string;
-  birth_date: string;
+  birth_date?: string;
+  age_months?: number | null;
   allergies?: string[] | null;
   likes?: string[] | null;
   dislikes?: string[] | null;
@@ -34,9 +36,9 @@ export interface BuildChatContextInput {
   userMessage: string;
   children: ChildProfile[];
   selectedChild: ChildProfile | null | undefined;
-  /** Когда "family", использовать всех детей для контекста. */
   selectedChildId?: string | null;
-  calculateAgeInMonths: (birthDate: string) => number;
+  /** Используется только если у профиля нет age_months (legacy). */
+  calculateAgeInMonths?: (birthDate: string) => number;
 }
 
 export interface BuildChatContextResult {
@@ -114,12 +116,18 @@ function isFamilyIntent(message: string): boolean {
   return FAMILY_INTENT_PATTERNS.some((re) => re.test(s));
 }
 
+function getAgeMonths(c: ChildProfile, calc?: (birthDate: string) => number): number {
+  if (c.age_months != null && Number.isFinite(c.age_months)) return c.age_months;
+  if (c.birth_date && calc) return calc(c.birth_date);
+  return 0;
+}
+
 function buildChildDataFromProfiles(
   profiles: ChildProfile[],
-  calculateAgeInMonths: (birthDate: string) => number
+  calc?: (birthDate: string) => number
 ): { childData: ChatContextChildData; matchedChildIds: string[] } {
-  const ages = profiles.map((c) => calculateAgeInMonths(c.birth_date));
-  const ageMonths = Math.min(...ages);
+  const ages = profiles.map((c) => getAgeMonths(c, calc));
+  const ageMonths = ages.length ? Math.min(...ages) : 0;
   const allAllergies = new Set<string>();
   const allLikes = new Set<string>();
   const allDislikes = new Set<string>();
@@ -132,7 +140,7 @@ function buildChildDataFromProfiles(
 
   const names = profiles.map((c) => c.name).join(', ');
   const ageParts = profiles.map((c) => {
-    const m = calculateAgeInMonths(c.birth_date);
+    const m = getAgeMonths(c, calc);
     if (m < 12) return `${m} мес`;
     const y = Math.floor(m / 12);
     const rest = m % 12;
@@ -181,7 +189,7 @@ export function buildChatContextFromProfiles({
   }
 
   if (selectedChild) {
-    const m = calculateAgeInMonths(selectedChild.birth_date);
+    const m = getAgeMonths(selectedChild, calculateAgeInMonths);
     const allergies = (selectedChild.allergies || []).filter((a) => a?.trim());
     const likes = (selectedChild.likes || []).filter((l) => l?.trim());
     const dislikes = (selectedChild.dislikes || []).filter((d) => d?.trim());

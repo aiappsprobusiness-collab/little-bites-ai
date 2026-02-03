@@ -2,7 +2,6 @@ import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { useChildren } from './useChildren';
 import { useSelectedChild } from '@/contexts/SelectedChildContext';
 import { useSubscription } from './useSubscription';
 import { buildChatContextFromProfiles } from '@/utils/buildChatContextFromProfiles';
@@ -36,10 +35,9 @@ interface ChatMessage {
 
 export function useDeepSeekAPI() {
   const { user, session } = useAuth();
-  const { children, calculateAgeInMonths } = useChildren();
-  const { selectedChild, selectedChildId } = useSelectedChild();
-  const { canGenerate, refetchUsage } = useSubscription();
+  const { children, selectedChild, selectedChildId } = useSelectedChild();
   const queryClient = useQueryClient();
+  const { canGenerate, refetchUsage } = useSubscription();
   const chatAbortRef = useRef<AbortController | null>(null);
 
   const abortChat = () => {
@@ -48,21 +46,22 @@ export function useDeepSeekAPI() {
     }
   };
 
-  // Chat with DeepSeek
+  // Chat with DeepSeek (streaming: onChunk вызывается на каждом чанке, в конце возвращается полный message)
   const chatMutation = useMutation({
     mutationFn: async ({
       messages,
       type = 'chat',
-      /** Контекст профиля на момент отправки — избегает stale closure при быстром переключении вкладок */
       overrideSelectedChildId,
       overrideSelectedChild,
       overrideChildren,
+      onChunk,
     }: {
       messages: ChatMessage[];
       type?: 'chat' | 'recipe' | 'diet_plan';
       overrideSelectedChildId?: string | null;
       overrideSelectedChild?: typeof selectedChild;
-      overrideChildren?: typeof children;
+      overrideChildren?: Array<{ id: string; name: string; age_months?: number | null; allergies?: string[]; likes?: string[]; dislikes?: string[] }>;
+      onChunk?: (chunk: string) => void;
     }) => {
       // Проверка лимита (для аккаунтов с неограниченным доступом пропускается)
       if (!canGenerate) {
@@ -75,19 +74,17 @@ export function useDeepSeekAPI() {
       const currentSelectedChildId = overrideSelectedChildId ?? selectedChildId;
       const currentChildren = overrideChildren ?? children;
 
-      // Всегда берём свежие данные профиля из БД перед запросом к ИИ (аллергии, любит, не любит)
-      await queryClient.refetchQueries({ queryKey: ['children', user?.id] });
-      const freshChildren = (queryClient.getQueryData(['children', user?.id]) as typeof children) ?? currentChildren;
+      await queryClient.refetchQueries({ queryKey: ['members', user?.id] });
+      const freshChildren = (queryClient.getQueryData(['members', user?.id]) as typeof children) ?? currentChildren;
       const freshSelectedChild = currentSelectedChildId && currentSelectedChildId !== 'family'
         ? (freshChildren.find((c) => c.id === currentSelectedChildId) ?? overrideSelectedChild ?? null)
         : freshChildren[0] ?? null;
 
       const { childData } = buildChatContextFromProfiles({
         userMessage: lastUserMessage,
-        children: freshChildren,
-        selectedChild: freshSelectedChild ?? null,
+        children: freshChildren.map((c) => ({ id: c.id, name: c.name, age_months: c.age_months, allergies: c.allergies, likes: c.likes, dislikes: c.dislikes })),
+        selectedChild: freshSelectedChild ? { id: freshSelectedChild.id, name: freshSelectedChild.name, age_months: freshSelectedChild.age_months, allergies: freshSelectedChild.allergies, likes: freshSelectedChild.likes, dislikes: freshSelectedChild.dislikes } : null,
         selectedChildId: currentSelectedChildId,
-        calculateAgeInMonths,
       });
 
       console.log('AI Context Sent:', {
@@ -117,9 +114,18 @@ export function useDeepSeekAPI() {
             messages,
             childData,
             type,
-            stream: false,
+            stream: true,
             maxRecipes: 1,
             targetIsFamily: currentSelectedChildId === 'family',
+            ...(currentSelectedChildId === 'family' && freshChildren.length > 0 && {
+              allChildren: freshChildren.map((c) => ({
+                name: c.name,
+                age_months: c.age_months ?? 0,
+                allergies: c.allergies ?? [],
+                likes: c.likes ?? [],
+                dislikes: c.dislikes ?? [],
+              })),
+            }),
           }),
         });
       } catch (err) {
@@ -136,6 +142,42 @@ export function useDeepSeekAPI() {
           throw new Error('usage_limit_exceeded');
         }
         throw new Error(error.message || 'Ошибка API');
+      }
+
+      const contentType = response.headers.get('Content-Type') || '';
+      if (contentType.includes('text/event-stream') && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim();
+              if (data === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(data);
+                const content = parsed?.choices?.[0]?.delta?.content;
+                if (typeof content === 'string') {
+                  fullContent += content;
+                  onChunk?.(content);
+                }
+              } catch {
+                // ignore malformed SSE lines
+              }
+            }
+          }
+        }
+
+        await refetchUsage();
+        return { message: fullContent };
       }
 
       const data = await response.json();

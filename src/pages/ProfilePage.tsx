@@ -1,7 +1,5 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,20 +19,16 @@ import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X,
 import { useNavigate } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/hooks/useAuth";
-import { useChildren } from "@/hooks/useChildren";
+import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useToast } from "@/hooks/use-toast";
-
-import type { Tables } from "@/integrations/supabase/types";
+import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { ensureStringArray } from "@/utils/typeUtils";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
-function childAvatar(child: Tables<"children">, index: number): React.ReactNode {
-  const url = child.avatar_url?.trim();
-  if (url && (url.startsWith("http") || url.startsWith("/"))) {
-    return <img src={url} alt="" className="w-8 h-8 rounded-full object-cover" />;
-  }
+function memberAvatar(_member: MembersRow, index: number): React.ReactNode {
   return <span className="text-2xl">{VEGETABLE_EMOJIS[index % VEGETABLE_EMOJIS.length]}</span>;
 }
 
@@ -42,82 +36,34 @@ const allergyOptions = [
   "Молоко", "Яйца", "Глютен", "Орехи", "Соя", "Рыба", "Мед", "Цитрусы"
 ];
 
-type Child = Tables<'children'>;
-
 export default function ProfilePage() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const {
-    children,
-    isLoading,
-    formatAge,
-    createChild,
-    updateChild,
-    deleteChild,
-    isCreating,
-    isUpdating,
-  } = useChildren();
+  const { children, isLoading, formatAge, selectedChildId, setSelectedChildId, selectedChild } = useSelectedChild();
+  const { createMember, updateMember, deleteMember, isCreating, isUpdating } = useMembers();
   const { recipes } = useRecipes();
   const { getMealPlans } = useMealPlans();
 
-  const { data: profile } = useQuery({
-    queryKey: ["profile", user?.id],
-    queryFn: async () => {
-      if (!user) return null;
-      const { data } = await supabase.from("profiles").select("display_name").eq("user_id", user.id).single();
-      return data;
-    },
-    enabled: !!user,
-  });
+  const [displayName, setDisplayName] = useState(user?.email?.split("@")[0] ?? "");
 
-  const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
-  useEffect(() => {
-    setDisplayName(profile?.display_name ?? "");
-  }, [profile?.display_name]);
-
-  const saveDisplayName = async () => {
-    if (!user) return;
-    const trimmed = displayName.trim();
-    const { error } = await supabase.from("profiles").upsert({ user_id: user.id, display_name: trimmed || null }, { onConflict: "user_id" });
-    if (error) {
-      toast({ variant: "destructive", title: "Ошибка", description: error.message });
-      return;
-    }
-    queryClient.invalidateQueries({ queryKey: ["profile", user.id] });
-    if (trimmed) toast({ title: "Имя сохранено" });
-  };
-
-  const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingChild, setEditingChild] = useState<Child | null>(null);
+  const [editingChild, setEditingChild] = useState<MembersRow | null>(null);
   const [showProfileSheet, setShowProfileSheet] = useState(false);
-  const [sheetChild, setSheetChild] = useState<Child | null>(null);
+  const [sheetChild, setSheetChild] = useState<MembersRow | null>(null);
   const [sheetCreateMode, setSheetCreateMode] = useState(false);
 
-  // Обновляем selectedChildId когда загружаются children
-  useEffect(() => {
-    if (children.length > 0 && !selectedChildId) {
-      setSelectedChildId(children[0].id);
-    }
-  }, [children, selectedChildId]);
+  const recipesList = Array.isArray(recipes) ? recipes as { child_id?: string | null; is_favorite?: boolean }[] : [];
+  const childRecipes = selectedChild ? recipesList.filter((r) => r.child_id === selectedChild.id) : [];
+  const favoriteRecipes = childRecipes.filter((r) => r.is_favorite).length;
 
-  const selectedChild = children.find(c => c.id === selectedChildId);
-
-  // Статистика для выбранного ребенка
-  const childRecipes = selectedChild ? recipes.filter(r => r.child_id === selectedChild.id) : [];
-  const favoriteRecipes = childRecipes.filter(r => r.is_favorite).length;
-
-
-  // Планы питания (примерно, можно улучшить)
   const today = new Date();
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - today.getDay() + 1);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
   const { data: mealPlans = [] } = getMealPlans(weekStart, weekEnd);
-  const childMealPlans = selectedChild ? mealPlans.filter(mp => mp.child_id === selectedChild.id) : [];
+  const childMealPlans = selectedChild ? mealPlans.filter((mp: { child_id?: string | null }) => mp.child_id === selectedChild.id) : [];
 
 
   const handleCreateChild = () => {
@@ -125,7 +71,7 @@ export default function ProfilePage() {
     setIsEditDialogOpen(true);
   };
 
-  const handleEditChild = (child: Child) => {
+  const handleEditChild = (child: MembersRow) => {
     setEditingChild(child);
     setIsEditDialogOpen(true);
   };
@@ -142,32 +88,28 @@ export default function ProfilePage() {
       const dislikesArray = Array.isArray(formData.dislikes) ? formData.dislikes.filter(d => d?.trim()) : [];
       const allergiesArray = Array.isArray(formData.allergies) ? formData.allergies.filter(a => a?.trim()) : [];
 
+      const ageMonths = formData.birthDate ? Math.max(0, birthDateToAgeMonths(formData.birthDate)) : null;
       if (editingChild) {
-        await updateChild({
+        await updateMember({
           id: editingChild.id,
           name: formData.name,
-          birth_date: formData.birthDate,
+          age_months: ageMonths,
           likes: likesArray,
           dislikes: dislikesArray,
           allergies: allergiesArray,
         });
-        toast({
-          title: "Профиль обновлен",
-          description: "Данные ребенка успешно сохранены",
-        });
+        toast({ title: "Профиль обновлен", description: "Данные сохранены" });
       } else {
-        const newChild = await createChild({
+        const newMember = await createMember({
           name: formData.name,
-          birth_date: formData.birthDate,
+          type: "child",
+          age_months: ageMonths,
           likes: likesArray,
           dislikes: dislikesArray,
           allergies: allergiesArray,
         });
-        setSelectedChildId(newChild.id);
-        toast({
-          title: "Ребенок добавлен",
-          description: "Профиль успешно создан",
-        });
+        setSelectedChildId(newMember.id);
+        toast({ title: "Профиль добавлен", description: "Профиль успешно создан" });
       }
       setIsEditDialogOpen(false);
       setEditingChild(null);
@@ -182,10 +124,10 @@ export default function ProfilePage() {
   };
 
   const handleDeleteChild = async (id: string) => {
-    if (!confirm("Вы уверены, что хотите удалить профиль ребенка?")) return;
+    if (!confirm("Вы уверены, что хотите удалить профиль?")) return;
 
     try {
-      await deleteChild(id);
+      await deleteMember(id);
       if (selectedChildId === id) {
         setSelectedChildId(children.find(c => c.id !== id)?.id || null);
       }
@@ -223,9 +165,9 @@ export default function ProfilePage() {
               id="profile-name"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              onBlur={saveDisplayName}
               placeholder="Ваше имя"
               className="h-11 border-2"
+              readOnly
             />
           </div>
           <div className="space-y-2">
@@ -254,9 +196,9 @@ export default function ProfilePage() {
                   }}
                   className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${selectedChildId === child.id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"}`}
                 >
-                  {childAvatar(child, index)}
+                  {memberAvatar(child, index)}
                   <span className="font-medium">{child.name}</span>
-                  <span className="text-xs opacity-80">{formatAge(child.birth_date)}</span>
+                  <span className="text-xs opacity-80">{formatAge(child.age_months ?? null)}</span>
                 </motion.button>
               ))}
               <motion.button
@@ -315,16 +257,14 @@ export default function ProfilePage() {
                 <CardContent className="relative pt-0">
                   <div className="absolute -top-12 left-1/2 -translate-x-1/2">
                     <div className="w-24 h-24 rounded-3xl bg-card shadow-card flex items-center justify-center text-5xl border-4 border-card overflow-hidden">
-                      {selectedChild.avatar_url && (selectedChild.avatar_url.startsWith("http") || selectedChild.avatar_url.startsWith("/"))
-                        ? <img src={selectedChild.avatar_url} alt="" className="w-full h-full object-cover" />
-                        : <span>{VEGETABLE_EMOJIS[children.findIndex((c) => c.id === selectedChild.id) % VEGETABLE_EMOJIS.length]}</span>}
+                      <span>{VEGETABLE_EMOJIS[children.findIndex((c) => c.id === selectedChild.id) % VEGETABLE_EMOJIS.length]}</span>
                     </div>
                   </div>
                   <div className="pt-14 text-center">
                     <h2 className="text-2xl font-bold">{selectedChild.name}</h2>
                     <p className="text-muted-foreground flex items-center justify-center gap-2 mt-1">
                       <Baby className="w-4 h-4" />
-                      {formatAge(selectedChild.birth_date)}
+                      {formatAge(selectedChild.age_months ?? null)}
                     </p>
                     <Button
                       variant="ghost"
@@ -578,7 +518,7 @@ function ChildEditDialog({
   onSave,
   isLoading,
 }: {
-  child: Child | null;
+  child: MembersRow | null;
   onSave: (data: {
     name: string;
     birthDate: string;
@@ -608,13 +548,12 @@ function ChildEditDialog({
     return { years: Math.floor(months / 12), months: months % 12 };
   };
 
-  // Синхронизируем состояние с пропсом child при его изменении
   useEffect(() => {
     if (child) {
       setName(child.name || "");
-      const { years, months } = birthDateToYearsMonths(child.birth_date);
-      setAgeYears(years);
-      setAgeMonths(months);
+      const total = child.age_months ?? 0;
+      setAgeYears(Math.floor(total / 12));
+      setAgeMonths(total % 12);
       setLikes(ensureStringArray(child.likes));
       setDislikes(ensureStringArray(child.dislikes));
       setAllergies(ensureStringArray(child.allergies));

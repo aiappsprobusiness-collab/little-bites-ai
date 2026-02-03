@@ -592,13 +592,13 @@ export function useShoppingLists() {
 
   // Генерировать список покупок из планов питания
   const generateFromMealPlans = useMutation({
-    mutationFn: async ({ startDate, endDate }: { startDate: Date; endDate: Date }) => {
+    mutationFn: async ({ startDate, endDate, childId }: { startDate: Date; endDate: Date; childId?: string | null }) => {
       if (!user) throw new Error('User not authenticated');
 
       console.log('Генерация списка покупок:', { startDate, endDate, userId: user.id });
 
-      // Получить планы питания за период
-      const { data: mealPlans, error: mealPlansError } = await supabase
+      // Получить планы питания за период (с фильтром по child_id при наличии)
+      let query = supabase
         .from('meal_plans')
         .select(`
           recipe:recipes(
@@ -610,6 +610,10 @@ export function useShoppingLists() {
         .eq('user_id', user.id)
         .gte('planned_date', startDate.toISOString().split('T')[0])
         .lte('planned_date', endDate.toISOString().split('T')[0]);
+      if (childId != null && childId !== '') {
+        query = query.or(`child_id.eq.${childId},child_id.is.null`);
+      }
+      const { data: mealPlans, error: mealPlansError } = await query;
 
       if (mealPlansError) {
         console.error('Ошибка получения планов питания:', mealPlansError);

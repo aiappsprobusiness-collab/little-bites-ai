@@ -1,7 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRelevantQuery, isRelevantPremiumQuery } from "./isRelevantQuery.ts";
-import { FREE_PROMPT_TEMPLATE, PREMIUM_PROMPT_TEMPLATE, RECIPE_PROMPT_TEMPLATE, ALLERGY_AND_SAFETY_RULES } from "./prompts.ts";
+import {
+  FREE_PROMPT_TEMPLATE,
+  PREMIUM_PROMPT_TEMPLATE,
+  ADULT_PROMPT_TEMPLATE,
+  ADULT_CONTEXT,
+  WEANING_CONTEXT,
+  RECIPE_PROMPT_TEMPLATE,
+  DIET_PLAN_TEMPLATE,
+  SINGLE_DAY_TEMPLATE,
+  EXPERT_ADVICE_TEMPLATE,
+} from "./prompts.ts";
+// v2: age-based logic and prompt by tariff
+import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
+import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -92,12 +105,13 @@ function findYoungestChild(children: ChildData[]): ChildData | null {
   }, children[0]);
 }
 
-/** Подставляет в шаблон переменные: {{name}}, {{target_profile}}, {{age}}, {{ageMonths}}, {{allergies}}, {{likes}}, {{dislikes}}, {{familyContext}}. При отсутствии — "твой малыш" / "не указано". */
+/** Подставляет в шаблон переменные, включая {{adultContext}}, {{weekContext}}. */
 function applyPromptTemplate(
   template: string,
   childData: ChildData | null | undefined,
   targetIsFamily: boolean,
-  allChildren: ChildData[] = []
+  allChildren: ChildData[] = [],
+  options?: { weekContext?: string }
 ): string {
   // Для семейного режима используем самого младшего для ageMonths
   const youngestChild = targetIsFamily && allChildren.length > 0 ? findYoungestChild(allChildren) : null;
@@ -106,8 +120,9 @@ function applyPromptTemplate(
   const name = (primaryChild?.name ?? "").trim() || "твой малыш";
   const targetProfile = targetIsFamily ? "Семья" : name;
   const age = getCalculatedAge(primaryChild) || "не указан";
-  // ageMonths = возраст самого младшего (для проверки безопасности)
-  const ageMonths = String(primaryChild?.age_months ?? primaryChild?.ageMonths ?? 0);
+  // ageMonths — строго число (месяцы) для правил безопасности; 999 → 0 при неизвестном
+  const rawMonths = primaryChild ? getAgeMonths(primaryChild) : 0;
+  const ageMonths = String(rawMonths === 999 ? 0 : rawMonths);
 
   // Собираем аллергии ВСЕХ детей для семейного режима
   let allergiesSet = new Set<string>();
@@ -119,6 +134,20 @@ function applyPromptTemplate(
     primaryChild.allergies.forEach((a) => allergiesSet.add(a));
   }
   const allergies = allergiesSet.size > 0 ? Array.from(allergiesSet).join(", ") : "не указано";
+  const allergiesExclude = allergiesSet.size > 0 ? `ИСКЛЮЧИТЬ (аллергия): ${allergies}.` : "";
+
+  const ageMode =
+    rawMonths > 216 ? "Взрослый" : rawMonths < 36 ? "Ребенок до 3" : "Школьник 3-17";
+  const adultContext = rawMonths > 216 ? ADULT_CONTEXT : "";
+  const weaningContext = rawMonths < 36 ? WEANING_CONTEXT : "";
+  const ageContext = adultContext || weaningContext;
+  const ageRule =
+    rawMonths > 216
+      ? "Используй ВЗРОСЛОЕ меню: омлеты, стейки, салаты. ЗАПРЕЩЕНО детское пюре и каши на воде."
+      : rawMonths < 36
+        ? "Используй меню ПРИКОРМА: мягкие текстуры, без соли/сахара."
+        : "";
+  const weekContext = options?.weekContext?.trim() || "";
 
   const likes = (primaryChild?.likes?.length ? primaryChild.likes.join(", ") : "") || "не указано";
   const dislikes = (primaryChild?.dislikes?.length ? primaryChild.dislikes.join(", ") : "") || "не указано";
@@ -143,7 +172,13 @@ function applyPromptTemplate(
     .split("{{target_profile}}").join(targetProfile)
     .split("{{age}}").join(age)
     .split("{{ageMonths}}").join(ageMonths)
+    .split("{{ageMode}}").join(ageMode)
+    .split("{{ageContext}}").join(ageContext)
+    .split("{{ageRule}}").join(ageRule)
     .split("{{allergies}}").join(allergies)
+    .split("{{allergiesExclude}}").join(allergiesExclude)
+    .split("{{adultContext}}").join(adultContext)
+    .split("{{weekContext}}").join(weekContext)
     .split("{{likes}}").join(likes)
     .split("{{dislikes}}").join(dislikes)
     .split("{{familyContext}}").join(familyContext);
@@ -154,7 +189,13 @@ function applyPromptTemplate(
       [/\{\{\s*target_profile\s*\}\}/g, targetProfile],
       [/\{\{\s*age\s*\}\}/g, age],
       [/\{\{\s*ageMonths\s*\}\}/g, ageMonths],
+      [/\{\{\s*ageMode\s*\}\}/g, ageMode],
+      [/\{\{\s*ageContext\s*\}\}/g, ageContext],
+      [/\{\{\s*ageRule\s*\}\}/g, ageRule],
       [/\{\{\s*allergies\s*\}\}/g, allergies],
+      [/\{\{\s*allergiesExclude\s*\}\}/g, allergiesExclude],
+      [/\{\{\s*adultContext\s*\}\}/g, adultContext],
+      [/\{\{\s*weekContext\s*\}\}/g, weekContext],
       [/\{\{\s*likes\s*\}\}/g, likes],
       [/\{\{\s*dislikes\s*\}\}/g, dislikes],
       [/\{\{\s*familyContext\s*\}\}/g, familyContext],
@@ -165,13 +206,18 @@ function applyPromptTemplate(
   return out;
 }
 
-/** Промпт для type === "chat": шаблон из prompts.ts + подстановка данных ребёнка. */
+/** Промпт для type === "chat": шаблон из prompts.ts + подстановка данных ребёнка. ageMonths > 216 → взрослый (без пюре/каш). */
 function generateChatSystemPrompt(
   isPremium: boolean,
   childData: ChildData | null | undefined,
   targetIsFamily: boolean,
   allChildren: ChildData[] = []
 ): string {
+  const youngestChild = targetIsFamily && allChildren.length > 0 ? findYoungestChild(allChildren) : childData;
+  const ageMonths = youngestChild ? getAgeMonths(youngestChild) : 0;
+  if (ageMonths > 216) {
+    return applyPromptTemplate(ADULT_PROMPT_TEMPLATE, childData, targetIsFamily, allChildren);
+  }
   const template = isPremium ? PREMIUM_PROMPT_TEMPLATE : FREE_PROMPT_TEMPLATE;
   return applyPromptTemplate(template, childData, targetIsFamily, allChildren);
 }
@@ -181,46 +227,24 @@ function getSystemPromptForType(
   childData: ChildData | null | undefined,
   isPremium: boolean,
   targetIsFamily: boolean,
-  allChildren: ChildData[] = []
+  allChildren: ChildData[] = [],
+  weekContext?: string
 ): string {
   if (type === "chat") {
     return generateChatSystemPrompt(isPremium, childData, targetIsFamily, allChildren);
   }
-
-  // Для recipe, diet_plan, single_day — используем те же правила безопасности
   if (type === "recipe") {
     return applyPromptTemplate(RECIPE_PROMPT_TEMPLATE, childData, targetIsFamily, allChildren);
   }
-
-  // Для остальных типов — базовый промпт с подстановкой данных
-  const youngestChild = targetIsFamily && allChildren.length > 0 ? findYoungestChild(allChildren) : null;
-  const primaryChild = youngestChild ?? childData;
-  const age = getCalculatedAge(primaryChild);
-
-  // Собираем аллергии всех детей
-  let allergiesSet = new Set<string>();
-  if (targetIsFamily && allChildren.length > 0) {
-    allChildren.forEach((child) => child.allergies?.forEach((a) => allergiesSet.add(a)));
-  } else if (primaryChild?.allergies?.length) {
-    primaryChild.allergies.forEach((a) => allergiesSet.add(a));
-  }
-  const allergies = allergiesSet.size > 0 ? Array.from(allergiesSet).join(", ") : "";
-
   if (type === "diet_plan") {
-    return `Ты — эксперт по детскому питанию. Недельный план.
-${ALLERGY_AND_SAFETY_RULES.replace(/\{\{name\}\}/g, primaryChild?.name || "ребенка").replace(/\{\{ageMonths\}\}/g, String(primaryChild?.age_months ?? 0))}
-Ребенок: ${primaryChild?.name ?? ""}, ${age || "не указан"}
-${allergies ? `ИСКЛЮЧИТЬ (аллергия): ${allergies}.` : ""}
-Ответ СТРОГО JSON. Ключи: breakfast, lunch, snack, dinner.`;
+    return applyPromptTemplate(DIET_PLAN_TEMPLATE, childData, targetIsFamily, allChildren);
   }
-
   if (type === "single_day") {
-    return `Детский диетолог. План на день.
-${ALLERGY_AND_SAFETY_RULES.replace(/\{\{name\}\}/g, primaryChild?.name || "ребенка").replace(/\{\{ageMonths\}\}/g, String(primaryChild?.age_months ?? 0))}
-${allergies ? `ИСКЛЮЧИТЬ (аллергия): ${allergies}.` : ""}
-Ответ — только JSON. Ключи: breakfast, lunch, snack, dinner. В каждом: name, calories, protein, carbs, fat, cooking_time, ingredients, steps. Всё на русском.`;
+    const ctx = weekContext?.trim()
+      ? `Уже запланировано: ${weekContext.trim()}. Сделай этот день максимально непохожим на уже запланированные.`
+      : "";
+    return applyPromptTemplate(SINGLE_DAY_TEMPLATE, childData, targetIsFamily, allChildren, { weekContext: ctx });
   }
-
   return "Ты — помощник. Отвечай кратко и по делу.";
 }
 
@@ -234,6 +258,12 @@ interface ChatRequest {
   targetIsFamily?: boolean;
   /** id профиля ребёнка; при значении "family" считается режим «Семья» */
   childId?: string;
+  /** Данные всех детей — если переданы, запрос в таблицу children не выполняется (экономия ~200–500мс) */
+  allChildren?: ChildData[];
+  /** Название дня (для плана питания, например "Понедельник") */
+  dayName?: string;
+  /** Уже запланированные блюда по дням: "Пн — Овсянка, Вт — Омлет". Чтобы ИИ не повторялся. */
+  weekContext?: string;
 }
 
 serve(async (req) => {
@@ -252,6 +282,7 @@ serve(async (req) => {
     let userId: string | null = null;
     type ProfileRow = { subscription_status?: string | null } | null;
     let profile: ProfileRow = null;
+    type ProfileV2Row = { status: string; requests_today: number; daily_limit: number } | null;
 
     // Создаём supabase клиент на уровне всего handler-а
     const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
@@ -264,17 +295,58 @@ serve(async (req) => {
       userId = user?.id ?? null;
 
       if (userId) {
-        const { data: usageData } = await supabase.rpc("check_usage_limit", { _user_id: userId });
-        if (usageData && !usageData.can_generate) {
-          return new Response(
-            JSON.stringify({
-              error: "usage_limit_exceeded",
-              message: "Достигнут лимит генераций на сегодня. Оформите Premium для безлимитного доступа.",
-              remaining: 0,
-              daily_limit: usageData.daily_limit,
-            }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        // Загружаем profiles_v2 (включая premium_until для trial)
+        const { data: profileV2Row } = await supabase
+          .from("profiles_v2")
+          .select("status, requests_today, daily_limit, premium_until")
+          .eq("user_id", userId)
+          .maybeSingle();
+
+        let profileV2 = profileV2Row as (ProfileV2Row & { premium_until?: string | null }) | null;
+
+        // Trial: если истёк (now > premium_until), переводим в free и daily_limit = 5
+        if (profileV2?.status === "trial" && profileV2.premium_until) {
+          const until = new Date(profileV2.premium_until).getTime();
+          if (Date.now() > until) {
+            await supabase
+              .from("profiles_v2")
+              .update({ status: "free", daily_limit: 5 })
+              .eq("user_id", userId);
+            profileV2 = {
+              status: "free",
+              requests_today: profileV2.requests_today,
+              daily_limit: 5,
+            };
+          }
+        }
+
+        // ТЕСТ ЛИМИТА (Free): status='free', requests_today=5, daily_limit=5 → сразу 429, DeepSeek не вызывается.
+        // ТЕСТ PREMIUM: status='premium' → запросы проходят даже при requests_today > daily_limit.
+        if (profileV2) {
+          const isPremiumOrTrial = profileV2.status === "premium" || profileV2.status === "trial";
+          if (!isPremiumOrTrial && profileV2.requests_today >= profileV2.daily_limit) {
+            return new Response(
+              JSON.stringify({
+                error: "usage_limit_exceeded",
+                message: "Дневной лимит исчерпан. Перейдите на Premium для безлимитного доступа.",
+                remaining: 0,
+              }),
+              { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } else {
+          // Нет строки в profiles_v2 — fallback на старую проверку (profiles + user_usage)
+          const { data: usageData } = await supabase.rpc("check_usage_limit", { _user_id: userId });
+          if (usageData && !usageData.can_generate) {
+            return new Response(
+              JSON.stringify({
+                error: "usage_limit_exceeded",
+                message: "Дневной лимит исчерпан. Перейдите на Premium для безлимитного доступа.",
+                remaining: 0,
+              }),
+              { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         }
 
         const { data: profileRow, error: profileError } = await supabase
@@ -300,6 +372,9 @@ serve(async (req) => {
       stream = true,
       targetIsFamily: reqTargetIsFamily,
       childId,
+      allChildren: reqAllChildren,
+      dayName,
+      weekContext,
     }: ChatRequest = await req.json();
 
     const childName = childData?.name?.trim() || "твой малыш";
@@ -336,32 +411,69 @@ serve(async (req) => {
     const targetIsFamily =
       type === "chat" && (reqTargetIsFamily === true || childId === "family");
 
-    // Загружаем всех детей для семейного контекста
+    // Используем allChildren из запроса — иначе запрос в БД (экономия ~200–500мс)
     let allChildren: ChildData[] = [];
-    if (targetIsFamily && userId && supabase) {
-      const { data: childrenData, error: childrenError } = await supabase
-        .from("children")
-        .select("name, birth_date, age_months, allergies, likes, dislikes")
-        .eq("user_id", userId);
+    if (targetIsFamily) {
+      if (Array.isArray(reqAllChildren) && reqAllChildren.length > 0) {
+        allChildren = reqAllChildren;
+      } else if (userId && supabase) {
+        const { data: childrenData, error: childrenError } = await supabase
+          .from("children")
+          .select("name, birth_date, age_months, allergies, likes, dislikes")
+          .eq("user_id", userId);
 
-      if (!childrenError && childrenData) {
-        allChildren = childrenData.map((child: any) => {
-          const birth = child.birth_date || "";
-          let age_months = child.age_months;
-          if (age_months == null && /^\d{4}-\d{2}-\d{2}$/.test(String(birth).trim())) {
-            const { years, months } = calculateAge(birth);
-            age_months = years * 12 + months;
-          }
-          return {
-            name: child.name,
-            birth_date: child.birth_date,
-            age_months: age_months ?? 0,
-            allergies: child.allergies,
-            likes: child.likes,
-            dislikes: child.dislikes,
-          };
-        });
+        if (!childrenError && childrenData) {
+          allChildren = childrenData.map((child: any) => {
+            const birth = child.birth_date || "";
+            let age_months = child.age_months;
+            if (age_months == null && /^\d{4}-\d{2}-\d{2}$/.test(String(birth).trim())) {
+              const { years, months } = calculateAge(birth);
+              age_months = years * 12 + months;
+            }
+            return {
+              name: child.name,
+              birth_date: child.birth_date,
+              age_months: age_months ?? 0,
+              allergies: child.allergies,
+              likes: child.likes,
+              dislikes: child.dislikes,
+            };
+          });
+        }
       }
+    }
+
+    // v2: tariff + age — считаем заранее, чтобы при Free ограничить данные промпта (1 аллергия, без likes/dislikes)
+    const primaryForAge =
+      targetIsFamily && allChildren.length > 0 ? findYoungestChild(allChildren) : childData;
+    const ageMonthsForCategory = primaryForAge ? getAgeMonths(primaryForAge) : 0;
+    const memberTypeV2 = targetIsFamily
+      ? "family"
+      : (ageMonthsForCategory > 216 ? "adult" : "child");
+    const tariffResult = buildPromptByProfileAndTariff({
+      status: subscriptionStatus,
+      memberType: memberTypeV2,
+      isFamilyTarget: targetIsFamily,
+    });
+
+    // v2: Free — в промпт передаём макс. 1 аллергию и не передаём likes/dislikes
+    let childDataForPrompt = childData;
+    let allChildrenForPrompt = allChildren;
+    if (!tariffResult.useLikesDislikes || !tariffResult.useAllAllergies) {
+      childDataForPrompt = childData
+        ? {
+          ...childData,
+          likes: [] as string[],
+          dislikes: [] as string[],
+          allergies: (childData.allergies ?? []).slice(0, 1),
+        }
+        : null;
+      allChildrenForPrompt = allChildren.map((c) => ({
+        ...c,
+        likes: [] as string[],
+        dislikes: [] as string[],
+        allergies: (c.allergies ?? []).slice(0, 1),
+      }));
     }
 
     if (type === "chat") {
@@ -371,39 +483,73 @@ serve(async (req) => {
         templateName,
         "subscription_status:",
         subscriptionStatus,
-        "userId:",
-        userId ?? "anonymous",
         "targetIsFamily:",
         targetIsFamily,
         "allChildren count:",
-        allChildren.length
+        allChildrenForPrompt.length
       );
     }
 
-    const cached = getCachedSystemPrompt(type, childData, isPremiumUser);
+    const cached = getCachedSystemPrompt(type, childDataForPrompt, isPremiumUser);
     let systemPrompt =
-      cached ?? getSystemPromptForType(type, childData, isPremiumUser, targetIsFamily, allChildren);
+      cached ?? getSystemPromptForType(type, childDataForPrompt, isPremiumUser, targetIsFamily, allChildrenForPrompt, weekContext);
 
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft") {
-      systemPrompt =
-        "ОТВЕТЬ КАК ЭКСПЕРТ-НУТРИЦИОЛОГ. КРАТКО. БЕЗ ГЕНЕРАЦИИ РЕЦЕПТА И БЕЗ JSON БЛОКА. Пиши только человеческим языком, не упоминай JSON или технические термины. Отвечай прямо и по существу, избегая вводных слов-паразитов. Сразу переходи к объяснению или рекомендации.";
+      systemPrompt = EXPERT_ADVICE_TEMPLATE;
+    }
+
+    // v2: age-based logic — категория возраста и правила питания в промпт
+    const ageCategory = getAgeCategory(ageMonthsForCategory);
+    const ageRulesV2 = getAgeCategoryRules(ageCategory);
+    systemPrompt =
+      systemPrompt +
+      "\n\n" +
+      ageRulesV2 +
+      "\n" +
+      tariffResult.tariffAppendix +
+      (tariffResult.familyBalanceNote ? "\n" + tariffResult.familyBalanceNote : "");
+
+    // База знаний: при упоминании сложных тем (аллергия, прикорм, безопасность) можно добавить ссылку на статью
+    if (type === "chat" && supabase) {
+      const { data: articlesList } = await supabase
+        .from("articles")
+        .select("id, title")
+        .not("id", "is", null);
+      const articles = (articlesList ?? []) as { id: string; title: string }[];
+      if (articles.length > 0) {
+        const articleLines = articles.map((a) => `- ${a.id} (${a.title})`).join("\n");
+        systemPrompt += `
+
+БАЗА ЗНАНИЙ: Если в ответе ты затронул сложную тему (аллергия на БКМ, прикорм, безопасность продуктов, питание), в конце ответа добавь одну строку: "Подробнее об этом в нашей статье: [ID]", подставив вместо ID ровно один UUID из списка ниже (без скобок в ответе — только UUID в квадратных скобках). Используй только эти ID:
+${articleLines}
+Формат в ответе строго: Подробнее об этом в нашей статье: [uuid-здесь]`;
+      }
     }
 
     console.log("FINAL_SYSTEM_PROMPT:", systemPrompt);
 
+    const isExpertSoft = type === "chat" && isPremiumUser && premiumRelevance === "soft";
+    const isMealPlan = type === "single_day" || type === "diet_plan";
+    // v2: Free ~700 tokens, Premium/Trial ~1500 for chat; остальные типы без изменений
+    const maxTokensChat =
+      type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
     const apiRequestBody: Record<string, unknown> = {
       model: "deepseek-chat",
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens: type === "single_day" ? 2000 : 8192,
+      max_tokens:
+        maxTokensChat ??
+        (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
       top_p: 0.8,
-      temperature: 0.3,
+      temperature: isMealPlan ? 0.7 : 0.3,
       repetition_penalty: 1.1,
       stream,
     };
 
-    if (type === "single_day") apiRequestBody.response_format = { type: "json_object" };
+    if (type === "single_day") {
+      apiRequestBody.response_format = { type: "json_object" };
+    }
 
-    const timeoutMs = stream ? 90000 : 120000;
+    const timeoutMs = type === "single_day" ? 60000 : stream ? 90000 : 120000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -437,9 +583,9 @@ serve(async (req) => {
       throw new Error(`DeepSeek API error: ${response.status}`);
     }
 
-    // Инкремент сразу после успешного ответа API — минимизация риска фрода при сбое записи в БД
+    // Инкремент после успешной генерации. ТЕСТ СБРОСА (Midnight MSK): RPC increment_usage при last_reset вчера должен сбросить requests_today и выставить 1.
     if (userId && supabase) {
-      await supabase.rpc("increment_usage", { _user_id: userId });
+      await supabase.rpc("increment_usage", { target_user_id: userId });
     }
 
     if (stream && response.body) {

@@ -15,21 +15,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useChildren } from "@/hooks/useChildren";
+import { useMembers } from "@/hooks/useMembers";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
-import type { Tables } from "@/integrations/supabase/types";
-
-type Child = Tables<"children">;
-
-function birthDateFromAgeMonths(ageMonths: number): string {
-  const d = new Date();
-  // Set day to 1 first to avoid day-of-month overflow when subtracting months.
-  // Without this, e.g. March 31 minus 1 month → Feb 31 → rolls to March 3 (wrong).
-  d.setDate(1);
-  d.setMonth(d.getMonth() - ageMonths);
-  return d.toISOString().slice(0, 10);
-}
+import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
 function ageMonthsFromYearsMonths(years: number, months: number): number {
   return years * 12 + Math.max(0, Math.min(11, months));
@@ -67,12 +56,9 @@ function createTagListHandlers(
 interface ProfileEditSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  child: Child | null | undefined;
-  /** Режим создания нового профиля (открыто по кнопке «Добавить»). */
+  child: MembersRow | null | undefined;
   createMode?: boolean;
-  /** Переключиться на создание нового профиля (кнопка «Добавить» внизу). */
   onAddNew?: () => void;
-  /** После создания профиля — выбрать его (передать id). */
   onCreated?: (childId: string) => void;
 }
 
@@ -85,9 +71,11 @@ export function ProfileEditSheet({
   onCreated,
 }: ProfileEditSheetProps) {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { updateChild, createChild, deleteChild, calculateAgeInMonths, isUpdating, isCreating, isDeleting } = useChildren();
+  const { subscriptionStatus } = useSubscription();
+  const { updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
+  const isFree = subscriptionStatus === "free";
   const [name, setName] = useState("");
+  const [memberType, setMemberType] = useState<MemberTypeV2>("child");
   const [ageYears, setAgeYears] = useState(0);
   const [ageMonths, setAgeMonths] = useState(0);
   const [allergies, setAllergies] = useState<string[]>([]);
@@ -97,13 +85,10 @@ export function ProfileEditSheet({
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [dislikeInput, setDislikeInput] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  /** Last (isCreate, childId) we initialized for — re-init when switching edit ↔ create or to another child. */
   const lastInitRef = useRef<{ isCreate: boolean; childId: string | null } | null>(null);
 
   const isCreate = createMode || (open && !child);
 
-  // Синхронизируем форму с профилем при открытии и при переключении режима (редактирование ↔ новый профиль) или смене ребёнка.
-  // При переключении на создание («Добавить») всегда сбрасываем форму — не пропускаем инициализацию по ref.
   useEffect(() => {
     if (!open) {
       lastInitRef.current = null;
@@ -111,14 +96,13 @@ export function ProfileEditSheet({
     }
     const childId = child?.id ?? null;
     const key = { isCreate, childId };
-    const sameKey =
-      lastInitRef.current?.isCreate === key.isCreate &&
-      lastInitRef.current?.childId === key.childId;
+    const sameKey = lastInitRef.current?.isCreate === key.isCreate && lastInitRef.current?.childId === key.childId;
     if (sameKey && !isCreate) return;
     lastInitRef.current = key;
 
     if (isCreate) {
       setName("");
+      setMemberType("child");
       setAgeYears(0);
       setAgeMonths(0);
       setAllergies([]);
@@ -130,16 +114,17 @@ export function ProfileEditSheet({
       return;
     }
     if (!child) return;
-    const totalMonths = calculateAgeInMonths(child.birth_date);
-    setAgeYears(Math.floor(totalMonths / 12));
-    setAgeMonths(totalMonths % 12);
+    const total = child.age_months ?? 0;
+    setMemberType((child as MembersRow).type ?? "child");
+    setAgeYears(Math.floor(total / 12));
+    setAgeMonths(total % 12);
     setAllergies(child.allergies ?? []);
     setAllergyInput("");
     setLikes(child.likes ?? []);
     setLikeInput("");
     setDislikes(child.dislikes ?? []);
     setDislikeInput("");
-  }, [open, isCreate, child, calculateAgeInMonths]);
+  }, [open, isCreate, child]);
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 
@@ -154,44 +139,40 @@ export function ProfileEditSheet({
         toast({ variant: "destructive", title: "Введите имя" });
         return;
       }
-      const createPayload = {
-        name: trimmedName,
-        birth_date: birthDateFromAgeMonths(totalAgeMonths),
-        allergies,
-        likes,
-        dislikes,
-      };
       try {
-        const newChild = await createChild(createPayload);
-        const { dismiss } = toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
-        setTimeout(dismiss, 2000);
+        const newMember = await createMember({
+          name: trimmedName,
+          type: memberType,
+          age_months: totalAgeMonths || null,
+          allergies,
+          likes,
+          dislikes,
+        });
+        toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
         onOpenChange(false);
-        onCreated?.(newChild.id);
-      } catch (e: any) {
+        onCreated?.(newMember.id);
+      } catch (e: unknown) {
         toast({
           variant: "destructive",
           title: "Ошибка",
-          description: e.message || "Не удалось создать профиль",
+          description: (e as Error)?.message || "Не удалось создать профиль",
         });
       }
       return;
     }
     if (!child) return;
-    const updatePayload = {
-      id: child.id,
-      birth_date: birthDateFromAgeMonths(totalAgeMonths),
-      allergies,
-      likes,
-      dislikes,
-    };
     try {
-      await updateChild(updatePayload);
-      await queryClient.refetchQueries({ queryKey: ["children"] });
-      const { dismiss } = toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
-      setTimeout(dismiss, 2000);
+      await updateMember({
+        id: child.id,
+        type: memberType,
+        age_months: totalAgeMonths || null,
+        allergies,
+        likes,
+        dislikes,
+      });
+      toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
       onOpenChange(false);
     } catch (e: unknown) {
-      console.error("SYNC ERROR:", (e as Error)?.message, (e as { details?: unknown })?.details);
       toast({
         variant: "destructive",
         title: "Ошибка",
@@ -203,15 +184,15 @@ export function ProfileEditSheet({
   const handleDelete = async () => {
     if (!child) return;
     try {
-      await deleteChild(child.id);
+      await deleteMember(child.id);
       toast({ title: "Профиль удалён" });
       setShowDeleteConfirm(false);
       onOpenChange(false);
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: e.message || "Не удалось удалить",
+        description: (e as Error)?.message || "Не удалось удалить",
       });
     }
   };
@@ -221,22 +202,67 @@ export function ProfileEditSheet({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-3xl flex flex-col max-h-[85vh]" aria-describedby="profile-sheet-desc">
-        <p id="profile-sheet-desc" className="sr-only">Редактирование профиля ребенка</p>
+        <p id="profile-sheet-desc" className="sr-only">Редактирование профиля</p>
         <SheetHeader>
-          <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать профиль — ${child?.name ?? ""}`}</SheetTitle>
+          <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать — ${child?.name ?? ""}`}</SheetTitle>
         </SheetHeader>
         <div className="space-y-5 py-4 overflow-y-auto">
           {isCreate && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
+                <Input
+                  id="profile-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Имя ребёнка или взрослого"
+                  className="h-11 border-2"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Тип</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={memberType === "child" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setMemberType("child")}
+                  >
+                    Ребёнок
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={memberType === "adult" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setMemberType("adult")}
+                  >
+                    Взрослый
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+          {!isCreate && (
             <div className="space-y-2">
-              <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
-              <Input
-                id="profile-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Имя ребёнка или семьи"
-                className="h-11 border-2"
-                readOnly={false}
-              />
+              <Label className="text-sm font-medium">Тип</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={memberType === "child" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setMemberType("child")}
+                >
+                  Ребёнок
+                </Button>
+                <Button
+                  type="button"
+                  variant={memberType === "adult" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setMemberType("adult")}
+                >
+                  Взрослый
+                </Button>
+              </div>
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
@@ -251,7 +277,6 @@ export function ProfileEditSheet({
                 onChange={(e) => setAgeYears(Math.max(0, parseInt(e.target.value, 10) || 0))}
                 placeholder="0"
                 className="h-11 border-2"
-                readOnly={false}
               />
             </div>
             <div className="space-y-2">
@@ -265,7 +290,6 @@ export function ProfileEditSheet({
                 onChange={(e) => setAgeMonths(Math.max(0, Math.min(11, parseInt(e.target.value, 10) || 0)))}
                 placeholder="0"
                 className="h-11 border-2"
-                readOnly={false}
               />
             </div>
           </div>
@@ -279,24 +303,41 @@ export function ProfileEditSheet({
             onRemove={allergiesHandlers.remove}
             placeholder="Добавить аллергию (запятая или Enter)"
           />
-          <TagListEditor
-            label="Любит"
-            items={likes}
-            inputValue={likeInput}
-            onInputChange={setLikeInput}
-            onAdd={likesHandlers.add}
-            onEdit={likesHandlers.edit}
-            onRemove={likesHandlers.remove}
-          />
-          <TagListEditor
-            label="Не любит"
-            items={dislikes}
-            inputValue={dislikeInput}
-            onInputChange={setDislikeInput}
-            onAdd={dislikesHandlers.add}
-            onEdit={dislikesHandlers.edit}
-            onRemove={dislikesHandlers.remove}
-          />
+          {isFree ? (
+            <>
+              <div className="space-y-2 opacity-60 pointer-events-none">
+                <Label className="text-sm font-medium">Любит</Label>
+                <p className="text-xs text-muted-foreground">Доступно в Premium</p>
+                <div className="flex flex-wrap gap-2 min-h-9 rounded-md border border-input bg-muted/30 px-3 py-2" />
+              </div>
+              <div className="space-y-2 opacity-60 pointer-events-none">
+                <Label className="text-sm font-medium">Не любит</Label>
+                <p className="text-xs text-muted-foreground">Доступно в Premium</p>
+                <div className="flex flex-wrap gap-2 min-h-9 rounded-md border border-input bg-muted/30 px-3 py-2" />
+              </div>
+            </>
+          ) : (
+            <>
+              <TagListEditor
+                label="Любит"
+                items={likes}
+                inputValue={likeInput}
+                onInputChange={setLikeInput}
+                onAdd={likesHandlers.add}
+                onEdit={likesHandlers.edit}
+                onRemove={likesHandlers.remove}
+              />
+              <TagListEditor
+                label="Не любит"
+                items={dislikes}
+                inputValue={dislikeInput}
+                onInputChange={setDislikeInput}
+                onAdd={dislikesHandlers.add}
+                onEdit={dislikesHandlers.edit}
+                onRemove={dislikesHandlers.remove}
+              />
+            </>
+          )}
         </div>
         <div className="flex flex-col gap-2 mt-auto pt-2">
           <Button
@@ -307,11 +348,7 @@ export function ProfileEditSheet({
             {isCreate ? "Создать профиль" : "Сохранить изменения"}
           </Button>
           {!isCreate && onAddNew && (
-            <Button
-              variant="outline"
-              className="w-full h-11 gap-2"
-              onClick={onAddNew}
-            >
+            <Button variant="outline" className="w-full h-11 gap-2" onClick={onAddNew}>
               <Plus className="w-4 h-4" />
               Добавить
             </Button>

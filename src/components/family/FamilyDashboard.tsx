@@ -278,7 +278,7 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{child.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatAge(child.birth_date)}
+                      {formatAge(child.age_months ?? null)}
                     </p>
                   </div>
                   <div className="text-right">

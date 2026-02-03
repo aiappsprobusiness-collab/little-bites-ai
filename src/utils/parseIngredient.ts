@@ -30,36 +30,50 @@ export function parseIngredient(raw: string): ParsedIngredient {
 
   let cleaned = raw.trim();
 
-  // Удаляем комментарии в скобках (включая вложенные)
+  // Извлекаем количество в скобках "Продукт (2 шт)", "Молоко (100 мл)" до удаления скобок
+  const parenQty = cleaned.match(/^(.+?)\s*\((\d+(?:[.,]\d+)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.)\)\s*$/i);
+  if (parenQty) {
+    const productPart = parenQty[1].trim();
+    const num = parenQty[2];
+    const u = parenQty[3];
+    cleaned = `${productPart} — ${num} ${u}`;
+  }
+
+  // Удаляем остальные комментарии в скобках (не количество)
   cleaned = cleaned.replace(/\([^()]*\)/g, '').trim();
-  // Удаляем оставшиеся скобки
   cleaned = cleaned.replace(/[()]/g, '').trim();
 
+  // "100 мл продукта", "2 шт яйца" — количество в начале
+  const leadingQty = cleaned.match(/^(\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.)\s+(.+)$/i);
+  if (leadingQty) {
+    const numPart = leadingQty[1].replace(/\s*-\s*/, '-');
+    const parts = numPart.includes('-') ? numPart.split('-').map((n) => parseFloat(n.replace(',', '.'))) : [parseFloat(numPart.replace(',', '.'))];
+    const quantity = parts.length === 2 ? Math.round((parts[0] + parts[1]) / 2) : parts[0];
+    const unit = normalizeUnit(leadingQty[2]);
+    const productName = leadingQty[3].trim();
+    const name = productName.charAt(0).toUpperCase() + productName.slice(1);
+    return { name, quantity, unit };
+  }
+
   // Удаляем описания после тире/дефиса, если они содержат инструкции
-  // Паттерн: "Продукт - количество (описание)" или "Продукт — количество"
+  // "Продукт - 100г", "Продукт — 100 г"
   const dashMatch = cleaned.match(/^([^—\-]+?)[—\-]\s*(.+)$/);
   if (dashMatch) {
     const beforeDash = dashMatch[1].trim();
     const afterDash = dashMatch[2].trim();
-
-    // Если после тире есть число + единица, это количество
-    // Важно: конкретные единицы (мл, л, ст.л., ч.л.) идут перед общим паттерном [а-яё]+
     const quantityMatch = afterDash.match(/^(\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.|[а-яё]+\.?)/i);
     if (quantityMatch) {
       cleaned = `${beforeDash} ${afterDash}`;
     } else {
-      // Если после тире нет количества, оставляем только до тире
       cleaned = beforeDash;
     }
   }
 
-  // Извлекаем количество и единицу измерения
-  // Паттерны: "6-8 шт", "1 шт", "100 г", "2 ст.л.", "по вкусу"
-  // Важно: конкретные единицы (мл, л, ст.л., ч.л.) идут перед общим паттерном [а-яё]+
+  // Извлекаем количество и единицу измерения (в т.ч. без пробела: "100г", "2шт")
   const quantityPatterns = [
-    /(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.|[а-яё]+\.?)/i, // "6-8 шт"
-    /(\d+(?:[.,]\d+)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.|[а-яё]+\.?)/i, // "1 шт", "100 г"
-    /по\s+вкусу/i, // "по вкусу"
+    /(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.|[а-яё]+\.?)/i,
+    /(\d+(?:[.,]\d+)?)\s*(шт|г|кг|мл|л|ст\.л\.|ч\.л\.|[а-яё]+\.?)/i,
+    /по\s+вкусу/i,
   ];
 
   let quantity: number | null = null;

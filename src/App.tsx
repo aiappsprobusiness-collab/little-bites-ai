@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -16,9 +17,20 @@ import RecipeEditPage from "./pages/RecipeEditPage";
 import RecipesPage from "./pages/RecipesPage";
 import ChatPage from "./pages/ChatPage";
 import FavoritesPage from "./pages/FavoritesPage";
+import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import { PWAInstall } from "./components/pwa/PWAInstall";
+
+const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data"];
+
+function LegacyCacheClear() {
+  useEffect(() => {
+    const hasV1 = V1_STORAGE_KEYS.some((k) => localStorage.getItem(k) != null);
+    if (hasV1) localStorage.clear();
+  }, []);
+  return null;
+}
 
 const queryClient = new QueryClient();
 
@@ -32,6 +44,7 @@ const App = () => (
         }}
       >
         <AuthProvider>
+          <LegacyCacheClear />
           <SelectedChildProvider>
             <Toaster />
             <Sonner />
@@ -124,6 +137,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <FavoritesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/articles"
+                element={
+                  <ProtectedRoute>
+                    <ArticlesPage />
                   </ProtectedRoute>
                 }
               />

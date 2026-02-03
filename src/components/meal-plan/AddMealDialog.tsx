@@ -52,24 +52,13 @@ export function AddMealDialog({
   // Важно: используем вычисляемое значение, которое обновляется при изменении selectedMealType
   const currentMealType = selectedMealType || mealTypesOptions[0]?.id || "breakfast";
 
-  // Фильтруем рецепты из чата - показываем все рецепты с тегом 'chat'
-  // независимо от типа приема пищи (пользователь может выбрать любой тип)
-  const filteredChatRecipes = (chatRecipes || []).filter(recipe => {
-    if (!recipe) {
-      return false;
-    }
-
-    if (!recipe.tags || !Array.isArray(recipe.tags)) {
-      return false;
-    }
-
-    const hasChatTag = recipe.tags.includes('chat');
-    if (!hasChatTag) {
-      return false;
-    }
-
-    // Показываем все рецепты из чата, независимо от типа приема пищи
-    // Пользователь может выбрать любой тип приема пищи для любого рецепта
+  // Фильтруем рецепты из чата — только с тегом 'chat', исключаем дубликаты из recipes
+  const recipeIds = new Set((recipes || []).map((r) => r.id));
+  const favoriteRecipeIds = new Set((favorites || []).map((f) => f.recipe?.id ?? f.recipe_id).filter(Boolean));
+  const filteredChatRecipes = (chatRecipes || []).filter((recipe) => {
+    if (!recipe?.id) return false;
+    if (!recipe.tags || !Array.isArray(recipe.tags) || !recipe.tags.includes("chat")) return false;
+    if (recipeIds.has(recipe.id) || favoriteRecipeIds.has(recipe.id)) return false;
     return true;
   });
 
@@ -115,8 +104,8 @@ export function AddMealDialog({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {mealTypesOptions.map((mt) => (
-                <SelectItem key={mt.id} value={mt.id}>
+              {mealTypesOptions.map((mt, idx) => (
+                <SelectItem key={`${mt.id}-${idx}`} value={mt.id}>
                   {mt.emoji} {mt.label}
                 </SelectItem>
               ))}
@@ -150,8 +139,8 @@ export function AddMealDialog({
                       <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
                         📖 Сохранённые рецепты
                       </div>
-                      {recipes.map((recipe) => (
-                        <SelectItem key={recipe.id} value={recipe.id}>
+                      {recipes.map((recipe, idx) => (
+                        <SelectItem key={`saved-${recipe.id}-${idx}`} value={recipe.id}>
                           {recipe.title}
                         </SelectItem>
                       ))}
@@ -164,8 +153,8 @@ export function AddMealDialog({
                       <div className={`px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b ${recipes.length > 0 ? 'border-t mt-1' : ''}`}>
                         ❤️ Избранное
                       </div>
-                      {favorites.map((favorite) => (
-                        <SelectItem key={favorite.id} value={`favorite_${favorite.id}`}>
+                      {favorites.map((favorite, idx) => (
+                        <SelectItem key={`favorite-${favorite.id}-${idx}`} value={`favorite_${favorite.id}`}>
                           {favorite.recipe.title}
                         </SelectItem>
                       ))}
@@ -178,8 +167,8 @@ export function AddMealDialog({
                       <div className={`px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b ${(recipes.length > 0 || favorites.length > 0) ? 'border-t mt-1' : ''}`}>
                         💬 История генераций чата
                       </div>
-                      {filteredChatRecipes.map((recipe) => (
-                        <SelectItem key={recipe.id} value={recipe.id}>
+                      {filteredChatRecipes.map((recipe, idx) => (
+                        <SelectItem key={`chat-${recipe.id}-${idx}`} value={recipe.id}>
                           {recipe.title}
                         </SelectItem>
                       ))}

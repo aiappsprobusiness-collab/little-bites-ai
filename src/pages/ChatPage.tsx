@@ -1,16 +1,19 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Send, Loader2, Pencil, Plus, Settings, Square, HelpCircle } from "lucide-react";
+import { Send, Loader2, Pencil, Plus, Settings, Square, HelpCircle, Mic, MicOff } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
+import { ArticleReaderModal } from "@/components/articles/ArticleReaderModal";
+import { useArticle } from "@/hooks/useArticles";
 import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { detectMealType, parseRecipesFromChat } from "@/utils/parseChatRecipes";
@@ -28,6 +31,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 
 const CHAT_HINT_PHRASES = [
   "Придумай ужин из того, что сейчас есть в холодильнике",
@@ -43,6 +47,8 @@ interface Message {
   content: string;
   timestamp: Date;
   rawContent?: string;
+  /** Пока true, ответ ещё стримится; не показываем сырой JSON. */
+  isStreaming?: boolean;
 }
 
 const STARTER_MESSAGE = "Я помогу с идеями, что приготовить для вашей семьи. Выберите, для кого готовим, и задайте вопрос.";
@@ -51,8 +57,9 @@ export default function ChatPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
-  const { canGenerate, isPremium, remaining, dailyLimit } = useSubscription();
+  const { selectedChild, children, selectedChildId, setSelectedChildId, isLoading: isLoadingMembers } = useSelectedChild();
+  const { canGenerate, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus } = useSubscription();
+  const isFree = subscriptionStatus === "free";
   const { chat, abortChat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage } = useChatHistory();
   const { saveRecipesFromChat } = useChatRecipes();
@@ -62,10 +69,24 @@ export default function ChatPage() {
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [sheetCreateMode, setSheetCreateMode] = useState(false);
   const [showHintsModal, setShowHintsModal] = useState(false);
+  const [openArticleId, setOpenArticleId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const { article: openArticle, isLoading: isArticleLoading } = useArticle(openArticleId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prefillSentRef = useRef(false);
+  const prevProfileKeyRef = useRef<string>("");
+
+  // Очищаем сообщения при смене профиля или списка детей — чтобы «призраки» (Кори, Авигея и др.) из истории не улетали в DeepSeek
+  useEffect(() => {
+    const childIds = children.map((c) => c.id).join(",");
+    const key = `${selectedChildId ?? "family"}|${childIds}`;
+    if (prevProfileKeyRef.current && prevProfileKeyRef.current !== key) {
+      setMessages([]);
+    }
+    prevProfileKeyRef.current = key;
+  }, [selectedChildId, children]);
 
   const childIdForSave = selectedChildId && selectedChildId !== "family" ? selectedChildId : undefined;
 
@@ -101,10 +122,13 @@ export default function ChatPage() {
   const showStarter = messages.length === 0 && !isLoadingHistory;
   const hasUserMessage = messages.some((m) => m.role === "user");
 
-  const handleSend = async (text?: string) => {
+  const sendInProgressRef = useRef(false);
+  const handleSend = useCallback(async (text?: string) => {
     const toSend = (text ?? input).trim();
-    if (!toSend || isChatting) return;
+    if (!toSend || isChatting || sendInProgressRef.current) return;
+    sendInProgressRef.current = true;
     if (!canGenerate && !isPremium) {
+      sendInProgressRef.current = false;
       setShowPaywall(true);
       return;
     }
@@ -117,7 +141,15 @@ export default function ChatPage() {
       content: toSend,
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    const assistantMessageId = `assistant-${Date.now()}`;
+    const assistantPlaceholder: Message = {
+      id: assistantMessageId,
+      role: "assistant",
+      content: "",
+      timestamp: new Date(),
+      isStreaming: true,
+    };
+    setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
 
     try {
       const chatMessages = messages.map((m) => ({ role: m.role, content: m.content }));
@@ -129,18 +161,24 @@ export default function ChatPage() {
         overrideSelectedChildId: selectedChildId,
         overrideSelectedChild: selectedChild,
         overrideChildren: children,
+        onChunk: (chunk) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId ? { ...m, content: m.content + chunk, isStreaming: true } : m
+            )
+          );
+        },
       });
       const rawMessage = typeof response?.message === "string" ? response.message : "";
 
       const parsed = parseRecipesFromChat(userMessage.content, rawMessage);
-      const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: parsed.displayText,
-        timestamp: new Date(),
-        rawContent: rawMessage,
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId
+            ? { ...m, content: parsed.displayText, rawContent: rawMessage, isStreaming: false }
+            : m
+        )
+      );
 
       try {
         const mealType = detectMealType(userMessage.content);
@@ -169,22 +207,34 @@ export default function ChatPage() {
       }
     } catch (err: any) {
       if (err?.name === "AbortError") {
-        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
         toast({ title: "Остановлено" });
         return;
       }
       if (err?.message === "usage_limit_exceeded") {
         setShowPaywall(true);
-        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
       } else {
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
         toast({
           variant: "destructive",
           title: "Ошибка",
           description: "Не удалось получить ответ. Попробуйте снова.",
         });
       }
+    } finally {
+      sendInProgressRef.current = false;
     }
-  };
+  }, [input, isChatting, canGenerate, isPremium, messages, selectedChildId, selectedChild, children, childIdForSave, chat, saveRecipesFromChat, saveChat, toast]);
+
+  const { isListening, toggle: toggleMic } = useSpeechRecognition({
+    onFinalTranscript: (text) => {
+      if (!text.trim()) return;
+      setInput(text);
+      handleSend(text);
+    },
+    onError: (msg) => toast({ variant: "destructive", title: "Голосовой ввод", description: msg }),
+  });
 
   // Обработка предзаполненного сообщения из ScanPage (после загрузки истории и определения handleSend)
   useEffect(() => {
@@ -251,56 +301,97 @@ export default function ChatPage() {
       <div className="flex flex-col h-[calc(100vh-130px)]">
         {/* Для кого готовим — закреплён под шапкой, не убегает при скролле */}
         <div className="sticky top-14 z-30 bg-background/95 backdrop-blur-sm px-4 py-3 border-b border-border/50 space-y-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Готовим для:</span>
-            <Select
-              value={selectedChildId ?? "family"}
-              onValueChange={(v) => setSelectedChildId(v)}
-            >
-              <SelectTrigger className="w-[180px] bg-card">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="family">Семья</SelectItem>
-                {children.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 shrink-0"
-              onClick={() => {
-                setSheetCreateMode(true);
-                setShowProfileSheet(true);
-              }}
-              title="Добавить профиль"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
-            {selectedChild && (
+          {isFree && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">
+                Осталось {remaining} из {dailyLimit} генераций сегодня
+              </p>
+              <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1.5" />
+            </div>
+          )}
+          {!(isFree && children.length === 0) && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Готовим для:</span>
+              <Select
+                value={
+                  isFree
+                    ? (selectedChildId === "family" ? children[0]?.id ?? "" : selectedChildId ?? children[0]?.id ?? "")
+                    : (selectedChildId ?? "family")
+                }
+                onValueChange={(v) => {
+                  const prev = isFree ? (selectedChildId === "family" ? children[0]?.id : selectedChildId) ?? children[0]?.id : selectedChildId ?? "family";
+                  if (v !== prev) setMessages([]);
+                  setSelectedChildId(v);
+                }}
+              >
+                <SelectTrigger className="w-[180px] bg-card">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {!isFree && <SelectItem value="family">Семья</SelectItem>}
+                  {children.map((c, idx) => (
+                    <SelectItem key={`${c.id}-${idx}`} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="icon"
-                className="h-8 w-8"
+                className="h-8 w-8 shrink-0"
                 onClick={() => {
-                  setSheetCreateMode(false);
+                  setSheetCreateMode(true);
                   setShowProfileSheet(true);
                 }}
-                title="Редактировать профиль"
+                title="Добавить профиль"
               >
-                <Pencil className="w-4 h-4" />
+                <Plus className="w-4 h-4" />
               </Button>
-            )}
-          </div>
+              {selectedChild && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => {
+                    setSheetCreateMode(false);
+                    setShowProfileSheet(true);
+                  }}
+                  title="Редактировать профиль"
+                >
+                  <Pencil className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-4">
-          {showStarter && !hasUserMessage && (
+          {!isLoadingMembers && children.length === 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center py-8 px-4 text-center"
+            >
+              <div className="rounded-2xl px-5 py-6 bg-card shadow-soft border border-border/50 max-w-[320px] space-y-4">
+                <p className="text-base text-foreground leading-relaxed">
+                  Добро пожаловать! Давайте создадим первый профиль члена семьи, чтобы я мог подбирать рецепты персонально.
+                </p>
+                <Button
+                  onClick={() => {
+                    setSheetCreateMode(true);
+                    setShowProfileSheet(true);
+                  }}
+                  className="w-full"
+                >
+                  Создать профиль
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {showStarter && !hasUserMessage && children.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -324,12 +415,17 @@ export default function ChatPage() {
                 key={m.id}
                 id={m.id}
                 role={m.role}
-                content={m.content}
+                content={
+                  m.role === "assistant" && m.isStreaming && m.content.trim().startsWith("{")
+                    ? "Готовлю рецепт…"
+                    : m.content
+                }
                 timestamp={m.timestamp}
                 rawContent={m.rawContent}
                 onDelete={handleDeleteMessage}
                 childId={selectedChild?.id}
                 childName={selectedChild?.name}
+                onOpenArticle={setOpenArticleId}
               />
             ))}
           </AnimatePresence>
@@ -378,6 +474,25 @@ export default function ChatPage() {
             >
               <HelpCircle className="w-5 h-5" />
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (isFree) {
+                  setShowPaywall(true);
+                } else {
+                  toggleMic();
+                }
+              }}
+              title={isFree ? "Голосовой ввод (Premium)" : (isListening ? "Остановить запись" : "Голосовой ввод")}
+              className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center transition-all active:scale-95 ${isFree
+                ? "bg-muted text-muted-foreground hover:bg-muted/80"
+                : isListening
+                  ? "bg-destructive/20 text-destructive hover:bg-destructive/30"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+            >
+              {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
             <Button
               variant="mint"
               size="icon"
@@ -396,6 +511,12 @@ export default function ChatPage() {
       </div>
 
       <Paywall isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
+      <ArticleReaderModal
+        article={openArticle}
+        open={!!openArticleId}
+        onOpenChange={(open) => !open && setOpenArticleId(null)}
+        isLoading={isArticleLoading}
+      />
       <ProfileEditSheet
         open={showProfileSheet}
         onOpenChange={(open) => {

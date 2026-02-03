@@ -6,16 +6,19 @@ interface MobileLayoutProps {
   children: ReactNode;
   title?: string;
   showNav?: boolean;
+  headerLeft?: ReactNode;
   headerRight?: ReactNode;
 }
 
-export function MobileLayout({ children, title, showNav = true, headerRight }: MobileLayoutProps) {
+export function MobileLayout({ children, title, showNav = true, headerLeft, headerRight }: MobileLayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       {title && (
         <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border/50 safe-top">
           <div className="flex items-center justify-between h-14 px-4">
-            <div className="w-16" /> {/* Spacer for balance */}
+            <div className="w-16 flex items-center justify-start">
+              {headerLeft}
+            </div>
             <h1 className="text-lg font-bold text-foreground">{title}</h1>
             <div className="w-16 flex justify-end">
               {headerRight}

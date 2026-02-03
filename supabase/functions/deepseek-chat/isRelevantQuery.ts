@@ -3,7 +3,7 @@
  */
 
 const VOWELS = /[аеёиоуыэюяaeiou]/gi;
-const MIN_VOWEL_RATIO = 0.15;
+const MIN_VOWEL_RATIO = 0.12;
 
 const CULINARY_TERMS = [
   "рецепт", "рецепты", "еда", "блюдо", "завтрак", "обед", "ужин", "полдник",

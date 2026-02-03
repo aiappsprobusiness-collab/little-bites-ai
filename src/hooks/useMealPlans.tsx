@@ -11,7 +11,8 @@ type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 const MEAL_PLANS_RECIPE_SELECT = `*, recipe:recipes(${RECIPES_LIST_SELECT})`;
 
-export function useMealPlans(childId?: string) {
+/** childId: конкретный id = планы ребёнка; null = режим "Семья" (child_id is null); undefined = не фильтровать (все). */
+export function useMealPlans(childId?: string | null) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -28,7 +29,8 @@ export function useMealPlans(childId?: string) {
           .gte('planned_date', startDate.toISOString().split('T')[0])
           .lte('planned_date', endDate.toISOString().split('T')[0]);
 
-        if (childId) query = query.eq('child_id', childId);
+        if (childId === null) query = query.is('child_id', null);
+        else if (childId) query = query.eq('child_id', childId);
 
         const { data, error } = await query.order('planned_date', { ascending: true }).limit(7 * 4 * 2);
 
@@ -52,7 +54,8 @@ export function useMealPlans(childId?: string) {
           .eq('user_id', user.id)
           .eq('planned_date', dateStr);
 
-        if (childId) query = query.eq('child_id', childId);
+        if (childId === null) query = query.is('child_id', null);
+        else if (childId) query = query.eq('child_id', childId);
 
         const { data, error } = await query.order('meal_type', { ascending: true }).limit(10);
 
@@ -136,6 +139,32 @@ export function useMealPlans(childId?: string) {
     },
   });
 
+  // Очистить план на неделю
+  const clearWeekPlan = useMutation({
+    mutationFn: async ({ startDate, endDate }: { startDate: Date; endDate: Date }) => {
+      if (!user) throw new Error('User not authenticated');
+
+      let query = supabase
+        .from('meal_plans')
+        .delete()
+        .eq('user_id', user.id)
+        .gte('planned_date', startDate.toISOString().split('T')[0])
+        .lte('planned_date', endDate.toISOString().split('T')[0]);
+
+      if (childId != null && childId !== '') {
+        query = query.eq('child_id', childId);
+      } else {
+        query = query.is('child_id', null);
+      }
+
+      const { error } = await query;
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meal_plans', user?.id] });
+    },
+  });
+
   // Создать план на неделю (автозаполнение)
   const createWeekPlan = useMutation({
     mutationFn: async ({
@@ -175,6 +204,7 @@ export function useMealPlans(childId?: string) {
     createMealPlan: createMealPlan.mutateAsync,
     updateMealPlan: updateMealPlan.mutateAsync,
     deleteMealPlan: deleteMealPlan.mutateAsync,
+    clearWeekPlan: clearWeekPlan.mutateAsync,
     markAsCompleted: markAsCompleted.mutateAsync,
     createWeekPlan: createWeekPlan.mutateAsync,
     isCreating: createMealPlan.isPending,

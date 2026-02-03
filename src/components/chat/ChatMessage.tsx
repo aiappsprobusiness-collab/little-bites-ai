@@ -1,26 +1,16 @@
 import { useState, useRef, forwardRef, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
-import { Trash2, ChefHat, Clock, Heart, ShoppingCart, Share2 } from "lucide-react";
+import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import type { RecipeSuggestion } from "@/services/deepseek";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { parseRecipeFromPlainText, extractFirstJsonObjectFromStart } from "@/utils/parseChatRecipes";
+
+const UUID_REGEX = /\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
 
 /** Убирает ведущий JSON (сырой или в блоке ```json) из ответа ИИ — в чате только читаемый текст. */
 function getTextForDisplay(content: string): string {
@@ -38,6 +28,11 @@ function getTextForDisplay(content: string): string {
   return t || content;
 }
 
+/** Заменяет [uuid] на markdown-ссылку article:uuid для рендера кнопки «Читать статью». */
+function injectArticleLinks(text: string): string {
+  return text.replace(UUID_REGEX, (_, id) => `[Читать статью](article:${id})`);
+}
+
 interface ChatMessageProps {
   id: string;
   role: "user" | "assistant";
@@ -48,6 +43,8 @@ interface ChatMessageProps {
   /** Контекст ребёнка для сохранения в избранное (отображается в меню «Избранное») */
   childId?: string;
   childName?: string;
+  /** При клике на ссылку «Читать статью» в ответе ИИ (база знаний) */
+  onOpenArticle?: (articleId: string) => void;
 }
 
 interface Recipe {
@@ -304,26 +301,22 @@ function formatRecipe(recipe: Recipe): string {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, onDelete, childId, childName }, ref) => {
+  ({ id, role, content, timestamp, rawContent, onDelete, childId, childName, onOpenArticle }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
-    const [showShoppingModal, setShowShoppingModal] = useState(false);
-    const [selectedIngredients, setSelectedIngredients] = useState<Set<number>>(new Set());
-    /** Рецепт, распарсенный при открытии модалки (стабильно при клике), для отображения ингредиентов даже если recipe фликает */
-    const [modalRecipe, setModalRecipe] = useState<Recipe | null>(null);
     const x = useMotionValue(0);
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
     const constraintsRef = useRef(null);
-    const queryClient = useQueryClient();
     const { user } = useAuth();
     const { favorites, addFavorite, removeFavorite, isAdding, isRemoving } = useFavorites();
-    const { addItemsFromRecipe, activeList } = useShoppingLists();
     const { toast } = useToast();
 
     const sourceForParse = (rawContent ?? content).trim();
     const recipe = role === "assistant" ? parseRecipeFromContent(sourceForParse) : null;
     // Для отображения: убираем ведущий JSON, чтобы в чате был только читаемый текст с Markdown
     const displayContent = role === "assistant" ? getTextForDisplay(content) : content;
+    const displayWithArticleLinks =
+      role === "assistant" && onOpenArticle ? injectArticleLinks(displayContent) : displayContent;
 
     const favoriteEntry = recipe
       ? favorites.find((f) => f.recipe.title?.toLowerCase().trim() === recipe.title?.toLowerCase().trim())
@@ -356,99 +349,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       } catch (e: unknown) {
         console.error("DB Error in ChatMessage handleAddToFavorites:", (e as Error).message);
         toast({ title: "Не удалось добавить в избранное", variant: "destructive" });
-      }
-    };
-
-    const openShoppingModal = () => {
-      const source = (rawContent ?? content).trim();
-      // Приоритет: уже распарсенный recipe (JSON) → parseRecipeFromContent → parseRecipeFromPlainText
-      const parsed =
-        (recipe?.ingredients?.length ? recipe : null) ??
-        parseRecipeFromContent(source) ??
-        parseRecipeFromPlainText(source);
-      if (!parsed?.ingredients?.length) {
-        toast({ title: "Не удалось распознать ингредиенты", variant: "destructive" });
-        return;
-      }
-      setModalRecipe(parsed);
-      setSelectedIngredients(new Set(parsed.ingredients.map((_, i) => i)));
-      setShowShoppingModal(true);
-    };
-
-    const toggleIngredient = (index: number) => {
-      setSelectedIngredients((prev) => {
-        const next = new Set(prev);
-        if (next.has(index)) next.delete(index);
-        else next.add(index);
-        return next;
-      });
-    };
-
-    /** Используем modalRecipe (парсится при открытии модалки), чтобы индексы selectedIngredients совпадали с отображаемыми ингредиентами. */
-    const handleAddToList = async () => {
-      const parsedRecipe = modalRecipe;
-      if (!parsedRecipe || !parsedRecipe.ingredients?.length) {
-        toast({ title: "Не удалось распознать рецепт или ингредиенты", variant: "destructive" });
-        return;
-      }
-      const toAdd = parsedRecipe.ingredients.filter((_, i) => selectedIngredients.has(i));
-      if (toAdd.length === 0) {
-        toast({ title: "Выберите ингредиенты", variant: "destructive" });
-        return;
-      }
-      const recipeTitle = parsedRecipe.title ?? "Рецепт из чата";
-      if (!user?.id) {
-        toast({ title: "Войдите в аккаунт", variant: "destructive" });
-        return;
-      }
-      try {
-        // Шаг А: сохранить распарсенный рецепт в БД
-        const { data: newRecipe, error: recipeError } = await supabase
-          .from("recipes")
-          .insert([
-            {
-              title: recipeTitle,
-              user_id: user.id,
-              description: parsedRecipe.description ?? null,
-              cooking_time_minutes: parsedRecipe.cookingTime != null ? Math.round(Number(parsedRecipe.cookingTime)) : null,
-            },
-          ])
-          .select("id")
-          .single();
-
-        if (recipeError || !newRecipe?.id) {
-          console.error("RECIPE SAVE FATAL ERROR:", recipeError);
-          toast({
-            title: "Не удалось сохранить рецепт",
-            description: recipeError?.message ?? "Не удалось добавить в список",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Шаг Б: получить ID
-        const recipeId = newRecipe.id;
-
-        // Шаг В: добавить ингредиенты в shopping_list_items с этим recipe_id
-        await addItemsFromRecipe({
-          ingredients: toAdd,
-          listId: activeList?.id,
-          recipeId,
-          recipeTitle,
-        });
-
-        queryClient.invalidateQueries({ queryKey: ["shopping_list"] });
-        queryClient.invalidateQueries({ queryKey: ["shopping_lists"] });
-        queryClient.invalidateQueries({ queryKey: ["shopping_list_items"] });
-        await queryClient.refetchQueries({ queryKey: ["shopping_list_items"] });
-        await queryClient.refetchQueries({ queryKey: ["shopping_lists"] });
-
-        setShowShoppingModal(false);
-        toast({ title: "В список покупок", description: `Добавлено ${toAdd.length} ингредиент(ов) из «${recipeTitle}»` });
-      } catch (e: unknown) {
-        console.error("DB Error in ChatMessage handleAddToList:", (e as Error).message);
-        setShowShoppingModal(false);
-        toast({ title: "Не удалось добавить в список", variant: "destructive" });
       }
     };
 
@@ -530,10 +430,41 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               : "bg-card shadow-soft rounded-bl-sm"
               }`}
           >
-            {/* Ответы ассистента рендерятся как Markdown (жирный, списки); ведущий JSON скрыт. */}
+            {/* Ответы ассистента рендерятся как Markdown (жирный, списки); ведущий JSON скрыт; [uuid] → кнопка «Читать статью». */}
             {role === "assistant" ? (
               <div className="chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-sm prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-sm prose-strong:text-sm [&>*]:text-sm">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    a: ({ href, children }) => {
+                      if (href?.startsWith("article:") && onOpenArticle) {
+                        const articleId = href.slice(8);
+                        return (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="h-8 gap-1.5 mt-1 inline-flex"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              onOpenArticle(articleId);
+                            }}
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            Читать статью
+                          </Button>
+                        );
+                      }
+                      return (
+                        <a href={href} target="_blank" rel="noopener noreferrer">
+                          {children}
+                        </a>
+                      );
+                    },
+                  }}
+                >
+                  {displayWithArticleLinks}
+                </ReactMarkdown>
               </div>
             ) : (
               <p className="text-base whitespace-pre-wrap select-none">{displayContent}</p>
@@ -576,20 +507,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    openShoppingModal();
-                  }}
-                  className="h-9 w-9 rounded-full shrink-0 shadow-sm"
-                  title="В список покупок"
-                >
-                  <ShoppingCart className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="icon"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
                     handleShare();
                   }}
                   disabled={!shareText}
@@ -599,40 +516,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   <Share2 className="h-4 w-4" />
                 </Button>
               </div>
-            )}
-            {role === "assistant" && (
-              <Dialog open={showShoppingModal} onOpenChange={setShowShoppingModal}>
-                <DialogContent className="max-w-sm max-h-[80vh] flex flex-col" aria-describedby={undefined}>
-                  <DialogHeader>
-                    <DialogTitle>Добавить в список покупок</DialogTitle>
-                    <DialogDescription>
-                      Рецепт: {(modalRecipe ?? recipe)?.title ?? ""}. Выберите ингредиенты для добавления в список покупок.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="overflow-y-auto space-y-2 py-2">
-                    {((modalRecipe ?? recipe)?.ingredients ?? []).map((ing, i) => (
-                      <label
-                        key={i}
-                        className="flex items-center gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/50"
-                      >
-                        <Checkbox
-                          checked={selectedIngredients.has(i)}
-                          onCheckedChange={() => toggleIngredient(i)}
-                        />
-                        <span className="text-sm flex-1">{ing}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setShowShoppingModal(false)}>
-                      Отмена
-                    </Button>
-                    <Button onClick={handleAddToList}>
-                      Добавить выбранное
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
             )}
           </div>
         </motion.div>

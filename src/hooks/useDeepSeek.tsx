@@ -1,10 +1,10 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getDeepSeek, fileToBase64, isDeepSeekConfigured, type ImageAnalysisResponse, type RecipeSuggestion } from '@/services/deepseek';
-import { useChildren } from './useChildren';
+import { useSelectedChild } from '@/contexts/SelectedChildContext';
 
 export function useDeepSeek() {
-  const { children, calculateAgeInMonths } = useChildren();
-  const selectedChild = children[0];
+  const { children, selectedChild } = useSelectedChild();
+  const profile = selectedChild ?? children[0];
   const isConfigured = isDeepSeekConfigured();
 
   // Анализ изображения
@@ -48,22 +48,21 @@ export function useDeepSeek() {
     },
   });
 
-  // Получение рекомендации
   const getRecommendation = useQuery({
-    queryKey: ['deepseek-recommendation', selectedChild?.id],
+    queryKey: ['deepseek-recommendation', profile?.id],
     queryFn: async () => {
-      if (!selectedChild || !isConfigured) return null;
+      if (!profile || !isConfigured) return null;
 
       try {
         const deepseek = getDeepSeek();
-        const ageMonths = calculateAgeInMonths(selectedChild.birth_date);
-        return await deepseek.getRecommendation(ageMonths, selectedChild.allergies || undefined);
+        const ageMonths = profile.age_months ?? 0;
+        return await deepseek.getRecommendation(ageMonths, profile.allergies || undefined);
       } catch (error: any) {
         console.error('Recommendation error:', error);
         return null;
       }
     },
-    enabled: !!selectedChild && isConfigured,
+    enabled: !!profile && isConfigured,
     staleTime: 1000 * 60 * 60, // 1 час
   });
 

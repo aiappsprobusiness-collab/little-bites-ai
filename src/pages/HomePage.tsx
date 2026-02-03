@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useChildren } from "@/hooks/useChildren";
+import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
 import { useToast } from "@/hooks/use-toast";
 
 const allergyOptions = [
@@ -33,7 +33,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const { selectedChild } = useSelectedChild();
   const { recentRecipes, isLoading: isLoadingRecipes } = useRecipes();
-  const { createChild, isCreating } = useChildren();
+  const { createMember, isCreating } = useMembers();
 
   const [isAddChildOpen, setIsAddChildOpen] = useState(false);
   const [newChildName, setNewChildName] = useState("");
@@ -45,12 +45,14 @@ export default function HomePage() {
     if (!newChildName.trim() || !newChildBirthDate) return;
 
     try {
-      await createChild({
+      const ageMonths = birthDateToAgeMonths(newChildBirthDate);
+      await createMember({
         name: newChildName.trim(),
-        birth_date: newChildBirthDate,
+        type: "child",
+        age_months: ageMonths || null,
+        allergies: newChildAllergies,
         likes: [],
         dislikes: [],
-        allergies: newChildAllergies,
       });
       toast({
         title: "Ребенок добавлен",

@@ -3,16 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trash2, ChefHat, ShoppingCart, MessageCircle, Clock } from "lucide-react";
+import { Trash2, ChefHat, MessageCircle, Clock } from "lucide-react";
 import { useFavorites } from "@/hooks/useFavorites";
-import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { useToast } from "@/hooks/use-toast";
 
 export default function FavoritesPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { favorites, removeFavorite } = useFavorites();
-  const { addItemsFromRecipe } = useShoppingLists();
 
   const handleRemove = async (id: string) => {
     try {
@@ -21,20 +19,6 @@ export default function FavoritesPage() {
     } catch (e: unknown) {
       console.error("DB Error in FavoritesPage handleRemove:", (e as Error).message);
       toast({ title: "Не удалось удалить", variant: "destructive" });
-    }
-  };
-
-  const handleAddToShoppingList = async (ingredients: string[], title: string) => {
-    if (!ingredients?.length) {
-      toast({ title: "Нет ингредиентов", variant: "destructive" });
-      return;
-    }
-    try {
-      await addItemsFromRecipe({ ingredients, recipeTitle: title });
-      toast({ title: "Добавлено в список покупок", description: `Ингредиенты «${title}» добавлены` });
-    } catch (e: unknown) {
-      console.error("DB Error in FavoritesPage handleAddToShoppingList:", (e as Error).message);
-      toast({ title: "Не удалось добавить в список", variant: "destructive" });
     }
   };
 
@@ -113,21 +97,6 @@ export default function FavoritesPage() {
                       </ol>
                     </div>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-2"
-                    onClick={() =>
-                      handleAddToShoppingList(
-                        favorite.recipe.ingredients || [],
-                        favorite.recipe.title
-                      )
-                    }
-                    disabled={!favorite.recipe.ingredients?.length}
-                  >
-                    <ShoppingCart className="w-4 h-4" />
-                    Добавить в список покупок
-                  </Button>
                 </CardContent>
               </Card>
             </motion.div>

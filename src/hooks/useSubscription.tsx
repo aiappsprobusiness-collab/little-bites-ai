@@ -1,6 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from './useAuth';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./useAuth";
 
 interface UsageData {
   can_generate: boolean;
@@ -14,119 +14,71 @@ export function useSubscription() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Получить статус подписки из профиля
-  const { data: profile, isLoading: isLoadingProfile } = useQuery({
-    queryKey: ['profile-subscription', user?.id],
+  const { data: profileV2, isLoading: isLoadingProfile } = useQuery({
+    queryKey: ["profile-subscription", user?.id],
     queryFn: async () => {
       if (!user) return null;
-      
       const { data, error } = await supabase
-        .from('profiles')
-        .select('subscription_status')
-        .eq('user_id', user.id)
-        .single();
-
+        .from("profiles_v2")
+        .select("status, requests_today, daily_limit")
+        .eq("user_id", user.id)
+        .maybeSingle();
       if (error) throw error;
-      return data;
+      return data as { status: string; requests_today: number; daily_limit: number } | null;
     },
     enabled: !!user,
   });
 
-  // Список email-адресов с неограниченным доступом
-  const UNLIMITED_ACCESS_EMAILS = ['alesah007@gmail.com'];
+  const UNLIMITED_ACCESS_EMAILS = ["alesah007@gmail.com"];
   const hasUnlimitedAccess = user?.email && UNLIMITED_ACCESS_EMAILS.includes(user.email);
 
-  // Получить лимиты использования
-  const { data: usageData, isLoading: isLoadingUsage, refetch: refetchUsage } = useQuery({
-    queryKey: ['usage-limit', user?.id],
-    queryFn: async (): Promise<UsageData | null> => {
-      if (!user) return null;
-      
-      // Для аккаунтов с неограниченным доступом возвращаем специальные значения
-      if (hasUnlimitedAccess) {
-        return {
-          can_generate: true,
-          remaining: 999999,
-          is_premium: true,
-          used_today: 0,
-          daily_limit: 999999,
-        };
-      }
-      
-      const { data, error } = await supabase.rpc('check_usage_limit', {
-        _user_id: user.id,
-      });
+  const status = profileV2?.status ?? "free";
+  const isPremium = status === "premium" || hasUnlimitedAccess;
+  const isTrial = status === "trial";
+  const usedToday = profileV2?.requests_today ?? 0;
+  const dailyLimit = profileV2?.daily_limit ?? 5;
+  const remaining = Math.max(0, dailyLimit - usedToday);
+  const canGenerate = hasUnlimitedAccess ? true : (status === "premium" || status === "trial" ? true : remaining > 0);
 
-      if (error) throw error;
-      return data as unknown as UsageData;
-    },
-    enabled: !!user,
-    staleTime: 30000, // 30 секунд
-  });
+  const refetchUsage = () => {
+    queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+  };
 
-  // Увеличить счетчик использования
   const incrementUsage = useMutation({
     mutationFn: async () => {
-      if (!user) throw new Error('User not authenticated');
-      
-      // Для аккаунтов с неограниченным доступом не увеличиваем счетчик
-      if (hasUnlimitedAccess) {
-        return;
-      }
-      
-      const { error } = await supabase.rpc('increment_usage', {
-        _user_id: user.id,
-      });
-
+      if (!user) throw new Error("User not authenticated");
+      if (hasUnlimitedAccess) return;
+      const { error } = await supabase.rpc("increment_usage", { target_user_id: user.id });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['usage-limit', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
     },
   });
 
-  // Обновить статус подписки (для RevenueCat webhook)
   const updateSubscriptionStatus = useMutation({
-    mutationFn: async (status: 'free' | 'premium' | 'trial') => {
-      if (!user) throw new Error('User not authenticated');
-      
+    mutationFn: async (newStatus: "free" | "premium" | "trial") => {
+      if (!user) throw new Error("User not authenticated");
       const { error } = await supabase
-        .from('profiles')
-        .update({ subscription_status: status })
-        .eq('user_id', user.id);
-
+        .from("profiles_v2")
+        .update({ status: newStatus })
+        .eq("user_id", user.id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile-subscription', user?.id] });
-      queryClient.invalidateQueries({ queryKey: ['usage-limit', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
     },
   });
-
-  const isPremium = profile?.subscription_status === 'premium' || hasUnlimitedAccess;
-  const isTrial = profile?.subscription_status === 'trial';
-  // Для аккаунтов с неограниченным доступом всегда разрешаем генерацию
-  const canGenerate = hasUnlimitedAccess ? true : (usageData?.can_generate ?? true);
-  const remaining = hasUnlimitedAccess ? 999999 : (usageData?.remaining ?? 5);
-  const usedToday = usageData?.used_today ?? 0;
-  const dailyLimit = hasUnlimitedAccess ? 999999 : (usageData?.daily_limit ?? 5);
 
   return {
-    // Status
     isPremium,
     isTrial,
-    subscriptionStatus: profile?.subscription_status || 'free',
-    
-    // Usage
+    subscriptionStatus: status,
     canGenerate,
     remaining,
     usedToday,
     dailyLimit,
-    
-    // Loading
-    isLoading: isLoadingProfile || isLoadingUsage,
-    
-    // Actions
+    isLoading: isLoadingProfile,
     incrementUsage: incrementUsage.mutateAsync,
     updateSubscriptionStatus: updateSubscriptionStatus.mutateAsync,
     refetchUsage,

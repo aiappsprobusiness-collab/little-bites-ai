@@ -1,20 +1,16 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ShoppingCart } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
-import { useShoppingLists } from "@/hooks/useShoppingLists";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
 import { getIngredientEmoji } from "@/utils/ingredientEmojis";
 
 export default function RecipePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { getRecipeById } = useRecipes();
-  const { addItemsFromRecipe } = useShoppingLists();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
 
   if (isLoading) {
@@ -52,20 +48,6 @@ export default function RecipePage() {
     const u = ing.unit?.trim() || "";
     return u ? `${ing.name} ${a} ${u}`.trim() : ing.name;
   });
-
-  const handleAddToShoppingList = async () => {
-    if (!ingredientStrings.length) {
-      toast({ title: "Нет ингредиентов", variant: "destructive" });
-      return;
-    }
-    try {
-      await addItemsFromRecipe({ ingredients: ingredientStrings, listId: undefined, recipeId: id || null, recipeTitle: recipe.title });
-      toast({ title: "Добавлено в список покупок", description: `Ингредиенты «${recipe.title}» добавлены` });
-    } catch (e: unknown) {
-      console.error("DB Error in RecipePage handleAddToShoppingList:", (e as Error).message);
-      toast({ title: "Не удалось добавить в список", variant: "destructive" });
-    }
-  };
 
   return (
     <MobileLayout title="">
@@ -111,16 +93,6 @@ export default function RecipePage() {
                   );
                 })}
               </ul>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full gap-2 mt-4"
-                onClick={handleAddToShoppingList}
-                disabled={!ingredientStrings.length}
-              >
-                <ShoppingCart className="w-4 h-4" />
-                Добавить в список покупок
-              </Button>
             </CardContent>
           </Card>
         )}

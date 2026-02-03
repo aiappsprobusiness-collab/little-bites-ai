@@ -1,14 +1,10 @@
--- Create enum for app roles
-CREATE TYPE public.app_role AS ENUM ('admin', 'user');
-
--- Create enum for meal types
-CREATE TYPE public.meal_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack');
-
--- Create enum for product categories
-CREATE TYPE public.product_category AS ENUM ('vegetables', 'fruits', 'dairy', 'meat', 'grains', 'other');
+-- Enums (идемпотентно: не падаем, если тип уже есть)
+DO $$ BEGIN CREATE TYPE public.app_role AS ENUM ('admin', 'user'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.meal_type AS ENUM ('breakfast', 'lunch', 'dinner', 'snack'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE public.product_category AS ENUM ('vegetables', 'fruits', 'dairy', 'meat', 'grains', 'other'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- User roles table (security best practice)
-CREATE TABLE public.user_roles (
+CREATE TABLE IF NOT EXISTS public.user_roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     role app_role NOT NULL DEFAULT 'user',
@@ -17,7 +13,7 @@ CREATE TABLE public.user_roles (
 );
 
 -- User profiles table
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
     display_name TEXT,
@@ -29,7 +25,7 @@ CREATE TABLE public.profiles (
 );
 
 -- Children profiles table
-CREATE TABLE public.children (
+CREATE TABLE IF NOT EXISTS public.children (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
@@ -43,7 +39,7 @@ CREATE TABLE public.children (
 );
 
 -- Recipes table
-CREATE TABLE public.recipes (
+CREATE TABLE IF NOT EXISTS public.recipes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     child_id UUID REFERENCES public.children(id) ON DELETE SET NULL,
@@ -67,7 +63,7 @@ CREATE TABLE public.recipes (
 );
 
 -- Recipe ingredients table
-CREATE TABLE public.recipe_ingredients (
+CREATE TABLE IF NOT EXISTS public.recipe_ingredients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id UUID REFERENCES public.recipes(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
@@ -78,7 +74,7 @@ CREATE TABLE public.recipe_ingredients (
 );
 
 -- Recipe steps table
-CREATE TABLE public.recipe_steps (
+CREATE TABLE IF NOT EXISTS public.recipe_steps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recipe_id UUID REFERENCES public.recipes(id) ON DELETE CASCADE NOT NULL,
     step_number INTEGER NOT NULL,
@@ -88,7 +84,7 @@ CREATE TABLE public.recipe_steps (
 );
 
 -- Shopping lists table
-CREATE TABLE public.shopping_lists (
+CREATE TABLE IF NOT EXISTS public.shopping_lists (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL DEFAULT 'Список покупок',
@@ -98,7 +94,7 @@ CREATE TABLE public.shopping_lists (
 );
 
 -- Shopping list items table
-CREATE TABLE public.shopping_list_items (
+CREATE TABLE IF NOT EXISTS public.shopping_list_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     shopping_list_id UUID REFERENCES public.shopping_lists(id) ON DELETE CASCADE NOT NULL,
     recipe_id UUID REFERENCES public.recipes(id) ON DELETE SET NULL,
@@ -111,7 +107,7 @@ CREATE TABLE public.shopping_list_items (
 );
 
 -- Meal plans table
-CREATE TABLE public.meal_plans (
+CREATE TABLE IF NOT EXISTS public.meal_plans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     child_id UUID REFERENCES public.children(id) ON DELETE CASCADE,
@@ -148,11 +144,14 @@ AS $$
   )
 $$;
 
--- RLS Policies for user_roles
+-- RLS Policies (идемпотентно: DROP IF EXISTS перед CREATE)
+DROP POLICY IF EXISTS "Users can view their own roles" ON public.user_roles;
 CREATE POLICY "Users can view their own roles" ON public.user_roles
     FOR SELECT USING (auth.uid() = user_id);
 
--- RLS Policies for profiles
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert their own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can view their own profile" ON public.profiles
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own profile" ON public.profiles
@@ -160,7 +159,10 @@ CREATE POLICY "Users can insert their own profile" ON public.profiles
 CREATE POLICY "Users can update their own profile" ON public.profiles
     FOR UPDATE USING (auth.uid() = user_id);
 
--- RLS Policies for children
+DROP POLICY IF EXISTS "Users can view their own children" ON public.children;
+DROP POLICY IF EXISTS "Users can insert their own children" ON public.children;
+DROP POLICY IF EXISTS "Users can update their own children" ON public.children;
+DROP POLICY IF EXISTS "Users can delete their own children" ON public.children;
 CREATE POLICY "Users can view their own children" ON public.children
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own children" ON public.children
@@ -170,7 +172,10 @@ CREATE POLICY "Users can update their own children" ON public.children
 CREATE POLICY "Users can delete their own children" ON public.children
     FOR DELETE USING (auth.uid() = user_id);
 
--- RLS Policies for recipes
+DROP POLICY IF EXISTS "Users can view their own recipes" ON public.recipes;
+DROP POLICY IF EXISTS "Users can insert their own recipes" ON public.recipes;
+DROP POLICY IF EXISTS "Users can update their own recipes" ON public.recipes;
+DROP POLICY IF EXISTS "Users can delete their own recipes" ON public.recipes;
 CREATE POLICY "Users can view their own recipes" ON public.recipes
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own recipes" ON public.recipes
@@ -180,7 +185,10 @@ CREATE POLICY "Users can update their own recipes" ON public.recipes
 CREATE POLICY "Users can delete their own recipes" ON public.recipes
     FOR DELETE USING (auth.uid() = user_id);
 
--- RLS Policies for recipe_ingredients (via recipe ownership)
+DROP POLICY IF EXISTS "Users can view ingredients of their recipes" ON public.recipe_ingredients;
+DROP POLICY IF EXISTS "Users can insert ingredients to their recipes" ON public.recipe_ingredients;
+DROP POLICY IF EXISTS "Users can update ingredients of their recipes" ON public.recipe_ingredients;
+DROP POLICY IF EXISTS "Users can delete ingredients of their recipes" ON public.recipe_ingredients;
 CREATE POLICY "Users can view ingredients of their recipes" ON public.recipe_ingredients
     FOR SELECT USING (EXISTS (
         SELECT 1 FROM public.recipes WHERE recipes.id = recipe_id AND recipes.user_id = auth.uid()
@@ -198,7 +206,10 @@ CREATE POLICY "Users can delete ingredients of their recipes" ON public.recipe_i
         SELECT 1 FROM public.recipes WHERE recipes.id = recipe_id AND recipes.user_id = auth.uid()
     ));
 
--- RLS Policies for recipe_steps (via recipe ownership)
+DROP POLICY IF EXISTS "Users can view steps of their recipes" ON public.recipe_steps;
+DROP POLICY IF EXISTS "Users can insert steps to their recipes" ON public.recipe_steps;
+DROP POLICY IF EXISTS "Users can update steps of their recipes" ON public.recipe_steps;
+DROP POLICY IF EXISTS "Users can delete steps of their recipes" ON public.recipe_steps;
 CREATE POLICY "Users can view steps of their recipes" ON public.recipe_steps
     FOR SELECT USING (EXISTS (
         SELECT 1 FROM public.recipes WHERE recipes.id = recipe_id AND recipes.user_id = auth.uid()
@@ -216,7 +227,10 @@ CREATE POLICY "Users can delete steps of their recipes" ON public.recipe_steps
         SELECT 1 FROM public.recipes WHERE recipes.id = recipe_id AND recipes.user_id = auth.uid()
     ));
 
--- RLS Policies for shopping_lists
+DROP POLICY IF EXISTS "Users can view their own shopping lists" ON public.shopping_lists;
+DROP POLICY IF EXISTS "Users can insert their own shopping lists" ON public.shopping_lists;
+DROP POLICY IF EXISTS "Users can update their own shopping lists" ON public.shopping_lists;
+DROP POLICY IF EXISTS "Users can delete their own shopping lists" ON public.shopping_lists;
 CREATE POLICY "Users can view their own shopping lists" ON public.shopping_lists
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own shopping lists" ON public.shopping_lists
@@ -226,7 +240,10 @@ CREATE POLICY "Users can update their own shopping lists" ON public.shopping_lis
 CREATE POLICY "Users can delete their own shopping lists" ON public.shopping_lists
     FOR DELETE USING (auth.uid() = user_id);
 
--- RLS Policies for shopping_list_items (via list ownership)
+DROP POLICY IF EXISTS "Users can view items of their lists" ON public.shopping_list_items;
+DROP POLICY IF EXISTS "Users can insert items to their lists" ON public.shopping_list_items;
+DROP POLICY IF EXISTS "Users can update items of their lists" ON public.shopping_list_items;
+DROP POLICY IF EXISTS "Users can delete items of their lists" ON public.shopping_list_items;
 CREATE POLICY "Users can view items of their lists" ON public.shopping_list_items
     FOR SELECT USING (EXISTS (
         SELECT 1 FROM public.shopping_lists WHERE shopping_lists.id = shopping_list_id AND shopping_lists.user_id = auth.uid()
@@ -244,7 +261,10 @@ CREATE POLICY "Users can delete items of their lists" ON public.shopping_list_it
         SELECT 1 FROM public.shopping_lists WHERE shopping_lists.id = shopping_list_id AND shopping_lists.user_id = auth.uid()
     ));
 
--- RLS Policies for meal_plans
+DROP POLICY IF EXISTS "Users can view their own meal plans" ON public.meal_plans;
+DROP POLICY IF EXISTS "Users can insert their own meal plans" ON public.meal_plans;
+DROP POLICY IF EXISTS "Users can update their own meal plans" ON public.meal_plans;
+DROP POLICY IF EXISTS "Users can delete their own meal plans" ON public.meal_plans;
 CREATE POLICY "Users can view their own meal plans" ON public.meal_plans
     FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own meal plans" ON public.meal_plans
@@ -263,26 +283,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Apply updated_at triggers
-CREATE TRIGGER update_profiles_updated_at
-    BEFORE UPDATE ON public.profiles
-    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_children_updated_at
-    BEFORE UPDATE ON public.children
-    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_recipes_updated_at
-    BEFORE UPDATE ON public.recipes
-    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_shopping_lists_updated_at
-    BEFORE UPDATE ON public.shopping_lists
-    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-
-CREATE TRIGGER update_meal_plans_updated_at
-    BEFORE UPDATE ON public.meal_plans
-    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+-- Apply updated_at triggers (идемпотентно)
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
+CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS update_children_updated_at ON public.children;
+CREATE TRIGGER update_children_updated_at BEFORE UPDATE ON public.children FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS update_recipes_updated_at ON public.recipes;
+CREATE TRIGGER update_recipes_updated_at BEFORE UPDATE ON public.recipes FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS update_shopping_lists_updated_at ON public.shopping_lists;
+CREATE TRIGGER update_shopping_lists_updated_at BEFORE UPDATE ON public.shopping_lists FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+DROP TRIGGER IF EXISTS update_meal_plans_updated_at ON public.meal_plans;
+CREATE TRIGGER update_meal_plans_updated_at BEFORE UPDATE ON public.meal_plans FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Auto-create profile and role on user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -298,17 +309,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Indexes for performance
-CREATE INDEX idx_children_user_id ON public.children(user_id);
-CREATE INDEX idx_recipes_user_id ON public.recipes(user_id);
-CREATE INDEX idx_recipes_child_id ON public.recipes(child_id);
-CREATE INDEX idx_recipe_ingredients_recipe_id ON public.recipe_ingredients(recipe_id);
-CREATE INDEX idx_recipe_steps_recipe_id ON public.recipe_steps(recipe_id);
-CREATE INDEX idx_shopping_lists_user_id ON public.shopping_lists(user_id);
-CREATE INDEX idx_shopping_list_items_list_id ON public.shopping_list_items(shopping_list_id);
-CREATE INDEX idx_meal_plans_user_id ON public.meal_plans(user_id);
-CREATE INDEX idx_meal_plans_date ON public.meal_plans(planned_date);
+-- Indexes for performance (идемпотентно)
+CREATE INDEX IF NOT EXISTS idx_children_user_id ON public.children(user_id);
+CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON public.recipes(user_id);
+CREATE INDEX IF NOT EXISTS idx_recipes_child_id ON public.recipes(child_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe_id ON public.recipe_ingredients(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_steps_recipe_id ON public.recipe_steps(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_shopping_lists_user_id ON public.shopping_lists(user_id);
+CREATE INDEX IF NOT EXISTS idx_shopping_list_items_list_id ON public.shopping_list_items(shopping_list_id);
+CREATE INDEX IF NOT EXISTS idx_meal_plans_user_id ON public.meal_plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_meal_plans_date ON public.meal_plans(planned_date);

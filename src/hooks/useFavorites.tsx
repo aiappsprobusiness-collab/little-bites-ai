@@ -17,14 +17,14 @@ export function useFavorites() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Получить все избранные рецепты
+  // Получить все избранные рецепты (таблица favorites_v2: recipe_data jsonb, created_at)
   const { data: favorites = [], isLoading } = useQuery({
     queryKey: ['favorites', user?.id],
     queryFn: async () => {
       if (!user) return [];
 
       const { data, error } = await supabase
-        .from('favorites')
+        .from('favorites_v2')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -34,11 +34,11 @@ export function useFavorites() {
         throw error;
       }
 
-      return (data || []).map((f) => ({
+      return (data || []).map((f: { id: string; recipe_data?: unknown; recipe?: unknown; created_at?: string }) => ({
         id: f.id,
-        recipe: f.recipe as StoredRecipe,
-        memberIds: [], // Убрано из схемы, оставляем пустой массив для обратной совместимости
-        createdAt: f.created_at,
+        recipe: ((f.recipe_data ?? f.recipe) ?? {}) as StoredRecipe,
+        memberIds: [],
+        createdAt: f.created_at ?? f.id,
       })) as SavedFavorite[];
     },
     enabled: !!user,
@@ -66,10 +66,10 @@ export function useFavorites() {
       };
 
       const { data, error } = await supabase
-        .from('favorites')
+        .from('favorites_v2')
         .insert({
           user_id: user.id,
-          recipe: recipePayload as any,
+          recipe_data: recipePayload as Record<string, unknown>,
         })
         .select()
         .single();
@@ -89,7 +89,7 @@ export function useFavorites() {
   const removeFavorite = useMutation({
     mutationFn: async (id: string) => {
       if (!user) throw new Error('User not authenticated');
-      const { error } = await supabase.from('favorites').delete().eq('id', id);
+      const { error } = await supabase.from('favorites_v2').delete().eq('id', id);
 
       if (error) {
         console.error('DB Error in useFavorites removeFavorite:', error.message, 'Details:', error.details);

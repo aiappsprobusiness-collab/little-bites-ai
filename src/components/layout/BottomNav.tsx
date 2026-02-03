@@ -1,14 +1,13 @@
 import { motion } from "framer-motion";
-import { Heart, Camera, Calendar, MessageCircle, ShoppingCart } from "lucide-react";
+import { Heart, Calendar, MessageCircle, BookOpen } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { icon: MessageCircle, label: "Чат", path: "/chat" },
   { icon: Heart, label: "Избранное", path: "/favorites" },
-  { icon: Camera, label: "", path: "/scan", isMain: true },
+  { icon: BookOpen, label: "База знаний", path: "/articles" },
   { icon: Calendar, label: "План", path: "/meal-plan" },
-  { icon: ShoppingCart, label: "Покупки", path: "/shopping" },
 ];
 
 export function BottomNav() {
@@ -21,22 +20,6 @@ export function BottomNav() {
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
-
-          if (item.isMain) {
-            return (
-              <motion.button
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                className="relative -mt-6"
-                whileTap={{ scale: 0.95 }}
-              >
-                <div className="w-14 h-14 rounded-full gradient-primary shadow-button flex items-center justify-center">
-                  <Icon className="w-6 h-6 text-primary-foreground" />
-                </div>
-              </motion.button>
-            );
-          }
-
           return (
             <motion.button
               key={item.path}

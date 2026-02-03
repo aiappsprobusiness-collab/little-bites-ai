@@ -1,18 +1,20 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Calendar as CalendarIcon, Loader2, X, Pencil } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Loader2, X, Pencil, Sparkles, Check, ArrowLeft } from "lucide-react";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useRecipes } from "@/hooks/useRecipes";
+import { useGenerateWeeklyPlan } from "@/hooks/useGenerateWeeklyPlan";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { AddMealDialog } from "@/components/meal-plan/AddMealDialog";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useSubscription } from "@/hooks/useSubscription";
 import { resolveUnit } from "@/utils/productUtils";
 import {
   Select,
@@ -37,12 +39,49 @@ const mealTypes = [
 export default function MealPlanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedChild, children, selectedChildId, setSelectedChildId } = useSelectedChild();
-  // Для выбора рецепта в план — всегда все рецепты пользователя (любой рецепт можно добавить любому ребёнку)
+  const { selectedChild, children, selectedChildId, setSelectedChildId, isLoading: isChildrenLoading } = useSelectedChild();
+  const { subscriptionStatus } = useSubscription();
+  const isFree = subscriptionStatus === "free";
+  const isFamilyMode = !isFree && selectedChildId === "family";
+  const mealPlanChildId = isFree && selectedChildId === "family"
+    ? (children[0]?.id ?? undefined)
+    : (isFamilyMode ? null : (selectedChildId || undefined));
   const { recipes, createRecipe } = useRecipes();
-  const { getMealPlansByDate, createMealPlan, deleteMealPlan, isCreating } = useMealPlans(selectedChild?.id);
+  const { getMealPlansByDate, createMealPlan, deleteMealPlan, clearWeekPlan, isCreating } = useMealPlans(mealPlanChildId);
   const { getTodayChatRecipes } = useChatRecipes();
   const { favorites } = useFavorites();
+  const childDataForPlan = useMemo(() => {
+    if (isFamilyMode && children.length > 0) {
+      const youngest = [...children].sort((a, b) => (a.age_months ?? 0) - (b.age_months ?? 0))[0];
+      const allAllergies = Array.from(new Set(children.flatMap((c) => c.allergies ?? [])));
+      const allLikes = Array.from(new Set(children.flatMap((c) => c.likes ?? [])));
+      const allDislikes = Array.from(new Set(children.flatMap((c) => c.dislikes ?? [])));
+      return {
+        name: "Семья",
+        age_months: youngest.age_months ?? 0,
+        allergies: allAllergies,
+        likes: allLikes,
+        dislikes: allDislikes,
+      };
+    }
+    const childForPlan = selectedChild ?? (isFree && selectedChildId === "family" && children.length > 0 ? children[0] : null);
+    if (childForPlan) {
+      return {
+        name: childForPlan.name,
+        age_months: childForPlan.age_months ?? 0,
+        allergies: childForPlan.allergies ?? [],
+        likes: childForPlan.likes ?? [],
+        dislikes: childForPlan.dislikes ?? [],
+      };
+    }
+    return null;
+  }, [isFamilyMode, children, selectedChild, isFree, selectedChildId]);
+
+  const childIdForPlan = mealPlanChildId ?? null;
+  const { generateWeeklyPlan, regenerateSingleDay, isGenerating: isPlanGenerating, completedDays } = useGenerateWeeklyPlan(
+    childDataForPlan,
+    childIdForPlan
+  );
 
   const [showProfileSheet, setShowProfileSheet] = useState(false);
   const [sheetCreateMode, setSheetCreateMode] = useState(false);
@@ -65,6 +104,8 @@ export default function MealPlanPage() {
   };
 
   const weekDates = getCurrentWeekDates();
+  const weekStart = weekDates[0];
+  const weekEnd = weekDates[6];
   // Находим индекс текущего дня в неделе
   const todayIndex = weekDates.findIndex(
     (date) => date.toDateString() === new Date().toDateString()
@@ -76,7 +117,9 @@ export default function MealPlanPage() {
 
   const isToday = selectedDate.toDateString() === new Date().toDateString();
   const todayChatRecipesQuery = getTodayChatRecipes();
-  const todayChatRecipes = todayChatRecipesQuery?.data || [];
+  const todayChatRecipes: any[] = Array.isArray(todayChatRecipesQuery?.data)
+    ? todayChatRecipesQuery.data
+    : [];
 
   const getPlannedMealRecipe = (plannedMeal: any) => {
     // В зависимости от select в Supabase джойн может прийти как `recipe` или `recipes`
@@ -97,7 +140,7 @@ export default function MealPlanPage() {
   const handleAddMeal = async (recipeId: string, mealType: string) => {
     try {
       await createMealPlan({
-        child_id: selectedChild?.id || null,
+        child_id: childIdForPlan ?? null,
         recipe_id: recipeId,
         planned_date: selectedDate.toISOString().split("T")[0],
         meal_type: mealType as any,
@@ -136,7 +179,7 @@ export default function MealPlanPage() {
           title: favorite.recipe.title,
           description: favorite.recipe.description || "",
           cooking_time_minutes: favorite.recipe.cookingTime || null,
-          child_id: selectedChild?.id || null,
+          child_id: childIdForPlan ?? null,
         },
         ingredients: (favorite.recipe.ingredients || []).map((ing, index) => ({
           name: ing,
@@ -155,7 +198,7 @@ export default function MealPlanPage() {
 
       // Добавляем созданный рецепт в план
       await createMealPlan({
-        child_id: selectedChild?.id || null,
+        child_id: childIdForPlan ?? null,
         recipe_id: newRecipe.id,
         planned_date: selectedDate.toISOString().split("T")[0],
         meal_type: mealType as any,
@@ -201,16 +244,46 @@ export default function MealPlanPage() {
     }
   };
 
-  if (!selectedChild) {
+  const showNoProfile =
+    !isFamilyMode && !selectedChild && !isChildrenLoading;
+  const showEmptyFamily = isFamilyMode && children.length === 0 && !isChildrenLoading;
+
+  if (isChildrenLoading) {
     return (
-      <MobileLayout title="План питания">
+      <MobileLayout
+        title="План питания"
+        headerLeft={
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+        }
+      >
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      </MobileLayout>
+    );
+  }
+
+  if (showNoProfile || showEmptyFamily) {
+    return (
+      <MobileLayout
+        title="План питания"
+        headerLeft={
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+        }
+      >
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card variant="default" className="p-8 text-center">
             <CardContent className="p-0">
               <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
               <h3 className="text-lg font-bold mb-2">Нет профиля ребенка</h3>
               <p className="text-muted-foreground mb-4">
-                Добавьте профиль ребенка, чтобы планировать питание
+                {isFree
+                  ? "Добавьте профиль ребёнка, чтобы строить план питания."
+                  : "Добавьте профиль ребёнка или выберите «Семья» для общего плана"}
               </p>
               <Button variant="mint" onClick={() => navigate("/profile")}>
                 Добавить ребенка
@@ -223,23 +296,34 @@ export default function MealPlanPage() {
   }
 
   return (
-    <MobileLayout title="План питания">
+    <MobileLayout
+      title="План питания"
+      headerRight={
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+      }
+    >
       <div className="space-y-6">
         {/* Готовим для */}
         <div className="px-4 pt-4 pb-3 border-b border-border/50">
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Готовим для:</span>
             <Select
-              value={selectedChildId ?? "family"}
+              value={
+                isFree
+                  ? (selectedChildId === "family" ? children[0]?.id ?? "" : selectedChildId ?? children[0]?.id ?? "")
+                  : (selectedChildId ?? "family")
+              }
               onValueChange={(v) => setSelectedChildId(v)}
             >
               <SelectTrigger className="w-[180px] bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="family">Семья</SelectItem>
-                {children.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
+                {!isFree && <SelectItem value="family">Семья</SelectItem>}
+                {children.map((c, idx) => (
+                  <SelectItem key={`${c.id}-${idx}`} value={c.id}>
                     {c.name}
                   </SelectItem>
                 ))}
@@ -274,6 +358,76 @@ export default function MealPlanPage() {
           </div>
         </div>
 
+        {/* Кнопка генерации плана на неделю */}
+        <div className="px-4">
+          <Button
+            variant="mint"
+            size="lg"
+            className="w-full h-14 rounded-2xl shadow-soft font-semibold text-base gradient-primary text-primary-foreground border-0"
+            onClick={async () => {
+              try {
+                await generateWeeklyPlan();
+                toast({
+                  title: "План создан",
+                  description: "План питания на неделю успешно сгенерирован",
+                });
+              } catch (e: any) {
+                toast({
+                  variant: "destructive",
+                  title: "Ошибка",
+                  description: e?.message || "Не удалось создать план",
+                });
+              }
+            }}
+            disabled={isPlanGenerating}
+          >
+            {isPlanGenerating ? (
+              <div className="flex items-center gap-3 w-full justify-center">
+                <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                <div className="flex gap-1.5">
+                  {weekDays.map((d, i) => (
+                    <span
+                      key={d}
+                      className={`inline-flex items-center justify-center w-7 h-7 rounded-lg text-xs font-medium transition-all ${completedDays[i]
+                        ? "bg-primary/20 text-primary"
+                        : "bg-muted/50 text-muted-foreground"
+                        }`}
+                    >
+                      {completedDays[i] ? <Check className="w-3.5 h-3.5" /> : d}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                <Sparkles className="w-5 h-5 mr-2 shrink-0" />
+                Создать план питания на неделю
+              </>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full mt-2 text-muted-foreground"
+            onClick={async () => {
+              if (!window.confirm("Удалить все блюда на текущую неделю? Это действие нельзя отменить.")) return;
+              try {
+                await clearWeekPlan({ startDate: weekStart, endDate: weekEnd });
+                toast({ title: "Неделя очищена", description: "План питания удалён" });
+              } catch (e: any) {
+                toast({
+                  variant: "destructive",
+                  title: "Ошибка",
+                  description: e?.message || "Не удалось очистить",
+                });
+              }
+            }}
+            disabled={isPlanGenerating}
+          >
+            Очистить неделю
+          </Button>
+        </div>
+
         {/* Week Strip */}
         <div className="px-4">
           {/* Day Selector */}
@@ -291,10 +445,10 @@ export default function MealPlanPage() {
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setSelectedDay(index)}
                   className={`flex flex-col items-center py-3 rounded-2xl transition-all ${isSelected
-                      ? "gradient-primary text-primary-foreground shadow-button"
-                      : isToday
-                        ? "bg-primary/10 border-2 border-primary"
-                        : "bg-card shadow-soft"
+                    ? "gradient-primary text-primary-foreground shadow-button"
+                    : isToday
+                      ? "bg-primary/10 border-2 border-primary"
+                      : "bg-card shadow-soft"
                     }`}
                 >
                   <span className="text-xs font-medium opacity-80">{day}</span>
@@ -347,9 +501,9 @@ export default function MealPlanPage() {
                 </Button>
               </DialogTrigger>
               <AddMealDialog
-                recipes={recipes}
-                chatRecipes={todayChatRecipes}
-                favorites={favorites}
+                recipes={Array.isArray(recipes) ? recipes : []}
+                chatRecipes={[...(Array.isArray(todayChatRecipes) ? todayChatRecipes : [])]}
+                favorites={Array.isArray(favorites) ? favorites : []}
                 mealTypes={mealTypes}
                 selectedMealType={selectedMealType}
                 onSelectMealType={setSelectedMealType}
@@ -363,6 +517,44 @@ export default function MealPlanPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : dayMealPlans.length === 0 ? (
+            <div className="space-y-3">
+              <Card variant="default" className="p-6 text-center border-dashed">
+                <CardContent className="p-0">
+                  <p className="text-muted-foreground mb-4">
+                    Нет блюд на этот день
+                  </p>
+                  <Button
+                    variant="mint"
+                    size="lg"
+                    className="rounded-xl shadow-soft font-medium"
+                    onClick={async () => {
+                      try {
+                        await regenerateSingleDay(selectedDay);
+                        toast({
+                          title: "День перегенерирован",
+                          description: "План питания на выбранный день обновлён",
+                        });
+                      } catch (e: any) {
+                        toast({
+                          variant: "destructive",
+                          title: "Ошибка",
+                          description: e?.message || "Не удалось перегенерировать",
+                        });
+                      }
+                    }}
+                    disabled={isPlanGenerating}
+                  >
+                    {isPlanGenerating ? (
+                      <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="w-5 h-5 mr-2" />
+                    )}
+                    Попробовать еще раз
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
           ) : (
             mealTypes.map((meal, index) => {
@@ -456,17 +648,6 @@ export default function MealPlanPage() {
           )}
         </div>
 
-        {/* Actions */}
-        <div className="px-4 pb-6 space-y-3">
-          <Button
-            variant="peach"
-            size="lg"
-            className="w-full"
-            onClick={() => navigate("/shopping")}
-          >
-            🛒 Список покупок
-          </Button>
-        </div>
       </div>
     </MobileLayout>
   );

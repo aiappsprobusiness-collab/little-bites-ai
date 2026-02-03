@@ -1,36 +1,41 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useChildren } from '@/hooks/useChildren';
-import type { Tables } from '@/integrations/supabase/types';
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { useMembers } from "@/hooks/useMembers";
+import type { MembersRow } from "@/integrations/supabase/types-v2";
 
-type Child = Tables<'children'>;
-
+/** В контексте под "children" отдаём список members (V2) для совместимости с чатом и планами. */
 interface SelectedChildContextType {
   selectedChildId: string | null;
-  selectedChild: Child | undefined;
+  selectedChild: MembersRow | undefined;
   setSelectedChildId: (id: string | null) => void;
-  children: Child[];
+  children: MembersRow[];
   isLoading: boolean;
-  formatAge: (birthDate: string) => string;
+  formatAge: (ageMonths: number | null) => string;
 }
 
 const SelectedChildContext = createContext<SelectedChildContextType | undefined>(undefined);
 
 export function SelectedChildProvider({ children: childrenProp }: { children: ReactNode }) {
-  const { children, isLoading, formatAge } = useChildren();
+  const { members, isLoading, formatAge } = useMembers();
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
 
-  // Auto-select first child when children load
-  useEffect(() => {
-    if (children.length > 0 && !selectedChildId) {
-      setSelectedChildId(children[0].id);
-    }
-    // If selected child was deleted, select first available ("family" is never a child id)
-    if (selectedChildId && selectedChildId !== "family" && children.length > 0 && !children.find(c => c.id === selectedChildId)) {
-      setSelectedChildId(children[0].id);
-    }
-  }, [children, selectedChildId]);
+  const existingIds = new Set(members.map((m) => m.id));
 
-  const selectedChild = children.find(c => c.id === selectedChildId);
+  useEffect(() => {
+    if (members.length > 0 && !selectedChildId) {
+      setSelectedChildId(members[0].id);
+    }
+    if (selectedChildId && selectedChildId !== "family" && !existingIds.has(selectedChildId)) {
+      setSelectedChildId(members.length > 0 ? members[0].id : null);
+    }
+    if (members.length === 0 && selectedChildId && selectedChildId !== "family") {
+      setSelectedChildId(null);
+    }
+  }, [members, selectedChildId]);
+
+  const selectedChild =
+    selectedChildId && selectedChildId !== "family" && existingIds.has(selectedChildId)
+      ? members.find((m) => m.id === selectedChildId)
+      : undefined;
 
   return (
     <SelectedChildContext.Provider
@@ -38,9 +43,9 @@ export function SelectedChildProvider({ children: childrenProp }: { children: Re
         selectedChildId,
         selectedChild,
         setSelectedChildId,
-        children,
+        children: members,
         isLoading,
-        formatAge,
+        formatAge: (ageMonths) => formatAge(ageMonths),
       }}
     >
       {childrenProp}
@@ -51,7 +56,7 @@ export function SelectedChildProvider({ children: childrenProp }: { children: Re
 export function useSelectedChild() {
   const context = useContext(SelectedChildContext);
   if (context === undefined) {
-    throw new Error('useSelectedChild must be used within a SelectedChildProvider');
+    throw new Error("useSelectedChild must be used within a SelectedChildProvider");
   }
   return context;
 }

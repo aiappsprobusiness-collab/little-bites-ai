@@ -41,7 +41,7 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
     <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
       {children.slice(0, 10).map((child) => {
         const isSelected = selectedChildId === child.id;
-        
+
         return (
           <motion.button
             key={child.id}
@@ -88,13 +88,13 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
                   isSelected ? "text-primary-foreground/80" : "text-muted-foreground"
                 )}
               >
-                {formatAge(child.birth_date)}
+                {formatAge(child.age_months ?? null)}
               </p>
             )}
           </motion.button>
         );
       })}
-      
+
       {children.length < 10 && onAddChild && (
         <motion.button
           whileTap={{ scale: 0.95 }}

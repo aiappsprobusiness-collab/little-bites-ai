@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, X, Loader2, Save } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
-import { useChildren } from "@/hooks/useChildren";
+import { useSelectedChild } from "@/contexts/SelectedChildContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -34,7 +34,7 @@ export default function RecipeEditPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { children } = useChildren();
+  const { children } = useSelectedChild();
   const { getRecipeById, createRecipe, updateRecipe } = useRecipes();
   const { data: existingRecipe, isLoading: isLoadingRecipe } = getRecipeById(id || "");
 
