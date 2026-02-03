@@ -8,8 +8,7 @@ export const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 /** хардкод для проверки cloudflare*/
 
 export const SUPABASE_URL = 'https://hidgiyyunigqazssnydm.supabase.co';
-export const SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZGdpeXl1bmlncWF6c3NueWRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3NTc2NDIsImV4cCI6MjA4NDMzMzY0Mn0.5qGWTbBKjU4TozaS_jguQ-_Fe-B5GOQg_k9g2wXk0AE'
-
+export const SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhpZGdpeXl1bmlncWF6c3NueWRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg3NTc2NDIsImV4cCI6MjA4NDMzMzY0Mn0.5qGWTbBKjU4TozaS_jguQ-_Fe-B5GOQg_k9g2wXk0AE';
 /** Rate-limit: debounce 200ms между запросами к Supabase. */
 let lastSupabaseFetch = 0;
 const throttledFetch = (url: string, options?: RequestInit): Promise<Response> => {
