@@ -1,7 +1,7 @@
 /**
  * v2: Free vs Premium/Trial — сборка опций промпта и лимитов на основе profiles.status.
- * Free: 1 профиль, 1 аллергия макс, без likes/dislikes, ~700 токенов, строгая структура.
- * Premium/Trial: likes/dislikes, все аллергии, эмпатичный тон, советы шефа, ~1500 токенов.
+ * Free: 1 профиль, 1 аллергия макс, ~700 токенов, строгая структура.
+ * Premium/Trial: все аллергии, эмпатичный тон, советы шефа, ~1500 токенов.
  * Для type "family" — явно балансировать интересы всех members.
  */
 
@@ -21,8 +21,6 @@ export interface PromptByTariffResult {
   tariffAppendix: string;
   /** Лимит токенов ответа: free ~700, premium/trial ~1500 */
   maxTokens: number;
-  /** Учитывать likes/dislikes в промпте (только premium/trial) */
-  useLikesDislikes: boolean;
   /** Учитывать все аллергии (free: макс 1, premium: все) */
   useAllAllergies: boolean;
   /** Строка для промпта: баланс интересов семьи (если memberType === "family" или isFamilyTarget) */
@@ -43,13 +41,12 @@ export function buildPromptByProfileAndTariff(
 
   return {
     tariffAppendix: isPremiumOrTrial
-      ? "Эмпатичный тон, советы шефа. Учитывай все предпочтения и аллергии."
+      ? "Эмпатичный тон, советы шефа. Учитывай все аллергии."
       : "Строгая структура: Название, 5–7 ингредиентов, 5–7 шагов, без длинных объяснений + один совет по блюду.",
     maxTokens: isPremiumOrTrial ? PREMIUM_MAX_TOKENS : FREE_MAX_TOKENS,
-    useLikesDislikes: isPremiumOrTrial,
     useAllAllergies: isPremiumOrTrial,
     familyBalanceNote: isFamily
-      ? "Балансируй интересы всех членов семьи (разный возраст и предпочтения)."
+      ? "Балансируй интересы всех членов семьи (разный возраст и аллергии)."
       : "",
   };
 }

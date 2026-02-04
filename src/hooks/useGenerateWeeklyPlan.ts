@@ -10,14 +10,12 @@ import { extractSingleJsonObject } from "@/utils/parseChatRecipes";
 const DAY_ABBREV = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 import type { Tables } from "@/integrations/supabase/types";
 
-type ChildData = {
+type MemberData = {
   name?: string;
   birth_date?: string;
   age_months?: number;
   ageMonths?: number;
   allergies?: string[];
-  likes?: string[];
-  dislikes?: string[];
 };
 
 const DAY_NAMES = [
@@ -63,11 +61,11 @@ function getWeekDates(): Date[] {
   return dates;
 }
 
-export function useGenerateWeeklyPlan(childData: ChildData | null, childId: string | null) {
+export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: string | null) {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const { createRecipe } = useRecipes();
-  const { createMealPlan } = useMealPlans(childId ?? undefined);
+  const { createMealPlan } = useMealPlans(memberId ?? undefined);
   const [isGenerating, setIsGenerating] = useState(false);
   const [completedDays, setCompletedDays] = useState<Record<number, boolean>>({});
 
@@ -89,7 +87,7 @@ export function useGenerateWeeklyPlan(childData: ChildData | null, childId: stri
           type: "single_day",
           stream: false,
           dayName,
-          childData,
+          memberData,
           weekContext,
           messages: [
             {
@@ -129,7 +127,7 @@ export function useGenerateWeeklyPlan(childData: ChildData | null, childId: stri
             title: meal.name,
             description: "",
             cooking_time_minutes: meal.cooking_time ?? null,
-            child_id: childId ?? null,
+            child_id: memberId ?? null,
           },
           ingredients: meal.ingredients.map((ing, idx) => ({
             name: typeof ing === "string" ? ing : String(ing),
@@ -147,7 +145,7 @@ export function useGenerateWeeklyPlan(childData: ChildData | null, childId: stri
         });
 
         await createMealPlan({
-          child_id: childId ?? null,
+          child_id: memberId ?? null,
           recipe_id: recipe.id,
           planned_date: dateStr,
           meal_type: mealKey,
@@ -158,12 +156,12 @@ export function useGenerateWeeklyPlan(childData: ChildData | null, childId: stri
       setCompletedDays((prev) => ({ ...prev, [dayIndex]: true }));
       return parsed;
     },
-    [childData, childId, createRecipe, createMealPlan]
+    [memberData, memberId, createRecipe, createMealPlan]
   );
 
   const generateWeeklyPlan = useCallback(async () => {
     if (!user || !session?.access_token) throw new Error("Необходима авторизация");
-    if (!childData) throw new Error("Выберите профиль ребёнка");
+    if (!memberData) throw new Error("Выберите профиль (члена семьи)");
 
     setIsGenerating(true);
     setCompletedDays({});
@@ -183,13 +181,13 @@ export function useGenerateWeeklyPlan(childData: ChildData | null, childId: stri
     } finally {
       setIsGenerating(false);
     }
-  }, [user, session, childData, generateSingleDay]);
+  }, [user, session, memberData, generateSingleDay]);
 
   /** Перегенерировать один день (с контекстом остальных дней недели) */
   const regenerateSingleDay = useCallback(
     async (dayIndex: number) => {
       if (!user || !session?.access_token) throw new Error("Необходима авторизация");
-      if (!childData) throw new Error("Выберите профиль ребёнка");
+      if (!memberData) throw new Error("Выберите профиль (члена семьи)");
       if (dayIndex < 0 || dayIndex > 6) return;
 
       setIsGenerating(true);
@@ -206,8 +204,8 @@ export function useGenerateWeeklyPlan(childData: ChildData | null, childId: stri
           .gte("planned_date", weekDates[0].toISOString().split("T")[0])
           .lte("planned_date", weekDates[6].toISOString().split("T")[0])
           .order("planned_date");
-        if (childId != null && childId !== "") {
-          weekQuery = weekQuery.eq("child_id", childId);
+        if (memberId != null && memberId !== "") {
+          weekQuery = weekQuery.eq("child_id", memberId);
         } else {
           weekQuery = weekQuery.is("child_id", null);
         }
@@ -238,8 +236,8 @@ export function useGenerateWeeklyPlan(childData: ChildData | null, childId: stri
           .delete()
           .eq("user_id", user.id)
           .eq("planned_date", dateStr);
-        if (childId != null && childId !== "") {
-          deleteQuery = deleteQuery.eq("child_id", childId);
+        if (memberId != null && memberId !== "") {
+          deleteQuery = deleteQuery.eq("child_id", memberId);
         } else {
           deleteQuery = deleteQuery.is("child_id", null);
         }
@@ -253,7 +251,7 @@ export function useGenerateWeeklyPlan(childData: ChildData | null, childId: stri
         setIsGenerating(false);
       }
     },
-    [user, session, childData, childId, generateSingleDay, queryClient]
+    [user, session, memberData, memberId, generateSingleDay, queryClient]
   );
 
   return {

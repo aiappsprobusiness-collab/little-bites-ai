@@ -1,10 +1,10 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getDeepSeek, fileToBase64, isDeepSeekConfigured, type ImageAnalysisResponse, type RecipeSuggestion } from '@/services/deepseek';
-import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { useFamily } from '@/contexts/FamilyContext';
 
 export function useDeepSeek() {
-  const { children, selectedChild } = useSelectedChild();
-  const profile = selectedChild ?? children[0];
+  const { members, selectedMember } = useFamily();
+  const profile = selectedMember ?? members[0];
   const isConfigured = isDeepSeekConfigured();
 
   // Анализ изображения

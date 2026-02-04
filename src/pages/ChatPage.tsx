@@ -11,7 +11,7 @@ import { ArticleReaderModal } from "@/components/articles/ArticleReaderModal";
 import { useArticle } from "@/hooks/useArticles";
 import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
 import { useChatHistory } from "@/hooks/useChatHistory";
-import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -57,7 +58,7 @@ export default function ChatPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedChild, children, selectedChildId, setSelectedChildId, isLoading: isLoadingMembers } = useSelectedChild();
+  const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
   const { canGenerate, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus } = useSubscription();
   const isFree = subscriptionStatus === "free";
   const { chat, abortChat, saveChat, isChatting } = useDeepSeekAPI();
@@ -78,17 +79,17 @@ export default function ChatPage() {
   const prefillSentRef = useRef(false);
   const prevProfileKeyRef = useRef<string>("");
 
-  // Очищаем сообщения при смене профиля или списка детей — чтобы «призраки» (Кори, Авигея и др.) из истории не улетали в DeepSeek
+  // Очищаем сообщения при смене профиля или списка членов семьи
   useEffect(() => {
-    const childIds = children.map((c) => c.id).join(",");
-    const key = `${selectedChildId ?? "family"}|${childIds}`;
+    const memberIds = members.map((c) => c.id).join(",");
+    const key = `${selectedMemberId ?? "family"}|${memberIds}`;
     if (prevProfileKeyRef.current && prevProfileKeyRef.current !== key) {
       setMessages([]);
     }
     prevProfileKeyRef.current = key;
-  }, [selectedChildId, children]);
+  }, [selectedMemberId, members]);
 
-  const childIdForSave = selectedChildId && selectedChildId !== "family" ? selectedChildId : undefined;
+  const memberIdForSave = selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : undefined;
 
   useEffect(() => {
     if (historyMessages.length > 0) {
@@ -158,9 +159,9 @@ export default function ChatPage() {
       const response = await chat({
         messages: chatMessages,
         type: "chat",
-        overrideSelectedChildId: selectedChildId,
-        overrideSelectedChild: selectedChild,
-        overrideChildren: children,
+        overrideSelectedMemberId: selectedMemberId,
+        overrideSelectedMember: selectedMember,
+        overrideMembers: members,
         onChunk: (chunk) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -185,7 +186,7 @@ export default function ChatPage() {
         const { savedRecipes } = await saveRecipesFromChat({
           userMessage: userMessage.content,
           aiResponse: rawMessage,
-          childId: childIdForSave,
+          memberId: memberIdForSave,
           mealType,
           parsedResult: parsed,
         });
@@ -225,7 +226,7 @@ export default function ChatPage() {
     } finally {
       sendInProgressRef.current = false;
     }
-  }, [input, isChatting, canGenerate, isPremium, messages, selectedChildId, selectedChild, children, childIdForSave, chat, saveRecipesFromChat, saveChat, toast]);
+  }, [input, isChatting, canGenerate, isPremium, messages, selectedMemberId, selectedMember, members, memberIdForSave, chat, saveRecipesFromChat, saveChat, toast]);
 
   const { isListening, toggle: toggleMic } = useSpeechRecognition({
     onFinalTranscript: (text) => {
@@ -309,19 +310,19 @@ export default function ChatPage() {
               <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1.5" />
             </div>
           )}
-          {!(isFree && children.length === 0) && (
+          {!(isFree && members.length === 0) && (
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Готовим для:</span>
               <Select
                 value={
                   isFree
-                    ? (selectedChildId === "family" ? children[0]?.id ?? "" : selectedChildId ?? children[0]?.id ?? "")
-                    : (selectedChildId ?? "family")
+                    ? (selectedMemberId === "family" ? members[0]?.id ?? "" : selectedMemberId ?? members[0]?.id ?? "")
+                    : (selectedMemberId ?? "family")
                 }
                 onValueChange={(v) => {
-                  const prev = isFree ? (selectedChildId === "family" ? children[0]?.id : selectedChildId) ?? children[0]?.id : selectedChildId ?? "family";
+                  const prev = isFree ? (selectedMemberId === "family" ? members[0]?.id : selectedMemberId) ?? members[0]?.id : selectedMemberId ?? "family";
                   if (v !== prev) setMessages([]);
-                  setSelectedChildId(v);
+                  setSelectedMemberId(v);
                 }}
               >
                 <SelectTrigger className="w-[180px] bg-card">
@@ -329,7 +330,7 @@ export default function ChatPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {!isFree && <SelectItem value="family">Семья</SelectItem>}
-                  {children.map((c, idx) => (
+                  {members.map((c, idx) => (
                     <SelectItem key={`${c.id}-${idx}`} value={c.id}>
                       {c.name}
                     </SelectItem>
@@ -348,7 +349,7 @@ export default function ChatPage() {
               >
                 <Plus className="w-4 h-4" />
               </Button>
-              {selectedChild && (
+              {selectedMember && (
                 <Button
                   variant="ghost"
                   size="icon"
@@ -368,7 +369,7 @@ export default function ChatPage() {
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-4">
-          {!isLoadingMembers && children.length === 0 && (
+          {!isLoadingMembers && members.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -391,7 +392,7 @@ export default function ChatPage() {
             </motion.div>
           )}
 
-          {showStarter && !hasUserMessage && children.length > 0 && (
+          {showStarter && !hasUserMessage && members.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -423,8 +424,8 @@ export default function ChatPage() {
                 timestamp={m.timestamp}
                 rawContent={m.rawContent}
                 onDelete={handleDeleteMessage}
-                childId={selectedChild?.id}
-                childName={selectedChild?.name}
+                memberId={selectedMember?.id}
+                memberName={selectedMember?.name}
                 onOpenArticle={setOpenArticleId}
               />
             ))}
@@ -523,15 +524,16 @@ export default function ChatPage() {
           setShowProfileSheet(open);
           if (!open) setSheetCreateMode(false);
         }}
-        child={sheetCreateMode ? null : selectedChild ?? null}
+        member={sheetCreateMode ? null : selectedMember ?? null}
         createMode={sheetCreateMode}
         onAddNew={() => setSheetCreateMode(true)}
-        onCreated={(childId) => setSelectedChildId(childId)}
+        onCreated={(memberId) => setSelectedMemberId(memberId)}
       />
       <Dialog open={showHintsModal} onOpenChange={setShowHintsModal}>
         <DialogContent className="max-w-[320px] p-4">
           <DialogHeader className="space-y-1 pb-2">
             <DialogTitle className="text-base">Подсказки</DialogTitle>
+            <DialogDescription className="sr-only">Примеры запросов для чата с ИИ</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
             {CHAT_HINT_PHRASES.map((phrase, i) => (

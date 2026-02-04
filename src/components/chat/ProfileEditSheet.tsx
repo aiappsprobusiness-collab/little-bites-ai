@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus } from "lucide-react";
 import { useMembers } from "@/hooks/useMembers";
-import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
@@ -56,47 +55,41 @@ function createTagListHandlers(
 interface ProfileEditSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  child: MembersRow | null | undefined;
+  member: MembersRow | null | undefined;
   createMode?: boolean;
   onAddNew?: () => void;
-  onCreated?: (childId: string) => void;
+  onCreated?: (memberId: string) => void;
 }
 
 export function ProfileEditSheet({
   open,
   onOpenChange,
-  child,
+  member,
   createMode = false,
   onAddNew,
   onCreated,
 }: ProfileEditSheetProps) {
   const { toast } = useToast();
-  const { subscriptionStatus } = useSubscription();
   const { updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
-  const isFree = subscriptionStatus === "free";
   const [name, setName] = useState("");
   const [memberType, setMemberType] = useState<MemberTypeV2>("child");
   const [ageYears, setAgeYears] = useState(0);
   const [ageMonths, setAgeMonths] = useState(0);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [allergyInput, setAllergyInput] = useState("");
-  const [likes, setLikes] = useState<string[]>([]);
-  const [likeInput, setLikeInput] = useState("");
-  const [dislikes, setDislikes] = useState<string[]>([]);
-  const [dislikeInput, setDislikeInput] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const lastInitRef = useRef<{ isCreate: boolean; childId: string | null } | null>(null);
+  const lastInitRef = useRef<{ isCreate: boolean; memberId: string | null } | null>(null);
 
-  const isCreate = createMode || (open && !child);
+  const isCreate = createMode || (open && !member);
 
   useEffect(() => {
     if (!open) {
       lastInitRef.current = null;
       return;
     }
-    const childId = child?.id ?? null;
-    const key = { isCreate, childId };
-    const sameKey = lastInitRef.current?.isCreate === key.isCreate && lastInitRef.current?.childId === key.childId;
+    const memberId = member?.id ?? null;
+    const key = { isCreate, memberId };
+    const sameKey = lastInitRef.current?.isCreate === key.isCreate && lastInitRef.current?.memberId === key.memberId;
     if (sameKey && !isCreate) return;
     lastInitRef.current = key;
 
@@ -107,30 +100,20 @@ export function ProfileEditSheet({
       setAgeMonths(0);
       setAllergies([]);
       setAllergyInput("");
-      setLikes([]);
-      setLikeInput("");
-      setDislikes([]);
-      setDislikeInput("");
       return;
     }
-    if (!child) return;
-    const total = child.age_months ?? 0;
-    setMemberType((child as MembersRow).type ?? "child");
+    if (!member) return;
+    const total = member.age_months ?? 0;
+    setMemberType((member as MembersRow).type ?? "child");
     setAgeYears(Math.floor(total / 12));
     setAgeMonths(total % 12);
-    setAllergies(child.allergies ?? []);
+    setAllergies(member.allergies ?? []);
     setAllergyInput("");
-    setLikes(child.likes ?? []);
-    setLikeInput("");
-    setDislikes(child.dislikes ?? []);
-    setDislikeInput("");
-  }, [open, isCreate, child]);
+  }, [open, isCreate, member]);
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 
   const allergiesHandlers = createTagListHandlers(setAllergies, setAllergyInput);
-  const likesHandlers = createTagListHandlers(setLikes, setLikeInput);
-  const dislikesHandlers = createTagListHandlers(setDislikes, setDislikeInput);
 
   const handleSave = async () => {
     if (isCreate) {
@@ -145,12 +128,10 @@ export function ProfileEditSheet({
           type: memberType,
           age_months: totalAgeMonths || null,
           allergies,
-          likes,
-          dislikes,
         });
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
         onOpenChange(false);
-        onCreated?.(newMember.id);
+        onCreated?.(newMember.id as string);
       } catch (e: unknown) {
         toast({
           variant: "destructive",
@@ -160,15 +141,13 @@ export function ProfileEditSheet({
       }
       return;
     }
-    if (!child) return;
+    if (!member) return;
     try {
       await updateMember({
-        id: child.id,
+        id: member.id,
         type: memberType,
         age_months: totalAgeMonths || null,
         allergies,
-        likes,
-        dislikes,
       });
       toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
       onOpenChange(false);
@@ -182,9 +161,9 @@ export function ProfileEditSheet({
   };
 
   const handleDelete = async () => {
-    if (!child) return;
+    if (!member) return;
     try {
-      await deleteMember(child.id);
+      await deleteMember(member.id);
       toast({ title: "Профиль удалён" });
       setShowDeleteConfirm(false);
       onOpenChange(false);
@@ -204,7 +183,7 @@ export function ProfileEditSheet({
       <SheetContent side="bottom" className="rounded-t-3xl flex flex-col max-h-[85vh]" aria-describedby="profile-sheet-desc">
         <p id="profile-sheet-desc" className="sr-only">Редактирование профиля</p>
         <SheetHeader>
-          <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать — ${child?.name ?? ""}`}</SheetTitle>
+          <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать — ${member?.name ?? ""}`}</SheetTitle>
         </SheetHeader>
         <div className="space-y-5 py-4 overflow-y-auto">
           {isCreate && (
@@ -303,41 +282,6 @@ export function ProfileEditSheet({
             onRemove={allergiesHandlers.remove}
             placeholder="Добавить аллергию (запятая или Enter)"
           />
-          {isFree ? (
-            <>
-              <div className="space-y-2 opacity-60 pointer-events-none">
-                <Label className="text-sm font-medium">Любит</Label>
-                <p className="text-xs text-muted-foreground">Доступно в Premium</p>
-                <div className="flex flex-wrap gap-2 min-h-9 rounded-md border border-input bg-muted/30 px-3 py-2" />
-              </div>
-              <div className="space-y-2 opacity-60 pointer-events-none">
-                <Label className="text-sm font-medium">Не любит</Label>
-                <p className="text-xs text-muted-foreground">Доступно в Premium</p>
-                <div className="flex flex-wrap gap-2 min-h-9 rounded-md border border-input bg-muted/30 px-3 py-2" />
-              </div>
-            </>
-          ) : (
-            <>
-              <TagListEditor
-                label="Любит"
-                items={likes}
-                inputValue={likeInput}
-                onInputChange={setLikeInput}
-                onAdd={likesHandlers.add}
-                onEdit={likesHandlers.edit}
-                onRemove={likesHandlers.remove}
-              />
-              <TagListEditor
-                label="Не любит"
-                items={dislikes}
-                inputValue={dislikeInput}
-                onInputChange={setDislikeInput}
-                onAdd={dislikesHandlers.add}
-                onEdit={dislikesHandlers.edit}
-                onRemove={dislikesHandlers.remove}
-              />
-            </>
-          )}
         </div>
         <div className="flex flex-col gap-2 mt-auto pt-2">
           <Button
@@ -353,7 +297,7 @@ export function ProfileEditSheet({
               Добавить
             </Button>
           )}
-          {!isCreate && child && (
+          {!isCreate && member && (
             <Button
               variant="ghost"
               className="w-full h-11 text-destructive hover:text-destructive hover:bg-destructive/10"
@@ -370,7 +314,7 @@ export function ProfileEditSheet({
           <AlertDialogHeader>
             <AlertDialogTitle>Удалить профиль?</AlertDialogTitle>
             <AlertDialogDescription>
-              Профиль «{child?.name}» будет удалён. Это действие нельзя отменить.
+              Профиль «{member?.name}» будет удалён. Это действие нельзя отменить.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

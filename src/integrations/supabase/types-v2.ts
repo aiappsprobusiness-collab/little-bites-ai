@@ -47,7 +47,7 @@ export interface ProfilesV2Update {
   requests_today?: number;
 }
 
-// v2: members — name, type, age_months, allergies; premium/trial: likes, dislikes
+// v2: members — name, type, age_months, allergies
 export interface MembersRow {
   id: string;
   user_id: string;
@@ -55,8 +55,6 @@ export interface MembersRow {
   type: MemberTypeV2;
   age_months: number | null;
   allergies: string[];
-  likes: string[];
-  dislikes: string[];
 }
 export interface MembersInsert {
   id?: string;
@@ -65,8 +63,6 @@ export interface MembersInsert {
   type?: MemberTypeV2;
   age_months?: number | null;
   allergies?: string[];
-  likes?: string[];
-  dislikes?: string[];
 }
 export interface MembersUpdate {
   id?: string;
@@ -75,8 +71,6 @@ export interface MembersUpdate {
   type?: MemberTypeV2;
   age_months?: number | null;
   allergies?: string[];
-  likes?: string[];
-  dislikes?: string[];
 }
 
 // v2: favorites — recipe_data jsonb; limit 5 (free) / 50 (premium). created_at добавлен миграцией 20260203160000.

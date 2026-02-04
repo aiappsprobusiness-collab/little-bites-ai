@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Calendar as CalendarIcon, Loader2, X, Pencil, Sparkles, Check, ArrowLeft } from "lucide-react";
 import { useMealPlans } from "@/hooks/useMealPlans";
-import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useFamily } from "@/contexts/FamilyContext";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useGenerateWeeklyPlan } from "@/hooks/useGenerateWeeklyPlan";
 import { useToast } from "@/hooks/use-toast";
@@ -39,48 +39,42 @@ const mealTypes = [
 export default function MealPlanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedChild, children, selectedChildId, setSelectedChildId, isLoading: isChildrenLoading } = useSelectedChild();
+  const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isMembersLoading } = useFamily();
   const { subscriptionStatus } = useSubscription();
   const isFree = subscriptionStatus === "free";
-  const isFamilyMode = !isFree && selectedChildId === "family";
-  const mealPlanChildId = isFree && selectedChildId === "family"
-    ? (children[0]?.id ?? undefined)
-    : (isFamilyMode ? null : (selectedChildId || undefined));
+  const isFamilyMode = !isFree && selectedMemberId === "family";
+  const mealPlanMemberId = isFree && selectedMemberId === "family"
+    ? (members[0]?.id ?? undefined)
+    : (isFamilyMode ? null : (selectedMemberId || undefined));
   const { recipes, createRecipe } = useRecipes();
-  const { getMealPlansByDate, createMealPlan, deleteMealPlan, clearWeekPlan, isCreating } = useMealPlans(mealPlanChildId);
+  const { getMealPlansByDate, createMealPlan, deleteMealPlan, clearWeekPlan, isCreating } = useMealPlans(mealPlanMemberId);
   const { getTodayChatRecipes } = useChatRecipes();
   const { favorites } = useFavorites();
-  const childDataForPlan = useMemo(() => {
-    if (isFamilyMode && children.length > 0) {
-      const youngest = [...children].sort((a, b) => (a.age_months ?? 0) - (b.age_months ?? 0))[0];
-      const allAllergies = Array.from(new Set(children.flatMap((c) => c.allergies ?? [])));
-      const allLikes = Array.from(new Set(children.flatMap((c) => c.likes ?? [])));
-      const allDislikes = Array.from(new Set(children.flatMap((c) => c.dislikes ?? [])));
+  const memberDataForPlan = useMemo(() => {
+    if (isFamilyMode && members.length > 0) {
+      const youngest = [...members].sort((a, b) => (a.age_months ?? 0) - (b.age_months ?? 0))[0];
+      const allAllergies = Array.from(new Set(members.flatMap((c) => c.allergies ?? [])));
       return {
         name: "Семья",
         age_months: youngest.age_months ?? 0,
         allergies: allAllergies,
-        likes: allLikes,
-        dislikes: allDislikes,
       };
     }
-    const childForPlan = selectedChild ?? (isFree && selectedChildId === "family" && children.length > 0 ? children[0] : null);
-    if (childForPlan) {
+    const memberForPlan = selectedMember ?? (isFree && selectedMemberId === "family" && members.length > 0 ? members[0] : null);
+    if (memberForPlan) {
       return {
-        name: childForPlan.name,
-        age_months: childForPlan.age_months ?? 0,
-        allergies: childForPlan.allergies ?? [],
-        likes: childForPlan.likes ?? [],
-        dislikes: childForPlan.dislikes ?? [],
+        name: memberForPlan.name,
+        age_months: memberForPlan.age_months ?? 0,
+        allergies: memberForPlan.allergies ?? [],
       };
     }
     return null;
-  }, [isFamilyMode, children, selectedChild, isFree, selectedChildId]);
+  }, [isFamilyMode, members, selectedMember, isFree, selectedMemberId]);
 
-  const childIdForPlan = mealPlanChildId ?? null;
+  const memberIdForPlan = mealPlanMemberId ?? null;
   const { generateWeeklyPlan, regenerateSingleDay, isGenerating: isPlanGenerating, completedDays } = useGenerateWeeklyPlan(
-    childDataForPlan,
-    childIdForPlan
+    memberDataForPlan,
+    memberIdForPlan
   );
 
   const [showProfileSheet, setShowProfileSheet] = useState(false);
@@ -140,7 +134,7 @@ export default function MealPlanPage() {
   const handleAddMeal = async (recipeId: string, mealType: string) => {
     try {
       await createMealPlan({
-        child_id: childIdForPlan ?? null,
+        child_id: memberIdForPlan ?? null,
         recipe_id: recipeId,
         planned_date: selectedDate.toISOString().split("T")[0],
         meal_type: mealType as any,
@@ -179,7 +173,7 @@ export default function MealPlanPage() {
           title: favorite.recipe.title,
           description: favorite.recipe.description || "",
           cooking_time_minutes: favorite.recipe.cookingTime || null,
-          child_id: childIdForPlan ?? null,
+          child_id: memberIdForPlan ?? null,
         },
         ingredients: (favorite.recipe.ingredients || []).map((ing, index) => ({
           name: ing,
@@ -198,7 +192,7 @@ export default function MealPlanPage() {
 
       // Добавляем созданный рецепт в план
       await createMealPlan({
-        child_id: childIdForPlan ?? null,
+        child_id: memberIdForPlan ?? null,
         recipe_id: newRecipe.id,
         planned_date: selectedDate.toISOString().split("T")[0],
         meal_type: mealType as any,
@@ -245,10 +239,10 @@ export default function MealPlanPage() {
   };
 
   const showNoProfile =
-    !isFamilyMode && !selectedChild && !isChildrenLoading;
-  const showEmptyFamily = isFamilyMode && children.length === 0 && !isChildrenLoading;
+    !isFamilyMode && !selectedMember && !isMembersLoading;
+  const showEmptyFamily = isFamilyMode && members.length === 0 && !isMembersLoading;
 
-  if (isChildrenLoading) {
+  if (isMembersLoading) {
     return (
       <MobileLayout
         title="План питания"
@@ -312,17 +306,17 @@ export default function MealPlanPage() {
             <Select
               value={
                 isFree
-                  ? (selectedChildId === "family" ? children[0]?.id ?? "" : selectedChildId ?? children[0]?.id ?? "")
-                  : (selectedChildId ?? "family")
+                  ? (selectedMemberId === "family" ? members[0]?.id ?? "" : selectedMemberId ?? members[0]?.id ?? "")
+                  : (selectedMemberId ?? "family")
               }
-              onValueChange={(v) => setSelectedChildId(v)}
+              onValueChange={(v) => setSelectedMemberId(v)}
             >
               <SelectTrigger className="w-[180px] bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {!isFree && <SelectItem value="family">Семья</SelectItem>}
-                {children.map((c, idx) => (
+                {members.map((c, idx) => (
                   <SelectItem key={`${c.id}-${idx}`} value={c.id}>
                     {c.name}
                   </SelectItem>
@@ -341,7 +335,7 @@ export default function MealPlanPage() {
             >
               <Plus className="w-4 h-4" />
             </Button>
-            {selectedChild && (
+            {selectedMember && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -466,13 +460,13 @@ export default function MealPlanPage() {
         <ProfileEditSheet
           open={showProfileSheet}
           onOpenChange={setShowProfileSheet}
-          child={selectedChild}
+          member={selectedMember}
           createMode={sheetCreateMode}
           onAddNew={() => {
             setSheetCreateMode(true);
           }}
-          onCreated={(childId) => {
-            setSelectedChildId(childId);
+          onCreated={(memberId) => {
+            setSelectedMemberId(memberId);
           }}
         />
 

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, X, Loader2, Save } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
-import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useFamily } from "@/contexts/FamilyContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -34,7 +34,7 @@ export default function RecipeEditPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { children } = useSelectedChild();
+  const { members } = useFamily();
   const { getRecipeById, createRecipe, updateRecipe } = useRecipes();
   const { data: existingRecipe, isLoading: isLoadingRecipe } = getRecipeById(id || "");
 
@@ -47,7 +47,7 @@ export default function RecipeEditPage() {
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
   const [imageUrl, setImageUrl] = useState("");
-  const [childId, setChildId] = useState<string>("none");
+  const [memberId, setMemberId] = useState<string>("none");
   const [ingredients, setIngredients] = useState<
     Array<{ name: string; amount: string; unit: string; category: string }>
   >([]);
@@ -73,7 +73,7 @@ export default function RecipeEditPage() {
       setMinAge(existingRecipe.min_age_months?.toString() || "");
       setMaxAge(existingRecipe.max_age_months?.toString() || "");
       setImageUrl(existingRecipe.image_url || "");
-      setChildId(existingRecipe.child_id || "none");
+      setMemberId(existingRecipe.child_id || "none");
 
       const existingIngredients = (existingRecipe as any).ingredients || [];
       setIngredients(
@@ -141,7 +141,7 @@ export default function RecipeEditPage() {
         const n = parseInt(v, 10);
         return Number.isFinite(n) ? Math.floor(n) : null;
       };
-      const rawChildId = childId && childId !== "none" ? childId : null;
+      const rawMemberId = memberId && memberId !== "none" ? memberId : null;
       const recipeData = {
         title: title.trim(),
         description: description.trim() || null,
@@ -149,7 +149,7 @@ export default function RecipeEditPage() {
         min_age_months: parseOptionalInt(minAge),
         max_age_months: parseOptionalInt(maxAge),
         image_url: imageUrl.trim() || null,
-        child_id: rawChildId,
+        child_id: rawMemberId,
       };
 
       const ingredientsData = ingredients
@@ -276,18 +276,18 @@ export default function RecipeEditPage() {
                 />
               </div>
 
-              {children.length > 0 && (
+              {members.length > 0 && (
                 <div className="space-y-2">
-                  <Label htmlFor="childId">Для ребенка</Label>
-                  <Select value={childId} onValueChange={setChildId}>
+                  <Label htmlFor="memberId">Для кого</Label>
+                  <Select value={memberId} onValueChange={setMemberId}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Выберите ребенка (необязательно)" />
+                      <SelectValue placeholder="Выберите (необязательно)" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Не указано</SelectItem>
-                      {children.map((child) => (
-                        <SelectItem key={child.id} value={child.id}>
-                          {child.name}
+                      {members.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {member.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -1,3 +1,7 @@
+/**
+ * @deprecated Shopping lists V1. Список покупок теперь интегрирован в meal_plans_v2.
+ * Маршрут /shopping перенаправляет на /meal-plan. Хук оставлен для обратной совместимости, не используется в UI.
+ */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';

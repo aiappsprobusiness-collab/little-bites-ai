@@ -2,17 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isRelevantQuery, isRelevantPremiumQuery } from "./isRelevantQuery.ts";
 import {
-  FREE_PROMPT_TEMPLATE,
-  PREMIUM_PROMPT_TEMPLATE,
-  ADULT_PROMPT_TEMPLATE,
-  ADULT_CONTEXT,
-  WEANING_CONTEXT,
-  RECIPE_PROMPT_TEMPLATE,
-  DIET_PLAN_TEMPLATE,
-  SINGLE_DAY_TEMPLATE,
-  EXPERT_ADVICE_TEMPLATE,
+  SAFETY_RULES,
+  AGE_CONTEXTS,
+  FREE_RECIPE_TEMPLATE,
+  PREMIUM_RECIPE_TEMPLATE,
+  SINGLE_DAY_PLAN_TEMPLATE,
 } from "./prompts.ts";
-// v2: age-based logic and prompt by tariff
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 
@@ -25,16 +20,16 @@ const corsHeaders = {
 // ——— Кэш: префикс v_template_system, принудительно отключён ———
 const CACHE_KEY_PREFIX = "v_template_system";
 
-function getCacheKey(type: string, childData?: ChildData | null, isPremium?: boolean): string {
-  return `${CACHE_KEY_PREFIX}_${type}_${isPremium ? "premium" : "free"}_${JSON.stringify(childData ?? {})}`;
+function getCacheKey(type: string, memberData?: MemberData | null, isPremium?: boolean): string {
+  return `${CACHE_KEY_PREFIX}_${type}_${isPremium ? "premium" : "free"}_${JSON.stringify(memberData ?? {})}`;
 }
 
 function getCachedSystemPrompt(
   _type: string,
-  _childData?: ChildData | null,
+  _memberData?: MemberData | null,
   _isPremium?: boolean
 ): string | null {
-  // const key = getCacheKey(type, childData, isPremium);
+  // const key = getCacheKey(type, memberData, isPremium);
   // const cached = systemPromptCache.get(key);
   // if (cached) return cached;  // временно закомментировано
   return null;
@@ -61,108 +56,102 @@ function formatAgeString(birthDate: string): string {
   return `${years} г. ${months} мес.`;
 }
 
-interface ChildData {
+interface MemberData {
   name?: string;
   birth_date?: string;
   age_months?: number;
   ageMonths?: number;
   ageDescription?: string;
   allergies?: string[];
-  likes?: string[];
-  dislikes?: string[];
 }
 
-function getCalculatedAge(childData?: ChildData | null): string {
-  if (!childData) return "";
-  if (childData.birth_date && /^\d{4}-\d{2}-\d{2}$/.test(childData.birth_date.trim())) {
-    return formatAgeString(childData.birth_date);
+function getCalculatedAge(memberData?: MemberData | null): string {
+  if (!memberData) return "";
+  if (memberData.birth_date && /^\d{4}-\d{2}-\d{2}$/.test(memberData.birth_date.trim())) {
+    return formatAgeString(memberData.birth_date);
   }
-  if (childData.ageDescription) return childData.ageDescription;
-  const m = childData.age_months ?? childData.ageMonths ?? 0;
+  if (memberData.ageDescription) return memberData.ageDescription;
+  const m = memberData.age_months ?? memberData.ageMonths ?? 0;
   if (m < 12) return `${m} мес.`;
   const y = Math.floor(m / 12);
   const rest = m % 12;
   return rest ? `${y} г. ${rest} мес.` : `${y} ${y === 1 ? "год" : y < 5 ? "года" : "лет"}`;
 }
 
-/** Возвращает возраст в месяцах для ChildData; при отсутствии age_months вычисляет из birth_date. */
-function getAgeMonths(child: ChildData): number {
-  const m = child.age_months ?? child.ageMonths;
-  if (m != null) return m;
-  const s = (child.birth_date || "").trim();
+/** Возвращает возраст в месяцах для MemberData. Проверяет ОБА варианта: age_months (snake) и ageMonths (camelCase от фронта). */
+function getAgeMonths(member: MemberData): number {
+  const m = member.age_months ?? member.ageMonths;
+  if (m != null && typeof m === "number" && !Number.isNaN(m)) return Math.max(0, m);
+  const s = (member.birth_date || "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return 999;
   const { years, months } = calculateAge(s);
   return years * 12 + months;
 }
 
-/** Находит самого младшего ребенка из списка (учитывает birth_date, если age_months отсутствует). */
-function findYoungestChild(children: ChildData[]): ChildData | null {
-  if (children.length === 0) return null;
-  return children.reduce((youngest, child) => {
-    const childMonths = getAgeMonths(child);
-    const youngestMonths = getAgeMonths(youngest);
-    return childMonths < youngestMonths ? child : youngest;
-  }, children[0]);
+/** Нормализует объект из запроса: гарантирует наличие age_months и ageMonths (фронт может присылать только camelCase или число строкой). */
+function normalizeMemberData(raw: MemberData | null | undefined): MemberData | null | undefined {
+  if (raw == null) return raw;
+  const months = raw.age_months ?? raw.ageMonths;
+  let num: number | undefined;
+  if (typeof months === "number" && !Number.isNaN(months)) num = Math.max(0, months);
+  else if (typeof months === "string") {
+    const parsed = parseInt(months, 10);
+    num = !Number.isNaN(parsed) ? Math.max(0, parsed) : undefined;
+  }
+  return { ...raw, age_months: num, ageMonths: num };
 }
 
-/** Подставляет в шаблон переменные, включая {{adultContext}}, {{weekContext}}. */
+/** В семейном режиме для правил возраста используем самого младшего члена семьи (inline, без отдельной функции). */
+function findYoungestMember(members: MemberData[]): MemberData | null {
+  if (members.length === 0) return null;
+  return members.reduce((youngest, m) =>
+    getAgeMonths(m) < getAgeMonths(youngest) ? m : youngest
+    , members[0]);
+}
+
+/** Подставляет в шаблон переменные V2: {{ageRule}}, {{allergies}}, {{familyContext}}, {{ageMonths}}, {{weekContext}} и др. */
 function applyPromptTemplate(
   template: string,
-  childData: ChildData | null | undefined,
+  memberData: MemberData | null | undefined,
   targetIsFamily: boolean,
-  allChildren: ChildData[] = [],
+  allMembers: MemberData[] = [],
   options?: { weekContext?: string }
 ): string {
-  // Для семейного режима используем самого младшего для ageMonths
-  const youngestChild = targetIsFamily && allChildren.length > 0 ? findYoungestChild(allChildren) : null;
-  const primaryChild = youngestChild ?? childData;
+  // Семья: для ageMonths используем самого младшего члена; иначе — выбранный Member
+  const youngestMember = targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : null;
+  const primaryMember = youngestMember ?? memberData;
 
-  const name = (primaryChild?.name ?? "").trim() || "твой малыш";
+  const name = (primaryMember?.name ?? "").trim() || "член семьи";
   const targetProfile = targetIsFamily ? "Семья" : name;
-  const age = getCalculatedAge(primaryChild) || "не указан";
-  // ageMonths — строго число (месяцы) для правил безопасности; 999 → 0 при неизвестном
-  const rawMonths = primaryChild ? getAgeMonths(primaryChild) : 0;
+  const age = getCalculatedAge(primaryMember) || "не указан";
+  // ageMonths — число (месяцы) для правил безопасности; 999 → 0 при неизвестном
+  const rawMonths = primaryMember ? getAgeMonths(primaryMember) : 0;
   const ageMonths = String(rawMonths === 999 ? 0 : rawMonths);
 
-  // Собираем аллергии ВСЕХ детей для семейного режима
+  // Семья: учитываем аллергии всех членов; выбранный Member — только его
   let allergiesSet = new Set<string>();
-  if (targetIsFamily && allChildren.length > 0) {
-    allChildren.forEach((child) => {
-      child.allergies?.forEach((a) => allergiesSet.add(a));
-    });
-  } else if (primaryChild?.allergies?.length) {
-    primaryChild.allergies.forEach((a) => allergiesSet.add(a));
+  if (targetIsFamily && allMembers.length > 0) {
+    allMembers.forEach((m) => m.allergies?.forEach((a) => allergiesSet.add(a)));
+  } else if (primaryMember?.allergies?.length) {
+    primaryMember.allergies.forEach((a) => allergiesSet.add(a));
   }
   const allergies = allergiesSet.size > 0 ? Array.from(allergiesSet).join(", ") : "не указано";
   const allergiesExclude = allergiesSet.size > 0 ? `ИСКЛЮЧИТЬ (аллергия): ${allergies}.` : "";
 
-  const ageMode =
-    rawMonths > 216 ? "Взрослый" : rawMonths < 36 ? "Ребенок до 3" : "Школьник 3-17";
-  const adultContext = rawMonths > 216 ? ADULT_CONTEXT : "";
-  const weaningContext = rawMonths < 36 ? WEANING_CONTEXT : "";
-  const ageContext = adultContext || weaningContext;
-  const ageRule =
-    rawMonths > 216
-      ? "Используй ВЗРОСЛОЕ меню: омлеты, стейки, салаты. ЗАПРЕЩЕНО детское пюре и каши на воде."
-      : rawMonths < 36
-        ? "Используй меню ПРИКОРМА: мягкие текстуры, без соли/сахара."
-        : "";
+  const ageCategory = getAgeCategory(rawMonths === 999 ? 0 : rawMonths);
+  const ageRule = ageCategory in AGE_CONTEXTS ? AGE_CONTEXTS[ageCategory as keyof typeof AGE_CONTEXTS] : AGE_CONTEXTS.adult;
   const weekContext = options?.weekContext?.trim() || "";
 
-  const likes = (primaryChild?.likes?.length ? primaryChild.likes.join(", ") : "") || "не указано";
-  const dislikes = (primaryChild?.dislikes?.length ? primaryChild.dislikes.join(", ") : "") || "не указано";
-
-  // Формируем familyContext из ВСЕХ детей
   let familyContext = `Профиль: ${name}`;
-  if (targetIsFamily && allChildren.length > 0) {
-    const childrenInfo = allChildren
-      .map((child) => {
-        const childName = child.name || "ребенок";
-        const childAge = getCalculatedAge(child) || formatAgeString(child.birth_date || "") || "возраст не указан";
-        return `${childName} (${childAge})`;
+  if (targetIsFamily && allMembers.length > 0) {
+    const membersInfo = allMembers
+      .map((m) => {
+        const memberName = m.name || "член семьи";
+        const memberAge = getCalculatedAge(m) || formatAgeString(m.birth_date || "") || "возраст не указан";
+        return `${memberName} (${memberAge})`;
       })
       .join(", ");
-    familyContext = `Готовим для всей семьи: ${childrenInfo}`;
+    familyContext = `Готовим для всей семьи: ${membersInfo}`;
   } else if (targetIsFamily) {
     familyContext = `Готовим для всей семьи (${name}, ${age})`;
   }
@@ -172,15 +161,10 @@ function applyPromptTemplate(
     .split("{{target_profile}}").join(targetProfile)
     .split("{{age}}").join(age)
     .split("{{ageMonths}}").join(ageMonths)
-    .split("{{ageMode}}").join(ageMode)
-    .split("{{ageContext}}").join(ageContext)
     .split("{{ageRule}}").join(ageRule)
     .split("{{allergies}}").join(allergies)
     .split("{{allergiesExclude}}").join(allergiesExclude)
-    .split("{{adultContext}}").join(adultContext)
     .split("{{weekContext}}").join(weekContext)
-    .split("{{likes}}").join(likes)
-    .split("{{dislikes}}").join(dislikes)
     .split("{{familyContext}}").join(familyContext);
 
   if (out.includes("{{")) {
@@ -189,15 +173,10 @@ function applyPromptTemplate(
       [/\{\{\s*target_profile\s*\}\}/g, targetProfile],
       [/\{\{\s*age\s*\}\}/g, age],
       [/\{\{\s*ageMonths\s*\}\}/g, ageMonths],
-      [/\{\{\s*ageMode\s*\}\}/g, ageMode],
-      [/\{\{\s*ageContext\s*\}\}/g, ageContext],
       [/\{\{\s*ageRule\s*\}\}/g, ageRule],
       [/\{\{\s*allergies\s*\}\}/g, allergies],
       [/\{\{\s*allergiesExclude\s*\}\}/g, allergiesExclude],
-      [/\{\{\s*adultContext\s*\}\}/g, adultContext],
       [/\{\{\s*weekContext\s*\}\}/g, weekContext],
-      [/\{\{\s*likes\s*\}\}/g, likes],
-      [/\{\{\s*dislikes\s*\}\}/g, dislikes],
       [/\{\{\s*familyContext\s*\}\}/g, familyContext],
     ];
     for (const [re, val] of replacers) out = out.replace(re, val);
@@ -206,63 +185,54 @@ function applyPromptTemplate(
   return out;
 }
 
-/** Промпт для type === "chat": шаблон из prompts.ts + подстановка данных ребёнка. ageMonths > 216 → взрослый (без пюре/каш). */
+/** Промпт для type === "chat": V2 шаблон по тарифу + подстановка (Member/семья). */
 function generateChatSystemPrompt(
   isPremium: boolean,
-  childData: ChildData | null | undefined,
+  memberData: MemberData | null | undefined,
   targetIsFamily: boolean,
-  allChildren: ChildData[] = []
+  allMembers: MemberData[] = []
 ): string {
-  const youngestChild = targetIsFamily && allChildren.length > 0 ? findYoungestChild(allChildren) : childData;
-  const ageMonths = youngestChild ? getAgeMonths(youngestChild) : 0;
-  if (ageMonths > 216) {
-    return applyPromptTemplate(ADULT_PROMPT_TEMPLATE, childData, targetIsFamily, allChildren);
-  }
-  const template = isPremium ? PREMIUM_PROMPT_TEMPLATE : FREE_PROMPT_TEMPLATE;
-  return applyPromptTemplate(template, childData, targetIsFamily, allChildren);
+  const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
+  return applyPromptTemplate(template, memberData, targetIsFamily, allMembers);
 }
 
 function getSystemPromptForType(
   type: string,
-  childData: ChildData | null | undefined,
+  memberData: MemberData | null | undefined,
   isPremium: boolean,
   targetIsFamily: boolean,
-  allChildren: ChildData[] = [],
+  allMembers: MemberData[] = [],
   weekContext?: string
 ): string {
   if (type === "chat") {
-    return generateChatSystemPrompt(isPremium, childData, targetIsFamily, allChildren);
+    return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers);
   }
-  if (type === "recipe") {
-    return applyPromptTemplate(RECIPE_PROMPT_TEMPLATE, childData, targetIsFamily, allChildren);
-  }
-  if (type === "diet_plan") {
-    return applyPromptTemplate(DIET_PLAN_TEMPLATE, childData, targetIsFamily, allChildren);
+  if (type === "recipe" || type === "diet_plan") {
+    const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
+    return applyPromptTemplate(template, memberData, targetIsFamily, allMembers);
   }
   if (type === "single_day") {
     const ctx = weekContext?.trim()
       ? `Уже запланировано: ${weekContext.trim()}. Сделай этот день максимально непохожим на уже запланированные.`
       : "";
-    return applyPromptTemplate(SINGLE_DAY_TEMPLATE, childData, targetIsFamily, allChildren, { weekContext: ctx });
+    return applyPromptTemplate(SINGLE_DAY_PLAN_TEMPLATE, memberData, targetIsFamily, allMembers, { weekContext: ctx });
   }
   return "Ты — помощник. Отвечай кратко и по делу.";
 }
 
 interface ChatRequest {
   messages: Array<{ role: string; content: string }>;
-  childData?: ChildData | null;
+  memberData?: MemberData | null;
   type?: "chat" | "recipe" | "diet_plan" | "single_day";
   stream?: boolean;
   maxRecipes?: number;
-  /** true, если выбран профиль «Семья» (рецепт для всех детей) */
+  /** true, если выбран профиль «Семья» (рецепт для всех членов) */
   targetIsFamily?: boolean;
-  /** id профиля ребёнка; при значении "family" считается режим «Семья» */
-  childId?: string;
-  /** Данные всех детей — если переданы, запрос в таблицу children не выполняется (экономия ~200–500мс) */
-  allChildren?: ChildData[];
-  /** Название дня (для плана питания, например "Понедельник") */
+  /** id выбранного члена семьи; при значении "family" — режим «Семья» */
+  memberId?: string;
+  /** Данные всех членов семьи — если переданы, запрос в таблицу members не выполняется */
+  allMembers?: MemberData[];
   dayName?: string;
-  /** Уже запланированные блюда по дням: "Пн — Овсянка, Вт — Омлет". Чтобы ИИ не повторялся. */
   weekContext?: string;
 }
 
@@ -365,19 +335,33 @@ serve(async (req) => {
 
     const subscriptionStatus = profile?.subscription_status ?? "free";
     const isPremiumUser = subscriptionStatus === "premium" || subscriptionStatus === "trial";
+
+    const body = await req.json();
+    // Поддержка и нового (memberData/allMembers), и старого (childData/allChildren) формата запроса
+    const memberDataRaw = body.memberData ?? body.childData;
+    const reqAllMembersRaw = body.allMembers ?? body.allChildren;
     const {
       messages,
-      childData,
       type = "chat",
       stream = true,
       targetIsFamily: reqTargetIsFamily,
-      childId,
-      allChildren: reqAllChildren,
+      memberId = body.memberId ?? body.childId,
       dayName,
       weekContext,
-    }: ChatRequest = await req.json();
+    } = body;
 
-    const childName = childData?.name?.trim() || "твой малыш";
+    // Нормализация: фронт может присылать ageMonths (camelCase), без age_months
+    const memberDataNorm = normalizeMemberData(memberDataRaw);
+    const reqAllMembersNorm = Array.isArray(reqAllMembersRaw)
+      ? reqAllMembersRaw.map((m: MemberData) => {
+        const n = normalizeMemberData(m);
+        return (n != null ? n : m) as MemberData;
+      })
+      : reqAllMembersRaw;
+
+    console.log("DEBUG: Received memberData:", JSON.stringify(memberDataNorm));
+
+    const memberName = memberDataNorm?.name?.trim() || "член семьи";
 
     const userMessage =
       (Array.isArray(messages) && messages.length > 0)
@@ -388,7 +372,7 @@ serve(async (req) => {
 
     if (type === "chat") {
       const irrelevantStub =
-        `Похоже, этот вопрос не связан с питанием. ${childName} ждет полезных рецептов! Пожалуйста, уточни свой кулинарный запрос.`;
+        `Похоже, этот вопрос не связан с питанием. ${memberName} ждёт полезных рецептов! Пожалуйста, уточни свой кулинарный запрос.`;
 
       if (!isPremiumUser) {
         if (!isRelevantQuery(userMessage)) {
@@ -409,44 +393,41 @@ serve(async (req) => {
     }
 
     const targetIsFamily =
-      type === "chat" && (reqTargetIsFamily === true || childId === "family");
+      type === "chat" && (reqTargetIsFamily === true || memberId === "family");
 
-    // Используем allChildren из запроса — иначе запрос в БД (экономия ~200–500мс)
-    let allChildren: ChildData[] = [];
+    // Данные только из members: из запроса (нормализованные) или запрос в БД
+    let allMembers: MemberData[] = [];
     if (targetIsFamily) {
-      if (Array.isArray(reqAllChildren) && reqAllChildren.length > 0) {
-        allChildren = reqAllChildren;
+      if (Array.isArray(reqAllMembersNorm) && reqAllMembersNorm.length > 0) {
+        allMembers = reqAllMembersNorm as MemberData[];
       } else if (userId && supabase) {
-        const { data: childrenData, error: childrenError } = await supabase
-          .from("children")
-          .select("name, birth_date, age_months, allergies, likes, dislikes")
+        const { data: rows, error: membersError } = await supabase
+          .from("members")
+          .select("name, age_months, allergies")
           .eq("user_id", userId);
 
-        if (!childrenError && childrenData) {
-          allChildren = childrenData.map((child: any) => {
-            const birth = child.birth_date || "";
-            let age_months = child.age_months;
-            if (age_months == null && /^\d{4}-\d{2}-\d{2}$/.test(String(birth).trim())) {
-              const { years, months } = calculateAge(birth);
-              age_months = years * 12 + months;
-            }
-            return {
-              name: child.name,
-              birth_date: child.birth_date,
-              age_months: age_months ?? 0,
-              allergies: child.allergies,
-              likes: child.likes,
-              dislikes: child.dislikes,
-            };
-          });
+        if (!membersError && rows) {
+          allMembers = rows.map((m: { name?: string; age_months?: number; allergies?: string[] }) => ({
+            name: m.name,
+            age_months: m.age_months ?? 0,
+            allergies: m.allergies ?? [],
+          }));
         }
       }
     }
 
-    // v2: tariff + age — считаем заранее, чтобы при Free ограничить данные промпта (1 аллергия, без likes/dislikes)
     const primaryForAge =
-      targetIsFamily && allChildren.length > 0 ? findYoungestChild(allChildren) : childData;
-    const ageMonthsForCategory = primaryForAge ? getAgeMonths(primaryForAge) : 0;
+      targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : memberDataNorm;
+    let ageMonthsForCategory = primaryForAge ? getAgeMonths(primaryForAge) : 0;
+    // Страховка: если возраст получился 0, но в теле запроса он есть — берём из запроса (один профиль)
+    if (ageMonthsForCategory === 0 && memberDataNorm && !targetIsFamily) {
+      const fromBody = memberDataNorm.age_months ?? memberDataNorm.ageMonths;
+      if (typeof fromBody === "number" && fromBody > 0) {
+        ageMonthsForCategory = fromBody;
+      }
+    }
+    const ageCategoryForLog = getAgeCategory(ageMonthsForCategory);
+    console.log("DEBUG: Final age category determined:", ageCategoryForLog, "Months:", ageMonthsForCategory);
     const memberTypeV2 = targetIsFamily
       ? "family"
       : (ageMonthsForCategory > 216 ? "adult" : "child");
@@ -456,50 +437,48 @@ serve(async (req) => {
       isFamilyTarget: targetIsFamily,
     });
 
-    // v2: Free — в промпт передаём макс. 1 аллергию и не передаём likes/dislikes
-    let childDataForPrompt = childData;
-    let allChildrenForPrompt = allChildren;
-    if (!tariffResult.useLikesDislikes || !tariffResult.useAllAllergies) {
-      childDataForPrompt = childData
-        ? {
-          ...childData,
-          likes: [] as string[],
-          dislikes: [] as string[],
-          allergies: (childData.allergies ?? []).slice(0, 1),
-        }
+    let memberDataForPrompt = memberDataNorm;
+    let allMembersForPrompt = allMembers;
+    if (!tariffResult.useAllAllergies) {
+      memberDataForPrompt = memberDataNorm
+        ? { ...memberDataNorm, allergies: (memberDataNorm.allergies ?? []).slice(0, 1) }
         : null;
-      allChildrenForPrompt = allChildren.map((c) => ({
-        ...c,
-        likes: [] as string[],
-        dislikes: [] as string[],
-        allergies: (c.allergies ?? []).slice(0, 1),
+      allMembersForPrompt = allMembers.map((m) => ({
+        ...m,
+        allergies: (m.allergies ?? []).slice(0, 1),
       }));
     }
 
     if (type === "chat") {
-      const templateName = isPremiumUser ? "PREMIUM_PROMPT_TEMPLATE" : "FREE_PROMPT_TEMPLATE";
+      const templateName = isPremiumUser ? "PREMIUM_RECIPE_TEMPLATE" : "FREE_RECIPE_TEMPLATE";
       console.log(
         "Template selected:",
         templateName,
         "subscription_status:",
         subscriptionStatus,
+        "userId:",
+        userId,
         "targetIsFamily:",
         targetIsFamily,
-        "allChildren count:",
-        allChildrenForPrompt.length
+        "allMembers count:",
+        allMembersForPrompt.length,
+        "ageMonthsForCategory:",
+        ageMonthsForCategory,
+        "ageCategory:",
+        ageCategoryForLog
       );
     }
 
-    const cached = getCachedSystemPrompt(type, childDataForPrompt, isPremiumUser);
+    const cached = getCachedSystemPrompt(type, memberDataForPrompt, isPremiumUser);
     let systemPrompt =
-      cached ?? getSystemPromptForType(type, childDataForPrompt, isPremiumUser, targetIsFamily, allChildrenForPrompt, weekContext);
+      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContext);
 
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft") {
-      systemPrompt = EXPERT_ADVICE_TEMPLATE;
+      systemPrompt = "Ты эксперт по питанию MomrecipesAI. Отвечай кратко по вопросу пользователя, без генерации рецепта.";
     }
 
-    // v2: age-based logic — категория возраста и правила питания в промпт
-    const ageCategory = getAgeCategory(ageMonthsForCategory);
+    // v2: age-based logic — категория возраста и правила питания в промпт (ageCategory уже вычислен выше для лога)
+    const ageCategory = ageCategoryForLog;
     const ageRulesV2 = getAgeCategoryRules(ageCategory);
     systemPrompt =
       systemPrompt +
@@ -580,7 +559,11 @@ ${articleLines}
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      throw new Error(`DeepSeek API error: ${response.status}`);
+      const message = "DeepSeek вернул ошибку. Попробуйте ещё раз.";
+      return new Response(
+        JSON.stringify({ error: "api_error", message, status: response.status }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Инкремент после успешной генерации. ТЕСТ СБРОСА (Midnight MSK): RPC increment_usage при last_reset вчера должен сбросить requests_today и выставить 1.
@@ -599,8 +582,22 @@ ${articleLines}
       });
     }
 
-    const data = await response.json();
-    const assistantMessage = data.choices?.[0]?.message?.content ?? "";
+    let data: { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
+    try {
+      data = await response.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
+    if (!assistantMessage) {
+      return new Response(
+        JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({ message: assistantMessage, usage: data.usage }),
@@ -608,8 +605,9 @@ ${articleLines}
     );
   } catch (error) {
     console.error("Error in deepseek-chat:", error);
+    const message = error instanceof Error ? error.message : "Неизвестная ошибка";
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: "server_error", message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

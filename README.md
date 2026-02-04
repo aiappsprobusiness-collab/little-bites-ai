@@ -1,6 +1,6 @@
 # Little Bites AI
 
-AI-powered meal planning application for children with personalized recipes, meal plans, and shopping lists.
+AI-powered meal planning for the whole family (infants, kids, adults) with personalized recipes and meal plans.
 
 ## Project info
 
@@ -71,7 +71,7 @@ This project is built with:
 
 This app uses GigaChat AI for:
 - 📸 **Image Analysis** - Recognize products from photos
-- 👨‍🍳 **Recipe Generation** - Create recipes based on products, child age, and allergies
+- 👨‍🍳 **Recipe Generation** - Create recipes based on products, family member age, and allergies
 - 💡 **Personalized Recommendations** - Get AI-powered nutrition advice
 
 See [GIGACHAT_SETUP.md](./GIGACHAT_SETUP.md) for setup instructions.

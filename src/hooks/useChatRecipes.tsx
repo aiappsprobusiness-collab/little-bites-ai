@@ -87,13 +87,13 @@ export function useChatRecipes() {
     mutationFn: async ({
       userMessage,
       aiResponse,
-      childId,
+      memberId,
       mealType,
       parsedResult: parsedResultIn,
     }: {
       userMessage: string;
       aiResponse: string;
-      childId?: string;
+      memberId?: string;
       mealType?: 'breakfast' | 'lunch' | 'snack' | 'dinner';
       /** Предраспарсенный результат — чат может сразу показать displayText, без повторного парсинга */
       parsedResult?: ParseRecipesFromChatResult;
@@ -116,12 +116,17 @@ export function useChatRecipes() {
       // Сохраняем каждый рецепт
       const savedRecipes: Recipe[] = [];
 
-      // Слова и фразы, которые не должны быть в названии рецепта
+      // Слова и фразы, которые не должны быть в названии рецепта (в т.ч. отказы ИИ)
       const invalidTitlePatterns = [
         /^(яркое|нравится|детям|полезно|вкусно)/i,
         /(размять|нарезать|варить|жарить|тушить|готовить|добавить|смешать)/i,
         /^(мякоть|ингредиент|приготовление|шаг|способ)/i,
-        /^рецепт из чата$/i, // Дефолтное название пропускаем если нет другого
+        /^рецепт из чата$/i,
+        /не рекомендуется/i,
+        /только грудное молоко/i,
+        /^только гв\.?$/i,
+        /только смесь/i,
+        /не вводить прикорм/i,
       ];
 
       // Проверка, что название валидное
@@ -176,8 +181,8 @@ export function useChatRecipes() {
                 : parseInt(String(parsedRecipe.cookingTime), 10))
               : null;
           const validChildId =
-            childId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(childId)
-              ? childId
+            memberId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(memberId)
+              ? memberId
               : null;
 
           const newRecipe = await createRecipe({
@@ -188,13 +193,16 @@ export function useChatRecipes() {
               child_id: validChildId,
               tags,
             },
-            ingredients: parsedRecipe.ingredients.map((ing, index) => ({
-              name: ing,
-              amount: null,
-              unit: resolveUnit(null, ing),
-              category: 'other' as const,
-              order_index: index,
-            })),
+            ingredients: parsedRecipe.ingredients.map((ing, index) => {
+              const nameStr = typeof ing === 'string' ? ing : ing.name;
+              return {
+                name: nameStr,
+                amount: null,
+                unit: resolveUnit(null, nameStr),
+                category: 'other' as const,
+                order_index: index,
+              };
+            }),
             steps: parsedRecipe.steps.map((step, index) => ({
               instruction: step,
               step_number: index + 1,

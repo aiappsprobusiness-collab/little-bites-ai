@@ -6,7 +6,7 @@ import { RecipeListItem } from "@/components/recipes/RecipeListItem";
 import { Loader2, LayoutGrid, List, Grid3x3, Square } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useRecipes } from "@/hooks/useRecipes";
-import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useFamily } from "@/contexts/FamilyContext";
 import { Button } from "@/components/ui/button";
 
 type ViewMode = 'list' | 'large' | 'medium' | 'small';
@@ -14,7 +14,7 @@ type ViewMode = 'list' | 'large' | 'medium' | 'small';
 export default function RecipesPage() {
   const navigate = useNavigate();
   const { recipes, isLoading } = useRecipes();
-  const { selectedChild } = useSelectedChild();
+  const { selectedMember } = useFamily();
   const [viewMode, setViewMode] = useState<ViewMode>('medium');
 
   // Фильтруем рецепты - исключаем рецепты из чата (они показываются только в плане питания)
@@ -26,7 +26,7 @@ export default function RecipesPage() {
     title: recipe.title,
     image: recipe.image_url || "https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?w=400&h=300&fit=crop",
     cookTime: recipe.cooking_time_minutes ? `${recipe.cooking_time_minutes} мин` : "—",
-    childName: selectedChild?.name || "—",
+    childName: selectedMember?.name || "—",
     rating: recipe.rating ? recipe.rating / 1 : undefined,
     isFavorite: recipe.is_favorite || false,
   }));

@@ -18,7 +18,8 @@
     "build:android": "npm run build && npm run cap:sync",
     "prepare:android": "npm run build:android && npm run cap:open:android",
     "postinstall": "patch-package",
-    "supabase:deploy:chat": "npx supabase functions deploy deepseek-chat"
+    "supabase:deploy:chat": "npx supabase functions deploy deepseek-chat",
+    "scripts:create-test-users": "node scripts/create-test-users.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",

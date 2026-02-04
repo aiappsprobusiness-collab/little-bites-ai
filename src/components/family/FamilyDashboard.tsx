@@ -4,14 +4,14 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChefHat, Clock, Utensils, Coffee, Cookie, Plus, Calendar } from 'lucide-react';
-import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { useFamily } from '@/contexts/FamilyContext';
 import { useMealPlans } from '@/hooks/useMealPlans';
 import { useRecipes } from '@/hooks/useRecipes';
 import { useChatRecipes } from '@/hooks/useChatRecipes';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog } from "@/components/ui/dialog";
 import { AddMealDialog, MealTypeOption } from "@/components/meal-plan/AddMealDialog";
-import { ChildCarousel } from './ChildCarousel';
+import { MemberCarousel } from './MemberCarousel';
 import type { Tables } from '@/integrations/supabase/types';
 
 type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -29,14 +29,14 @@ const mealTypesOptions: MealTypeOption[] = Object.values(mealTypeConfig)
   .sort((a, b) => a.time.localeCompare(b.time));
 
 interface FamilyDashboardProps {
-  onAddChild?: () => void;
+  onAddMember?: () => void;
 }
 
-export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
+export function FamilyDashboard({ onAddMember }: FamilyDashboardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { children, selectedChild, formatAge } = useSelectedChild();
-  const { getMealPlansByDate, createMealPlan, isCreating } = useMealPlans(selectedChild?.id);
+  const { members, selectedMember, formatAge } = useFamily();
+  const { getMealPlansByDate, createMealPlan, isCreating } = useMealPlans(selectedMember?.id);
   // Для выбора рецепта в план — всегда все рецепты пользователя (любой рецепт можно добавить любому ребёнку)
   const { recipes } = useRecipes();
   const { getTodayChatRecipes } = useChatRecipes();
@@ -44,9 +44,8 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
   const today = new Date();
   const { data: todayMeals = [], isLoading: isLoadingMeals } = getMealPlansByDate(today);
 
-  // Get all children's meals for today (family overview)
-  const allChildrenMealsHook = useMealPlans();
-  const { data: allMeals = [] } = allChildrenMealsHook.getMealPlansByDate(today);
+  const mealPlansHook = useMealPlans();
+  const { data: allMeals = [] } = mealPlansHook.getMealPlansByDate(today);
 
   // State for dialog
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -69,11 +68,11 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
     show: { opacity: 1, y: 0 },
   };
 
-  // Group meals by child for family view
-  const mealsByChild = allMeals.reduce((acc, meal) => {
-    const childId = meal.child_id || 'unknown';
-    if (!acc[childId]) acc[childId] = [];
-    acc[childId].push(meal);
+  // Group meals by member for family view
+  const mealsByMember = allMeals.reduce((acc, meal) => {
+    const memberId = meal.child_id || 'unknown';
+    if (!acc[memberId]) acc[memberId] = [];
+    acc[memberId].push(meal);
     return acc;
   }, {} as Record<string, typeof allMeals>);
 
@@ -95,7 +94,7 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
   const handleAddMeal = async (recipeId: string, mealType: string) => {
     try {
       await createMealPlan({
-        child_id: selectedChild?.id || null,
+        child_id: selectedMember?.id || null,
         recipe_id: recipeId,
         planned_date: today.toISOString().split('T')[0],
         meal_type: mealType as any,
@@ -145,17 +144,17 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
       animate="show"
       className="space-y-4"
     >
-      {/* Child Carousel */}
+      {/* Member Carousel */}
       <motion.div variants={item}>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-bold flex items-center gap-2">
             👨‍👩‍👧‍👦 Семья
             <span className="text-sm font-normal text-muted-foreground">
-              ({children.length}/10)
+              ({members.length}/10)
             </span>
           </h2>
         </div>
-        <ChildCarousel onAddChild={onAddChild} />
+        <MemberCarousel onAddMember={onAddMember} />
       </motion.div>
 
       {/* Today's Date */}
@@ -164,17 +163,17 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
         <span className="font-medium capitalize">{formatDate(today)}</span>
       </motion.div>
 
-      {/* Selected Child's Menu */}
-      {selectedChild && (
+      {/* Selected Member's Menu */}
+      {selectedMember && (
         <motion.div variants={item}>
           <Card variant="mint" className="overflow-hidden">
             <CardContent className="p-4">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-xl bg-card/50 flex items-center justify-center text-xl">
-                  {selectedChild.avatar_url || "👶"}
+                  👤
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">{selectedChild.name}</h3>
+                  <h3 className="font-bold text-base">{selectedMember.name}</h3>
                   <p className="text-sm text-muted-foreground">
                     Меню на сегодня
                   </p>
@@ -252,42 +251,42 @@ export function FamilyDashboard({ onAddChild }: FamilyDashboardProps) {
         </motion.div>
       )}
 
-      {/* Family Overview - All Children's Meals - Hidden for cleaner UI */}
+      {/* Family Overview - All Family Members' Meals - Hidden for cleaner UI */}
       {/* 
-      {children.length > 1 && (
+      {members.length > 1 && (
         <motion.div variants={item}>
           <h3 className="font-bold mb-3 flex items-center gap-2">
             <Clock className="w-4 h-4 text-primary" />
             Обзор семьи на сегодня
           </h3>
           <div className="space-y-2">
-            {children.slice(0, 10).map((child) => {
-              const childMeals = mealsByChild[child.id] || [];
-              const completedCount = childMeals.filter(m => m.is_completed).length;
+            {members.slice(0, 10).map((member) => {
+              const memberMeals = mealsByMember[member.id] || [];
+              const completedCount = memberMeals.filter(m => m.is_completed).length;
 
               return (
                 <motion.div
-                  key={child.id}
+                  key={member.id}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => navigate('/meal-plan')}
                   className="flex items-center gap-3 p-3 rounded-xl bg-card shadow-soft cursor-pointer hover:shadow-card transition-shadow"
                 >
                   <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center text-xl">
-                    {child.avatar_url || "👶"}
+                    👤
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{child.name}</p>
+                    <p className="font-semibold truncate">{member.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatAge(child.age_months ?? null)}
+                      {formatAge(member.age_months ?? null)}
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium">
-                      {childMeals.length} блюд
+                      {memberMeals.length} блюд
                     </p>
-                    {childMeals.length > 0 && (
+                    {memberMeals.length > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        {completedCount}/{childMeals.length} готово
+                        {completedCount}/{memberMeals.length} готово
                       </p>
                     )}
                   </div>

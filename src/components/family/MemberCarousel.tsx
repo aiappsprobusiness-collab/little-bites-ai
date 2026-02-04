@@ -1,15 +1,15 @@
 import { motion } from 'framer-motion';
 import { Plus, Check } from 'lucide-react';
-import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { useFamily } from '@/contexts/FamilyContext';
 import { cn } from '@/lib/utils';
 
-interface ChildCarouselProps {
-  onAddChild?: () => void;
+interface MemberCarouselProps {
+  onAddMember?: () => void;
   compact?: boolean;
 }
 
-export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProps) {
-  const { children, selectedChildId, setSelectedChildId, formatAge, isLoading } = useSelectedChild();
+export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselProps) {
+  const { members, selectedMemberId, setSelectedMemberId, formatAge, isLoading } = useFamily();
 
   if (isLoading) {
     return (
@@ -24,29 +24,29 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
     );
   }
 
-  if (children.length === 0) {
+  if (members.length === 0) {
     return (
       <motion.button
         whileTap={{ scale: 0.95 }}
-        onClick={onAddChild}
+        onClick={onAddMember}
         className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-muted border-2 border-dashed border-muted-foreground/30"
       >
         <Plus className="w-5 h-5 text-muted-foreground" />
-        <span className="text-muted-foreground font-medium">Добавить ребенка</span>
+        <span className="text-muted-foreground font-medium">Добавить члена семьи</span>
       </motion.button>
     );
   }
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-      {children.slice(0, 10).map((child) => {
-        const isSelected = selectedChildId === child.id;
+      {members.slice(0, 10).map((member) => {
+        const isSelected = selectedMemberId === member.id;
 
         return (
           <motion.button
-            key={child.id}
+            key={member.id}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setSelectedChildId(child.id)}
+            onClick={() => setSelectedMemberId(member.id)}
             className={cn(
               "flex-shrink-0 flex flex-col items-center p-2 rounded-xl transition-all relative",
               compact ? "w-14" : "w-16",
@@ -71,7 +71,7 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
                 isSelected ? "bg-primary-foreground/20" : "bg-muted"
               )}
             >
-              {child.avatar_url || "👶"}
+              👤
             </div>
             <p
               className={cn(
@@ -79,7 +79,7 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
                 isSelected && "text-primary-foreground"
               )}
             >
-              {child.name}
+              {member.name}
             </p>
             {!compact && (
               <p
@@ -88,17 +88,17 @@ export function ChildCarousel({ onAddChild, compact = false }: ChildCarouselProp
                   isSelected ? "text-primary-foreground/80" : "text-muted-foreground"
                 )}
               >
-                {formatAge(child.age_months ?? null)}
+                {formatAge(member.age_months ?? null)}
               </p>
             )}
           </motion.button>
         );
       })}
 
-      {children.length < 10 && onAddChild && (
+      {members.length < 10 && onAddMember && (
         <motion.button
           whileTap={{ scale: 0.95 }}
-          onClick={onAddChild}
+          onClick={onAddMember}
           className={cn(
             "flex-shrink-0 flex items-center justify-center rounded-xl bg-muted border-2 border-dashed border-muted-foreground/30",
             compact ? "w-14 h-14" : "w-16 h-20"

@@ -1,9 +1,8 @@
 import { motion } from "framer-motion";
 import { Baby, ChefHat, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 
-interface ChildProfileCardProps {
+interface MemberProfileCardProps {
   name: string;
   age: string;
   avatarEmoji: string;
@@ -12,14 +11,14 @@ interface ChildProfileCardProps {
   onClick?: () => void;
 }
 
-export function ChildProfileCard({
+export function MemberProfileCard({
   name,
   age,
   avatarEmoji,
   allergies = [],
   recipesCount,
   onClick,
-}: ChildProfileCardProps) {
+}: MemberProfileCardProps) {
   return (
     <motion.div
       whileTap={{ scale: 0.98 }}

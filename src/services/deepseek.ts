@@ -121,9 +121,9 @@ class DeepSeekService {
 
       // Используем формат с изображением для Vision API
       const messages: ChatMessage[] = [
-        { 
-          role: 'system', 
-          content: systemPrompt 
+        {
+          role: 'system',
+          content: systemPrompt
         },
         {
           role: 'user',
@@ -154,7 +154,7 @@ class DeepSeekService {
         }
         throw error;
       }
-      
+
       // Парсим JSON ответ
       try {
         // Ищем JSON в ответе
@@ -182,13 +182,13 @@ class DeepSeekService {
       return { products: [] };
     } catch (error: any) {
       console.error('Image analysis error:', error);
-      
+
       // Если ошибка связана с форматом изображения, пробуем текстовый запрос
       if (error.message?.includes('image') || error.message?.includes('format') || error.message?.includes('vision')) {
         console.log('Trying fallback text-based analysis');
         return this.analyzeImageFallback(imageBase64);
       }
-      
+
       // Возвращаем пустой результат вместо ошибки для более плавной работы
       return { products: [] };
     }
@@ -211,9 +211,9 @@ class DeepSeekService {
 
       const messages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
-        { 
-          role: 'user', 
-          content: 'Проанализируй изображение продуктов для детского питания и верни список всех продуктов в формате JSON. Изображение закодировано в base64, но ты можешь дать общие рекомендации по типичным продуктам для детского питания.' 
+        {
+          role: 'user',
+          content: 'Проанализируй изображение продуктов для детского питания и верни список всех продуктов в формате JSON. Изображение закодировано в base64, но ты можешь дать общие рекомендации по типичным продуктам для детского питания.'
         },
       ];
 
@@ -225,7 +225,7 @@ class DeepSeekService {
           return parsed;
         }
       }
-      
+
       const products = this.extractProductsFromText(response);
       return { products };
     } catch (error) {
@@ -396,7 +396,7 @@ ${ageInfo}${allergyLine || 'Используй только продукты, б
           /```json\s*(\{[\s\S]*?\})\s*```/,  // JSON в code block
           /```\s*(\{[\s\S]*?\})\s*```/,  // JSON в code block без json
         ];
-        
+
         let jsonMatch = null;
         for (const pattern of jsonPatterns) {
           jsonMatch = response.match(pattern);
@@ -442,22 +442,16 @@ ${ageInfo}${allergyLine || 'Используй только продукты, б
       ageMonths: number | null;
       isChild: boolean;
       allergies: string[];
-      likes: string[];
-      dislikes: string[];
     }>,
     products?: string[]
   ): Promise<RecipeSuggestion> {
     try {
       // Строим контекст семьи
       const allAllergies = new Set<string>();
-      const allLikes = new Set<string>();
-      const allDislikes = new Set<string>();
       const childAges: number[] = [];
 
       members.forEach((member) => {
         (member.allergies || []).forEach((a) => a?.trim() && allAllergies.add(a.trim()));
-        (member.likes || []).forEach((l) => l?.trim() && allLikes.add(l.trim()));
-        (member.dislikes || []).forEach((d) => d?.trim() && allDislikes.add(d.trim()));
         if (member.isChild && member.ageMonths != null) {
           childAges.push(member.ageMonths);
         }
@@ -475,17 +469,11 @@ ${ageInfo}${allergyLine || 'Используй только продукты, б
               : 'взрослый';
         const allergiesPart =
           m.allergies && m.allergies.length > 0 ? m.allergies.join(', ') : 'нет';
-        const likesPart =
-          m.likes && m.likes.length > 0 ? m.likes.join(', ') : 'не указано';
-        const dislikesPart =
-          m.dislikes && m.dislikes.length > 0 ? m.dislikes.join(', ') : 'не указано';
-        return `${m.name} (${agePart}, аллергии: ${allergiesPart}, любит: ${likesPart}, не любит: ${dislikesPart})`;
+        return `${m.name} (${agePart}, аллергии: ${allergiesPart})`;
       });
 
       const familyDescription = memberDescriptions.join('\n');
       const allAllergiesList = Array.from(allAllergies);
-      const likesSummary = Array.from(allLikes).join(', ') || 'не указано';
-      const dislikesSummary = Array.from(allDislikes).join(', ') || 'не указано';
 
       // Формируем возраст для ageRange
       let ageRangeText = '';
@@ -510,16 +498,6 @@ ${ageInfo}${allergyLine || 'Используй только продукты, б
           ? `КРИТИЧЕСКИ ВАЖНО: НЕ используй продукты, на которые есть аллергия у КОГО-ЛИБО из участников: ${allAllergiesList.join(', ')}. `
           : '';
 
-      const likesInfo =
-        allLikes.size > 0
-          ? `Учитывай предпочтения: участники любят ${likesSummary}. `
-          : '';
-
-      const dislikesInfo =
-        allDislikes.size > 0
-          ? `Избегай продуктов, которые кто-то не любит: ${dislikesSummary}. Если есть безопасная альтернатива, используй её. `
-          : '';
-
       const ageInfo = minChildAgeMonths
         ? `ВАЖНО: Основная часть блюда должна быть безопасной для самого маленького ребёнка (${minChildAgeMonths} месяцев). `
         : '';
@@ -534,8 +512,7 @@ ${ageInfo}${allergyLine || 'Используй только продукты, б
 ${familyDescription}
 
 ОБЩИЕ ПРАВИЛА:
-${allergyInfo}${ageInfo}${likesInfo}${dislikesInfo}${productsInfo}
-- Блюдо должны есть все участники: избегай продуктов, которые кто-то явно не любит, если есть безопасная альтернатива.
+${allergyInfo}${ageInfo}${productsInfo}
 - Если есть маленькие дети, основная часть блюда должна быть безопасной для самого маленького ребёнка по возрасту; взрослым можно добавить специи/острое отдельно.
 
 Верни ответ ТОЛЬКО в формате JSON без дополнительного текста:
@@ -652,7 +629,7 @@ export function initDeepSeek(config: DeepSeekConfig): DeepSeekService {
 export function getDeepSeek(): DeepSeekService {
   if (!deepseekInstance) {
     const apiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;
-    
+
     if (!apiKey) {
       throw new Error(
         'DeepSeek не настроен. Создайте файл .env с VITE_DEEPSEEK_API_KEY'

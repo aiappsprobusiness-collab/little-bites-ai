@@ -2,10 +2,11 @@ import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { useSelectedChild } from '@/contexts/SelectedChildContext';
+import { useFamily } from '@/contexts/FamilyContext';
 import { useSubscription } from './useSubscription';
 import { buildChatContextFromProfiles } from '@/utils/buildChatContextFromProfiles';
 import { checkChatAllergyBlock } from '@/utils/chatAllergyCheck';
+import { birthDateToAgeMonths } from '@/hooks/useMembers';
 
 /** Повтор запроса при сетевой/протокольной ошибке (ERR_HTTP2_PROTOCOL_ERROR, Failed to fetch). */
 async function fetchWithRetry(
@@ -35,7 +36,7 @@ interface ChatMessage {
 
 export function useDeepSeekAPI() {
   const { user, session } = useAuth();
-  const { children, selectedChild, selectedChildId } = useSelectedChild();
+  const { members, selectedMember, selectedMemberId } = useFamily();
   const queryClient = useQueryClient();
   const { canGenerate, refetchUsage } = useSubscription();
   const chatAbortRef = useRef<AbortController | null>(null);
@@ -51,50 +52,61 @@ export function useDeepSeekAPI() {
     mutationFn: async ({
       messages,
       type = 'chat',
-      overrideSelectedChildId,
-      overrideSelectedChild,
-      overrideChildren,
+      overrideSelectedMemberId,
+      overrideSelectedMember,
+      overrideMembers,
       onChunk,
     }: {
       messages: ChatMessage[];
       type?: 'chat' | 'recipe' | 'diet_plan';
-      overrideSelectedChildId?: string | null;
-      overrideSelectedChild?: typeof selectedChild;
-      overrideChildren?: Array<{ id: string; name: string; age_months?: number | null; allergies?: string[]; likes?: string[]; dislikes?: string[] }>;
+      overrideSelectedMemberId?: string | null;
+      overrideSelectedMember?: typeof selectedMember;
+      overrideMembers?: Array<{ id: string; name: string; age_months?: number | null; allergies?: string[] }>;
       onChunk?: (chunk: string) => void;
     }) => {
-      // Проверка лимита (для аккаунтов с неограниченным доступом пропускается)
       if (!canGenerate) {
         throw new Error('usage_limit_exceeded');
       }
 
       const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
 
-      // Используем контекст на момент отправки (переданный явно) или из хука
-      const currentSelectedChildId = overrideSelectedChildId ?? selectedChildId;
-      const currentChildren = overrideChildren ?? children;
+      const currentSelectedMemberId = overrideSelectedMemberId ?? selectedMemberId;
+      const currentMembers = overrideMembers ?? members;
 
       await queryClient.refetchQueries({ queryKey: ['members', user?.id] });
-      const freshChildren = (queryClient.getQueryData(['members', user?.id]) as typeof children) ?? currentChildren;
-      const freshSelectedChild = currentSelectedChildId && currentSelectedChildId !== 'family'
-        ? (freshChildren.find((c) => c.id === currentSelectedChildId) ?? overrideSelectedChild ?? null)
-        : freshChildren[0] ?? null;
+      const freshMembers = (queryClient.getQueryData(['members', user?.id]) as typeof members) ?? currentMembers;
+      const freshSelectedMember = currentSelectedMemberId && currentSelectedMemberId !== 'family'
+        ? (freshMembers.find((c) => c.id === currentSelectedMemberId) ?? overrideSelectedMember ?? null)
+        : freshMembers[0] ?? null;
 
-      const { childData } = buildChatContextFromProfiles({
+      const memberData = buildChatContextFromProfiles({
         userMessage: lastUserMessage,
-        children: freshChildren.map((c) => ({ id: c.id, name: c.name, age_months: c.age_months, allergies: c.allergies, likes: c.likes, dislikes: c.dislikes })),
-        selectedChild: freshSelectedChild ? { id: freshSelectedChild.id, name: freshSelectedChild.name, age_months: freshSelectedChild.age_months, allergies: freshSelectedChild.allergies, likes: freshSelectedChild.likes, dislikes: freshSelectedChild.dislikes } : null,
-        selectedChildId: currentSelectedChildId,
-      });
+        members: freshMembers.map((c) => ({
+          id: c.id,
+          name: c.name,
+          age_months: c.age_months,
+          allergies: c.allergies,
+        })),
+        selectedMember: freshSelectedMember
+          ? {
+            id: freshSelectedMember.id,
+            name: freshSelectedMember.name,
+            age_months: freshSelectedMember.age_months,
+            allergies: freshSelectedMember.allergies,
+          }
+          : null,
+        selectedMemberId: currentSelectedMemberId,
+        calculateAgeInMonths: birthDateToAgeMonths,
+      }).memberData;
 
       console.log('AI Context Sent:', {
-        childData,
-        allergies: childData?.allergies,
-        allergiesStr: childData?.allergies?.length ? `Аллергии ребенка: ${childData.allergies.join(', ')}` : '(не указаны)',
+        memberData,
+        ageMonths: memberData?.ageMonths,
+        targetIsFamily: currentSelectedMemberId === 'family',
+        allergies: memberData?.allergies,
       });
 
-      // Блок по аллергиям: используем те же аллергии, что и в промпте (выбранный / все при «для всех» / matched)
-      const allergyCheck = checkChatAllergyBlock(lastUserMessage, childData?.allergies);
+      const allergyCheck = checkChatAllergyBlock(lastUserMessage, memberData?.allergies);
       if (allergyCheck.blocked && allergyCheck.found.length > 0) {
         const text = `У нас аллергия на ${allergyCheck.found.join(', ')}, давайте приготовим что-то другое`;
         return { message: text };
@@ -112,18 +124,17 @@ export function useDeepSeekAPI() {
           },
           body: JSON.stringify({
             messages,
-            childData,
+            memberData,
             type,
             stream: true,
             maxRecipes: 1,
-            targetIsFamily: currentSelectedChildId === 'family',
-            ...(currentSelectedChildId === 'family' && freshChildren.length > 0 && {
-              allChildren: freshChildren.map((c) => ({
+            targetIsFamily: currentSelectedMemberId === 'family',
+            memberId: currentSelectedMemberId === 'family' ? 'family' : currentSelectedMemberId ?? undefined,
+            ...(currentSelectedMemberId === 'family' && freshMembers.length > 0 && {
+              allMembers: freshMembers.map((c) => ({
                 name: c.name,
                 age_months: c.age_months ?? 0,
                 allergies: c.allergies ?? [],
-                likes: c.likes ?? [],
-                dislikes: c.dislikes ?? [],
               })),
             }),
           }),

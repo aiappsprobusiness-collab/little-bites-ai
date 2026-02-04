@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import type { RecipeSuggestion } from '@/services/deepseek';
 
-/** Рецепт в БД может содержать child_id/child_name (контекст при добавлении из чата) */
+/** Рецепт в БД: в recipe_data JSONB сохраняются child_id/child_name (контекст при добавлении из чата, ключи в БД не меняем). */
 export type StoredRecipe = RecipeSuggestion & { child_id?: string; child_name?: string };
 
 export interface SavedFavorite {
@@ -44,25 +44,24 @@ export function useFavorites() {
     enabled: !!user,
   });
 
-  // Добавить в избранное (child_id/child_name сохраняются в recipe JSONB для отображения контекста в меню)
   const addFavorite = useMutation({
     mutationFn: async ({
       recipe,
       memberIds = [],
-      childId,
-      childName,
+      memberId,
+      memberName,
     }: {
       recipe: RecipeSuggestion;
       memberIds?: string[];
-      childId?: string;
-      childName?: string;
+      memberId?: string;
+      memberName?: string;
     }) => {
       if (!user) throw new Error('User not authenticated');
 
       const recipePayload = {
         ...recipe,
-        ...(childId != null && { child_id: childId }),
-        ...(childName != null && childName !== '' && { child_name: childName }),
+        ...(memberId != null && { child_id: memberId }),
+        ...(memberName != null && memberName !== '' && { child_name: memberName }),
       };
 
       const { data, error } = await supabase

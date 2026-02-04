@@ -6,14 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Camera, Image, Sparkles, X, Plus, ChefHat } from "lucide-react";
-import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useFamily } from "@/contexts/FamilyContext";
 import { useToast } from "@/hooks/use-toast";
 import { useDeepSeek } from "@/hooks/useDeepSeek";
 
 export default function ScanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedChild } = useSelectedChild();
+  const { selectedMember } = useFamily();
   const { analyzeImage, isAnalyzing } = useDeepSeek();
 
   const [step, setStep] = useState<"capture" | "detecting" | "confirm">("capture");
@@ -41,7 +41,7 @@ export default function ScanPage() {
       const analysis = await analyzeImage(file);
       console.log('Analysis result:', analysis);
 
-      const allergies = (selectedChild?.allergies ?? []).filter((a) => a?.trim());
+      const allergies = (selectedMember?.allergies ?? []).filter((a) => a?.trim());
       const isAllergen = (productName: string) => {
         if (!productName || productName.includes('не распознаны')) return false;
         const n = productName.toLowerCase().trim();

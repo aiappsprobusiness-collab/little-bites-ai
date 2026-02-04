@@ -1,7 +1,7 @@
 {
   "name": "Little Bites AI",
   "short_name": "Little Bites",
-  "description": "AI-powered meal planning app for children",
+  "description": "AI-powered meal planning for the whole family (infants, kids, adults)",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

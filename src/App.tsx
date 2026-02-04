@@ -5,13 +5,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { SelectedChildProvider } from "@/contexts/SelectedChildContext";
+import { FamilyProvider } from "@/contexts/FamilyContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import ScanPage from "./pages/ScanPage";
 import ProfilePage from "./pages/ProfilePage";
 import MealPlanPage from "./pages/MealPlanPage";
-import ShoppingPage from "./pages/ShoppingPage";
 import RecipePage from "./pages/RecipePage";
 import RecipeEditPage from "./pages/RecipeEditPage";
 import RecipesPage from "./pages/RecipesPage";
@@ -22,6 +21,7 @@ import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import { PWAInstall } from "./components/pwa/PWAInstall";
 
+/** Ключи localStorage V1: при наличии любого из них очищаем кэш для миграции на V2 (members, profiles_v2). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data"];
 
 function LegacyCacheClear() {
@@ -45,7 +45,7 @@ const App = () => (
       >
         <AuthProvider>
           <LegacyCacheClear />
-          <SelectedChildProvider>
+          <FamilyProvider>
             <Toaster />
             <Sonner />
             <PWAInstall />
@@ -84,14 +84,7 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/shopping"
-                element={
-                  <ProtectedRoute>
-                    <ShoppingPage />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/shopping" element={<Navigate to="/meal-plan" replace />} />
               <Route
                 path="/recipe/:id"
                 element={
@@ -151,7 +144,7 @@ const App = () => (
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </SelectedChildProvider>
+          </FamilyProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

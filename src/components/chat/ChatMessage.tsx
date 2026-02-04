@@ -8,7 +8,21 @@ import { useToast } from "@/hooks/use-toast";
 import type { RecipeSuggestion } from "@/services/deepseek";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { parseRecipeFromPlainText, extractFirstJsonObjectFromStart } from "@/utils/parseChatRecipes";
+import {
+  parseRecipeFromPlainText,
+  extractFirstJsonObjectFromStart,
+  isIngredientObject,
+  ingredientDisplayText,
+  type ParsedIngredient,
+  type IngredientWithSubstitute,
+} from "@/utils/parseChatRecipes";
+import { useSubscription } from "@/hooks/useSubscription";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const UUID_REGEX = /\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
 
@@ -40,9 +54,9 @@ interface ChatMessageProps {
   timestamp: Date;
   rawContent?: string;
   onDelete: (id: string) => void;
-  /** Контекст ребёнка для сохранения в избранное (отображается в меню «Избранное») */
-  childId?: string;
-  childName?: string;
+  /** Контекст члена семьи для сохранения в избранное */
+  memberId?: string;
+  memberName?: string;
   /** При клике на ссылку «Читать статью» в ответе ИИ (база знаний) */
   onOpenArticle?: (articleId: string) => void;
 }
@@ -50,10 +64,22 @@ interface ChatMessageProps {
 interface Recipe {
   title: string;
   description?: string;
-  ingredients?: string[];
+  ingredients?: ParsedIngredient[];
   steps?: string[];
   cookingTime?: number;
   ageRange?: string;
+}
+
+function normalizeIngredients(raw: unknown): ParsedIngredient[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item: unknown) => {
+    if (typeof item === "string") return item;
+    if (item && typeof item === "object" && "name" in item && typeof (item as { name: string }).name === "string") {
+      const o = item as { name: string; amount?: string; substitute?: string };
+      return { name: o.name, amount: o.amount, substitute: o.substitute };
+    }
+    return String(item);
+  });
 }
 
 /**
@@ -68,10 +94,11 @@ function parseRecipeFromContent(content: string): Recipe | null {
         try {
           const parsed = JSON.parse(jsonStr);
           if (parsed.title || parsed.name) {
+            const ings = normalizeIngredients(parsed.ingredients);
             return {
               title: parsed.title || parsed.name,
               description: parsed.description,
-              ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+              ingredients: ings,
               steps: Array.isArray(parsed.steps) ? parsed.steps : [],
               cookingTime: parsed.cookingTime || parsed.cooking_time,
               ageRange: parsed.ageRange || "",
@@ -82,7 +109,7 @@ function parseRecipeFromContent(content: string): Recipe | null {
             return {
               title: r.title || r.name,
               description: r.description,
-              ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+              ingredients: normalizeIngredients(r.ingredients),
               steps: Array.isArray(r.steps) ? r.steps : [],
               cookingTime: r.cookingTime || r.cooking_time,
               ageRange: r.ageRange || "",
@@ -102,24 +129,22 @@ function parseRecipeFromContent(content: string): Recipe | null {
       if (jsonStr.startsWith('{')) {
         try {
           const parsed = JSON.parse(jsonStr);
-          // Если это один рецепт
           if (parsed.title || parsed.name) {
             return {
               title: parsed.title || parsed.name,
               description: parsed.description,
-              ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+              ingredients: normalizeIngredients(parsed.ingredients),
               steps: Array.isArray(parsed.steps) ? parsed.steps : [],
               cookingTime: parsed.cookingTime || parsed.cooking_time,
               ageRange: parsed.ageRange || '',
             };
           }
-          // Если это массив рецептов, берем первый
           if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
             const recipe = parsed.recipes[0];
             return {
               title: recipe.title || recipe.name,
               description: recipe.description,
-              ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
+              ingredients: normalizeIngredients(recipe.ingredients),
               steps: Array.isArray(recipe.steps) ? recipe.steps : [],
               cookingTime: recipe.cookingTime || recipe.cooking_time,
               ageRange: recipe.ageRange || '',
@@ -144,7 +169,7 @@ function parseRecipeFromContent(content: string): Recipe | null {
           return {
             title: parsed.title || parsed.name,
             description: parsed.description,
-            ingredients: Array.isArray(parsed.ingredients) ? parsed.ingredients : [],
+            ingredients: normalizeIngredients(parsed.ingredients),
             steps: Array.isArray(parsed.steps) ? parsed.steps : [],
             cookingTime: parsed.cookingTime || parsed.cooking_time,
             ageRange: parsed.ageRange || '',
@@ -269,7 +294,7 @@ function tryFixTruncatedJson(jsonStr: string): Recipe | null {
 }
 
 /**
- * Форматирует рецепт в красивый вид
+ * Форматирует рецепт в красивый вид (для шаринга и т.д.)
  */
 function formatRecipe(recipe: Recipe): string {
   let formatted = `🍽️ **${recipe.title}**\n\n`;
@@ -284,8 +309,8 @@ function formatRecipe(recipe: Recipe): string {
 
   if (recipe.ingredients && recipe.ingredients.length > 0) {
     formatted += `**Ингредиенты:**\n`;
-    recipe.ingredients.forEach((ingredient, index) => {
-      formatted += `${index + 1}. ${ingredient}\n`;
+    recipe.ingredients.forEach((ing, index) => {
+      formatted += `${index + 1}. ${ingredientDisplayText(ing)}\n`;
     });
     formatted += `\n`;
   }
@@ -301,18 +326,20 @@ function formatRecipe(recipe: Recipe): string {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, onDelete, childId, childName, onOpenArticle }, ref) => {
+  ({ id, role, content, timestamp, rawContent, onDelete, memberId, memberName, onOpenArticle }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const x = useMotionValue(0);
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
     const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
     const constraintsRef = useRef(null);
     const { user } = useAuth();
+    const { isPremium } = useSubscription();
     const { favorites, addFavorite, removeFavorite, isAdding, isRemoving } = useFavorites();
     const { toast } = useToast();
 
     const sourceForParse = (rawContent ?? content).trim();
     const recipe = role === "assistant" ? parseRecipeFromContent(sourceForParse) : null;
+    const hasSubstitutes = isPremium && recipe?.ingredients?.some((ing) => isIngredientObject(ing) && (ing as { substitute?: string }).substitute);
     // Для отображения: убираем ведущий JSON, чтобы в чате был только читаемый текст с Markdown
     const displayContent = role === "assistant" ? getTextForDisplay(content) : content;
     const displayWithArticleLinks =
@@ -338,13 +365,13 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       const recipeSuggestion: RecipeSuggestion = {
         title: recipe.title,
         description: recipe.description || "",
-        ingredients: recipe.ingredients || [],
+        ingredients: (recipe.ingredients || []).map((ing) => (typeof ing === "string" ? ing : ingredientDisplayText(ing))),
         steps: recipe.steps || [],
         cookingTime: recipe.cookingTime || 0,
         ageRange: recipe.ageRange || "",
       };
       try {
-        await addFavorite({ recipe: recipeSuggestion, memberIds: [], childId, childName });
+        await addFavorite({ recipe: recipeSuggestion, memberIds: [], memberId, memberName });
         toast({ title: "Добавлено в избранное" });
       } catch (e: unknown) {
         console.error("DB Error in ChatMessage handleAddToFavorites:", (e as Error).message);
@@ -465,6 +492,34 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 >
                   {displayWithArticleLinks}
                 </ReactMarkdown>
+                {hasSubstitutes && recipe?.ingredients && (
+                  <TooltipProvider delayDuration={200}>
+                    <div className="mt-2 pt-2 border-t border-border/50">
+                      <p className="text-xs font-medium text-muted-foreground mb-1.5">Замены ингредиентов</p>
+                      <ul className="space-y-1">
+                        {(recipe.ingredients.filter((ing) => isIngredientObject(ing) && (ing as IngredientWithSubstitute).substitute) as IngredientWithSubstitute[]).map((ing, idx) => (
+                          <li key={idx} className="flex items-center gap-1.5 text-sm">
+                            <span>{ingredientDisplayText(ing)}</span>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="inline-flex shrink-0 text-muted-foreground hover:text-foreground"
+                                  aria-label="Чем заменить"
+                                >
+                                  🔄
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-[240px]">
+                                <p className="text-xs">{ing.substitute}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </TooltipProvider>
+                )}
               </div>
             ) : (
               <p className="text-base whitespace-pre-wrap select-none">{displayContent}</p>

@@ -8,7 +8,7 @@ import { RecipeListItem } from "@/components/recipes/RecipeListItem";
 import { FamilyDashboard } from "@/components/family/FamilyDashboard";
 import { ChefHat, Loader2, LayoutGrid, List, Grid3x3, Square, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useSelectedChild } from "@/contexts/SelectedChildContext";
+import { useFamily } from "@/contexts/FamilyContext";
 import { useRecipes } from "@/hooks/useRecipes";
 import {
   Dialog,
@@ -31,52 +31,49 @@ type ViewMode = 'list' | 'large' | 'medium' | 'small';
 export default function HomePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedChild } = useSelectedChild();
+  const { selectedMember } = useFamily();
   const { recentRecipes, isLoading: isLoadingRecipes } = useRecipes();
   const { createMember, isCreating } = useMembers();
 
-  const [isAddChildOpen, setIsAddChildOpen] = useState(false);
-  const [newChildName, setNewChildName] = useState("");
-  const [newChildBirthDate, setNewChildBirthDate] = useState("");
-  const [newChildAllergies, setNewChildAllergies] = useState<string[]>([]);
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberBirthDate, setNewMemberBirthDate] = useState("");
+  const [newMemberAllergies, setNewMemberAllergies] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('medium');
 
-  const handleAddChild = async () => {
-    if (!newChildName.trim() || !newChildBirthDate) return;
+  const handleAddMember = async () => {
+    if (!newMemberName.trim() || !newMemberBirthDate) return;
 
     try {
-      const ageMonths = birthDateToAgeMonths(newChildBirthDate);
+      const ageMonths = birthDateToAgeMonths(newMemberBirthDate);
       await createMember({
-        name: newChildName.trim(),
+        name: newMemberName.trim(),
         type: "child",
         age_months: ageMonths || null,
-        allergies: newChildAllergies,
-        likes: [],
-        dislikes: [],
+        allergies: newMemberAllergies,
       });
       toast({
-        title: "Ребенок добавлен",
-        description: `${newChildName} успешно добавлен в семью`,
+        title: "Член семьи добавлен",
+        description: `${newMemberName} успешно добавлен`,
       });
-      setIsAddChildOpen(false);
-      setNewChildName("");
-      setNewChildBirthDate("");
-      setNewChildAllergies([]);
+      setIsAddMemberOpen(false);
+      setNewMemberName("");
+      setNewMemberBirthDate("");
+      setNewMemberAllergies([]);
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Ошибка",
-        description: error.message || "Не удалось добавить ребенка",
+        description: error.message || "Не удалось добавить",
       });
     }
   };
 
   const toggleAllergy = (allergy: string) => {
-    setNewChildAllergies((prev) =>
+    setNewMemberAllergies((prev) =>
       prev.includes(allergy) ? prev.filter((a) => a !== allergy) : [...prev, allergy]
     );
   };
-
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -101,7 +98,7 @@ export default function HomePage() {
     title: recipe.title,
     image: recipe.image_url || "https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?w=400&h=300&fit=crop",
     cookTime: recipe.cooking_time_minutes ? `${recipe.cooking_time_minutes} мин` : "—",
-    childName: selectedChild?.name || "—",
+    childName: selectedMember?.name || "—",
     rating: recipe.rating ? recipe.rating / 1 : undefined,
     isFavorite: recipe.is_favorite || false,
   }));
@@ -130,7 +127,7 @@ export default function HomePage() {
         </motion.div>
 
         {/* Family Dashboard with Carousel */}
-        <FamilyDashboard onAddChild={() => setIsAddChildOpen(true)} />
+        <FamilyDashboard onAddMember={() => setIsAddMemberOpen(true)} />
 
         {/* Recent Recipes */}
         <div>
@@ -250,8 +247,8 @@ export default function HomePage() {
 
       </div>
 
-      {/* Add Child Dialog */}
-      <Dialog open={isAddChildOpen} onOpenChange={setIsAddChildOpen}>
+      {/* Add Member Dialog */}
+      <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Добавить ребенка</DialogTitle>
@@ -264,8 +261,8 @@ export default function HomePage() {
               <Label htmlFor="name">Имя</Label>
               <Input
                 id="name"
-                value={newChildName}
-                onChange={(e) => setNewChildName(e.target.value)}
+                value={newMemberName}
+                onChange={(e) => setNewMemberName(e.target.value)}
                 placeholder="Введите имя"
               />
             </div>
@@ -275,8 +272,8 @@ export default function HomePage() {
               <Input
                 id="birthDate"
                 type="date"
-                value={newChildBirthDate}
-                onChange={(e) => setNewChildBirthDate(e.target.value)}
+                value={newMemberBirthDate}
+                onChange={(e) => setNewMemberBirthDate(e.target.value)}
                 max={new Date().toISOString().split("T")[0]}
               />
             </div>
@@ -289,7 +286,7 @@ export default function HomePage() {
                     key={allergy}
                     type="button"
                     onClick={() => toggleAllergy(allergy)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${newChildAllergies.includes(allergy)
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${newMemberAllergies.includes(allergy)
                       ? "bg-destructive/20 text-destructive"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
                       }`}
@@ -303,8 +300,8 @@ export default function HomePage() {
             <Button
               className="w-full"
               variant="mint"
-              onClick={handleAddChild}
-              disabled={!newChildName.trim() || !newChildBirthDate || isCreating}
+              onClick={handleAddMember}
+              disabled={!newMemberName.trim() || !newMemberBirthDate || isCreating}
             >
               {isCreating ? (
                 <>

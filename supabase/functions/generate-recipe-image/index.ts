@@ -52,15 +52,15 @@ serve(async (req) => {
         messages: [
           {
             role: "user",
-            content: `Generate a beautiful, appetizing photo of a children's dish: "${recipeName}". 
+            content: `Generate a beautiful, appetizing photo of a dish: "${recipeName}". 
 The image should be:
 - Bright and colorful
 - Shot from above at 45-degree angle
-- On a cute children's plate or bowl
+- On beautifully plated dish with elegant tableware
 - Well-lit with natural lighting
 - Styled for food photography
-- Safe and appropriate for baby/toddler food
-Make it look delicious and healthy for kids.`
+- Appetizing for all ages
+Make it look delicious and inviting.`
           }
         ],
         modalities: ["image", "text"]
@@ -70,14 +70,14 @@ Make it look delicious and healthy for kids.`
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Lovable AI error:", response.status, errorText);
-      
+
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "rate_limit", message: "Rate limit exceeded" }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       throw new Error(`Lovable AI error: ${response.status}`);
     }
 
@@ -91,13 +91,13 @@ Make it look delicious and healthy for kids.`
 
     // Upload image to Supabase Storage
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
+
     // Convert base64 to blob
     const base64Data = imageData.replace(/^data:image\/\w+;base64,/, "");
     const imageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
-    
+
     const fileName = `recipes/${recipeId}.png`;
-    
+
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from("recipe-images")
       .upload(fileName, imageBytes, {

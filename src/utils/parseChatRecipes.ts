@@ -2,14 +2,35 @@
  * Утилиты для парсинга рецептов из ответов AI в чате
  */
 
+/** Ингредиент с подсказкой замены (Premium). */
+export interface IngredientWithSubstitute {
+  name: string;
+  amount?: string;
+  substitute?: string;
+}
+
+export type ParsedIngredient = string | IngredientWithSubstitute;
+
 export interface ParsedRecipe {
   id?: string;
   title: string;
   description?: string;
-  ingredients: string[];
+  ingredients: ParsedIngredient[];
   steps: string[];
   cookingTime?: number;
   mealType?: 'breakfast' | 'lunch' | 'snack' | 'dinner';
+}
+
+/** Проверка: элемент ингредиента — объект с полем name (Premium-формат). */
+export function isIngredientObject(ing: ParsedIngredient): ing is IngredientWithSubstitute {
+  return typeof ing === 'object' && ing !== null && 'name' in ing && typeof (ing as IngredientWithSubstitute).name === 'string';
+}
+
+/** Текст ингредиента для отображения (строка или "name — amount"). */
+export function ingredientDisplayText(ing: ParsedIngredient): string {
+  if (typeof ing === 'string') return ing;
+  const a = (ing as IngredientWithSubstitute).amount?.trim();
+  return a ? `${(ing as IngredientWithSubstitute).name} — ${a}` : (ing as IngredientWithSubstitute).name;
 }
 
 function generateTempRecipeId(): string {
@@ -326,7 +347,7 @@ function formatRecipeForDisplay(recipe: ParsedRecipe): string {
   if (recipe.ingredients?.length) {
     lines.push('');
     lines.push('🥘 **Ингредиенты:**');
-    recipe.ingredients.forEach((ing) => lines.push(`- ${ing}`));
+    recipe.ingredients.forEach((ing) => lines.push(`- ${ingredientDisplayText(ing)}`));
   }
   if (recipe.steps?.length) {
     lines.push('');
@@ -501,9 +522,17 @@ export function parseRecipesFromChat(
       if (parsed.title || parsed.name) {
         const title = parsed.title || parsed.name;
         if (title && title.trim() && title !== 'Рецепт из чата' && title.length >= 3 && title.length <= 80) {
-          const ingredients = Array.isArray(parsed.ingredients)
+          const rawIngredients = Array.isArray(parsed.ingredients)
             ? parsed.ingredients
             : parsed.ingredients?.split(',').map((i: string) => i.trim()) || [];
+          const ingredients: ParsedIngredient[] = rawIngredients.map((item: unknown) => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item === 'object' && 'name' in item && typeof (item as { name: string }).name === 'string') {
+              const o = item as { name: string; amount?: string; substitute?: string };
+              return { name: o.name, amount: o.amount, substitute: o.substitute };
+            }
+            return String(item);
+          });
           const steps = Array.isArray(parsed.steps)
             ? parsed.steps
             : parsed.steps?.split('\n').filter((s: string) => s.trim()) || [];
@@ -525,9 +554,15 @@ export function parseRecipesFromChat(
         recipeList.forEach((recipe: any) => {
           const title = recipe.title || recipe.name;
           if (title && title.trim() && title !== 'Рецепт из чата' && title.length >= 3 && title.length <= 80) {
-            const ingredients = Array.isArray(recipe.ingredients)
-              ? recipe.ingredients
-              : recipe.ingredients?.split(',').map((i: string) => i.trim()) || [];
+            const rawIng = Array.isArray(recipe.ingredients) ? recipe.ingredients : recipe.ingredients?.split(',').map((i: string) => i.trim()) || [];
+            const ingredients: ParsedIngredient[] = rawIng.map((item: unknown) => {
+              if (typeof item === 'string') return item;
+              if (item && typeof item === 'object' && 'name' in item && typeof (item as { name: string }).name === 'string') {
+                const o = item as { name: string; amount?: string; substitute?: string };
+                return { name: o.name, amount: o.amount, substitute: o.substitute };
+              }
+              return String(item);
+            });
             const steps = Array.isArray(recipe.steps)
               ? recipe.steps
               : recipe.steps?.split('\n').filter((s: string) => s.trim()) || [];

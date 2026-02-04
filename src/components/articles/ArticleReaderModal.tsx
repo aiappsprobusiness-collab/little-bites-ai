@@ -2,6 +2,7 @@ import { Share2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -53,6 +54,7 @@ export function ArticleReaderModal({ article, open, onOpenChange, isLoading }: A
       <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0">
         <DialogHeader className="p-4 pb-2 shrink-0 flex flex-row items-start justify-between gap-2">
           <DialogTitle className="text-lg pr-8">{article?.title ?? ""}</DialogTitle>
+          <DialogDescription className="sr-only">Содержимое статьи</DialogDescription>
           <Button
             variant="ghost"
             size="icon"
