@@ -146,10 +146,12 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
 
         await createMealPlan({
           child_id: memberId ?? null,
+          member_id: memberId ?? null,
           recipe_id: recipe.id,
           planned_date: dateStr,
           meal_type: mealKey,
           is_completed: false,
+          title: recipe.title,
         });
       }
 
@@ -175,8 +177,9 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           generateSingleDay(i, date, DAY_NAMES[i], token)
         )
       );
-      queryClient.invalidateQueries({ queryKey: ["meal_plans"] });
+      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2"] });
       queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      queryClient.refetchQueries({ queryKey: ["meal_plans_v2"] });
       return results;
     } finally {
       setIsGenerating(false);
@@ -198,28 +201,30 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
 
       try {
         let weekQuery = supabase
-          .from("meal_plans")
-          .select("planned_date, meal_type, recipe:recipes(title)")
+          .from("meal_plans_v2")
+          .select("planned_date, meals")
           .eq("user_id", user.id)
           .gte("planned_date", weekDates[0].toISOString().split("T")[0])
           .lte("planned_date", weekDates[6].toISOString().split("T")[0])
           .order("planned_date");
         if (memberId != null && memberId !== "") {
-          weekQuery = weekQuery.eq("child_id", memberId);
+          weekQuery = weekQuery.eq("member_id", memberId);
         } else {
-          weekQuery = weekQuery.is("child_id", null);
+          weekQuery = weekQuery.is("member_id", null);
         }
         const { data: weekPlans } = await weekQuery;
 
         const weekContextParts: string[] = [];
         const byDate = new Map<string, string[]>();
-        (weekPlans || []).forEach((p: any) => {
+        (weekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string }> }) => {
           if (!p.planned_date || p.planned_date === dateStr) return;
-          const recipe = p.recipe ?? p.recipes;
-          const title = recipe?.title ?? "";
-          if (!title) return;
+          const meals = p.meals ?? {};
+          const titles = (["breakfast", "lunch", "snack", "dinner"] as const)
+            .map((k) => meals[k]?.title)
+            .filter(Boolean) as string[];
+          if (titles.length === 0) return;
           if (!byDate.has(p.planned_date)) byDate.set(p.planned_date, []);
-          byDate.get(p.planned_date)!.push(title);
+          byDate.get(p.planned_date)!.push(...titles);
         });
         weekDates.forEach((d, i) => {
           if (i === dayIndex) return;
@@ -232,20 +237,21 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
         const weekContext = weekContextParts.join(". ");
 
         let deleteQuery = supabase
-          .from("meal_plans")
+          .from("meal_plans_v2")
           .delete()
           .eq("user_id", user.id)
           .eq("planned_date", dateStr);
         if (memberId != null && memberId !== "") {
-          deleteQuery = deleteQuery.eq("child_id", memberId);
+          deleteQuery = deleteQuery.eq("member_id", memberId);
         } else {
-          deleteQuery = deleteQuery.is("child_id", null);
+          deleteQuery = deleteQuery.is("member_id", null);
         }
         await deleteQuery;
 
         await generateSingleDay(dayIndex, date, DAY_NAMES[dayIndex], session.access_token, weekContext);
 
-        queryClient.invalidateQueries({ queryKey: ["meal_plans"] });
+        queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+        queryClient.refetchQueries({ queryKey: ["meal_plans_v2", user?.id] });
         queryClient.invalidateQueries({ queryKey: ["recipes"] });
       } finally {
         setIsGenerating(false);

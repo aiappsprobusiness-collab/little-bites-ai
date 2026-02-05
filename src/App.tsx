@@ -16,6 +16,8 @@ import RecipeEditPage from "./pages/RecipeEditPage";
 import RecipesPage from "./pages/RecipesPage";
 import ChatPage from "./pages/ChatPage";
 import FavoritesPage from "./pages/FavoritesPage";
+import SosConsultant from "./pages/SosConsultant";
+import PlateAnalysis from "./pages/PlateAnalysis";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
@@ -84,7 +86,6 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
-              <Route path="/shopping" element={<Navigate to="/meal-plan" replace />} />
               <Route
                 path="/recipe/:id"
                 element={
@@ -130,6 +131,22 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <FavoritesPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/sos"
+                element={
+                  <ProtectedRoute>
+                    <SosConsultant />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/plate-analysis"
+                element={
+                  <ProtectedRoute>
+                    <PlateAnalysis />
                   </ProtectedRoute>
                 }
               />

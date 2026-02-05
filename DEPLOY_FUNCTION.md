@@ -44,14 +44,38 @@ npx supabase link --project-ref "ваш_project_ref"
 
 ### Шаг 4: Задеплойте функцию
 
+Обычный деплой (может упасть по таймауту «Bundle generation timed out»):
+
 ```powershell
 npm run supabase:deploy:chat
 ```
 
-Или напрямую:
+**Если деплой падает по таймауту** — используйте скрипт с увеличенным таймаутом (5 мин по умолчанию):
+
+```powershell
+npm run supabase:deploy:chat:slow
+```
+
+Или вручную с нужным таймаутом (в PowerShell):
+
+```powershell
+$env:DEPLOY_TIMEOUT_MS = "600000"   # 10 минут
+node scripts/deploy-function.mjs deepseek-chat
+```
+
+Скрипт по умолчанию использует `--use-api` (сборка на сервере Supabase). Если таймаут всё равно происходит на стороне Supabase, попробуйте сборку через Docker (нужен установленный Docker):
+
+```powershell
+$env:USE_DOCKER = "1"
+node scripts/deploy-function.mjs deepseek-chat
+```
+
+Прямой вызов CLI:
 
 ```powershell
 npx supabase functions deploy deepseek-chat
+npx supabase functions deploy deepseek-chat --use-api
+npx supabase functions deploy deepseek-chat --use-docker
 ```
 
 ## Проверка деплоя

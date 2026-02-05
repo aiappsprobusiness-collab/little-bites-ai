@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { isRelevantQuery, isRelevantPremiumQuery } from "./isRelevantQuery.ts";
 import {
   SAFETY_RULES,
@@ -7,6 +7,9 @@ import {
   FREE_RECIPE_TEMPLATE,
   PREMIUM_RECIPE_TEMPLATE,
   SINGLE_DAY_PLAN_TEMPLATE,
+  SOS_PROMPT_TEMPLATE,
+  BALANCE_CHECK_TEMPLATE,
+  NO_ARTICLES_RULE,
 } from "./prompts.ts";
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
@@ -115,7 +118,7 @@ function applyPromptTemplate(
   memberData: MemberData | null | undefined,
   targetIsFamily: boolean,
   allMembers: MemberData[] = [],
-  options?: { weekContext?: string }
+  options?: { weekContext?: string; userMessage?: string }
 ): string {
   // Семья: для ageMonths используем самого младшего члена; иначе — выбранный Member
   const youngestMember = targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : null;
@@ -141,17 +144,25 @@ function applyPromptTemplate(
   const ageCategory = getAgeCategory(rawMonths === 999 ? 0 : rawMonths);
   const ageRule = ageCategory in AGE_CONTEXTS ? AGE_CONTEXTS[ageCategory as keyof typeof AGE_CONTEXTS] : AGE_CONTEXTS.adult;
   const weekContext = options?.weekContext?.trim() || "";
+  const userMessage = options?.userMessage?.trim() || "";
 
+  const ADULT_AGE_MONTHS = 336; // 28+ лет — взрослое меню
   let familyContext = `Профиль: ${name}`;
   if (targetIsFamily && allMembers.length > 0) {
-    const membersInfo = allMembers
-      .map((m) => {
-        const memberName = m.name || "член семьи";
-        const memberAge = getCalculatedAge(m) || formatAgeString(m.birth_date || "") || "возраст не указан";
-        return `${memberName} (${memberAge})`;
-      })
+    const adults = allMembers.filter((m) => getAgeMonths(m) >= ADULT_AGE_MONTHS);
+    const children = allMembers.filter((m) => getAgeMonths(m) < ADULT_AGE_MONTHS);
+    const adultNames = adults.map((m) => m.name || "взрослый").join(", ");
+    const childInfo = children
+      .map((m) => `${m.name || "ребёнок"} (${getCalculatedAge(m) || getAgeMonths(m) + " мес."})`)
       .join(", ");
-    familyContext = `Готовим для всей семьи: ${membersInfo}`;
+    const parts: string[] = [];
+    if (adultNames) {
+      parts.push(`Меню для взрослых (Adult Menu): ${adultNames}. Для взрослых ТОЛЬКО взрослые блюда — НЕ предлагай детские каши на воде, пюре, прикормовые блюда.`);
+    }
+    if (childInfo) {
+      parts.push(`Прикорм/меню для ребёнка (Infant/Toddler Menu): ${childInfo}.`);
+    }
+    familyContext = parts.length > 0 ? parts.join(" ") : `Готовим для всей семьи: ${allMembers.map((m) => `${m.name || "член семьи"} (${getCalculatedAge(m)})`).join(", ")}`;
   } else if (targetIsFamily) {
     familyContext = `Готовим для всей семьи (${name}, ${age})`;
   }
@@ -165,7 +176,8 @@ function applyPromptTemplate(
     .split("{{allergies}}").join(allergies)
     .split("{{allergiesExclude}}").join(allergiesExclude)
     .split("{{weekContext}}").join(weekContext)
-    .split("{{familyContext}}").join(familyContext);
+    .split("{{familyContext}}").join(familyContext)
+    .split("{{userMessage}}").join(userMessage);
 
   if (out.includes("{{")) {
     const replacers: [RegExp, string][] = [
@@ -178,6 +190,7 @@ function applyPromptTemplate(
       [/\{\{\s*allergiesExclude\s*\}\}/g, allergiesExclude],
       [/\{\{\s*weekContext\s*\}\}/g, weekContext],
       [/\{\{\s*familyContext\s*\}\}/g, familyContext],
+      [/\{\{\s*userMessage\s*\}\}/g, userMessage],
     ];
     for (const [re, val] of replacers) out = out.replace(re, val);
     out = out.replace(/\{\{[^}]*\}\}/g, "не указано");
@@ -202,7 +215,8 @@ function getSystemPromptForType(
   isPremium: boolean,
   targetIsFamily: boolean,
   allMembers: MemberData[] = [],
-  weekContext?: string
+  weekContext?: string,
+  userMessage?: string
 ): string {
   if (type === "chat") {
     return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers);
@@ -217,13 +231,19 @@ function getSystemPromptForType(
       : "";
     return applyPromptTemplate(SINGLE_DAY_PLAN_TEMPLATE, memberData, targetIsFamily, allMembers, { weekContext: ctx });
   }
+  if (type === "sos_consultant") {
+    return applyPromptTemplate(SOS_PROMPT_TEMPLATE, memberData, false, allMembers, { userMessage: userMessage || "" });
+  }
+  if (type === "balance_check") {
+    return applyPromptTemplate(BALANCE_CHECK_TEMPLATE, memberData, false, allMembers, { userMessage: userMessage || "" });
+  }
   return "Ты — помощник. Отвечай кратко и по делу.";
 }
 
 interface ChatRequest {
   messages: Array<{ role: string; content: string }>;
   memberData?: MemberData | null;
-  type?: "chat" | "recipe" | "diet_plan" | "single_day";
+  type?: "chat" | "recipe" | "diet_plan" | "single_day" | "sos_consultant" | "balance_check";
   stream?: boolean;
   maxRecipes?: number;
   /** true, если выбран профиль «Семья» (рецепт для всех членов) */
@@ -253,6 +273,7 @@ serve(async (req) => {
     type ProfileRow = { subscription_status?: string | null } | null;
     let profile: ProfileRow = null;
     type ProfileV2Row = { status: string; requests_today: number; daily_limit: number } | null;
+    let profileV2: (ProfileV2Row & { premium_until?: string | null }) | null = null;
 
     // Создаём supabase клиент на уровне всего handler-а
     const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
@@ -272,7 +293,7 @@ serve(async (req) => {
           .eq("user_id", userId)
           .maybeSingle();
 
-        let profileV2 = profileV2Row as (ProfileV2Row & { premium_until?: string | null }) | null;
+        profileV2 = profileV2Row as (ProfileV2Row & { premium_until?: string | null }) | null;
 
         // Trial: если истёк (now > premium_until), переводим в free и daily_limit = 5
         if (profileV2?.status === "trial" && profileV2.premium_until) {
@@ -333,7 +354,7 @@ serve(async (req) => {
       }
     }
 
-    const subscriptionStatus = profile?.subscription_status ?? "free";
+    const subscriptionStatus = (profileV2?.status ?? profile?.subscription_status ?? "free") as string;
     const isPremiumUser = subscriptionStatus === "premium" || subscriptionStatus === "trial";
 
     const body = await req.json();
@@ -343,7 +364,7 @@ serve(async (req) => {
     const {
       messages,
       type = "chat",
-      stream = true,
+      stream: reqStream = true,
       targetIsFamily: reqTargetIsFamily,
       memberId = body.memberId ?? body.childId,
       dayName,
@@ -392,8 +413,27 @@ serve(async (req) => {
       }
     }
 
+    const isPremiumRecipeChat = type === "chat" && isPremiumUser && premiumRelevance === true;
+    const stream =
+      type === "sos_consultant" || type === "balance_check" || isPremiumRecipeChat
+        ? false
+        : reqStream;
+
     const targetIsFamily =
       type === "chat" && (reqTargetIsFamily === true || memberId === "family");
+
+    // SOS-консультант — только Premium (проверка profiles_v2)
+    if (type === "sos_consultant") {
+      if (!isPremiumUser) {
+        return new Response(
+          JSON.stringify({
+            error: "premium_required",
+            message: "Доступно в Premium. Оформите подписку для доступа к SOS-консультанту.",
+          }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // Данные только из members: из запроса (нормализованные) или запрос в БД
     let allMembers: MemberData[] = [];
@@ -469,9 +509,10 @@ serve(async (req) => {
       );
     }
 
+    const promptUserMessage = (type === "sos_consultant" || type === "balance_check") ? userMessage : undefined;
     const cached = getCachedSystemPrompt(type, memberDataForPrompt, isPremiumUser);
     let systemPrompt =
-      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContext);
+      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContext, promptUserMessage);
 
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft") {
       systemPrompt = "Ты эксперт по питанию MomrecipesAI. Отвечай кратко по вопросу пользователя, без генерации рецепта.";
@@ -486,24 +527,9 @@ serve(async (req) => {
       ageRulesV2 +
       "\n" +
       tariffResult.tariffAppendix +
-      (tariffResult.familyBalanceNote ? "\n" + tariffResult.familyBalanceNote : "");
-
-    // База знаний: при упоминании сложных тем (аллергия, прикорм, безопасность) можно добавить ссылку на статью
-    if (type === "chat" && supabase) {
-      const { data: articlesList } = await supabase
-        .from("articles")
-        .select("id, title")
-        .not("id", "is", null);
-      const articles = (articlesList ?? []) as { id: string; title: string }[];
-      if (articles.length > 0) {
-        const articleLines = articles.map((a) => `- ${a.id} (${a.title})`).join("\n");
-        systemPrompt += `
-
-БАЗА ЗНАНИЙ: Если в ответе ты затронул сложную тему (аллергия на БКМ, прикорм, безопасность продуктов, питание), в конце ответа добавь одну строку: "Подробнее об этом в нашей статье: [ID]", подставив вместо ID ровно один UUID из списка ниже (без скобок в ответе — только UUID в квадратных скобках). Используй только эти ID:
-${articleLines}
-Формат в ответе строго: Подробнее об этом в нашей статье: [uuid-здесь]`;
-      }
-    }
+      (tariffResult.familyBalanceNote ? "\n" + tariffResult.familyBalanceNote : "") +
+      "\n" +
+      NO_ARTICLES_RULE;
 
     console.log("FINAL_SYSTEM_PROMPT:", systemPrompt);
 
@@ -524,7 +550,7 @@ ${articleLines}
       stream,
     };
 
-    if (type === "single_day") {
+    if (type === "single_day" || isPremiumRecipeChat) {
       apiRequestBody.response_format = { type: "json_object" };
     }
 
@@ -597,6 +623,16 @@ ${articleLines}
         JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    if (type === "balance_check" && userId && supabase) {
+      const memberIdForLog = (memberId && memberId !== "family") ? memberId : null;
+      await supabase.from("plate_logs").insert({
+        user_id: userId,
+        member_id: memberIdForLog,
+        user_message: userMessage,
+        assistant_message: assistantMessage,
+      });
     }
 
     return new Response(

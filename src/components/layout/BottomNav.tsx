@@ -1,12 +1,12 @@
 import { motion } from "framer-motion";
-import { Heart, Calendar, MessageCircle, BookOpen } from "lucide-react";
+import { Heart, Calendar, MessageCircle, Stethoscope } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { icon: MessageCircle, label: "Чат", path: "/chat" },
   { icon: Heart, label: "Избранное", path: "/favorites" },
-  { icon: BookOpen, label: "База знаний", path: "/articles" },
+  { icon: Stethoscope, label: "SOS", path: "/sos" },
   { icon: Calendar, label: "План", path: "/meal-plan" },
 ];
 

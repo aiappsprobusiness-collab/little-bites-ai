@@ -1,16 +1,19 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getIngredientEmoji } from "@/utils/ingredientEmojis";
 
 export default function RecipePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getRecipeById } = useRecipes();
+  const { isPremium } = useSubscription();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
 
   if (isLoading) {
@@ -70,8 +73,9 @@ export default function RecipePage() {
                 <span className="text-xl">🥗</span>
               </h2>
               <ul className="space-y-2.5">
-                {ingredients.map((ing: any, index: number) => {
+                {ingredients.map((ing: { name: string; amount?: number | null; unit?: string | null; substitute?: string | null }, index: number) => {
                   const emoji = getIngredientEmoji(ing.name);
+                  const hasSubstitute = !!ing.substitute?.trim();
                   return (
                     <motion.li
                       key={index}
@@ -88,6 +92,25 @@ export default function RecipePage() {
                         <span className="text-muted-foreground text-sm bg-primary/10 text-primary font-semibold px-3 py-1 rounded-full border border-primary/20">
                           {ing.amount} {ing.unit}
                         </span>
+                      )}
+                      {hasSubstitute && (
+                        isPremium ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8 text-primary" aria-label="Чем заменить">
+                                <span className="text-lg">🔄</span>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent side="left" className="max-w-[280px]">
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Чем заменить:</p>
+                              <p className="text-sm">{ing.substitute}</p>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <span className="shrink-0 text-muted-foreground/70" title="Доступно в Premium">
+                            <Lock className="w-4 h-4" />
+                          </span>
+                        )
                       )}
                     </motion.li>
                   );

@@ -114,6 +114,16 @@ export interface MealPlansV2Update {
   meals?: Json;
 }
 
+// v2: plate_logs — история «Анализ тарелки» (balance_check)
+export interface PlateLogsRow {
+  id: string;
+  user_id: string;
+  member_id: string | null;
+  user_message: string;
+  assistant_message: string;
+  created_at: string;
+}
+
 // v2: articles — контент в стиле Flo (id, title, description, content, category, is_premium, cover_image_url)
 export type AgeCategoryV2 = "infant" | "toddler" | "school" | "adult";
 export type ArticleCategoryV2 = "weaning" | "safety" | "nutrition";

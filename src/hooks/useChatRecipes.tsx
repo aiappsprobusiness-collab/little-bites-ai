@@ -195,12 +195,14 @@ export function useChatRecipes() {
             },
             ingredients: parsedRecipe.ingredients.map((ing, index) => {
               const nameStr = typeof ing === 'string' ? ing : ing.name;
+              const substitute = typeof ing === 'object' && ing && 'substitute' in ing ? (ing as { substitute?: string }).substitute : undefined;
               return {
                 name: nameStr,
                 amount: null,
                 unit: resolveUnit(null, nameStr),
                 category: 'other' as const,
                 order_index: index,
+                ...(substitute != null && substitute !== '' && { substitute: String(substitute) }),
               };
             }),
             steps: parsedRecipe.steps.map((step, index) => ({

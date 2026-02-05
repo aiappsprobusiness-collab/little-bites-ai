@@ -17,7 +17,8 @@ interface GeneratedDay {
 
 interface GeneratedPlan {
   days: Record<string, GeneratedDay>;
-  shopping_list: string[];
+  /** Опциональный список продуктов (раздел в PDF не выводится). */
+  product_list?: string[];
   total_calories_week: number;
 }
 
@@ -149,67 +150,12 @@ export function exportMealPlanToPDF(
     yPos += 6;
   }
 
-  // Shopping List - New Page
-  pdf.addPage();
-  yPos = margin;
-
-  // Shopping List Title
-  addText('SPISOK POKUPOK / СПИСОК ПОКУПОК', pageWidth / 2, yPos, { fontSize: 16, fontStyle: 'bold' });
-  yPos += 10;
-
-  addText(`Vsego produktov: ${plan.shopping_list.length}`, margin, yPos, { fontSize: 10, color: [100, 100, 100] });
-  yPos += 8;
-
-  // Divider
-  pdf.setDrawColor(200, 200, 200);
-  pdf.line(margin, yPos, pageWidth - margin, yPos);
-  yPos += 6;
-
-  // Shopping items in columns
-  const columnWidth = contentWidth / 2;
-  let leftColumn = true;
-  let leftY = yPos;
-  let rightY = yPos;
-
-  for (let i = 0; i < plan.shopping_list.length; i++) {
-    const item = plan.shopping_list[i];
-    const currentY = leftColumn ? leftY : rightY;
-    const xPos = leftColumn ? margin : margin + columnWidth;
-
-    if (currentY > pageHeight - margin - 10) {
-      if (leftColumn) {
-        leftColumn = false;
-        continue;
-      } else {
-        pdf.addPage();
-        leftY = margin;
-        rightY = margin;
-        leftColumn = true;
-      }
-    }
-
-    // Checkbox
-    pdf.setDrawColor(180, 180, 180);
-    pdf.rect(xPos, currentY - 3, 4, 4);
-
-    // Item text
-    const itemText = item.length > 35 ? item.substring(0, 32) + '...' : item;
-    addText(`${i + 1}. ${itemText}`, xPos + 6, currentY, { fontSize: 9 });
-
-    if (leftColumn) {
-      leftY += 6;
-    } else {
-      rightY += 6;
-    }
-    leftColumn = !leftColumn;
-  }
-
-  // Footer on last page
-  const finalY = Math.max(leftY, rightY) + 10;
+  // Footer
+  let finalY = yPos + 10;
   if (finalY < pageHeight - margin - 10) {
     pdf.setDrawColor(200, 200, 200);
     pdf.line(margin, finalY, pageWidth - margin, finalY);
-    addText('Sozdano v BabyFood AI', pageWidth / 2, finalY + 6, { fontSize: 8, color: [150, 150, 150] });
+    addText('Sozdano v MomrecipesAI', pageWidth / 2, finalY + 6, { fontSize: 8, color: [150, 150, 150] });
   }
 
   // Generate date-based filename

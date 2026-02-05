@@ -10,7 +10,7 @@ export const RECIPES_LIST_SELECT =
 /**
  * Select для одного рецепта с ингредиентами и шагами (без лимита по количеству).
  */
-export const RECIPES_DETAIL_SELECT = `${RECIPES_LIST_SELECT}, ingredients:recipe_ingredients(name, amount, unit), steps:recipe_steps(instruction, step_number)`;
+export const RECIPES_DETAIL_SELECT = `${RECIPES_LIST_SELECT}, ingredients:recipe_ingredients(name, amount, unit, substitute), steps:recipe_steps(instruction, step_number)`;
 
 /** Минимальные поля chat_history для отображения. */
 export const CHAT_HISTORY_SELECT = 'id, message, response, created_at, user_id, child_id, message_type';
