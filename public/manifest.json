@@ -1,7 +1,7 @@
 {
-  "name": "Little Bites AI",
-  "short_name": "Little Bites",
-  "description": "AI-powered meal planning for the whole family (infants, kids, adults)",
+  "name": "Mom Recipes",
+  "short_name": "Mom Recipes",
+  "description": "От первого прикорма до изысканного ужина. Умное планирование рациона для здоровья, красоты и спокойствия.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

@@ -1,6 +1,6 @@
-# Little Bites AI
+# Mom Recipes
 
-AI-powered meal planning for the whole family (infants, kids, adults) with personalized recipes and meal plans.
+От первого прикорма до изысканного ужина. Умное планирование рациона для здоровья, красоты и спокойствия.
 
 ## Project info
 

@@ -5,8 +5,8 @@
 
 @layer base {
   :root {
-    /* Pastel Baby Food Theme */
-    --background: 30 40% 98%;
+    /* Светлый серо-бежевый фон приложения */
+    --background: 210 14% 98%;
     --foreground: 240 10% 25%;
 
     --card: 0 0% 100%;
@@ -15,9 +15,9 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 25%;
 
-    /* Soft mint green - primary */
-    --primary: 160 45% 65%;
-    --primary-foreground: 160 45% 15%;
+    /* Оливковый/шалфейный акцент #6B8E23 */
+    --primary: 80 60% 34%;
+    --primary-foreground: 0 0% 100%;
 
     /* Warm peach - secondary */
     --secondary: 25 80% 85%;
@@ -121,7 +121,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased leading-relaxed;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }

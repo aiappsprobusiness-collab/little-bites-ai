@@ -40,15 +40,16 @@ export default function FavoritesPage() {
             </CardContent>
           </Card>
         ) : (
-          favorites.map((favorite, index) => (
-            <motion.div
-              key={favorite.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-            >
-              <Card variant="elevated" className="overflow-hidden">
-                <CardContent className="p-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            {favorites.map((favorite, index) => (
+              <motion.div
+                key={favorite.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+              >
+                <Card className="overflow-hidden rounded-[24px] bg-white border border-slate-100 shadow-sm">
+                  <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <h3 className="font-bold text-lg">{favorite.recipe.title}</h3>
@@ -97,10 +98,11 @@ export default function FavoritesPage() {
                       </ol>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
         )}
       </div>
     </MobileLayout>

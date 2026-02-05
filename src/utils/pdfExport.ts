@@ -155,7 +155,7 @@ export function exportMealPlanToPDF(
   if (finalY < pageHeight - margin - 10) {
     pdf.setDrawColor(200, 200, 200);
     pdf.line(margin, finalY, pageWidth - margin, finalY);
-    addText('Sozdano v MomrecipesAI', pageWidth / 2, finalY + 6, { fontSize: 8, color: [150, 150, 150] });
+    addText('Sozdano v Mom Recipes', pageWidth / 2, finalY + 6, { fontSize: 8, color: [150, 150, 150] });
   }
 
   // Generate date-based filename

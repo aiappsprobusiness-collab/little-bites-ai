@@ -6,13 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2, ChefHat, Sparkles } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
@@ -32,6 +31,9 @@ const signupSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 type SignupFormData = z.infer<typeof signupSchema>;
 
+const AUTH_INPUT_CLASS =
+  "rounded-[16px] border border-slate-200/80 bg-white/50 py-4 focus-visible:ring-0 focus-visible:border-primary shadow-none min-h-[52px]";
+
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,20 +43,12 @@ export default function AuthPage() {
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: "",
-      password: "",
-    },
+    defaultValues: { email: "", password: "" },
   });
 
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    defaultValues: {
-      displayName: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-    },
+    defaultValues: { displayName: "", email: "", password: "", confirmPassword: "" },
   });
 
   const onLogin = async (data: LoginFormData) => {
@@ -62,24 +56,14 @@ export default function AuthPage() {
     try {
       const { error } = await signIn(data.email, data.password);
       setIsLoading(false);
-
       if (error) {
-        toast({
-          variant: "destructive",
-          title: "Ошибка входа",
-          description: error.message || "Не удалось войти. Проверьте email и пароль.",
-        });
+        toast({ variant: "destructive", title: "Ошибка входа", description: error.message || "Не удалось войти. Проверьте email и пароль." });
       } else {
         navigate("/");
       }
     } catch (err) {
       setIsLoading(false);
-      const errorMessage = err instanceof Error ? err.message : "Произошла непредвиденная ошибка";
-      toast({
-        variant: "destructive",
-        title: "Ошибка входа",
-        description: errorMessage,
-      });
+      toast({ variant: "destructive", title: "Ошибка входа", description: err instanceof Error ? err.message : "Произошла непредвиденная ошибка" });
     }
   };
 
@@ -87,102 +71,117 @@ export default function AuthPage() {
     setIsLoading(true);
     const { error } = await signUp(data.email, data.password, data.displayName);
     setIsLoading(false);
-
     if (error) {
-      toast({
-        variant: "destructive",
-        title: "Ошибка регистрации",
-        description: error.message,
-      });
+      toast({ variant: "destructive", title: "Ошибка регистрации", description: error.message });
     } else {
-      toast({
-        title: "Регистрация успешна!",
-        description: "Проверьте почту для подтверждения аккаунта",
-      });
+      toast({ title: "Регистрация успешна!", description: "Проверьте почту для подтверждения аккаунта" });
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 gradient-hero">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-8"
-      >
-        <div className="w-20 h-20 mx-auto mb-4 rounded-3xl gradient-primary flex items-center justify-center shadow-button">
-          <ChefHat className="w-10 h-10 text-primary-foreground" />
-        </div>
-        <h1 className="text-3xl font-bold mb-2">Ваш персональный ИИ-повар</h1>
-        <p className="text-muted-foreground flex items-center justify-center gap-1">
-          <Sparkles className="w-4 h-4" />
-          Умное и безопасное меню для вашей семьи
-        </p>
-      </motion.div>
+    <div
+      className="min-h-screen flex flex-col items-center justify-center sm:justify-start p-3 pt-4 sm:p-4 sm:pt-6 pb-6 sm:pb-12"
+      style={{
+        background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F1F5E9 100%)",
+      }}
+    >
+      <div className="w-full max-w-md mx-auto flex flex-col items-center">
+        {/* Заголовок Hero — более значимый */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-2 sm:mb-4"
+        >
+          <h1 className="text-4xl sm:text-5xl font-semibold tracking-widest text-foreground">Mom Recipes</h1>
+        </motion.div>
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1 }}
-        className="w-full max-w-md"
-      >
-        <Card className="shadow-card">
-          <CardHeader className="text-center pb-4">
-            <CardTitle className="text-xl">Добро пожаловать!</CardTitle>
-            <CardDescription>
-              Войдите или создайте аккаунт
-            </CardDescription>
+        {/* Подзаголовок — слоган в два ряда */}
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="text-center mb-4 sm:mb-6 px-2"
+        >
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            От первого прикорма до изысканного ужина.
+            <br />
+            Умное планирование рациона для здоровья, красоты и спокойствия.
+          </p>
+        </motion.div>
+
+        {/* Блок преимуществ — отцентрован, компактный */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="w-full space-y-2 sm:space-y-3 mb-4 sm:mb-5 text-center"
+        >
+          <p className="text-xs text-muted-foreground flex items-center justify-center gap-2 leading-relaxed">
+            <span>👪</span> Семейный уют: Рецепты, которые объединяют за столом.
+          </p>
+          <p className="text-xs text-muted-foreground flex items-center justify-center gap-2 leading-relaxed">
+            <span>✨</span> Красота и Здоровье: Сбалансированное меню для вашей энергии.
+          </p>
+          <p className="text-xs text-muted-foreground flex items-center justify-center gap-2 leading-relaxed">
+            <span>🆘</span> Поддержка 24/7: Быстрые ответы на любые вопросы о питании.
+          </p>
+        </motion.div>
+
+        {/* Карточка формы — визуально единое целое с блоком выше */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.15 }}
+          className="w-full"
+        >
+        <Card className="bg-white/80 backdrop-blur-xl border-0 rounded-[40px] shadow-lg">
+          <CardHeader className="text-center pb-3 sm:pb-4 px-4 sm:px-6 pt-4 sm:pt-6">
+            <CardTitle className="text-lg">Добро пожаловать</CardTitle>
+            <CardDescription>Войдите или создайте аккаунт</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-4 sm:px-6 pb-5 sm:pb-6">
             <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login">Вход</TabsTrigger>
-                <TabsTrigger value="signup">Регистрация</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 mb-6 rounded-full bg-slate-100/80 p-1">
+                <TabsTrigger value="login" className="rounded-full">Вход</TabsTrigger>
+                <TabsTrigger value="signup" className="rounded-full">Регистрация</TabsTrigger>
               </TabsList>
 
               <TabsContent value="login">
                 <Form {...loginForm}>
-                  <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-4">
+                  <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-5">
                     <FormField
                       control={loginForm.control}
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
                           <FormControl>
-                            <Input
-                              type="email"
-                              placeholder="mail@example.com"
-                              {...field}
-                            />
+                            <Input placeholder="mail@example.com" className={AUTH_INPUT_CLASS} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-
                     <FormField
                       control={loginForm.control}
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Пароль</FormLabel>
+                          <FormLabel className="text-muted-foreground font-normal">Пароль</FormLabel>
                           <FormControl>
                             <div className="relative">
                               <Input
                                 type={showPassword ? "text" : "password"}
                                 placeholder="••••••"
+                                className={AUTH_INPUT_CLASS}
                                 {...field}
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                               >
-                                {showPassword ? (
-                                  <EyeOff className="w-4 h-4" />
-                                ) : (
-                                  <Eye className="w-4 h-4" />
-                                )}
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                               </button>
                             </div>
                           </FormControl>
@@ -190,16 +189,14 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
-
                     <Button
                       type="submit"
-                      className="w-full gradient-primary shadow-button"
+                      className="w-full rounded-full h-12 text-white font-medium uppercase tracking-wider flex items-center justify-center gap-2"
+                      style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)" }}
                       disabled={isLoading}
                     >
-                      {isLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      ) : null}
-                      Войти
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
+                      <span>Войти</span>
                     </Button>
                   </form>
                 </Form>
@@ -207,65 +204,53 @@ export default function AuthPage() {
 
               <TabsContent value="signup">
                 <Form {...signupForm}>
-                  <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-4">
+                  <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-5">
                     <FormField
                       control={signupForm.control}
                       name="displayName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Ваше имя</FormLabel>
+                          <FormLabel className="text-muted-foreground font-normal">Ваше имя</FormLabel>
                           <FormControl>
-                            <Input
-                              placeholder="Мария"
-                              {...field}
-                            />
+                            <Input placeholder="Мария" className={AUTH_INPUT_CLASS} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-
                     <FormField
                       control={signupForm.control}
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
                           <FormControl>
-                            <Input
-                              type="email"
-                              placeholder="mail@example.com"
-                              {...field}
-                            />
+                            <Input type="email" placeholder="mail@example.com" className={AUTH_INPUT_CLASS} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-
                     <FormField
                       control={signupForm.control}
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Пароль</FormLabel>
+                          <FormLabel className="text-muted-foreground font-normal">Пароль</FormLabel>
                           <FormControl>
                             <div className="relative">
                               <Input
                                 type={showPassword ? "text" : "password"}
                                 placeholder="••••••"
+                                className={AUTH_INPUT_CLASS}
                                 {...field}
                               />
                               <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                               >
-                                {showPassword ? (
-                                  <EyeOff className="w-4 h-4" />
-                                ) : (
-                                  <Eye className="w-4 h-4" />
-                                )}
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                               </button>
                             </div>
                           </FormControl>
@@ -273,17 +258,17 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
-
                     <FormField
                       control={signupForm.control}
                       name="confirmPassword"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Повторите пароль</FormLabel>
+                          <FormLabel className="text-muted-foreground font-normal">Повторите пароль</FormLabel>
                           <FormControl>
                             <Input
                               type={showPassword ? "text" : "password"}
                               placeholder="••••••"
+                              className={AUTH_INPUT_CLASS}
                               {...field}
                             />
                           </FormControl>
@@ -291,16 +276,14 @@ export default function AuthPage() {
                         </FormItem>
                       )}
                     />
-
                     <Button
                       type="submit"
-                      className="w-full gradient-primary shadow-button"
+                      className="w-full rounded-full h-12 text-white font-medium uppercase tracking-wider flex items-center justify-center gap-2"
+                      style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)" }}
                       disabled={isLoading}
                     >
-                      {isLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      ) : null}
-                      Создать аккаунт
+                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
+                      <span>Начать готовить с Mom Recipes</span>
                     </Button>
                   </form>
                 </Form>
@@ -309,6 +292,7 @@ export default function AuthPage() {
           </CardContent>
         </Card>
       </motion.div>
+      </div>
     </div>
   );
 }

@@ -17,11 +17,13 @@ import RecipesPage from "./pages/RecipesPage";
 import ChatPage from "./pages/ChatPage";
 import FavoritesPage from "./pages/FavoritesPage";
 import SosConsultant from "./pages/SosConsultant";
-import PlateAnalysis from "./pages/PlateAnalysis";
+import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import { PWAInstall } from "./components/pwa/PWAInstall";
+import { Paywall } from "./components/subscription/Paywall";
+import { useAppStore } from "./store/useAppStore";
 
 /** Ключи localStorage V1: при наличии любого из них очищаем кэш для миграции на V2 (members, profiles_v2). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data"];
@@ -35,6 +37,18 @@ function LegacyCacheClear() {
 }
 
 const queryClient = new QueryClient();
+
+function GlobalPaywall() {
+  const showPaywall = useAppStore((s) => s.showPaywall);
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  return (
+    <Paywall
+      isOpen={showPaywall}
+      onClose={() => setShowPaywall(false)}
+      onSubscribe={() => setShowPaywall(false)}
+    />
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -51,6 +65,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <PWAInstall />
+            <GlobalPaywall />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/" element={<Navigate to="/chat" replace />} />
@@ -142,11 +157,12 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route path="/plate-analysis" element={<Navigate to="/diary" replace />} />
               <Route
-                path="/plate-analysis"
+                path="/diary"
                 element={
                   <ProtectedRoute>
-                    <PlateAnalysis />
+                    <FoodDiary />
                   </ProtectedRoute>
                 }
               />

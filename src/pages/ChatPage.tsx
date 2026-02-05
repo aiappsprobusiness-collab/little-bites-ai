@@ -52,7 +52,7 @@ interface Message {
   isStreaming?: boolean;
 }
 
-const STARTER_MESSAGE = "Я помогу с идеями, что приготовить для вашей семьи. Выберите, для кого готовим, и задайте вопрос.";
+const STARTER_MESSAGE = "Здравствуйте! Выберите профиль, и я мгновенно подберу идеальный рецепт.";
 
 export default function ChatPage() {
   const location = useLocation();

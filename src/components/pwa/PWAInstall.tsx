@@ -17,7 +17,7 @@ export function PWAInstall() {
           </div>
           <DialogTitle className="flex items-center justify-center gap-2 text-center">
             <Puzzle className="h-6 w-6 text-primary shrink-0" />
-            Установить Momrecipes на экран?
+            Установить Mom Recipes на экран?
           </DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-2 text-center">

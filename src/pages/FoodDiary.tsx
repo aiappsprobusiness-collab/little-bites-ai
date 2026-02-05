@@ -11,7 +11,7 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { usePlateLogs } from "@/hooks/usePlateLogs";
 import { SUPABASE_URL } from "@/integrations/supabase/client";
 
-export default function PlateAnalysis() {
+export default function FoodDiary() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { session, user } = useAuth();
@@ -72,7 +72,7 @@ export default function PlateAnalysis() {
 
   return (
     <MobileLayout
-      title="Анализ тарелки"
+      title="Дневник питания"
       showNav
       headerLeft={
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
@@ -88,15 +88,17 @@ export default function PlateAnalysis() {
             </p>
           )}
 
+          <p className="text-xs font-medium text-muted-foreground px-1">Сегодняшняя тарелка</p>
+
           {lastResponse && (
             <div className="space-y-3">
-              <Card className="bg-muted/30">
+              <Card className="bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <CardContent className="p-3">
                   <p className="text-xs text-muted-foreground mb-1">Вы:</p>
                   <p className="text-sm">{lastResponse.user}</p>
                 </CardContent>
               </Card>
-              <Card className="border-primary/30">
+              <Card className="bg-white rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-primary">
                 <CardContent className="p-3">
                   <p className="text-xs text-primary font-medium mb-1">Рекомендация:</p>
                   <p className="text-sm whitespace-pre-wrap">{lastResponse.assistant}</p>
@@ -110,29 +112,35 @@ export default function PlateAnalysis() {
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            logs.map((log) => (
-              <div key={log.id} className="space-y-2">
-                <Card className="bg-muted/30">
-                  <CardContent className="p-3">
-                    <p className="text-xs text-muted-foreground mb-1">Вы:</p>
-                    <p className="text-sm">{log.user_message}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="p-3">
-                    <p className="text-xs text-primary font-medium mb-1">Рекомендация:</p>
-                    <p className="text-sm whitespace-pre-wrap">{log.assistant_message}</p>
-                  </CardContent>
-                </Card>
-              </div>
-            ))
+            logs.map((log) => {
+              const date = log.created_at ? new Date(log.created_at) : null;
+              const dateStr = date ? date.toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" }) : "";
+              return (
+                <div key={log.id} className="space-y-2">
+                  <Card className="bg-white rounded-2xl border border-slate-100 shadow-sm relative">
+                    <CardContent className="p-3 pr-20">
+                      <p className="absolute top-2 right-2 text-[10px] text-muted-foreground">{dateStr}</p>
+                      <p className="text-xs text-muted-foreground mb-1">Вы:</p>
+                      <p className="text-sm">{log.user_message}</p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-white rounded-2xl border border-slate-100 shadow-sm relative border-l-4 border-l-primary">
+                    <CardContent className="p-3 pr-20">
+                      <p className="absolute top-2 right-2 text-[10px] text-muted-foreground">{dateStr}</p>
+                      <p className="text-xs text-primary font-medium mb-1">Рекомендация:</p>
+                      <p className="text-sm whitespace-pre-wrap">{log.assistant_message}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })
           )}
         </div>
 
-        <div className="p-4 border-t bg-background">
-          <div className="flex gap-2">
+        <div className="p-4 border-t bg-white/80 backdrop-blur-sm">
+          <div className="flex gap-2 items-end rounded-full bg-slate-100/80 px-4 py-2 border border-slate-200/80">
             <Textarea
-              placeholder="Опишите, что съел ребёнок (например: каша овсяная, полбанана, компот)"
+              placeholder="Что малыш съел сегодня? Например: полбаночки кабачка и компот"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -141,13 +149,13 @@ export default function PlateAnalysis() {
                   sendMessage();
                 }
               }}
-              rows={2}
-              className="resize-none"
+              rows={1}
+              className="resize-none flex-1 min-h-[44px] max-h-24 bg-transparent border-0 shadow-none focus-visible:ring-0 rounded-full"
               disabled={sending || !memberData}
             />
             <Button
               size="icon"
-              className="shrink-0 h-auto"
+              className="shrink-0 h-10 w-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={sendMessage}
               disabled={sending || !input.trim() || !memberData}
             >

@@ -10,6 +10,8 @@ import {
   SOS_PROMPT_TEMPLATE,
   BALANCE_CHECK_TEMPLATE,
   NO_ARTICLES_RULE,
+  GREETING_STYLE_RULE,
+  FAMILY_RECIPE_INSTRUCTION,
 } from "./prompts.ts";
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
@@ -414,8 +416,10 @@ serve(async (req) => {
     }
 
     const isPremiumRecipeChat = type === "chat" && isPremiumUser && premiumRelevance === true;
+    const isRecipeChat =
+      type === "chat" && (isPremiumUser ? premiumRelevance === true : true);
     const stream =
-      type === "sos_consultant" || type === "balance_check" || isPremiumRecipeChat
+      type === "sos_consultant" || type === "balance_check" || isRecipeChat
         ? false
         : reqStream;
 
@@ -515,7 +519,7 @@ serve(async (req) => {
       cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContext, promptUserMessage);
 
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft") {
-      systemPrompt = "Ты эксперт по питанию MomrecipesAI. Отвечай кратко по вопросу пользователя, без генерации рецепта.";
+      systemPrompt = "Ты эксперт по питанию Mom Recipes. Отвечай кратко по вопросу пользователя, без генерации рецепта.";
     }
 
     // v2: age-based logic — категория возраста и правила питания в промпт (ageCategory уже вычислен выше для лога)
@@ -529,7 +533,18 @@ serve(async (req) => {
       tariffResult.tariffAppendix +
       (tariffResult.familyBalanceNote ? "\n" + tariffResult.familyBalanceNote : "") +
       "\n" +
-      NO_ARTICLES_RULE;
+      NO_ARTICLES_RULE +
+      "\n" +
+      GREETING_STYLE_RULE;
+
+    if ((type === "chat" || type === "recipe" || type === "diet_plan") && targetIsFamily) {
+      systemPrompt += "\n\n" + applyPromptTemplate(
+        FAMILY_RECIPE_INSTRUCTION,
+        memberDataForPrompt,
+        true,
+        allMembersForPrompt
+      );
+    }
 
     console.log("FINAL_SYSTEM_PROMPT:", systemPrompt);
 
@@ -550,7 +565,7 @@ serve(async (req) => {
       stream,
     };
 
-    if (type === "single_day" || isPremiumRecipeChat) {
+    if (type === "single_day" || isRecipeChat) {
       apiRequestBody.response_format = { type: "json_object" };
     }
 

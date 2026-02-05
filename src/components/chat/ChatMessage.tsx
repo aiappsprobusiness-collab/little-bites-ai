@@ -1,6 +1,6 @@
 import { useState, useRef, forwardRef, useMemo } from "react";
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
-import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen } from "lucide-react";
+import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -68,18 +68,25 @@ interface Recipe {
   steps?: string[];
   cookingTime?: number;
   ageRange?: string;
+  chefAdvice?: string;
+  familyServing?: string;
 }
 
 function normalizeIngredients(raw: unknown): ParsedIngredient[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((item: unknown) => {
-    if (typeof item === "string") return item;
-    if (item && typeof item === "object" && "name" in item && typeof (item as { name: string }).name === "string") {
-      const o = item as { name: string; amount?: string; substitute?: string };
-      return { name: o.name, amount: o.amount, substitute: o.substitute };
-    }
-    return String(item);
-  });
+  return raw
+    .map((item: unknown) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && "name" in item && typeof (item as { name: string }).name === "string") {
+        const o = item as { name: string; amount?: string; substitute?: string };
+        return { name: o.name, amount: o.amount, substitute: o.substitute };
+      }
+      return String(item);
+    })
+    .filter((ing) => {
+      const text = typeof ing === "string" ? ing : (ing as { name?: string }).name ?? "";
+      return String(text).trim().length >= 2;
+    });
 }
 
 /**
@@ -95,24 +102,34 @@ function parseRecipeFromContent(content: string): Recipe | null {
           const parsed = JSON.parse(jsonStr);
           if (parsed.title || parsed.name) {
             const ings = normalizeIngredients(parsed.ingredients);
+            const steps = Array.isArray(parsed.steps)
+              ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
+              : [];
             return {
               title: parsed.title || parsed.name,
               description: parsed.description,
               ingredients: ings,
-              steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+              steps,
               cookingTime: parsed.cookingTime || parsed.cooking_time,
               ageRange: parsed.ageRange || "",
+              chefAdvice: parsed.chefAdvice,
+              familyServing: parsed.familyServing,
             };
           }
           if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
             const r = parsed.recipes[0];
+            const steps = Array.isArray(r.steps)
+              ? r.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
+              : [];
             return {
               title: r.title || r.name,
               description: r.description,
               ingredients: normalizeIngredients(r.ingredients),
-              steps: Array.isArray(r.steps) ? r.steps : [],
+              steps,
               cookingTime: r.cookingTime || r.cooking_time,
               ageRange: r.ageRange || "",
+              chefAdvice: r.chefAdvice,
+              familyServing: r.familyServing,
             };
           }
         } catch {
@@ -130,24 +147,34 @@ function parseRecipeFromContent(content: string): Recipe | null {
         try {
           const parsed = JSON.parse(jsonStr);
           if (parsed.title || parsed.name) {
+            const steps = Array.isArray(parsed.steps)
+              ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
+              : [];
             return {
               title: parsed.title || parsed.name,
               description: parsed.description,
               ingredients: normalizeIngredients(parsed.ingredients),
-              steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+              steps,
               cookingTime: parsed.cookingTime || parsed.cooking_time,
               ageRange: parsed.ageRange || '',
+              chefAdvice: parsed.chefAdvice,
+              familyServing: parsed.familyServing,
             };
           }
           if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
             const recipe = parsed.recipes[0];
+            const steps = Array.isArray(recipe.steps)
+              ? recipe.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
+              : [];
             return {
               title: recipe.title || recipe.name,
               description: recipe.description,
               ingredients: normalizeIngredients(recipe.ingredients),
-              steps: Array.isArray(recipe.steps) ? recipe.steps : [],
+              steps,
               cookingTime: recipe.cookingTime || recipe.cooking_time,
               ageRange: recipe.ageRange || '',
+              chefAdvice: recipe.chefAdvice,
+              familyServing: recipe.familyServing,
             };
           }
         } catch {
@@ -166,13 +193,18 @@ function parseRecipeFromContent(content: string): Recipe | null {
       try {
         const parsed = JSON.parse(simpleMatch[0]);
         if (parsed.title || parsed.name) {
+          const steps = Array.isArray(parsed.steps)
+            ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
+            : [];
           return {
             title: parsed.title || parsed.name,
             description: parsed.description,
             ingredients: normalizeIngredients(parsed.ingredients),
-            steps: Array.isArray(parsed.steps) ? parsed.steps : [],
+            steps,
             cookingTime: parsed.cookingTime || parsed.cooking_time,
             ageRange: parsed.ageRange || '',
+            chefAdvice: parsed.chefAdvice,
+            familyServing: parsed.familyServing,
           };
         }
       } catch {
@@ -381,7 +413,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const shareText = useMemo(() => {
       const base = recipe ? formatRecipe(recipe) : typeof content === "string" ? content : "";
-      const appMention = "\n\n— Рецепт из приложения Little Bites";
+      const appMention = "\n\n— Рецепт из приложения Mom Recipes";
       return `${base}${appMention}`;
     }, [recipe, content]);
 
@@ -452,14 +484,98 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           className={`relative max-w-[85%] cursor-grab active:cursor-grabbing`}
         >
           <div
-            className={`rounded-2xl px-4 py-3 relative ${role === "user"
-              ? "bg-primary text-primary-foreground rounded-br-sm"
-              : "bg-card shadow-soft rounded-bl-sm"
+            className={`relative ${role === "user"
+              ? "px-4 py-3 bg-primary text-primary-foreground rounded-full rounded-br-sm"
+              : role === "assistant" && recipe
+                ? "rounded-bl-sm overflow-hidden px-4 pb-3"
+                : "px-4 py-3 bg-card shadow-soft rounded-2xl rounded-bl-sm"
               }`}
           >
-            {/* Ответы ассистента рендерятся как Markdown (жирный, списки); ведущий JSON скрыт; [uuid] → кнопка «Читать статью». */}
-            {role === "assistant" ? (
-              <div className="chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-sm prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-sm prose-strong:text-sm [&>*]:text-sm">
+            {role === "assistant" && recipe ? (
+              /* Карточка рецепта: не выводим ингредиенты текстом, рендерим карточки */
+              <div className="bg-white rounded-[40px] p-6 sm:p-8 shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-slate-50 max-w-full">
+                <h3 className="text-2xl font-semibold leading-relaxed text-[#2D3436] mb-2">{recipe.title}</h3>
+                {recipe.description && (
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">{recipe.description}</p>
+                )}
+                {recipe.cookingTime != null && recipe.cookingTime > 0 && (
+                  <p className="text-xs text-muted-foreground mb-4">⏱️ {recipe.cookingTime} мин</p>
+                )}
+                {recipe.ingredients && recipe.ingredients.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Ингредиенты</p>
+                    {recipe.ingredients
+                      .map((ing, idx) => {
+                        const isObj = isIngredientObject(ing);
+                        const name = typeof ing === "string" ? ing : (ing as { name?: string }).name ?? "";
+                        const amount = isObj ? (ing as { amount?: string }).amount : "";
+                        const displayText = typeof ing === "string" ? ing : `${name}${amount ? ` — ${amount}` : ""}`.trim();
+                        if (displayText.length < 2) return null;
+                        const substitute = isObj ? (ing as IngredientWithSubstitute).substitute : undefined;
+                        const hasSubstitute = !!substitute?.trim();
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between bg-[#F1F5E9]/60 rounded-[18px] py-2.5 px-3 mb-2 border border-[#6B8E23]/5"
+                          >
+                            <span className="text-[#2D3436] font-medium text-sm truncate mr-2">
+                              {displayText}
+                            </span>
+                            {hasSubstitute && (
+                              isPremium ? (
+                                <TooltipProvider delayDuration={200}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        type="button"
+                                        className="bg-white text-[#6B8E23] text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm border border-[#6B8E23]/20 shrink-0"
+                                      >
+                                        ЗАМЕНИТЬ 🔄
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="max-w-[240px]">
+                                      <p className="text-xs">{substitute}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <span className="text-muted-foreground shrink-0" title="Доступно в Premium">
+                                  <Lock className="w-3.5 h-3.5" />
+                                </span>
+                              )
+                            )}
+                          </div>
+                        );
+                      })
+                      .filter(Boolean)}
+                  </div>
+                )}
+                {recipe.steps && recipe.steps.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Приготовление</p>
+                    <ol className="list-decimal list-inside space-y-0.5 text-sm text-[#2D3436] leading-tight [&>li]:pl-0.5">
+                      {recipe.steps.map((step, idx) => (
+                        <li key={idx}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+                {(recipe.chefAdvice || recipe.familyServing) && (
+                  <div className="rounded-2xl p-4 bg-[#EFF6FF] border border-sky-100 flex gap-3 items-start">
+                    <span className="text-xl shrink-0" aria-hidden>👨‍🍳</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-sky-800/80 mb-0.5">
+                        {recipe.familyServing ? "Адаптация для ребёнка" : "Секрет шефа"}
+                      </p>
+                      <p className="text-sm text-[#2D3436] leading-snug">
+                        {recipe.familyServing || recipe.chefAdvice}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : role === "assistant" ? (
+              <div className="chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-sm prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-sm prose-strong:text-sm [&>*]:text-sm px-4 py-3">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -492,37 +608,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 >
                   {displayWithArticleLinks}
                 </ReactMarkdown>
-                {hasSubstitutes && recipe?.ingredients && (
-                  <TooltipProvider delayDuration={200}>
-                    <div className="mt-2 pt-2 border-t border-border/50">
-                      <p className="text-xs font-medium text-muted-foreground mb-1.5">Замены ингредиентов</p>
-                      <ul className="space-y-1">
-                        {(recipe.ingredients.filter((ing) => isIngredientObject(ing) && (ing as IngredientWithSubstitute).substitute) as IngredientWithSubstitute[]).map((ing, idx) => (
-                          <li key={idx} className="flex items-center gap-1.5 text-sm">
-                            <span>{ingredientDisplayText(ing)}</span>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  className="inline-flex shrink-0 text-muted-foreground hover:text-foreground"
-                                  aria-label="Чем заменить"
-                                >
-                                  🔄
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" className="max-w-[240px]">
-                                <p className="text-xs">{ing.substitute}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </TooltipProvider>
-                )}
               </div>
             ) : (
-              <p className="text-base whitespace-pre-wrap select-none">{displayContent}</p>
+              <p className="text-base whitespace-pre-wrap select-none px-4 py-3">{displayContent}</p>
             )}
             <p className="text-[10px] opacity-60 mt-1">
               {timestamp.toLocaleTimeString("ru-RU", {
