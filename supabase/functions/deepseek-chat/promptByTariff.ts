@@ -27,8 +27,8 @@ export interface PromptByTariffResult {
   familyBalanceNote: string;
 }
 
-const FREE_MAX_TOKENS = 700;
-const PREMIUM_MAX_TOKENS = 1500;
+const FREE_MAX_TOKENS = 1200;
+const PREMIUM_MAX_TOKENS = 2500;
 
 /** Собирает опции промпта на основе профиля и тарифа. */
 export function buildPromptByProfileAndTariff(

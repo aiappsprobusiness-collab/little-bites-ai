@@ -25,13 +25,17 @@ import { PWAInstall } from "./components/pwa/PWAInstall";
 import { Paywall } from "./components/subscription/Paywall";
 import { useAppStore } from "./store/useAppStore";
 
-/** Ключи localStorage V1: при наличии любого из них очищаем кэш для миграции на V2 (members, profiles_v2). */
-const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data"];
+/** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
+const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
 
 function LegacyCacheClear() {
   useEffect(() => {
-    const hasV1 = V1_STORAGE_KEYS.some((k) => localStorage.getItem(k) != null);
-    if (hasV1) localStorage.clear();
+    V1_STORAGE_KEYS.forEach((key) => {
+      if (localStorage.getItem(key) !== null) {
+        localStorage.removeItem(key);
+      }
+    });
+    // console.log("V1 Cache cleared safely");
   }, []);
   return null;
 }

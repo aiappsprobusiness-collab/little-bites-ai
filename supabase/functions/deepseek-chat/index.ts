@@ -373,6 +373,9 @@ serve(async (req) => {
       weekContext,
     } = body;
 
+    const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
+    const isRecipeRequestByType = recipeTypes.includes(type as (typeof recipeTypes)[number]);
+
     // Нормализация: фронт может присылать ageMonths (camelCase), без age_months
     const memberDataNorm = normalizeMemberData(memberDataRaw);
     const reqAllMembersNorm = Array.isArray(reqAllMembersRaw)
@@ -415,11 +418,11 @@ serve(async (req) => {
       }
     }
 
-    const isPremiumRecipeChat = type === "chat" && isPremiumUser && premiumRelevance === true;
     const isRecipeChat =
       type === "chat" && (isPremiumUser ? premiumRelevance === true : true);
+    const isRecipeRequest = isRecipeRequestByType || (type === "chat" && isRecipeChat);
     const stream =
-      type === "sos_consultant" || type === "balance_check" || isRecipeChat
+      isRecipeRequest || type === "sos_consultant" || type === "balance_check"
         ? false
         : reqStream;
 
@@ -534,8 +537,7 @@ serve(async (req) => {
       (tariffResult.familyBalanceNote ? "\n" + tariffResult.familyBalanceNote : "") +
       "\n" +
       NO_ARTICLES_RULE +
-      "\n" +
-      GREETING_STYLE_RULE;
+      (!isRecipeRequest ? "\n" + GREETING_STYLE_RULE : "");
 
     if ((type === "chat" || type === "recipe" || type === "diet_plan") && targetIsFamily) {
       systemPrompt += "\n\n" + applyPromptTemplate(
@@ -550,29 +552,36 @@ serve(async (req) => {
 
     const isExpertSoft = type === "chat" && isPremiumUser && premiumRelevance === "soft";
     const isMealPlan = type === "single_day" || type === "diet_plan";
-    // v2: Free ~700 tokens, Premium/Trial ~1500 for chat; остальные типы без изменений
     const maxTokensChat =
       type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
-    const apiRequestBody: Record<string, unknown> = {
+    const promptConfig = {
+      maxTokens: maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
+    };
+    const payload = {
       model: "deepseek-chat",
       messages: [{ role: "system", content: systemPrompt }, ...messages],
-      max_tokens:
-        maxTokensChat ??
-        (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
+      stream: isRecipeRequest || type === "sos_consultant" || type === "balance_check" ? false : reqStream,
+      max_tokens: promptConfig.maxTokens,
+      temperature: isRecipeRequest ? 0.3 : 0.7,
       top_p: 0.8,
-      temperature: isMealPlan ? 0.7 : 0.3,
       repetition_penalty: 1.1,
-      stream,
+      ...(isRecipeRequest && { response_format: { type: "json_object" } }),
     };
 
-    if (type === "single_day" || isRecipeChat) {
-      apiRequestBody.response_format = { type: "json_object" };
+    if (isRecipeRequest) {
+      if ((payload as { stream?: boolean }).stream === true) {
+        throw new Error("Recipe request must not use stream=true");
+      }
+      if (!("response_format" in payload)) {
+        throw new Error("Recipe request must enforce JSON response_format");
+      }
     }
 
-    const timeoutMs = type === "single_day" ? 60000 : stream ? 90000 : 120000;
+    const timeoutMs = type === "single_day" ? 60000 : (payload as { stream?: boolean }).stream ? 90000 : 120000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+    console.log("SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
     let response: Response;
     try {
       response = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -581,7 +590,7 @@ serve(async (req) => {
           Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(apiRequestBody),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);

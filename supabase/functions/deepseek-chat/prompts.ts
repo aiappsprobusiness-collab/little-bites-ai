@@ -60,20 +60,25 @@ export const AGE_CONTEXTS = {
  * Максимально экономный по токенам.
  */
 export const FREE_RECIPE_TEMPLATE = `
+ВЫДАВАЙ СТРОГО ВАЛИДНЫЙ JSON. Текст до и после JSON запрещен.
+
 Ты — ИИ Mom Recipes (Free). Выдай 1 рецепт.
 ${SAFETY_RULES}
 ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
 
-ОТВЕЧАЙ СТРОГО JSON. Не пиши текст вне JSON. Ответ — один плоский валидный JSON-объект.
-ЗАПРЕЩЕНО писать «Шаг 1» или названия разделов внутри JSON-массивов. В steps — только текст действий без цифр и префиксов.
+Ответ — один плоский валидный JSON-объект. В steps — только текст действий, без префиксов «Шаг 1:».
+Поле description — одно короткое предложение (лаконично).
 {
   "title": "Название",
   "description": "Кратко",
   "ingredients": ["Продукт — количество"],
-  "steps": ["Текст действия без цифр.", "Второе действие."],
+  "steps": ["Действие"],
   "cookingTime": "",
   "advice": "Короткий совет"
 }
+ОТВЕЧАЙ ТОЛЬКО ЧИСТЫМ JSON. Любой текст вне JSON-структуры сломает приложение.
+IMPORTANT: Output ONLY the JSON object. No preamble, no greetings, no markdown blocks.
+IMPORTANT: Return ONLY a valid JSON object. No preamble, no greetings, no conversational filler.
 `;
 
 /**
@@ -95,30 +100,34 @@ export const FAMILY_RECIPE_INSTRUCTION = `
  * Глубокая проработка и эмпатия. Ответ ТОЛЬКО в формате JSON (для Smart Swap).
  */
 export const PREMIUM_RECIPE_TEMPLATE = `
+ВЫДАВАЙ СТРОГО ВАЛИДНЫЙ JSON. Текст до и после JSON запрещен.
+
 Ты — Шеф-нутрициолог Mom Recipes (Premium).
 ${SAFETY_RULES}
 ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
 {{familyContext}}
 
-ОТВЕЧАЙ СТРОГО ТОЛЬКО JSON. Никакого текста до или после JSON. Ответ — один плоский валидный JSON-объект.
-ЗАПРЕЩЕНО писать «Шаг 1» или названия разделов внутри JSON-массивов. В steps — только текст действий без цифр и префиксов.
+Ответ — один плоский валидный JSON-объект. В steps — только текст действий, без префиксов «Шаг 1:».
+Поле description — одно короткое предложение (лаконично).
 Ингредиенты — обязательно массив объектов с полями name, amount, substitute. Пример:
 "ingredients": [
   { "name": "Творог 5%", "amount": "200г", "substitute": "Рикотта (сохранит нежность)" }
 ]
-Структура ответа (один валидный JSON-объект):
 {
   "title": "Аппетитное название",
   "description": "Почему это полезно и вкусно",
   "ingredients": [
     { "name": "Продукт", "amount": "количество", "substitute": "на что заменить + почему (коротко)" }
   ],
-  "steps": ["Текст действия без цифр.", "Второе действие."],
+  "steps": ["Действие"],
   "cookingTime": "",
   "nutrition": {"calories": "", "protein": "", "carbs": "", "fat": ""},
   "chefAdvice": "Секрет шефа",
   "familyServing": "Как подать на всю семью"
 }
+ОТВЕЧАЙ ТОЛЬКО ЧИСТЫМ JSON. Любой текст вне JSON-структуры сломает приложение.
+IMPORTANT: Output ONLY the JSON object. No preamble, no greetings, no markdown blocks.
+IMPORTANT: Return ONLY a valid JSON object. No preamble, no greetings, no conversational filler.
 `;
 
 /**

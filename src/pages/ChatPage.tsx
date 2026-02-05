@@ -423,6 +423,7 @@ export default function ChatPage() {
                 }
                 timestamp={m.timestamp}
                 rawContent={m.rawContent}
+                expectRecipe={m.role === "assistant"}
                 onDelete={handleDeleteMessage}
                 memberId={selectedMember?.id}
                 memberName={selectedMember?.name}

@@ -55,6 +55,8 @@ interface ChatMessageProps {
   timestamp: Date;
   rawContent?: string;
   onDelete: (id: string) => void;
+  /** true = ответ должен быть рецептом (JSON); при null от парсера показываем ошибку, не текст */
+  expectRecipe?: boolean;
   /** Контекст члена семьи для сохранения в избранное */
   memberId?: string;
   memberName?: string;
@@ -76,9 +78,20 @@ interface Recipe {
 /** Заголовки секций, которые не должны попадать в массив шагов. */
 const STEP_HEADER_PATTERNS = /^(Пошаговое приготовление|Приготовление|Инструкция|Шаги|Рецепт|Как приготовить)$/i;
 
+/** Мусорный текст от ИИ (вводные фразы), не показываем в шагах/ингредиентах. */
+const GARBAGE_INTRO_PATTERN = /^(Конечно,?\s*)?(Вот\s+)?(ваш\s+)?(рецепт|ингредиенты|шаги)\s*:?\s*$/i;
+
+function isGarbageText(s: string): boolean {
+  const t = s.trim();
+  if (!t || t.length < 3) return true;
+  if (GARBAGE_INTRO_PATTERN.test(t)) return true;
+  if (t.length <= 25 && /:\s*$/.test(t) && !/\d/.test(t)) return true;
+  return false;
+}
+
 function filterStepHeaders(steps: string[]): string[] {
   return steps.filter(
-    (s) => s.trim().length > 0 && !STEP_HEADER_PATTERNS.test(s.trim())
+    (s) => s.trim().length > 0 && !STEP_HEADER_PATTERNS.test(s.trim()) && !isGarbageText(s)
   );
 }
 
@@ -88,161 +101,140 @@ const STEP_PREFIX_REGEX = /^\s*(Шаг\s*\d+\s*[:\.]?|Инструкция\s*[:\
 function cleanStepLines(steps: string[]): string[] {
   return steps
     .map((s) => s.replace(STEP_PREFIX_REGEX, "").trim())
-    .filter((s) => s.length > 0 && !STEP_HEADER_PATTERNS.test(s));
+    .filter((s) => s.length > 0 && !STEP_HEADER_PATTERNS.test(s) && !isGarbageText(s));
 }
 
+/** Строку приводим к объекту { name, amount } для единообразия. */
 function normalizeIngredients(raw: unknown): ParsedIngredient[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .map((item: unknown) => {
-      if (typeof item === "string") return item;
+      if (typeof item === "string") {
+        const t = item.trim();
+        return t ? { name: t, amount: "", substitute: undefined } : null;
+      }
       if (item && typeof item === "object" && "name" in item && typeof (item as { name: string }).name === "string") {
         const o = item as { name: string; amount?: string; substitute?: string };
-        return { name: o.name, amount: o.amount, substitute: o.substitute };
+        return { name: o.name, amount: o.amount ?? "", substitute: o.substitute };
       }
-      return String(item);
+      const s = String(item).trim();
+      return s ? { name: s, amount: "", substitute: undefined } : null;
     })
     .filter((ing) => {
-      const text = typeof ing === "string" ? ing : (ing as { name?: string }).name ?? "";
-      return String(text).trim().length >= 2;
-    });
+      if (!ing) return false;
+      const name = typeof ing === "string" ? ing : ing.name ?? "";
+      const t = String(name).trim();
+      return t.length >= 2 && !isGarbageText(t);
+    }) as ParsedIngredient[];
+}
+
+/** Приводит steps к массиву строк: массив — по элементам, строка — разбивка по переносам. */
+function normalizeSteps(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    const arr = raw.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)));
+    return cleanStepLines(filterStepHeaders(arr));
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    const lines = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    return cleanStepLines(filterStepHeaders(lines));
+  }
+  return [];
+}
+
+/** Собирает Recipe из распарсенного объекта. Показываем карточку даже при частичном JSON (только title). */
+function buildRecipeFromParsed(parsed: Record<string, unknown>): Recipe | null {
+  const title = (parsed.title ?? parsed.name) as string | undefined;
+  if (!title || typeof title !== "string" || !title.trim()) return null;
+  const description = (parsed.description as string | undefined) ?? undefined;
+  const ings = normalizeIngredients(parsed.ingredients);
+  const steps = normalizeSteps(parsed.steps);
+  const cookingTime = parsed.cookingTime ?? parsed.cooking_time;
+  const numTime = typeof cookingTime === "number" ? cookingTime : typeof cookingTime === "string" ? parseInt(String(cookingTime), 10) : undefined;
+  return {
+    title: title.trim(),
+    description: typeof description === "string" ? description : undefined,
+    ingredients: ings.length > 0 ? ings : undefined,
+    steps: steps.length > 0 ? steps : undefined,
+    cookingTime: !Number.isNaN(numTime) ? numTime : undefined,
+    ageRange: (parsed.ageRange as string) ?? "",
+    chefAdvice: (parsed.chefAdvice as string) ?? undefined,
+    familyServing: (parsed.familyServing as string) ?? undefined,
+  };
+}
+
+/** Пытается починить битый JSON: подставляет пустые массивы только для явных null/undefined. */
+function tryRepairJsonAndParse(jsonStr: string): Recipe | null {
+  try {
+    const repaired = jsonStr
+      .replace(/\"ingredients\"\s*:\s*null/g, '"ingredients": []')
+      .replace(/\"steps\"\s*:\s*null/g, '"steps": []')
+      .replace(/\"ingredients\"\s*:\s*undefined/g, '"ingredients": []')
+      .replace(/\"steps\"\s*:\s*undefined/g, '"steps": []');
+    const parsed = JSON.parse(repaired) as Record<string, unknown>;
+    if (!Array.isArray(parsed.ingredients)) parsed.ingredients = [];
+    if (!Array.isArray(parsed.steps)) parsed.steps = [];
+    const recipe = buildRecipeFromParsed(parsed);
+    if (recipe) return recipe;
+    if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
+      const r0 = parsed.recipes[0] as Record<string, unknown>;
+      if (!Array.isArray(r0.ingredients)) r0.ingredients = [];
+      if (!Array.isArray(r0.steps)) r0.steps = [];
+      return buildRecipeFromParsed(r0);
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/** Добиваем закрывающие скобки к обрезанному JSON и пробуем распарсить (до 4 попыток). */
+function tryFixAndParseJson(str: string): Record<string, unknown> | null {
+  let attempt = str.trim();
+  for (let i = 0; i < 4; i++) {
+    try {
+      return JSON.parse(attempt) as Record<string, unknown>;
+    } catch {
+      if (attempt.endsWith("]")) attempt += "}";
+      else if (attempt.endsWith('"')) attempt += "]}";
+      else attempt += '"}]}';
+    }
+  }
+  return null;
 }
 
 /**
- * Парсит JSON рецепт из текста сообщения
+ * Парсит JSON рецепт из текста. Устойчив к мусору до/после, использует ленивый RegExp для первого подходящего объекта.
  */
 function parseRecipeFromContent(content: string): Recipe | null {
-  try {
-    // Ответ начинается с JSON (формат «сначала JSON, потом текст») — берём только первый объект
-    if (content.trim().startsWith("{")) {
-      const jsonStr = extractFirstJsonObjectFromStart(content);
-      if (jsonStr) {
-        try {
-          const parsed = JSON.parse(jsonStr);
-          if (parsed.title || parsed.name) {
-            const ings = normalizeIngredients(parsed.ingredients);
-            const rawSteps = Array.isArray(parsed.steps)
-              ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
-              : [];
-            const steps = cleanStepLines(filterStepHeaders(rawSteps));
-            return {
-              title: parsed.title || parsed.name,
-              description: parsed.description,
-              ingredients: ings,
-              steps,
-              cookingTime: parsed.cookingTime || parsed.cooking_time,
-              ageRange: parsed.ageRange || "",
-              chefAdvice: parsed.chefAdvice,
-              familyServing: parsed.familyServing,
-            };
-          }
-          if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
-            const r = parsed.recipes[0];
-            const rawStepsR = Array.isArray(r.steps)
-              ? r.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
-              : [];
-            const stepsR = cleanStepLines(filterStepHeaders(rawStepsR));
-            return {
-              title: r.title || r.name,
-              description: r.description,
-              ingredients: normalizeIngredients(r.ingredients),
-              steps: stepsR,
-              cookingTime: r.cookingTime || r.cooking_time,
-              ageRange: r.ageRange || "",
-              chefAdvice: r.chefAdvice,
-              familyServing: r.familyServing,
-            };
-          }
-        } catch {
-          // fallback ниже
+  if (!content || typeof content !== "string") return null;
+  const trim = content.trim();
+  if (!trim) return null;
+
+  if (content.includes("{")) {
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*?\}/);
+      if (!jsonMatch) return null;
+      const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+      if (parsed && typeof parsed === "object" && (parsed.title || parsed.ingredients != null)) {
+        if (!Array.isArray(parsed.ingredients)) parsed.ingredients = [];
+        if (!Array.isArray(parsed.steps)) parsed.steps = [];
+        const recipe = buildRecipeFromParsed(parsed);
+        if (recipe) return recipe;
+        if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
+          const r0 = parsed.recipes[0] as Record<string, unknown>;
+          if (!Array.isArray(r0.ingredients)) r0.ingredients = [];
+          if (!Array.isArray(r0.steps)) r0.steps = [];
+          return buildRecipeFromParsed(r0);
         }
       }
+    } catch {
+      // JSON не доукомплектован или невалиден — пробуем fallback ниже
     }
+  }
 
-    // Ищем JSON в code blocks - используем greedy quantifier для захвата всего содержимого
-    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch && codeBlockMatch[1]) {
-      const jsonStr = codeBlockMatch[1].trim();
-      // Проверяем что это JSON объект
-      if (jsonStr.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(jsonStr);
-          if (parsed.title || parsed.name) {
-            const rawStepsCb = Array.isArray(parsed.steps)
-              ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
-              : [];
-            const stepsCb = cleanStepLines(filterStepHeaders(rawStepsCb));
-            return {
-              title: parsed.title || parsed.name,
-              description: parsed.description,
-              ingredients: normalizeIngredients(parsed.ingredients),
-              steps: stepsCb,
-              cookingTime: parsed.cookingTime || parsed.cooking_time,
-              ageRange: parsed.ageRange || '',
-              chefAdvice: parsed.chefAdvice,
-              familyServing: parsed.familyServing,
-            };
-          }
-          if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
-            const recipe = parsed.recipes[0];
-            const rawStepsCb2 = Array.isArray(recipe.steps)
-              ? recipe.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
-              : [];
-            const stepsCb2 = cleanStepLines(filterStepHeaders(rawStepsCb2));
-            return {
-              title: recipe.title || recipe.name,
-              description: recipe.description,
-              ingredients: normalizeIngredients(recipe.ingredients),
-              steps: stepsCb2,
-              cookingTime: recipe.cookingTime || recipe.cooking_time,
-              ageRange: recipe.ageRange || '',
-              chefAdvice: recipe.chefAdvice,
-              familyServing: recipe.familyServing,
-            };
-          }
-        } catch {
-          // JSON невалидный - пробуем "исправить" обрезанный JSON
-          const fixedJson = tryFixTruncatedJson(jsonStr);
-          if (fixedJson) {
-            return fixedJson;
-          }
-        }
-      }
-    }
-
-    // Если не нашли в code block, ищем один полный JSON-объект (игнорируем текст до/после)
-    const jsonStr = extractSingleJsonObject(content);
-    if (jsonStr) {
-      try {
-        const parsed = JSON.parse(jsonStr);
-        if (parsed.title || parsed.name) {
-          const rawStepsSm = Array.isArray(parsed.steps)
-            ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
-            : [];
-          const stepsSm = cleanStepLines(filterStepHeaders(rawStepsSm));
-          return {
-            title: parsed.title || parsed.name,
-            description: parsed.description,
-            ingredients: normalizeIngredients(parsed.ingredients),
-            steps: stepsSm,
-            cookingTime: parsed.cookingTime || parsed.cooking_time,
-            ageRange: parsed.ageRange || '',
-            chefAdvice: parsed.chefAdvice,
-            familyServing: parsed.familyServing,
-          };
-        }
-      } catch {
-        // Невалидный JSON
-      }
-    }
-
-    // Fallback: парсим форматированный текст (как от formatRecipeResponse) — для сообщений из истории
-    const fromFormatted = parseRecipeFromFormattedText(content);
-    if (fromFormatted) return fromFormatted;
-
-    // Fallback: обычный текст без JSON — название (эмодзи/капс) и ингредиенты (1., 2., 3. или -)
+  if (!content.includes("{")) {
     const fromPlain = parseRecipeFromPlainText(content);
-    if (fromPlain)
+    if (fromPlain) {
       return {
         title: fromPlain.title,
         description: fromPlain.description,
@@ -251,11 +243,104 @@ function parseRecipeFromContent(content: string): Recipe | null {
         cookingTime: fromPlain.cookingTime,
         ageRange: undefined,
       };
-  } catch (e) {
-    // Не JSON или невалидный JSON - возвращаем null
+    }
+    const fromFormatted = parseRecipeFromFormattedText(content);
+    if (fromFormatted) return fromFormatted;
+  }
+
+  const cleanContent = content.replace(/^[^{]*/, "").replace(/[^}]*$/, "");
+  const firstBrace = content.indexOf("{");
+
+  const tryParse = (jsonStr: string): Recipe | null => {
+    try {
+      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+      if (!Array.isArray(parsed.ingredients)) parsed.ingredients = [];
+      if (!Array.isArray(parsed.steps)) parsed.steps = [];
+      const recipe = buildRecipeFromParsed(parsed);
+      if (recipe) return recipe;
+      if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
+        const r0 = parsed.recipes[0] as Record<string, unknown>;
+        if (!Array.isArray(r0.ingredients)) r0.ingredients = [];
+        if (!Array.isArray(r0.steps)) r0.steps = [];
+        return buildRecipeFromParsed(r0);
+      }
+    } catch {
+      const fixed = tryFixAndParseJson(jsonStr);
+      if (fixed) {
+        if (!Array.isArray(fixed.ingredients)) fixed.ingredients = [];
+        if (!Array.isArray(fixed.steps)) fixed.steps = [];
+        const recipe = buildRecipeFromParsed(fixed);
+        if (recipe) return recipe;
+        if (Array.isArray(fixed.recipes) && fixed.recipes.length > 0) {
+          const r0 = fixed.recipes[0] as Record<string, unknown>;
+          if (!Array.isArray(r0.ingredients)) r0.ingredients = [];
+          if (!Array.isArray(r0.steps)) r0.steps = [];
+          return buildRecipeFromParsed(r0);
+        }
+      }
+      const repaired = tryRepairJsonAndParse(jsonStr);
+      if (repaired) return repaired;
+      const fallback = tryFixTruncatedJson(jsonStr);
+      if (fallback) return fallback;
+    }
+    return null;
+  };
+
+  try {
+    if (cleanContent.length > 0) {
+      const r = tryParse(cleanContent);
+      if (r) return r;
+    }
+    const lastBrace = content.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      const slice = content.slice(firstBrace, lastBrace + 1);
+      const r = tryParse(slice);
+      if (r) return r;
+    }
+    const truncated = content.slice(firstBrace).trim();
+    const r = tryParse(truncated);
+    if (r) return r;
+
+    const jsonStr = extractFirstJsonObjectFromStart(content);
+    if (jsonStr) {
+      const r = tryParse(jsonStr);
+      if (r) return r;
+    }
+
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch?.[1]) {
+      const block = codeBlockMatch[1].trim();
+      if (block.startsWith("{")) {
+        const r = tryParse(block);
+        if (r) return r;
+      }
+    }
+
+    const single = extractSingleJsonObject(content);
+    if (single) {
+      const r = tryParse(single);
+      if (r) return r;
+    }
+
+    const fromFormatted = parseRecipeFromFormattedText(content);
+    if (fromFormatted) return fromFormatted;
+
+    const fromPlain = parseRecipeFromPlainText(content);
+    if (fromPlain) {
+      return {
+        title: fromPlain.title,
+        description: fromPlain.description,
+        ingredients: fromPlain.ingredients,
+        steps: fromPlain.steps,
+        cookingTime: fromPlain.cookingTime,
+        ageRange: undefined,
+      };
+    }
+  } catch {
     return null;
   }
 
+  console.error("NO JSON IN MODEL OUTPUT", content);
   return null;
 }
 
@@ -382,7 +467,7 @@ function formatRecipe(recipe: Recipe): string {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, onDelete, memberId, memberName, onOpenArticle }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, onDelete, memberId, memberName, onOpenArticle }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const x = useMotionValue(0);
     const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
@@ -395,19 +480,27 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const sourceForParse = (rawContent ?? content).trim();
     const recipe = role === "assistant" ? parseRecipeFromContent(sourceForParse) : null;
-    const hasSubstitutes = isPremium && recipe?.ingredients?.some((ing) => isIngredientObject(ing) && (ing as { substitute?: string }).substitute);
+    // Ответ от API должен быть JSON ({...}). Если пришёл текст — не показываем его как рецепт и не рендерим как Markdown.
+    const apiSentTextNotJson =
+      rawContent != null && rawContent.trim().length > 0 && !/^\s*\{/.test(rawContent);
+    const effectiveRecipe = apiSentTextNotJson ? null : recipe;
+    const isRecipeParseFailure =
+      role === "assistant" &&
+      (expectRecipe === true || (rawContent != null && rawContent.trim().length > 0)) &&
+      effectiveRecipe === null;
+    const hasSubstitutes = isPremium && effectiveRecipe?.ingredients?.some((ing) => isIngredientObject(ing) && (ing as { substitute?: string }).substitute);
     // Для отображения: убираем ведущий JSON, чтобы в чате был только читаемый текст с Markdown
     const displayContent = role === "assistant" ? getTextForDisplay(content) : content;
     const displayWithArticleLinks =
       role === "assistant" && onOpenArticle ? injectArticleLinks(displayContent) : displayContent;
 
-    const favoriteEntry = recipe
-      ? favorites.find((f) => f.recipe.title?.toLowerCase().trim() === recipe.title?.toLowerCase().trim())
+    const favoriteEntry = effectiveRecipe
+      ? favorites.find((f) => f.recipe.title?.toLowerCase().trim() === effectiveRecipe.title?.toLowerCase().trim())
       : null;
     const isFavorite = !!favoriteEntry;
 
     const handleToggleFavorite = async () => {
-      if (!recipe) return;
+      if (!effectiveRecipe) return;
       if (isFavorite && favoriteEntry) {
         try {
           await removeFavorite(favoriteEntry.id);
@@ -419,12 +512,12 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         return;
       }
       const recipeSuggestion: RecipeSuggestion = {
-        title: recipe.title,
-        description: recipe.description || "",
-        ingredients: (recipe.ingredients || []).map((ing) => (typeof ing === "string" ? ing : ingredientDisplayText(ing))),
-        steps: recipe.steps || [],
-        cookingTime: recipe.cookingTime || 0,
-        ageRange: recipe.ageRange || "",
+        title: effectiveRecipe.title,
+        description: effectiveRecipe.description || "",
+        ingredients: (effectiveRecipe.ingredients || []).map((ing) => (typeof ing === "string" ? ing : ingredientDisplayText(ing))),
+        steps: effectiveRecipe.steps || [],
+        cookingTime: effectiveRecipe.cookingTime || 0,
+        ageRange: effectiveRecipe.ageRange || "",
       };
       try {
         await addFavorite({ recipe: recipeSuggestion, memberIds: [], memberId, memberName });
@@ -436,17 +529,17 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     };
 
     const shareText = useMemo(() => {
-      const base = recipe ? formatRecipe(recipe) : typeof content === "string" ? content : "";
+      const base = effectiveRecipe ? formatRecipe(effectiveRecipe) : typeof content === "string" ? content : "";
       const appMention = "\n\n— Рецепт из приложения Mom Recipes";
       return `${base}${appMention}`;
-    }, [recipe, content]);
+    }, [effectiveRecipe, content]);
 
     const handleShare = async () => {
       if (!shareText) return;
       try {
         if (typeof navigator !== "undefined" && navigator.share) {
           await navigator.share({
-            title: recipe?.title ?? "Рецепт",
+            title: effectiveRecipe?.title ?? "Рецепт",
             text: shareText,
           });
           toast({ title: "Поделиться", description: "Рецепт отправлен" });
@@ -510,101 +603,101 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           <div
             className={`relative ${role === "user"
               ? "px-4 py-3 bg-primary text-primary-foreground rounded-full rounded-br-sm"
-              : role === "assistant" && recipe
+              : role === "assistant" && effectiveRecipe
                 ? "rounded-bl-sm overflow-hidden px-4 pb-3"
                 : "px-4 py-3 bg-card shadow-soft rounded-2xl rounded-bl-sm"
               }`}
           >
-            {role === "assistant" && recipe ? (
+            {role === "assistant" && isRecipeParseFailure ? (
+              <p className="text-sm text-destructive">Ошибка генерации рецепта. Данные повреждены.</p>
+            ) : role === "assistant" && effectiveRecipe ? (
               /* Карточка рецепта: не выводим ингредиенты текстом, рендерим карточки */
               <div className="bg-white rounded-[40px] p-6 sm:p-8 shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-slate-50 max-w-full">
-                <h3 className="text-2xl font-semibold leading-relaxed text-[#2D3436] mb-2">{recipe.title}</h3>
-                {recipe.description && (
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">{recipe.description}</p>
+                <h3 className="text-2xl font-semibold leading-relaxed text-[#2D3436] mb-2">{effectiveRecipe.title}</h3>
+                {effectiveRecipe.description && (
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">{effectiveRecipe.description}</p>
                 )}
-                {recipe.cookingTime != null && recipe.cookingTime > 0 && (
-                  <p className="text-xs text-muted-foreground mb-4">⏱️ {recipe.cookingTime} мин</p>
-                )}
-                {recipe.ingredients && recipe.ingredients.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Ингредиенты</p>
+                <div className="mb-4">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Ингредиенты</p>
+                  {effectiveRecipe.ingredients?.length ? (
                     <div className="flex flex-wrap gap-2">
-                      {recipe.ingredients
-                        .map((ing, idx) => {
-                          const isObj = isIngredientObject(ing);
-                          const name = typeof ing === "string" ? ing : (ing as { name?: string }).name ?? "";
-                          const amount = isObj ? (ing as { amount?: string }).amount : "";
-                          const displayText = typeof ing === "string" ? ing : `${name}${amount ? ` — ${amount}` : ""}`.trim();
-                          if (displayText.length < 2) return null;
-                          const substitute = isObj ? (ing as IngredientWithSubstitute).substitute : undefined;
-                          const hasSubstitute = !!substitute?.trim();
-                          return (
-                            <div
-                              key={idx}
-                              className="flex items-center gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-3 py-1.5"
-                            >
-                              <span className="text-[#2D3436] font-medium text-sm">
-                                {displayText}
-                              </span>
-                              {hasSubstitute && (
-                                isPremium ? (
-                                  <TooltipProvider delayDuration={200}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <button type="button" className="shrink-0 text-[#6B8E23] p-0.5 rounded-full hover:bg-[#6B8E23]/10" aria-label="Заменить">
-                                          <RefreshCw className="w-3.5 h-3.5" />
-                                        </button>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="left" className="max-w-[240px]">
-                                        <p className="text-xs">{substitute}</p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
-                                ) : (
-                                  <span className="text-muted-foreground shrink-0" title="Доступно в Premium">
-                                    <Lock className="w-3 h-3" />
-                                  </span>
-                                )
-                              )}
-                            </div>
-                          );
-                        })
-                        .filter(Boolean)}
+                      {effectiveRecipe.ingredients.map((ing, idx) => {
+                        const isObj = isIngredientObject(ing);
+                        const name = typeof ing === "string" ? ing : (ing as { name?: string }).name ?? "";
+                        const amount = isObj ? (ing as { amount?: string }).amount : "";
+                        const displayText = typeof ing === "string" ? ing : `${name}${amount ? ` — ${amount}` : ""}`.trim();
+                        if (displayText.length < 2) return null;
+                        const substitute = isObj ? (ing as IngredientWithSubstitute).substitute : undefined;
+                        const hasSubstitute = !!substitute?.trim();
+                        return (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-3 py-1.5"
+                          >
+                            <span className="text-[#2D3436] font-medium text-sm">
+                              {displayText}
+                            </span>
+                            {hasSubstitute && (
+                              isPremium ? (
+                                <TooltipProvider delayDuration={200}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button type="button" className="shrink-0 text-[#6B8E23] p-0.5 rounded-full hover:bg-[#6B8E23]/10" aria-label="Заменить">
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="max-w-[240px]">
+                                      <p className="text-xs">{substitute}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                <span className="text-muted-foreground shrink-0" title="Доступно в Premium">
+                                  <Lock className="w-3 h-3" />
+                                </span>
+                              )
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">ИИ уточняет состав…</p>
+                  )}
+                </div>
+                {effectiveRecipe.cookingTime != null && effectiveRecipe.cookingTime > 0 && (
+                  <p className="text-xs text-muted-foreground mb-4">⏱️ {effectiveRecipe.cookingTime} мин</p>
                 )}
-                {recipe.steps && recipe.steps.length > 0 && (
+                {effectiveRecipe.steps && effectiveRecipe.steps.length > 0 && (
                   <div className="mb-4">
                     <p className="text-xs font-medium text-muted-foreground mb-2">Приготовление</p>
-                    <div className="space-y-5">
-                      {recipe.steps.map((step, idx) => (
+                    <div className="space-y-2">
+                      {(effectiveRecipe.steps?.map((step, idx) => (
                         <div key={idx} className="flex gap-3 items-start">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-500">
-                            {idx + 1}
-                          </span>
-                          <span className="text-[#2D3436] leading-relaxed pt-0.5">{step}</span>
+                          <span className="text-xs font-bold text-[#6B8E23] shrink-0">{idx + 1}.</span>
+                          <p className="text-[#2D3436] leading-relaxed flex-1">{step}</p>
                         </div>
-                      ))}
+                      )) ?? null)}
                     </div>
                   </div>
                 )}
-                {(recipe.chefAdvice || recipe.familyServing) && (
+                {(effectiveRecipe.chefAdvice || effectiveRecipe.familyServing) && (
                   <div className="space-y-3">
-                    {recipe.chefAdvice && (
+                    {effectiveRecipe.chefAdvice && (
                       <div className="rounded-2xl p-4 bg-slate-50 border border-slate-100 flex gap-3 items-start">
                         <span className="text-xl shrink-0" aria-hidden>👨‍🍳</span>
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-slate-600 mb-0.5">Секрет шефа</p>
-                          <p className="text-sm text-[#2D3436] leading-snug">{recipe.chefAdvice}</p>
+                          <p className="text-sm text-[#2D3436] leading-snug">{effectiveRecipe.chefAdvice}</p>
                         </div>
                       </div>
                     )}
-                    {recipe.familyServing && (
+                    {effectiveRecipe.familyServing && (
                       <div className="rounded-2xl p-4 bg-slate-50 border border-slate-100 flex gap-3 items-start">
                         <span className="text-xl shrink-0" aria-hidden>👶</span>
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-slate-600 mb-0.5">Адаптация для ребёнка</p>
-                          <p className="text-sm text-[#2D3436] leading-snug">{recipe.familyServing}</p>
+                          <p className="text-sm text-[#2D3436] leading-snug">{effectiveRecipe.familyServing}</p>
                         </div>
                       </div>
                     )}
