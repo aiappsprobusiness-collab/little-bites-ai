@@ -1,6 +1,6 @@
 import { useState, useRef, forwardRef, useMemo } from "react";
 import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
-import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock } from "lucide-react";
+import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -11,6 +11,7 @@ import remarkGfm from "remark-gfm";
 import {
   parseRecipeFromPlainText,
   extractFirstJsonObjectFromStart,
+  extractSingleJsonObject,
   isIngredientObject,
   ingredientDisplayText,
   type ParsedIngredient,
@@ -72,6 +73,24 @@ interface Recipe {
   familyServing?: string;
 }
 
+/** Заголовки секций, которые не должны попадать в массив шагов. */
+const STEP_HEADER_PATTERNS = /^(Пошаговое приготовление|Приготовление|Инструкция|Шаги|Рецепт|Как приготовить)$/i;
+
+function filterStepHeaders(steps: string[]): string[] {
+  return steps.filter(
+    (s) => s.trim().length > 0 && !STEP_HEADER_PATTERNS.test(s.trim())
+  );
+}
+
+/** Убирает префиксы "Шаг 1:", "Инструкция:", "Ингредиенты:" и отбрасывает пустые/заголовочные строки. */
+const STEP_PREFIX_REGEX = /^\s*(Шаг\s*\d+\s*[:\.]?|Инструкция\s*[:\.]?|Ингредиенты\s*[:\.]?)\s*/iu;
+
+function cleanStepLines(steps: string[]): string[] {
+  return steps
+    .map((s) => s.replace(STEP_PREFIX_REGEX, "").trim())
+    .filter((s) => s.length > 0 && !STEP_HEADER_PATTERNS.test(s));
+}
+
 function normalizeIngredients(raw: unknown): ParsedIngredient[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -102,9 +121,10 @@ function parseRecipeFromContent(content: string): Recipe | null {
           const parsed = JSON.parse(jsonStr);
           if (parsed.title || parsed.name) {
             const ings = normalizeIngredients(parsed.ingredients);
-            const steps = Array.isArray(parsed.steps)
+            const rawSteps = Array.isArray(parsed.steps)
               ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
               : [];
+            const steps = cleanStepLines(filterStepHeaders(rawSteps));
             return {
               title: parsed.title || parsed.name,
               description: parsed.description,
@@ -118,14 +138,15 @@ function parseRecipeFromContent(content: string): Recipe | null {
           }
           if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
             const r = parsed.recipes[0];
-            const steps = Array.isArray(r.steps)
+            const rawStepsR = Array.isArray(r.steps)
               ? r.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
               : [];
+            const stepsR = cleanStepLines(filterStepHeaders(rawStepsR));
             return {
               title: r.title || r.name,
               description: r.description,
               ingredients: normalizeIngredients(r.ingredients),
-              steps,
+              steps: stepsR,
               cookingTime: r.cookingTime || r.cooking_time,
               ageRange: r.ageRange || "",
               chefAdvice: r.chefAdvice,
@@ -147,14 +168,15 @@ function parseRecipeFromContent(content: string): Recipe | null {
         try {
           const parsed = JSON.parse(jsonStr);
           if (parsed.title || parsed.name) {
-            const steps = Array.isArray(parsed.steps)
+            const rawStepsCb = Array.isArray(parsed.steps)
               ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
               : [];
+            const stepsCb = cleanStepLines(filterStepHeaders(rawStepsCb));
             return {
               title: parsed.title || parsed.name,
               description: parsed.description,
               ingredients: normalizeIngredients(parsed.ingredients),
-              steps,
+              steps: stepsCb,
               cookingTime: parsed.cookingTime || parsed.cooking_time,
               ageRange: parsed.ageRange || '',
               chefAdvice: parsed.chefAdvice,
@@ -163,14 +185,15 @@ function parseRecipeFromContent(content: string): Recipe | null {
           }
           if (Array.isArray(parsed.recipes) && parsed.recipes.length > 0) {
             const recipe = parsed.recipes[0];
-            const steps = Array.isArray(recipe.steps)
+            const rawStepsCb2 = Array.isArray(recipe.steps)
               ? recipe.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
               : [];
+            const stepsCb2 = cleanStepLines(filterStepHeaders(rawStepsCb2));
             return {
               title: recipe.title || recipe.name,
               description: recipe.description,
               ingredients: normalizeIngredients(recipe.ingredients),
-              steps,
+              steps: stepsCb2,
               cookingTime: recipe.cookingTime || recipe.cooking_time,
               ageRange: recipe.ageRange || '',
               chefAdvice: recipe.chefAdvice,
@@ -187,20 +210,21 @@ function parseRecipeFromContent(content: string): Recipe | null {
       }
     }
 
-    // Если не нашли в code block, ищем обычный JSON объект
-    const simpleMatch = content.match(/\{[\s\S]*\}/);
-    if (simpleMatch) {
+    // Если не нашли в code block, ищем один полный JSON-объект (игнорируем текст до/после)
+    const jsonStr = extractSingleJsonObject(content);
+    if (jsonStr) {
       try {
-        const parsed = JSON.parse(simpleMatch[0]);
+        const parsed = JSON.parse(jsonStr);
         if (parsed.title || parsed.name) {
-          const steps = Array.isArray(parsed.steps)
+          const rawStepsSm = Array.isArray(parsed.steps)
             ? parsed.steps.map((s: unknown) => (typeof s === "string" ? s : (s as { instruction?: string })?.instruction ?? String(s)))
             : [];
+          const stepsSm = cleanStepLines(filterStepHeaders(rawStepsSm));
           return {
             title: parsed.title || parsed.name,
             description: parsed.description,
             ingredients: normalizeIngredients(parsed.ingredients),
-            steps,
+            steps: stepsSm,
             cookingTime: parsed.cookingTime || parsed.cooking_time,
             ageRange: parsed.ageRange || '',
             chefAdvice: parsed.chefAdvice,
@@ -504,73 +528,86 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 {recipe.ingredients && recipe.ingredients.length > 0 && (
                   <div className="mb-4">
                     <p className="text-xs font-medium text-muted-foreground mb-2">Ингредиенты</p>
-                    {recipe.ingredients
-                      .map((ing, idx) => {
-                        const isObj = isIngredientObject(ing);
-                        const name = typeof ing === "string" ? ing : (ing as { name?: string }).name ?? "";
-                        const amount = isObj ? (ing as { amount?: string }).amount : "";
-                        const displayText = typeof ing === "string" ? ing : `${name}${amount ? ` — ${amount}` : ""}`.trim();
-                        if (displayText.length < 2) return null;
-                        const substitute = isObj ? (ing as IngredientWithSubstitute).substitute : undefined;
-                        const hasSubstitute = !!substitute?.trim();
-                        return (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between bg-[#F1F5E9]/60 rounded-[18px] py-2.5 px-3 mb-2 border border-[#6B8E23]/5"
-                          >
-                            <span className="text-[#2D3436] font-medium text-sm truncate mr-2">
-                              {displayText}
-                            </span>
-                            {hasSubstitute && (
-                              isPremium ? (
-                                <TooltipProvider delayDuration={200}>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <button
-                                        type="button"
-                                        className="bg-white text-[#6B8E23] text-[10px] font-bold px-3 py-1.5 rounded-full shadow-sm border border-[#6B8E23]/20 shrink-0"
-                                      >
-                                        ЗАМЕНИТЬ 🔄
-                                      </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left" className="max-w-[240px]">
-                                      <p className="text-xs">{substitute}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
-                              ) : (
-                                <span className="text-muted-foreground shrink-0" title="Доступно в Premium">
-                                  <Lock className="w-3.5 h-3.5" />
-                                </span>
-                              )
-                            )}
-                          </div>
-                        );
-                      })
-                      .filter(Boolean)}
+                    <div className="flex flex-wrap gap-2">
+                      {recipe.ingredients
+                        .map((ing, idx) => {
+                          const isObj = isIngredientObject(ing);
+                          const name = typeof ing === "string" ? ing : (ing as { name?: string }).name ?? "";
+                          const amount = isObj ? (ing as { amount?: string }).amount : "";
+                          const displayText = typeof ing === "string" ? ing : `${name}${amount ? ` — ${amount}` : ""}`.trim();
+                          if (displayText.length < 2) return null;
+                          const substitute = isObj ? (ing as IngredientWithSubstitute).substitute : undefined;
+                          const hasSubstitute = !!substitute?.trim();
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-3 py-1.5"
+                            >
+                              <span className="text-[#2D3436] font-medium text-sm">
+                                {displayText}
+                              </span>
+                              {hasSubstitute && (
+                                isPremium ? (
+                                  <TooltipProvider delayDuration={200}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button type="button" className="shrink-0 text-[#6B8E23] p-0.5 rounded-full hover:bg-[#6B8E23]/10" aria-label="Заменить">
+                                          <RefreshCw className="w-3.5 h-3.5" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="left" className="max-w-[240px]">
+                                        <p className="text-xs">{substitute}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : (
+                                  <span className="text-muted-foreground shrink-0" title="Доступно в Premium">
+                                    <Lock className="w-3 h-3" />
+                                  </span>
+                                )
+                              )}
+                            </div>
+                          );
+                        })
+                        .filter(Boolean)}
+                    </div>
                   </div>
                 )}
                 {recipe.steps && recipe.steps.length > 0 && (
                   <div className="mb-4">
                     <p className="text-xs font-medium text-muted-foreground mb-2">Приготовление</p>
-                    <ol className="list-decimal list-inside space-y-0.5 text-sm text-[#2D3436] leading-tight [&>li]:pl-0.5">
+                    <div className="space-y-5">
                       {recipe.steps.map((step, idx) => (
-                        <li key={idx}>{step}</li>
+                        <div key={idx} className="flex gap-3 items-start">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-500">
+                            {idx + 1}
+                          </span>
+                          <span className="text-[#2D3436] leading-relaxed pt-0.5">{step}</span>
+                        </div>
                       ))}
-                    </ol>
+                    </div>
                   </div>
                 )}
                 {(recipe.chefAdvice || recipe.familyServing) && (
-                  <div className="rounded-2xl p-4 bg-[#EFF6FF] border border-sky-100 flex gap-3 items-start">
-                    <span className="text-xl shrink-0" aria-hidden>👨‍🍳</span>
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-sky-800/80 mb-0.5">
-                        {recipe.familyServing ? "Адаптация для ребёнка" : "Секрет шефа"}
-                      </p>
-                      <p className="text-sm text-[#2D3436] leading-snug">
-                        {recipe.familyServing || recipe.chefAdvice}
-                      </p>
-                    </div>
+                  <div className="space-y-3">
+                    {recipe.chefAdvice && (
+                      <div className="rounded-2xl p-4 bg-slate-50 border border-slate-100 flex gap-3 items-start">
+                        <span className="text-xl shrink-0" aria-hidden>👨‍🍳</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-slate-600 mb-0.5">Секрет шефа</p>
+                          <p className="text-sm text-[#2D3436] leading-snug">{recipe.chefAdvice}</p>
+                        </div>
+                      </div>
+                    )}
+                    {recipe.familyServing && (
+                      <div className="rounded-2xl p-4 bg-slate-50 border border-slate-100 flex gap-3 items-start">
+                        <span className="text-xl shrink-0" aria-hidden>👶</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-slate-600 mb-0.5">Адаптация для ребёнка</p>
+                          <p className="text-sm text-[#2D3436] leading-snug">{recipe.familyServing}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
