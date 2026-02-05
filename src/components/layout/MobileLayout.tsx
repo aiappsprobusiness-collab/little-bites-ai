@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { BottomNav } from "./BottomNav";
+import { BottomNavigation } from "./BottomNavigation";
 import { motion } from "framer-motion";
 
 interface MobileLayoutProps {
@@ -30,11 +30,11 @@ export function MobileLayout({ children, title, showNav = true, headerLeft, head
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className={showNav ? "pb-16" : ""}
+        className={showNav ? "pb-20" : ""}
       >
         {children}
       </motion.main>
-      {showNav && <BottomNav />}
+      {showNav && <BottomNavigation />}
     </div>
   );
 }

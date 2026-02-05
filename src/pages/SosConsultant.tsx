@@ -195,16 +195,6 @@ export default function SosConsultant() {
             </CardContent>
           </Card>
         )}
-
-        <div className="pt-4">
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => navigate("/plate-analysis")}
-          >
-            Анализ тарелки
-          </Button>
-        </div>
       </div>
 
       <SosPaywallModal
