@@ -6,12 +6,13 @@ import { SUPABASE_DEBOUNCE_MS } from '@/lib/supabase-constants';
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-/** Rate-limit: debounce 200ms между запросами к Supabase. */
+/** Rate-limit: debounce 200ms между запросами к Supabase. Auth-запросы не троттлятся. */
 let lastSupabaseFetch = 0;
 const throttledFetch = (url: string, options?: RequestInit): Promise<Response> => {
+  const isAuth = typeof url === 'string' && url.includes('/auth/v1/');
   const now = Date.now();
   const elapsed = now - lastSupabaseFetch;
-  const delay = elapsed < SUPABASE_DEBOUNCE_MS ? SUPABASE_DEBOUNCE_MS - elapsed : 0;
+  const delay = isAuth ? 0 : (elapsed < SUPABASE_DEBOUNCE_MS ? SUPABASE_DEBOUNCE_MS - elapsed : 0);
   return new Promise((resolve, reject) => {
     const run = () => {
       lastSupabaseFetch = Date.now();

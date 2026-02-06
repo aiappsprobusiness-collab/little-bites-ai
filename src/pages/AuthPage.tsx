@@ -32,7 +32,13 @@ type LoginFormData = z.infer<typeof loginSchema>;
 type SignupFormData = z.infer<typeof signupSchema>;
 
 const AUTH_INPUT_CLASS =
-  "rounded-[16px] border border-slate-200/80 bg-white/50 py-4 focus-visible:ring-0 focus-visible:border-primary shadow-none min-h-[52px]";
+  "rounded-[24px] border border-slate-200/80 bg-white/50 py-4 focus-visible:ring-0 focus-visible:border-primary shadow-none min-h-[52px]";
+
+const VALUE_CARDS = [
+  { icon: "🧸", title: "Для всей семьи", text: "Рецепты, которые объединяют за столом" },
+  { icon: "✨", title: "Здоровье и энергия", text: "Сбалансированное питание без перегруза" },
+  { icon: "🆘", title: "Помощь 24/7", text: "Ответы, когда ребёнку тревожно или плохо" },
+];
 
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -69,81 +75,86 @@ export default function AuthPage() {
 
   const onSignup = async (data: SignupFormData) => {
     setIsLoading(true);
-    const { error } = await signUp(data.email, data.password, data.displayName);
-    setIsLoading(false);
-    if (error) {
-      toast({ variant: "destructive", title: "Ошибка регистрации", description: error.message });
-    } else {
-      toast({ title: "Регистрация успешна!", description: "Проверьте почту для подтверждения аккаунта" });
+    try {
+      const { error } = await signUp(data.email, data.password, data.displayName);
+      if (error) {
+        toast({ variant: "destructive", title: "Ошибка регистрации", description: error.message });
+      } else {
+        toast({ title: "Регистрация успешна!", description: "Проверьте почту для подтверждения аккаунта" });
+      }
+    } catch (err) {
+      toast({ variant: "destructive", title: "Ошибка регистрации", description: err instanceof Error ? err.message : "Произошла непредвиденная ошибка" });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center sm:justify-start p-3 pt-4 sm:p-4 sm:pt-6 pb-6 sm:pb-12"
+      className="min-h-screen flex flex-col items-center justify-center sm:justify-start p-4 pt-5 sm:p-5 sm:pt-8 pb-8 sm:pb-14"
       style={{
         background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F1F5E9 100%)",
       }}
     >
       <div className="w-full max-w-md mx-auto flex flex-col items-center">
-        {/* Заголовок Hero — более значимый */}
+        {/* Hero — бренд, польза, слоган */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-2 sm:mb-4"
-        >
-          <h1 className="text-4xl sm:text-5xl font-semibold tracking-widest text-foreground">Mom Recipes</h1>
-        </motion.div>
-
-        {/* Подзаголовок — слоган в два ряда */}
-        <motion.div
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
           className="text-center mb-4 sm:mb-6 px-2"
         >
+          <h1 className="text-5xl sm:text-6xl font-bold tracking-[0.12em] leading-tight text-foreground mb-3">
+            Mom Recipes
+          </h1>
+          <p className="text-base sm:text-lg font-medium text-foreground/90 leading-snug mb-1.5">
+            Умное питание для детей и всей семьи
+          </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            От первого прикорма до изысканного ужина.
-            <br />
-            Умное планирование рациона для здоровья, красоты и спокойствия.
+            От первого прикорма до семейных ужинов без стресса.
           </p>
         </motion.div>
 
-        {/* Блок преимуществ — отцентрован, компактный */}
+        {/* Карточки ценностей — мини-карточки с иконкой сверху */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.1 }}
-          className="w-full space-y-2 sm:space-y-3 mb-4 sm:mb-5 text-center"
+          className="w-full space-y-3 sm:space-y-4 mb-5 sm:mb-6"
         >
-          <p className="text-xs text-muted-foreground flex items-center justify-center gap-2 leading-relaxed">
-            <span>👪</span> Семейный уют: Рецепты, которые объединяют за столом.
-          </p>
-          <p className="text-xs text-muted-foreground flex items-center justify-center gap-2 leading-relaxed">
-            <span>✨</span> Красота и Здоровье: Сбалансированное меню для вашей энергии.
-          </p>
-          <p className="text-xs text-muted-foreground flex items-center justify-center gap-2 leading-relaxed">
-            <span>🆘</span> Поддержка 24/7: Быстрые ответы на любые вопросы о питании.
-          </p>
+          {VALUE_CARDS.map((card, i) => (
+            <motion.div
+              key={card.title}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12 + i * 0.05 }}
+              className="rounded-2xl bg-emerald-50/80 border border-emerald-100/80 px-4 py-4 sm:px-5 sm:py-5 shadow-sm"
+            >
+              <div className="flex flex-col items-start gap-2">
+                <span className="text-2xl sm:text-3xl leading-none">{card.icon}</span>
+                <p className="text-sm font-bold text-foreground">{card.title}</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">{card.text}</p>
+              </div>
+            </motion.div>
+          ))}
         </motion.div>
 
-        {/* Карточка формы — визуально единое целое с блоком выше */}
+        {/* Карточка формы — с тенью и мягкими углами */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.15 }}
           className="w-full"
         >
-        <Card className="bg-white/80 backdrop-blur-xl border-0 rounded-[40px] shadow-lg">
-          <CardHeader className="text-center pb-3 sm:pb-4 px-4 sm:px-6 pt-4 sm:pt-6">
-            <CardTitle className="text-lg">Добро пожаловать</CardTitle>
-            <CardDescription>Войдите или создайте аккаунт</CardDescription>
+        <Card className="bg-white/90 backdrop-blur-xl border-0 rounded-[28px] sm:rounded-[32px] shadow-xl shadow-slate-200/50">
+          <CardHeader className="text-center pb-5 sm:pb-6 px-4 sm:px-6 pt-6 sm:pt-7">
+            <CardTitle className="text-lg sm:text-xl font-semibold text-foreground/95">Начните заботиться о питании уже сегодня</CardTitle>
+            <CardDescription className="text-muted-foreground mt-1.5">Войдите или создайте аккаунт за 1 минуту</CardDescription>
           </CardHeader>
-          <CardContent className="px-4 sm:px-6 pb-5 sm:pb-6">
+          <CardContent className="px-4 sm:px-6 pt-0 pb-5 sm:pb-6">
             <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6 rounded-full bg-slate-100/80 p-1">
-                <TabsTrigger value="login" className="rounded-full">Вход</TabsTrigger>
-                <TabsTrigger value="signup" className="rounded-full">Регистрация</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11">
+                <TabsTrigger value="login" className="rounded-[16px]">Вход</TabsTrigger>
+                <TabsTrigger value="signup" className="rounded-[16px]">Создать аккаунт</TabsTrigger>
               </TabsList>
 
               <TabsContent value="login">
@@ -156,7 +167,7 @@ export default function AuthPage() {
                         <FormItem>
                           <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
                           <FormControl>
-                            <Input placeholder="mail@example.com" className={AUTH_INPUT_CLASS} {...field} />
+                            <Input placeholder="Введите ваш email" className={AUTH_INPUT_CLASS} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -172,7 +183,7 @@ export default function AuthPage() {
                             <div className="relative">
                               <Input
                                 type={showPassword ? "text" : "password"}
-                                placeholder="••••••"
+                                placeholder="Введите пароль"
                                 className={AUTH_INPUT_CLASS}
                                 {...field}
                               />
@@ -191,12 +202,12 @@ export default function AuthPage() {
                     />
                     <Button
                       type="submit"
-                      className="w-full rounded-full h-12 text-white font-medium uppercase tracking-wider flex items-center justify-center gap-2"
+                      className="w-full rounded-[24px] h-14 px-6 py-6 text-white font-semibold tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 hover:shadow-xl hover:shadow-emerald-900/30 hover:brightness-105 active:scale-[0.99] transition-all duration-200"
                       style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)" }}
                       disabled={isLoading}
                     >
                       {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
-                      <span>Войти</span>
+                      <span>Продолжить</span>
                     </Button>
                   </form>
                 </Form>
@@ -210,9 +221,9 @@ export default function AuthPage() {
                       name="displayName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-muted-foreground font-normal">Ваше имя</FormLabel>
+                          <FormLabel className="text-muted-foreground font-normal">Как к вам обращаться?</FormLabel>
                           <FormControl>
-                            <Input placeholder="Мария" className={AUTH_INPUT_CLASS} {...field} />
+                            <Input placeholder="Например, Мария" className={AUTH_INPUT_CLASS} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -225,7 +236,7 @@ export default function AuthPage() {
                         <FormItem>
                           <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
                           <FormControl>
-                            <Input type="email" placeholder="mail@example.com" className={AUTH_INPUT_CLASS} {...field} />
+                            <Input type="email" placeholder="Введите ваш email" className={AUTH_INPUT_CLASS} {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -241,7 +252,7 @@ export default function AuthPage() {
                             <div className="relative">
                               <Input
                                 type={showPassword ? "text" : "password"}
-                                placeholder="••••••"
+                                placeholder="Придумайте пароль (от 6 символов)"
                                 className={AUTH_INPUT_CLASS}
                                 {...field}
                               />
@@ -267,7 +278,7 @@ export default function AuthPage() {
                           <FormControl>
                             <Input
                               type={showPassword ? "text" : "password"}
-                              placeholder="••••••"
+                              placeholder="Введите пароль ещё раз"
                               className={AUTH_INPUT_CLASS}
                               {...field}
                             />
@@ -278,12 +289,12 @@ export default function AuthPage() {
                     />
                     <Button
                       type="submit"
-                      className="w-full rounded-full h-12 text-white font-medium uppercase tracking-wider flex items-center justify-center gap-2"
-                      style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)" }}
+                      variant="outline"
+                      className="w-full rounded-[24px] h-14 px-6 py-6 font-semibold tracking-wide flex items-center justify-center gap-2 border-2 border-emerald-200 bg-transparent text-emerald-800 hover:bg-emerald-50 hover:border-emerald-300 active:scale-[0.99] transition-all duration-200"
                       disabled={isLoading}
                     >
                       {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
-                      <span>Начать готовить с Mom Recipes</span>
+                      <span>Создать аккаунт</span>
                     </Button>
                   </form>
                 </Form>

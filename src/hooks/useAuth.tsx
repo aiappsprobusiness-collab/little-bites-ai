@@ -54,17 +54,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, displayName?: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: {
-          display_name: displayName,
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            display_name: displayName,
+          },
         },
-      },
-    });
-    return { error };
+      });
+      if (error) return { error };
+      // Supabase может вернуть user=null при включённом email confirmation — это нормально
+      return { error: null };
+    } catch (err) {
+      const e = err as Error;
+      let msg = e.message || 'Не удалось зарегистрироваться';
+      if (e.message?.includes('Превышено время') || e.message?.includes('timeout') || e.message?.includes('aborted')) {
+        msg = 'Превышено время ожидания. Проверьте интернет-соединение.';
+      } else if (e.message === 'Failed to fetch' || e.message?.includes('NetworkError') || e.name === 'TypeError') {
+        msg = 'Не удалось подключиться к серверу. Проверьте интернет-соединение.';
+      }
+      return { error: new Error(msg) };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
