@@ -18,11 +18,13 @@ const publicDir = join(__dirname, '..', 'public');
 const sizes = [
   { name: 'icon-192', width: 192, height: 192 },
   { name: 'icon-512', width: 512, height: 512 },
+  { name: 'icon-512-maskable', width: 512, height: 512, svgSource: 'icon-512' },
 ];
 
 async function main() {
-  for (const { name, width, height } of sizes) {
-    const svgPath = join(publicDir, `${name}.svg`);
+  for (const { name, width, height, svgSource } of sizes) {
+    const svgName = svgSource ?? name;
+    const svgPath = join(publicDir, `${svgName}.svg`);
     const pngPath = join(publicDir, `${name}.png`);
     try {
       const svg = readFileSync(svgPath);

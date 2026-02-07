@@ -22,6 +22,7 @@ import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
 import { PWAInstall } from "./components/pwa/PWAInstall";
+import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
 import { useAppStore } from "./store/useAppStore";
 
@@ -69,6 +70,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <PWAInstall />
+            <PWAUpdateToast />
             <GlobalPaywall />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />

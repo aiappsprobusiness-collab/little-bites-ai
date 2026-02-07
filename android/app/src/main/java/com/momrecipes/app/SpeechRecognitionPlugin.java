@@ -72,6 +72,11 @@ public class SpeechRecognitionPlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
+        // Reject the pending start() call so its Promise settles instead of hanging
+        if (currentCall != null) {
+            currentCall.reject("Speech recognition cancelled");
+            currentCall = null;
+        }
         if (speechRecognizer != null) {
             speechRecognizer.cancel();
             cleanup();
