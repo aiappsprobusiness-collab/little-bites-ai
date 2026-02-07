@@ -142,7 +142,7 @@ export default function SosConsultant() {
 
   return (
     <MobileLayout
-      title="SOS-консультант"
+      title="Мы рядом"
       showNav
       headerLeft={
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
@@ -213,7 +213,7 @@ export default function SosConsultant() {
         <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
           <SheetHeader>
             <SheetTitle>
-              {selectedTopic ? `🆘 Помощь: ${selectedTopic.label}` : "🆘 Помощь"}
+              {selectedTopic ? `💛 ${selectedTopic.label}` : "Мы рядом"}
             </SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-4">

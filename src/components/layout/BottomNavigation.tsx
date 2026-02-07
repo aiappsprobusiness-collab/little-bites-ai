@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 
-/** Центральная кнопка SOS: градиент #FF7F50 → #FF6B6B, коралловая тень, 64×64. */
-const SOS_FAB_STYLE = {
-  background: "linear-gradient(135deg, #FF7F50 0%, #FF6B6B 100%)",
-  boxShadow: "0 8px 24px -4px rgba(255, 127, 80, 0.45)",
+/** Центральная кнопка «Быстрый помощник»: тёплый акцент, спокойный тон. */
+const FAB_STYLE = {
+  background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)",
+  boxShadow: "0 6px 20px -4px rgba(107, 142, 35, 0.35)",
 };
 
 const LEFT_TABS = [
@@ -51,19 +51,19 @@ export function BottomNavigation() {
         key={item.path}
         onClick={() => navigate(item.path)}
         className={cn(
-          "relative flex flex-col items-center justify-center gap-1 py-2 px-2 min-w-0 flex-1 rounded-xl transition-colors",
-          isActive ? "text-primary" : "text-muted-foreground"
+          "relative flex flex-col items-center justify-center gap-1 py-2.5 px-2 min-w-0 flex-1 rounded-xl transition-colors",
+          isActive ? "text-emerald-700" : "text-slate-500"
         )}
         whileTap={{ scale: 0.95 }}
       >
-        <Icon className="w-6 h-6 shrink-0" />
-        <span className="text-xs font-medium truncate w-full text-center">
+        <Icon className={cn("w-5 h-5 shrink-0", isActive && "opacity-90")} />
+        <span className={cn("text-xs truncate w-full text-center", isActive ? "font-medium text-emerald-700" : "font-normal text-slate-500")}>
           {item.label}
         </span>
         {isActive && (
           <motion.div
             layoutId="navIndicator"
-            className="absolute bottom-1 w-1 h-1 rounded-full bg-primary"
+            className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-500/80"
           />
         )}
       </motion.button>
@@ -84,16 +84,28 @@ export function BottomNavigation() {
           {LEFT_TABS.map(renderTab)}
         </div>
 
-        {/* Центральная FAB: 64×64, поверх всех слоёв, кликабельна */}
-        <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 z-[999] flex items-center justify-center pointer-events-auto">
+        {/* Центральная FAB: Быстрый помощник — ниже, в слое таббара, между input и nav */}
+        <div className="absolute left-1/2 top-0 -translate-x-1/2 translate-y-1/4 z-[999] flex items-center justify-center pointer-events-auto">
           <motion.button
             onClick={handleSosClick}
-            className="flex items-center justify-center w-16 h-16 rounded-full text-white transition-transform hover:scale-105 active:scale-95"
-            style={SOS_FAB_STYLE}
+            className="flex items-center justify-center w-14 h-14 rounded-full text-white transition-transform hover:scale-105 active:scale-95"
+            style={FAB_STYLE}
             whileTap={{ scale: 0.92 }}
-            aria-label="SOS-консультант"
+            animate={{
+              boxShadow: [
+                "0 6px 20px -4px rgba(107, 142, 35, 0.35)",
+                "0 6px 24px -2px rgba(107, 142, 35, 0.45)",
+                "0 6px 20px -4px rgba(107, 142, 35, 0.35)",
+              ],
+            }}
+            transition={{
+              duration: 3,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+            aria-label="Быстрый помощник"
           >
-            <LifeBuoy className="w-8 h-8" />
+            <LifeBuoy className="w-7 h-7" />
           </motion.button>
         </div>
 

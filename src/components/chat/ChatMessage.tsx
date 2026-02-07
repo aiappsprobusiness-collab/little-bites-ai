@@ -1,5 +1,5 @@
-import { useState, useRef, forwardRef, useMemo } from "react";
-import { motion, AnimatePresence, PanInfo, useMotionValue, useTransform } from "framer-motion";
+import { useState, forwardRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -64,6 +64,8 @@ interface ChatMessageProps {
   onOpenArticle?: (articleId: string) => void;
 }
 
+type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
+
 interface Recipe {
   title: string;
   description?: string;
@@ -73,7 +75,16 @@ interface Recipe {
   ageRange?: string;
   chefAdvice?: string;
   familyServing?: string;
+  mealType?: MealType;
 }
+
+/** Чат = child_only: НЕ показываем familyServing (Адаптация для ребёнка/взрослых). */
+const MEAL_LABELS: Record<MealType, string> = {
+  breakfast: 'Завтрак',
+  lunch: 'Обед',
+  dinner: 'Ужин',
+  snack: 'Перекус',
+};
 
 /** Заголовки секций, которые не должны попадать в массив шагов. */
 const STEP_HEADER_PATTERNS = /^(Пошаговое приготовление|Приготовление|Инструкция|Шаги|Рецепт|Как приготовить)$/i;
@@ -150,6 +161,9 @@ function buildRecipeFromParsed(parsed: Record<string, unknown>): Recipe | null {
   const steps = normalizeSteps(parsed.steps);
   const cookingTime = parsed.cookingTime ?? parsed.cooking_time;
   const numTime = typeof cookingTime === "number" ? cookingTime : typeof cookingTime === "string" ? parseInt(String(cookingTime), 10) : undefined;
+  const mealType = (parsed.mealType as MealType | string) ?? undefined;
+  const validMeal = mealType && ['breakfast', 'lunch', 'snack', 'dinner'].includes(String(mealType))
+    ? (mealType as MealType) : undefined;
   return {
     title: title.trim(),
     description: typeof description === "string" ? description : undefined,
@@ -159,6 +173,7 @@ function buildRecipeFromParsed(parsed: Record<string, unknown>): Recipe | null {
     ageRange: (parsed.ageRange as string) ?? "",
     chefAdvice: (parsed.chefAdvice as string) ?? undefined,
     familyServing: (parsed.familyServing as string) ?? undefined,
+    mealType: validMeal,
   };
 }
 
@@ -469,12 +484,9 @@ function formatRecipe(recipe: Recipe): string {
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
   ({ id, role, content, timestamp, rawContent, expectRecipe, onDelete, memberId, memberName, onOpenArticle }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
-    const x = useMotionValue(0);
-    const deleteOpacity = useTransform(x, [-100, -50, 0], [1, 0.5, 0]);
-    const deleteScale = useTransform(x, [-100, -50, 0], [1, 0.8, 0.5]);
-    const constraintsRef = useRef(null);
     const { user } = useAuth();
-    const { isPremium } = useSubscription();
+    const { isPremium, isTrial } = useSubscription();
+    const showChefTip = isPremium || isTrial;
     const { favorites, addFavorite, removeFavorite, isAdding, isRemoving } = useFavorites();
     const { toast } = useToast();
 
@@ -563,12 +575,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       }
     };
 
-    const handleDragEnd = (_: any, info: PanInfo) => {
-      if (info.offset.x < -80) {
-        setShowDelete(true);
-      }
-    };
-
     const handleDelete = () => {
       onDelete(id);
       setShowDelete(false);
@@ -579,46 +585,39 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         ref={ref}
         className={`relative flex ${role === "user" ? "justify-end" : "justify-start"}`}
       >
-        {/* Delete button background - visible on swipe */}
         <motion.div
-          style={{ opacity: deleteOpacity, scale: deleteScale }}
-          className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center justify-center w-16 h-16"
-        >
-          <div className="w-12 h-12 rounded-full bg-destructive/20 flex items-center justify-center">
-            <Trash2 className="w-5 h-5 text-destructive" />
-          </div>
-        </motion.div>
-
-        <motion.div
-          drag="x"
-          dragConstraints={{ left: -100, right: 0 }}
-          dragElastic={0.1}
-          onDragEnd={handleDragEnd}
-          style={{ x }}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, x: -100 }}
-          className={`relative max-w-[85%] cursor-grab active:cursor-grabbing`}
+          exit={{ opacity: 0 }}
+          className={`relative ${role === "user" ? "max-w-[75%]" : "max-w-[85%]"}`}
         >
           <div
             className={`relative ${role === "user"
-              ? "px-4 py-3 bg-primary text-primary-foreground rounded-full rounded-br-sm"
+              ? "px-4 py-2.5 text-sm bg-primary text-primary-foreground rounded-full rounded-br-sm"
               : role === "assistant" && effectiveRecipe
                 ? "rounded-bl-sm overflow-hidden px-4 pb-3"
-                : "px-4 py-3 bg-card shadow-soft rounded-2xl rounded-bl-sm"
+                : "px-5 py-4 bg-slate-50/90 border border-slate-200/40 rounded-2xl rounded-bl-sm"
               }`}
           >
             {role === "assistant" && isRecipeParseFailure ? (
               <p className="text-sm text-destructive">Ошибка генерации рецепта. Данные повреждены.</p>
             ) : role === "assistant" && effectiveRecipe ? (
-              /* Карточка рецепта: не выводим ингредиенты текстом, рендерим карточки */
-              <div className="bg-white rounded-[40px] p-6 sm:p-8 shadow-[0_10px_40px_rgba(0,0,0,0.03)] border border-slate-50 max-w-full">
-                <h3 className="text-2xl font-semibold leading-relaxed text-[#2D3436] mb-2">{effectiveRecipe.title}</h3>
+              /* Карточка рецепта в чате: child_only, порядок: mealType → title → benefit → ingredients → chef tip (premium/trial) → steps */
+              <div className="bg-white rounded-[28px] px-5 py-5 sm:px-6 sm:py-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100/80 max-w-[94%] w-full">
+                {effectiveRecipe.mealType && MEAL_LABELS[effectiveRecipe.mealType] && (
+                  <span className="inline-block text-sm font-medium text-emerald-700 bg-emerald-50/80 border border-emerald-100 rounded-full px-3 py-1 mb-3">
+                    {MEAL_LABELS[effectiveRecipe.mealType]}
+                  </span>
+                )}
+                <h3 className="text-xl font-semibold leading-snug text-[#2D3436] mb-1.5 line-clamp-2">{effectiveRecipe.title}</h3>
                 {effectiveRecipe.description && (
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">{effectiveRecipe.description}</p>
+                  <div className="mb-4">
+                    <p className="text-sm font-medium text-muted-foreground mb-1">Польза для ребёнка</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">{effectiveRecipe.description}</p>
+                  </div>
                 )}
                 <div className="mb-4">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Ингредиенты</p>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Ингредиенты</p>
                   {effectiveRecipe.ingredients?.length ? (
                     <div className="flex flex-wrap gap-2">
                       {effectiveRecipe.ingredients.map((ing, idx) => {
@@ -668,9 +667,18 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 {effectiveRecipe.cookingTime != null && effectiveRecipe.cookingTime > 0 && (
                   <p className="text-xs text-muted-foreground mb-4">⏱️ {effectiveRecipe.cookingTime} мин</p>
                 )}
+                {showChefTip && effectiveRecipe.chefAdvice && (
+                  <div className="rounded-2xl p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-3 items-start mb-4">
+                    <span className="text-xl shrink-0" aria-hidden>👨‍🍳</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
+                      <p className="text-sm text-[#2D3436] leading-snug">{effectiveRecipe.chefAdvice}</p>
+                    </div>
+                  </div>
+                )}
                 {effectiveRecipe.steps && effectiveRecipe.steps.length > 0 && (
-                  <div className="mb-4">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Приготовление</p>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Шаги приготовления</p>
                     <div className="space-y-2">
                       {(effectiveRecipe.steps?.map((step, idx) => (
                         <div key={idx} className="flex gap-3 items-start">
@@ -681,31 +689,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     </div>
                   </div>
                 )}
-                {(effectiveRecipe.chefAdvice || effectiveRecipe.familyServing) && (
-                  <div className="space-y-3">
-                    {effectiveRecipe.chefAdvice && (
-                      <div className="rounded-2xl p-4 bg-slate-50 border border-slate-100 flex gap-3 items-start">
-                        <span className="text-xl shrink-0" aria-hidden>👨‍🍳</span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-slate-600 mb-0.5">Секрет шефа</p>
-                          <p className="text-sm text-[#2D3436] leading-snug">{effectiveRecipe.chefAdvice}</p>
-                        </div>
-                      </div>
-                    )}
-                    {effectiveRecipe.familyServing && (
-                      <div className="rounded-2xl p-4 bg-slate-50 border border-slate-100 flex gap-3 items-start">
-                        <span className="text-xl shrink-0" aria-hidden>👶</span>
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-slate-600 mb-0.5">Адаптация для ребёнка</p>
-                          <p className="text-sm text-[#2D3436] leading-snug">{effectiveRecipe.familyServing}</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             ) : role === "assistant" ? (
-              <div className="chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-sm prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-sm prose-strong:text-sm [&>*]:text-sm px-4 py-3">
+              <div className="chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-sm prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-sm prose-strong:text-sm [&>*]:text-sm px-5 py-4">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -740,7 +726,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 </ReactMarkdown>
               </div>
             ) : (
-              <p className="text-base whitespace-pre-wrap select-none px-4 py-3">{displayContent}</p>
+              <p className="text-sm whitespace-pre-wrap select-none leading-relaxed">{displayContent}</p>
             )}
             <p className="text-[10px] opacity-60 mt-1">
               {timestamp.toLocaleTimeString("ru-RU", {
@@ -750,44 +736,55 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             </p>
             {role === "assistant" && (
               <div
-                className="flex flex-row gap-2 mt-2 pt-2 min-h-[44px] border-t border-border/50 shrink-0"
+                className="flex flex-row items-center justify-between gap-2 mt-2 pt-2 min-h-[36px] border-t border-slate-200/30 shrink-0"
                 style={{ touchAction: "manipulation" }}
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerDownCapture={(e) => e.stopPropagation()}
               >
-                <Button
+                <div className="flex flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleToggleFavorite();
+                    }}
+                    disabled={isAdding || isRemoving}
+                    className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 border ${isFavorite
+                      ? "text-amber-600/90 bg-amber-50/70 fill-amber-600/90 border-amber-200/40"
+                      : "text-slate-400 bg-slate-50/50 border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500"
+                      }`}
+                    title="В избранное"
+                  >
+                    <Heart className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleShare();
+                    }}
+                    disabled={!shareText}
+                    className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 disabled:opacity-50 transition-all active:scale-95"
+                    title="Поделиться"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <button
                   type="button"
-                  variant="secondary"
-                  size="icon"
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    handleToggleFavorite();
+                    setShowDelete(true);
                   }}
-                  disabled={isAdding || isRemoving}
-                  className={`h-9 w-9 rounded-full shrink-0 shadow-sm ${isFavorite ? "text-red-600 bg-red-100 dark:bg-red-950/50 fill-red-600" : ""}`}
-                  title="Избранное"
+                  className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 transition-all active:scale-95"
+                  title="Удалить"
                 >
-                  <Heart
-                    className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`}
-                  />
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="icon"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handleShare();
-                  }}
-                  disabled={!shareText}
-                  className="h-9 w-9 rounded-full shrink-0 shadow-sm"
-                  title="Поделиться"
-                >
-                  <Share2 className="h-4 w-4" />
-                </Button>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
           </div>

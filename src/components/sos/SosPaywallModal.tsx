@@ -26,8 +26,8 @@ export function SosPaywallModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg">
-            🆘 SOS-консультант доступен только в Premium-версии
+          <DialogTitle className="text-lg font-medium">
+            💛 Мы рядом — доступно в Premium
           </DialogTitle>
         </DialogHeader>
         <p className="text-muted-foreground text-sm leading-relaxed">

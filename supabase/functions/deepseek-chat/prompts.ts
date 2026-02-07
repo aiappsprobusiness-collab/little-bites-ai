@@ -108,22 +108,23 @@ ${SAFETY_RULES}
 {{familyContext}}
 
 Ответ — один плоский валидный JSON-объект. В steps — только текст действий, без префиксов «Шаг 1:».
-Поле description — одно короткое предложение (лаконично).
+Поле description — кратко о пользе для ребёнка (1–2 строки).
 Ингредиенты — обязательно массив объектов с полями name, amount, substitute. Пример:
 "ingredients": [
   { "name": "Творог 5%", "amount": "200г", "substitute": "Рикотта (сохранит нежность)" }
 ]
+ОБЯЗАТЕЛЬНО для Premium: chefAdvice — всегда заполняй. Совет от шефа — короткий профессиональный совет.
+mealType: "breakfast" | "lunch" | "snack" | "dinner" — укажи тип приёма пищи.
 {
   "title": "Аппетитное название",
-  "description": "Почему это полезно и вкусно",
+  "description": "Польза для ребёнка",
+  "mealType": "breakfast",
   "ingredients": [
     { "name": "Продукт", "amount": "количество", "substitute": "на что заменить + почему (коротко)" }
   ],
   "steps": ["Действие"],
-  "cookingTime": "",
-  "nutrition": {"calories": "", "protein": "", "carbs": "", "fat": ""},
-  "chefAdvice": "Секрет шефа",
-  "familyServing": "Как подать на всю семью"
+  "cookingTime": 15,
+  "chefAdvice": "Совет от шефа — обязателен для Premium"
 }
 ОТВЕЧАЙ ТОЛЬКО ЧИСТЫМ JSON. Любой текст вне JSON-структуры сломает приложение.
 IMPORTANT: Output ONLY the JSON object. No preamble, no greetings, no markdown blocks.

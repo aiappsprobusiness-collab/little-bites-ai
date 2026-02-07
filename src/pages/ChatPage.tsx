@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Send, Loader2, Pencil, Plus, Settings, Square, HelpCircle, Mic, MicOff } from "lucide-react";
+import { Send, Loader2, Pencil, Plus, User, Square, HelpCircle } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -13,7 +13,6 @@ import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { detectMealType, parseRecipesFromChat } from "@/utils/parseChatRecipes";
@@ -35,11 +34,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 
 const CHAT_HINT_PHRASES = [
-  "Придумай ужин из того, что сейчас есть в холодильнике",
-  "Составь меню на завтра без глютена и молока для ребенка",
-  "Что приготовить за 15 минут, чтобы понравилось и мужу, и детям",
-  "Найди рецепт полезного десерта без сахара для малыша",
-  "Что приготовить на десерт с учетом аллергии?",
+  "Придумай ужин из того, что есть в холодильнике",
+  "Что приготовить за 15 минут ребёнку?",
+  "Меню на день без сахара и глютена",
+  "Полезный десерт для малыша",
 ];
 
 interface Message {
@@ -228,15 +226,6 @@ export default function ChatPage() {
     }
   }, [input, isChatting, canGenerate, isPremium, messages, selectedMemberId, selectedMember, members, memberIdForSave, chat, saveRecipesFromChat, saveChat, toast]);
 
-  const { isListening, toggle: toggleMic } = useSpeechRecognition({
-    onFinalTranscript: (text) => {
-      if (!text.trim()) return;
-      setInput(text);
-      handleSend(text);
-    },
-    onError: (msg) => toast({ variant: "destructive", title: "Голосовой ввод", description: msg }),
-  });
-
   // Обработка предзаполненного сообщения из ScanPage (после загрузки истории и определения handleSend)
   useEffect(() => {
     const state = location.state as { prefillMessage?: string; sourceProducts?: string[] } | null;
@@ -278,104 +267,110 @@ export default function ChatPage() {
 
   return (
     <MobileLayout showNav>
-      <div className="sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border/50 safe-top">
-        <div className="flex items-center justify-between w-full px-4 h-14">
-          <h1 className="text-lg font-bold text-foreground">AI Помощник</h1>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowPaywall(true)}
-              className="text-sm font-semibold text-primary bg-primary/15 px-3 py-1.5 rounded-full border border-primary/30"
-            >
-              {isPremium ? "∞" : `${remaining ?? 0}/${dailyLimit ?? 3}`}
-            </button>
-            <button
-              onClick={() => navigate("/profile")}
-              title="Настройки профиля"
-              className="w-9 h-9 rounded-full bg-primary text-primary-foreground shadow-md flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
+      <div className="sticky top-0 z-40 bg-background/98 backdrop-blur-lg border-b border-slate-200/40 safe-top">
+        <div className="flex items-center justify-between w-full px-4 py-2 gap-4">
+          <div className="leading-tight min-w-0 flex-shrink">
+            <h1 className="text-xl font-semibold text-foreground tracking-tight">Mom Recipes</h1>
+            <p className="text-xs text-muted-foreground">рядом на кухне</p>
           </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col h-[calc(100vh-130px)]">
-        {/* Для кого готовим — закреплён под шапкой, не убегает при скролле */}
-        <div className="sticky top-14 z-30 bg-background/95 backdrop-blur-sm px-4 py-3 border-b border-border/50 space-y-2 shrink-0">
-          {isFree && (
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">
-                Осталось {remaining} из {dailyLimit} генераций сегодня
-              </p>
-              <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1.5" />
-            </div>
-          )}
-          {!(isFree && members.length === 0) && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Готовим для:</span>
-              <Select
-                value={
-                  isFree
-                    ? (selectedMemberId === "family" ? members[0]?.id ?? "" : selectedMemberId ?? members[0]?.id ?? "")
-                    : (selectedMemberId ?? "family")
-                }
-                onValueChange={(v) => {
-                  const prev = isFree ? (selectedMemberId === "family" ? members[0]?.id : selectedMemberId) ?? members[0]?.id : selectedMemberId ?? "family";
-                  if (v !== prev) setMessages([]);
-                  setSelectedMemberId(v);
-                }}
-              >
-                <SelectTrigger className="w-[180px] bg-card">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {!isFree && <SelectItem value="family">Семья</SelectItem>}
-                  {members.map((c, idx) => (
-                    <SelectItem key={`${c.id}-${idx}`} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8 shrink-0"
+          <div className="flex items-center gap-2 flex-1 justify-end min-w-0 pl-2">
+            {members.length > 0 && (
+              <>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-sm font-medium text-foreground/90 whitespace-nowrap">Готовим для:</span>
+                  <Select
+                    value={
+                      isFree
+                        ? (selectedMemberId === "family" ? members[0]?.id ?? "" : selectedMemberId ?? members[0]?.id ?? "")
+                        : (selectedMemberId ?? "family")
+                    }
+                    onValueChange={(v) => {
+                      const prev = isFree ? (selectedMemberId === "family" ? members[0]?.id : selectedMemberId) ?? members[0]?.id : selectedMemberId ?? "family";
+                      if (v !== prev) setMessages([]);
+                      setSelectedMemberId(v);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 min-w-[80px] w-auto text-sm font-medium bg-emerald-50/70 border-emerald-200/50 text-emerald-800/90 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                  <SelectContent>
+                    {!isFree && <SelectItem value="family">Семья</SelectItem>}
+                    {members.map((c, idx) => (
+                      <SelectItem key={`${c.id}-${idx}`} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSheetCreateMode(true);
+                    setShowProfileSheet(true);
+                  }}
+                  title="Добавить профиль"
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100/70 hover:text-slate-600 active:scale-95 transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+                {selectedMember && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSheetCreateMode(false);
+                      setShowProfileSheet(true);
+                    }}
+                    title="Редактировать профиль"
+                    className="h-8 w-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100/60 hover:text-slate-600 active:scale-95 transition-all"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+              </>
+            )}
+            {members.length === 0 && (
+              <button
+                type="button"
                 onClick={() => {
                   setSheetCreateMode(true);
                   setShowProfileSheet(true);
                 }}
-                title="Добавить профиль"
+                title="Создать профиль"
+                className="h-8 w-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100/70 hover:text-slate-600 active:scale-95 transition-all"
               >
                 <Plus className="w-4 h-4" />
-              </Button>
-              {selectedMember && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => {
-                    setSheetCreateMode(false);
-                    setShowProfileSheet(true);
-                  }}
-                  title="Редактировать профиль"
-                >
-                  <Pencil className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          )}
+              </button>
+            )}
+            <button
+              onClick={() => navigate("/profile")}
+              title="Профиль"
+              className="h-11 w-11 min-w-[44px] min-h-[44px] rounded-full bg-slate-100/80 text-slate-600 flex items-center justify-center hover:bg-slate-200/70 hover:text-slate-700 active:scale-95 transition-all"
+            >
+              <User className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+        {isFree && (
+          <div className="px-4 pb-1.5">
+            <p className="text-[11px] text-muted-foreground/80">
+              Осталось {remaining} из {dailyLimit} сегодня
+            </p>
+            <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1 mt-0.5" />
+          </div>
+        )}
+      </div>
 
+      <div className="flex flex-col h-[calc(100vh-110px)]">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-4">
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5 pb-4">
           {!isLoadingMembers && members.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex flex-col items-center justify-center py-8 px-4 text-center"
             >
-              <div className="rounded-2xl px-5 py-6 bg-card shadow-soft border border-border/50 max-w-[320px] space-y-4">
+              <div className="rounded-2xl px-5 py-6 bg-slate-50/90 border border-slate-200/40 max-w-[320px] space-y-4">
                 <p className="text-base text-foreground leading-relaxed">
                   Добро пожаловать! Давайте создадим первый профиль члена семьи, чтобы я мог подбирать рецепты персонально.
                 </p>
@@ -398,8 +393,8 @@ export default function ChatPage() {
               animate={{ opacity: 1, y: 0 }}
               className="flex justify-start"
             >
-              <div className="rounded-2xl rounded-bl-sm px-4 py-3 bg-card shadow-soft max-w-[85%]">
-                <p className="text-base whitespace-pre-wrap">{STARTER_MESSAGE}</p>
+              <div className="rounded-2xl rounded-bl-sm px-5 py-4 bg-slate-50/80 border border-slate-200/40 max-w-[85%]">
+                <p className="text-base text-foreground/90 leading-relaxed whitespace-pre-wrap">{STARTER_MESSAGE}</p>
               </div>
             </motion.div>
           )}
@@ -433,19 +428,17 @@ export default function ChatPage() {
           </AnimatePresence>
 
           {isChatting && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start items-start gap-2">
-              <Button
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start items-start gap-3">
+              <button
                 type="button"
-                variant="outline"
-                size="icon"
-                className="h-9 w-9 shrink-0"
                 onClick={abortChat}
                 title="Остановить генерацию"
+                className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center bg-slate-100/80 text-slate-500 hover:bg-slate-200/60 hover:text-slate-600 active:scale-95 transition-all"
               >
                 <Square className="w-4 h-4" />
-              </Button>
-              <div className="rounded-2xl rounded-bl-sm px-4 py-3 bg-card shadow-soft">
-                <div className="flex items-center gap-2">
+              </button>
+              <div className="rounded-2xl rounded-bl-sm px-5 py-4 bg-slate-50/80 border border-slate-200/40">
+                <div className="flex items-center gap-3">
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
                   <span className="text-sm text-muted-foreground">Готовим кулинарное чудо...</span>
                 </div>
@@ -457,57 +450,40 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-border/50 bg-background/95 backdrop-blur px-4 py-3 safe-bottom">
-          <div className="flex gap-2">
+        <div className="border-t border-slate-200/40 bg-background/98 backdrop-blur px-4 py-4 safe-bottom">
+          <div className="flex items-end gap-2.5">
             <Textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Что приготовить?"
-              className="min-h-[44px] max-h-[120px] resize-none rounded-2xl bg-card border-border/50 py-3 pb-4"
+              className="min-h-[44px] max-h-[120px] resize-none rounded-2xl bg-slate-50/80 border-slate-200/50 py-3 px-4 text-base placeholder:text-muted-foreground/70 focus-visible:ring-emerald-500/30"
               rows={1}
             />
-            <button
-              type="button"
-              onClick={() => setShowHintsModal(true)}
-              title="Подсказки"
-              className="h-11 w-11 shrink-0 rounded-full bg-muted text-muted-foreground flex items-center justify-center hover:bg-muted/80 active:scale-95 transition-all"
-            >
-              <HelpCircle className="w-5 h-5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (isFree) {
-                  setShowPaywall(true);
-                } else {
-                  toggleMic();
-                }
-              }}
-              title={isFree ? "Голосовой ввод (Premium)" : (isListening ? "Остановить запись" : "Голосовой ввод")}
-              className={`h-11 w-11 shrink-0 rounded-full flex items-center justify-center transition-all active:scale-95 ${isFree
-                ? "bg-muted text-muted-foreground hover:bg-muted/80"
-                : isListening
-                  ? "bg-destructive/20 text-destructive hover:bg-destructive/30"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-                }`}
-            >
-              {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-            <Button
-              variant="mint"
-              size="icon"
-              className="h-11 w-11 shrink-0 rounded-xl"
-              disabled={!input.trim() || isChatting}
-              onClick={() => handleSend()}
-            >
-              {isChatting ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
-            </Button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowHintsModal(true)}
+                title="Подсказки"
+                className="h-10 w-10 rounded-full bg-slate-100/80 text-slate-500 flex items-center justify-center hover:bg-slate-200/60 hover:text-slate-600 active:scale-95 transition-all"
+              >
+                <HelpCircle className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                disabled={!input.trim() || isChatting}
+                onClick={() => handleSend()}
+                className="h-10 w-10 shrink-0 rounded-full flex items-center justify-center text-white disabled:opacity-50 transition-opacity hover:opacity-95 active:scale-95"
+                style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)", boxShadow: "0 4px 14px -2px rgba(107, 142, 35, 0.35)" }}
+              >
+                {isChatting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -531,10 +507,10 @@ export default function ChatPage() {
         onCreated={(memberId) => setSelectedMemberId(memberId)}
       />
       <Dialog open={showHintsModal} onOpenChange={setShowHintsModal}>
-        <DialogContent className="max-w-[320px] p-4">
-          <DialogHeader className="space-y-1 pb-2">
-            <DialogTitle className="text-base">Подсказки</DialogTitle>
-            <DialogDescription className="sr-only">Примеры запросов для чата с ИИ</DialogDescription>
+        <DialogContent className="w-[min(280px,calc(100vw-40px))] max-w-[280px] p-4 rounded-xl border-slate-200/50 mx-auto">
+          <DialogHeader className="space-y-0.5 pb-3 text-center">
+            <DialogTitle className="text-base font-medium text-foreground">Подсказки для мам 💛</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">С чего начать?</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
             {CHAT_HINT_PHRASES.map((phrase, i) => (
@@ -546,7 +522,7 @@ export default function ChatPage() {
                   setShowHintsModal(false);
                   textareaRef.current?.focus();
                 }}
-                className="text-left px-3 py-2 rounded-lg border border-border bg-card hover:bg-muted/50 text-xs leading-tight transition-colors"
+                className="text-left px-3 py-2 rounded-lg bg-slate-50/80 border border-slate-200/50 hover:bg-emerald-50/50 hover:border-emerald-200/40 text-[13px] leading-snug transition-colors"
               >
                 {phrase}
               </button>

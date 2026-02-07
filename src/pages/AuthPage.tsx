@@ -103,14 +103,14 @@ export default function AuthPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-4 sm:mb-6 px-2"
         >
-          <h1 className="text-5xl sm:text-6xl font-bold tracking-[0.12em] leading-tight text-foreground mb-3">
-            Mom Recipes
+          <h1 className="text-5xl sm:text-6xl font-semibold tracking-tight leading-tight text-foreground mb-3">
+            MomRecipes 🌿
           </h1>
           <p className="text-base sm:text-lg font-medium text-foreground/90 leading-snug mb-1.5">
             Умное питание для детей и всей семьи
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            От первого прикорма до семейных ужинов без стресса.
+            От первого прикорма до семейных ужинов без стресса
           </p>
         </motion.div>
 
@@ -127,12 +127,14 @@ export default function AuthPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12 + i * 0.05 }}
-              className="rounded-2xl bg-emerald-50/80 border border-emerald-100/80 px-4 py-4 sm:px-5 sm:py-5 shadow-sm"
+              className="rounded-2xl bg-emerald-50/80 border border-emerald-100/80 px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm"
             >
-              <div className="flex flex-col items-start gap-2">
-                <span className="text-2xl sm:text-3xl leading-none">{card.icon}</span>
-                <p className="text-sm font-bold text-foreground">{card.title}</p>
-                <p className="text-xs text-muted-foreground leading-relaxed">{card.text}</p>
+              <div className="flex flex-row items-start gap-3">
+                <span className="text-2xl sm:text-3xl leading-none shrink-0">{card.icon}</span>
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <p className="text-sm font-bold text-foreground leading-snug">{card.title}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{card.text}</p>
+                </div>
               </div>
             </motion.div>
           ))}
@@ -145,164 +147,164 @@ export default function AuthPage() {
           transition={{ delay: 0.15 }}
           className="w-full"
         >
-        <Card className="bg-white/90 backdrop-blur-xl border-0 rounded-[28px] sm:rounded-[32px] shadow-xl shadow-slate-200/50">
-          <CardHeader className="text-center pb-5 sm:pb-6 px-4 sm:px-6 pt-6 sm:pt-7">
-            <CardTitle className="text-lg sm:text-xl font-semibold text-foreground/95">Начните заботиться о питании уже сегодня</CardTitle>
-            <CardDescription className="text-muted-foreground mt-1.5">Войдите или создайте аккаунт за 1 минуту</CardDescription>
-          </CardHeader>
-          <CardContent className="px-4 sm:px-6 pt-0 pb-5 sm:pb-6">
-            <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11">
-                <TabsTrigger value="login" className="rounded-[16px]">Вход</TabsTrigger>
-                <TabsTrigger value="signup" className="rounded-[16px]">Создать аккаунт</TabsTrigger>
-              </TabsList>
+          <Card className="bg-white/90 backdrop-blur-xl border-0 rounded-[28px] sm:rounded-[32px] shadow-xl shadow-slate-200/50">
+            <CardHeader className="text-center pb-5 sm:pb-6 px-4 sm:px-6 pt-6 sm:pt-7">
+              <CardTitle className="text-lg sm:text-xl font-semibold text-foreground/95">Начните заботиться о питании уже сегодня</CardTitle>
+              <CardDescription className="text-muted-foreground mt-1.5">Войдите или создайте аккаунт за 1 минуту</CardDescription>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6 pt-0 pb-5 sm:pb-6">
+              <Tabs defaultValue="login" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11">
+                  <TabsTrigger value="login" className="rounded-[16px]">Вход</TabsTrigger>
+                  <TabsTrigger value="signup" className="rounded-[16px]">Создать аккаунт</TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="login">
-                <Form {...loginForm}>
-                  <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-5">
-                    <FormField
-                      control={loginForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Введите ваш email" className={AUTH_INPUT_CLASS} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={loginForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-muted-foreground font-normal">Пароль</FormLabel>
-                          <FormControl>
-                            <div className="relative">
+                <TabsContent value="login">
+                  <Form {...loginForm}>
+                    <form onSubmit={loginForm.handleSubmit(onLogin)} className="space-y-5">
+                      <FormField
+                        control={loginForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Введите ваш email" className={AUTH_INPUT_CLASS} {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={loginForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-muted-foreground font-normal">Пароль</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  type={showPassword ? "text" : "password"}
+                                  placeholder="Введите пароль"
+                                  className={AUTH_INPUT_CLASS}
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPassword(!showPassword)}
+                                  className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="submit"
+                        className="w-full rounded-[24px] h-14 px-6 py-6 text-white font-semibold tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 hover:shadow-xl hover:shadow-emerald-900/30 hover:brightness-105 active:scale-[0.99] transition-all duration-200"
+                        style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)" }}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
+                        <span>Продолжить</span>
+                      </Button>
+                    </form>
+                  </Form>
+                </TabsContent>
+
+                <TabsContent value="signup">
+                  <Form {...signupForm}>
+                    <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-5">
+                      <FormField
+                        control={signupForm.control}
+                        name="displayName"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-muted-foreground font-normal">Как к вам обращаться?</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Например, Мария" className={AUTH_INPUT_CLASS} {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
+                            <FormControl>
+                              <Input type="email" placeholder="Введите ваш email" className={AUTH_INPUT_CLASS} {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-muted-foreground font-normal">Пароль</FormLabel>
+                            <FormControl>
+                              <div className="relative">
+                                <Input
+                                  type={showPassword ? "text" : "password"}
+                                  placeholder="Придумайте пароль (от 6 символов)"
+                                  className={AUTH_INPUT_CLASS}
+                                  {...field}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowPassword(!showPassword)}
+                                  className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-muted-foreground font-normal">Повторите пароль</FormLabel>
+                            <FormControl>
                               <Input
                                 type={showPassword ? "text" : "password"}
-                                placeholder="Введите пароль"
+                                placeholder="Введите пароль ещё раз"
                                 className={AUTH_INPUT_CLASS}
                                 {...field}
                               />
-                              <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                              >
-                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button
-                      type="submit"
-                      className="w-full rounded-[24px] h-14 px-6 py-6 text-white font-semibold tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 hover:shadow-xl hover:shadow-emerald-900/30 hover:brightness-105 active:scale-[0.99] transition-all duration-200"
-                      style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)" }}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
-                      <span>Продолжить</span>
-                    </Button>
-                  </form>
-                </Form>
-              </TabsContent>
-
-              <TabsContent value="signup">
-                <Form {...signupForm}>
-                  <form onSubmit={signupForm.handleSubmit(onSignup)} className="space-y-5">
-                    <FormField
-                      control={signupForm.control}
-                      name="displayName"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-muted-foreground font-normal">Как к вам обращаться?</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Например, Мария" className={AUTH_INPUT_CLASS} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={signupForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
-                          <FormControl>
-                            <Input type="email" placeholder="Введите ваш email" className={AUTH_INPUT_CLASS} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={signupForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-muted-foreground font-normal">Пароль</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Input
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Придумайте пароль (от 6 символов)"
-                                className={AUTH_INPUT_CLASS}
-                                {...field}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                              >
-                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </button>
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={signupForm.control}
-                      name="confirmPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-muted-foreground font-normal">Повторите пароль</FormLabel>
-                          <FormControl>
-                            <Input
-                              type={showPassword ? "text" : "password"}
-                              placeholder="Введите пароль ещё раз"
-                              className={AUTH_INPUT_CLASS}
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      className="w-full rounded-[24px] h-14 px-6 py-6 font-semibold tracking-wide flex items-center justify-center gap-2 border-2 border-emerald-200 bg-transparent text-emerald-800 hover:bg-emerald-50 hover:border-emerald-300 active:scale-[0.99] transition-all duration-200"
-                      disabled={isLoading}
-                    >
-                      {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
-                      <span>Создать аккаунт</span>
-                    </Button>
-                  </form>
-                </Form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-      </motion.div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        className="w-full rounded-[24px] h-14 px-6 py-6 font-semibold tracking-wide flex items-center justify-center gap-2 border-2 border-emerald-200 bg-transparent text-emerald-800 hover:bg-emerald-50 hover:border-emerald-300 active:scale-[0.99] transition-all duration-200"
+                        disabled={isLoading}
+                      >
+                        {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
+                        <span>Создать аккаунт</span>
+                      </Button>
+                    </form>
+                  </Form>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     </div>
   );

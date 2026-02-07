@@ -30,7 +30,7 @@ export function SosButton({
       disabled={disabled}
       whileTap={disabled ? undefined : { scale: 0.97 }}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 border-border bg-card hover:bg-muted/50 hover:border-primary/30 transition-colors text-left min-h-[100px]",
+        "relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-slate-200/60 bg-slate-50/60 hover:bg-emerald-50/60 hover:border-emerald-200/60 transition-colors text-left min-h-[100px]",
         disabled && "opacity-70 cursor-not-allowed",
         locked && "opacity-80",
         className
