@@ -84,11 +84,11 @@ export function BottomNavigation() {
           {LEFT_TABS.map(renderTab)}
         </div>
 
-        {/* Центральная FAB: Быстрый помощник — над таббаром, не перекрывает input */}
+        {/* Центральная FAB: Быстрый помощник — по центру над таббаром */}
         <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 z-[999] flex items-center justify-center pointer-events-auto sm:translate-y-1/4">
           <motion.button
             onClick={handleSosClick}
-            className="fixed bottom-[calc(56px+12px)] left-1/2 -translate-x-1/2 z-40 w-14 h-14 sm:relative sm:bottom-auto sm:left-auto sm:translate-x-0 flex items-center justify-center rounded-full text-white transition-transform hover:scale-105 active:scale-95"
+            className="fixed bottom-[72px] left-1/2 -translate-x-1/2 z-40 w-14 h-14 sm:relative sm:bottom-auto sm:left-auto sm:translate-x-0 flex items-center justify-center rounded-full text-white transition-transform hover:scale-105 active:scale-95"
             style={FAB_STYLE}
             whileTap={{ scale: 0.92 }}
             animate={{

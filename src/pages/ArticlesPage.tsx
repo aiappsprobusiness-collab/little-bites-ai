@@ -1,22 +1,55 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Lock, BookOpen } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Paywall } from "@/components/subscription/Paywall";
-import { useArticles, CATEGORIES } from "@/hooks/useArticles";
+import { useArticles, useArticle, CATEGORIES } from "@/hooks/useArticles";
 import { useSubscription } from "@/hooks/useSubscription";
 import { ArticleReaderModal } from "@/components/articles/ArticleReaderModal";
 import type { ArticlesRow, ArticleCategoryV2 } from "@/integrations/supabase/types-v2";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ArticlesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const idFromUrl = searchParams.get("id");
+
   const [selectedCategory, setSelectedCategory] = useState<ArticleCategoryV2 | "all">("all");
   const [selectedArticle, setSelectedArticle] = useState<ArticlesRow | null>(null);
   const [readerOpen, setReaderOpen] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
 
   const { articles, isLoading, categories } = useArticles(selectedCategory);
+  const { article: articleFromUrl, isLoading: isLoadingUrlArticle } = useArticle(idFromUrl);
   const { isPremium } = useSubscription();
+  const { toast } = useToast();
+
+  // Deep-link: open article when URL has ?id=...
+  useEffect(() => {
+    if (!idFromUrl) return;
+    if (isLoadingUrlArticle) return;
+    if (articleFromUrl) {
+      if (articleFromUrl.is_premium && !isPremium) {
+        setShowPaywall(true);
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("id");
+          return next;
+        });
+        return;
+      }
+      setSelectedArticle(articleFromUrl);
+      setReaderOpen(true);
+    } else {
+      toast({ variant: "destructive", title: "Статья не найдена" });
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("id");
+        return next;
+      });
+    }
+  }, [idFromUrl, articleFromUrl, isLoadingUrlArticle, isPremium, setSearchParams, toast]);
 
   const handleCardClick = (article: ArticlesRow) => {
     if (article.is_premium && !isPremium) {
@@ -113,7 +146,16 @@ export default function ArticlesPage() {
         open={readerOpen}
         onOpenChange={(open) => {
           setReaderOpen(open);
-          if (!open) setSelectedArticle(null);
+          if (!open) {
+            setSelectedArticle(null);
+            if (idFromUrl) {
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete("id");
+                return next;
+              });
+            }
+          }
         }}
       />
     </MobileLayout>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Send, Loader2, Pencil, Plus, User, Square, HelpCircle } from "lucide-react";
+import { Send, Loader2, User, Square, HelpCircle } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -267,105 +267,57 @@ export default function ChatPage() {
 
   return (
     <MobileLayout showNav>
-      <div className="sticky top-0 z-40 bg-background/98 backdrop-blur-lg border-b border-slate-200/40 safe-top overflow-hidden">
-        <div className="container mx-auto px-3 max-w-full">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-2 w-full py-2">
-            <div className="leading-tight min-w-0 flex-shrink-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-foreground tracking-tight truncate">Mom Recipes</h1>
-              <p className="text-xs text-muted-foreground truncate">рядом на кухне</p>
+      <div className="sticky top-0 z-40 bg-background/98 backdrop-blur-lg border-b border-slate-200/40 safe-top overflow-hidden max-w-full">
+        <div className="container mx-auto px-3 sm:px-4 max-w-full">
+          <div className="flex flex-col w-full py-2">
+            {/* Row 1: Title left, Profile icon right */}
+            <div className="flex items-center justify-between w-full min-w-0">
+              <div className="leading-tight min-w-0">
+                <h1 className="text-lg sm:text-xl font-semibold text-foreground tracking-tight truncate">Mom Recipes</h1>
+                <p className="text-xs text-muted-foreground truncate">рядом на кухне</p>
+              </div>
+              <button
+                onClick={() => navigate("/profile")}
+                title="Профиль"
+                className="h-9 w-9 shrink-0 rounded-full bg-slate-100/80 text-slate-600 flex items-center justify-center hover:bg-slate-200/70 hover:text-slate-700 active:scale-95 transition-all"
+              >
+                <User className="w-5 h-5" />
+              </button>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0 justify-end">
-              {members.length > 0 && (
-                <>
-                  <div className="flex items-center gap-1.5 min-w-0 max-w-[70%] sm:max-w-none flex-shrink">
-                    <span className="text-xs sm:text-sm font-medium text-foreground/90 whitespace-nowrap shrink-0">Готовим для:</span>
-                    <Select
-                      value={
-                        isFree
-                          ? (selectedMemberId === "family" ? members[0]?.id ?? "" : selectedMemberId ?? members[0]?.id ?? "")
-                          : (selectedMemberId ?? "family")
-                      }
-                      onValueChange={(v) => {
-                        const prev = isFree ? (selectedMemberId === "family" ? members[0]?.id : selectedMemberId) ?? members[0]?.id : selectedMemberId ?? "family";
-                        if (v !== prev) setMessages([]);
-                        setSelectedMemberId(v);
-                      }}
-                    >
-                      <SelectTrigger className="h-9 min-w-0 w-auto max-w-[120px] sm:max-w-none sm:min-w-[80px] text-sm font-medium bg-emerald-50/70 border-emerald-200/50 text-emerald-800/90 rounded-xl truncate">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {!isFree && <SelectItem value="family">Семья</SelectItem>}
-                        {members.map((c, idx) => (
-                          <SelectItem key={`${c.id}-${idx}`} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSheetCreateMode(true);
-                        setShowProfileSheet(true);
-                      }}
-                      title="Добавить профиль"
-                      className="h-8 w-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100/70 hover:text-slate-600 active:scale-95 transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                    {selectedMember && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSheetCreateMode(false);
-                          setShowProfileSheet(true);
-                        }}
-                        title="Редактировать профиль"
-                        className="h-8 w-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100/60 hover:text-slate-600 active:scale-95 transition-all"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => navigate("/profile")}
-                      title="Профиль"
-                      className="h-9 w-9 rounded-full bg-slate-100/80 text-slate-600 flex items-center justify-center hover:bg-slate-200/70 hover:text-slate-700 active:scale-95 transition-all shrink-0"
-                    >
-                      <User className="w-5 h-5" />
-                    </button>
-                  </div>
-                </>
-              )}
-              {members.length === 0 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSheetCreateMode(true);
-                      setShowProfileSheet(true);
-                    }}
-                    title="Создать профиль"
-                    className="h-8 w-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100/70 hover:text-slate-600 active:scale-95 transition-all"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => navigate("/profile")}
-                    title="Профиль"
-                    className="h-9 w-9 rounded-full bg-slate-100/80 text-slate-600 flex items-center justify-center hover:bg-slate-200/70 hover:text-slate-700 active:scale-95 transition-all shrink-0"
-                  >
-                    <User className="w-5 h-5" />
-                  </button>
-                </>
-              )}
-            </div>
+            {/* Row 2: Готовим для — right-aligned under title */}
+            {members.length > 0 && (
+              <div className="flex justify-end items-center gap-2 mt-1.5 min-w-0">
+                <span className="text-xs sm:text-sm font-medium text-foreground/90 whitespace-nowrap shrink-0">Готовим для:</span>
+                <Select
+                  value={
+                    isFree
+                      ? (selectedMemberId === "family" ? members[0]?.id ?? "" : selectedMemberId ?? members[0]?.id ?? "")
+                      : (selectedMemberId ?? "family")
+                  }
+                  onValueChange={(v) => {
+                    const prev = isFree ? (selectedMemberId === "family" ? members[0]?.id : selectedMemberId) ?? members[0]?.id : selectedMemberId ?? "family";
+                    if (v !== prev) setMessages([]);
+                    setSelectedMemberId(v);
+                  }}
+                >
+                  <SelectTrigger className="h-9 min-w-0 w-auto max-w-[140px] sm:max-w-none sm:min-w-[80px] text-sm font-medium bg-emerald-50/70 border-emerald-200/50 text-emerald-800/90 rounded-xl truncate">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {!isFree && <SelectItem value="family">Семья</SelectItem>}
+                    {members.map((c, idx) => (
+                      <SelectItem key={`${c.id}-${idx}`} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </div>
         {isFree && (
-          <div className="container mx-auto px-3 pb-1.5">
+          <div className="container mx-auto px-3 sm:px-4 pb-1.5 max-w-full">
             <p className="text-[11px] text-muted-foreground/80">
               Осталось {remaining} из {dailyLimit} сегодня
             </p>
@@ -374,9 +326,9 @@ export default function ChatPage() {
         )}
       </div>
 
-      <div className="flex flex-col h-[calc(100vh-110px)] container mx-auto max-w-full">
+      <div className="flex flex-col h-[calc(100vh-110px)] container mx-auto max-w-full overflow-x-hidden px-3 sm:px-4">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-4 py-5 space-y-5 pb-4">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-5 space-y-5 pb-4">
           {!isLoadingMembers && members.length === 0 && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -463,8 +415,8 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-slate-200/40 bg-background/98 backdrop-blur px-3 sm:px-4 py-3 safe-bottom max-w-full">
-          <div className="flex w-full items-center gap-2">
+        <div className="border-t border-slate-200/40 bg-background/98 backdrop-blur py-3 safe-bottom max-w-full overflow-x-hidden">
+          <div className="flex w-full items-center gap-2 min-w-0">
             <Textarea
               ref={textareaRef}
               value={input}
@@ -487,8 +439,8 @@ export default function ChatPage() {
                 type="button"
                 disabled={!input.trim() || isChatting}
                 onClick={() => handleSend()}
-                className="h-9 w-9 shrink-0 rounded-full flex items-center justify-center text-white disabled:opacity-50 transition-opacity hover:opacity-95 active:scale-95"
-                style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)", boxShadow: "0 4px 14px -2px rgba(107, 142, 35, 0.35)" }}
+                className="w-11 h-11 shrink-0 rounded-full flex items-center justify-center text-white disabled:opacity-50 transition-opacity hover:opacity-95 active:scale-95 bg-[#6B8E23] hover:bg-[#5a7d1e]"
+                style={{ boxShadow: "0 4px 14px -2px rgba(107, 142, 35, 0.35)" }}
               >
                 {isChatting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
