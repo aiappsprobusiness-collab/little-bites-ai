@@ -1,36 +1,29 @@
 {
   "name": "Mom Recipes",
   "short_name": "Mom Recipes",
-  "description": "От первого прикорма до изысканного ужина. Умное планирование рациона для здоровья, красоты и спокойствия.",
+  "description": "Умный помощник на кухне для родителей",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "theme_color": "#5eb89a",
-  "background_color": "#faf8f5",
+  "orientation": "portrait",
+  "background_color": "#F7F9F7",
+  "theme_color": "#7FAE3E",
   "icons": [
     {
-      "src": "/icon-192.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-192.png",
+      "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "maskable"
     }
   ]
 }

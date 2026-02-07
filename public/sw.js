@@ -1,54 +1,57 @@
-/* PWA Service Worker - Mom Recipes */
 const CACHE_NAME = 'mom-recipes-v2';
+const OFFLINE_URL = '/index.html';
 
-// Precache shell: без этого на мобильных при сбое сети respondWith отдавал undefined → белый экран
-self.addEventListener('install', (event) => {
+const ASSETS_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+];
+
+// INSTALL
+self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.add('/index.html'))
-      .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
   );
+  self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
+// ACTIVATE
+self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(names.filter((n) => n !== CACHE_NAME).map((n) => caches.delete(n)))
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.map(key => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
+      )
     )
   );
   self.clients.claim();
 });
 
-// Минимальная HTML-страница, если кэша нет (не передаём undefined в respondWith)
-function offlinePage() {
-  return new Response(
-    '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mom Recipes</title></head><body><p>Нет соединения.</p><button onclick="location.reload()">Обновить</button></body></html>',
-    { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
-  );
-}
+// FETCH
+self.addEventListener('fetch', event => {
+  const { request } = event;
 
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin) return;
+  // Только GET
+  if (request.method !== 'GET') return;
 
-  const isNav = event.request.mode === 'navigate';
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        if (isNav && !response.ok) {
-          return caches.match('/index.html').then((cached) => cached || response);
-        }
-        const clone = response.clone();
-        if (response.ok && (url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.startsWith('/assets/'))) {
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      })
-      .catch(() =>
-        caches.match(event.request)
-          .then((cached) => cached || caches.match('/index.html'))
-          .then((cached) => cached || offlinePage())
-      )
+    caches.match(request).then(cached => {
+      return (
+        cached ||
+        fetch(request)
+          .then(response => {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, copy);
+            });
+            return response;
+          })
+          .catch(() => caches.match(OFFLINE_URL))
+      );
+    })
   );
 });
