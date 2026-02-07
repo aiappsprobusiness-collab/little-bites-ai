@@ -15,6 +15,8 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
+import { buildGenerationContext, validateRecipe } from "@/domain/generation";
+import type { Profile } from "@/domain/generation";
 import { detectMealType, parseRecipesFromChat, type ParsedRecipe } from "@/utils/parseChatRecipes";
 import {
   Select,
@@ -159,87 +161,147 @@ export default function ChatPage() {
       const chatMessages = messages.map((m) => ({ role: m.role, content: m.content }));
       chatMessages.push({ role: "user", content: userMessage.content });
 
-      let response = await chat({
-        messages: chatMessages,
-        type: "chat",
-        overrideSelectedMemberId: selectedMemberId,
-        overrideSelectedMember: selectedMember,
-        overrideMembers: members,
-        onChunk: (chunk) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMessageId ? { ...m, content: m.content + chunk, isStreaming: true } : m
-            )
-          );
-        },
-      });
-      let rawMessage = typeof response?.message === "string" ? response.message : "";
-      let parsed = parseRecipesFromChat(userMessage.content, rawMessage);
+      const activeProfileId = selectedMemberId ?? "family";
+      const profiles: Profile[] = members.map((m) => ({
+        id: m.id,
+        role: (m.type === "adult" || m.type === "family" ? "adult" : "child") as "adult" | "child",
+        name: m.name,
+        allergies: m.allergies ?? [],
+        preferences: m.preferences ?? [],
+        difficulty:
+          m.difficulty === "easy" || m.difficulty === "medium" || m.difficulty === "any"
+            ? m.difficulty
+            : undefined,
+      }));
+      const plan =
+        subscriptionStatus === "premium"
+          ? "premium"
+          : subscriptionStatus === "trial"
+            ? "trial"
+            : "free";
+      const family = { id: "family" as const, profiles, activeProfileId };
+      const generationContext = buildGenerationContext(family, activeProfileId, plan);
 
       const normalizeTitle = (t: string) => t?.trim().toLowerCase() ?? "";
       const lastSaved = normalizeTitle(lastSavedRecipeTitleRef.current ?? "");
-      let attempt = 1;
-      while (
-        attempt < 2 &&
-        parsed.recipes[0]?.title &&
-        lastSaved &&
-        normalizeTitle(parsed.recipes[0].title) === lastSaved
-      ) {
-        attempt++;
+      const FAILED_MESSAGE =
+        "Не удалось сгенерировать подходящий рецепт. Попробуйте изменить запрос.";
+
+      let attempts = 0;
+      let response: { message?: string } | null = null;
+      let rawMessage = "";
+      let parsed = parseRecipesFromChat(userMessage.content, "");
+
+      while (attempts < 2) {
         response = await chat({
           messages: chatMessages,
           type: "chat",
           overrideSelectedMemberId: selectedMemberId,
           overrideSelectedMember: selectedMember,
           overrideMembers: members,
-          extraSystemSuffix: "Previous recipe was duplicated. Generate a DIFFERENT recipe now.",
+          ...(attempts > 0 && {
+            extraSystemSuffix:
+              "Previous recipe was duplicated or violated constraints. Generate a DIFFERENT, compliant recipe now.",
+          }),
+          onChunk:
+            attempts === 0
+              ? (chunk) => {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMessageId
+                        ? { ...m, content: m.content + chunk, isStreaming: true }
+                        : m
+                    )
+                  );
+                }
+              : undefined,
         });
         rawMessage = typeof response?.message === "string" ? response.message : "";
         parsed = parseRecipesFromChat(userMessage.content, rawMessage);
+        const recipe = parsed.recipes[0];
+
+        if (!recipe) {
+          attempts++;
+          continue;
+        }
+        const validation = validateRecipe(recipe, generationContext);
+        if (!validation.ok) {
+          attempts++;
+          continue;
+        }
+        if (lastSaved && normalizeTitle(recipe.title) === lastSaved) {
+          attempts++;
+          continue;
+        }
+        break;
       }
 
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId
-            ? {
-                ...m,
-                content: parsed.displayText,
-                rawContent: rawMessage,
-                isStreaming: false,
-                preParsedRecipe: parsed.recipes[0] ?? null,
-              }
-            : m
-        )
-      );
+      const finalRecipe = parsed.recipes[0];
+      const finalValidation = finalRecipe ? validateRecipe(finalRecipe, generationContext) : { ok: false };
 
-      try {
-        const mealType = detectMealType(userMessage.content);
-        const { savedRecipes } = await saveRecipesFromChat({
-          userMessage: userMessage.content,
-          aiResponse: rawMessage,
-          memberId: memberIdForSave,
-          mealType,
-          parsedResult: parsed,
+      if (!finalRecipe || !finalValidation.ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: FAILED_MESSAGE,
+                  rawContent: rawMessage || undefined,
+                  isStreaming: false,
+                  preParsedRecipe: null,
+                }
+              : m
+          )
+        );
+        toast({
+          variant: "destructive",
+          title: "Не удалось подобрать рецепт",
+          description: FAILED_MESSAGE,
         });
+      } else {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  content: parsed.displayText,
+                  rawContent: rawMessage,
+                  isStreaming: false,
+                  preParsedRecipe: parsed.recipes[0] ?? null,
+                }
+              : m
+          )
+        );
 
-        if (savedRecipes?.length > 0) {
-          lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
-        }
-
-        await saveChat({
-          message: userMessage.content,
-          response: rawMessage,
-        });
-
-        if (savedRecipes?.length > 0) {
-          toast({
-            title: "Рецепты сохранены",
-            description: `${savedRecipes.length} рецепт(ов) добавлено в ваш список`,
+        try {
+          const mealType = detectMealType(userMessage.content);
+          const { savedRecipes } = await saveRecipesFromChat({
+            userMessage: userMessage.content,
+            aiResponse: rawMessage,
+            memberId: memberIdForSave,
+            mealType,
+            parsedResult: parsed,
           });
+
+          if (savedRecipes?.length > 0) {
+            lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
+          }
+
+          await saveChat({
+            message: userMessage.content,
+            response: rawMessage,
+          });
+
+          if (savedRecipes?.length > 0) {
+            toast({
+              title: "Рецепты сохранены",
+              description: `${savedRecipes.length} рецепт(ов) добавлено в ваш список`,
+            });
+          }
+        } catch (e) {
+          console.error("Failed to save recipes from chat:", e);
+          await saveChat({ message: userMessage.content, response: rawMessage });
         }
-      } catch (e) {
-        console.error("Failed to save recipes from chat:", e);
-        await saveChat({ message: userMessage.content, response: rawMessage });
       }
     } catch (err: any) {
       if (err?.name === "AbortError") {
