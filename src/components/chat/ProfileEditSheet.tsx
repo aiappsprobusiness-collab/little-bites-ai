@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus } from "lucide-react";
 import { useMembers } from "@/hooks/useMembers";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
@@ -71,12 +72,16 @@ export function ProfileEditSheet({
 }: ProfileEditSheetProps) {
   const { toast } = useToast();
   const { updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
+  const { isPremium } = useSubscription();
   const [name, setName] = useState("");
   const [memberType, setMemberType] = useState<MemberTypeV2>("child");
   const [ageYears, setAgeYears] = useState(0);
   const [ageMonths, setAgeMonths] = useState(0);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [allergyInput, setAllergyInput] = useState("");
+  const [preferences, setPreferences] = useState<string[]>([]);
+  const [preferenceInput, setPreferenceInput] = useState("");
+  const [difficulty, setDifficulty] = useState<string>("easy");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const lastInitRef = useRef<{ isCreate: boolean; memberId: string | null } | null>(null);
 
@@ -100,6 +105,9 @@ export function ProfileEditSheet({
       setAgeMonths(0);
       setAllergies([]);
       setAllergyInput("");
+      setPreferences([]);
+      setPreferenceInput("");
+      setDifficulty("easy");
       return;
     }
     if (!member) return;
@@ -109,11 +117,16 @@ export function ProfileEditSheet({
     setAgeMonths(total % 12);
     setAllergies(member.allergies ?? []);
     setAllergyInput("");
+    setPreferences((member as MembersRow).preferences ?? []);
+    setPreferenceInput("");
+    const d = (member as MembersRow).difficulty?.trim();
+    setDifficulty(d === "medium" || d === "any" ? d : "easy");
   }, [open, isCreate, member]);
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 
   const allergiesHandlers = createTagListHandlers(setAllergies, setAllergyInput);
+  const preferencesHandlers = createTagListHandlers(setPreferences, setPreferenceInput);
 
   const handleSave = async () => {
     if (isCreate) {
@@ -128,6 +141,7 @@ export function ProfileEditSheet({
           type: memberType,
           age_months: totalAgeMonths || null,
           allergies,
+          ...(isPremium && { preferences, difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy" }),
         });
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
         onOpenChange(false);
@@ -148,6 +162,7 @@ export function ProfileEditSheet({
         type: memberType,
         age_months: totalAgeMonths || null,
         allergies,
+        ...(isPremium && { preferences, difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy" }),
       });
       toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
       onOpenChange(false);
@@ -282,6 +297,49 @@ export function ProfileEditSheet({
             onRemove={allergiesHandlers.remove}
             placeholder="Добавить аллергию (запятая или Enter)"
           />
+          {isPremium && (
+            <>
+              <TagListEditor
+                label="Предпочтения в питании"
+                items={preferences}
+                inputValue={preferenceInput}
+                onInputChange={setPreferenceInput}
+                onAdd={preferencesHandlers.add}
+                onEdit={preferencesHandlers.edit}
+                onRemove={preferencesHandlers.remove}
+                placeholder="Например: вегетарианское, быстрые блюда (запятая или Enter)"
+              />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Сложность блюд</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={difficulty === "easy" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setDifficulty("easy")}
+                  >
+                    Простые
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={difficulty === "medium" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setDifficulty("medium")}
+                  >
+                    Средние
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={difficulty === "any" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setDifficulty("any")}
+                  >
+                    Любые
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
         <div className="flex flex-col gap-2 mt-auto pt-2">
           <Button

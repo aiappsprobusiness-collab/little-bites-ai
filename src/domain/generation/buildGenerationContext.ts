@@ -1,8 +1,12 @@
 import type { Family, GenerationContext } from "./types";
 
+/** Trial and premium both get family mode; free does not. */
+function hasPremiumAccess(plan: "free" | "trial" | "premium"): boolean {
+  return plan === "premium" || plan === "trial";
+}
+
 /**
  * Builds a GenerationContext from family, active profile selection, and plan.
- * Not wired into UI or generation yet.
  */
 export function buildGenerationContext(
   family: Family,
@@ -14,7 +18,7 @@ export function buildGenerationContext(
     return { mode: "single", target: profile };
   }
 
-  if (plan !== "premium") {
+  if (!hasPremiumAccess(plan)) {
     const first = family.profiles[0];
     return { mode: "single", target: first };
   }

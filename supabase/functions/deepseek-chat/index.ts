@@ -68,6 +68,8 @@ interface MemberData {
   ageMonths?: number;
   ageDescription?: string;
   allergies?: string[];
+  preferences?: string[];
+  difficulty?: string;
 }
 
 function getCalculatedAge(memberData?: MemberData | null): string {
@@ -143,6 +145,16 @@ function applyPromptTemplate(
   const allergies = allergiesSet.size > 0 ? Array.from(allergiesSet).join(", ") : "не указано";
   const allergiesExclude = allergiesSet.size > 0 ? `ИСКЛЮЧИТЬ (аллергия): ${allergies}.` : "";
 
+  let preferencesSet = new Set<string>();
+  if (targetIsFamily && allMembers.length > 0) {
+    allMembers.forEach((m) => (m as MemberData).preferences?.forEach((p) => p?.trim() && preferencesSet.add(p.trim())));
+  } else if ((primaryMember as MemberData)?.preferences?.length) {
+    (primaryMember as MemberData).preferences!.forEach((p) => p?.trim() && preferencesSet.add(p.trim()));
+  }
+  const preferencesText = preferencesSet.size > 0 ? Array.from(preferencesSet).join(", ") : "не указано";
+  const primaryDifficulty = (primaryMember as MemberData)?.difficulty?.trim();
+  const difficultyText = primaryDifficulty === "easy" ? "Простые" : primaryDifficulty === "medium" ? "Средние" : primaryDifficulty === "any" ? "Любые" : "не указано";
+
   const ageCategory = getAgeCategory(rawMonths === 999 ? 0 : rawMonths);
   const ageRule = ageCategory in AGE_CONTEXTS ? AGE_CONTEXTS[ageCategory as keyof typeof AGE_CONTEXTS] : AGE_CONTEXTS.adult;
   const weekContext = options?.weekContext?.trim() || "";
@@ -177,6 +189,8 @@ function applyPromptTemplate(
     .split("{{ageRule}}").join(ageRule)
     .split("{{allergies}}").join(allergies)
     .split("{{allergiesExclude}}").join(allergiesExclude)
+    .split("{{preferences}}").join(preferencesText)
+    .split("{{difficulty}}").join(difficultyText)
     .split("{{weekContext}}").join(weekContext)
     .split("{{familyContext}}").join(familyContext)
     .split("{{userMessage}}").join(userMessage);
@@ -190,6 +204,8 @@ function applyPromptTemplate(
       [/\{\{\s*ageRule\s*\}\}/g, ageRule],
       [/\{\{\s*allergies\s*\}\}/g, allergies],
       [/\{\{\s*allergiesExclude\s*\}\}/g, allergiesExclude],
+      [/\{\{\s*preferences\s*\}\}/g, preferencesText],
+      [/\{\{\s*difficulty\s*\}\}/g, difficultyText],
       [/\{\{\s*weekContext\s*\}\}/g, weekContext],
       [/\{\{\s*familyContext\s*\}\}/g, familyContext],
       [/\{\{\s*userMessage\s*\}\}/g, userMessage],

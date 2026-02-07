@@ -33,7 +33,9 @@ export function useSubscription() {
   const hasUnlimitedAccess = user?.email && UNLIMITED_ACCESS_EMAILS.includes(user.email);
 
   const status = profileV2?.status ?? "free";
-  const isPremium = status === "premium" || hasUnlimitedAccess;
+  /** Trial and premium both get family mode, multiple profiles, preferences/difficulty. */
+  const hasPremiumAccess = status === "premium" || status === "trial" || hasUnlimitedAccess;
+  const isPremium = hasPremiumAccess;
   const isTrial = status === "trial";
   const usedToday = profileV2?.requests_today ?? 0;
   const dailyLimit = profileV2?.daily_limit ?? 5;
@@ -72,6 +74,7 @@ export function useSubscription() {
 
   return {
     isPremium,
+    hasPremiumAccess,
     isTrial,
     subscriptionStatus: status,
     canGenerate,
