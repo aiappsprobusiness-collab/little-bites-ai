@@ -122,7 +122,7 @@ function applyPromptTemplate(
   memberData: MemberData | null | undefined,
   targetIsFamily: boolean,
   allMembers: MemberData[] = [],
-  options?: { weekContext?: string; userMessage?: string }
+  options?: { weekContext?: string; userMessage?: string; generationContextBlock?: string }
 ): string {
   // Семья: для ageMonths используем самого младшего члена; иначе — выбранный Member
   const youngestMember = targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : null;
@@ -159,6 +159,7 @@ function applyPromptTemplate(
   const ageRule = ageCategory in AGE_CONTEXTS ? AGE_CONTEXTS[ageCategory as keyof typeof AGE_CONTEXTS] : AGE_CONTEXTS.adult;
   const weekContext = options?.weekContext?.trim() || "";
   const userMessage = options?.userMessage?.trim() || "";
+  const generationContextBlock = options?.generationContextBlock?.trim() || "";
 
   const ADULT_AGE_MONTHS = 336; // 28+ лет — взрослое меню
   let familyContext = `Профиль: ${name}`;
@@ -191,6 +192,7 @@ function applyPromptTemplate(
     .split("{{allergiesExclude}}").join(allergiesExclude)
     .split("{{preferences}}").join(preferencesText)
     .split("{{difficulty}}").join(difficultyText)
+    .split("{{generationContextBlock}}").join(generationContextBlock)
     .split("{{weekContext}}").join(weekContext)
     .split("{{familyContext}}").join(familyContext)
     .split("{{userMessage}}").join(userMessage);
@@ -206,6 +208,7 @@ function applyPromptTemplate(
       [/\{\{\s*allergiesExclude\s*\}\}/g, allergiesExclude],
       [/\{\{\s*preferences\s*\}\}/g, preferencesText],
       [/\{\{\s*difficulty\s*\}\}/g, difficultyText],
+      [/\{\{\s*generationContextBlock\s*\}\}/g, generationContextBlock],
       [/\{\{\s*weekContext\s*\}\}/g, weekContext],
       [/\{\{\s*familyContext\s*\}\}/g, familyContext],
       [/\{\{\s*userMessage\s*\}\}/g, userMessage],
@@ -221,10 +224,11 @@ function generateChatSystemPrompt(
   isPremium: boolean,
   memberData: MemberData | null | undefined,
   targetIsFamily: boolean,
-  allMembers: MemberData[] = []
+  allMembers: MemberData[] = [],
+  options?: { generationContextBlock?: string }
 ): string {
   const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
-  return applyPromptTemplate(template, memberData, targetIsFamily, allMembers);
+  return applyPromptTemplate(template, memberData, targetIsFamily, allMembers, options);
 }
 
 function getSystemPromptForType(
@@ -234,20 +238,22 @@ function getSystemPromptForType(
   targetIsFamily: boolean,
   allMembers: MemberData[] = [],
   weekContext?: string,
-  userMessage?: string
+  userMessage?: string,
+  generationContextBlock?: string
 ): string {
+  const genBlockOpt = generationContextBlock?.trim() ? { generationContextBlock: generationContextBlock.trim() } : undefined;
   if (type === "chat") {
-    return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers);
+    return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers, genBlockOpt);
   }
   if (type === "recipe" || type === "diet_plan") {
     const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
-    return applyPromptTemplate(template, memberData, targetIsFamily, allMembers);
+    return applyPromptTemplate(template, memberData, targetIsFamily, allMembers, genBlockOpt);
   }
   if (type === "single_day") {
     const ctx = weekContext?.trim()
       ? `Уже запланировано: ${weekContext.trim()}. Сделай этот день максимально непохожим на уже запланированные.`
       : "";
-    return applyPromptTemplate(SINGLE_DAY_PLAN_TEMPLATE, memberData, targetIsFamily, allMembers, { weekContext: ctx });
+    return applyPromptTemplate(SINGLE_DAY_PLAN_TEMPLATE, memberData, targetIsFamily, allMembers, { weekContext: ctx, ...genBlockOpt });
   }
   if (type === "sos_consultant") {
     return applyPromptTemplate(SOS_PROMPT_TEMPLATE, memberData, false, allMembers, { userMessage: userMessage || "" });
@@ -270,6 +276,8 @@ interface ChatRequest {
   memberId?: string;
   /** Данные всех членов семьи — если переданы, запрос в таблицу members не выполняется */
   allMembers?: MemberData[];
+  /** Structured prompt block from GenerationContext (single/family with age, allergies, preferences, difficulty) */
+  generationContextBlock?: string;
   dayName?: string;
   weekContext?: string;
 }
@@ -387,6 +395,7 @@ serve(async (req) => {
       memberId = body.memberId ?? body.childId,
       dayName,
       weekContext,
+      generationContextBlock: reqGenerationContextBlock,
     } = body;
 
     const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
@@ -535,7 +544,7 @@ serve(async (req) => {
     const promptUserMessage = (type === "sos_consultant" || type === "balance_check") ? userMessage : undefined;
     const cached = getCachedSystemPrompt(type, memberDataForPrompt, isPremiumUser);
     let systemPrompt =
-      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContext, promptUserMessage);
+      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContext, promptUserMessage, reqGenerationContextBlock);
 
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft") {
       systemPrompt = "Ты эксперт по питанию Mom Recipes. Отвечай кратко по вопросу пользователя, без генерации рецепта.";

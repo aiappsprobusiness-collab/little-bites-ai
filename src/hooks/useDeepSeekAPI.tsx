@@ -5,6 +5,7 @@ import { useAuth } from './useAuth';
 import { useFamily } from '@/contexts/FamilyContext';
 import { useSubscription } from './useSubscription';
 import { buildGenerationContext } from '@/domain/generation/buildGenerationContext';
+import { buildPrompt } from '@/domain/generation/buildPrompt';
 import { derivePayloadFromContext } from '@/domain/generation/derivePayloadFromContext';
 import type { Family, Profile } from '@/domain/generation/types';
 import { checkChatAllergyBlock } from '@/utils/chatAllergyCheck';
@@ -120,6 +121,14 @@ export function useDeepSeekAPI() {
         age_months: c.age_months,
         allergies: c.allergies,
       })));
+      const generationContextBlock = buildPrompt(context, freshMembers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        age_months: c.age_months,
+        allergies: c.allergies,
+        preferences: c.preferences,
+        difficulty: c.difficulty,
+      })));
 
       console.log('AI Context Sent:', {
         memberData,
@@ -153,6 +162,7 @@ export function useDeepSeekAPI() {
             targetIsFamily,
             memberId: targetIsFamily ? 'family' : currentSelectedMemberId ?? undefined,
             ...(targetIsFamily && allMembers.length > 0 && { allMembers }),
+            ...(generationContextBlock && { generationContextBlock }),
           }),
         });
       } catch (err) {

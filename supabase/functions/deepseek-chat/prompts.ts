@@ -66,6 +66,7 @@ export const FREE_RECIPE_TEMPLATE = `
 ${SAFETY_RULES}
 ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
 Предпочтения в питании: {{preferences}}. Сложность блюд: {{difficulty}}.
+{{generationContextBlock}}
 
 Ответ — один плоский валидный JSON-объект. В steps — только текст действий, без префиксов «Шаг 1:».
 Поле description — одно короткое предложение (лаконично).
@@ -108,6 +109,7 @@ ${SAFETY_RULES}
 ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
 {{familyContext}}
 Предпочтения в питании: {{preferences}}. Сложность блюд: {{difficulty}}.
+{{generationContextBlock}}
 
 Ответ — один плоский валидный JSON-объект. В steps — только текст действий, без префиксов «Шаг 1:».
 Поле description — кратко о пользе для ребёнка (1–2 строки).
