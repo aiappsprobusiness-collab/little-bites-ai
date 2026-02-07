@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useFamily } from '@/contexts/FamilyContext';
 import { useSubscription } from './useSubscription';
@@ -83,6 +83,7 @@ export function useDeepSeekAPI() {
       overrideSelectedMember,
       overrideMembers,
       onChunk,
+      extraSystemSuffix,
     }: {
       messages: ChatMessage[];
       type?: 'chat' | 'recipe' | 'diet_plan';
@@ -90,6 +91,8 @@ export function useDeepSeekAPI() {
       overrideSelectedMember?: typeof selectedMember;
       overrideMembers?: Array<{ id: string; name: string; age_months?: number | null; allergies?: string[] }>;
       onChunk?: (chunk: string) => void;
+      /** Optional suffix for system prompt (e.g. anti-duplicate hint). */
+      extraSystemSuffix?: string;
     }) => {
       if (!canGenerate) {
         throw new Error('usage_limit_exceeded');
@@ -154,7 +157,8 @@ export function useDeepSeekAPI() {
           signal: chatAbortRef.current.signal,
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '',
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+            ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
           },
           body: JSON.stringify({
             messages,
@@ -166,6 +170,7 @@ export function useDeepSeekAPI() {
             memberId: targetIsFamily ? 'family' : currentSelectedMemberId ?? undefined,
             ...(targetIsFamily && allMembers.length > 0 && { allMembers }),
             ...(generationContextBlock && { generationContextBlock }),
+            ...(extraSystemSuffix && extraSystemSuffix.trim() && { extraSystemSuffix: extraSystemSuffix.trim() }),
           }),
         });
       } catch (err) {
@@ -181,7 +186,9 @@ export function useDeepSeekAPI() {
         if (response.status === 429 && error.error === 'usage_limit_exceeded') {
           throw new Error('usage_limit_exceeded');
         }
-        throw new Error(error.message || 'Ошибка API');
+        const msg = error?.message || error?.error || `HTTP ${response.status}`;
+        console.error('deepseek-chat error:', response.status, error);
+        throw new Error(typeof msg === 'string' ? msg : 'Ошибка API');
       }
 
       const contentType = response.headers.get('Content-Type') || '';
@@ -239,7 +246,8 @@ export function useDeepSeekAPI() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '',
+            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+            ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
           },
           body: JSON.stringify({ imageBase64, mimeType }),
         });

@@ -16,10 +16,11 @@ import {
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 
-const corsHeaders = {
+const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
 };
 
 // ——— Кэш: префикс v_template_system, принудительно отключён ———
@@ -278,11 +279,14 @@ interface ChatRequest {
   allMembers?: MemberData[];
   /** Structured prompt block from GenerationContext (single/family with age, allergies, preferences, difficulty) */
   generationContextBlock?: string;
+  /** Optional suffix appended to system prompt (e.g. anti-duplicate hint) */
+  extraSystemSuffix?: string;
   dayName?: string;
   weekContext?: string;
 }
 
 serve(async (req) => {
+  // CORS preflight: ответить 200 до любой логики, чтобы браузер не блокировал запрос
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
@@ -396,6 +400,7 @@ serve(async (req) => {
       dayName,
       weekContext,
       generationContextBlock: reqGenerationContextBlock,
+      extraSystemSuffix: reqExtraSystemSuffix,
     } = body;
 
     const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
@@ -570,6 +575,11 @@ serve(async (req) => {
         true,
         allMembersForPrompt
       );
+    }
+
+    const extraSuffix = typeof reqExtraSystemSuffix === "string" ? reqExtraSystemSuffix.trim() : "";
+    if (extraSuffix) {
+      systemPrompt += "\n\n" + extraSuffix;
     }
 
     console.log("FINAL_SYSTEM_PROMPT:", systemPrompt);

@@ -17,7 +17,7 @@ function formatDifficulty(d?: string): string {
   return d;
 }
 
-/** One child block in STRICT format for the LLM. */
+/** One child block in STRICT format for the LLM (no extra headers). */
 function profileBlock(p: Profile, lookup?: MemberWithAgeMonths[]): string {
   const ageMonths = getAgeMonths(p, lookup);
   const allergies = (p.allergies ?? []).filter((a) => a?.trim());
@@ -25,7 +25,6 @@ function profileBlock(p: Profile, lookup?: MemberWithAgeMonths[]): string {
   const difficulty = formatDifficulty(p.difficulty) || "any";
 
   const lines: string[] = [
-    `Child:`,
     `- Age: ${ageMonths} months`,
     `- Allergies (STRICT): ${allergies.length ? allergies.join(", ") : "none"}`,
     `- Preferences (STRICT): ${preferences.length ? preferences.join(", ") : "none"}`,
@@ -36,21 +35,25 @@ function profileBlock(p: Profile, lookup?: MemberWithAgeMonths[]): string {
 
 /**
  * Builds a structured prompt context block from GenerationContext for the LLM.
- * Uses STRICT format: Age, Allergies (STRICT), Preferences (STRICT), Difficulty.
- * Single: one child block. Family: list each child then instruction to respect ALL.
+ * Single: "Child:" + one block. Family: "Children:" + "Child 1:", "Child 2:", ... + instruction.
  */
 export function buildPrompt(
   context: GenerationContext,
   membersWithAgeMonths: MemberWithAgeMonths[] = []
 ): string {
   if (context.mode === "single" && context.target) {
-    return profileBlock(context.target, membersWithAgeMonths);
+    const block = profileBlock(context.target, membersWithAgeMonths);
+    return `Child:\n${block}`;
   }
 
   if (context.mode === "family" && context.targets && context.targets.length > 0) {
-    const blocks = context.targets.map((p) => profileBlock(p, membersWithAgeMonths));
+    const childBlocks = context.targets.map((p, i) => {
+      const block = profileBlock(p, membersWithAgeMonths);
+      return `Child ${i + 1}:\n${block}`;
+    });
     const parts: string[] = [
-      ...blocks,
+      "Children:",
+      ...childBlocks,
       "",
       "Generate ONE recipe that is safe and suitable for ALL children above.",
       "You must respect ALL allergies and ALL preferences.",

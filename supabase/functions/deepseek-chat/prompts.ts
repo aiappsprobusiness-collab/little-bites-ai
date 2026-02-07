@@ -4,7 +4,7 @@ export const NO_ARTICLES_RULE = `
 `;
 
 /** Стиль приветствия: профессионально-дружелюбный, без «мамочка». */
-/** export const GREETING_STYLE_RULE = ` *
+export const GREETING_STYLE_RULE = `
 ПРИВЕТСТВИЕ: Если добавляешь приветственный текст перед рецептом или меню, используй форму: «Здравствуйте! Выберите профиль, и я мгновенно подберу идеальный рецепт» или аналогично по смыслу. Не используй «Привет, мамочка!» или подобные обращения.
 `;
 
@@ -29,23 +29,25 @@ export const BALANCE_CHECK_TEMPLATE = `
 `;
 
 
-/** [1] HIGHEST PRIORITY: Must be first in system prompt. Allergies and preferences are absolute. */
+/** [1] Universal semantic constraints: allergies + preferences as strict restrictions. */
 export const STRICT_RULES = `
-STRICT DIETARY RULES (must be followed exactly):
+You MUST strictly follow the child's Allergies and Preferences.
 
-1. ALLERGIES are ABSOLUTE. Any ingredient that matches an allergy MUST NOT appear.
-   - Example: allergy "Молоко" → ЗАПРЕЩЕНО: молоко, творог, сыр, сливочное масло, кефир, сливки, сметана, ряженка.
-   - No exceptions.
+Interpret preferences semantically:
+• "не любит X" / "не ест X" / "не переносит X" → NEVER use X in any form
+• "вегетарианское" → no meat, poultry, fish, seafood
+• "без молочного" → no milk, cheese, yogurt, butter, cream
+• "без мучного" → no flour, bread, pasta, pastries
+• "без сахара" → no sugar or sweeteners
 
-2. PREFERENCE "Вегетарианское" / "вегетарианское" / "не любит мясо" = NO MEAT, NO POULTRY, NO FISH.
-   - ЗАПРЕЩЕНО: мясо, курица, индейка, рыба, морепродукты, колбаса, фарш мясной.
-   - Only plant-based ingredients; eggs allowed if not allergic.
+Preferences are RESTRICTIONS, not mandatory ingredients.
+"Любит рыбу" ≠ you must use fish. It only allows fish.
 
-3. PREFERENCE "не любит X" = ingredient X MUST NOT appear in the recipe.
+Allergies are ABSOLUTE bans.
 
-4. If there is any conflict between creativity and constraints → CONSTRAINTS ALWAYS WIN.
+If constraints conflict with a dish idea — constraints always win.
 
-5. If the recipe violates any allergy or preference rule → The answer is INVALID.
+If unsure → choose the safest plant-based option.
 `;
 
 
@@ -89,7 +91,6 @@ ${SAFETY_RULES}
 ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
 Предпочтения в питании: {{preferences}}. Сложность блюд: {{difficulty}}.
 {{generationContextBlock}}
-ВАЖНО: Соблюдай блок выше. Если в Preferences есть «Вегетарианское» — рецепт БЕЗ мяса, птицы, рыбы. Если в Allergies есть «Молоко» — рецепт БЕЗ молочных продуктов.
 
 [RECIPE TASK]
 ВЫДАВАЙ СТРОГО ВАЛИДНЫЙ JSON. Текст до и после JSON запрещен.
@@ -137,7 +138,6 @@ ${SAFETY_RULES}
 {{familyContext}}
 Предпочтения в питании: {{preferences}}. Сложность блюд: {{difficulty}}.
 {{generationContextBlock}}
-ВАЖНО: Соблюдай блок выше. Если в Preferences есть «Вегетарианское» — рецепт БЕЗ мяса, птицы, рыбы. Если в Allergies есть «Молоко» — рецепт БЕЗ молочных продуктов.
 
 [RECIPE TASK]
 ВЫДАВАЙ СТРОГО ВАЛИДНЫЙ JSON. Текст до и после JSON запрещен.

@@ -78,6 +78,8 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prefillSentRef = useRef(false);
   const prevProfileKeyRef = useRef<string>("");
+  /** Last saved recipe title (for anti-duplicate: retry once if model returns the same). */
+  const lastSavedRecipeTitleRef = useRef<string | null>(null);
 
   // Очищаем сообщения при смене профиля или списка членов семьи
   useEffect(() => {
@@ -157,7 +159,7 @@ export default function ChatPage() {
       const chatMessages = messages.map((m) => ({ role: m.role, content: m.content }));
       chatMessages.push({ role: "user", content: userMessage.content });
 
-      const response = await chat({
+      let response = await chat({
         messages: chatMessages,
         type: "chat",
         overrideSelectedMemberId: selectedMemberId,
@@ -171,9 +173,31 @@ export default function ChatPage() {
           );
         },
       });
-      const rawMessage = typeof response?.message === "string" ? response.message : "";
+      let rawMessage = typeof response?.message === "string" ? response.message : "";
+      let parsed = parseRecipesFromChat(userMessage.content, rawMessage);
 
-      const parsed = parseRecipesFromChat(userMessage.content, rawMessage);
+      const normalizeTitle = (t: string) => t?.trim().toLowerCase() ?? "";
+      const lastSaved = normalizeTitle(lastSavedRecipeTitleRef.current ?? "");
+      let attempt = 1;
+      while (
+        attempt < 2 &&
+        parsed.recipes[0]?.title &&
+        lastSaved &&
+        normalizeTitle(parsed.recipes[0].title) === lastSaved
+      ) {
+        attempt++;
+        response = await chat({
+          messages: chatMessages,
+          type: "chat",
+          overrideSelectedMemberId: selectedMemberId,
+          overrideSelectedMember: selectedMember,
+          overrideMembers: members,
+          extraSystemSuffix: "Previous recipe was duplicated. Generate a DIFFERENT recipe now.",
+        });
+        rawMessage = typeof response?.message === "string" ? response.message : "";
+        parsed = parseRecipesFromChat(userMessage.content, rawMessage);
+      }
+
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMessageId
@@ -197,6 +221,10 @@ export default function ChatPage() {
           mealType,
           parsedResult: parsed,
         });
+
+        if (savedRecipes?.length > 0) {
+          lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
+        }
 
         await saveChat({
           message: userMessage.content,
