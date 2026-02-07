@@ -71,10 +71,14 @@ export function ProfileEditSheet({
   onAddNew,
   onCreated,
 }: ProfileEditSheetProps) {
+  const FAMILY_LIMIT_MESSAGE =
+    "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу";
+
   const { toast } = useToast();
   const { members, updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
   const { isPremium, hasPremiumAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const [name, setName] = useState("");
   const [memberType, setMemberType] = useState<MemberTypeV2>("child");
   const [ageYears, setAgeYears] = useState(0);
@@ -132,6 +136,7 @@ export function ProfileEditSheet({
     ...baseAllergiesHandlers,
     add: (raw: string) => {
       if (!isPremium && allergies.length >= 1) {
+        setPaywallCustomMessage(FAMILY_LIMIT_MESSAGE);
         setShowPaywall(true);
         return;
       }
@@ -143,6 +148,7 @@ export function ProfileEditSheet({
   const handleSave = async () => {
     if (isCreate) {
       if (!hasPremiumAccess && members.length >= 1) {
+        setPaywallCustomMessage(FAMILY_LIMIT_MESSAGE);
         setShowPaywall(true);
         return;
       }

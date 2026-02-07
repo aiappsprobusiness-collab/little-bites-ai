@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
+import { FamilyOnboarding } from "@/components/onboarding/FamilyOnboarding";
 import { ArticleReaderModal } from "@/components/articles/ArticleReaderModal";
 import { useArticle } from "@/hooks/useArticles";
 import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
@@ -61,7 +62,7 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
-  const { canGenerate, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus } = useSubscription();
+  const { canGenerate, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining } = useSubscription();
   const isFree = subscriptionStatus === "free";
   const { chat, abortChat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage } = useChatHistory();
@@ -415,6 +416,13 @@ export default function ChatPage() {
             )}
           </div>
         </div>
+        {isTrial && trialDaysRemaining !== null && (
+          <div className="container mx-auto px-3 sm:px-4 pb-1.5 max-w-full">
+            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+              Trial: осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
+            </p>
+          </div>
+        )}
         {isFree && (
           <div className="container mx-auto px-3 sm:px-4 pb-1.5 max-w-full">
             <p className="text-[11px] text-muted-foreground/80">
@@ -429,26 +437,7 @@ export default function ChatPage() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-5 space-y-5 pb-4">
           {!isLoadingMembers && members.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center py-8 px-4 text-center"
-            >
-              <div className="rounded-2xl px-5 py-6 bg-slate-50/90 border border-slate-200/40 max-w-[320px] space-y-4">
-                <p className="text-base text-foreground leading-relaxed">
-                  Добро пожаловать! Давайте создадим первый профиль члена семьи, чтобы я мог подбирать рецепты персонально.
-                </p>
-                <Button
-                  onClick={() => {
-                    setSheetCreateMode(true);
-                    setShowProfileSheet(true);
-                  }}
-                  className="w-full"
-                >
-                  Создать профиль
-                </Button>
-              </div>
-            </motion.div>
+            <FamilyOnboarding onComplete={() => {}} />
           )}
 
           {showStarter && !hasUserMessage && members.length > 0 && (

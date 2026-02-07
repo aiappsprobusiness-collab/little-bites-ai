@@ -84,8 +84,8 @@ export function BottomNavigation() {
           {LEFT_TABS.map(renderTab)}
         </div>
 
-        {/* Центральная FAB: строго над таббаром по центру, фиксированная позиция */}
-        <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 z-[999] flex items-center justify-center pointer-events-auto w-14 h-14">
+        {/* Центральная FAB: в центре таббара, без выхода за пределы */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[999] flex items-center justify-center pointer-events-auto w-14 h-14">
           <motion.button
             onClick={handleSosClick}
             className="w-14 h-14 flex items-center justify-center rounded-full text-white transition-transform hover:scale-105 active:scale-95"

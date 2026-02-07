@@ -67,6 +67,7 @@ public class SpeechRecognitionPlugin extends Plugin {
             startActivityForResult(call, intent, REQUEST_CODE_SPEECH_INPUT);
         } catch (Exception e) {
             call.reject("Failed to start speech recognition: " + e.getMessage());
+            currentCall = null;
         }
     }
 

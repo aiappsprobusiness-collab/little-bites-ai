@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Sparkles, Crown, Check, Zap } from "lucide-react";
+import { X, Crown, Check, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { useAppStore } from "@/store/useAppStore";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface PaywallProps {
   isOpen: boolean;
@@ -9,20 +11,38 @@ interface PaywallProps {
   onSubscribe?: () => void;
 }
 
-const features = [
-  { icon: "🤖", text: "Безлимитный AI-ассистент" },
-  { icon: "👨‍👩‍👧‍👦", text: "До 10 профилей в семье" },
-  { icon: "🥗", text: "Рецепты под аллергии и предпочтения" },
-  { icon: "📅", text: "Недельные планы питания" },
-  { icon: "💬", text: "24/7 помощь в чате" },
-];
+const FEATURES = [
+  "До 10 профилей в семье",
+  "Рецепты под аллергии и предпочтения",
+  "Один рецепт сразу для всей семьи",
+  "Недельные планы питания",
+  "Безлимитный AI-помощник",
+] as const;
 
 export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
+  const paywallCustomMessage = useAppStore((s) => s.paywallCustomMessage);
+  const { subscriptionStatus, startPayment, isStartingPayment } = useSubscription();
+  const [pricingOption, setPricingOption] = useState<"month" | "year">("year");
+
   const handleSubscribe = () => {
-    // TODO: Интеграция с RevenueCat
     onSubscribe?.();
     onClose();
   };
+
+  const handlePayPremium = () => {
+    startPayment(pricingOption).catch(() => {});
+  };
+
+  const handleContinueFree = () => {
+    onClose();
+  };
+
+  const handleManageSubscription = () => {
+    // TODO: Открыть управление подпиской (RevenueCat / App Store)
+    onClose();
+  };
+
+  const isPremium = subscriptionStatus === "premium";
 
   return (
     <AnimatePresence>
@@ -39,109 +59,148 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="w-full max-w-md bg-gradient-to-b from-background to-secondary/30 rounded-t-3xl sm:rounded-3xl p-6 pb-safe"
+            className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-gradient-to-b from-background via-background to-secondary/20 rounded-t-3xl sm:rounded-3xl p-6 pb-safe shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Close button */}
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-2 rounded-full bg-muted/50 hover:bg-muted transition-colors"
+              className="absolute top-4 right-4 p-2 rounded-full bg-muted/50 hover:bg-muted transition-colors z-10"
+              aria-label="Закрыть"
             >
               <X className="w-5 h-5" />
             </button>
 
-            {/* Crown icon */}
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: "spring" }}
-              className="flex justify-center mb-6"
-            >
-              <div className="relative">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
-                  <Crown className="w-10 h-10 text-white" />
-                </div>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0"
-                >
-                  {[...Array(6)].map((_, i) => (
-                    <Sparkles
-                      key={i}
-                      className="absolute w-4 h-4 text-amber-400"
-                      style={{
-                        top: `${50 - 45 * Math.cos((i * Math.PI * 2) / 6)}%`,
-                        left: `${50 + 45 * Math.sin((i * Math.PI * 2) / 6)}%`,
-                        transform: "translate(-50%, -50%)",
-                      }}
-                    />
-                  ))}
-                </motion.div>
+            {/* Custom message (upsell из онбординга или при лимитах) */}
+            {paywallCustomMessage && (
+              <div className="mb-4 p-4 rounded-xl bg-primary/10 border border-primary/20">
+                <p className="text-sm font-medium text-foreground text-center leading-relaxed">
+                  {paywallCustomMessage}
+                </p>
               </div>
-            </motion.div>
+            )}
+
+            {/* Crown / Premium icon — тёплый, заботливый */}
+            <div className="flex justify-center mb-5">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Crown className="w-8 h-8 text-white" />
+              </div>
+            </div>
 
             {/* Title */}
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold mb-2">
+            <div className="text-center mb-5">
+              <h2 className="text-xl sm:text-2xl font-bold mb-2 text-foreground">
                 Mama Premium — забота о семье на автопилоте
               </h2>
-              <p className="text-muted-foreground text-sm">
+              <p className="text-muted-foreground text-sm leading-relaxed">
                 Персональные рецепты, планы питания и ИИ-помощник для всей семьи.
               </p>
             </div>
 
-            {/* Features */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              {features.map((feature, index) => (
+            {/* Features — чекмарки, тёплый тон */}
+            <div className="space-y-3 mb-6">
+              {FEATURES.map((text, index) => (
                 <motion.div
-                  key={feature.text}
-                  initial={{ opacity: 0, x: -20 }}
+                  key={text}
+                  initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 * index }}
-                  className="flex items-center gap-2 text-sm"
+                  transition={{ delay: 0.05 * index }}
+                  className="flex items-center gap-3 text-sm"
                 >
-                  <span className="text-lg">{feature.icon}</span>
-                  <span>{feature.text}</span>
+                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                    <Check className="w-3 h-3 text-primary" />
+                  </div>
+                  <span className="text-foreground">{text}</span>
                 </motion.div>
               ))}
             </div>
 
-            {/* Pricing */}
-            <Card variant="elevated" className="mb-6">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-lg">299 ₽ / месяц</p>
-                    <p className="text-sm text-muted-foreground">
-                      или 3000 ₽ / год
+            {!isPremium && (
+              <>
+                {/* Pricing */}
+                <div className="rounded-2xl border border-border bg-card/50 p-4 mb-5 space-y-3">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPricingOption("month")}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                        pricingOption === "month"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      299 ₽ / месяц
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPricingOption("year")}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                        pricingOption === "year"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                      }`}
+                    >
+                      2 999 ₽ / год
+                    </button>
+                  </div>
+                  {pricingOption === "year" && (
+                    <p className="text-xs text-center text-muted-foreground">
+                      Экономия ~17% · 250 ₽/месяц
                     </p>
-                  </div>
-                  <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">
-                    Популярный
-                  </div>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* CTA Button */}
-            <Button
-              variant="mint"
-              size="xl"
-              className="w-full mb-4"
-              onClick={handleSubscribe}
-            >
-              <Zap className="w-5 h-5 mr-2" />
-              Попробовать бесплатно 7 дней
-            </Button>
+                {/* CTA: Trial */}
+                <Button
+                  variant="default"
+                  size="lg"
+                  className="w-full mb-3 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl"
+                  onClick={handleSubscribe}
+                >
+                  <Heart className="w-5 h-5 mr-2" />
+                  Попробовать бесплатно 7 дней
+                </Button>
 
-            {/* Terms */}
-            <p className="text-xs text-center text-muted-foreground">
-              Отменить подписку можно в любое время. Подробнее в{" "}
-              <a href="#" className="underline">
-                условиях использования
-              </a>
-              .
+                {/* CTA: Continue with Premium (month/year) — редирект на Т-Банк */}
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full mb-3 h-11 rounded-xl"
+                  onClick={handlePayPremium}
+                  disabled={isStartingPayment}
+                >
+                  {isStartingPayment ? "Перенаправление…" : `Продолжить с Premium — ${pricingOption === "month" ? "299 ₽/мес" : "2 999 ₽/год"}`}
+                </Button>
+
+                {/* CTA: Continue with Free */}
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  className="w-full h-11 text-muted-foreground hover:text-foreground rounded-xl"
+                  onClick={handleContinueFree}
+                >
+                  Продолжить с Free
+                </Button>
+              </>
+            )}
+
+            {isPremium && (
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full h-12 rounded-xl"
+                onClick={handleManageSubscription}
+              >
+                Управлять подпиской
+              </Button>
+            )}
+
+            {/* Legal */}
+            <p className="text-xs text-center text-muted-foreground mt-5">
+              Оплачивая подписку, вы соглашаетесь с{" "}
+              <a href="/terms" className="underline hover:text-foreground">Пользовательским соглашением</a>,{" "}
+              <a href="/privacy" className="underline hover:text-foreground">Политикой конфиденциальности</a> и{" "}
+              <a href="/subscription" className="underline hover:text-foreground">Условиями подписки</a>.
             </p>
           </motion.div>
         </motion.div>

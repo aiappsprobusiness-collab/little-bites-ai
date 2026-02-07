@@ -50,8 +50,8 @@ function isApiRequest(request) {
   const u = new URL(request.url);
   return (
     u.pathname.startsWith("/api") ||
-    /\.supabase\.co\//.test(u.host) ||
-    /functions\.supabase\.co\//.test(u.host)
+    /\.supabase\.co$/.test(u.host) ||
+    /functions\.supabase\.co$/.test(u.host)
   );
 }
 

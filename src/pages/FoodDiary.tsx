@@ -1,7 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useAppStore } from "@/store/useAppStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,6 +17,19 @@ export default function FoodDiary() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { session, user } = useAuth();
+  const { subscriptionStatus } = useSubscription();
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const isFree = subscriptionStatus === "free";
+
+  // Free: при открытии дневника — показываем Paywall
+  useEffect(() => {
+    if (isFree) {
+      setPaywallCustomMessage("Готовьте для всех детей сразу с Premium — дневник и анализ тарелки.");
+      setShowPaywall(true);
+    }
+    return () => setPaywallCustomMessage(null);
+  }, [isFree, setShowPaywall, setPaywallCustomMessage]);
   const { selectedMember, members } = useFamily();
   const { logs, isLoading: logsLoading } = usePlateLogs(30);
   const [input, setInput] = useState("");

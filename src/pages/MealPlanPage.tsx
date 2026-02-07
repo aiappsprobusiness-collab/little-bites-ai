@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,7 +43,17 @@ export default function MealPlanPage() {
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isMembersLoading } = useFamily();
   const { subscriptionStatus } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const isFree = subscriptionStatus === "free";
+
+  // Free: при открытии плана питания — показываем Paywall
+  useEffect(() => {
+    if (isFree) {
+      setPaywallCustomMessage("Экономьте время с семейным режимом и недельными планами питания.");
+      setShowPaywall(true);
+    }
+    return () => setPaywallCustomMessage(null);
+  }, [isFree, setShowPaywall, setPaywallCustomMessage]);
   const isFamilyMode = !isFree && selectedMemberId === "family";
   const mealPlanMemberId = isFree && selectedMemberId === "family"
     ? (members[0]?.id ?? undefined)

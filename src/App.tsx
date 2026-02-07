@@ -22,6 +22,9 @@ import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import NotFound from "./pages/NotFound";
+import Terms from "./pages/legal/Terms";
+import Privacy from "./pages/legal/Privacy";
+import Subscription from "./pages/legal/Subscription";
 import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
@@ -189,6 +192,9 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/subscription" element={<Subscription />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

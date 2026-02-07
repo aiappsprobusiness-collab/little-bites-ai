@@ -18,6 +18,7 @@ import {
   type IngredientWithSubstitute,
 } from "@/utils/parseChatRecipes";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAppStore } from "@/store/useAppStore";
 import {
   Tooltip,
   TooltipContent,
@@ -491,9 +492,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
   ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, onDelete, memberId, memberName, onOpenArticle }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const { user } = useAuth();
-    const { isPremium, isTrial } = useSubscription();
+    const { isPremium, isTrial, favoritesLimit } = useSubscription();
     const showChefTip = isPremium || isTrial;
     const { favorites, addFavorite, removeFavorite, isAdding, isRemoving } = useFavorites();
+    const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+    const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
     const { toast } = useToast();
 
     const sourceForParse = (rawContent ?? content).trim();
@@ -526,6 +529,12 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           console.error("DB Error in ChatMessage removeFavorite:", (e as Error).message);
           toast({ title: "Не удалось удалить из избранного", variant: "destructive" });
         }
+        return;
+      }
+      // Free: лимит 10 избранных
+      if (!showChefTip && favorites.length >= (favoritesLimit ?? 10)) {
+        setPaywallCustomMessage("Добавьте всю семью в Premium — безлимитное избранное и история.");
+        setShowPaywall(true);
         return;
       }
       const recipeSuggestion: RecipeSuggestion = {
