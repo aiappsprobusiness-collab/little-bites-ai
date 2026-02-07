@@ -125,7 +125,7 @@ export default function RecipePage() {
                     const amount = (ing as { amount?: number | null }).amount;
                     const unit = (ing as { unit?: string }).unit?.trim() || "";
                     const text = isStr ? name : (unit ? `${name} ${amount ?? ""} ${unit}`.trim() : name);
-                    const hasSubstitute = !!(ing as { substitute?: string }).substitute?.trim();
+                    const hasSubstitute = isPremium && !!(ing as { substitute?: string }).substitute?.trim();
                     return (
                       <li key={index} className="flex items-center justify-between gap-2">
                         <span>{text}</span>

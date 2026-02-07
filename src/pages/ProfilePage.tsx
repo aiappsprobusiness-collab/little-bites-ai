@@ -1,619 +1,217 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
-import { Baby, Plus, Edit2, AlertTriangle, ChefHat, Heart, Calendar, Loader2, X, LogOut, ChevronDown } from "lucide-react";
+import { Plus, Settings, LogOut, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
-import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
-import { useRecipes } from "@/hooks/useRecipes";
-import { useMealPlans } from "@/hooks/useMealPlans";
-import { useToast } from "@/hooks/use-toast";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useAppStore } from "@/store/useAppStore";
+import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
-import { ensureStringArray } from "@/utils/typeUtils";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
-function memberAvatar(_member: MembersRow, index: number): React.ReactNode {
-  return <span className="text-2xl">{VEGETABLE_EMOJIS[index % VEGETABLE_EMOJIS.length]}</span>;
+
+function memberAvatar(_member: MembersRow, index: number): string {
+  return VEGETABLE_EMOJIS[index % VEGETABLE_EMOJIS.length];
 }
 
-const allergyOptions = [
-  "Молоко", "Яйца", "Глютен", "Орехи", "Соя", "Рыба", "Мед", "Цитрусы"
-];
+const STATUS_LABEL: Record<string, string> = {
+  free: "Free",
+  trial: "Trial",
+  premium: "Premium",
+};
+
+const MEMBER_TYPE_LABEL: Record<string, string> = {
+  child: "Ребёнок",
+  adult: "Взрослый",
+  family: "Семья",
+};
 
 export default function ProfilePage() {
-  const { toast } = useToast();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const { members, isLoading, formatAge, selectedMemberId, setSelectedMemberId, selectedMember } = useFamily();
-  const { createMember, updateMember, deleteMember, isCreating, isUpdating } = useMembers();
-  const { recipes } = useRecipes();
-  const { getMealPlans } = useMealPlans();
+  const { members, isLoading, formatAge, selectedMember, setSelectedMemberId } = useFamily();
+  const { subscriptionStatus, hasPremiumAccess } = useSubscription();
+  const [showMemberSheet, setShowMemberSheet] = useState(false);
 
-  const [displayName, setDisplayName] = useState(user?.email?.split("@")[0] ?? "");
+  const displayName = user?.email?.split("@")[0] ?? "Пользователь";
+  const statusLabel = STATUS_LABEL[subscriptionStatus] ?? "Free";
 
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingMember, setEditingMember] = useState<MembersRow | null>(null);
-  const [showProfileSheet, setShowProfileSheet] = useState(false);
-  const [sheetMember, setSheetMember] = useState<MembersRow | null>(null);
-  const [sheetCreateMode, setSheetCreateMode] = useState(false);
-
-  const recipesList = Array.isArray(recipes) ? recipes as { child_id?: string | null; is_favorite?: boolean }[] : [];
-  const memberRecipes = selectedMember ? recipesList.filter((r) => r.child_id === selectedMember.id) : [];
-  const favoriteRecipes = memberRecipes.filter((r) => r.is_favorite).length;
-
-  const today = new Date();
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay() + 1);
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  const { data: mealPlans = [] } = getMealPlans(weekStart, weekEnd);
-  const memberMealPlans = selectedMember ? mealPlans.filter((mp: { child_id?: string | null }) => mp.child_id === selectedMember.id) : [];
-
-
-  const handleCreateMember = () => {
-    setEditingMember(null);
-    setIsEditDialogOpen(true);
-  };
-
-  const handleEditMember = (member: MembersRow) => {
-    setEditingMember(member);
-    setIsEditDialogOpen(true);
-  };
-
-  const handleSaveMember = async (formData: {
-    name: string;
-    birthDate: string;
-    allergies: string[];
-  }) => {
-    try {
-      const allergiesArray = Array.isArray(formData.allergies) ? formData.allergies.filter(a => a?.trim()) : [];
-
-      const ageMonths = formData.birthDate ? Math.max(0, birthDateToAgeMonths(formData.birthDate)) : null;
-      if (editingMember) {
-        await updateMember({
-          id: editingMember.id,
-          name: formData.name,
-          age_months: ageMonths,
-          allergies: allergiesArray,
-        });
-        toast({ title: "Профиль обновлен", description: "Данные сохранены" });
-      } else {
-        const newMember = await createMember({
-          name: formData.name,
-          type: "child",
-          age_months: ageMonths,
-          allergies: allergiesArray,
-        });
-        setSelectedMemberId(newMember.id);
-        toast({ title: "Профиль добавлен", description: "Профиль успешно создан" });
-      }
-      setIsEditDialogOpen(false);
-      setEditingMember(null);
-    } catch (error: unknown) {
-      console.error("SYNC ERROR:", (error as Error).message, (error as Error).message);
-      toast({
-        variant: "destructive",
-        title: "Ошибка",
-        description: (error as Error).message || "Не удалось сохранить данные",
-      });
-    }
-  };
-
-  const handleDeleteMember = async (id: string) => {
-    if (!confirm("Вы уверены, что хотите удалить профиль?")) return;
-
-    try {
-      await deleteMember(id);
-      if (selectedMemberId === id) {
-        setSelectedMemberId(members.find(c => c.id !== id)?.id || null);
-      }
-      toast({
-        title: "Профиль удален",
-        description: "Профиль ребенка успешно удален",
-      });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Ошибка",
-        description: error.message || "Не удалось удалить профиль",
-      });
-    }
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/auth", { replace: true });
   };
 
   if (isLoading) {
     return (
-      <MobileLayout title="Семья">
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      <MobileLayout
+        title="Профиль"
+        headerRight={
+          <Button variant="ghost" size="icon" className="h-10 w-10" disabled>
+            <Settings className="h-5 w-5" />
+          </Button>
+        }
+      >
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
       </MobileLayout>
     );
   }
 
   return (
-    <MobileLayout title="Профиль">
-      <div className="px-4 pt-6 space-y-6">
-        {/* Top: Имя (редактируемое) + Email (только чтение) */}
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
-            <Input
-              id="profile-name"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Ваше имя"
-              className="h-11 border-2"
-              readOnly
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Email</Label>
-            <p className="text-sm text-muted-foreground" aria-readonly>{user?.email ?? ""}</p>
-          </div>
-        </div>
-
-        {/* Моя семья: чипсы + Добавить + Редактировать (ProfileEditSheet из ЧАТА) */}
-        <Collapsible defaultOpen>
-          <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3 text-left font-medium">
-            <span>Моя семья</span>
-            <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="flex flex-wrap gap-2 pt-3 pb-2">
-              {members.map((member, index) => (
-                <motion.button
-                  key={member.id}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    setSelectedMemberId(member.id);
-                    setSheetMember(member);
-                    setSheetCreateMode(false);
-                    setShowProfileSheet(true);
-                  }}
-                  className={`flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${selectedMemberId === member.id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"}`}
-                >
-                  {memberAvatar(member, index)}
-                  <span className="font-medium">{member.name}</span>
-                  <span className="text-xs opacity-80">{formatAge(member.age_months ?? null)}</span>
-                </motion.button>
-              ))}
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  setSheetCreateMode(true);
-                  setSheetMember(null);
-                  setShowProfileSheet(true);
-                }}
-                className="flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-xl border-2 border-dashed border-muted-foreground/30 bg-muted/50"
-              >
-                <Plus className="w-5 h-5 text-muted-foreground" />
-                <span className="text-sm font-medium">Добавить</span>
-              </motion.button>
+    <MobileLayout
+      title="Профиль"
+      headerRight={
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 rounded-full"
+          aria-label="Настройки"
+        >
+          <Settings className="h-5 w-5" />
+        </Button>
+      }
+    >
+      <div className="px-4 py-6 space-y-8">
+        {/* Секция: Аккаунт */}
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
+          <h3 className="text-base font-semibold text-foreground">Аккаунт</h3>
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl border-2 border-background shrink-0">
+              {displayName.charAt(0).toUpperCase()}
             </div>
-            {members.length > 0 && selectedMember && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="mb-2"
-                onClick={() => {
-                  setSheetMember(selectedMember);
-                  setSheetCreateMode(false);
-                  setShowProfileSheet(true);
-                }}
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground truncate">{displayName}</p>
+              <p className="text-sm text-muted-foreground">
+                Статус: <span className="font-medium text-foreground">{statusLabel}</span>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Секция: Моя семья */}
+        <section className="space-y-4">
+          <h3 className="text-base font-semibold text-foreground">Моя семья</h3>
+          <div className="space-y-3">
+            {members.map((member, index) => (
+              <motion.div
+                key={member.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="rounded-2xl border border-border bg-card p-4 shadow-sm"
               >
-                <Edit2 className="w-4 h-4 mr-2" />
-                Редактировать
-              </Button>
-            )}
-          </CollapsibleContent>
-        </Collapsible>
-
-        <ProfileEditSheet
-          open={showProfileSheet}
-          onOpenChange={setShowProfileSheet}
-          member={sheetMember}
-          createMode={sheetCreateMode}
-          onAddNew={() => {
-            setSheetCreateMode(true);
-            setSheetMember(null);
-            setShowProfileSheet(true);
-          }}
-          onCreated={(id) => setSelectedMemberId(id)}
-        />
-
-        {selectedMember ? (
-          <>
-            {/* Profile Card */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <Card variant="elevated" className="overflow-hidden">
-                <div className="h-24 gradient-primary" />
-                <CardContent className="relative pt-0">
-                  <div className="absolute -top-12 left-1/2 -translate-x-1/2">
-                    <div className="w-24 h-24 rounded-3xl bg-card shadow-card flex items-center justify-center text-5xl border-4 border-card overflow-hidden">
-                      <span>{VEGETABLE_EMOJIS[members.findIndex((m) => m.id === selectedMember.id) % VEGETABLE_EMOJIS.length]}</span>
-                    </div>
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-2xl shrink-0">
+                    {memberAvatar(member, index)}
                   </div>
-                  <div className="pt-14 text-center">
-                    <h2 className="text-2xl font-bold">{selectedMember.name}</h2>
-                    <p className="text-muted-foreground flex items-center justify-center gap-2 mt-1">
-                      <Baby className="w-4 h-4" />
-                      {formatAge(selectedMember.age_months ?? null)}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-foreground">
+                      {member.name}
+                      <span className="text-muted-foreground font-normal text-sm ml-1.5">
+                        {[MEMBER_TYPE_LABEL[(member as MembersRow).type] ?? (member as MembersRow).type, formatAge(member.age_months ?? null)].filter(Boolean).join(" · ")}
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {[
+                        (member.allergies?.length && `Аллергии: ${(member.allergies as string[]).join(", ")}`) || "",
+                        (member.preferences?.length && `Предпочтения: ${(member.preferences as string[]).join(", ")}`) || "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Нет ограничений"}
                     </p>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="mt-2"
-                      onClick={() => selectedMember && (setSheetMember(selectedMember), setSheetCreateMode(false), setShowProfileSheet(true))}
+                      className="mt-2 -ml-2 h-8 text-primary"
+                      onClick={() => navigate(`/profile/child/${member.id}`)}
                     >
-                      <Edit2 className="w-4 h-4 mr-2" />
                       Редактировать
+                      <ChevronRight className="h-4 w-4 ml-0.5" />
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Stats */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
+                </div>
+              </motion.div>
+            ))}
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="grid grid-cols-3 gap-3"
+              transition={{ delay: members.length * 0.05 }}
+              onClick={() => {
+                if (!hasPremiumAccess && members.length >= 1) {
+                  useAppStore.getState().setShowPaywall(true);
+                  return;
+                }
+                setShowMemberSheet(true);
+              }}
+              className="w-full rounded-2xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4 flex items-center justify-center gap-2 text-muted-foreground hover:bg-muted/50 hover:border-muted-foreground/50 transition-colors"
             >
-              {[
-                { icon: ChefHat, label: "Рецепты", value: memberRecipes.length, color: "mint" },
-                { icon: Heart, label: "Избранное", value: favoriteRecipes, color: "peach" },
-                { icon: Calendar, label: "Запланировано", value: memberMealPlans.length, color: "lavender" },
-              ].map((stat) => (
-                <Card key={stat.label} variant={stat.color as any} className="text-center">
-                  <CardContent className="p-4">
-                    <stat.icon className="w-6 h-6 mx-auto mb-2 opacity-80" />
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </motion.div>
+              <Plus className="h-5 w-5" />
+              <span className="font-medium">Добавить члена семьи</span>
+            </motion.button>
+          </div>
+        </section>
 
-            {/* Allergies */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card variant="default">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5 text-destructive" />
-                      <h3 className="font-bold">Аллергии и ограничения</h3>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => selectedMember && (setSheetMember(selectedMember), setSheetCreateMode(false), setShowProfileSheet(true))}
-                    >
-                      <Edit2 className="w-4 h-4 mr-1" />
-                      Редактировать
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {Array.isArray(selectedMember.allergies) && selectedMember.allergies.length > 0 ? (
-                      selectedMember.allergies.map((allergy) => (
-                        <span
-                          key={allergy}
-                          className="px-3 py-1.5 rounded-full bg-destructive/10 text-destructive text-sm font-medium"
-                        >
-                          {allergy}
-                        </span>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Нет аллергий</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Delete Button */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
+        {/* Секция: Выбранный профиль (для чата) */}
+        {members.length > 0 && (
+          <section className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
+            <h3 className="text-base font-semibold text-foreground">Выбранный профиль</h3>
+            <p className="text-sm text-muted-foreground">
+              В чате готовим для:{" "}
+              <span className="font-medium text-foreground">
+                {selectedMember?.name ?? "Семья"}
+              </span>
+            </p>
+            {members.length > 1 && (
               <Button
-                variant="destructive"
-                className="w-full"
-                onClick={() => selectedMember && handleDeleteMember(selectedMember.id)}
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const next = members.find((m) => m.id !== selectedMember?.id);
+                  if (next) setSelectedMemberId(next.id);
+                }}
               >
-                Удалить профиль
+                Сменить профиль
               </Button>
-            </motion.div>
-          </>
-        ) : (
-          <Card variant="default" className="p-8 text-center">
-            <CardContent className="p-0">
-              <Baby className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-bold mb-2">Нет профилей детей</h3>
-              <p className="text-muted-foreground mb-4">
-                Добавьте профиль ребенка, чтобы начать использовать приложение
-              </p>
-              <Button
-                variant="mint"
-                onClick={() => (setSheetCreateMode(true), setSheetMember(null), setShowProfileSheet(true))}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Добавить ребенка
-              </Button>
-            </CardContent>
-          </Card>
+            )}
+          </section>
         )}
 
-        {/* Выйти из аккаунта */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.35 }}
-          className="pt-4 pb-8"
-        >
+        {/* Секция: Управление */}
+        <section className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
+          <h3 className="text-base font-semibold text-foreground">Управление</h3>
+          <p className="text-sm text-muted-foreground">
+            Текущий план: <span className="font-medium text-foreground">{statusLabel}</span>
+          </p>
           <Button
             variant="outline"
-            className="w-full text-muted-foreground border-muted-foreground/30"
-            onClick={async () => {
-              await signOut();
-              navigate("/auth", { replace: true });
-            }}
+            className="w-full"
+            onClick={() => useAppStore.getState().setShowPaywall(true)}
           >
-            <LogOut className="w-4 h-4 mr-2" />
+            Управлять подпиской
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full text-muted-foreground"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
             Выйти из аккаунта
           </Button>
-        </motion.div>
+        </section>
       </div>
+
+      <ProfileEditSheet
+        open={showMemberSheet}
+        onOpenChange={setShowMemberSheet}
+        member={null}
+        createMode={true}
+        onCreated={() => setShowMemberSheet(false)}
+      />
     </MobileLayout>
-  );
-}
-
-// Компонент диалога для создания/редактирования ребенка
-function birthDateFromYearsMonths(years: number, months: number): string {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - years);
-  d.setMonth(d.getMonth() - months);
-  return d.toISOString().slice(0, 10);
-}
-
-function MemberEditDialog({
-  member,
-  onSave,
-  isLoading,
-}: {
-  member: MembersRow | null;
-  onSave: (data: {
-    name: string;
-    birthDate: string;
-    allergies: string[];
-  }) => void;
-  isLoading: boolean;
-}) {
-  const [name, setName] = useState(member?.name || "");
-  const [allergies, setAllergies] = useState<string[]>(() => ensureStringArray(member?.allergies));
-  const [ageYears, setAgeYears] = useState(0);
-  const [ageMonths, setAgeMonths] = useState(0);
-  const [newAllergy, setNewAllergy] = useState("");
-
-  const birthDateToYearsMonths = (birthDate: string): { years: number; months: number } => {
-    if (!birthDate || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate)) return { years: 0, months: 0 };
-    const birth = new Date(birthDate);
-    const now = new Date();
-    let months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
-    if (now.getDate() < birth.getDate()) months--;
-    return { years: Math.floor(months / 12), months: months % 12 };
-  };
-
-  useEffect(() => {
-    if (member) {
-      setName(member.name || "");
-      const total = member.age_months ?? 0;
-      setAgeYears(Math.floor(total / 12));
-      setAgeMonths(total % 12);
-      setAllergies(ensureStringArray(member.allergies));
-    } else {
-      setName("");
-      setAgeYears(0);
-      setAgeMonths(0);
-      setAllergies([]);
-    }
-    setNewAllergy("");
-  }, [member]);
-
-  const toggleAllergy = (allergy: string) => {
-    setAllergies((prev) =>
-      prev.includes(allergy) ? prev.filter((a) => a !== allergy) : [...prev, allergy]
-    );
-  };
-
-  const addCustomAllergy = () => {
-    const trimmed = newAllergy.trim();
-    if (trimmed && !allergies.includes(trimmed)) {
-      setAllergies([...allergies, trimmed]);
-      setNewAllergy("");
-    }
-  };
-
-  const removeAllergy = (allergy: string) => {
-    setAllergies(allergies.filter((a) => a !== allergy));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const allergiesArray = Array.isArray(allergies) ? allergies.filter(a => a?.trim()) : [];
-    const birthDateToSave = birthDateFromYearsMonths(ageYears, ageMonths);
-    onSave({
-      name,
-      birthDate: birthDateToSave,
-      allergies: allergiesArray,
-    });
-  };
-
-  return (
-    <DialogContent className="max-h-[90vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>{member ? "Редактировать профиль" : "Добавить члена семьи"}</DialogTitle>
-        <DialogDescription>
-          {member
-            ? "Обновите информацию"
-            : "Создайте профиль для члена семьи"}
-        </DialogDescription>
-      </DialogHeader>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">Имя</Label>
-          <Input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            placeholder="Введите имя"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="ageYears">Возраст: годы</Label>
-            <Input
-              id="ageYears"
-              type="number"
-              min={0}
-              max={20}
-              value={ageYears === 0 ? "" : ageYears}
-              onChange={(e) => setAgeYears(Math.max(0, parseInt(e.target.value, 10) || 0))}
-              placeholder="0"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="ageMonths">Месяцы (0–11)</Label>
-            <Input
-              id="ageMonths"
-              type="number"
-              min={0}
-              max={11}
-              value={ageMonths === 0 ? "" : ageMonths}
-              onChange={(e) => setAgeMonths(Math.max(0, Math.min(11, parseInt(e.target.value, 10) || 0)))}
-              placeholder="0"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Аллергии и ограничения</Label>
-
-          {/* Предустановленные аллергии */}
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Выберите из списка:</p>
-            <div className="flex flex-wrap gap-2">
-              {allergyOptions.map((allergy) => (
-                <button
-                  key={allergy}
-                  type="button"
-                  onClick={() => toggleAllergy(allergy)}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${allergies.includes(allergy)
-                    ? "bg-destructive text-destructive-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    }`}
-                >
-                  {allergy}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Добавление кастомной аллергии */}
-          <div className="space-y-2 pt-2 border-t">
-            <p className="text-xs text-muted-foreground">Или добавьте свою:</p>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Введите название аллергии"
-                value={newAllergy}
-                onChange={(e) => setNewAllergy(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addCustomAllergy();
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={addCustomAllergy}
-                disabled={!newAllergy.trim() || allergies.includes(newAllergy.trim())}
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Список выбранных аллергий */}
-          {allergies.length > 0 && (
-            <div className="space-y-2 pt-2 border-t">
-              <p className="text-xs text-muted-foreground">Выбранные аллергии:</p>
-              <div className="flex flex-wrap gap-2">
-                {allergies.map((allergy) => (
-                  <span
-                    key={allergy}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-destructive/10 text-destructive text-sm font-medium"
-                  >
-                    {allergy}
-                    <button
-                      type="button"
-                      onClick={() => removeAllergy(allergy)}
-                      className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          <Button
-            type="submit"
-            variant="mint"
-            disabled={isLoading || !name}
-            className="flex-1"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Сохранение...
-              </>
-            ) : (
-              "Сохранить"
-            )}
-          </Button>
-        </div>
-      </form>
-    </DialogContent>
   );
 }

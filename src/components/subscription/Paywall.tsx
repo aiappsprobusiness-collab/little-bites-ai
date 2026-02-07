@@ -10,12 +10,11 @@ interface PaywallProps {
 }
 
 const features = [
-  { icon: "🤖", text: "Неограниченный AI-ассистент" },
-  { icon: "👨‍👩‍👧‍👦", text: "До 15 детей в семье" },
+  { icon: "🤖", text: "Безлимитный AI-ассистент" },
+  { icon: "👨‍👩‍👧‍👦", text: "До 10 профилей в семье" },
+  { icon: "🥗", text: "Рецепты под аллергии и предпочтения" },
   { icon: "📅", text: "Недельные планы питания" },
-  { icon: "💬", text: "24/7 чат с экспертом" },
-  { icon: "📊", text: "Калории и БЖУ" },
-  { icon: "📋", text: "Умные списки покупок" },
+  { icon: "💬", text: "24/7 помощь в чате" },
 ];
 
 export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
@@ -85,10 +84,10 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
             {/* Title */}
             <div className="text-center mb-6">
               <h2 className="text-2xl font-bold mb-2">
-                Мама<span className="text-primary">Premium</span>
+                Mama Premium — забота о семье на автопилоте
               </h2>
-              <p className="text-muted-foreground">
-                Неограниченный доступ к AI-рецептам и семейным функциям
+              <p className="text-muted-foreground text-sm">
+                Персональные рецепты, планы питания и ИИ-помощник для всей семьи.
               </p>
             </div>
 
@@ -113,9 +112,9 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-bold text-lg">199 ₽/месяц</p>
+                    <p className="font-bold text-lg">299 ₽ / месяц</p>
                     <p className="text-sm text-muted-foreground">
-                      или 1800 ₽/год (экономия 25%)
+                      или 3000 ₽ / год
                     </p>
                   </div>
                   <div className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">

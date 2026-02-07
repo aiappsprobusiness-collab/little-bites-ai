@@ -19,6 +19,10 @@ export interface ParsedRecipe {
   steps: string[];
   cookingTime?: number;
   mealType?: 'breakfast' | 'lunch' | 'snack' | 'dinner';
+  /** Совет от шефа (Premium). */
+  chefAdvice?: string;
+  /** Мини-совет (Free, поле advice в JSON). */
+  advice?: string;
 }
 
 /** Проверка: элемент ингредиента — объект с полем name (Premium-формат). */
@@ -354,6 +358,15 @@ function formatRecipeForDisplay(recipe: ParsedRecipe): string {
     lines.push('👨‍🍳 **Приготовление:**');
     recipe.steps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
   }
+  if (recipe.chefAdvice?.trim()) {
+    lines.push('');
+    lines.push('👨‍🍳 **Совет от шефа:**');
+    lines.push(recipe.chefAdvice.trim());
+  } else if (recipe.advice?.trim()) {
+    lines.push('');
+    lines.push('💡 **Мини-совет:**');
+    lines.push(recipe.advice.trim());
+  }
   return lines.join('\n');
 }
 
@@ -544,6 +557,8 @@ export function parseRecipesFromChat(
               steps,
               cookingTime: parsed.cookingTime ?? parsed.cooking_time ?? parsed.time,
               mealType,
+              chefAdvice: typeof parsed.chefAdvice === 'string' ? parsed.chefAdvice : undefined,
+              advice: typeof parsed.advice === 'string' ? parsed.advice : undefined,
             });
           }
         }
@@ -574,6 +589,8 @@ export function parseRecipesFromChat(
                 steps,
                 cookingTime: recipe.cookingTime ?? recipe.cooking_time ?? recipe.time,
                 mealType: recipe.mealType || mealType,
+                chefAdvice: typeof recipe.chefAdvice === 'string' ? recipe.chefAdvice : undefined,
+                advice: typeof recipe.advice === 'string' ? recipe.advice : undefined,
               });
             }
           }

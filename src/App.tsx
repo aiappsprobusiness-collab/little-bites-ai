@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import ScanPage from "./pages/ScanPage";
 import ProfilePage from "./pages/ProfilePage";
+import ChildProfileEditPage from "./pages/ChildProfileEditPage";
 import MealPlanPage from "./pages/MealPlanPage";
 import RecipePage from "./pages/RecipePage";
 import RecipeEditPage from "./pages/RecipeEditPage";
@@ -96,6 +97,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <ProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile/child/:id"
+                element={
+                  <ProtectedRoute>
+                    <ChildProfileEditPage />
                   </ProtectedRoute>
                 }
               />

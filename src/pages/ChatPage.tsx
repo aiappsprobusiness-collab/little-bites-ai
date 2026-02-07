@@ -201,7 +201,7 @@ export default function ChatPage() {
           overrideMembers: members,
           ...(attempts > 0 && {
             extraSystemSuffix:
-              "Previous recipe was duplicated or violated constraints. Generate a DIFFERENT, compliant recipe now.",
+              "Previous recipe was duplicated. Generate a DIFFERENT recipe now.",
           }),
           onChunk:
             attempts === 0
@@ -221,13 +221,11 @@ export default function ChatPage() {
         const recipe = parsed.recipes[0];
 
         if (!recipe) {
-          attempts++;
-          continue;
+          break;
         }
         const validation = validateRecipe(recipe, generationContext);
         if (!validation.ok) {
-          attempts++;
-          continue;
+          break;
         }
         if (lastSaved && normalizeTitle(recipe.title) === lastSaved) {
           attempts++;
@@ -383,34 +381,36 @@ export default function ChatPage() {
                 <User className="w-5 h-5" />
               </button>
             </div>
-            {/* Row 2: Готовим для — right-aligned under title */}
+            {/* Row 2: Готовим для — Free: один профиль, не кликается и тусклее; Premium: выбор Семья + профили */}
             {members.length > 0 && (
               <div className="flex justify-end items-center gap-2 mt-1.5 min-w-0">
                 <span className="text-xs sm:text-sm font-medium text-foreground/90 whitespace-nowrap shrink-0">Готовим для:</span>
-                <Select
-                  value={
-                    isFree
-                      ? (selectedMemberId === "family" ? members[0]?.id ?? "" : selectedMemberId ?? members[0]?.id ?? "")
-                      : (selectedMemberId ?? "family")
-                  }
-                  onValueChange={(v) => {
-                    const prev = isFree ? (selectedMemberId === "family" ? members[0]?.id : selectedMemberId) ?? members[0]?.id : selectedMemberId ?? "family";
-                    if (v !== prev) setMessages([]);
-                    setSelectedMemberId(v);
-                  }}
-                >
-                  <SelectTrigger className="h-9 min-w-0 w-auto max-w-[140px] sm:max-w-none sm:min-w-[80px] text-sm font-medium bg-emerald-50/70 border-emerald-200/50 text-emerald-800/90 rounded-xl truncate">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {!isFree && <SelectItem value="family">Семья</SelectItem>}
-                    {members.map((c, idx) => (
-                      <SelectItem key={`${c.id}-${idx}`} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isFree ? (
+                  <span className="h-9 px-3 flex items-center min-w-0 max-w-[140px] sm:max-w-none text-sm font-medium bg-muted/50 border border-border/50 text-muted-foreground rounded-xl truncate">
+                    {members.find((c) => c.id === (selectedMemberId ?? members[0]?.id))?.name ?? members[0]?.name ?? ""}
+                  </span>
+                ) : (
+                  <Select
+                    value={selectedMemberId ?? "family"}
+                    onValueChange={(v) => {
+                      const prev = selectedMemberId ?? "family";
+                      if (v !== prev) setMessages([]);
+                      setSelectedMemberId(v);
+                    }}
+                  >
+                    <SelectTrigger className="h-9 min-w-0 w-auto max-w-[140px] sm:max-w-none sm:min-w-[80px] text-sm font-medium bg-emerald-50/70 border-emerald-200/50 text-emerald-800/90 rounded-xl truncate">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="family">Семья</SelectItem>
+                      {members.map((c, idx) => (
+                        <SelectItem key={`${c.id}-${idx}`} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             )}
           </div>

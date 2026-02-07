@@ -75,7 +75,10 @@ interface Recipe {
   steps?: string[];
   cookingTime?: number;
   ageRange?: string;
+  /** Premium: совет от шефа */
   chefAdvice?: string;
+  /** Free: короткий мини-совет (поле advice в JSON) */
+  advice?: string;
   familyServing?: string;
   mealType?: MealType;
 }
@@ -174,6 +177,7 @@ function buildRecipeFromParsed(parsed: Record<string, unknown>): Recipe | null {
     cookingTime: !Number.isNaN(numTime) ? numTime : undefined,
     ageRange: (parsed.ageRange as string) ?? "",
     chefAdvice: (parsed.chefAdvice as string) ?? undefined,
+    advice: (parsed.advice as string) ?? undefined,
     familyServing: (parsed.familyServing as string) ?? undefined,
     mealType: validMeal,
   };
@@ -668,7 +672,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 {effectiveRecipe.cookingTime != null && effectiveRecipe.cookingTime > 0 && (
                   <p className="text-xs text-muted-foreground mb-3 sm:mb-4">⏱️ {effectiveRecipe.cookingTime} мин</p>
                 )}
-                {showChefTip && effectiveRecipe.chefAdvice && (
+                {(showChefTip && effectiveRecipe.chefAdvice) ? (
                   <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
                     <span className="text-lg sm:text-xl shrink-0" aria-hidden>👨‍🍳</span>
                     <div className="min-w-0">
@@ -676,7 +680,15 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       <p className="text-xs sm:text-sm text-[#2D3436] leading-snug">{effectiveRecipe.chefAdvice}</p>
                     </div>
                   </div>
-                )}
+                ) : (effectiveRecipe.advice && (
+                  <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-slate-50/80 border border-slate-200/60 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
+                    <span className="text-lg sm:text-xl shrink-0" aria-hidden>💡</span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-600 mb-0.5">Мини-совет</p>
+                      <p className="text-xs sm:text-sm text-[#2D3436] leading-snug">{effectiveRecipe.advice}</p>
+                    </div>
+                  </div>
+                ))}
                 {effectiveRecipe.steps && effectiveRecipe.steps.length > 0 && (
                   <div>
                     <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Шаги приготовления</p>

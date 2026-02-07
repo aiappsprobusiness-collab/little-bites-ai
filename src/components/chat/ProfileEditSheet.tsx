@@ -18,6 +18,7 @@ import { Plus } from "lucide-react";
 import { useMembers } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
+import { useAppStore } from "@/store/useAppStore";
 import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
 function ageMonthsFromYearsMonths(years: number, months: number): number {
@@ -71,8 +72,9 @@ export function ProfileEditSheet({
   onCreated,
 }: ProfileEditSheetProps) {
   const { toast } = useToast();
-  const { updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
-  const { isPremium } = useSubscription();
+  const { members, updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
+  const { isPremium, hasPremiumAccess } = useSubscription();
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const [name, setName] = useState("");
   const [memberType, setMemberType] = useState<MemberTypeV2>("child");
   const [ageYears, setAgeYears] = useState(0);
@@ -125,11 +127,25 @@ export function ProfileEditSheet({
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 
-  const allergiesHandlers = createTagListHandlers(setAllergies, setAllergyInput);
+  const baseAllergiesHandlers = createTagListHandlers(setAllergies, setAllergyInput);
+  const allergiesHandlers = {
+    ...baseAllergiesHandlers,
+    add: (raw: string) => {
+      if (!isPremium && allergies.length >= 1) {
+        setShowPaywall(true);
+        return;
+      }
+      baseAllergiesHandlers.add(raw);
+    },
+  };
   const preferencesHandlers = createTagListHandlers(setPreferences, setPreferenceInput);
 
   const handleSave = async () => {
     if (isCreate) {
+      if (!hasPremiumAccess && members.length >= 1) {
+        setShowPaywall(true);
+        return;
+      }
       const trimmedName = name.trim();
       if (!trimmedName) {
         toast({ variant: "destructive", title: "Введите имя" });

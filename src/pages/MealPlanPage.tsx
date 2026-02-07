@@ -15,6 +15,7 @@ import { AddMealDialog } from "@/components/meal-plan/AddMealDialog";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAppStore } from "@/store/useAppStore";
 import { resolveUnit } from "@/utils/productUtils";
 import {
   Select,
@@ -41,6 +42,7 @@ export default function MealPlanPage() {
   const { toast } = useToast();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isMembersLoading } = useFamily();
   const { subscriptionStatus } = useSubscription();
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const isFree = subscriptionStatus === "free";
   const isFamilyMode = !isFree && selectedMemberId === "family";
   const mealPlanMemberId = isFree && selectedMemberId === "family"
@@ -359,6 +361,10 @@ export default function MealPlanPage() {
             size="lg"
             className="w-full h-14 rounded-2xl shadow-soft font-semibold text-base gradient-primary text-primary-foreground border-0"
             onClick={async () => {
+              if (isFree) {
+                setShowPaywall(true);
+                return;
+              }
               try {
                 await generateWeeklyPlan();
                 toast({
