@@ -5,6 +5,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
 };
 
 const TINKOFF_INIT_URL = "https://securepay.tinkoff.ru/v2/Init";
@@ -27,7 +28,7 @@ async function sha256Hex(message: string): Promise<string> {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
   if (req.method !== "POST") {

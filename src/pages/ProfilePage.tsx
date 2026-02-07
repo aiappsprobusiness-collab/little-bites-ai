@@ -77,7 +77,7 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { members, isLoading, formatAge } = useFamily();
-  const { subscriptionStatus, hasPremiumAccess, isTrial, trialDaysRemaining } = useSubscription();
+  const { subscriptionStatus, hasPremiumAccess, isTrial, trialDaysRemaining, cancelSubscription, isCancellingSubscription } = useSubscription();
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
@@ -286,6 +286,24 @@ export default function ProfilePage() {
             {getSubscriptionCta()}
             <ExternalLink className="h-4 w-4 ml-2" />
           </Button>
+          {hasPremiumAccess && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full text-muted-foreground hover:text-destructive"
+              onClick={async () => {
+                try {
+                  await cancelSubscription();
+                  toast({ title: "Подписка отменена", description: "Доступ сохранится до конца оплаченного периода." });
+                } catch {
+                  toast({ variant: "destructive", title: "Не удалось отменить подписку" });
+                }
+              }}
+              disabled={isCancellingSubscription}
+            >
+              {isCancellingSubscription ? "Отмена…" : "Отменить подписку"}
+            </Button>
+          )}
         </section>
 
         {/* Settings */}

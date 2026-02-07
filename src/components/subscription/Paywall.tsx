@@ -21,10 +21,13 @@ const FEATURES = [
 
 export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
   const paywallCustomMessage = useAppStore((s) => s.paywallCustomMessage);
-  const { subscriptionStatus, startPayment, isStartingPayment } = useSubscription();
+  const { startPayment, isStartingPayment, isPremium, hasPremiumAccess, startTrial, isStartingTrial } = useSubscription();
   const [pricingOption, setPricingOption] = useState<"month" | "year">("year");
+  /** Показывать форму оплаты только если нет доступа (free/expired) */
+  const showPayForm = !hasPremiumAccess;
 
-  const handleSubscribe = () => {
+  const handleStartTrial = async () => {
+    await startTrial();
     onSubscribe?.();
     onClose();
   };
@@ -41,8 +44,6 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
     // TODO: Открыть управление подпиской (RevenueCat / App Store)
     onClose();
   };
-
-  const isPremium = subscriptionStatus === "premium";
 
   return (
     <AnimatePresence>
@@ -115,7 +116,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
               ))}
             </div>
 
-            {!isPremium && (
+            {showPayForm && (
               <>
                 {/* Pricing */}
                 <div className="rounded-2xl border border-border bg-card/50 p-4 mb-5 space-y-3">
@@ -150,15 +151,16 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                   )}
                 </div>
 
-                {/* CTA: Trial */}
+                {/* CTA: Trial — активирует trial по кнопке (3 дня) */}
                 <Button
                   variant="default"
                   size="lg"
                   className="w-full mb-3 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl"
-                  onClick={handleSubscribe}
+                  onClick={() => handleStartTrial().catch(() => {})}
+                  disabled={isStartingTrial}
                 >
                   <Heart className="w-5 h-5 mr-2" />
-                  Попробовать бесплатно 7 дней
+                  {isStartingTrial ? "Активация…" : "Попробовать Premium бесплатно"}
                 </Button>
 
                 {/* CTA: Continue with Premium (month/year) — редирект на Т-Банк */}

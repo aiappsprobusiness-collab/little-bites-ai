@@ -41,19 +41,19 @@ export default function MealPlanPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isMembersLoading } = useFamily();
-  const { subscriptionStatus } = useSubscription();
+  const { hasPremiumAccess, subscriptionStatus } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
-  const isFree = subscriptionStatus === "free";
+  const isFree = !hasPremiumAccess;
 
-  // Free: при открытии плана питания — показываем Paywall
+  // Нет доступа (free/expired): при открытии плана — Paywall
   useEffect(() => {
-    if (isFree) {
+    if (!hasPremiumAccess) {
       setPaywallCustomMessage("Экономьте время с семейным режимом и недельными планами питания.");
       setShowPaywall(true);
     }
     return () => setPaywallCustomMessage(null);
-  }, [isFree, setShowPaywall, setPaywallCustomMessage]);
+  }, [hasPremiumAccess, setShowPaywall, setPaywallCustomMessage]);
   const isFamilyMode = !isFree && selectedMemberId === "family";
   const mealPlanMemberId = isFree && selectedMemberId === "family"
     ? (members[0]?.id ?? undefined)
