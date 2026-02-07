@@ -35,15 +35,25 @@ interface ChatMessage {
   content: string;
 }
 
-function toProfile(m: { id: string; name: string; age_months?: number | null; allergies?: string[]; type?: string }): Profile {
+function toProfile(m: {
+  id: string;
+  name: string;
+  age_months?: number | null;
+  allergies?: string[];
+  type?: string;
+  preferences?: string[];
+  difficulty?: string | null;
+}): Profile {
   const role = (m.type === 'adult' || m.type === 'family') ? 'adult' : 'child';
+  const diff = m.difficulty as Profile['difficulty'] | undefined;
   return {
     id: m.id,
     role,
     name: m.name,
     age: m.age_months != null ? m.age_months / 12 : undefined,
     allergies: m.allergies ?? [],
-    preferences: [],
+    preferences: m.preferences ?? [],
+    ...(diff && (diff === 'easy' || diff === 'medium' || diff === 'any') && { difficulty: diff }),
   };
 }
 
@@ -100,7 +110,7 @@ export function useDeepSeekAPI() {
         : currentSelectedMemberId;
       const family: Family = {
         id: 'family',
-        profiles: freshMembers.map((c) => toProfile({ id: c.id, name: c.name, age_months: c.age_months, allergies: c.allergies, type: (c as { type?: string }).type })),
+        profiles: freshMembers.map((c) => toProfile(c)),
         activeProfileId,
       };
       const context = buildGenerationContext(family, family.activeProfileId, plan);

@@ -47,7 +47,7 @@ export interface ProfilesV2Update {
   requests_today?: number;
 }
 
-// v2: members — name, type, age_months, allergies
+// v2: members — family/child/adult profiles. Maps to domain Profile (id, role=type, name, age from age_months, allergies, preferences, difficulty).
 export interface MembersRow {
   id: string;
   user_id: string;
@@ -55,6 +55,10 @@ export interface MembersRow {
   type: MemberTypeV2;
   age_months: number | null;
   allergies: string[];
+  /** Food/cooking preferences. Default [] for existing rows. */
+  preferences: string[];
+  /** Recipe difficulty: easy | medium | any. Null for backward compat. */
+  difficulty: string | null;
 }
 export interface MembersInsert {
   id?: string;
@@ -63,6 +67,8 @@ export interface MembersInsert {
   type?: MemberTypeV2;
   age_months?: number | null;
   allergies?: string[];
+  preferences?: string[];
+  difficulty?: string | null;
 }
 export interface MembersUpdate {
   id?: string;
@@ -71,6 +77,8 @@ export interface MembersUpdate {
   type?: MemberTypeV2;
   age_months?: number | null;
   allergies?: string[];
+  preferences?: string[];
+  difficulty?: string | null;
 }
 
 // v2: favorites — recipe_data jsonb; limit 5 (free) / 50 (premium). created_at добавлен миграцией 20260203160000.

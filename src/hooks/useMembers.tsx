@@ -6,7 +6,7 @@ import { ensureStringArray } from "@/utils/typeUtils";
 
 function normalizeMemberPayload<T extends Record<string, unknown>>(payload: T): T {
   const out = { ...payload };
-  const arrayKeys = ["allergies"] as const;
+  const arrayKeys = ["allergies", "preferences"] as const;
   for (const key of arrayKeys) {
     if (key in out && out[key] !== undefined) {
       (out as Record<string, unknown>)[key] = ensureStringArray(out[key]);
@@ -63,10 +63,15 @@ export function useMembers() {
         .eq("user_id", user.id)
         .order("name", { ascending: true });
       if (err) throw err;
-      return (data ?? []).map((m) => ({
-        ...m,
-        allergies: ensureStringArray(m.allergies),
-      })) as MembersRow[];
+      return (data ?? []).map((m) => {
+        const row = m as Record<string, unknown>;
+        return {
+          ...m,
+          allergies: ensureStringArray(m.allergies),
+          preferences: ensureStringArray(row.preferences),
+          difficulty: row.difficulty != null ? String(row.difficulty) : null,
+        } as MembersRow;
+      });
     },
     enabled: !!user,
   });
