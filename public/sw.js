@@ -1,5 +1,5 @@
-/* PWA Service Worker - Little Bites AI */
-const CACHE_NAME = 'little-bites-v2';
+/* PWA Service Worker - Mom Recipes */
+const CACHE_NAME = 'mom-recipes-v2';
 
 // Precache shell: без этого на мобильных при сбое сети respondWith отдавал undefined → белый экран
 self.addEventListener('install', (event) => {
@@ -22,7 +22,7 @@ self.addEventListener('activate', (event) => {
 // Минимальная HTML-страница, если кэша нет (не передаём undefined в respondWith)
 function offlinePage() {
   return new Response(
-    '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Little Bites</title></head><body><p>Нет соединения.</p><button onclick="location.reload()">Обновить</button></body></html>',
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mom Recipes</title></head><body><p>Нет соединения.</p><button onclick="location.reload()">Обновить</button></body></html>',
     { headers: { 'Content-Type': 'text/html; charset=utf-8' } }
   );
 }

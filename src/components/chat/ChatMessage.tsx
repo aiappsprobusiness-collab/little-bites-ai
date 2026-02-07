@@ -593,31 +593,31 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         >
           <div
             className={`relative ${role === "user"
-              ? "px-4 py-2.5 text-sm bg-primary text-primary-foreground rounded-full rounded-br-sm"
+              ? "px-4 py-2.5 text-sm bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
               : role === "assistant" && effectiveRecipe
-                ? "rounded-bl-sm overflow-hidden px-4 pb-3"
-                : "px-5 py-4 bg-slate-50/90 border border-slate-200/40 rounded-2xl rounded-bl-sm"
+                ? "rounded-bl-sm overflow-hidden px-3 pb-3 sm:px-4"
+                : "px-4 py-4 sm:px-5 bg-slate-50/90 border border-slate-200/40 rounded-2xl rounded-bl-sm"
               }`}
           >
             {role === "assistant" && isRecipeParseFailure ? (
               <p className="text-sm text-destructive">Ошибка генерации рецепта. Данные повреждены.</p>
             ) : role === "assistant" && effectiveRecipe ? (
               /* Карточка рецепта в чате: child_only, порядок: mealType → title → benefit → ingredients → chef tip (premium/trial) → steps */
-              <div className="bg-white rounded-[28px] px-5 py-5 sm:px-6 sm:py-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100/80 max-w-[94%] w-full">
+              <div className="bg-white rounded-2xl sm:rounded-[28px] px-3 py-3 sm:px-6 sm:py-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100/80 max-w-[100%] w-full">
                 {effectiveRecipe.mealType && MEAL_LABELS[effectiveRecipe.mealType] && (
-                  <span className="inline-block text-sm font-medium text-emerald-700 bg-emerald-50/80 border border-emerald-100 rounded-full px-3 py-1 mb-3">
+                  <span className="inline-block text-xs sm:text-sm font-medium text-emerald-700 bg-emerald-50/80 border border-emerald-100 rounded-full px-2.5 py-0.5 sm:px-3 sm:py-1 mb-2 sm:mb-3">
                     {MEAL_LABELS[effectiveRecipe.mealType]}
                   </span>
                 )}
-                <h3 className="text-xl font-semibold leading-snug text-[#2D3436] mb-1.5 line-clamp-2">{effectiveRecipe.title}</h3>
+                <h3 className="text-base sm:text-xl font-semibold leading-snug text-[#2D3436] mb-1 sm:mb-1.5 line-clamp-2">{effectiveRecipe.title}</h3>
                 {effectiveRecipe.description && (
-                  <div className="mb-4">
-                    <p className="text-sm font-medium text-muted-foreground mb-1">Польза для ребёнка</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">{effectiveRecipe.description}</p>
+                  <div className="mb-3 sm:mb-4">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Польза для ребёнка</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed line-clamp-2">{effectiveRecipe.description}</p>
                   </div>
                 )}
-                <div className="mb-4">
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Ингредиенты</p>
+                <div className="mb-3 sm:mb-4">
+                  <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Ингредиенты</p>
                   {effectiveRecipe.ingredients?.length ? (
                     <div className="flex flex-wrap gap-2">
                       {effectiveRecipe.ingredients.map((ing, idx) => {
@@ -631,9 +631,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                         return (
                           <div
                             key={idx}
-                            className="flex items-center gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-3 py-1.5"
+                            className="flex items-center gap-1.5 sm:gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-2 py-1 sm:px-3 sm:py-1.5"
                           >
-                            <span className="text-[#2D3436] font-medium text-sm">
+                            <span className="text-[#2D3436] font-medium text-xs sm:text-sm">
                               {displayText}
                             </span>
                             {hasSubstitute && (
@@ -665,25 +665,25 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   )}
                 </div>
                 {effectiveRecipe.cookingTime != null && effectiveRecipe.cookingTime > 0 && (
-                  <p className="text-xs text-muted-foreground mb-4">⏱️ {effectiveRecipe.cookingTime} мин</p>
+                  <p className="text-xs text-muted-foreground mb-3 sm:mb-4">⏱️ {effectiveRecipe.cookingTime} мин</p>
                 )}
                 {showChefTip && effectiveRecipe.chefAdvice && (
-                  <div className="rounded-2xl p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-3 items-start mb-4">
-                    <span className="text-xl shrink-0" aria-hidden>👨‍🍳</span>
+                  <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
+                    <span className="text-lg sm:text-xl shrink-0" aria-hidden>👨‍🍳</span>
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
-                      <p className="text-sm text-[#2D3436] leading-snug">{effectiveRecipe.chefAdvice}</p>
+                      <p className="text-xs sm:text-sm text-[#2D3436] leading-snug">{effectiveRecipe.chefAdvice}</p>
                     </div>
                   </div>
                 )}
                 {effectiveRecipe.steps && effectiveRecipe.steps.length > 0 && (
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-2">Шаги приготовления</p>
-                    <div className="space-y-2">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">Шаги приготовления</p>
+                    <div className="space-y-1.5 sm:space-y-2">
                       {(effectiveRecipe.steps?.map((step, idx) => (
-                        <div key={idx} className="flex gap-3 items-start">
+                        <div key={idx} className="flex gap-2 sm:gap-3 items-start">
                           <span className="text-xs font-bold text-[#6B8E23] shrink-0">{idx + 1}.</span>
-                          <p className="text-[#2D3436] leading-relaxed flex-1">{step}</p>
+                          <p className="text-xs sm:text-sm text-[#2D3436] leading-relaxed flex-1 min-w-0 break-words">{step}</p>
                         </div>
                       )) ?? null)}
                     </div>
@@ -691,7 +691,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 )}
               </div>
             ) : role === "assistant" ? (
-              <div className="chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-sm prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-sm prose-strong:text-sm [&>*]:text-sm px-5 py-4">
+              <div className="chat-message-content text-xs sm:text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-sm prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-sm prose-strong:text-sm [&>*]:text-sm px-4 py-3 sm:px-5 sm:py-4">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -726,7 +726,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 </ReactMarkdown>
               </div>
             ) : (
-              <p className="text-sm whitespace-pre-wrap select-none leading-relaxed">{displayContent}</p>
+              <p className="text-sm whitespace-pre-wrap select-none leading-snug break-words">{displayContent}</p>
             )}
             <p className="text-[10px] opacity-60 mt-1">
               {timestamp.toLocaleTimeString("ru-RU", {
