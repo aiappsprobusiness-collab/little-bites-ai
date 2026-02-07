@@ -4,9 +4,10 @@ import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useFamily } from '@/contexts/FamilyContext';
 import { useSubscription } from './useSubscription';
-import { buildChatContextFromProfiles } from '@/utils/buildChatContextFromProfiles';
+import { buildGenerationContext } from '@/domain/generation/buildGenerationContext';
+import { derivePayloadFromContext } from '@/domain/generation/derivePayloadFromContext';
+import type { Family, Profile } from '@/domain/generation/types';
 import { checkChatAllergyBlock } from '@/utils/chatAllergyCheck';
-import { birthDateToAgeMonths } from '@/hooks/useMembers';
 
 /** Повтор запроса при сетевой/протокольной ошибке (ERR_HTTP2_PROTOCOL_ERROR, Failed to fetch). */
 async function fetchWithRetry(
@@ -34,12 +35,27 @@ interface ChatMessage {
   content: string;
 }
 
+function toProfile(m: { id: string; name: string; age_months?: number | null; allergies?: string[]; type?: string }): Profile {
+  const role = (m.type === 'adult' || m.type === 'family') ? 'adult' : 'child';
+  return {
+    id: m.id,
+    role,
+    name: m.name,
+    age: m.age_months != null ? m.age_months / 12 : undefined,
+    allergies: m.allergies ?? [],
+    preferences: [],
+  };
+}
+
 export function useDeepSeekAPI() {
   const { user, session } = useAuth();
   const { members, selectedMember, selectedMemberId } = useFamily();
   const queryClient = useQueryClient();
-  const { canGenerate, refetchUsage } = useSubscription();
+  const { canGenerate, refetchUsage, subscriptionStatus } = useSubscription();
   const chatAbortRef = useRef<AbortController | null>(null);
+  const plan = (subscriptionStatus === 'premium' || subscriptionStatus === 'trial' || subscriptionStatus === 'free')
+    ? subscriptionStatus
+    : 'free';
 
   const abortChat = () => {
     if (chatAbortRef.current) {
@@ -79,30 +95,26 @@ export function useDeepSeekAPI() {
         ? (freshMembers.find((c) => c.id === currentSelectedMemberId) ?? overrideSelectedMember ?? null)
         : freshMembers[0] ?? null;
 
-      const memberData = buildChatContextFromProfiles({
-        userMessage: lastUserMessage,
-        members: freshMembers.map((c) => ({
-          id: c.id,
-          name: c.name,
-          age_months: c.age_months,
-          allergies: c.allergies,
-        })),
-        selectedMember: freshSelectedMember
-          ? {
-            id: freshSelectedMember.id,
-            name: freshSelectedMember.name,
-            age_months: freshSelectedMember.age_months,
-            allergies: freshSelectedMember.allergies,
-          }
-          : null,
-        selectedMemberId: currentSelectedMemberId,
-        calculateAgeInMonths: birthDateToAgeMonths,
-      }).memberData;
+      const activeProfileId: string | 'family' = (currentSelectedMemberId === null || currentSelectedMemberId === 'family')
+        ? 'family'
+        : currentSelectedMemberId;
+      const family: Family = {
+        id: 'family',
+        profiles: freshMembers.map((c) => toProfile({ id: c.id, name: c.name, age_months: c.age_months, allergies: c.allergies, type: (c as { type?: string }).type })),
+        activeProfileId,
+      };
+      const context = buildGenerationContext(family, family.activeProfileId, plan);
+      const { memberData, allMembers, targetIsFamily } = derivePayloadFromContext(context, freshMembers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        age_months: c.age_months,
+        allergies: c.allergies,
+      })));
 
       console.log('AI Context Sent:', {
         memberData,
         ageMonths: memberData?.ageMonths,
-        targetIsFamily: currentSelectedMemberId === 'family',
+        targetIsFamily,
         allergies: memberData?.allergies,
       });
 
@@ -128,15 +140,9 @@ export function useDeepSeekAPI() {
             type,
             stream: true,
             maxRecipes: 1,
-            targetIsFamily: currentSelectedMemberId === 'family',
-            memberId: currentSelectedMemberId === 'family' ? 'family' : currentSelectedMemberId ?? undefined,
-            ...(currentSelectedMemberId === 'family' && freshMembers.length > 0 && {
-              allMembers: freshMembers.map((c) => ({
-                name: c.name,
-                age_months: c.age_months ?? 0,
-                allergies: c.allergies ?? [],
-              })),
-            }),
+            targetIsFamily,
+            memberId: targetIsFamily ? 'family' : currentSelectedMemberId ?? undefined,
+            ...(targetIsFamily && allMembers.length > 0 && { allMembers }),
           }),
         });
       } catch (err) {
