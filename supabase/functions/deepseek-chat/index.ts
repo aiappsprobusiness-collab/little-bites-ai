@@ -521,23 +521,22 @@ serve(async (req) => {
       }));
     }
 
-    if (type === "chat") {
+    if (type === "chat" || type === "recipe" || type === "diet_plan") {
       const templateName = isPremiumUser ? "PREMIUM_RECIPE_TEMPLATE" : "FREE_RECIPE_TEMPLATE";
+      const genBlockLen = typeof reqGenerationContextBlock === "string" ? reqGenerationContextBlock.trim().length : 0;
       console.log(
         "Template selected:",
         templateName,
         "subscription_status:",
         subscriptionStatus,
-        "userId:",
-        userId,
         "targetIsFamily:",
         targetIsFamily,
-        "allMembers count:",
-        allMembersForPrompt.length,
+        "generationContextBlock length:",
+        genBlockLen,
+        "memberData preferences:",
+        memberDataNorm?.preferences ?? "(none)",
         "ageMonthsForCategory:",
-        ageMonthsForCategory,
-        "ageCategory:",
-        ageCategoryForLog
+        ageMonthsForCategory
       );
     }
 

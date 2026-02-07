@@ -15,7 +15,7 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
-import { detectMealType, parseRecipesFromChat } from "@/utils/parseChatRecipes";
+import { detectMealType, parseRecipesFromChat, type ParsedRecipe } from "@/utils/parseChatRecipes";
 import {
   Select,
   SelectContent,
@@ -48,6 +48,8 @@ interface Message {
   rawContent?: string;
   /** Пока true, ответ ещё стримится; не показываем сырой JSON. */
   isStreaming?: boolean;
+  /** Уже распарсенный рецепт (из parseRecipesFromChat), чтобы карточка не показывала «Данные повреждены». */
+  preParsedRecipe?: ParsedRecipe | null;
 }
 
 const STARTER_MESSAGE = "Здравствуйте! Выберите профиль, и я мгновенно подберу идеальный рецепт.";
@@ -100,13 +102,14 @@ export default function ChatPage() {
           timestamp: new Date(msg.created_at),
         });
         if (msg.response) {
-          const { displayText } = parseRecipesFromChat(msg.message || "", msg.response);
+          const { displayText, recipes } = parseRecipesFromChat(msg.message || "", msg.response);
           formatted.push({
             id: `${msg.id}-assistant`,
             role: "assistant",
             content: displayText,
             timestamp: new Date(msg.created_at),
             rawContent: msg.response,
+            preParsedRecipe: recipes[0] ?? null,
           });
         }
       });
@@ -174,7 +177,13 @@ export default function ChatPage() {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMessageId
-            ? { ...m, content: parsed.displayText, rawContent: rawMessage, isStreaming: false }
+            ? {
+                ...m,
+                content: parsed.displayText,
+                rawContent: rawMessage,
+                isStreaming: false,
+                preParsedRecipe: parsed.recipes[0] ?? null,
+              }
             : m
         )
       );
@@ -384,6 +393,7 @@ export default function ChatPage() {
                 timestamp={m.timestamp}
                 rawContent={m.rawContent}
                 expectRecipe={m.role === "assistant"}
+                preParsedRecipe={m.preParsedRecipe}
                 onDelete={handleDeleteMessage}
                 memberId={selectedMember?.id}
                 memberName={selectedMember?.name}

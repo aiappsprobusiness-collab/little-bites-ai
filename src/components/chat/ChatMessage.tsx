@@ -62,6 +62,8 @@ interface ChatMessageProps {
   memberName?: string;
   /** При клике на ссылку «Читать статью» в ответе ИИ (база знаний) */
   onOpenArticle?: (articleId: string) => void;
+  /** Уже распарсенный рецепт (из parseRecipesFromChat), чтобы не показывать «Данные повреждены» при расхождении парсеров */
+  preParsedRecipe?: Recipe | null;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
@@ -482,7 +484,7 @@ function formatRecipe(recipe: Recipe): string {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, onDelete, memberId, memberName, onOpenArticle }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, onDelete, memberId, memberName, onOpenArticle }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const { user } = useAuth();
     const { isPremium, isTrial } = useSubscription();
@@ -492,10 +494,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const sourceForParse = (rawContent ?? content).trim();
     const recipe = role === "assistant" ? parseRecipeFromContent(sourceForParse) : null;
-    // Ответ от API должен быть JSON ({...}). Если пришёл текст — не показываем его как рецепт и не рендерим как Markdown.
-    const apiSentTextNotJson =
-      rawContent != null && rawContent.trim().length > 0 && !/^\s*\{/.test(rawContent);
-    const effectiveRecipe = apiSentTextNotJson ? null : recipe;
+    // Используем уже распарсенный рецепт из чата (если есть), иначе — результат локального парсера.
+    // Раньше при ответе не в JSON мы принудительно показывали «Данные повреждены», даже если рецепт удалось извлечь.
+    const effectiveRecipe = preParsedRecipe ?? recipe;
     const isRecipeParseFailure =
       role === "assistant" &&
       (expectRecipe === true || (rawContent != null && rawContent.trim().length > 0)) &&

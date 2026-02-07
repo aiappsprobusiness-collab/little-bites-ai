@@ -135,6 +135,9 @@ export function useDeepSeekAPI() {
         ageMonths: memberData?.ageMonths,
         targetIsFamily,
         allergies: memberData?.allergies,
+        preferences: memberData?.preferences,
+        generationContextBlockLength: generationContextBlock?.length ?? 0,
+        generationContextBlockPreview: generationContextBlock ? generationContextBlock.slice(0, 300) : '',
       });
 
       const allergyCheck = checkChatAllergyBlock(lastUserMessage, memberData?.allergies);
