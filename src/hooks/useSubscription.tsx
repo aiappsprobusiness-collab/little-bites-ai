@@ -142,16 +142,34 @@ export function useSubscription() {
     },
   });
 
-  /** Запуск оплаты Т-Банк: создаёт платёж и редиректит на PaymentURL */
+  /** Запуск оплаты Т-Банк: создаёт платёж и редиректит на PaymentURL. SuccessURL/FailURL обязательны для Tinkoff Init. */
   const startPayment = useMutation({
     mutationFn: async (plan: "month" | "year") => {
       if (!user) throw new Error("User not authenticated");
+      const base =
+        (typeof window !== "undefined" && window.location.origin) ||
+        (import.meta.env.VITE_APP_URL as string) ||
+        "https://momrecipes.app";
+      const successUrl = `${base.replace(/\/$/, "")}/payment/success`;
+      const failUrl = `${base.replace(/\/$/, "")}/payment/fail`;
       const { data, error } = await supabase.functions.invoke("create-payment", {
-        body: { userId: user.id, plan, email: user.email ?? "" },
+        body: {
+          userId: user.id,
+          plan,
+          email: user.email ?? "",
+          successUrl,
+          failUrl,
+        },
       });
-      if (error) throw error;
+      const errBody = data as { error?: string; code?: string } | null;
+      if (error) {
+        throw new Error(errBody?.error || error.message);
+      }
       const url = (data as { PaymentURL?: string } | null)?.PaymentURL;
-      if (!url) throw new Error("Не получена ссылка на оплату");
+      if (!url) {
+        const err = data as { error?: string; details?: unknown } | null;
+        throw new Error(err?.error ? `${err.error}: ${JSON.stringify(err.details ?? "")}` : "Не получена ссылка на оплату");
+      }
       window.location.href = url;
     },
   });

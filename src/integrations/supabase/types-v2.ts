@@ -18,7 +18,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-// v2: profiles schema — user_id FK auth.users, status, daily_limit, last_reset, premium_until, requests_today
+// v2: profiles schema — user_id FK auth.users, status, daily_limit, last_reset, premium_until, requests_today, email (из auth.users)
 export interface ProfilesV2Row {
   id: string;
   user_id: string;
@@ -27,6 +27,7 @@ export interface ProfilesV2Row {
   last_reset: string;
   premium_until: string | null;
   requests_today: number;
+  email: string | null;
 }
 export interface ProfilesV2Insert {
   id?: string;
@@ -36,6 +37,7 @@ export interface ProfilesV2Insert {
   last_reset?: string;
   premium_until?: string | null;
   requests_today?: number;
+  email?: string | null;
 }
 export interface ProfilesV2Update {
   id?: string;
@@ -45,6 +47,7 @@ export interface ProfilesV2Update {
   last_reset?: string;
   premium_until?: string | null;
   requests_today?: number;
+  email?: string | null;
 }
 
 // v2: members — family/child/adult profiles. Maps to domain Profile (id, role=type, name, age from age_months, allergies, preferences, difficulty).

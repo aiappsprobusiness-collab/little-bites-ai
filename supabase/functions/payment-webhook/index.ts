@@ -1,13 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-/** Подпись Tinkoff: значения параметров по алфавиту ключей + Password, SHA-256 hex */
+/** Подпись уведомления T-Bank EACQ: все параметры кроме Token и вложенных (Data, Receipt); добавить Password; сортировка по ключу; конкатенация только значений; SHA-256 hex. */
 function buildTokenString(params: Record<string, unknown>, secret: string): string {
-  const sortedKeys = Object.keys(params)
-    .filter((k) => k !== "Token" && params[k] !== undefined && params[k] !== null)
-    .sort();
-  const concat = sortedKeys.map((k) => String(params[k])).join("") + secret;
-  return concat;
+  const flat: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (k === "Token" || v === undefined || v === null) continue;
+    if (typeof v === "object") continue;
+    flat[k] = String(v);
+  }
+  flat.Password = secret;
+  const sortedKeys = Object.keys(flat).sort();
+  return sortedKeys.map((k) => flat[k]).join("");
 }
 
 async function sha256Hex(message: string): Promise<string> {
@@ -36,23 +40,29 @@ serve(async (req) => {
     const body = (await req.json()) as Record<string, unknown>;
     const status = body.Status as string | undefined;
     const paymentId = body.PaymentId as number | undefined;
-    const orderId = body.OrderId as string | undefined;
+    const orderId = (body.OrderId ?? body.orderId) as string | undefined;
     const receivedToken = body.Token as string | undefined;
 
+    console.log("[payment-webhook] received", { Status: status, PaymentId: paymentId, OrderId: orderId, hasToken: !!receivedToken });
+
     if (!receivedToken) {
+      console.log("[payment-webhook] reject: Missing Token");
       return new Response(JSON.stringify({ error: "Missing Token" }), { status: 400 });
     }
 
     const tokenString = buildTokenString(body, secretKey);
     const expectedToken = await sha256Hex(tokenString);
     if (receivedToken.toLowerCase() !== expectedToken.toLowerCase()) {
+      console.log("[payment-webhook] reject: Invalid Token (signature mismatch)");
       return new Response(JSON.stringify({ error: "Invalid Token" }), { status: 400 });
     }
+    console.log("[payment-webhook] signature ok");
 
     if (status !== "CONFIRMED") {
-      return new Response(JSON.stringify({ success: true, message: "Status not CONFIRMED, skip" }), {
+      console.log("[payment-webhook] skip: status not CONFIRMED", status);
+      return new Response("OK", {
         status: 200,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
 
@@ -67,41 +77,134 @@ serve(async (req) => {
 
     const row = byPayment?.data ?? byOrder?.data;
     if (!row || row.status === "confirmed") {
-      return new Response(JSON.stringify({ success: true }), {
+      console.log("[payment-webhook] skip: subscription not found or already confirmed", { paymentId, orderId, found: !!row });
+      return new Response("OK", {
         status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+
+    const amountFromNotification = body.Amount != null ? Number(body.Amount) : null;
+    const monthKopecks = 29900;
+    const yearKopecks = 299000;
+    const amountTolerance = 1;
+
+    const dataObj = body.DATA ?? body.Data ?? body.data;
+    const dataShape = dataObj && typeof dataObj === "object" ? Object.keys(dataObj as Record<string, unknown>) : [];
+    console.log("[payment-webhook] data_shape", { data_keys: dataShape });
+
+    const dataPlan =
+      dataObj && typeof dataObj === "object" && "plan" in (dataObj as Record<string, unknown>)
+        ? String((dataObj as Record<string, unknown>).plan)
+        : null;
+
+    let plan: "month" | "year" | null = null;
+    let sourceOfPlan: "Data" | "OrderId" | "DB" | "Amount" | null = null;
+
+    if (dataPlan === "year" || dataPlan === "month") {
+      plan = dataPlan;
+      sourceOfPlan = "Data";
+    } else if (orderId && /_year_/.test(orderId)) {
+      plan = "year";
+      sourceOfPlan = "OrderId";
+    } else if (orderId && /_month_/.test(orderId)) {
+      plan = "month";
+      sourceOfPlan = "OrderId";
+    } else if ((row.plan as string) === "year" || (row.plan as string) === "month") {
+      plan = (row.plan as string) as "month" | "year";
+      sourceOfPlan = "DB";
+    } else if (
+      amountFromNotification !== null &&
+      amountFromNotification >= yearKopecks - amountTolerance &&
+      amountFromNotification <= yearKopecks + amountTolerance
+    ) {
+      plan = "year";
+      sourceOfPlan = "Amount";
+      console.log("[payment-webhook] source_of_plan=Amount (year)", { amountFromNotification, yearKopecks });
+    } else if (
+      amountFromNotification !== null &&
+      amountFromNotification >= monthKopecks - amountTolerance &&
+      amountFromNotification <= monthKopecks + amountTolerance
+    ) {
+      plan = "month";
+      sourceOfPlan = "Amount";
+      console.log("[payment-webhook] source_of_plan=Amount (month)", { amountFromNotification, monthKopecks });
+    }
+
+    if (plan !== "month" && plan !== "year") {
+      console.log("[payment-webhook] reject_unknown_plan", { order_id: orderId, payment_id: paymentId, amount: amountFromNotification });
+      return new Response(JSON.stringify({ error: "Unknown plan" }), {
+        status: 422,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    const now = new Date();
-    const plan = (row.plan as string) || "month";
-    const months = plan === "year" ? 12 : 1;
-    const expiresAt = new Date(now);
-    expiresAt.setMonth(expiresAt.getMonth() + months);
+    console.log("[payment-webhook] updating subscription and profile", {
+      subscriptionId: row.id,
+      userId: row.user_id,
+      order_id: orderId,
+      payment_id: paymentId,
+      status: status,
+      plan_detected: plan,
+      source_of_plan: sourceOfPlan,
+    });
 
-    await supabase
-      .from("subscriptions")
-      .update({
-        status: "confirmed",
-        started_at: now.toISOString(),
-        expires_at: expiresAt.toISOString(),
-        ...(paymentId != null && { payment_id: paymentId }),
-      })
-      .eq("id", row.id);
+    const rpcResult = await supabase.rpc("confirm_subscription_webhook", {
+      p_subscription_id: row.id,
+      p_plan: plan,
+      p_payment_id: paymentId ?? null,
+    });
 
-    await supabase
-      .from("profiles_v2")
-      .update({
-        status: "premium",
-        premium_until: expiresAt.toISOString(),
-      })
-      .eq("user_id", row.user_id);
+    type RpcRow = { subscription_id: string; was_updated: boolean; started_at: string | null; expires_at: string | null };
+    const rows = (rpcResult.data as RpcRow[] | null) ?? [];
+    const res = rows[0] ?? null;
+    const err = rpcResult.error;
 
-    return new Response(JSON.stringify({ success: true }), {
+    if (err || !res) {
+      console.error("[payment-webhook] RPC error", { err: err?.message, subscriptionId: row.id });
+      return new Response(JSON.stringify({ error: err?.message ?? "Confirm failed" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (!res.was_updated) {
+      // Не пишем audit при replay: одна запись на факт подтверждения, без дублей.
+      console.log("[payment-webhook] idempotent: already confirmed", { subscriptionId: row.id });
+      return new Response("OK", {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
+
+    console.log("[payment-webhook] subscription updated", {
+      started_at: res.started_at,
+      expires_at: res.expires_at,
+      plan,
+      calc_method: "DB_interval",
+    });
+
+    const auditNote = sourceOfPlan === "Amount" ? "fallback amount ±1" : null;
+    await supabase.from("subscription_plan_audit").insert({
+      user_id: row.user_id,
+      subscription_id: row.id,
+      order_id: orderId ?? null,
+      payment_id: paymentId != null ? String(paymentId) : null,
+      tbank_status: status ?? null,
+      amount: amountFromNotification != null ? Math.round(amountFromNotification) : null,
+      plan_detected: plan,
+      source_of_plan: sourceOfPlan,
+      data_keys: dataShape.length > 0 ? dataShape : null,
+      raw_order_id_hint: null,
+      note: auditNote,
+    });
+
+    return new Response("OK", {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (e) {
+    console.error("[payment-webhook] error", e);
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 });
   }
 });

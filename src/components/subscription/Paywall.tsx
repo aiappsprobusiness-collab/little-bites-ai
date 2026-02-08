@@ -4,6 +4,9 @@ import { X, Crown, Check, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useToast } from "@/hooks/use-toast";
+// Единый источник цен с бэкендом (create-payment)
+import pricing from "../../../supabase/functions/create-payment/pricing.json";
 
 interface PaywallProps {
   isOpen: boolean;
@@ -20,6 +23,7 @@ const FEATURES = [
 ] as const;
 
 export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
+  const { toast } = useToast();
   const paywallCustomMessage = useAppStore((s) => s.paywallCustomMessage);
   const { startPayment, isStartingPayment, isPremium, hasPremiumAccess, startTrial, isStartingTrial } = useSubscription();
   const [pricingOption, setPricingOption] = useState<"month" | "year">("year");
@@ -33,7 +37,9 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
   };
 
   const handlePayPremium = () => {
-    startPayment(pricingOption).catch(() => {});
+    startPayment(pricingOption).catch((err) => {
+      toast({ variant: "destructive", title: "Ошибка оплаты", description: err?.message || "Попробуйте позже." });
+    });
   };
 
   const handleContinueFree = () => {
@@ -130,7 +136,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                           : "bg-muted/50 text-muted-foreground hover:bg-muted"
                       }`}
                     >
-                      299 ₽ / месяц
+                        {pricing.monthRub.toLocaleString("ru-RU")} ₽ / месяц
                     </button>
                     <button
                       type="button"
@@ -141,12 +147,12 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                           : "bg-muted/50 text-muted-foreground hover:bg-muted"
                       }`}
                     >
-                      2 999 ₽ / год
+                        {pricing.yearRub.toLocaleString("ru-RU")} ₽ / год
                     </button>
                   </div>
                   {pricingOption === "year" && (
                     <p className="text-xs text-center text-muted-foreground">
-                      Экономия ~17% · 250 ₽/месяц
+                      Экономия ~17% · {Math.round(pricing.yearRub / 12).toLocaleString("ru-RU")} ₽/месяц
                     </p>
                   )}
                 </div>
@@ -171,7 +177,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                   onClick={handlePayPremium}
                   disabled={isStartingPayment}
                 >
-                  {isStartingPayment ? "Перенаправление…" : `Продолжить с Premium — ${pricingOption === "month" ? "299 ₽/мес" : "2 999 ₽/год"}`}
+                  {isStartingPayment ? "Перенаправление…" : `Продолжить с Premium — ${pricingOption === "month" ? `${pricing.monthRub} ₽/мес` : `${pricing.yearRub.toLocaleString("ru-RU")} ₽/год`}`}
                 </Button>
 
                 {/* CTA: Continue with Free */}

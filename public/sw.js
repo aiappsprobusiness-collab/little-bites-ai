@@ -60,12 +60,29 @@ function isImageRequest(request) {
   return /image\//.test(accept) || /\.(png|jpg|jpeg|gif|webp|svg|ico)(\?|$)/i.test(new URL(request.url).pathname);
 }
 
+/** Only cache GET requests with http: or https:. Skip chrome-extension:, data:, blob:, file:. */
+function isCacheableUrl(urlString) {
+  try {
+    const u = new URL(urlString);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function safeCachePut(cacheName, request, responseClone) {
+  if (request.method !== "GET" || !isCacheableUrl(request.url)) return;
+  caches.open(cacheName).then((cache) => {
+    cache.put(request, responseClone).catch(() => {});
+  });
+}
+
 /** Stale-while-revalidate: return cached if present, then revalidate in background. */
 function staleWhileRevalidate(request, cacheName) {
   return caches.open(cacheName).then((cache) =>
     cache.match(request).then((cached) => {
       const fetchPromise = fetch(request).then((response) => {
-        if (response.ok) cache.put(request, response.clone());
+        if (response.ok) safeCachePut(cacheName, request, response.clone());
         return response;
       });
       return cached || fetchPromise;
@@ -79,7 +96,7 @@ function networkFirstWithOfflineFallback(request) {
     .then((response) => {
       if (response.ok) {
         const copy = response.clone();
-        caches.open(RUNTIME_NAME).then((cache) => cache.put(request, copy));
+        safeCachePut(RUNTIME_NAME, request, copy);
       }
       return response;
     })
@@ -91,6 +108,11 @@ function networkFirstWithOfflineFallback(request) {
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
+
+  if (!isCacheableUrl(request.url)) {
+    event.respondWith(fetch(request));
+    return;
+  }
 
   if (isNavigationRequest(request)) {
     event.respondWith(networkFirstWithOfflineFallback(request));
@@ -114,7 +136,7 @@ self.addEventListener("fetch", (event) => {
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();
-          caches.open(RUNTIME_NAME).then((cache) => cache.put(request, copy));
+          safeCachePut(RUNTIME_NAME, request, copy);
         }
         return res;
       })
