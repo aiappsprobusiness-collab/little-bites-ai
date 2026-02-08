@@ -30,6 +30,7 @@ import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
 import { useAppStore } from "./store/useAppStore";
+import { useSubscription } from "./hooks/useSubscription";
 
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
@@ -60,6 +61,29 @@ function GlobalPaywall() {
   );
 }
 
+/** Мягкий баннер: при trial и остатке ≤24ч — «сегодня/завтра», иначе «через N дней». */
+function TrialSoftBanner() {
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const { hasTrialAccess, trialRemainingMs, trialRemainingDays } = useSubscription();
+  useEffect(() => {
+    if (!hasTrialAccess) return;
+    if (trialRemainingMs <= 86_400_000) {
+      const endOfTrial = new Date(Date.now() + trialRemainingMs);
+      const now = new Date();
+      const isToday =
+        endOfTrial.getDate() === now.getDate() &&
+        endOfTrial.getMonth() === now.getMonth() &&
+        endOfTrial.getFullYear() === now.getFullYear();
+      setPaywallCustomMessage(isToday ? "Триал закончится сегодня" : "Триал закончится завтра");
+    } else if (trialRemainingDays != null) {
+      const days =
+        trialRemainingDays === 1 ? "день" : trialRemainingDays < 5 ? "дня" : "дней";
+      setPaywallCustomMessage(`Триал заканчивается через ${trialRemainingDays} ${days}`);
+    }
+  }, [hasTrialAccess, trialRemainingMs, trialRemainingDays, setPaywallCustomMessage]);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -77,6 +101,7 @@ const App = () => (
             <PWAInstall />
             <PWAUpdateToast />
             <GlobalPaywall />
+            <TrialSoftBanner />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/" element={<Navigate to="/chat" replace />} />

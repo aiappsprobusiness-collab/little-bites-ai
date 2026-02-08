@@ -23,7 +23,7 @@ export function useSubscription() {
       if (!user) return null;
       const { data, error } = await supabase
         .from("profiles_v2")
-        .select("status, requests_today, daily_limit, premium_until")
+        .select("status, requests_today, daily_limit, premium_until, trial_until, trial_used")
         .eq("user_id", user.id)
         .maybeSingle();
       if (error) throw error;
@@ -32,6 +32,8 @@ export function useSubscription() {
         requests_today: number;
         daily_limit: number;
         premium_until: string | null;
+        trial_until: string | null;
+        trial_used: boolean | null;
       } | null;
     },
     enabled: !!user,
@@ -42,49 +44,53 @@ export function useSubscription() {
 
   const status = profileV2?.status ?? "free";
   const expiresAt = profileV2?.premium_until ?? null;
-  const isExpired =
-    (status === "premium" || status === "trial") && expiresAt
-      ? new Date(expiresAt) <= new Date()
-      : false;
-  /** Эффективный статус: истёкший = free для UI и гвардов */
-  const effectiveStatus = isExpired ? "free" : status;
+  const trialUntil = profileV2?.trial_until ?? null;
+  const trialUsed = profileV2?.trial_used ?? false;
 
+  /** Trial: источник истины — trial_until. Доступ пока trial_until > now(). */
+  const hasTrialAccess =
+    trialUntil != null && trialUntil !== "" && new Date(trialUntil) > new Date();
+  const trialRemainingMs = hasTrialAccess
+    ? new Date(trialUntil!).getTime() - Date.now()
+    : 0;
+  /** ceil для UX (1.5 дня → 2); min 1 день при любом положительном остатке. */
+  const trialRemainingDays = hasTrialAccess
+    ? Math.max(1, Math.ceil(trialRemainingMs / 86_400_000))
+    : null;
+
+  /** Только платная подписка: premium_until > now(). Trial сюда не входит. */
   const hasPremiumAccess =
-    hasPremiumAccessFromSubscription({ status, expiresAt }) || hasUnlimitedAccess;
-  const isPremium = status === "premium" && !isExpired;
-  const isTrial = status === "trial" && !isExpired;
+    hasUnlimitedAccess ||
+    (expiresAt != null && expiresAt !== "" && new Date(expiresAt) > new Date());
+  /** Доступ (trial или premium) — для гейтов и лимитов. */
+  const hasAccess = hasTrialAccess || hasPremiumAccess;
+
+  const isExpired =
+    status === "premium" && expiresAt ? new Date(expiresAt) <= new Date() : false;
+  /** Платный premium всегда приоритетнее trial: при активной оплате UI показывает premium. */
+  const effectiveStatus = hasPremiumAccess ? "premium" : hasTrialAccess ? "trial" : "free";
 
   const usedToday = profileV2?.requests_today ?? 0;
   const dailyLimit = profileV2?.daily_limit ?? 5;
   const remaining = Math.max(0, dailyLimit - usedToday);
-  const canGenerate = hasUnlimitedAccess
-    ? true
-    : hasPremiumAccess
-      ? true
-      : remaining > 0;
+  const canGenerate = hasUnlimitedAccess ? true : hasAccess ? true : remaining > 0;
 
-  /** Trial: дни до окончания. null если не Trial или истёк. */
-  const trialDaysRemaining =
-    status === "trial" && profileV2?.premium_until && !isExpired
-      ? Math.max(
-          0,
-          Math.ceil(
-            (new Date(profileV2.premium_until).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-          )
-        )
-      : null;
+  /** Дни до окончания trial (то же значение для UI). */
+  const trialDaysRemaining = trialRemainingDays;
 
-  /** Free: 10 избранных, Trial/Premium: без лимита (50 в БД). */
+  /** Free: 10 избранных; trial/premium: без лимита (50 в БД). */
   const favoritesLimit = effectiveStatus === "free" ? 10 : 50;
+
+  const isPremium = effectiveStatus === "premium";
+  const isTrial = effectiveStatus === "trial";
 
   if (typeof window !== "undefined" && import.meta.env?.DEV && user && !isLoadingProfile) {
     console.log("[useSubscription] статус и доступы", {
       status,
-      expiresAt: expiresAt ?? undefined,
-      isExpired,
+      hasTrialAccess,
       hasPremiumAccess,
-      isPremium,
-      isTrial,
+      hasAccess,
+      effectiveStatus,
     });
   }
 
@@ -118,12 +124,23 @@ export function useSubscription() {
     },
   });
 
-  /** Активировать trial по кнопке «Попробовать Premium бесплатно» (3 дня) */
+  /** Активировать trial по кнопке. RPC возвращает { result, trial_until }. */
   const startTrial = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("User not authenticated");
-      const { error } = await supabase.rpc("start_trial");
+      const { data, error } = await supabase.rpc("start_trial");
       if (error) throw error;
+      const payload = data as { result?: string; trial_until?: string } | null;
+      const result = payload?.result ?? "error";
+      if (result === "already_used") {
+        throw new Error("TRIAL_ALREADY_USED");
+      }
+      if (result === "already_active") {
+        return;
+      }
+      if (result !== "activated") {
+        throw new Error(payload?.error ?? "Не удалось активировать триал");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
@@ -180,6 +197,11 @@ export function useSubscription() {
     isExpired,
     isPremium,
     hasPremiumAccess,
+    hasAccess,
+    hasTrialAccess,
+    trialRemainingMs,
+    trialRemainingDays,
+    trialUsed,
     isTrial,
     subscriptionStatus: effectiveStatus,
     canGenerate,

@@ -316,18 +316,19 @@ serve(async (req) => {
       userId = user?.id ?? null;
 
       if (userId) {
-        // Загружаем profiles_v2 (включая premium_until для trial)
+        // Загружаем profiles_v2. Trial — по trial_until, premium — по premium_until (не смешивать).
         const { data: profileV2Row } = await supabase
           .from("profiles_v2")
-          .select("status, requests_today, daily_limit, premium_until")
+          .select("status, requests_today, daily_limit, premium_until, trial_until")
           .eq("user_id", userId)
           .maybeSingle();
 
-        profileV2 = profileV2Row as (ProfileV2Row & { premium_until?: string | null }) | null;
+        profileV2 = profileV2Row as (ProfileV2Row & { premium_until?: string | null; trial_until?: string | null }) | null;
 
-        // Trial: если истёк (now > premium_until), переводим в free и daily_limit = 5
-        if (profileV2?.status === "trial" && profileV2.premium_until) {
-          const until = new Date(profileV2.premium_until).getTime();
+        // Trial: истекает по trial_until (не по premium_until). При истечении — free.
+        const p = profileV2 as { status?: string; trial_until?: string | null; requests_today?: number } | null;
+        if (p?.status === "trial" && p.trial_until) {
+          const until = new Date(p.trial_until).getTime();
           if (Date.now() > until) {
             await supabase
               .from("profiles_v2")
@@ -335,16 +336,18 @@ serve(async (req) => {
               .eq("user_id", userId);
             profileV2 = {
               status: "free",
-              requests_today: profileV2.requests_today,
+              requests_today: p.requests_today ?? 0,
               daily_limit: 5,
             };
           }
         }
 
-        // ТЕСТ ЛИМИТА (Free): status='free', requests_today=5, daily_limit=5 → сразу 429, DeepSeek не вызывается.
-        // ТЕСТ PREMIUM: status='premium' → запросы проходят даже при requests_today > daily_limit.
         if (profileV2) {
-          const isPremiumOrTrial = profileV2.status === "premium" || profileV2.status === "trial";
+          const premiumUntil = (profileV2 as { premium_until?: string | null }).premium_until;
+          const trialUntil = (profileV2 as { trial_until?: string | null }).trial_until;
+          const hasPremium = premiumUntil && new Date(premiumUntil) > new Date();
+          const hasTrial = trialUntil && new Date(trialUntil) > new Date();
+          const isPremiumOrTrial = hasPremium || hasTrial;
           if (!isPremiumOrTrial && profileV2.requests_today >= profileV2.daily_limit) {
             return new Response(
               JSON.stringify({

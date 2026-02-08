@@ -18,7 +18,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-// v2: profiles schema — user_id FK auth.users, status, daily_limit, last_reset, premium_until, requests_today, email (из auth.users)
+// v2: profiles schema — user_id FK auth.users, status, daily_limit, last_reset, premium_until, requests_today, trial_until, trial_used, trial_started_at, email
 export interface ProfilesV2Row {
   id: string;
   user_id: string;
@@ -27,6 +27,9 @@ export interface ProfilesV2Row {
   last_reset: string;
   premium_until: string | null;
   requests_today: number;
+  trial_until: string | null;
+  trial_used: boolean;
+  trial_started_at: string | null;
   email: string | null;
 }
 export interface ProfilesV2Insert {
@@ -37,6 +40,9 @@ export interface ProfilesV2Insert {
   last_reset?: string;
   premium_until?: string | null;
   requests_today?: number;
+  trial_until?: string | null;
+  trial_used?: boolean;
+  trial_started_at?: string | null;
   email?: string | null;
 }
 export interface ProfilesV2Update {
@@ -47,6 +53,9 @@ export interface ProfilesV2Update {
   last_reset?: string;
   premium_until?: string | null;
   requests_today?: number;
+  trial_until?: string | null;
+  trial_used?: boolean;
+  trial_started_at?: string | null;
   email?: string | null;
 }
 

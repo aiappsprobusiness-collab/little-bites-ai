@@ -45,7 +45,7 @@ export function AddChildForm({
 }: AddChildFormProps) {
   const { toast } = useToast();
   const { createMember, isCreating } = useMembers();
-  const { subscriptionStatus, hasPremiumAccess } = useSubscription();
+  const { subscriptionStatus, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
 
@@ -60,7 +60,7 @@ export function AddChildForm({
 
   const maxMembers = getMaxMembersByTariff(subscriptionStatus);
   const canAddMore = memberCount < maxMembers;
-  const isFreeLimitReached = !hasPremiumAccess && memberCount >= 1;
+  const isFreeLimitReached = !hasAccess && memberCount >= 1;
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 
@@ -87,7 +87,7 @@ export function AddChildForm({
 
   const allergiesHandlers = {
     add: (raw: string) => {
-      if (!hasPremiumAccess && allergies.length >= 1) {
+      if (!hasAccess && allergies.length >= 1) {
         setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
         setShowPaywall(true);
         return;
@@ -134,7 +134,7 @@ export function AddChildForm({
         type: memberType,
         age_months: totalAgeMonths || null,
         allergies,
-        ...(hasPremiumAccess && { preferences }),
+        ...(hasAccess && { preferences }),
       });
       toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
       onSaved(newMember.id);
@@ -251,7 +251,7 @@ export function AddChildForm({
         placeholder="Добавить аллергию (запятая или Enter)"
       />
 
-      {hasPremiumAccess && (
+      {hasAccess && (
         <TagListEditor
           label="Предпочтения в еде"
           items={preferences}

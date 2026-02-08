@@ -30,7 +30,7 @@ interface FamilyOnboardingProps {
 
 export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
   const { members, formatAge, setSelectedMemberId } = useFamily();
-  const { subscriptionStatus, hasPremiumAccess } = useSubscription();
+  const { subscriptionStatus, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
 
@@ -38,7 +38,7 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
 
   const maxMembers = getMaxMembersByTariff(subscriptionStatus);
   const canAddMore = members.length < maxMembers;
-  const isFreeLimitReached = !hasPremiumAccess && members.length >= 1;
+  const isFreeLimitReached = !hasAccess && members.length >= 1;
 
   const handleAddClick = () => {
     if (!canAddMore) {

@@ -25,15 +25,36 @@ const FEATURES = [
 export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
   const { toast } = useToast();
   const paywallCustomMessage = useAppStore((s) => s.paywallCustomMessage);
-  const { startPayment, isStartingPayment, isPremium, hasPremiumAccess, startTrial, isStartingTrial } = useSubscription();
+  const {
+    startPayment,
+    isStartingPayment,
+    isPremium,
+    hasAccess,
+    hasTrialAccess,
+    trialRemainingDays,
+    trialUsed,
+    startTrial,
+    isStartingTrial,
+  } = useSubscription();
   const [pricingOption, setPricingOption] = useState<"month" | "year">("year");
-  /** Показывать форму оплаты только если нет доступа (free/expired) */
-  const showPayForm = !hasPremiumAccess;
+  /** Показывать форму оплаты, если нет доступа или активен trial (чтобы оформить подписку). */
+  const showPayForm = !hasAccess || hasTrialAccess;
+  /** Триал уже был использован и истёк — не показывать кнопку Trial */
+  const trialUnavailable = trialUsed && !hasTrialAccess;
 
   const handleStartTrial = async () => {
-    await startTrial();
-    onSubscribe?.();
-    onClose();
+    try {
+      await startTrial();
+      onSubscribe?.();
+      onClose();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg === "TRIAL_ALREADY_USED") {
+        toast({ variant: "default", title: "Триал уже использован", description: "Оформите подписку для полного доступа." });
+      } else {
+        toast({ variant: "destructive", title: "Ошибка", description: msg || "Попробуйте позже." });
+      }
+    }
   };
 
   const handlePayPremium = () => {
@@ -157,19 +178,32 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                   )}
                 </div>
 
-                {/* CTA: Trial — активирует trial по кнопке (3 дня) */}
-                <Button
-                  variant="default"
-                  size="lg"
-                  className="w-full mb-3 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl"
-                  onClick={() => handleStartTrial().catch(() => {})}
-                  disabled={isStartingTrial}
-                >
-                  <Heart className="w-5 h-5 mr-2" />
-                  {isStartingTrial ? "Активация…" : "Попробовать Premium бесплатно"}
-                </Button>
+                {/* Trial: при активном trial — остаток (trialRemainingDays); при уже использованном — текст без кнопки */}
+                {hasTrialAccess && trialRemainingDays != null && (
+                  <p className="text-center text-sm text-muted-foreground mb-3">
+                    Осталось {trialRemainingDays} {trialRemainingDays === 1 ? "день" : trialRemainingDays < 5 ? "дня" : "дней"}
+                  </p>
+                )}
+                {trialUnavailable && (
+                  <p className="text-center text-sm text-muted-foreground mb-3">Триал уже использован</p>
+                )}
+                {!hasAccess && !trialUnavailable && (
+                  <Button
+                    variant="default"
+                    size="lg"
+                    className="w-full mb-3 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl"
+                    onClick={() => handleStartTrial()}
+                    disabled={isStartingTrial}
+                  >
+                    <Heart className="w-5 h-5 mr-2" />
+                    {isStartingTrial ? "Активация…" : "Попробовать Premium бесплатно"}
+                  </Button>
+                )}
 
                 {/* CTA: Continue with Premium (month/year) — редирект на Т-Банк */}
+                {hasTrialAccess && (
+                  <p className="text-center text-xs text-muted-foreground mb-2">У вас активен trial</p>
+                )}
                 <Button
                   variant="outline"
                   size="lg"

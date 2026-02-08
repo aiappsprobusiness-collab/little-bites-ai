@@ -77,7 +77,7 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { members, isLoading, formatAge } = useFamily();
-  const { subscriptionStatus, hasPremiumAccess, isTrial, trialDaysRemaining, cancelSubscription, isCancellingSubscription } = useSubscription();
+  const { subscriptionStatus, hasAccess, hasPremiumAccess, isTrial, trialDaysRemaining, cancelSubscription, isCancellingSubscription } = useSubscription();
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
@@ -240,7 +240,7 @@ export default function ProfilePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: members.length * 0.05 }}
               onClick={() => {
-                if (!hasPremiumAccess && members.length >= 1) {
+                if (!hasAccess && members.length >= 1) {
                   setPaywallCustomMessage(
                     "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу"
                   );
@@ -286,7 +286,7 @@ export default function ProfilePage() {
             {getSubscriptionCta()}
             <ExternalLink className="h-4 w-4 ml-2" />
           </Button>
-          {hasPremiumAccess && (
+          {hasAccess && (
             <Button
               variant="ghost"
               size="sm"

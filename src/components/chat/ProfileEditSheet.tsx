@@ -76,7 +76,7 @@ export function ProfileEditSheet({
 
   const { toast } = useToast();
   const { members, updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
-  const { isPremium, hasPremiumAccess } = useSubscription();
+  const { isPremium, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const [name, setName] = useState("");
@@ -147,7 +147,7 @@ export function ProfileEditSheet({
 
   const handleSave = async () => {
     if (isCreate) {
-      if (!hasPremiumAccess && members.length >= 1) {
+      if (!hasAccess && members.length >= 1) {
         setPaywallCustomMessage(FAMILY_LIMIT_MESSAGE);
         setShowPaywall(true);
         return;
