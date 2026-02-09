@@ -23,7 +23,7 @@ export function PWAInstall() {
             <div className="space-y-2 text-center">
               <p>Установите приложение, чтобы открывать его с иконки и пользоваться офлайн.</p>
               {isIOSDevice && (
-                <p className="text-sm font-medium text-foreground/90">
+                <p className="text-typo-muted font-semibold text-foreground/90">
                   На iPhone: нажмите «Поделиться» в Safari → «На экран Домой».
                 </p>
               )}

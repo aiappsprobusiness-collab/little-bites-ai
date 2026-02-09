@@ -207,14 +207,14 @@ export default function ChatPage() {
           onChunk:
             attempts === 0
               ? (chunk) => {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, content: m.content + chunk, isStreaming: true }
-                        : m
-                    )
-                  );
-                }
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMessageId
+                      ? { ...m, content: m.content + chunk, isStreaming: true }
+                      : m
+                  )
+                );
+              }
               : undefined,
         });
         rawMessage = typeof response?.message === "string" ? response.message : "";
@@ -243,12 +243,12 @@ export default function ChatPage() {
           prev.map((m) =>
             m.id === assistantMessageId
               ? {
-                  ...m,
-                  content: FAILED_MESSAGE,
-                  rawContent: rawMessage || undefined,
-                  isStreaming: false,
-                  preParsedRecipe: null,
-                }
+                ...m,
+                content: FAILED_MESSAGE,
+                rawContent: rawMessage || undefined,
+                isStreaming: false,
+                preParsedRecipe: null,
+              }
               : m
           )
         );
@@ -262,12 +262,12 @@ export default function ChatPage() {
           prev.map((m) =>
             m.id === assistantMessageId
               ? {
-                  ...m,
-                  content: parsed.displayText,
-                  rawContent: rawMessage,
-                  isStreaming: false,
-                  preParsedRecipe: parsed.recipes[0] ?? null,
-                }
+                ...m,
+                content: parsed.displayText,
+                rawContent: rawMessage,
+                isStreaming: false,
+                preParsedRecipe: parsed.recipes[0] ?? null,
+              }
               : m
           )
         );
@@ -371,8 +371,8 @@ export default function ChatPage() {
             {/* Row 1: Title left, Profile icon right */}
             <div className="flex items-center justify-between w-full min-w-0">
               <div className="leading-tight min-w-0">
-                <h1 className="text-lg sm:text-xl font-semibold text-foreground tracking-tight truncate">Mom Recipes</h1>
-                <p className="text-xs text-muted-foreground truncate">рядом на кухне</p>
+                <h1 className="text-typo-title font-semibold text-foreground tracking-tight truncate">Mom Recipes</h1>
+                <p className="text-typo-caption text-muted-foreground truncate">рядом на кухне</p>
               </div>
               <button
                 onClick={() => navigate("/profile")}
@@ -386,7 +386,7 @@ export default function ChatPage() {
             {members.length > 0 && (
               <div className="flex justify-start items-center mt-1.5 min-w-0 w-fit">
                 {isFree ? (
-                  <span className="inline-flex items-center w-fit rounded-full min-h-[40px] px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 whitespace-nowrap">
+                  <span className="inline-flex items-center w-fit rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 whitespace-nowrap">
                     <span className="truncate max-w-[140px]">
                       {members.find((c) => c.id === (selectedMemberId ?? members[0]?.id))?.name ?? members[0]?.name ?? ""}
                     </span>
@@ -400,7 +400,7 @@ export default function ChatPage() {
                       setSelectedMemberId(v);
                     }}
                   >
-                    <SelectTrigger className="inline-flex items-center w-fit max-w-[180px] rounded-full min-h-[40px] px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap [&>span]:truncate [&>span]:max-w-[140px] focus:ring-0 [&>svg]:hidden">
+                    <SelectTrigger className="inline-flex items-center w-fit max-w-[180px] rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap [&>span]:truncate [&>span]:max-w-[140px] focus:ring-0 [&>svg]:hidden">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -419,7 +419,7 @@ export default function ChatPage() {
         </div>
         {isTrial && trialDaysRemaining !== null && (
           <div className="container mx-auto px-3 sm:px-4 pb-1.5 max-w-full">
-            <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+            <p className="text-typo-caption text-amber-700 dark:text-amber-400 font-medium">
               Trial: осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
             </p>
           </div>
@@ -438,7 +438,7 @@ export default function ChatPage() {
         {/* Messages */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-5 space-y-5 pb-4">
           {!isLoadingMembers && members.length === 0 && (
-            <FamilyOnboarding onComplete={() => {}} />
+            <FamilyOnboarding onComplete={() => { }} />
           )}
 
           {showStarter && !hasUserMessage && members.length > 0 && (
@@ -448,7 +448,7 @@ export default function ChatPage() {
               className="flex justify-start"
             >
               <div className="rounded-2xl rounded-bl-sm px-5 py-4 bg-slate-50/80 border border-slate-200/40 max-w-[85%]">
-                <p className="text-base text-foreground/90 leading-relaxed whitespace-pre-wrap">{STARTER_MESSAGE}</p>
+                <p className="text-typo-body text-foreground/90 leading-relaxed whitespace-pre-wrap">{STARTER_MESSAGE}</p>
               </div>
             </motion.div>
           )}
@@ -495,7 +495,7 @@ export default function ChatPage() {
               <div className="rounded-2xl rounded-bl-sm px-5 py-4 bg-slate-50/80 border border-slate-200/40">
                 <div className="flex items-center gap-3">
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  <span className="text-sm text-muted-foreground">Готовим кулинарное чудо...</span>
+                  <span className="text-typo-muted text-muted-foreground">Готовим кулинарное чудо...</span>
                 </div>
               </div>
             </motion.div>
@@ -513,7 +513,7 @@ export default function ChatPage() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Что приготовить?"
-              className="min-h-[44px] max-h-[120px] flex-1 min-w-0 resize-none rounded-2xl bg-slate-50/80 border-slate-200/50 py-3 px-4 text-base placeholder:text-muted-foreground/70 focus-visible:ring-emerald-500/30"
+              className="min-h-[44px] max-h-[120px] flex-1 min-w-0 resize-none rounded-2xl bg-slate-50/80 border-slate-200/50 py-3 px-4 text-typo-body placeholder:text-muted-foreground/70 focus-visible:ring-emerald-500/30"
               rows={1}
             />
             <div className="flex items-center gap-1.5 shrink-0">
@@ -564,8 +564,8 @@ export default function ChatPage() {
       <Dialog open={showHintsModal} onOpenChange={setShowHintsModal}>
         <DialogContent className="w-[min(280px,calc(100vw-40px))] max-w-[280px] p-4 rounded-xl border-slate-200/50 mx-auto">
           <DialogHeader className="space-y-0.5 pb-3 text-center">
-            <DialogTitle className="text-base font-medium text-foreground">Подсказки для мам 💛</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">С чего начать?</DialogDescription>
+            <DialogTitle className="text-typo-title font-semibold text-foreground">Подсказки для мам 💛</DialogTitle>
+            <DialogDescription className="text-typo-caption text-muted-foreground">С чего начать?</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
             {CHAT_HINT_PHRASES.map((phrase, i) => (

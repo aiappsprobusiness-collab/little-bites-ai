@@ -217,7 +217,7 @@ export default function ChildProfileEditPage() {
                 onChange={(e) => setBirthDate(e.target.value)}
                 className="h-11 rounded-xl"
               />
-              <p className="text-xs text-muted-foreground">
+              <p className="text-typo-caption text-muted-foreground">
                 Возраст считается автоматически
               </p>
             </div>

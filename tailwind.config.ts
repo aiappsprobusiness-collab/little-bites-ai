@@ -16,6 +16,15 @@ export default {
       fontFamily: {
         sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
       },
+      /** Typography scale (source: onboarding/auth). Use with font-semibold/font-bold for titles. */
+      fontSize: {
+        "typo-title": ["1.125rem", { lineHeight: "1.3" }],
+        "typo-h2": ["0.875rem", { lineHeight: "1.4" }],
+        "typo-body": ["1rem", { lineHeight: "1.5" }],
+        "typo-muted": ["0.875rem", { lineHeight: "1.5" }],
+        "typo-caption": ["0.75rem", { lineHeight: "1.4" }],
+        "typo-button": ["1rem", { lineHeight: "1.25" }],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

@@ -235,7 +235,7 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <SheetContent side="bottom" className="rounded-t-3xl px-4 pb-safe">
         <SheetHeader className="pb-3">
-          <SheetTitle className="text-base">Написать сообщение</SheetTitle>
+          <SheetTitle className="text-typo-title">Написать сообщение</SheetTitle>
         </SheetHeader>
         
         <div className="space-y-4">
@@ -246,7 +246,7 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Спросите о рецепте или питании..."
-              className="min-h-[80px] max-h-[150px] resize-none text-base rounded-2xl bg-card border-border/50 pr-12"
+              className="min-h-[80px] max-h-[150px] resize-none text-typo-body rounded-2xl bg-card border-border/50 pr-12"
               rows={3}
             />
             {isRecording && (

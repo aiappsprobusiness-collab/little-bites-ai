@@ -86,16 +86,16 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
             className="w-full space-y-5"
           >
             <div className="rounded-2xl px-5 py-6 bg-slate-50/90 dark:bg-slate-900/50 border border-slate-200/40 dark:border-slate-700/40 space-y-4">
-              <h2 className="text-lg font-semibold text-foreground">
+              <h2 className="text-typo-title font-semibold text-foreground">
                 Давайте познакомимся с вашей семьёй
               </h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-typo-muted text-muted-foreground leading-relaxed">
                 Добавьте членов семьи, для которых мы будем подбирать рецепты и планы питания.
               </p>
             </div>
 
             <div className="space-y-3">
-              <h3 className="text-base font-medium text-foreground text-left">
+              <h3 className="text-typo-body font-medium text-foreground text-left">
                 Расскажите о вашей семье
               </h3>
 
@@ -115,7 +115,7 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
                         <p className="font-medium text-foreground truncate">
                           {member.name}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-typo-caption text-muted-foreground">
                           {[
                             MEMBER_TYPE_LABEL[(member as MembersRow).type] ?? (member as MembersRow).type,
                             formatAge(member.age_months ?? null),
@@ -149,7 +149,7 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
             className="w-full"
           >
             <div className="rounded-2xl px-5 py-6 bg-slate-50/90 dark:bg-slate-900/50 border border-slate-200/40 dark:border-slate-700/40 space-y-5">
-              <h3 className="text-base font-semibold text-foreground text-left">
+              <h3 className="text-typo-title font-semibold text-foreground text-left">
                 Профиль члена семьи
               </h3>
               <AddChildForm

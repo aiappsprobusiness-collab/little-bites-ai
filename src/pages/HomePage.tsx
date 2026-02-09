@@ -114,7 +114,7 @@ export default function HomePage() {
         >
           <div>
             <h1 className="text-2xl font-bold">Привет! 👋</h1>
-            <p className="text-base text-muted-foreground">
+            <p className="text-typo-body text-muted-foreground">
               Что приготовим сегодня для малыша?
             </p>
           </div>
@@ -132,7 +132,7 @@ export default function HomePage() {
         {/* Recent Recipes */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-bold">Недавние рецепты</h2>
+            <h2 className="text-typo-title font-semibold">Недавние рецепты</h2>
             <div className="flex items-center gap-2">
               {recipesWithoutChat.length > 0 && (
                 <>
@@ -286,7 +286,7 @@ export default function HomePage() {
                     key={allergy}
                     type="button"
                     onClick={() => toggleAllergy(allergy)}
-                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${newMemberAllergies.includes(allergy)
+                    className={`px-3 py-1.5 rounded-full text-typo-muted font-semibold transition-colors ${newMemberAllergies.includes(allergy)
                       ? "bg-destructive/20 text-destructive"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
                       }`}

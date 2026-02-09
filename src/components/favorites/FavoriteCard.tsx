@@ -38,8 +38,8 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
         <CardContent className="p-4">
           {/* Header: Title + Favorite toggle */}
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h3 className="font-semibold text-base text-foreground leading-snug line-clamp-2 flex-1 min-w-0 flex items-center gap-1.5">
-              {isPremium && <span className="text-amber-500/80 shrink-0 text-sm" aria-hidden>⭐</span>}
+            <h3 className="text-typo-body font-semibold text-foreground leading-snug line-clamp-2 flex-1 min-w-0 flex items-center gap-1.5">
+              {isPremium && <span className="text-amber-500/80 shrink-0 text-typo-muted" aria-hidden>⭐</span>}
               <span>{vm.title}</span>
             </h3>
             <Button
@@ -58,11 +58,11 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
 
           {/* Subtitle (1 line max, ellipsis) */}
           {vm.subtitle && (
-            <p className="text-sm text-muted-foreground truncate mb-2">{vm.subtitle}</p>
+            <p className="text-typo-muted text-muted-foreground truncate mb-2">{vm.subtitle}</p>
           )}
 
           {/* Meta row: 👶 child | 🕒 cook time | 🍽 meal type */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground mb-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-typo-caption text-muted-foreground mb-2">
             <span className="flex items-center gap-1">
               <span>👶</span>
               <span>{vm.childLabel}</span>
@@ -85,13 +85,13 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
               {chips.map((name, i) => (
                 <span
                   key={i}
-                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200/60"
+                  className="inline-flex items-center px-2 py-0.5 rounded-full text-typo-caption font-medium bg-slate-100 text-slate-700 border border-slate-200/60"
                 >
                   {name}
                 </span>
               ))}
               {extraCount > 0 && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200/60">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-typo-caption font-medium bg-slate-100 text-slate-600 border border-slate-200/60">
                   +{extraCount}
                 </span>
               )}
@@ -100,7 +100,7 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
 
           {/* Optional hint row — Premium only */}
           {showHint && (
-            <p className="text-xs text-muted-foreground italic line-clamp-2 pt-1 border-t border-slate-100">
+            <p className="text-typo-caption text-muted-foreground italic line-clamp-2 pt-1 border-t border-slate-100">
               💡 {vm.hint}
             </p>
           )}

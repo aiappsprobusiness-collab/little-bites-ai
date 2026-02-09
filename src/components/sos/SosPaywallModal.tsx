@@ -26,11 +26,11 @@ export function SosPaywallModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg font-medium">
+          <DialogTitle className="text-typo-title font-semibold">
             💛 Мы рядом — доступно в Premium
           </DialogTitle>
         </DialogHeader>
-        <p className="text-muted-foreground text-sm leading-relaxed">
+        <p className="text-muted-foreground text-typo-muted leading-relaxed">
           Получайте мгновенные советы от нутрициолога при запорах, аллергиях и
           отказах от еды.
         </p>

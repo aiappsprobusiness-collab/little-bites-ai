@@ -74,12 +74,12 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
         className="h-[85vh] rounded-t-3xl border-t px-4 pt-4 pb-8"
       >
         <SheetHeader className="text-left pb-3">
-          <SheetTitle className="text-xl font-semibold text-foreground">{title}</SheetTitle>
+          <SheetTitle className="text-typo-title font-semibold text-foreground">{title}</SheetTitle>
         </SheetHeader>
         <ScrollArea className="h-[calc(85vh-80px)] pr-2">
           <div className="space-y-5 pb-6">
             {/* Meta row */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-typo-muted text-muted-foreground">
               {childName && (
                 <span>👶 {childName}</span>
               )}
@@ -94,20 +94,20 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
             {/* Description */}
             {description && (
               <div>
-                <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+                <p className="text-typo-muted text-muted-foreground leading-relaxed">{description}</p>
               </div>
             )}
 
             {/* Ingredients */}
             {ingredients.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-foreground mb-2">Ингредиенты</h3>
+                <h3 className="text-typo-h2 font-bold text-foreground mb-2">Ингредиенты</h3>
                 <ul className="space-y-1.5">
                   {ingredients.map((ing, i) => {
                     const text = ingredientDisplayText(ing);
                     if (!text) return null;
                     return (
-                      <li key={i} className="flex items-center gap-2 text-sm text-foreground">
+                      <li key={i} className="flex items-center gap-2 text-typo-muted text-foreground">
                         <span className="text-muted-foreground">•</span>
                         <span>{text}</span>
                       </li>
@@ -120,20 +120,20 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
             {/* Hint / Chef advice — Premium only */}
             {isPremium && hint && (
               <div className="rounded-xl p-4 bg-emerald-50/60 border border-emerald-100/80">
-                <p className="text-xs font-medium text-emerald-800/90 mb-1">Совет от шефа</p>
-                <p className="text-sm text-foreground leading-snug">{hint}</p>
+                <p className="text-typo-caption font-medium text-emerald-800/90 mb-1">Совет от шефа</p>
+                <p className="text-typo-muted text-foreground leading-snug">{hint}</p>
               </div>
             )}
 
             {/* Steps */}
             {steps.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-foreground mb-2">Приготовление</h3>
+                <h3 className="text-typo-h2 font-bold text-foreground mb-2">Приготовление</h3>
                 <div className="space-y-2">
                   {steps.map((step, idx) => (
                     <div key={idx} className="flex gap-3 items-start">
-                      <span className="text-sm font-bold text-primary shrink-0">{idx + 1}.</span>
-                      <p className="text-sm text-foreground leading-relaxed flex-1">{step}</p>
+                      <span className="text-typo-muted font-bold text-primary shrink-0">{idx + 1}.</span>
+                      <p className="text-typo-muted text-foreground leading-relaxed flex-1">{step}</p>
                     </div>
                   ))}
                 </div>

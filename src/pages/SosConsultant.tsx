@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, Baby, UtensilsCrossed, Apple, AlertCircle, Clock, Droplets, ClipboardList } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -19,33 +19,49 @@ import { SosPaywallModal } from "@/components/sos/SosPaywallModal";
 import { Paywall } from "@/components/subscription/Paywall";
 import { SUPABASE_URL } from "@/integrations/supabase/client";
 
-const SOS_TOPICS: { id: string; label: string; emoji: string }[] = [
-  { id: "constipation_diarrhea", label: "Запор / Понос", emoji: "🚽" },
-  { id: "new_food", label: "Ввод продукта", emoji: "🥄" },
-  { id: "food_refusal", label: "Отказ от еды", emoji: "😤" },
-  { id: "allergy", label: "Аллергия", emoji: "⚠️" },
-  { id: "routine", label: "График кормления", emoji: "⏰" },
-  { id: "spitting_up", label: "Срыгивание", emoji: "🍼" },
+const SOS_TOPICS: {
+  id: string;
+  label: string;
+  emoji: string;
+  icon: ComponentType<{ className?: string }>;
+}[] = [
+  { id: "constipation_diarrhea", label: "Стул малыша", emoji: "🚽", icon: Baby },
+  { id: "new_food", label: "Ввод нового продукта", emoji: "🥄", icon: Apple },
+  { id: "food_refusal", label: "Не хочет есть", emoji: "😤", icon: UtensilsCrossed },
+  { id: "allergy", label: "Аллергия или реакция", emoji: "⚠️", icon: AlertCircle },
+  { id: "routine", label: "График кормления", emoji: "⏰", icon: Clock },
+  { id: "spitting_up", label: "Срыгивание", emoji: "🍼", icon: Droplets },
+  { id: "food_diary", label: "Дневник питания", emoji: "📋", icon: ClipboardList },
 ];
 
 const sosHints: Record<string, string> = {
   constipation_diarrhea:
-    "Пример: Не ходит в туалет 2 дня после введения банана. Живот спокойный.",
-  new_food: "Пример: Можно ли в 7 месяцев давать клубнику? В каком виде?",
+    "Опишите, как часто бывает стул, консистенция, как давно изменилось",
+  new_food: "Напишите, какой продукт хотите ввести и в каком виде",
   food_refusal:
-    "Пример: Ребенок перестал есть мясо, выплевывает кусочки. Что делать?",
+    "Опишите, что именно отказывается есть и как давно это началось",
   allergy:
-    "Пример: Появились красные точки на животе после нового пюре из кабачка.",
+    "Опишите, что появилось (сыпь, краснота) и после чего",
   routine:
-    "Пример: Как выстроить график, если ребенок спит 3 раза в день по 40 минут?",
+    "Опишите текущий режим: сколько раз ест, примерные объёмы",
   spitting_up:
-    "Пример: Ребенок срыгивает больше 2 столовых ложек после обеда.",
+    "Опишите, как часто и сколько примерно срыгивает",
+  food_diary:
+    "Укажите, чем кормили ребёнка, и я подскажу, что улучшить в следующий раз.",
 };
+
+/** Убирает эмодзи из текста только для отображения (спокойнее вид). Переносы строк сохраняются. */
+function stripEmojiForDisplay(text: string): string {
+  return text
+    .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}]/gu, " ")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
 
 export default function SosConsultant() {
   const navigate = useNavigate();
   const { session } = useAuth();
-  const { selectedMember, members } = useFamily();
+  const { selectedMember, members, formatAge } = useFamily();
   const { isPremium } = useSubscription();
   const [sosPaywallOpen, setSosPaywallOpen] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -125,10 +141,15 @@ export default function SosConsultant() {
         return;
       }
       setSelectedTopic(topic);
-      setDetails("");
+      if (topic.id === "food_diary" && memberData) {
+        const ageStr = memberData.age_months != null ? formatAge(memberData.age_months) : "[возраст]";
+        setDetails(`Ребёнку ${ageStr}. Сегодня ел(а): [список продуктов/объёмы]. Дай рекомендации: что оставить, что добавить/заменить и почему в следующий раз.`);
+      } else {
+        setDetails("");
+      }
       setInputSheetOpen(true);
     },
-    [isPremium]
+    [isPremium, memberData, formatAge]
   );
 
   const handleGetAdvice = useCallback(() => {
@@ -150,44 +171,60 @@ export default function SosConsultant() {
         </Button>
       }
     >
-      <div className="p-4 space-y-6">
+      <div className="p-4 space-y-6 bg-slate-50 min-h-full">
         {!memberData && (
-          <p className="text-sm text-muted-foreground text-center py-4">
+          <p className="text-typo-muted text-muted-foreground text-center py-4">
             Добавьте ребёнка в профиле, чтобы получать персональные рекомендации.
           </p>
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          {SOS_TOPICS.map((topic) => (
-            <SosButton
-              key={topic.id}
-              label={topic.label}
-              emoji={topic.emoji}
-              onClick={() => handleSosClick(topic)}
-              disabled={loadingTopic !== null}
-              showLock={!isPremium}
-              locked={!isPremium}
-            />
-          ))}
+          {SOS_TOPICS.map((topic) => {
+            const Icon = topic.icon;
+            return (
+              <SosButton
+                key={topic.id}
+                label={topic.label}
+                subtext={topic.id === "food_diary" ? "Записать кормление и получить совет" : undefined}
+                emoji={topic.emoji}
+                icon={<Icon className="w-5 h-5 text-emerald-700" />}
+                onClick={() => handleSosClick(topic)}
+                disabled={loadingTopic !== null}
+                showLock={!isPremium}
+                locked={!isPremium}
+              />
+            );
+          })}
         </div>
 
         {loadingTopic && (
-          <Card className="border-primary/30">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <CardContent className="p-6 flex items-center justify-center gap-3">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              <span className="text-muted-foreground">Получаем рекомендацию...</span>
+              <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+              <span className="text-typo-muted text-slate-500">Получаем рекомендацию...</span>
             </CardContent>
           </Card>
         )}
 
         {result && !loadingTopic && (
-          <Card className="border-primary/30">
-            <CardContent className="p-4">
-              <p className="text-sm whitespace-pre-wrap text-foreground">{result.text}</p>
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-hidden">
+            <CardContent className="p-5 pb-4">
+              <div className="space-y-4 text-typo-muted text-slate-700 leading-relaxed">
+                {(() => {
+                  const displayText = stripEmojiForDisplay(result.text);
+                  const paragraphs = displayText.split(/\n\n+/).filter(Boolean);
+                  if (paragraphs.length === 0) return <p className="whitespace-pre-wrap">{result.text}</p>;
+                  return paragraphs.map((paragraph, i) => (
+                    <p key={i} className="whitespace-pre-wrap">
+                      {paragraph.trim()}
+                    </p>
+                  ));
+                })()}
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
-                className="mt-3"
+                className="mt-4 text-slate-500"
                 onClick={() => setResult(null)}
               >
                 Закрыть
@@ -210,30 +247,30 @@ export default function SosConsultant() {
       />
 
       <Sheet open={inputSheetOpen} onOpenChange={setInputSheetOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-safe">
-          <SheetHeader>
-            <SheetTitle>
-              {selectedTopic ? `💛 ${selectedTopic.label}` : "Мы рядом"}
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe px-6 pt-6 pb-8">
+          <SheetHeader className="px-0">
+            <SheetTitle className="text-typo-title font-semibold text-slate-900">
+              {selectedTopic ? selectedTopic.label : "Мы рядом"}
             </SheetTitle>
           </SheetHeader>
-          <div className="mt-4 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              О чем можно спросить:
+          <div className="mt-6 space-y-5">
+            <p className="text-typo-muted text-slate-600">
+              О чём можно спросить
             </p>
             <Textarea
               placeholder={
                 selectedTopic
-                  ? sosHints[selectedTopic.id] ?? "Опишите ситуацию подробнее (необязательно)"
-                  : "Опишите ситуацию подробнее (необязательно)"
+                  ? sosHints[selectedTopic.id] ?? "Опишите ситуацию (необязательно)"
+                  : "Опишите ситуацию (необязательно)"
               }
               value={details}
               onChange={(e) => setDetails(e.target.value)}
               rows={4}
-              className="resize-none placeholder:text-muted-foreground"
+              className="resize-none rounded-xl border-slate-200 text-typo-body placeholder:text-slate-400"
               disabled={!!loadingTopic}
             />
             <Button
-              className="w-full"
+              className="w-full h-12 rounded-[14px] bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-none"
               onClick={handleGetAdvice}
               disabled={!!loadingTopic}
             >

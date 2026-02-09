@@ -66,7 +66,7 @@ function PlanBadge({ status }: { status: string }) {
         ? "secondary"
         : "outline";
   return (
-    <Badge variant={variant} className="text-xs font-medium shrink-0">
+    <Badge variant={variant} className="text-typo-caption font-medium shrink-0">
       {STATUS_LABEL[status] ?? "Free"}
     </Badge>
   );
@@ -153,7 +153,7 @@ export default function ProfilePage() {
             </div>
             <div className="min-w-0 flex-1 pt-0.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-lg font-semibold text-foreground truncate">
+                <h2 className="text-typo-title font-semibold text-foreground truncate">
                   {displayName}
                 </h2>
                 <button
@@ -165,7 +165,7 @@ export default function ProfilePage() {
                   <Pencil className="h-4 w-4" />
                 </button>
               </div>
-              <p className="text-sm text-muted-foreground mt-0.5 truncate">
+              <p className="text-typo-muted text-muted-foreground mt-0.5 truncate">
                 {email}
               </p>
               <div className="mt-2">
@@ -178,10 +178,10 @@ export default function ProfilePage() {
         {/* My Family */}
         <section className="space-y-4">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">
+            <h3 className="text-typo-title font-semibold text-foreground">
               Моя семья
             </h3>
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-typo-muted text-muted-foreground mt-0.5">
               Профили, для которых вы готовите
             </p>
           </div>
@@ -201,7 +201,7 @@ export default function ProfilePage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-foreground">
                       {member.name}
-                      <span className="text-muted-foreground font-normal text-sm ml-1.5">
+                      <span className="text-muted-foreground font-normal text-typo-muted ml-1.5">
                         {[
                           MEMBER_TYPE_LABEL[(member as MembersRow).type] ??
                             (member as MembersRow).type,
@@ -211,7 +211,7 @@ export default function ProfilePage() {
                           .join(" · ")}
                       </span>
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    <p className="text-typo-caption text-muted-foreground mt-1 line-clamp-2">
                       {[
                         member.allergies?.length &&
                           `Аллергии: ${(member.allergies as string[]).join(", ")}`,
@@ -264,18 +264,18 @@ export default function ProfilePage() {
           className="rounded-2xl border border-border bg-card p-5 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.06)] space-y-4"
           style={{ boxShadow: "0 8px 30px -8px hsl(240 10% 25% / 0.08)" }}
         >
-          <h3 className="text-base font-semibold text-foreground">
+          <h3 className="text-typo-title font-semibold text-foreground">
             Текущий план
           </h3>
           <div className="flex items-center justify-between gap-2">
             <PlanBadge status={subscriptionStatus} />
             {isTrial && trialDaysRemaining !== null && (
-              <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+              <span className="text-typo-caption font-medium text-amber-700 dark:text-amber-400">
                 Осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
               </span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-typo-muted text-muted-foreground">
             {PLAN_BENEFITS[subscriptionStatus] ?? PLAN_BENEFITS.free}
           </p>
           <Button
@@ -308,7 +308,7 @@ export default function ProfilePage() {
 
         {/* Settings */}
         <section className="space-y-2">
-          <h3 className="text-base font-semibold text-foreground px-1">
+          <h3 className="text-typo-title font-semibold text-foreground px-1">
             Настройки
           </h3>
           <div
@@ -344,7 +344,7 @@ export default function ProfilePage() {
 
         {/* Юридическая информация */}
         <section className="space-y-2">
-          <h3 className="text-base font-semibold text-foreground px-1">
+          <h3 className="text-typo-title font-semibold text-foreground px-1">
             Юридическая информация
           </h3>
           <div

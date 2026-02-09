@@ -75,7 +75,7 @@ export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselP
             </div>
             <p
               className={cn(
-                "font-semibold text-xs truncate w-full text-center",
+                "font-semibold text-typo-caption truncate w-full text-center",
                 isSelected && "text-primary-foreground"
               )}
             >
@@ -84,7 +84,7 @@ export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselP
             {!compact && (
               <p
                 className={cn(
-                  "text-xs truncate w-full text-center",
+                  "text-typo-caption truncate w-full text-center",
                   isSelected ? "text-primary-foreground/80" : "text-muted-foreground"
                 )}
               >

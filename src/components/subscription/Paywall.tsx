@@ -102,7 +102,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
             {/* Custom message (upsell из онбординга или при лимитах) */}
             {paywallCustomMessage && (
               <div className="mb-4 p-4 rounded-xl bg-primary/10 border border-primary/20">
-                <p className="text-sm font-medium text-foreground text-center leading-relaxed">
+                <p className="text-typo-muted font-semibold text-foreground text-center leading-relaxed">
                   {paywallCustomMessage}
                 </p>
               </div>
@@ -117,10 +117,10 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
 
             {/* Title */}
             <div className="text-center mb-5">
-              <h2 className="text-xl sm:text-2xl font-bold mb-2 text-foreground">
+              <h2 className="text-typo-title font-semibold mb-2 text-foreground">
                 Mama Premium — забота о семье на автопилоте
               </h2>
-              <p className="text-muted-foreground text-sm leading-relaxed">
+              <p className="text-muted-foreground text-typo-muted leading-relaxed">
                 Персональные рецепты, планы питания и ИИ-помощник для всей семьи.
               </p>
             </div>
@@ -133,7 +133,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.05 * index }}
-                  className="flex items-center gap-3 text-sm"
+                  className="flex items-center gap-3 text-typo-muted"
                 >
                   <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                     <Check className="w-3 h-3 text-primary" />
@@ -151,7 +151,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                     <button
                       type="button"
                       onClick={() => setPricingOption("month")}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      className={`flex-1 py-2.5 rounded-xl text-typo-muted font-semibold transition-colors ${
                         pricingOption === "month"
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted/50 text-muted-foreground hover:bg-muted"
@@ -162,7 +162,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                     <button
                       type="button"
                       onClick={() => setPricingOption("year")}
-                      className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      className={`flex-1 py-2.5 rounded-xl text-typo-muted font-semibold transition-colors ${
                         pricingOption === "year"
                           ? "bg-primary text-primary-foreground"
                           : "bg-muted/50 text-muted-foreground hover:bg-muted"
@@ -172,7 +172,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                     </button>
                   </div>
                   {pricingOption === "year" && (
-                    <p className="text-xs text-center text-muted-foreground">
+                    <p className="text-typo-caption text-center text-muted-foreground">
                       Экономия ~17% · {Math.round(pricing.yearRub / 12).toLocaleString("ru-RU")} ₽/месяц
                     </p>
                   )}
@@ -180,12 +180,12 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
 
                 {/* Trial: при активном trial — остаток (trialRemainingDays); при уже использованном — текст без кнопки */}
                 {hasTrialAccess && trialRemainingDays != null && (
-                  <p className="text-center text-sm text-muted-foreground mb-3">
+                  <p className="text-center text-typo-muted text-muted-foreground mb-3">
                     Осталось {trialRemainingDays} {trialRemainingDays === 1 ? "день" : trialRemainingDays < 5 ? "дня" : "дней"}
                   </p>
                 )}
                 {trialUnavailable && (
-                  <p className="text-center text-sm text-muted-foreground mb-3">Триал уже использован</p>
+                  <p className="text-center text-typo-muted text-muted-foreground mb-3">Триал уже использован</p>
                 )}
                 {!hasAccess && !trialUnavailable && (
                   <Button
@@ -202,7 +202,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
 
                 {/* CTA: Continue with Premium (month/year) — редирект на Т-Банк */}
                 {hasTrialAccess && (
-                  <p className="text-center text-xs text-muted-foreground mb-2">У вас активен trial</p>
+                  <p className="text-center text-typo-caption text-muted-foreground mb-2">У вас активен trial</p>
                 )}
                 <Button
                   variant="outline"
@@ -238,7 +238,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
             )}
 
             {/* Legal */}
-            <p className="text-xs text-center text-muted-foreground mt-5">
+            <p className="text-typo-caption text-center text-muted-foreground mt-5">
               Оплачивая подписку, вы соглашаетесь с{" "}
               <a href="/terms" className="underline hover:text-foreground">Пользовательским соглашением</a>,{" "}
               <a href="/privacy" className="underline hover:text-foreground">Политикой конфиденциальности</a> и{" "}

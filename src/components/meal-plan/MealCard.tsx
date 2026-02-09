@@ -69,14 +69,14 @@ export function MealCard({
         aria-label={`Открыть рецепт: ${recipeTitle}`}
         onClick={handleClick}
         className={cn(
-          "w-full text-left rounded-2xl border border-border/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+          "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
           "p-4 min-h-[44px]",
           "active:opacity-95 transition-opacity",
           "touch-manipulation",
           className
         )}
       >
-        <div className="font-semibold text-foreground text-base leading-tight">
+        <div className="text-typo-body font-semibold text-foreground leading-tight">
           {recipeTitle}
         </div>
       </button>
@@ -89,41 +89,41 @@ export function MealCard({
       aria-label={`Открыть рецепт: ${recipeTitle}`}
       onClick={handleClick}
       className={cn(
-        "w-full text-left rounded-2xl border border-border/60 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+        "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
         "p-4 min-h-[44px] flex flex-col gap-1.5",
         "active:opacity-95 transition-opacity",
         "touch-manipulation",
         className
       )}
     >
-      <div className="text-xs text-muted-foreground">
+      <div className="text-typo-caption text-muted-foreground">
         {meta.emoji} {meta.label}{timeStr}
       </div>
-      <div className="font-semibold text-foreground text-base leading-tight">
+      <div className="text-typo-body font-semibold text-foreground leading-tight">
         {recipeTitle}
       </div>
       {metaLine2 && (
-        <div className="text-xs text-muted-foreground">{metaLine2}</div>
+        <div className="text-typo-caption text-muted-foreground">{metaLine2}</div>
       )}
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-1">
           {chips.map((name, i) => (
             <span
               key={`${name}-${i}`}
-              className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/70 text-muted-foreground text-xs"
+              className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-typo-caption"
             >
               {name}
             </span>
           ))}
           {extraCount > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-muted/70 text-muted-foreground text-xs">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-typo-caption">
               +{extraCount}
             </span>
           )}
         </div>
       )}
       {hint && (
-        <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+        <div className="text-typo-caption text-muted-foreground mt-0.5 leading-relaxed">
           {hint}
         </div>
       )}
@@ -136,7 +136,7 @@ export function MealCardSkeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "w-full rounded-2xl border border-border/40 bg-white/80 p-4 flex flex-col gap-2",
+        "w-full rounded-2xl border border-slate-200 bg-white p-4 flex flex-col gap-2",
         className
       )}
     >

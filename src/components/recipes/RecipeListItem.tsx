@@ -68,8 +68,8 @@ export function RecipeListItem({
             )}
           </div>
           <CardContent className="p-3 flex-1 flex flex-col justify-center">
-            <h3 className="font-bold text-sm mb-1 line-clamp-2">{title}</h3>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <h3 className="text-typo-h2 font-bold mb-1 line-clamp-2">{title}</h3>
+            <div className="flex items-center gap-2 text-typo-caption text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 <span>{cookTime}</span>

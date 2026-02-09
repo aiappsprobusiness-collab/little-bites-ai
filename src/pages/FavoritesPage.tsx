@@ -44,7 +44,7 @@ export default function FavoritesPage() {
     <MobileLayout title="Избранное">
       <div className="px-4 pt-4 pb-24">
         {/* Subtitle */}
-        <p className="text-sm text-muted-foreground mb-5 px-0.5">
+        <p className="text-typo-muted text-muted-foreground mb-5 px-0.5">
           Любимые рецепты для вашей семьи
         </p>
 
@@ -57,10 +57,10 @@ export default function FavoritesPage() {
             <Card className="rounded-2xl border border-slate-200/40 bg-slate-50/90 overflow-hidden">
               <CardContent className="p-8 text-center">
                 <p className="text-4xl mb-4">💚</p>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
+                <h3 className="text-typo-title font-semibold text-foreground mb-2">
                   Здесь будут ваши любимые рецепты
                 </h3>
-                <p className="text-sm text-muted-foreground mb-6 leading-relaxed max-w-[260px] mx-auto">
+                <p className="text-typo-muted text-muted-foreground mb-6 leading-relaxed max-w-[260px] mx-auto">
                   Сохраняйте блюда из чата или рецептов,
                   <br />
                   чтобы быстро возвращаться к ним

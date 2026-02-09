@@ -147,7 +147,7 @@ export function FamilyDashboard({ onAddMember }: FamilyDashboardProps) {
       {/* Member Carousel */}
       <motion.div variants={item}>
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-bold flex items-center gap-2">
+          <h2 className="text-typo-title font-semibold flex items-center gap-2">
             👨‍👩‍👧‍👦 Семья
             <span className="text-sm font-normal text-muted-foreground">
               ({members.length}/10)
@@ -173,8 +173,8 @@ export function FamilyDashboard({ onAddMember }: FamilyDashboardProps) {
                   👤
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">{selectedMember.name}</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="text-typo-title font-bold">{selectedMember.name}</h3>
+                  <p className="text-typo-muted text-muted-foreground">
                     Меню на сегодня
                   </p>
                 </div>
@@ -214,17 +214,17 @@ export function FamilyDashboard({ onAddMember }: FamilyDashboardProps) {
                           <config.icon className="w-4 h-4 text-foreground/80" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-muted-foreground">{config.label}</p>
+                          <p className="text-typo-muted text-muted-foreground">{config.label}</p>
                           {meal ? (
-                            <p className="font-semibold text-base leading-tight line-clamp-2">
+                            <p className="text-typo-body font-semibold leading-tight line-clamp-2">
                               {meal.recipe?.title || 'Рецепт'}
                             </p>
                           ) : (
-                            <p className="text-base text-muted-foreground italic">Не запланировано</p>
+                            <p className="text-typo-body text-muted-foreground italic">Не запланировано</p>
                           )}
                         </div>
                         {meal?.is_completed && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium flex-shrink-0">
+                          <span className="text-typo-caption px-2 py-0.5 rounded-full bg-primary/20 text-primary font-medium flex-shrink-0">
                             ✓
                           </span>
                         )}
@@ -276,16 +276,16 @@ export function FamilyDashboard({ onAddMember }: FamilyDashboardProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{member.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-typo-caption text-muted-foreground">
                       {formatAge(member.age_months ?? null)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium">
+                    <p className="text-typo-muted font-semibold">
                       {memberMeals.length} блюд
                     </p>
                     {memberMeals.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-typo-caption text-muted-foreground">
                         {completedCount}/{memberMeals.length} готово
                       </p>
                     )}

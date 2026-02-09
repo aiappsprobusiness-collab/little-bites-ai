@@ -140,10 +140,10 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
       <DialogContent className="max-w-md mx-auto" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <span className="text-lg">
+            <span className="text-typo-title">
               {mealTypeLabels[mealType] || mealType}
             </span>
-            <span className="text-muted-foreground font-normal text-sm">
+            <span className="text-muted-foreground font-normal text-typo-muted">
               • {dayName}
             </span>
           </DialogTitle>
@@ -166,7 +166,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
 
             <div className="grid grid-cols-4 gap-2">
               <div>
-                <Label className="text-xs text-muted-foreground">Ккал</Label>
+                <Label className="text-typo-caption text-muted-foreground">Ккал</Label>
                 <Input
                   type="number"
                   value={editedMeal?.calories || 0}
@@ -175,11 +175,11 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
                       prev ? { ...prev, calories: Number(e.target.value) } : null
                     )
                   }
-                  className="h-9 text-sm"
+                  className="h-9 text-typo-muted"
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Белки</Label>
+                <Label className="text-typo-caption text-muted-foreground">Белки</Label>
                 <Input
                   type="number"
                   value={editedMeal?.protein || 0}
@@ -188,11 +188,11 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
                       prev ? { ...prev, protein: Number(e.target.value) } : null
                     )
                   }
-                  className="h-9 text-sm"
+                  className="h-9 text-typo-muted"
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Углев</Label>
+                <Label className="text-typo-caption text-muted-foreground">Углев</Label>
                 <Input
                   type="number"
                   value={editedMeal?.carbs || 0}
@@ -201,11 +201,11 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
                       prev ? { ...prev, carbs: Number(e.target.value) } : null
                     )
                   }
-                  className="h-9 text-sm"
+                  className="h-9 text-typo-muted"
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Жиры</Label>
+                <Label className="text-typo-caption text-muted-foreground">Жиры</Label>
                 <Input
                   type="number"
                   value={editedMeal?.fat || 0}
@@ -214,7 +214,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
                       prev ? { ...prev, fat: Number(e.target.value) } : null
                     )
                   }
-                  className="h-9 text-sm"
+                  className="h-9 text-typo-muted"
                 />
               </div>
             </div>
@@ -246,7 +246,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
           {/* Alternatives List */}
           {alternatives.length > 0 && (
             <div className="space-y-2">
-              <Label className="text-sm">Выберите замену:</Label>
+              <Label className="text-typo-muted">Выберите замену:</Label>
               {alternatives.map((alt, index) => (
                 <motion.button
                   key={index}
@@ -260,8 +260,8 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
                       : "border-border hover:border-primary/50"
                   }`}
                 >
-                  <p className="font-medium text-sm">{alt.name}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-typo-muted font-semibold">{alt.name}</p>
+                  <p className="text-typo-caption text-muted-foreground mt-1">
                     {alt.calories} ккал • Б:{alt.protein}г У:{alt.carbs}г Ж:{alt.fat}г
                   </p>
                 </motion.button>
@@ -278,7 +278,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
             >
               Отмена
             </Button>
-            <Button variant="mint" className="flex-1" onClick={handleSave}>
+            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={handleSave}>
               <RefreshCw className="w-4 h-4 mr-2" />
               Заменить
             </Button>

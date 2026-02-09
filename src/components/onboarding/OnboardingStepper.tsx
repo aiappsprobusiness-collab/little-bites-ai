@@ -13,7 +13,7 @@ export function OnboardingStepper({
 }: OnboardingStepperProps) {
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <span className="text-sm font-medium text-muted-foreground">
+      <span className="text-typo-muted font-medium text-muted-foreground">
         Шаг {currentStep} из {totalSteps}
       </span>
       <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">

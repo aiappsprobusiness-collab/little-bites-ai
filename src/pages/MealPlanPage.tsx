@@ -190,13 +190,13 @@ export default function MealPlanPage() {
           <Card variant="default" className="p-8 text-center">
             <CardContent className="p-0">
               <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-bold mb-2">Нет профиля ребенка</h3>
-              <p className="text-muted-foreground mb-4">
+<h3 className="text-typo-title font-semibold mb-2">Нет профиля ребенка</h3>
+            <p className="text-typo-muted text-muted-foreground mb-4">
                 {isFree
                   ? "Добавьте профиль ребёнка, чтобы строить план питания."
                   : "Добавьте профиль ребёнка или выберите «Семья» для общего плана"}
               </p>
-              <Button variant="mint" onClick={() => navigate("/profile")}>
+              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => navigate("/profile")}>
                 Добавить ребенка
               </Button>
             </CardContent>
@@ -213,7 +213,7 @@ export default function MealPlanPage() {
         <button
           type="button"
           onClick={() => setShowProfilePicker(true)}
-          className="flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap"
+          className="flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap"
           aria-label="Выбрать профиль"
         >
           <span className="truncate max-w-[140px]">{displayName}</span>
@@ -237,14 +237,14 @@ export default function MealPlanPage() {
                   onClick={() => setSelectedDay(index)}
                   className={`flex flex-col items-center justify-center min-w-[44px] min-h-[44px] py-2.5 px-3 rounded-xl shrink-0 transition-colors ${
                     isSelected
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "bg-muted/40 text-muted-foreground border border-border/40"
+                      ? "bg-emerald-600 text-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+                      : "bg-white text-slate-600 border border-slate-200"
                   }`}
                 >
-                  <span className="text-xs font-medium">{day}</span>
-                  <span className="text-base font-semibold leading-tight">{date.getDate()}</span>
+                  <span className="text-typo-caption font-medium">{day}</span>
+                  <span className="text-typo-body font-semibold leading-tight">{date.getDate()}</span>
                   {hasMeals && (
-                    <span className={`w-1.5 h-1.5 rounded-full mt-1 ${isSelected ? "bg-primary-foreground/60" : "bg-primary/70"}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full mt-1 ${isSelected ? "bg-white/80" : "bg-emerald-500"}`} />
                   )}
                 </motion.button>
               );
@@ -254,12 +254,12 @@ export default function MealPlanPage() {
 
         {/* Day content — always show plan structure */}
         <div className="flex-1 mt-5">
-          <h2 className="font-semibold text-foreground text-base mb-3">
+          <h2 className="text-typo-title font-semibold text-foreground mb-3">
             {formatDayHeader(selectedDate)}
           </h2>
 
           {(isLoading || isPlanGenerating) && (
-            <p className="text-sm text-muted-foreground mb-3">
+            <p className="text-typo-muted text-muted-foreground mb-3">
               {isPlanGenerating ? GENERATION_MESSAGES[generationMessageIndex] : "Подбираем меню на день…"}
             </p>
           )}
@@ -270,7 +270,7 @@ export default function MealPlanPage() {
               const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
               return (
                 <div key={slot.id}>
-                  <p className="text-xs text-muted-foreground mb-1.5">
+                  <p className="text-typo-caption text-muted-foreground mb-1.5">
                     {slot.emoji} {slot.label} · {slot.time}
                   </p>
                   {isLoading || isPlanGenerating ? (
@@ -284,7 +284,7 @@ export default function MealPlanPage() {
                       compact
                     />
                   ) : (
-                    <p className="text-sm text-muted-foreground/80 py-3">— пока без блюда</p>
+                    <p className="text-typo-muted text-muted-foreground/80 py-3">— пока без блюда</p>
                   )}
                 </div>
               );
@@ -293,9 +293,8 @@ export default function MealPlanPage() {
           {weekIsEmpty && !isPlanGenerating && (
             <div className="mt-5">
               <Button
-                variant="mint"
                 size="lg"
-                className="w-full h-12 rounded-xl font-medium min-h-[44px]"
+                className="w-full h-12 rounded-xl font-medium min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
                 onClick={async () => {
                   if (isFree) {
                     setShowPaywall(true);
@@ -313,7 +312,7 @@ export default function MealPlanPage() {
                 <Sparkles className="w-5 h-5 mr-2 shrink-0" />
                 Создать план на неделю
               </Button>
-              <p className="text-xs text-muted-foreground mt-2 text-center">Меню на семь дней под ваш профиль</p>
+              <p className="text-typo-caption text-muted-foreground mt-2 text-center">Меню на семь дней под ваш профиль</p>
             </div>
           )}
         </div>
@@ -333,7 +332,7 @@ export default function MealPlanPage() {
                 }
               }}
               disabled={isPlanGenerating}
-              className="text-xs text-muted-foreground/80 hover:text-muted-foreground transition-colors"
+              className="text-typo-caption text-muted-foreground/80 hover:text-muted-foreground transition-colors"
             >
               Очистить неделю
             </button>
@@ -345,7 +344,7 @@ export default function MealPlanPage() {
       <Dialog open={showProfilePicker} onOpenChange={setShowProfilePicker}>
         <DialogContent className="rounded-2xl max-w-[90vw]">
           <DialogHeader>
-            <DialogTitle className="text-lg">Кому готовим?</DialogTitle>
+            <DialogTitle className="text-typo-title font-semibold">Кому готовим?</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-1 py-2">
             {!isFree && (
@@ -355,7 +354,7 @@ export default function MealPlanPage() {
                   setSelectedMemberId("family");
                   setShowProfilePicker(false);
                 }}
-                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors ${selectedMemberId === "family" ? "bg-muted font-medium" : "hover:bg-muted/60"}`}
+                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors ${selectedMemberId === "family" ? "bg-emerald-50 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-700"}`}
               >
                 Семья
               </button>
@@ -368,7 +367,7 @@ export default function MealPlanPage() {
                   setSelectedMemberId(c.id);
                   setShowProfilePicker(false);
                 }}
-                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors ${selectedMemberId === c.id ? "bg-muted font-medium" : "hover:bg-muted/60"}`}
+                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors ${selectedMemberId === c.id ? "bg-emerald-50 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-700"}`}
               >
                 {c.name}
               </button>
@@ -380,7 +379,7 @@ export default function MealPlanPage() {
                 setSheetCreateMode(true);
                 setShowProfileSheet(true);
               }}
-              className="text-left py-3 px-4 rounded-xl min-h-[44px] text-muted-foreground hover:bg-muted/60 flex items-center gap-2"
+              className="text-left py-3 px-4 rounded-xl min-h-[44px] text-slate-500 hover:bg-slate-100 flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
               Добавить ребёнка

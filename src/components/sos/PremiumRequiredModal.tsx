@@ -27,7 +27,7 @@ export function PremiumRequiredModal({
             {title}
           </DialogTitle>
         </DialogHeader>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-typo-muted">
           Оформите подписку Premium, чтобы пользоваться этой функцией.
         </p>
         <Button

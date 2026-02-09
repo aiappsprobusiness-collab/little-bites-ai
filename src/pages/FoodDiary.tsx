@@ -97,25 +97,25 @@ export default function FoodDiary() {
       <div className="flex flex-col h-[calc(100vh-3.5rem)] pb-16">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {!memberData && (
-            <p className="text-sm text-muted-foreground text-center py-4">
+            <p className="text-typo-muted text-muted-foreground text-center py-4">
               Добавьте ребёнка в профиле для персональных рекомендаций.
             </p>
           )}
 
-          <p className="text-xs font-medium text-muted-foreground px-1">Сегодняшняя тарелка</p>
+          <p className="text-typo-caption font-medium text-muted-foreground px-1">Сегодняшняя тарелка</p>
 
           {lastResponse && (
             <div className="space-y-3">
               <Card className="bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <CardContent className="p-3">
-                  <p className="text-xs text-muted-foreground mb-1">Вы:</p>
-                  <p className="text-sm">{lastResponse.user}</p>
+                  <p className="text-typo-caption text-muted-foreground mb-1">Вы:</p>
+                  <p className="text-typo-muted">{lastResponse.user}</p>
                 </CardContent>
               </Card>
               <Card className="bg-white rounded-2xl border border-slate-100 shadow-sm border-l-4 border-l-primary">
                 <CardContent className="p-3">
-                  <p className="text-xs text-primary font-medium mb-1">Рекомендация:</p>
-                  <p className="text-sm whitespace-pre-wrap">{lastResponse.assistant}</p>
+                  <p className="text-typo-caption text-primary font-medium mb-1">Рекомендация:</p>
+                  <p className="text-typo-muted whitespace-pre-wrap">{lastResponse.assistant}</p>
                 </CardContent>
               </Card>
             </div>
@@ -134,15 +134,15 @@ export default function FoodDiary() {
                   <Card className="bg-white rounded-2xl border border-slate-100 shadow-sm relative">
                     <CardContent className="p-3 pr-20">
                       <p className="absolute top-2 right-2 text-[10px] text-muted-foreground">{dateStr}</p>
-                      <p className="text-xs text-muted-foreground mb-1">Вы:</p>
-                      <p className="text-sm">{log.user_message}</p>
+                      <p className="text-typo-caption text-muted-foreground mb-1">Вы:</p>
+                      <p className="text-typo-muted">{log.user_message}</p>
                     </CardContent>
                   </Card>
                   <Card className="bg-white rounded-2xl border border-slate-100 shadow-sm relative border-l-4 border-l-primary">
                     <CardContent className="p-3 pr-20">
                       <p className="absolute top-2 right-2 text-[10px] text-muted-foreground">{dateStr}</p>
-                      <p className="text-xs text-primary font-medium mb-1">Рекомендация:</p>
-                      <p className="text-sm whitespace-pre-wrap">{log.assistant_message}</p>
+                      <p className="text-typo-caption text-primary font-medium mb-1">Рекомендация:</p>
+                      <p className="text-typo-muted whitespace-pre-wrap">{log.assistant_message}</p>
                     </CardContent>
                   </Card>
                 </div>

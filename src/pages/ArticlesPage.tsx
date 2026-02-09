@@ -71,7 +71,7 @@ export default function ArticlesPage() {
                 key={cat.value}
                 onClick={() => setSelectedCategory(cat.value as ArticleCategoryV2 | "all")}
                 className={cn(
-                  "shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors",
+                  "shrink-0 px-4 py-2 rounded-full text-typo-muted font-semibold transition-colors",
                   selectedCategory === cat.value
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted/70 text-muted-foreground hover:bg-muted"
@@ -86,12 +86,12 @@ export default function ArticlesPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <BookOpen className="w-12 h-12 mb-3 opacity-50" />
-            <p className="text-sm">Загрузка статей...</p>
+            <p className="text-typo-muted">Загрузка статей...</p>
           </div>
         ) : articles.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <BookOpen className="w-12 h-12 mb-3 opacity-50" />
-            <p className="text-sm">В этой категории пока нет статей</p>
+            <p className="text-typo-muted">В этой категории пока нет статей</p>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -124,11 +124,11 @@ export default function ArticlesPage() {
                     </span>
                   )}
                   <div className="absolute bottom-0 left-0 right-0 p-3">
-                    <h3 className="font-semibold text-sm text-white drop-shadow-md line-clamp-2">
+                    <h3 className="font-semibold text-typo-muted text-white drop-shadow-md line-clamp-2">
                       {article.title}
                     </h3>
                     {article.description && (
-                      <p className="text-xs text-white/90 mt-0.5 line-clamp-1 drop-shadow">
+                      <p className="text-typo-caption text-white/90 mt-0.5 line-clamp-1 drop-shadow">
                         {article.description}
                       </p>
                     )}

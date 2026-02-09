@@ -28,10 +28,10 @@ export function PremiumLock({ children, isLocked, onUnlock, className }: Premium
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg">
           <Lock className="w-6 h-6 text-white" />
         </div>
-        <span className="text-sm font-medium text-foreground">
+        <span className="text-typo-muted font-semibold text-foreground">
           Premium функция
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-typo-caption text-muted-foreground">
           Нажмите, чтобы разблокировать
         </span>
       </button>

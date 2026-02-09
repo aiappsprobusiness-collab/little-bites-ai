@@ -253,7 +253,7 @@ export default function ScanPage() {
             {/* Tips */}
             <Card variant="lavender">
               <CardContent className="p-4">
-                <p className="text-sm text-accent-foreground/80">
+                <p className="text-typo-muted text-accent-foreground/80">
                   💡 <strong>Совет:</strong> После распознавания вы можете добавить/изменить продукты вручную.
                 </p>
               </CardContent>
@@ -275,7 +275,7 @@ export default function ScanPage() {
               <Sparkles className="w-12 h-12 text-primary-foreground" />
             </motion.div>
             <div className="text-center">
-              <h2 className="text-xl font-bold mb-2">Анализируем фото...</h2>
+              <h2 className="text-typo-title font-semibold mb-2">Анализируем фото...</h2>
             </div>
           </motion.div>
         )}
@@ -307,7 +307,7 @@ export default function ScanPage() {
 
             {/* Редактируемый список продуктов */}
             <div className="space-y-3">
-              <h2 className="text-xl font-bold mb-2">Список продуктов</h2>
+              <h2 className="text-typo-title font-semibold mb-2">Список продуктов</h2>
               {editableProducts.map((product, index) => (
                 <motion.div
                   key={product.id}

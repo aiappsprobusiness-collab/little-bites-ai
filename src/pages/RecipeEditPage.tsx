@@ -301,7 +301,7 @@ export default function RecipeEditPage() {
           <Card variant="mint">
             <CardContent className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold">Ингредиенты</h2>
+                <h2 className="text-typo-title font-semibold">Ингредиенты</h2>
                 <Button
                   type="button"
                   variant="ghost"
@@ -314,7 +314,7 @@ export default function RecipeEditPage() {
               </div>
 
               {ingredients.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
+                <p className="text-typo-muted text-muted-foreground text-center py-4">
                   Нет ингредиентов. Нажмите "Добавить", чтобы добавить первый ингредиент.
                 </p>
               ) : (
@@ -386,7 +386,7 @@ export default function RecipeEditPage() {
           <Card variant="default">
             <CardContent className="p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold">Шаги приготовления</h2>
+                <h2 className="text-typo-title font-semibold">Шаги приготовления</h2>
                 <Button
                   type="button"
                   variant="ghost"
@@ -399,7 +399,7 @@ export default function RecipeEditPage() {
               </div>
 
               {steps.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
+                <p className="text-typo-muted text-muted-foreground text-center py-4">
                   Нет шагов. Нажмите "Добавить", чтобы добавить первый шаг.
                 </p>
               ) : (

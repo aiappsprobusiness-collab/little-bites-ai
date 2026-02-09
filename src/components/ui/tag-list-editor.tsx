@@ -31,10 +31,10 @@ export function TagListEditor({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={inputId} className="text-sm font-medium">
+      <Label htmlFor={inputId} className="text-typo-muted font-medium">
         {label}
       </Label>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-typo-caption text-muted-foreground">
         Нажмите на чип для редактирования, крестик — удалить
       </p>
       <div className="flex flex-wrap gap-2 mb-2">

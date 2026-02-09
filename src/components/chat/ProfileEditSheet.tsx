@@ -226,7 +226,7 @@ export function ProfileEditSheet({
           {isCreate && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
+                <Label htmlFor="profile-name" className="text-typo-muted font-medium">Имя</Label>
                 <Input
                   id="profile-name"
                   value={name}
@@ -236,7 +236,7 @@ export function ProfileEditSheet({
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Тип</Label>
+                <Label className="text-typo-muted font-medium">Тип</Label>
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -260,7 +260,7 @@ export function ProfileEditSheet({
           )}
           {!isCreate && (
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Тип</Label>
+              <Label className="text-typo-muted font-medium">Тип</Label>
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -283,7 +283,7 @@ export function ProfileEditSheet({
           )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="age-years" className="text-sm font-medium">Возраст: годы</Label>
+              <Label htmlFor="age-years" className="text-typo-muted font-medium">Возраст: годы</Label>
               <Input
                 id="age-years"
                 type="number"
@@ -296,7 +296,7 @@ export function ProfileEditSheet({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="age-months" className="text-sm font-medium">Месяцы (0–11)</Label>
+              <Label htmlFor="age-months" className="text-typo-muted font-medium">Месяцы (0–11)</Label>
               <Input
                 id="age-months"
                 type="number"
@@ -332,7 +332,7 @@ export function ProfileEditSheet({
                 placeholder="Например: вегетарианское, быстрые блюда (запятая или Enter)"
               />
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Сложность блюд</Label>
+                <Label className="text-typo-muted font-medium">Сложность блюд</Label>
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -365,7 +365,7 @@ export function ProfileEditSheet({
         </div>
         <div className="flex flex-col gap-2 mt-auto pt-2">
           <Button
-            className="w-full h-12 text-base font-medium"
+            className="w-full h-12 text-typo-body font-medium"
             onClick={handleSave}
             disabled={isUpdating || isCreating}
           >

@@ -93,7 +93,7 @@ export function AddMealDialog({
       </DialogHeader>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Тип приема пищи</label>
+          <label className="text-typo-muted font-medium">Тип приема пищи</label>
           <Select
             value={currentMealType}
             onValueChange={(value) => {
@@ -114,7 +114,7 @@ export function AddMealDialog({
         </div>
 
         <div className="space-y-2">
-          <label className="text-sm font-medium">Рецепт</label>
+          <label className="text-typo-muted font-medium">Рецепт</label>
           <Select
             value={selectedFavoriteId ? `favorite_${selectedFavoriteId}` : selectedRecipeId}
             onValueChange={(value) => {
@@ -136,7 +136,7 @@ export function AddMealDialog({
                   {/* Сохранённые рецепты */}
                   {recipes.length > 0 && (
                     <>
-                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b">
+                      <div className="px-2 py-1.5 text-typo-caption font-semibold text-muted-foreground border-b">
                         📖 Сохранённые рецепты
                       </div>
                       {recipes.map((recipe, idx) => (
@@ -150,7 +150,7 @@ export function AddMealDialog({
                   {/* Избранное */}
                   {favorites.length > 0 && (
                     <>
-                      <div className={`px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b ${recipes.length > 0 ? 'border-t mt-1' : ''}`}>
+                      <div className={`px-2 py-1.5 text-typo-caption font-semibold text-muted-foreground border-b ${recipes.length > 0 ? 'border-t mt-1' : ''}`}>
                         ❤️ Избранное
                       </div>
                       {favorites.map((favorite, idx) => (
@@ -164,7 +164,7 @@ export function AddMealDialog({
                   {/* История генераций чата */}
                   {filteredChatRecipes.length > 0 && (
                     <>
-                      <div className={`px-2 py-1.5 text-xs font-semibold text-muted-foreground border-b ${(recipes.length > 0 || favorites.length > 0) ? 'border-t mt-1' : ''}`}>
+                      <div className={`px-2 py-1.5 text-typo-caption font-semibold text-muted-foreground border-b ${(recipes.length > 0 || favorites.length > 0) ? 'border-t mt-1' : ''}`}>
                         💬 История генераций чата
                       </div>
                       {filteredChatRecipes.map((recipe, idx) => (
@@ -176,7 +176,7 @@ export function AddMealDialog({
                   )}
                 </>
               ) : (
-                <div className="p-4 text-center text-sm text-muted-foreground">
+                <div className="p-4 text-center text-typo-muted text-muted-foreground">
                   Нет доступных рецептов
                 </div>
               )}
@@ -186,8 +186,7 @@ export function AddMealDialog({
 
         <Button
           type="submit"
-          variant="mint"
-          className="w-full"
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white border-0"
           disabled={isLoading || !hasSelection}
         >
           {isLoading ? (

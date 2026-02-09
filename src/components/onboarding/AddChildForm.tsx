@@ -173,7 +173,7 @@ export function AddChildForm({
   return (
     <div className="space-y-5">
       <div className="space-y-2">
-        <Label htmlFor="onboarding-name" className="text-sm font-medium">
+        <Label htmlFor="onboarding-name" className="text-typo-muted font-medium">
           Имя
         </Label>
         <Input
@@ -186,7 +186,7 @@ export function AddChildForm({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-sm font-medium">Тип</Label>
+        <Label className="text-typo-muted font-medium">Тип</Label>
         <div className="flex gap-2">
           <Button
             type="button"
@@ -209,7 +209,7 @@ export function AddChildForm({
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="onboarding-age-years" className="text-sm font-medium">
+          <Label htmlFor="onboarding-age-years" className="text-typo-muted font-medium">
             Возраст: годы
           </Label>
           <Input
@@ -224,7 +224,7 @@ export function AddChildForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="onboarding-age-months" className="text-sm font-medium">
+          <Label htmlFor="onboarding-age-months" className="text-typo-muted font-medium">
             Месяцы (0–11)
           </Label>
           <Input

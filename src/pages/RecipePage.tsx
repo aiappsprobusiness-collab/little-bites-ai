@@ -66,7 +66,7 @@ export default function RecipePage() {
       <MobileLayout title="Рецепт" headerLeft={<Button variant="ghost" size="icon" className="min-w-[44px] min-h-[44px]" onClick={() => navigate(-1)} aria-label="Назад"><ArrowLeft className="w-5 h-5" /></Button>}>
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <p className="text-muted-foreground mb-4">Рецепт не найден</p>
-          <Button variant="mint" onClick={() => (fromMealPlan ? navigate("/meal-plan") : navigate("/home"))}>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => (fromMealPlan ? navigate("/meal-plan") : navigate("/home"))}>
             {fromMealPlan ? "К плану питания" : "На главную"}
           </Button>
         </div>
@@ -76,6 +76,7 @@ export default function RecipePage() {
 
   const recipeDisplay = recipe as RecipeDisplayIngredients & {
     title?: string;
+    description?: string;
     steps?: { instruction?: string; step_number?: number }[];
     chefAdvice?: string;
     cooking_time_minutes?: number | null;
@@ -86,12 +87,11 @@ export default function RecipePage() {
   const chefAdvice = recipeDisplay.chefAdvice;
   const cookingTime = recipeDisplay.cooking_time_minutes;
   const minAgeMonths = recipeDisplay.min_age_months;
+  const description = recipeDisplay.description;
 
   const ageStr = formatAge(minAgeMonths ?? null);
   const mealStr = mealTypeLabel ?? "";
   const timeStr = cookingTime != null ? `${cookingTime} мин` : "";
-  const metaParts = [ageStr, mealStr, timeStr].filter(Boolean);
-  const metaString = metaParts.length > 0 ? metaParts.join(" · ") : undefined;
 
   const handleBack = () => {
     if (fromMealPlan) navigate("/meal-plan");
@@ -107,78 +107,86 @@ export default function RecipePage() {
         </Button>
       }
     >
-      <div className="px-4 pb-6 space-y-6 max-w-[75ch] mx-auto">
-        {/* Секция: заголовок (название блюда) + мета chip */}
-        <section className="space-y-2">
-          <h1 className="text-xl font-semibold text-slate-900 line-clamp-2 leading-tight">
-            {recipe.title}
-          </h1>
-          {metaString && (
-            <span className="inline-block rounded-full bg-emerald-50/80 px-3 py-1 text-sm text-slate-600">
-              {metaString}
-            </span>
-          )}
-        </section>
+      <div className="px-4 pb-6 max-w-[100%] mx-auto">
+        {/* Карточка рецепта — те же стили, что и в чате */}
+        <div className="bg-white rounded-2xl sm:rounded-[28px] px-3 py-3 sm:px-6 sm:py-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100/80 space-y-4 sm:space-y-5">
+          {/* Тип приёма пищи + заголовок */}
+          <section className="space-y-1.5 sm:space-y-2">
+            {mealStr && (
+              <span className="inline-block text-typo-caption sm:text-typo-muted font-medium text-emerald-700 bg-emerald-50/80 border border-emerald-100 rounded-full px-2.5 py-0.5 sm:px-3 sm:py-1">
+                {mealStr}
+              </span>
+            )}
+            <h1 className="text-typo-body sm:text-typo-title font-semibold leading-snug text-[#2D3436]">
+              {recipe.title}
+            </h1>
+          </section>
 
-        {/* Секция: Ингредиенты — карточка, двухколоночный вид (название | количество) */}
-        {displayIngredients.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-700">Ингредиенты</h2>
-            <div className="rounded-xl bg-emerald-50/50 p-4">
-              <ul className="space-y-2.5 list-none p-0 m-0">
+          {/* Польза для ребёнка */}
+          {description && description.trim() !== "" && (
+            <section className="mb-3 sm:mb-4">
+              <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-0.5 sm:mb-1">Польза для ребёнка</p>
+              <p className="text-typo-caption sm:text-typo-muted text-muted-foreground leading-relaxed">{description.trim()}</p>
+            </section>
+          )}
+
+          {/* Ингредиенты — пилюли как в чате (olive/mint) */}
+          {displayIngredients.length > 0 && (
+            <section className="mb-3 sm:mb-4">
+              <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-1.5 sm:mb-2">Ингредиенты</p>
+              <div className="flex flex-wrap gap-2">
                 {displayIngredients.map((ing, index) => {
                   const qty = formatQuantity(ing);
+                  const label = qty != null ? `${ing.name} — ${qty}` : ing.name;
                   return (
-                    <li key={index} className="grid grid-cols-[auto_1fr_auto] gap-x-2 gap-y-0.5 items-baseline text-sm leading-relaxed">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400/80 mt-1.5 shrink-0" aria-hidden />
-                      <span className="min-w-0 text-slate-600">{ing.name}</span>
-                      {qty != null ? (
-                        <span className="text-xs text-slate-500 shrink-0 text-right">{qty}</span>
-                      ) : (
-                        <span />
-                      )}
-                    </li>
+                    <span
+                      key={index}
+                      className="inline-flex items-center gap-1.5 sm:gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-2 py-1 sm:px-3 sm:py-1.5"
+                    >
+                      <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 truncate max-w-[200px]">{label}</span>
+                    </span>
                   );
                 })}
-              </ul>
-            </div>
-          </section>
-        )}
+              </div>
+            </section>
+          )}
 
-        {/* Секция: Приготовление — шаги с кружками */}
-        {steps.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-700">Приготовление</h2>
-            <ol className="space-y-4 list-none p-0 m-0">
-              {steps.map((step: { instruction?: string; step_number?: number }, index: number) => {
-                const num = step.step_number ?? index + 1;
-                return (
-                  <li key={index} className="flex gap-3 items-start">
-                    <span
-                      className="shrink-0 flex items-center justify-center h-6 w-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold"
-                      aria-hidden
-                    >
-                      {num}
-                    </span>
-                    <p className="text-sm text-slate-700 leading-relaxed pt-0.5 flex-1 min-w-0">
-                      {step.instruction ?? ""}
-                    </p>
-                  </li>
-                );
-              })}
-            </ol>
-          </section>
-        )}
+          {/* Время приготовления — как в чате */}
+          {timeStr && (
+            <p className="text-typo-caption text-muted-foreground mb-3 sm:mb-4">⏱️ {timeStr}</p>
+          )}
 
-        {/* Совет шефа: мягкий блок без тяжёлых бордеров */}
-        {chefAdvice && (
-          <section>
-            <div className="rounded-xl p-4 bg-emerald-50/40">
-              <p className="font-semibold text-slate-700 text-sm mb-1.5">Совет шефа</p>
-              <p className="text-sm text-slate-600 leading-relaxed">{chefAdvice}</p>
+          {/* Приготовление — нумерация и отступы как в чате */}
+          {steps.length > 0 && (
+            <section>
+              <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-1.5 sm:mb-2">Приготовление</p>
+              <div className="space-y-1.5 sm:space-y-2">
+                {steps.map((step: { instruction?: string; step_number?: number }, index: number) => {
+                  const num = step.step_number ?? index + 1;
+                  return (
+                    <div key={index} className="flex gap-2 sm:gap-3 items-start">
+                      <span className="text-typo-caption font-bold text-[#6B8E23] shrink-0">{num}.</span>
+                      <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-relaxed flex-1 min-w-0">
+                        {step.instruction ?? ""}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Совет от шефа — блок как в чате */}
+          {chefAdvice && (
+            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start">
+              <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
+              <div className="min-w-0">
+                <p className="text-typo-caption font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
+                <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{chefAdvice}</p>
+              </div>
             </div>
-          </section>
-        )}
+          )}
+        </div>
       </div>
     </MobileLayout>
   );

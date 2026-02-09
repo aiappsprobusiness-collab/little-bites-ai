@@ -23,10 +23,10 @@ export function MobileLayout({ children, title, showNav = true, headerLeft, head
             </div>
             <div className="flex-1 min-w-0 flex flex-col items-center justify-center text-center px-1">
               {title != null && title !== "" && (
-                <h1 className="text-lg font-bold text-foreground truncate w-full">{title}</h1>
+                <h1 className="text-typo-title font-semibold text-foreground truncate w-full">{title}</h1>
               )}
               {headerMeta != null && (
-                <div className="text-xs font-normal text-muted-foreground leading-tight mt-1 truncate w-full">{headerMeta}</div>
+                <div className="text-typo-caption text-muted-foreground mt-1 truncate w-full">{headerMeta}</div>
               )}
             </div>
             <div className="min-w-[44px] flex justify-end shrink-0 pl-2">

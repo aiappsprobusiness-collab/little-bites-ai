@@ -31,7 +31,7 @@ export function UsageBadge({ onClick, className }: UsageBadgeProps) {
         )}
       >
         <Crown className="w-4 h-4" />
-        <span className="text-sm font-medium">Premium</span>
+        <span className="text-typo-muted font-semibold">Premium</span>
       </motion.button>
     );
   }
@@ -55,7 +55,7 @@ export function UsageBadge({ onClick, className }: UsageBadgeProps) {
       )}
     >
       <Zap className="w-4 h-4" />
-      <span className="text-sm font-medium">
+      <span className="text-typo-muted font-semibold">
         {remaining}/{dailyLimit} AI
       </span>
       
