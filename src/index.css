@@ -163,6 +163,11 @@
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
+
+  /** PWA bottom nav: at least 12px, or safe area */
+  .safe-bottom-nav {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+  }
   
   .safe-top {
     padding-top: env(safe-area-inset-top, 1rem);

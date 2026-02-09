@@ -73,7 +73,7 @@ export function BottomNavigation() {
   return (
     <nav
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-50 safe-bottom",
+        "fixed bottom-0 left-0 right-0 z-50 safe-bottom-nav",
         "bg-white/70 backdrop-blur-xl border-t-0",
         "rounded-t-[35px] max-w-lg mx-auto shadow-[0_-4px_24px_-4px_rgba(0,0,0,0.08)]"
       )}

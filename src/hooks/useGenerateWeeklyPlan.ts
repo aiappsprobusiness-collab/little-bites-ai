@@ -179,7 +179,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       );
       queryClient.invalidateQueries({ queryKey: ["meal_plans_v2"] });
       queryClient.invalidateQueries({ queryKey: ["recipes"] });
-      queryClient.refetchQueries({ queryKey: ["meal_plans_v2"] });
+      await queryClient.refetchQueries({ queryKey: ["meal_plans_v2"] });
       return results;
     } finally {
       setIsGenerating(false);

@@ -382,13 +382,14 @@ export default function ChatPage() {
                 <User className="w-5 h-5" />
               </button>
             </div>
-            {/* Row 2: Готовим для — Free: один профиль, не кликается и тусклее; Premium: выбор Семья + профили */}
+            {/* Блок с именем профиля под заголовком — по ширине как на Плане (w-fit) */}
             {members.length > 0 && (
-              <div className="flex justify-end items-center gap-2 mt-1.5 min-w-0">
-                <span className="text-xs sm:text-sm font-medium text-foreground/90 whitespace-nowrap shrink-0">Готовим для:</span>
+              <div className="flex justify-start items-center mt-1.5 min-w-0 w-fit">
                 {isFree ? (
-                  <span className="h-9 px-3 flex items-center min-w-0 max-w-[140px] sm:max-w-none text-sm font-medium bg-muted/50 border border-border/50 text-muted-foreground rounded-xl truncate">
-                    {members.find((c) => c.id === (selectedMemberId ?? members[0]?.id))?.name ?? members[0]?.name ?? ""}
+                  <span className="inline-flex items-center w-fit rounded-full min-h-[40px] px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 whitespace-nowrap">
+                    <span className="truncate max-w-[140px]">
+                      {members.find((c) => c.id === (selectedMemberId ?? members[0]?.id))?.name ?? members[0]?.name ?? ""}
+                    </span>
                   </span>
                 ) : (
                   <Select
@@ -399,7 +400,7 @@ export default function ChatPage() {
                       setSelectedMemberId(v);
                     }}
                   >
-                    <SelectTrigger className="h-9 min-w-0 w-auto max-w-[140px] sm:max-w-none sm:min-w-[80px] text-sm font-medium bg-emerald-50/70 border-emerald-200/50 text-emerald-800/90 rounded-xl truncate">
+                    <SelectTrigger className="inline-flex items-center w-fit max-w-[180px] rounded-full min-h-[40px] px-3 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap [&>span]:truncate [&>span]:max-w-[140px] focus:ring-0 [&>svg]:hidden">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
