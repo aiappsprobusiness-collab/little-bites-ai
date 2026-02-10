@@ -31,6 +31,11 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Create .env.production
+        run: |
+          echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" >> .env.production
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env.production
+
       - name: Build
         run: npm run build
 
