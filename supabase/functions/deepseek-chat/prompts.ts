@@ -69,16 +69,16 @@ export const VARIETY_AND_MEALS_RULES = `
 - Стейк на завтрак — ЗАПРЕЩЕНО. Завтраки — только утренние блюда: каши, яйца (омлет, яичница), сырники, тосты, творог, блинчики, мюсли.
 `;
 
-/** v2: Контексты возраста. Подставляются как {{ageRule}} через getAgeCategory() в index. */
+/** v2: Контексты возраста. Подставляются как {{ageRule}} через getAgeCategory() в index. НЕ использовать: toddler, infant, preschool, тоддлер, инфант. */
 export const AGE_CONTEXTS = {
-  infant: "КАТЕГОРИЯ: Младенец (<12 мес). Только прикорм: мягкие пюреобразные текстуры, отсутствие специй.",
-  toddler: "КАТЕГОРИЯ: Тоддлер (1-5 лет). Мягкая пища кусочками, минимум соли, без зажарки и острых специй.",
-  school: "КАТЕГОРИЯ: Школьник (5-18 лет). Полноценное детское меню, сбалансированное для роста.",
-  adult: "КАТЕГОРИЯ: Взрослый (18+). Взрослое меню: стейки, салаты, паста. ЗАПРЕЩЕНО детское пюре и каши на воде."
+  infant: "ВОЗРАСТ: <12 мес. Только прикорм: мягкие пюреобразные текстуры, отсутствие специй.",
+  toddler: "ВОЗРАСТ: 12–60 мес. Мягкая пища кусочками, минимум соли, без зажарки и острых специй.",
+  school: "ВОЗРАСТ: 5–18 лет. Полноценное детское меню, сбалансированное для роста.",
+  adult: "ВОЗРАСТ: 18+. Взрослое меню. ЗАПРЕЩЕНО детское пюре и каши на воде."
 };
 
 /**
- * // v2: Шаблон для FREE пользователей. Порядок: STRICT_RULES → SAFETY_RULES → ROLE → TASK.
+ * // v2: Шаблон для FREE пользователей. Возвращать ТОЛЬКО валидный JSON.
  */
 export const FREE_RECIPE_TEMPLATE = `
 ${STRICT_RULES}
@@ -89,24 +89,30 @@ ${SAFETY_RULES}
 
 [CONTEXT]
 ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
-Предпочтения в питании: {{preferences}}. Сложность блюд: {{difficulty}}.
+Предпочтения: {{preferences}}. Сложность: {{difficulty}}.
 {{generationContextBlock}}
 
+[ЗАПРЕЩЕНО В ТЕКСТЕ]
+Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом (например "для детей 12–36 месяцев") или не писать вовсе.
+
 [RECIPE TASK]
-ВЫДАВАЙ СТРОГО ВАЛИДНЫЙ JSON. Текст до и после JSON запрещен.
-Ответ — один плоский валидный JSON-объект. В steps — только текст действий, без префиксов «Шаг 1:».
-Поле description — одно короткое предложение (лаконично).
+Return ONLY valid JSON. No markdown. No text. No explanation before or after.
+Схема:
 {
-  "title": "Название",
-  "description": "Кратко",
-  "ingredients": ["Продукт — количество"],
-  "steps": ["Действие"],
-  "cookingTime": "",
-  "advice": "Короткий совет"
+  "title": "string",
+  "description": "string — 1–2 предложения о пользе",
+  "cookingTimeMinutes": number,
+  "ingredients": [
+    { "name": "string", "displayText": "string — обязательно с количеством", "canonical": { "amount": number, "unit": "g" или "ml" } или null }
+  ],
+  "steps": ["шаг 1", "шаг 2", ...] — минимум 4 шага,
+  "advice": "string или null",
+  "chefAdvice": null
 }
-ОТВЕЧАЙ ТОЛЬКО ЧИСТЫМ JSON. Любой текст вне JSON-структуры сломает приложение.
-IMPORTANT: Output ONLY the JSON object. No preamble, no greetings, no markdown blocks.
-IMPORTANT: Return ONLY a valid JSON object. No preamble, no greetings, no conversational filler.
+
+ИНГРЕДИЕНТЫ: displayText ВСЕГДА с количеством. canonical — ТОЛЬКО где уместно г/мл: молоко, вода, крупы, масла, мясо, рыба, йогурт → canonical. Яблоко, банан, морковь, лук в шт/половина → canonical = null. Не переводить фрукты/овощи в граммы.
+
+ШАГИ: минимум 4. Добавить детские уточнения: мягкая текстура, без соли/сахара для маленьких, при необходимости "измельчить блендером". Шаги полезные, не "смешать и приготовить".
 `;
 
 /**
@@ -124,7 +130,7 @@ export const FAMILY_RECIPE_INSTRUCTION = `
 `;
 
 /**
- * // v2: Шаблон для PREMIUM пользователей. Порядок: STRICT_RULES → SAFETY_RULES → ROLE → TASK.
+ * // v2: Шаблон для PREMIUM пользователей. Возвращать ТОЛЬКО валидный JSON.
  */
 export const PREMIUM_RECIPE_TEMPLATE = `
 ${STRICT_RULES}
@@ -136,33 +142,32 @@ ${SAFETY_RULES}
 [CONTEXT]
 ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
 {{familyContext}}
-Предпочтения в питании: {{preferences}}. Сложность блюд: {{difficulty}}.
+Предпочтения: {{preferences}}. Сложность: {{difficulty}}.
 {{generationContextBlock}}
 
+[ЗАПРЕЩЕНО В ТЕКСТЕ]
+Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
+
 [RECIPE TASK]
-ВЫДАВАЙ СТРОГО ВАЛИДНЫЙ JSON. Текст до и после JSON запрещен.
-Ответ — один плоский валидный JSON-объект. В steps — только текст действий, без префиксов «Шаг 1:».
-Поле description — кратко о пользе для ребёнка (1–2 строки).
-Ингредиенты — обязательно массив объектов с полями name, amount, substitute. Пример:
-"ingredients": [
-  { "name": "Творог 5%", "amount": "200г", "substitute": "Рикотта (сохранит нежность)" }
-]
-ОБЯЗАТЕЛЬНО для Premium: chefAdvice — всегда заполняй. Совет от шефа — короткий профессиональный совет.
-mealType: "breakfast" | "lunch" | "snack" | "dinner" — укажи тип приёма пищи.
+Return ONLY valid JSON. No markdown. No text. No explanation before or after.
+ОБЯЗАТЕЛЬНО: advice и chefAdvice — заполняй. mealType — breakfast|lunch|snack|dinner.
+Схема:
 {
-  "title": "Аппетитное название",
-  "description": "Польза для ребёнка",
+  "title": "string",
+  "description": "string — 1–2 предложения о пользе",
+  "cookingTimeMinutes": number,
   "mealType": "breakfast",
   "ingredients": [
-    { "name": "Продукт", "amount": "количество", "substitute": "на что заменить + почему (коротко)" }
+    { "name": "string", "displayText": "string — обязательно с количеством", "canonical": { "amount": number, "unit": "g" или "ml" } или null, "substitute": "string — на что заменить" }
   ],
-  "steps": ["Действие"],
-  "cookingTime": 15,
-  "chefAdvice": "Совет от шефа — обязателен для Premium"
+  "steps": ["шаг 1", ...] — 4–7 шагов,
+  "advice": "string",
+  "chefAdvice": "string — расширенный совет от шефа"
 }
-ОТВЕЧАЙ ТОЛЬКО ЧИСТЫМ JSON. Любой текст вне JSON-структуры сломает приложение.
-IMPORTANT: Output ONLY the JSON object. No preamble, no greetings, no markdown blocks.
-IMPORTANT: Return ONLY a valid JSON object. No preamble, no greetings, no conversational filler.
+
+ИНГРЕДИЕНТЫ: displayText ВСЕГДА с количеством. canonical — ТОЛЬКО где уместно г/мл. Фрукты/овощи в шт/половина → canonical = null.
+
+ШАГИ: 4–7 штук. Детские уточнения: мягкая текстура, без соли/сахара, "измельчить блендером" при необходимости.
 `;
 
 /**

@@ -21,6 +21,7 @@
  */
 
 import { Capacitor } from '@capacitor/core';
+import { safeLog, safeError, safeWarn } from "@/utils/safeLogger";
 
 export interface SpeechToTextResponse {
   text: string;
@@ -81,7 +82,7 @@ export async function checkMicrophonePermission(): Promise<boolean> {
       }
     }
   } catch (error) {
-    console.error('Error checking microphone permission:', error);
+    safeError('Error checking microphone permission:', error);
     return false;
   }
 }
@@ -99,7 +100,7 @@ export async function requestMicrophonePermission(): Promise<boolean> {
         stream.getTracks().forEach(track => track.stop());
         return true;
       } catch (error: any) {
-        console.error('Error requesting microphone permission:', error);
+        safeError('Error requesting microphone permission:', error);
         return false;
       }
     } else {
@@ -108,12 +109,12 @@ export async function requestMicrophonePermission(): Promise<boolean> {
         stream.getTracks().forEach(track => track.stop());
         return true;
       } catch (error: any) {
-        console.error('Error requesting microphone permission:', error);
+        safeError('Error requesting microphone permission:', error);
         return false;
       }
     }
   } catch (error) {
-    console.error('Error requesting microphone permission:', error);
+    safeError('Error requesting microphone permission:', error);
     return false;
   }
 }
@@ -237,7 +238,7 @@ function createWebSpeechRecognition(options: SpeechRecognitionOptions): any {
   };
 
   recognition.onstart = () => {
-    console.log('Web Speech Recognition started');
+    safeLog('Web Speech Recognition started');
   };
 
   return recognition;
@@ -255,7 +256,7 @@ async function createAndroidNativeRecognition(options: SpeechRecognitionOptions)
     // Проверяем доступность кастомного плагина
     const SpeechRecognition = (Plugins as any).SpeechRecognition;
     if (!SpeechRecognition) {
-      console.warn('SpeechRecognition plugin not available, using Web Speech API fallback');
+      safeWarn('SpeechRecognition plugin not available, using Web Speech API fallback');
       return null;
     }
 
@@ -309,7 +310,7 @@ async function createAndroidNativeRecognition(options: SpeechRecognitionOptions)
             await SpeechRecognition.stop();
           }
         } catch (error) {
-          console.error('Error stopping Android recognition:', error);
+          safeError('Error stopping Android recognition:', error);
         }
       },
       abort: async () => {
@@ -320,12 +321,12 @@ async function createAndroidNativeRecognition(options: SpeechRecognitionOptions)
             await SpeechRecognition.stop();
           }
         } catch (error) {
-          console.error('Error aborting Android recognition:', error);
+          safeError('Error aborting Android recognition:', error);
         }
       },
     };
   } catch (error) {
-    console.warn('Android native recognition plugin not available, using Web Speech API fallback');
+    safeWarn('Android native recognition plugin not available, using Web Speech API fallback');
     return null;
   }
 }
@@ -430,7 +431,7 @@ export class SpeechRecognitionService {
    */
   async start(): Promise<void> {
     if (this.isRecording) {
-      console.warn('Recognition is already running');
+      safeWarn('Recognition is already running');
       return;
     }
 
@@ -448,7 +449,7 @@ export class SpeechRecognitionService {
         this.recognition.onerror = (event: any) => {
           // Если это network ошибка и доступен Android Native, пробуем его
           if (event.error === 'network' && Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android') {
-            console.log('Network error detected, trying Android Native fallback...');
+            safeLog('Network error detected, trying Android Native fallback...');
             this.recognition = null;
             this.currentMethod = null;
             // Пробуем переключиться на Android Native
@@ -519,7 +520,7 @@ export class SpeechRecognitionService {
       }
       this.isRecording = false;
     } catch (error) {
-      console.error('Error stopping recognition:', error);
+      safeError('Error stopping recognition:', error);
       this.isRecording = false;
     }
   }
@@ -540,7 +541,7 @@ export class SpeechRecognitionService {
       }
       this.isRecording = false;
     } catch (error) {
-      console.error('Error aborting recognition:', error);
+      safeError('Error aborting recognition:', error);
       this.isRecording = false;
     }
   }

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { safeLog, safeError } from "../_shared/safeLogger.ts";
 
 /** Подпись уведомления T-Bank EACQ: все параметры кроме Token и вложенных (Data, Receipt); добавить Password; сортировка по ключу; конкатенация только значений; SHA-256 hex. */
 function buildTokenString(params: Record<string, unknown>, secret: string): string {
@@ -43,23 +44,23 @@ serve(async (req) => {
     const orderId = (body.OrderId ?? body.orderId) as string | undefined;
     const receivedToken = body.Token as string | undefined;
 
-    console.log("[payment-webhook] received", { Status: status, PaymentId: paymentId, OrderId: orderId, hasToken: !!receivedToken });
+    safeLog("[payment-webhook] received", { Status: status, PaymentId: paymentId, OrderId: orderId, hasToken: !!receivedToken });
 
     if (!receivedToken) {
-      console.log("[payment-webhook] reject: Missing Token");
+      safeLog("[payment-webhook] reject: Missing Token");
       return new Response(JSON.stringify({ error: "Missing Token" }), { status: 400 });
     }
 
     const tokenString = buildTokenString(body, secretKey);
     const expectedToken = await sha256Hex(tokenString);
     if (receivedToken.toLowerCase() !== expectedToken.toLowerCase()) {
-      console.log("[payment-webhook] reject: Invalid Token (signature mismatch)");
+      safeLog("[payment-webhook] reject: Invalid Token (signature mismatch)");
       return new Response(JSON.stringify({ error: "Invalid Token" }), { status: 400 });
     }
-    console.log("[payment-webhook] signature ok");
+    safeLog("[payment-webhook] signature ok");
 
     if (status !== "CONFIRMED") {
-      console.log("[payment-webhook] skip: status not CONFIRMED", status);
+      safeLog("[payment-webhook] skip: status not CONFIRMED", status);
       return new Response("OK", {
         status: 200,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -77,7 +78,7 @@ serve(async (req) => {
 
     const row = byPayment?.data ?? byOrder?.data;
     if (!row || row.status === "confirmed") {
-      console.log("[payment-webhook] skip: subscription not found or already confirmed", { paymentId, orderId, found: !!row });
+      safeLog("[payment-webhook] skip: subscription not found or already confirmed", { paymentId, orderId, found: !!row });
       return new Response("OK", {
         status: 200,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -91,7 +92,7 @@ serve(async (req) => {
 
     const dataObj = body.DATA ?? body.Data ?? body.data;
     const dataShape = dataObj && typeof dataObj === "object" ? Object.keys(dataObj as Record<string, unknown>) : [];
-    console.log("[payment-webhook] data_shape", { data_keys: dataShape });
+    safeLog("[payment-webhook] data_shape", { data_keys: dataShape });
 
     const dataPlan =
       dataObj && typeof dataObj === "object" && "plan" in (dataObj as Record<string, unknown>)
@@ -120,7 +121,7 @@ serve(async (req) => {
     ) {
       plan = "year";
       sourceOfPlan = "Amount";
-      console.log("[payment-webhook] source_of_plan=Amount (year)", { amountFromNotification, yearKopecks });
+      safeLog("[payment-webhook] source_of_plan=Amount (year)", { amountFromNotification, yearKopecks });
     } else if (
       amountFromNotification !== null &&
       amountFromNotification >= monthKopecks - amountTolerance &&
@@ -128,18 +129,18 @@ serve(async (req) => {
     ) {
       plan = "month";
       sourceOfPlan = "Amount";
-      console.log("[payment-webhook] source_of_plan=Amount (month)", { amountFromNotification, monthKopecks });
+      safeLog("[payment-webhook] source_of_plan=Amount (month)", { amountFromNotification, monthKopecks });
     }
 
     if (plan !== "month" && plan !== "year") {
-      console.log("[payment-webhook] reject_unknown_plan", { order_id: orderId, payment_id: paymentId, amount: amountFromNotification });
+      safeLog("[payment-webhook] reject_unknown_plan", { order_id: orderId, payment_id: paymentId, amount: amountFromNotification });
       return new Response(JSON.stringify({ error: "Unknown plan" }), {
         status: 422,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    console.log("[payment-webhook] updating subscription and profile", {
+    safeLog("[payment-webhook] updating subscription and profile", {
       subscriptionId: row.id,
       userId: row.user_id,
       order_id: orderId,
@@ -161,7 +162,7 @@ serve(async (req) => {
     const err = rpcResult.error;
 
     if (err || !res) {
-      console.error("[payment-webhook] RPC error", { err: err?.message, subscriptionId: row.id });
+      safeError("[payment-webhook] RPC error", { err: err?.message, subscriptionId: row.id });
       return new Response(JSON.stringify({ error: err?.message ?? "Confirm failed" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
@@ -170,14 +171,14 @@ serve(async (req) => {
 
     if (!res.was_updated) {
       // Не пишем audit при replay: одна запись на факт подтверждения, без дублей.
-      console.log("[payment-webhook] idempotent: already confirmed", { subscriptionId: row.id });
+      safeLog("[payment-webhook] idempotent: already confirmed", { subscriptionId: row.id });
       return new Response("OK", {
         status: 200,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
 
-    console.log("[payment-webhook] subscription updated", {
+    safeLog("[payment-webhook] subscription updated", {
       started_at: res.started_at,
       expires_at: res.expires_at,
       plan,
@@ -204,7 +205,7 @@ serve(async (req) => {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (e) {
-    console.error("[payment-webhook] error", e);
+    safeError("[payment-webhook] error", e);
     return new Response(JSON.stringify({ error: String(e) }), { status: 500 });
   }
 });

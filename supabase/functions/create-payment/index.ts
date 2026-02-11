@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { safeLog } from "../_shared/safeLogger.ts";
 import pricing from "./pricing.json" with { type: "json" };
 
 const corsHeaders: Record<string, string> = {
@@ -153,7 +154,7 @@ serve(async (req) => {
 
     const Token = await sha256Hex(buildToken(initParams, secretKey));
     const payload: Record<string, unknown> = { ...initParams, Token };
-    console.log("[create-payment] Init payload (no Token)", {
+    safeLog("[create-payment] Init payload (no Token)", {
       TerminalKey: initParams.TerminalKey,
       Amount: initParams.Amount,
       OrderId: initParams.OrderId,

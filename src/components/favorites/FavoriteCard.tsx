@@ -18,7 +18,7 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
   const vm = toFavoriteCardViewModel(favorite.recipe);
   const maxChips = 4;
   const chips = vm.ingredientNames.slice(0, maxChips);
-  const extraCount = vm.ingredientNames.length - maxChips;
+  const extraCount = Math.max(0, vm.ingredientTotalCount - maxChips);
   const showHint = isPremium && Boolean(vm.hint);
 
   return (

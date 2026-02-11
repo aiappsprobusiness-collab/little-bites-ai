@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { MessageCircle } from "lucide-react";
@@ -9,35 +8,36 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { FavoriteCard } from "@/components/favorites/FavoriteCard";
-import { FavoriteRecipeSheet } from "@/components/favorites/FavoriteRecipeSheet";
 import type { SavedFavorite } from "@/hooks/useFavorites";
+import { safeError } from "@/utils/safeLogger";
+
+function getRecipeId(favorite: SavedFavorite): string | null {
+  const f = favorite as { _recipeId?: string };
+  return f._recipeId ?? (favorite.recipe as { id?: string })?.id ?? null;
+}
 
 export default function FavoritesPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { hasAccess } = useSubscription();
   const { favorites, removeFavorite } = useFavorites();
-  const [selectedFavorite, setSelectedFavorite] = useState<SavedFavorite | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   const handleRemove = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
       await removeFavorite(id);
       toast({ title: "Рецепт удалён из избранного" });
-      if (selectedFavorite?.id === id) {
-        setSheetOpen(false);
-        setSelectedFavorite(null);
-      }
     } catch (e: unknown) {
-      console.error("DB Error in FavoritesPage handleRemove:", (e as Error).message);
+      safeError("DB Error in FavoritesPage handleRemove:", (e as Error).message);
       toast({ title: "Не удалось удалить", variant: "destructive" });
     }
   };
 
   const handleCardTap = (favorite: SavedFavorite) => {
-    setSelectedFavorite(favorite);
-    setSheetOpen(true);
+    const recipeId = getRecipeId(favorite);
+    if (recipeId) {
+      navigate(`/recipe/${recipeId}`);
+    }
   };
 
   return (
@@ -90,13 +90,6 @@ export default function FavoritesPage() {
           </div>
         )}
       </div>
-
-      <FavoriteRecipeSheet
-        favorite={selectedFavorite}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        isPremium={hasAccess}
-      />
     </MobileLayout>
   );
 }

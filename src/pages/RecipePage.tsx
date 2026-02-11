@@ -1,9 +1,13 @@
+import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, RotateCcw } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
+import { ingredientDisplayLabel } from "@/types/recipe";
+import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
 
 function formatAge(ageMonths: number | null | undefined): string {
   if (ageMonths == null) return "";
@@ -24,32 +28,36 @@ function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem
 
   return raw.map((item): IngredientItem => {
     if (typeof item === "string") return { name: item };
-    const o = item as { name?: string; amount?: number | null; unit?: string | null; note?: string };
+    const o = item as { name?: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; amount?: number | null; unit?: string | null; note?: string; substitute?: string | null };
     return {
       name: o.name ?? "",
+      display_text: o.display_text ?? undefined,
+      canonical_amount: o.canonical_amount ?? undefined,
+      canonical_unit: (o.canonical_unit === "g" || o.canonical_unit === "ml" ? o.canonical_unit : undefined) as "g" | "ml" | undefined,
       amount: o.amount ?? undefined,
       unit: o.unit ?? undefined,
       note: o.note ?? undefined,
+      substitute: o.substitute ?? undefined,
     };
   });
-}
-
-/** Строка количества для UI: amount + unit или note. */
-function formatQuantity(ing: IngredientItem): string | null {
-  if (ing.note) return ing.note;
-  if (ing.amount != null && ing.unit) return `${ing.amount} ${ing.unit}`;
-  if (ing.amount != null) return String(ing.amount);
-  return null;
 }
 
 export default function RecipePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { toast } = useToast();
   const { getRecipeById } = useRecipes();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
   const fromMealPlan = (location.state as { fromMealPlan?: boolean; mealTypeLabel?: string } | null)?.fromMealPlan;
   const mealTypeLabel = (location.state as { mealTypeLabel?: string } | null)?.mealTypeLabel;
+
+  const [overrides, setOverrides] = useState<Record<number, string>>({});
+  const [substituteSheet, setSubstituteSheet] = useState<{
+    open: boolean;
+    index: number;
+    ing: IngredientItem;
+  } | null>(null);
 
   if (isLoading) {
     return (
@@ -130,26 +138,48 @@ export default function RecipePage() {
             </section>
           )}
 
-          {/* Ингредиенты — пилюли как в чате (olive/mint) */}
+          {/* Ингредиенты — пилюли как в чате (olive/mint) + кнопка замены */}
           {displayIngredients.length > 0 && (
             <section className="mb-3 sm:mb-4">
               <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-1.5 sm:mb-2">Ингредиенты</p>
               <div className="flex flex-wrap gap-2">
                 {displayIngredients.map((ing, index) => {
-                  const qty = formatQuantity(ing);
-                  const label = qty != null ? `${ing.name} — ${qty}` : ing.name;
+                  const baseLabel = ingredientDisplayLabel(ing);
+                  const label = overrides[index] ?? baseLabel;
+                  if (!label) return null;
                   return (
                     <span
                       key={index}
                       className="inline-flex items-center gap-1.5 sm:gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-2 py-1 sm:px-3 sm:py-1.5"
                     >
                       <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 truncate max-w-[200px]">{label}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSubstituteSheet({ open: true, index, ing })}
+                        className="shrink-0 p-0.5 rounded-full hover:bg-[#6B8E23]/15 text-[#6B8E23] touch-manipulation"
+                        aria-label={`Заменить: ${ing.name}`}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </button>
                     </span>
                   );
                 })}
               </div>
             </section>
           )}
+
+          <IngredientSubstituteSheet
+            open={!!substituteSheet?.open}
+            onOpenChange={(open) => setSubstituteSheet((s) => (s ? { ...s, open } : null))}
+            ingredientName={substituteSheet?.ing.name ?? ""}
+            substituteFromDb={substituteSheet?.ing.substitute}
+            onSelect={(replacement) => {
+              if (substituteSheet != null) {
+                setOverrides((prev) => ({ ...prev, [substituteSheet.index]: replacement }));
+                toast({ title: "Ингредиент заменён" });
+              }
+            }}
+          />
 
           {/* Время приготовления — как в чате */}
           {timeStr && (

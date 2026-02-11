@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
+import { safeLog, safeError } from "@/utils/safeLogger";
 import { useNavigate } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,7 @@ export default function ScanPage() {
 
     try {
       const analysis = await analyzeImage(file);
-      console.log('Analysis result:', analysis);
+      safeLog('Analysis result:', analysis);
 
       const allergies = (selectedMember?.allergies ?? []).filter((a) => a?.trim());
       const isAllergen = (productName: string) => {
@@ -74,7 +75,7 @@ export default function ScanPage() {
         });
       }
     } catch (error: any) {
-      console.error('Image analysis error:', error);
+      safeError('Image analysis error:', error);
 
       let errorMessage = "Не удалось проанализировать изображение";
       if (error.message) {

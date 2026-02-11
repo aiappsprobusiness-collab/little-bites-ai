@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { safeError } from "@/utils/safeLogger";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { CHAT_HISTORY_SELECT, CHAT_LAST_MESSAGES } from '@/lib/supabase-constants';
@@ -20,7 +21,7 @@ export function useChatHistory() {
         .limit(CHAT_LAST_MESSAGES);
 
       if (error) {
-        console.error('SYNC ERROR:', error.message, error.details);
+        safeError('SYNC ERROR:', error.message, error.details);
         throw error;
       }
       const list = (data ?? []).slice();
@@ -34,7 +35,7 @@ export function useChatHistory() {
     if (!user) return;
     const { error } = await supabase.from('chat_history').delete().eq('user_id', user.id);
     if (error) {
-      console.error('SYNC ERROR:', error.message, error.details);
+      safeError('SYNC ERROR:', error.message, error.details);
       throw error;
     }
     await refetch();
@@ -48,7 +49,7 @@ export function useChatHistory() {
       .eq('id', messageId)
       .eq('user_id', user.id);
     if (error) {
-      console.error('SYNC ERROR:', error.message, error.details);
+      safeError('SYNC ERROR:', error.message, error.details);
       throw error;
     }
     await refetch();

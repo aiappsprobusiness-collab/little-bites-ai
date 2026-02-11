@@ -19,6 +19,7 @@ import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { buildGenerationContext, validateRecipe } from "@/domain/generation";
 import type { Profile } from "@/domain/generation";
 import { detectMealType, parseRecipesFromChat, type ParsedRecipe } from "@/utils/parseChatRecipes";
+import { safeError } from "@/utils/safeLogger";
 import {
   Select,
   SelectContent,
@@ -53,6 +54,8 @@ interface Message {
   isStreaming?: boolean;
   /** Уже распарсенный рецепт (из parseRecipesFromChat), чтобы карточка не показывала «Данные повреждены». */
   preParsedRecipe?: ParsedRecipe | null;
+  /** ID рецепта в БД (из createRecipe), для добавления в избранное через favorites_v2.recipe_id */
+  recipeId?: string | null;
 }
 
 const STARTER_MESSAGE = "Здравствуйте! Выберите профиль, и я мгновенно подберу идеальный рецепт.";
@@ -97,29 +100,31 @@ export default function ChatPage() {
   const memberIdForSave = selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : undefined;
 
   useEffect(() => {
-    if (historyMessages.length > 0) {
-      const formatted: Message[] = [];
-      historyMessages.forEach((msg: any) => {
-        formatted.push({
-          id: `${msg.id}-user`,
-          role: "user",
-          content: msg.message,
-          timestamp: new Date(msg.created_at),
-        });
-        if (msg.response) {
-          const { displayText, recipes } = parseRecipesFromChat(msg.message || "", msg.response);
-          formatted.push({
-            id: `${msg.id}-assistant`,
-            role: "assistant",
-            content: displayText,
-            timestamp: new Date(msg.created_at),
-            rawContent: msg.response,
-            preParsedRecipe: recipes[0] ?? null,
-          });
-        }
-      });
-      setMessages(formatted);
+    if (historyMessages.length === 0) {
+      setMessages([]);
+      return;
     }
+    const formatted: Message[] = [];
+    historyMessages.forEach((msg: any) => {
+      formatted.push({
+        id: `${msg.id}-user`,
+        role: "user",
+        content: msg.message ?? "",
+        timestamp: new Date(msg.created_at),
+      });
+      if (msg.response) {
+        const { displayText, recipes } = parseRecipesFromChat(msg.message ?? "", msg.response);
+        formatted.push({
+          id: `${msg.id}-assistant`,
+          role: "assistant",
+          content: displayText,
+          timestamp: new Date(msg.created_at),
+          rawContent: msg.response,
+          preParsedRecipe: recipes[0] ?? null,
+        });
+      }
+    });
+    setMessages(formatted);
   }, [historyMessages]);
 
   useEffect(() => {
@@ -284,6 +289,14 @@ export default function ChatPage() {
 
           if (savedRecipes?.length > 0) {
             lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
+            const recipeId = savedRecipes[0]?.id;
+            if (recipeId) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId ? { ...m, recipeId } : m
+                )
+              );
+            }
           }
 
           await saveChat({
@@ -298,7 +311,7 @@ export default function ChatPage() {
             });
           }
         } catch (e) {
-          console.error("Failed to save recipes from chat:", e);
+          safeError("Failed to save recipes from chat:", e);
           await saveChat({ message: userMessage.content, response: rawMessage });
         }
       }
@@ -474,6 +487,8 @@ export default function ChatPage() {
                 rawContent={m.rawContent}
                 expectRecipe={m.role === "assistant"}
                 preParsedRecipe={m.preParsedRecipe}
+                recipeId={m.recipeId}
+                isStreaming={m.isStreaming}
                 onDelete={handleDeleteMessage}
                 memberId={selectedMember?.id}
                 memberName={selectedMember?.name}

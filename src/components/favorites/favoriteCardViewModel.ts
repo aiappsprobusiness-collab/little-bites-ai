@@ -12,8 +12,8 @@ const MEAL_LABELS: Record<string, string> = {
   snack: "Перекус",
 };
 
-/** Extract ingredient name only (no quantity). Handles string or { name, amount } format. */
-function ingredientName(ing: string | { name?: string }): string {
+/** Extract display text for chip. Prefer display_text, else name, else "name — amount". */
+function ingredientName(ing: string | { name?: string; display_text?: string | null; amount?: string }): string {
   if (typeof ing === "string") {
     const t = ing.trim();
     const dashIdx = t.indexOf(" — ");
@@ -21,8 +21,11 @@ function ingredientName(ing: string | { name?: string }): string {
     const sep = dashIdx >= 0 ? dashIdx : colonIdx >= 0 ? colonIdx : -1;
     return sep >= 0 ? t.slice(0, sep).trim() : t;
   }
+  const dt = (ing as { display_text?: string | null }).display_text;
+  if (typeof dt === "string" && dt.trim()) return dt.trim();
   const name = ing?.name;
-  return typeof name === "string" ? name.trim() : "";
+  const amount = (ing as { amount?: string }).amount?.trim();
+  return amount ? `${(name ?? "").trim()} — ${amount}`.trim() || (name ?? "").trim() : (name ?? "").trim();
 }
 
 export interface FavoriteCardViewModel {
@@ -32,6 +35,7 @@ export interface FavoriteCardViewModel {
   cookTimeLabel: string;
   mealTypeLabel: string | null;
   ingredientNames: string[];
+  ingredientTotalCount: number;
   hint: string | null;
 }
 
@@ -51,11 +55,17 @@ export function toFavoriteCardViewModel(recipe: StoredRecipe): FavoriteCardViewM
   const mealTypeLabel =
     typeof mealType === "string" && MEAL_LABELS[mealType] ? MEAL_LABELS[mealType] : null;
 
-  const rawIngredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
-  const allNames = rawIngredients
-    .map(ingredientName)
-    .filter((n) => n.length >= 2);
-  const ingredientNames = allNames;
+  // Предпочтение: ingredientNames из preview (RPC get_recipe_previews) — только названия
+  const fromPreview = (recipe as { ingredientNames?: string[]; ingredientTotalCount?: number }).ingredientNames;
+  const ingredientNames = Array.isArray(fromPreview) && fromPreview.length > 0
+    ? fromPreview.filter((n) => n && String(n).trim().length >= 2)
+    : (() => {
+        const rawIngredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
+        return rawIngredients.map(ingredientName).filter((n) => n.length >= 2);
+      })();
+  const ingredientTotalCount = typeof (recipe as { ingredientTotalCount?: number }).ingredientTotalCount === 'number'
+    ? (recipe as { ingredientTotalCount: number }).ingredientTotalCount
+    : ingredientNames.length;
 
   const chefAdvice = (recipe as { chefAdvice?: string })?.chefAdvice;
   const advice = (recipe as { advice?: string })?.advice;
@@ -72,6 +82,7 @@ export function toFavoriteCardViewModel(recipe: StoredRecipe): FavoriteCardViewM
     cookTimeLabel,
     mealTypeLabel,
     ingredientNames,
+    ingredientTotalCount,
     hint,
   };
 }

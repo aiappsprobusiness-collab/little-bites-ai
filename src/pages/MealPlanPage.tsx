@@ -1,10 +1,14 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Loader2, Sparkles, Plus, ChevronDown } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMealPlans } from "@/hooks/useMealPlans";
+import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
+import { useRecipes } from "@/hooks/useRecipes";
+import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useGenerateWeeklyPlan } from "@/hooks/useGenerateWeeklyPlan";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { formatLocalDate } from "@/utils/dateUtils";
 
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const mealTypes = [
@@ -66,27 +71,37 @@ export default function MealPlanPage() {
   const mealPlanMemberId = isFree && selectedMemberId === "family"
     ? (members[0]?.id ?? undefined)
     : (isFamilyMode ? null : (selectedMemberId || undefined));
-  const { getMealPlans, getMealPlansByDate, clearWeekPlan } = useMealPlans(mealPlanMemberId);
   const memberDataForPlan = useMemo(() => {
     if (isFamilyMode && members.length > 0) {
       const youngest = [...members].sort((a, b) => (a.age_months ?? 0) - (b.age_months ?? 0))[0];
       const allAllergies = Array.from(new Set(members.flatMap((c) => c.allergies ?? [])));
+      const rawPrefs = members.flatMap((c) => (c as { preferences?: string[] }).preferences ?? []);
+      const hardBanPattern = /аллерги|нельзя|^без\s+/i;
+      const familyPreferences = Array.from(new Set(rawPrefs.filter((p) => hardBanPattern.test(String(p).trim()))));
       return {
         name: "Семья",
         age_months: youngest.age_months ?? 0,
         allergies: allAllergies,
+        preferences: familyPreferences,
       };
     }
     const memberForPlan = selectedMember ?? (isFree && selectedMemberId === "family" && members.length > 0 ? members[0] : null);
     if (memberForPlan) {
+      const m = memberForPlan as { allergies?: string[]; preferences?: string[] };
       return {
         name: memberForPlan.name,
         age_months: memberForPlan.age_months ?? 0,
-        allergies: memberForPlan.allergies ?? [],
+        allergies: m.allergies ?? [],
+        preferences: m.preferences ?? [],
       };
     }
     return null;
   }, [isFamilyMode, members, selectedMember, isFree, selectedMemberId]);
+
+  const [mutedWeekKey, setMutedWeekKey] = useState<string | null>(null);
+
+  const starterProfile = memberDataForPlan ? { allergies: memberDataForPlan.allergies, preferences: memberDataForPlan.preferences } : null;
+  const { getMealPlans, getMealPlansByDate, clearWeekPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
 
   const memberIdForPlan = mealPlanMemberId ?? null;
   const { generateWeeklyPlan, regenerateSingleDay, isGenerating: isPlanGenerating, completedDays } = useGenerateWeeklyPlan(
@@ -111,22 +126,25 @@ export default function MealPlanPage() {
     return () => clearInterval(t);
   }, [isPlanGenerating]);
 
-  // Вычисляем текущую неделю и находим индекс текущего дня
-  const getCurrentWeekDates = () => {
-    const dates = [];
+  // Неделя пересчитывается при смене календарной недели (ключ — понедельник в локальной таймзоне)
+  const weekKey = (() => {
+    const today = new Date();
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - today.getDay() + 1);
+    return formatLocalDate(monday);
+  })();
+  const weekDates = useMemo(() => {
+    const dates: Date[] = [];
     const today = new Date();
     const startOfWeek = new Date(today);
     startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Понедельник
-
     for (let i = 0; i < 7; i++) {
-      const date = new Date(startOfWeek);
-      date.setDate(startOfWeek.getDate() + i);
-      dates.push(date);
+      const d = new Date(startOfWeek);
+      d.setDate(startOfWeek.getDate() + i);
+      dates.push(d);
     }
     return dates;
-  };
-
-  const weekDates = getCurrentWeekDates();
+  }, [weekKey]);
   const weekStart = weekDates[0];
   const weekEnd = weekDates[6];
   const todayIndex = weekDates.findIndex(
@@ -147,11 +165,68 @@ export default function MealPlanPage() {
 
   const selectedDate = weekDates[selectedDay];
   const { data: dayMealPlans = [], isLoading } = getMealPlansByDate(selectedDate);
+
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const recipeIdsForPreviews = useMemo(
+    () => dayMealPlans.map((m) => m.recipe_id).filter((id): id is string => !!id),
+    [dayMealPlans]
+  );
+  const { previews, isLoading: isLoadingPreviews } = useRecipePreviewsByIds(recipeIdsForPreviews);
+  const { toggleFavorite } = useRecipes();
+
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const isValidRecipeId = (id: string) => UUID_REGEX.test(id);
+
+  const handleToggleFavorite = useCallback(async (recipeId: string, next: boolean) => {
+    const sortedIds = Array.from(new Set(recipeIdsForPreviews)).filter(isValidRecipeId).sort().join(",");
+    const queryKey = ["recipe_previews", user?.id, sortedIds] as const;
+    const prev = queryClient.getQueryData<Record<string, { isFavorite?: boolean }>>(queryKey);
+
+    queryClient.setQueryData(queryKey, (old: Record<string, { isFavorite?: boolean }> | undefined) => {
+      if (!old) return old;
+      const nextPreviews = { ...old };
+      if (nextPreviews[recipeId]) {
+        nextPreviews[recipeId] = { ...nextPreviews[recipeId], isFavorite: next };
+      }
+      return nextPreviews;
+    });
+
+    try {
+      await toggleFavorite({ id: recipeId, isFavorite: next, preview: previews[recipeId] });
+    } catch (e: unknown) {
+      if (prev != null) queryClient.setQueryData(queryKey, prev);
+      toast({ variant: "destructive", title: "Ошибка", description: (e as Error)?.message ?? "Не удалось обновить избранное" });
+    }
+  }, [queryClient, user?.id, recipeIdsForPreviews, toggleFavorite, toast, previews]);
+
+  const handleShare = useCallback(async (recipeId: string, recipeTitle: string) => {
+    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/recipe/${recipeId}`;
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: recipeTitle, url });
+        toast({ title: "Рецепт отправлен" });
+      } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Ссылка скопирована" });
+      } else {
+        toast({ variant: "destructive", title: "Поделиться недоступно", description: "Скопируйте ссылку вручную" });
+      }
+    } catch (e: unknown) {
+      if ((e as Error)?.name !== "AbortError") {
+        toast({ variant: "destructive", title: "Ошибка", description: (e as Error)?.message ?? "Не удалось поделиться" });
+      }
+    }
+  }, []);
   const { data: weekPlans = [] } = getMealPlans(weekStart, weekEnd);
   const hasMealsByDayIndex = weekDates.map(
-    (d) => weekPlans.some((p) => p.planned_date === d.toISOString().split("T")[0])
+    (d) => weekPlans.some((p) => p.planned_date === formatLocalDate(d))
   );
-  const weekIsEmpty = weekPlans.length === 0;
+  const hasDbWeekPlan = weekPlans.some((p) => !p.isStarter);
+  const weekIsEmpty = !hasDbWeekPlan;
+  const hasAnyWeekPlan = weekPlans.length > 0;
+  /** Неделя полностью пустая: нет DB и starter скрыт. */
+  const isCompletelyEmpty = mutedWeekKey === weekKey && !hasAnyWeekPlan;
 
   const getPlannedMealRecipe = (plannedMeal: any) => {
     // В зависимости от select в Supabase джойн может прийти как `recipe` или `recipes`
@@ -282,6 +357,13 @@ export default function MealPlanPage() {
                       recipeId={recipeId}
                       mealTypeLabel={slot.label}
                       compact
+                      isLoadingPreviews={isLoadingPreviews}
+                      cookTimeMinutes={previews[recipeId]?.cookTimeMinutes}
+                      ingredientNames={previews[recipeId]?.ingredientNames}
+                      ingredientTotalCount={previews[recipeId]?.ingredientTotalCount}
+                      isFavorite={previews[recipeId]?.isFavorite ?? false}
+                      onToggleFavorite={isValidRecipeId(recipeId) ? handleToggleFavorite : undefined}
+                      onShare={isValidRecipeId(recipeId) ? handleShare : undefined}
                     />
                   ) : (
                     <p className="text-typo-muted text-muted-foreground/80 py-3">— пока без блюда</p>
@@ -290,52 +372,94 @@ export default function MealPlanPage() {
               );
             })}
           </div>
-          {weekIsEmpty && !isPlanGenerating && (
-            <div className="mt-5">
-              <Button
-                size="lg"
-                className="w-full h-12 rounded-xl font-medium min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
-                onClick={async () => {
-                  if (isFree) {
-                    setShowPaywall(true);
-                    return;
+          {isCompletelyEmpty && !isPlanGenerating && (
+            <div className="mt-5 flex flex-col gap-2">
+              {isFree ? (
+                <Button
+                  size="lg"
+                  className="w-full h-12 rounded-xl font-medium min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+                  onClick={() => setMutedWeekKey(null)}
+                  disabled={isPlanGenerating}
+                >
+                  Заполнить шаблоном
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    size="lg"
+                    className="w-full h-12 rounded-xl font-medium min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+                    onClick={async () => {
+                      try {
+                        await generateWeeklyPlan();
+                        setMutedWeekKey(null);
+                        toast({ description: "План на неделю готов" });
+                      } catch (e: any) {
+                        toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                      }
+                    }}
+                    disabled={isPlanGenerating}
+                  >
+                    <Sparkles className="w-5 h-5 mr-2 shrink-0" />
+                    Улучшить с AI
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setMutedWeekKey(null)}
+                    className="text-typo-caption text-emerald-600 hover:text-emerald-700 transition-colors"
+                  >
+                    Заполнить шаблоном
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Очистить неделю / Улучшить с AI — below content, когда есть план (B или C) */}
+        {hasAnyWeekPlan && (
+          <div className="mt-6 pb-6 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const msg = hasDbWeekPlan
+                  ? "Удалить все блюда на текущую неделю? Это действие нельзя отменить."
+                  : "Скрыть шаблонное меню на эту неделю?";
+                if (!window.confirm(msg)) return;
+                setMutedWeekKey(weekKey);
+                if (hasDbWeekPlan) {
+                  try {
+                    await clearWeekPlan({ startDate: weekStart, endDate: weekEnd });
+                    toast({ title: "Неделя очищена", description: "План питания удалён" });
+                  } catch (e: any) {
+                    toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
                   }
+                }
+              }}
+              disabled={isPlanGenerating}
+              className="text-typo-caption text-muted-foreground/80 hover:text-muted-foreground transition-colors text-left"
+            >
+              Очистить неделю
+            </button>
+            {!isFree && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-fit"
+                disabled={isPlanGenerating}
+                onClick={async () => {
                   try {
                     await generateWeeklyPlan();
+                    setMutedWeekKey(null);
                     toast({ description: "План на неделю готов" });
                   } catch (e: any) {
                     toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
                   }
                 }}
-                disabled={isPlanGenerating}
               >
-                <Sparkles className="w-5 h-5 mr-2 shrink-0" />
-                Создать план на неделю
+                <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                Улучшить с AI
               </Button>
-              <p className="text-typo-caption text-muted-foreground mt-2 text-center">Меню на семь дней под ваш профиль</p>
-            </div>
-          )}
-        </div>
-
-        {/* Очистить неделю — very low emphasis, below content */}
-        {!weekIsEmpty && (
-          <div className="mt-6 pb-6">
-            <button
-              type="button"
-              onClick={async () => {
-                if (!window.confirm("Удалить все блюда на текущую неделю? Это действие нельзя отменить.")) return;
-                try {
-                  await clearWeekPlan({ startDate: weekStart, endDate: weekEnd });
-                  toast({ title: "Неделя очищена", description: "План питания удалён" });
-                } catch (e: any) {
-                  toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
-                }
-              }}
-              disabled={isPlanGenerating}
-              className="text-typo-caption text-muted-foreground/80 hover:text-muted-foreground transition-colors"
-            >
-              Очистить неделю
-            </button>
+            )}
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { safeLog, safeError } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,7 +39,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Generating image for recipe: ${recipeName}`);
+    safeLog(`Generating image for recipe: ${recipeName}`);
 
     // Generate image using Lovable AI
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -69,7 +70,7 @@ Make it look delicious and inviting.`
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Lovable AI error:", response.status, errorText);
+      safeError("Lovable AI error:", response.status, errorText);
 
       if (response.status === 429) {
         return new Response(
@@ -85,7 +86,7 @@ Make it look delicious and inviting.`
     const imageData = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
     if (!imageData) {
-      console.error("No image in response:", JSON.stringify(data));
+      safeError("No image in response:", JSON.stringify(data));
       throw new Error("No image generated");
     }
 
@@ -106,7 +107,7 @@ Make it look delicious and inviting.`
       });
 
     if (uploadError) {
-      console.error("Upload error:", uploadError);
+      safeError("Upload error:", uploadError);
       throw new Error(`Upload failed: ${uploadError.message}`);
     }
 
@@ -124,18 +125,18 @@ Make it look delicious and inviting.`
       .eq("id", recipeId);
 
     if (updateError) {
-      console.error("Update recipe error:", updateError);
+      safeError("Update recipe error:", updateError);
       throw new Error(`Update failed: ${updateError.message}`);
     }
 
-    console.log(`Image generated and saved for recipe ${recipeId}: ${imageUrl}`);
+    safeLog(`Image generated and saved for recipe ${recipeId}: ${imageUrl}`);
 
     return new Response(
       JSON.stringify({ success: true, imageUrl }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error in generate-recipe-image:", error);
+    safeError("Error in generate-recipe-image:", error);
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error",

@@ -197,7 +197,10 @@ export type Database = {
       recipe_ingredients: {
         Row: {
           amount: number | null
+          canonical_amount: number | null
+          canonical_unit: string | null
           category: Database["public"]["Enums"]["product_category"] | null
+          display_text: string | null
           id: string
           name: string
           order_index: number | null
@@ -206,7 +209,10 @@ export type Database = {
         }
         Insert: {
           amount?: number | null
+          canonical_amount?: number | null
+          canonical_unit?: string | null
           category?: Database["public"]["Enums"]["product_category"] | null
+          display_text?: string | null
           id?: string
           name: string
           order_index?: number | null
@@ -215,7 +221,10 @@ export type Database = {
         }
         Update: {
           amount?: number | null
+          canonical_amount?: number | null
+          canonical_unit?: string | null
           category?: Database["public"]["Enums"]["product_category"] | null
+          display_text?: string | null
           id?: string
           name?: string
           order_index?: number | null
@@ -503,12 +512,44 @@ export type Database = {
         }
         Relationships: []
       }
+      // v2 tables (from types-v2)
+      meal_plans_v2: {
+        Row: { id: string; user_id: string; member_id: string | null; planned_date: string; meals: Json }
+        Insert: { id?: string; user_id: string; member_id?: string | null; planned_date: string; meals?: Json }
+        Update: { id?: string; user_id?: string; member_id?: string | null; planned_date?: string; meals?: Json }
+        Relationships: []
+      }
+      members: {
+        Row: { id: string; user_id: string; name: string; type: string; age_months: number | null; allergies: string[]; preferences: string[]; difficulty: string | null }
+        Insert: { id?: string; user_id: string; name: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; difficulty?: string | null }
+        Update: { id?: string; user_id?: string; name?: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; difficulty?: string | null }
+        Relationships: []
+      }
+      profiles_v2: {
+        Row: { id: string; user_id: string; status: string; daily_limit: number; last_reset: string; premium_until: string | null; requests_today: number; trial_until: string | null; trial_used: boolean; trial_started_at: string | null; email: string | null }
+        Insert: { id?: string; user_id: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null }
+        Update: { id?: string; user_id?: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null }
+        Relationships: []
+      }
+      favorites_v2: {
+        Row: { id: string; user_id: string; recipe_id: string | null; recipe_data: Json; created_at?: string }
+        Insert: { id?: string; user_id: string; recipe_id?: string | null; recipe_data?: Json; created_at?: string }
+        Update: { id?: string; user_id?: string; recipe_id?: string | null; recipe_data?: Json; created_at?: string }
+        Relationships: []
+      }
+      articles: {
+        Row: { id: string; title: string; description: string; content: string; category: string | null; is_premium: boolean; cover_image_url: string | null; age_category: string | null }
+        Insert: { id?: string; title: string; description?: string; content?: string; category?: string | null; is_premium?: boolean; cover_image_url?: string | null; age_category?: string | null }
+        Update: { id?: string; title?: string; description?: string; content?: string; category?: string | null; is_premium?: boolean; cover_image_url?: string | null; age_category?: string | null }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       check_usage_limit: { Args: { _user_id: string }; Returns: Json }
+      ensure_starter_recipes_seeded: { Args: { p_recipes: Json }; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

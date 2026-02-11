@@ -1,11 +1,11 @@
 import { useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { safeLog, safeWarn, safeError } from "@/utils/safeLogger";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useRecipes } from './useRecipes';
 import { parseRecipesFromChat } from '@/utils/parseChatRecipes';
 import type { ParseRecipesFromChatResult } from '@/utils/parseChatRecipes';
-import { resolveUnit } from '@/utils/productUtils';
 import type { Tables } from '@/integrations/supabase/types';
 import { RECIPES_LIST_SELECT, RECIPES_PAGE_SIZE } from '@/lib/supabase-constants';
 import mockRecipes from '@/mocks/mockRecipes.json';
@@ -151,9 +151,9 @@ export function useChatRecipes() {
         try {
           // Валидируем название рецепта
           if (!isValidTitle(parsedRecipe.title)) {
-            console.warn('=== Skipping invalid recipe title ===');
-            console.warn('Invalid title:', parsedRecipe.title);
-            console.warn('This looks like a description or instruction, not a recipe name');
+            safeWarn('=== Skipping invalid recipe title ===');
+            safeWarn('Invalid title:', parsedRecipe.title);
+            safeWarn('This looks like a description or instruction, not a recipe name');
             continue; // Пропускаем рецепты с некорректными названиями
           }
 
@@ -166,12 +166,12 @@ export function useChatRecipes() {
             tags.push(`chat_${recipeMealType}`);
           }
 
-          console.log('=== Saving recipe from chat ===');
-          console.log('Recipe title:', parsedRecipe.title);
-          console.log('Tags:', tags);
-          console.log('Meal type:', recipeMealType);
-          console.log('Ingredients count:', parsedRecipe.ingredients.length);
-          console.log('Steps count:', parsedRecipe.steps.length);
+          safeLog('=== Saving recipe from chat ===');
+          safeLog('Recipe title:', parsedRecipe.title);
+          safeLog('Tags:', tags);
+          safeLog('Meal type:', recipeMealType);
+          safeLog('Ingredients count:', parsedRecipe.ingredients.length);
+          safeLog('Steps count:', parsedRecipe.steps.length);
 
           // Схема recipes: cooking_time_minutes — integer; child_id — UUID или null; tags — text[]
           const cookingMinutes =
@@ -194,15 +194,22 @@ export function useChatRecipes() {
               tags,
             },
             ingredients: parsedRecipe.ingredients.map((ing, index) => {
-              const nameStr = typeof ing === 'string' ? ing : ing.name;
-              const substitute = typeof ing === 'object' && ing && 'substitute' in ing ? (ing as { substitute?: string }).substitute : undefined;
+              const o = typeof ing === 'object' && ing && 'name' in ing ? (ing as { name: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; substitute?: string }) : null;
+              const nameStr = o?.name ?? (typeof ing === 'string' ? ing : String(ing));
+              const displayText = o?.display_text;
+              const canonical = o?.canonical_amount != null && (o?.canonical_unit === 'g' || o?.canonical_unit === 'ml')
+                ? { amount: o.canonical_amount, unit: o.canonical_unit as 'g' | 'ml' }
+                : null;
               return {
                 name: nameStr,
+                display_text: displayText ?? null,
+                canonical_amount: canonical?.amount ?? null,
+                canonical_unit: canonical?.unit ?? null,
                 amount: null,
-                unit: resolveUnit(null, nameStr),
+                unit: null,
                 category: 'other' as const,
                 order_index: index,
-                ...(substitute != null && substitute !== '' && { substitute: String(substitute) }),
+                ...(o?.substitute != null && o.substitute !== '' && { substitute: String(o.substitute) }),
               };
             }),
             steps: parsedRecipe.steps.map((step, index) => ({
@@ -213,13 +220,13 @@ export function useChatRecipes() {
             })),
           });
 
-          console.log('=== Recipe saved successfully ===');
-          console.log('Saved recipe ID:', newRecipe.id);
-          console.log('Saved recipe title:', newRecipe.title);
-          console.log('Saved recipe tags:', newRecipe.tags);
+          safeLog('=== Recipe saved successfully ===');
+          safeLog('Saved recipe ID:', newRecipe.id);
+          safeLog('Saved recipe title:', newRecipe.title);
+          safeLog('Saved recipe tags:', newRecipe.tags);
           savedRecipes.push(newRecipe);
         } catch (error) {
-          console.error('Failed to save recipe from chat:', error, parsedRecipe);
+          safeError('Failed to save recipe from chat:', error, parsedRecipe);
           // Продолжаем сохранять другие рецепты даже если один не удался
         }
       }

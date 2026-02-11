@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import type { MembersRow, MembersInsert, MembersUpdate, MemberTypeV2 } from "@/integrations/supabase/types-v2";
@@ -85,7 +86,7 @@ export function useMembers() {
       } as Record<string, unknown>) as MembersInsert;
       const { data, error } = await supabase.from("members").insert(payload).select().single();
       if (error) {
-        console.error("Supabase Error (members):", error.message, error.details);
+        safeError("Supabase Error (members):", error.message, error.details);
         throw error;
       }
       return data as MembersRow;

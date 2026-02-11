@@ -1,11 +1,15 @@
 /**
  * Утилиты для парсинга рецептов из ответов AI в чате
  */
+import { safeLog, safeWarn } from "./safeLogger";
 
-/** Ингредиент с подсказкой замены (Premium). */
+/** Ингредиент (контракт AI: displayText, canonical). */
 export interface IngredientWithSubstitute {
   name: string;
+  display_text?: string | null;
   amount?: string;
+  canonical_amount?: number | null;
+  canonical_unit?: "g" | "ml" | null;
   substitute?: string;
 }
 
@@ -30,11 +34,13 @@ export function isIngredientObject(ing: ParsedIngredient): ing is IngredientWith
   return typeof ing === 'object' && ing !== null && 'name' in ing && typeof (ing as IngredientWithSubstitute).name === 'string';
 }
 
-/** Текст ингредиента для отображения (строка или "name — amount"). */
-export function ingredientDisplayText(ing: ParsedIngredient): string {
+/** Текст ингредиента для отображения. Приоритет: display_text > "name — amount" > name. */
+export function ingredientDisplayText(ing: ParsedIngredient | { name?: string; display_text?: string | null; amount?: string }): string {
   if (typeof ing === 'string') return ing;
+  const dt = (ing as { display_text?: string | null }).display_text;
+  if (typeof dt === 'string' && dt.trim()) return dt.trim();
   const a = (ing as IngredientWithSubstitute).amount?.trim();
-  return a ? `${(ing as IngredientWithSubstitute).name} — ${a}` : (ing as IngredientWithSubstitute).name;
+  return a ? `${(ing as IngredientWithSubstitute).name} — ${a}` : (ing as IngredientWithSubstitute).name ?? '';
 }
 
 function generateTempRecipeId(): string {
@@ -213,6 +219,55 @@ export function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
     ingredients: cleanedIngredients,
     steps,
     mealType: detectMealType(text),
+  };
+}
+
+/**
+ * Парсит рецепт из форматированного текста (🍽️ **Title**, 🥘 **Ингредиенты:**, 👨‍🍳 **Приготовление:**).
+ * Для сообщений из истории, сохранённых до перехода на строгий JSON.
+ */
+function parseRecipeFromFormattedText(text: string): ParsedRecipe | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const titleMatch = trimmed.match(/(?:🍽️\s*)?\*\*([^*]+)\*\*/);
+  const title = titleMatch ? titleMatch[1].trim() : null;
+  if (!title) return null;
+
+  const timeMatch = trimmed.match(/⏱️\s*Время приготовления:\s*(\d+)\s*мин/);
+  const cookingTime = timeMatch ? parseInt(timeMatch[1], 10) : undefined;
+
+  const ingredients: string[] = [];
+  const ingsSection = trimmed.match(/(?:🥘\s*)?\*\*Ингредиенты:\*\*\s*\n([\s\S]*?)(?=(?:👨‍🍳\s*)?\*\*Приготовление:\*\*|$)/i);
+  if (ingsSection?.[1]) {
+    ingsSection[1]
+      .trim()
+      .split(/\n/)
+      .forEach((line) => {
+        const cleaned = line
+          .replace(/^\d+\.\s*/, "")
+          .replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}]*/u, "")
+          .trim();
+        if (cleaned) ingredients.push(cleaned);
+      });
+  }
+
+  const steps: string[] = [];
+  const stepsSection = trimmed.match(/(?:👨‍🍳\s*)?\*\*Приготовление:\*\*\s*\n([\s\S]*)$/i);
+  if (stepsSection?.[1]) {
+    stepsSection[1]
+      .trim()
+      .split(/\n/)
+      .forEach((line) => {
+        const cleaned = line.replace(/^\d+\.\s*/, "").trim();
+        if (cleaned) steps.push(cleaned);
+      });
+  }
+
+  return {
+    title,
+    ingredients: ingredients.length ? ingredients : [],
+    steps: steps.length ? steps : [],
+    cookingTime,
   };
 }
 
@@ -541,8 +596,15 @@ export function parseRecipesFromChat(
           const ingredients: ParsedIngredient[] = rawIngredients.map((item: unknown) => {
             if (typeof item === 'string') return item;
             if (item && typeof item === 'object' && 'name' in item && typeof (item as { name: string }).name === 'string') {
-              const o = item as { name: string; amount?: string; substitute?: string };
-              return { name: o.name, amount: o.amount, substitute: o.substitute };
+              const o = item as { name: string; displayText?: string; amount?: string; canonical?: { amount: number; unit: string } | null; substitute?: string };
+              return {
+                name: o.name,
+                display_text: o.displayText ?? o.amount,
+                amount: o.amount,
+                substitute: o.substitute,
+                canonical_amount: o.canonical?.amount,
+                canonical_unit: o.canonical?.unit === 'g' || o.canonical?.unit === 'ml' ? o.canonical.unit : undefined,
+              };
             }
             return String(item);
           });
@@ -555,7 +617,7 @@ export function parseRecipesFromChat(
               description: parsed.description || parsed.desc,
               ingredients,
               steps,
-              cookingTime: parsed.cookingTime ?? parsed.cooking_time ?? parsed.time,
+              cookingTime: parsed.cookingTimeMinutes ?? parsed.cookingTime ?? parsed.cooking_time ?? parsed.time,
               mealType,
               chefAdvice: typeof parsed.chefAdvice === 'string' ? parsed.chefAdvice : undefined,
               advice: typeof parsed.advice === 'string' ? parsed.advice : undefined,
@@ -573,8 +635,15 @@ export function parseRecipesFromChat(
             const ingredients: ParsedIngredient[] = rawIng.map((item: unknown) => {
               if (typeof item === 'string') return item;
               if (item && typeof item === 'object' && 'name' in item && typeof (item as { name: string }).name === 'string') {
-                const o = item as { name: string; amount?: string; substitute?: string };
-                return { name: o.name, amount: o.amount, substitute: o.substitute };
+                const o = item as { name: string; displayText?: string; amount?: string; canonical?: { amount: number; unit: string } | null; substitute?: string };
+                return {
+                  name: o.name,
+                  display_text: o.displayText ?? o.amount,
+                  amount: o.amount,
+                  substitute: o.substitute,
+                  canonical_amount: o.canonical?.amount,
+                  canonical_unit: o.canonical?.unit === 'g' || o.canonical?.unit === 'ml' ? o.canonical.unit : undefined,
+                };
               }
               return String(item);
             });
@@ -587,7 +656,7 @@ export function parseRecipesFromChat(
                 description: recipe.description || recipe.desc,
                 ingredients,
                 steps,
-                cookingTime: recipe.cookingTime ?? recipe.cooking_time ?? recipe.time,
+                cookingTime: recipe.cookingTimeMinutes ?? recipe.cookingTime ?? recipe.cooking_time ?? recipe.time,
                 mealType: recipe.mealType || mealType,
                 chefAdvice: typeof recipe.chefAdvice === 'string' ? recipe.chefAdvice : undefined,
                 advice: typeof recipe.advice === 'string' ? recipe.advice : undefined,
@@ -598,20 +667,27 @@ export function parseRecipesFromChat(
       }
       jsonParsedSuccessfully = true;
     } catch (e) {
-      console.warn('Failed to parse JSON recipe:', e);
+      safeWarn('Failed to parse JSON recipe:', e);
     }
   }
 
-  // Приоритет JSON: при успешном JSON и непустом списке рецептов полностью пропускаем parseRecipeFromPlainText
-  // (доверяем только чистому JSON — шаги приготовления не попадут в список покупок)
+  // Приоритет JSON: при успешном JSON и непустом списке рецептов пропускаем fallback-парсинг
   if (jsonParsedSuccessfully && recipes.length > 0) {
-    // не вызываем parseRecipeFromPlainText
+    // ok
   } else if (recipes.length === 0 && !looksLikeHumanText(aiResponse)) {
-    const textRecipe = parseRecipeFromPlainText(aiResponse);
-    if (textRecipe) {
-      textRecipe.id = textRecipe.id ?? generateTempRecipeId();
-      recipes.push(textRecipe);
-      console.log('parseRecipesFromChat - Parsed recipe from plain text:', textRecipe.title);
+    // Сначала пробуем формат 🍽️ **Title**, 🥘 **Ингредиенты:** (старая история)
+    const formattedRecipe = parseRecipeFromFormattedText(aiResponse);
+    if (formattedRecipe) {
+      formattedRecipe.id = formattedRecipe.id ?? generateTempRecipeId();
+      recipes.push(formattedRecipe);
+      safeLog('parseRecipesFromChat - Parsed recipe from formatted text:', formattedRecipe.title);
+    } else {
+      const textRecipe = parseRecipeFromPlainText(aiResponse);
+      if (textRecipe) {
+        textRecipe.id = textRecipe.id ?? generateTempRecipeId();
+        recipes.push(textRecipe);
+        safeLog('parseRecipesFromChat - Parsed recipe from plain text:', textRecipe.title);
+      }
     }
   }
 
@@ -647,17 +723,17 @@ export function parseRecipesFromChat(
 
     const foundTitles = new Set<string>();
 
-    console.log('parseRecipesFromChat - Starting text parsing with', recipeTitlePatterns.length, 'patterns');
+    safeLog('parseRecipesFromChat - Starting text parsing with', recipeTitlePatterns.length, 'patterns');
 
     for (const pattern of recipeTitlePatterns) {
       const matches = [...aiResponse.matchAll(pattern)];
-      console.log('parseRecipesFromChat - Pattern matches:', matches.length);
+      safeLog('parseRecipesFromChat - Pattern matches:', matches.length);
 
       matches.forEach((match, index) => {
         // Берем название из группы захвата (обычно вторая группа)
         const title = (match[2] || match[1] || '').trim();
 
-        console.log(`parseRecipesFromChat - Match ${index}:`, { title, match: match[0] });
+        safeLog(`parseRecipesFromChat - Match ${index}:`, { title, match: match[0] });
 
         // Проверяем, что это похоже на название рецепта
         if (title.length >= 3 && title.length <= 80) {
@@ -711,7 +787,7 @@ export function parseRecipesFromChat(
             // Определяем тип приема пищи из контекста
             const contextMealType = detectMealType(context) || mealType;
 
-            console.log('parseRecipesFromChat - Found recipe:', { title, contextMealType, context: context.substring(0, 50) });
+            safeLog('parseRecipesFromChat - Found recipe:', { title, contextMealType, context: context.substring(0, 50) });
 
             recipes.push({
               title: title,
@@ -721,7 +797,7 @@ export function parseRecipesFromChat(
               mealType: contextMealType,
             });
           } else {
-            console.log('parseRecipesFromChat - Excluded title:', title, { isExcluded, alreadyFound: foundTitles.has(title) });
+            safeLog('parseRecipesFromChat - Excluded title:', title, { isExcluded, alreadyFound: foundTitles.has(title) });
           }
         }
       });
@@ -730,7 +806,7 @@ export function parseRecipesFromChat(
       // Не break, чтобы найти все возможные рецепты
     }
 
-    console.log('parseRecipesFromChat - Found', recipes.length, 'recipes from text parsing');
+    safeLog('parseRecipesFromChat - Found', recipes.length, 'recipes from text parsing');
   }
 
   // Отключаем fallback парсинг - он создает некорректные рецепты

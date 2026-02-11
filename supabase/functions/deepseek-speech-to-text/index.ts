@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { safeError } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,7 +108,7 @@ serve(async (req) => {
     );
     
   } catch (error: any) {
-    console.error("DeepSeek speech-to-text error:", error);
+    safeError("DeepSeek speech-to-text error:", error);
     return new Response(
       JSON.stringify({
         error: error.message || "Failed to transcribe audio",

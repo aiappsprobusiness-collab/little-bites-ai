@@ -3,6 +3,7 @@
  * 
  * Сервис для работы с DeepSeek API для распознавания продуктов и генерации рецептов
  */
+import { safeLog, safeWarn, safeError } from "@/utils/safeLogger";
 
 export interface DeepSeekConfig {
   apiKey: string;
@@ -93,7 +94,7 @@ class DeepSeekService {
       const data: ChatResponse = await response.json();
       return data.choices[0]?.message?.content || '';
     } catch (error) {
-      console.error('DeepSeek chat error:', error);
+      safeError('DeepSeek chat error:', error);
       throw error;
     }
   }
@@ -162,30 +163,30 @@ class DeepSeekService {
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           if (parsed.products && Array.isArray(parsed.products) && parsed.products.length > 0) {
-            console.log('Successfully parsed products from DeepSeek:', parsed.products);
+            safeLog('Successfully parsed products from DeepSeek:', parsed.products);
             return parsed;
           }
         }
       } catch (e) {
-        console.warn('Failed to parse JSON response, trying text extraction');
+        safeWarn('Failed to parse JSON response, trying text extraction');
       }
 
       // Fallback: если не удалось распарсить JSON, пытаемся извлечь продукты из текста
       const products = this.extractProductsFromText(response);
       if (products.length > 0) {
-        console.log('Extracted products from text:', products);
+        safeLog('Extracted products from text:', products);
         return { products };
       }
 
       // Если ничего не найдено, возвращаем пустой массив
-      console.warn('No products found in DeepSeek response');
+      safeWarn('No products found in DeepSeek response');
       return { products: [] };
     } catch (error: any) {
-      console.error('Image analysis error:', error);
+      safeError('Image analysis error:', error);
 
       // Если ошибка связана с форматом изображения, пробуем текстовый запрос
       if (error.message?.includes('image') || error.message?.includes('format') || error.message?.includes('vision')) {
-        console.log('Trying fallback text-based analysis');
+        safeLog('Trying fallback text-based analysis');
         return this.analyzeImageFallback(imageBase64);
       }
 
@@ -229,7 +230,7 @@ class DeepSeekService {
       const products = this.extractProductsFromText(response);
       return { products };
     } catch (error) {
-      console.error('Fallback analysis error:', error);
+      safeError('Fallback analysis error:', error);
       return { products: [] };
     }
   }
@@ -403,12 +404,12 @@ ${ageInfo}${allergyLine || 'Используй только продукты, б
           if (jsonMatch) {
             const jsonString = jsonMatch[1] || jsonMatch[0];
             const parsed = JSON.parse(jsonString);
-            console.log('Successfully parsed recipe JSON:', parsed);
+            safeLog('Successfully parsed recipe JSON:', parsed);
             return parsed;
           }
         }
       } catch (e) {
-        console.warn('Failed to parse recipe JSON:', e, 'Response:', response.substring(0, 200));
+        safeWarn('Failed to parse recipe JSON:', e, 'Response:', response.substring(0, 200));
       }
 
       // Fallback: создаем простой рецепт
@@ -424,7 +425,7 @@ ${ageInfo}${allergyLine || 'Используй только продукты, б
         ageRange,
       };
     } catch (error: any) {
-      console.error('Recipe generation error:', error);
+      safeError('Recipe generation error:', error);
       if (error.message) {
         throw new Error(`Ошибка генерации рецепта: ${error.message}`);
       }
@@ -554,12 +555,12 @@ ${allergyInfo}${ageInfo}${productsInfo}
           if (jsonMatch) {
             const jsonString = jsonMatch[1] || jsonMatch[0];
             const parsed = JSON.parse(jsonString);
-            console.log('Successfully parsed family recipe JSON:', parsed);
+            safeLog('Successfully parsed family recipe JSON:', parsed);
             return parsed;
           }
         }
       } catch (e) {
-        console.warn('Failed to parse family recipe JSON:', e, 'Response:', response.substring(0, 200));
+        safeWarn('Failed to parse family recipe JSON:', e, 'Response:', response.substring(0, 200));
       }
 
       // Fallback: создаем простой рецепт
@@ -575,7 +576,7 @@ ${allergyInfo}${ageInfo}${productsInfo}
         ageRange: ageRangeText || 'семейный',
       };
     } catch (error: any) {
-      console.error('Family recipe generation error:', error);
+      safeError('Family recipe generation error:', error);
       if (error.message) {
         throw new Error(`Ошибка генерации семейного рецепта: ${error.message}`);
       }
@@ -605,7 +606,7 @@ ${allergyInfo}${ageInfo}${productsInfo}
 
       return await this.chat(messages);
     } catch (error) {
-      console.error('Recommendation error:', error);
+      safeError('Recommendation error:', error);
       throw new Error('Не удалось получить рекомендацию');
     }
   }

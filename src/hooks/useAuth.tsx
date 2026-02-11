@@ -1,4 +1,5 @@
 import { useState, useEffect, createContext, useContext, ReactNode, useRef } from 'react';
+import { safeError } from '@/utils/safeLogger';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -24,7 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession()
       .then(({ data: { session }, error }) => {
         if (error) {
-          console.error('Auth session error:', error);
+          safeError('Auth session error:', error);
         }
         setSession(session);
         setUser(session?.user ?? null);
@@ -32,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         initializedRef.current = true;
       })
       .catch((error) => {
-        console.error('Failed to get auth session:', error);
+        safeError('Failed to get auth session:', error);
         setLoading(false);
         initializedRef.current = true;
       });

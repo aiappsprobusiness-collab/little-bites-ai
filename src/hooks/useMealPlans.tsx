@@ -1,7 +1,39 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { formatLocalDate } from '@/utils/dateUtils';
+import { STARTER_DAILY_PLANS, STARTER_NEUTRAL_DAY } from '@/data/starterDailyPlans';
+import { selectStarterVariant, STARTER_NEUTRAL_INDEX, type StarterProfile } from '@/data/starterResolver';
+import { ensureStarterRecipesSeeded, toStarterRecipeDbId } from '@/data/starterRecipeSeed';
 import type { MealPlansV2Row, MealPlansV2Insert, MealPlansV2Update } from '@/integrations/supabase/types-v2';
+
+async function buildStarterItems(
+  plannedDate: string,
+  variantIndex: number,
+  userId: string,
+  memberId: string | null | undefined
+): Promise<MealPlanItemV2[]> {
+  await ensureStarterRecipesSeeded(userId);
+  const useNeutral = variantIndex === STARTER_NEUTRAL_INDEX;
+  const template = useNeutral ? STARTER_NEUTRAL_DAY : (STARTER_DAILY_PLANS[variantIndex] ?? STARTER_DAILY_PLANS[0]);
+  const mid = memberId ?? null;
+  const idPrefix = useNeutral ? `starter_neutral_${plannedDate}` : `starter_${plannedDate}`;
+  return template.map((item) => {
+    const starterId = item.recipe_id ?? item.recipe?.id;
+    const dbId = starterId ? toStarterRecipeDbId(userId, starterId) : null;
+    return {
+      ...item,
+      id: useNeutral ? `${idPrefix}_${item.meal_type}` : `${idPrefix}_${item.meal_type}_${variantIndex}`,
+      planned_date: plannedDate,
+      recipe_id: dbId,
+      recipe: item.recipe && dbId ? { id: dbId, title: item.recipe.title } : item.recipe,
+      child_id: mid,
+      member_id: mid,
+      user_id: userId,
+      isStarter: true,
+    };
+  });
+}
 
 const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'] as const;
 type MealType = (typeof MEAL_SLOTS)[number];
@@ -19,7 +51,10 @@ export interface MealPlanItemV2 {
   /** Alias for member_id so existing UI (ProfilePage, FamilyDashboard) keeps working */
   child_id: string | null;
   member_id: string | null;
+  user_id?: string;
   is_completed?: boolean;
+  /** true = starter, отсутствует/false = из БД */
+  isStarter?: boolean;
 }
 
 function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
@@ -42,43 +77,82 @@ function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
 }
 
 /** memberId: конкретный id = планы этого члена; null = "Семья" (member_id is null); undefined = не фильтровать. */
-export function useMealPlans(memberId?: string | null) {
+export function useMealPlans(
+  memberId?: string | null,
+  profile?: StarterProfile | null,
+  options?: { mutedWeekKey?: string | null }
+) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const getMealPlans = (startDate: Date, endDate: Date) => {
-    return useQuery({
-      queryKey: ['meal_plans_v2', user?.id, memberId, startDate.toISOString(), endDate.toISOString()],
-      queryFn: async (): Promise<MealPlanItemV2[]> => {
-        if (!user) return [];
+  const profileKey: string | null = profile
+    ? [
+        [...(profile.allergies ?? [])].sort().join(","),
+        (profile.preferences ?? []).map((p) => String(p).trim().toLowerCase()).join("|"),
+      ].join(";")
+    : null;
 
+  const mutedWeekKey = options?.mutedWeekKey ?? null;
+
+  const getMealPlans = (startDate: Date, endDate: Date) => {
+    const startStr = formatLocalDate(startDate);
+    const endStr = formatLocalDate(endDate);
+    return useQuery({
+      queryKey: ['meal_plans_v2', user?.id, memberId, startStr, endStr, profileKey, mutedWeekKey],
+      queryFn: async ({ signal }): Promise<MealPlanItemV2[]> => {
+        if (!user) return [];
         let query = supabase
           .from('meal_plans_v2')
           .select('id, user_id, member_id, planned_date, meals')
           .eq('user_id', user.id)
-          .gte('planned_date', startDate.toISOString().split('T')[0])
-          .lte('planned_date', endDate.toISOString().split('T')[0]);
+          .gte('planned_date', startStr)
+          .lte('planned_date', endStr);
 
         if (memberId === null) query = query.is('member_id', null);
         else if (memberId) query = query.eq('member_id', memberId);
 
-        const { data: rows, error } = await query.order('planned_date', { ascending: true });
+        const { data: rows, error } = await query
+          .abortSignal(signal)
+          .order('planned_date', { ascending: true });
 
         if (error) throw error;
-        const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as MealPlansV2Row));
+        const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as unknown as MealPlansV2Row));
+        if (expanded.length === 0) {
+          const mon = new Date(startStr + "T12:00:00");
+          mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+          const weekKeyForRange = formatLocalDate(mon);
+          if (mutedWeekKey !== null && weekKeyForRange === mutedWeekKey) return [];
+          const dates: string[] = [];
+          const startD = new Date(startStr + 'T12:00:00');
+          const endD = new Date(endStr + 'T12:00:00');
+          for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+            dates.push(formatLocalDate(d));
+          }
+          const usedIndices = new Set<number>();
+          const results: MealPlanItemV2[] = [];
+          for (const d of dates) {
+            const idx = selectStarterVariant(d, memberId, profile, usedIndices);
+            if (idx >= 0) usedIndices.add(idx);
+            const items = await buildStarterItems(d, idx, user.id, memberId);
+            results.push(...items);
+          }
+          return results;
+        }
         return expanded;
       },
       enabled: !!user,
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
     });
   };
 
   const getMealPlansByDate = (date: Date) => {
+    const dateStr = formatLocalDate(date);
     return useQuery({
-      queryKey: ['meal_plans_v2', user?.id, memberId, date.toISOString().split('T')[0]],
-      queryFn: async (): Promise<MealPlanItemV2[]> => {
+      queryKey: ['meal_plans_v2', user?.id, memberId, dateStr, profileKey, mutedWeekKey],
+      queryFn: async ({ signal }): Promise<MealPlanItemV2[]> => {
         if (!user) return [];
 
-        const dateStr = date.toISOString().split('T')[0];
         let query = supabase
           .from('meal_plans_v2')
           .select('id, user_id, member_id, planned_date, meals')
@@ -88,12 +162,22 @@ export function useMealPlans(memberId?: string | null) {
         if (memberId === null) query = query.is('member_id', null);
         else if (memberId) query = query.eq('member_id', memberId);
 
-        const { data: rows, error } = await query;
+        const { data: rows, error } = await query.abortSignal(signal);
 
         if (error) throw error;
-        return (rows ?? []).flatMap((r) => expandMealsRow(r as MealPlansV2Row));
+        const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as unknown as MealPlansV2Row));
+        if (expanded.length === 0) {
+          const mon = new Date(dateStr + "T12:00:00"); //Это нормальный трюк, чтобы избежать timezone-дыр. 👍
+          mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+          const weekKeyForDate = formatLocalDate(mon);
+          if (mutedWeekKey !== null && weekKeyForDate === mutedWeekKey) return [];
+          return await buildStarterItems(dateStr, selectStarterVariant(dateStr, memberId, profile), user.id, memberId);
+        }
+        return expanded;
       },
       enabled: !!user,
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
     });
   };
 
@@ -126,22 +210,22 @@ export function useMealPlans(memberId?: string | null) {
         existingQuery = existingQuery.eq('member_id', member_id);
       }
       const { data: existing } = await existingQuery.maybeSingle();
-
-      const currentMeals = ((existing as { meals?: MealsJson } | null)?.meals ?? {}) as MealsJson;
+      const existingRow = existing as unknown as { id: string; meals?: MealsJson } | null;
+      const currentMeals = (existingRow?.meals ?? {}) as MealsJson;
       const newMeals = {
         ...currentMeals,
         [mealType]: { recipe_id: payload.recipe_id, title: payload.title ?? undefined },
       };
 
-      if (existing?.id) {
+      if (existingRow?.id) {
         const { data: updated, error } = await supabase
           .from('meal_plans_v2')
           .update({ meals: newMeals })
-          .eq('id', existing.id)
+          .eq('id', existingRow.id)
           .select()
           .single();
         if (error) throw error;
-        return updated as MealPlansV2Row;
+        return updated as unknown as MealPlansV2Row;
       }
 
       const { data: inserted, error } = await supabase
@@ -151,11 +235,11 @@ export function useMealPlans(memberId?: string | null) {
           member_id,
           planned_date: payload.planned_date,
           meals: newMeals,
-        } as MealPlansV2Insert)
+        } as unknown as MealPlansV2Insert)
         .select()
         .single();
       if (error) throw error;
-      return inserted as MealPlansV2Row;
+      return inserted as unknown as MealPlansV2Row;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
@@ -171,7 +255,7 @@ export function useMealPlans(memberId?: string | null) {
         .select()
         .single();
       if (error) throw error;
-      return data as MealPlansV2Row;
+      return data as unknown as MealPlansV2Row;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
@@ -190,8 +274,8 @@ export function useMealPlans(memberId?: string | null) {
         .eq('id', rowId)
         .single();
       if (fetchError || !row) throw fetchError || new Error('Plan not found');
-
-      const meals = { ...(row.meals as MealsJson) };
+      const rowData = row as unknown as { meals?: MealsJson };
+      const meals = { ...(rowData.meals ?? {}) } as MealsJson;
       delete meals[mealType];
 
       const { error: updateError } = await supabase
@@ -217,8 +301,8 @@ export function useMealPlans(memberId?: string | null) {
         .eq('id', rowId)
         .single();
       if (fetchError || !row) throw fetchError || new Error('Plan not found');
-
-      const meals = { ...(row.meals as MealsJson) };
+      const rowData = row as unknown as { meals?: MealsJson };
+      const meals = { ...(rowData.meals ?? {}) } as MealsJson;
       const slot = meals[mealType];
       if (slot && typeof slot === 'object') {
         (meals as Record<string, unknown>)[mealType] = { ...slot, completed: true };
@@ -243,8 +327,8 @@ export function useMealPlans(memberId?: string | null) {
         .from('meal_plans_v2')
         .delete()
         .eq('user_id', user.id)
-        .gte('planned_date', startDate.toISOString().split('T')[0])
-        .lte('planned_date', endDate.toISOString().split('T')[0]);
+        .gte('planned_date', formatLocalDate(startDate))
+        .lte('planned_date', formatLocalDate(endDate));
 
       if (memberId != null && memberId !== '') {
         query = query.eq('member_id', memberId);
@@ -272,7 +356,7 @@ export function useMealPlans(memberId?: string | null) {
 
       const byDate = new Map<string, { mealType: MealType; recipeId: string; title?: string }[]>();
       for (const r of recipes) {
-        const d = r.date.toISOString().split('T')[0];
+        const d = formatLocalDate(r.date);
         if (!byDate.has(d)) byDate.set(d, []);
         byDate.get(d)!.push({ mealType: r.mealType, recipeId: r.recipeId, title: r.title });
       }
@@ -293,7 +377,7 @@ export function useMealPlans(memberId?: string | null) {
 
       const { data, error } = await supabase.from('meal_plans_v2').insert(rows).select();
       if (error) throw error;
-      return (data ?? []) as MealPlansV2Row[];
+      return (data ?? []) as unknown as MealPlansV2Row[];
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });

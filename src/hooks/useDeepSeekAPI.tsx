@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { safeLog, safeError } from '@/utils/safeLogger';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useFamily } from '@/contexts/FamilyContext';
@@ -133,7 +134,7 @@ export function useDeepSeekAPI() {
         difficulty: c.difficulty,
       })));
 
-      console.log('AI Context Sent:', {
+      safeLog('AI Context Sent:', {
         memberData,
         ageMonths: memberData?.ageMonths,
         targetIsFamily,
@@ -187,7 +188,7 @@ export function useDeepSeekAPI() {
           throw new Error('usage_limit_exceeded');
         }
         const msg = error?.message || error?.error || `HTTP ${response.status}`;
-        console.error('deepseek-chat error:', response.status, error);
+        safeError('deepseek-chat error:', response.status, error);
         throw new Error(typeof msg === 'string' ? msg : 'Ошибка API');
       }
 
@@ -298,7 +299,7 @@ export function useDeepSeekAPI() {
         });
 
       if (insertError) {
-        console.error('SYNC ERROR:', insertError.message, insertError.details);
+        safeError('SYNC ERROR:', insertError.message, insertError.details);
         throw insertError;
       }
 
@@ -314,7 +315,7 @@ export function useDeepSeekAPI() {
           .from('chat_history')
           .delete()
           .in('id', toDelete);
-        if (deleteError) console.error('SYNC ERROR (trim history):', deleteError.message, deleteError.details);
+        if (deleteError) safeError('SYNC ERROR (trim history):', deleteError.message, deleteError.details);
       }
     },
     onSuccess: () => {

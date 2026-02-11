@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { safeError } from "@/utils/safeLogger";
 import { getDeepSeek, fileToBase64, isDeepSeekConfigured, type ImageAnalysisResponse, type RecipeSuggestion } from '@/services/deepseek';
 import { useFamily } from '@/contexts/FamilyContext';
 
@@ -58,7 +59,7 @@ export function useDeepSeek() {
         const ageMonths = profile.age_months ?? 0;
         return await deepseek.getRecommendation(ageMonths, profile.allergies || undefined);
       } catch (error: any) {
-        console.error('Recommendation error:', error);
+        safeError('Recommendation error:', error);
         return null;
       }
     },

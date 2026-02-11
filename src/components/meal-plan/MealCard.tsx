@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { Heart, Share2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -27,13 +28,22 @@ export interface MealCardProps {
   ageMonths?: number | null;
   cookTimeMinutes?: number | null;
   ingredientNames?: string[];
+  /** Total ingredient count; used for "+N" chip when > 4 */
+  ingredientTotalCount?: number | null;
   hint?: string | null;
   /** Optional: pass to Recipe page for header meta */
   mealTypeLabel?: string;
-  /** When true (e.g. Plan day view): only recipe title; slot header is shown outside the card */
+  /** When true (e.g. Plan day view): slot header shown outside; still shows title + cookTime + chips when provided */
   compact?: boolean;
   className?: string;
+  /** When true, actions are hidden and chips show placeholders if empty */
+  isLoadingPreviews?: boolean;
+  isFavorite?: boolean;
+  onToggleFavorite?: (recipeId: string, next: boolean) => void;
+  onShare?: (recipeId: string, recipeTitle: string) => void;
 }
+
+const CHIP_PLACEHOLDER_COUNT = 3;
 
 export function MealCard({
   mealType,
@@ -42,10 +52,15 @@ export function MealCard({
   ageMonths,
   cookTimeMinutes,
   ingredientNames = [],
+  ingredientTotalCount,
   hint,
   mealTypeLabel,
   compact = false,
   className,
+  isLoadingPreviews = false,
+  isFavorite = false,
+  onToggleFavorite,
+  onShare,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -54,7 +69,9 @@ export function MealCard({
   const cookStr = cookTimeMinutes != null ? `${cookTimeMinutes} мин` : "";
   const metaLine2 = [ageStr, cookStr].filter(Boolean).join(" · ");
   const chips = ingredientNames.slice(0, INGREDIENT_CHIPS_MAX);
-  const extraCount = ingredientNames.length - INGREDIENT_CHIPS_MAX;
+  const total = ingredientTotalCount ?? ingredientNames.length;
+  const extraCount = total > INGREDIENT_CHIPS_MAX ? total - INGREDIENT_CHIPS_MAX : 0;
+  const showPlaceholderChips = compact && isLoadingPreviews && chips.length === 0 && extraCount === 0;
 
   const handleClick = () => {
     navigate(`/recipe/${recipeId}`, {
@@ -62,24 +79,105 @@ export function MealCard({
     });
   };
 
+  const showActions = !isLoadingPreviews && (onToggleFavorite ?? onShare) != null;
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onToggleFavorite?.(recipeId, !isFavorite);
+  };
+  const handleShareClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onShare?.(recipeId, recipeTitle);
+  };
+
   if (compact) {
+    const showChips = chips.length > 0 || extraCount > 0 || showPlaceholderChips;
+    const showCookTime = cookTimeMinutes != null && cookTimeMinutes > 0;
     return (
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         aria-label={`Открыть рецепт: ${recipeTitle}`}
         onClick={handleClick}
+        onKeyDown={(e) => e.key === "Enter" && handleClick()}
         className={cn(
           "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-          "p-4 min-h-[44px]",
+          "p-4 min-h-[44px] flex flex-col gap-1.5",
           "active:opacity-95 transition-opacity",
-          "touch-manipulation",
+          "touch-manipulation cursor-pointer",
           className
         )}
       >
-        <div className="text-typo-body font-semibold text-foreground leading-tight">
-          {recipeTitle}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-typo-body font-semibold text-foreground leading-tight">
+              {recipeTitle}
+            </div>
+            {showCookTime && (
+              <div className="text-typo-caption text-muted-foreground">⏱️ {cookTimeMinutes} мин</div>
+            )}
+            {showChips && (
+              <div className="flex flex-wrap gap-1.5 mt-0.5">
+                {showPlaceholderChips
+                  ? Array.from({ length: CHIP_PLACEHOLDER_COUNT }).map((_, i) => (
+                      <Skeleton key={i} className="h-5 w-14 rounded-md shrink-0" />
+                    ))
+                  : (
+                    <>
+                      {chips.map((name, i) => (
+                        <span
+                          key={`${name}-${i}`}
+                          className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-typo-caption"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                      {extraCount > 0 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-typo-caption">
+                          +{extraCount}
+                        </span>
+                      )}
+                    </>
+                  )}
+              </div>
+            )}
+          </div>
+          {showActions && (
+            <div
+              className="flex shrink-0 gap-1"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              {onToggleFavorite && (
+                <button
+                  type="button"
+                  onClick={handleFavoriteClick}
+                  className={cn(
+                    "h-8 w-8 rounded-full flex items-center justify-center transition-all active:scale-95 border shrink-0",
+                    isFavorite
+                      ? "text-amber-600/90 bg-amber-50/70 fill-amber-600/90 border-amber-200/40"
+                      : "text-slate-400 bg-slate-50/50 border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500"
+                  )}
+                  title="В избранное"
+                  aria-label={isFavorite ? "Удалить из избранного" : "Добавить в избранное"}
+                >
+                  <Heart className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
+                </button>
+              )}
+              {onShare && (
+                <button
+                  type="button"
+                  onClick={handleShareClick}
+                  className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 active:scale-95 transition-all"
+                  title="Поделиться"
+                  aria-label="Поделиться"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      </button>
+      </div>
     );
   }
 

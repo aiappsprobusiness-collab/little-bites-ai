@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { safeWarn } from "@/utils/safeLogger";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
@@ -65,7 +66,7 @@ function normalizeRecipePayload<T extends Record<string, unknown>>(payload: T): 
     (out as Record<string, unknown>).child_id = cid != null && isValidUUID(cid) ? cid : null;
   }
   if ('user_id' in out && out.user_id !== undefined && !isValidUUID(out.user_id)) {
-    console.warn('recipes: user_id is not a valid UUID', out.user_id);
+    safeWarn('recipes: user_id is not a valid UUID', out.user_id);
   }
   if ('macros' in out && out.macros !== undefined && out.macros !== null) {
     const m = out.macros;
@@ -110,11 +111,19 @@ export function useRecipes(childId?: string) {
     queryFn: async () => {
       if (!user) return [];
       if (IS_DEV) return (mockRecipes as unknown[]).filter((r: { is_favorite?: boolean }) => r.is_favorite) as Recipe[];
+      const { data: favs, error: favError } = await supabase
+        .from('favorites_v2')
+        .select('recipe_id')
+        .eq('user_id', user.id)
+        .not('recipe_id', 'is', null);
+      if (favError) throw favError;
+      const ids = (favs ?? []).map((f) => f.recipe_id).filter(isValidUUID) as string[];
+      if (ids.length === 0) return [];
       const { data, error } = await supabase
         .from('recipes')
         .select(RECIPES_LIST_SELECT)
         .eq('user_id', user.id)
-        .eq('is_favorite', true)
+        .in('id', ids)
         .order('created_at', { ascending: false })
         .limit(RECIPES_PAGE_SIZE);
       if (error) throw error;
@@ -253,19 +262,30 @@ export function useRecipes(childId?: string) {
   });
 
   const toggleFavorite = useMutation({
-    mutationFn: async ({ id, isFavorite }: { id: string; isFavorite: boolean }) => {
-      const { data, error } = await supabase
-        .from('recipes')
-        .update({ is_favorite: isFavorite })
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
+    mutationFn: async ({ id, isFavorite, preview }: { id: string; isFavorite: boolean; preview?: { title?: string; description?: string | null; cookTimeMinutes?: number | null; ingredientNames?: string[] } }) => {
+      if (!user) throw new Error('User not authenticated');
+      if (isFavorite) {
+        const { data: existing } = await supabase
+          .from('favorites_v2')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('recipe_id', id)
+          .maybeSingle();
+        if (existing) return { id } as Recipe;
+        const recipe_data = preview
+          ? { id, title: preview.title ?? '', description: preview.description ?? null, cookingTime: preview.cookTimeMinutes ?? null, ingredients: (preview.ingredientNames ?? []).map((n) => ({ name: n })) }
+          : { id };
+        const { error } = await supabase.from('favorites_v2').insert({ user_id: user.id, recipe_id: id, recipe_data });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('favorites_v2').delete().eq('user_id', user.id).eq('recipe_id', id);
+        if (error) throw error;
+      }
       invalidateRecipeCache(id);
-      return data as Recipe;
+      return { id } as Recipe;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['recipes', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['favorites', user?.id] });
     },
   });
 

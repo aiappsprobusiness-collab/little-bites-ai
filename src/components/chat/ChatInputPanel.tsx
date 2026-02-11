@@ -16,6 +16,7 @@ import {
   requestMicrophonePermission,
   getAvailableMethods 
 } from "@/services/speechToTextEnhanced";
+import { safeLog, safeError } from "@/utils/safeLogger";
 
 // Extend window for TypeScript
 declare global {
@@ -64,7 +65,7 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
         try {
           speechServiceRef.current.stop();
         } catch (error) {
-          console.error('Error stopping recognition:', error);
+          safeError('Error stopping recognition:', error);
         }
         setIsRecording(false);
       }
@@ -73,12 +74,12 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
 
     // Начинаем запись с проверкой разрешений
     setIsInitializing(true);
-    console.log('Starting speech recognition...');
+    safeLog('Starting speech recognition...');
 
     try {
       // Проверяем доступность методов сначала
       const availableMethods = getAvailableMethods();
-      console.log('Available methods:', availableMethods);
+      safeLog('Available methods:', availableMethods);
       
       if (availableMethods.length === 0) {
         toast({
@@ -92,14 +93,14 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
       }
 
       // Проверяем разрешения
-      console.log('Checking microphone permission...');
+      safeLog('Checking microphone permission...');
       const hasPermission = await checkMicrophonePermission();
-      console.log('Has permission:', hasPermission);
+      safeLog('Has permission:', hasPermission);
       
       if (!hasPermission) {
-        console.log('Requesting microphone permission...');
+        safeLog('Requesting microphone permission...');
         const granted = await requestMicrophonePermission();
-        console.log('Permission granted:', granted);
+        safeLog('Permission granted:', granted);
         
         if (!granted) {
           toast({
@@ -118,21 +119,21 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
         speechServiceRef.current.destroy();
       }
 
-      console.log('Creating speech recognition service...');
+      safeLog('Creating speech recognition service...');
       const service = new SpeechRecognitionService({
         language: 'ru-RU',
         continuous: true,
         interimResults: true,
         maxAlternatives: 1,
         onResult: (result) => {
-          console.log('Speech recognition result:', result);
+          safeLog('Speech recognition result:', result);
           if (result.isFinal) {
             finalTranscriptRef.current += result.text + ' ';
           }
           setInput((finalTranscriptRef.current + (result.isFinal ? '' : result.text)).trim());
         },
         onError: (error) => {
-          console.error('Speech recognition error:', error);
+          safeError('Speech recognition error:', error);
           setIsRecording(false);
           
           let errorMessage = error.error;
@@ -162,7 +163,7 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
           });
         },
         onEnd: () => {
-          console.log('Speech recognition ended');
+          safeLog('Speech recognition ended');
           setIsRecording(false);
           if (finalTranscriptRef.current) {
             setInput(finalTranscriptRef.current.trim());
@@ -172,9 +173,9 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
       speechServiceRef.current = service;
 
       // Инициализируем распознавание
-      console.log('Initializing speech recognition...');
+      safeLog('Initializing speech recognition...');
       const initResult = await speechServiceRef.current.initialize();
-      console.log('Initialization result:', initResult);
+      safeLog('Initialization result:', initResult);
       
       if (!initResult.success) {
         toast({
@@ -188,16 +189,16 @@ export function ChatInputPanel({ isOpen, onClose, onSend, isSending }: ChatInput
       }
 
       // Начинаем запись
-      console.log('Starting speech recognition...');
+      safeLog('Starting speech recognition...');
       finalTranscriptRef.current = '';
       setInput('');
       await speechServiceRef.current.start();
       setIsRecording(true);
       setIsInitializing(false);
 
-      console.log('Speech recognition started successfully');
+      safeLog('Speech recognition started successfully');
     } catch (error: any) {
-      console.error('Error starting recognition:', error);
+      safeError('Error starting recognition:', error);
       setIsRecording(false);
       setIsInitializing(false);
       

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { safeError } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,7 +108,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Lovable AI Gateway error:", response.status, errorText);
+      safeError("Lovable AI Gateway error:", response.status, errorText);
 
       if (response.status === 429) {
         return new Response(
@@ -136,7 +137,7 @@ serve(async (req) => {
       const jsonStr = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : content;
       result = JSON.parse(jsonStr);
     } catch {
-      console.error("Failed to parse JSON:", content);
+      safeError("Failed to parse JSON:", content);
       result = { products: [], confidence: 0 };
     }
 
@@ -150,7 +151,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in deepseek-analyze:", error);
+    safeError("Error in deepseek-analyze:", error);
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error",

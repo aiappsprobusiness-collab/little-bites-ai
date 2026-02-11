@@ -15,6 +15,8 @@ import {
 } from "./prompts.ts";
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
+import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
+import { validateRecipeJson } from "./recipeSchema.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -379,7 +381,7 @@ serve(async (req) => {
           .eq("user_id", userId)
           .maybeSingle();
         if (profileError) {
-          console.warn("Profile fetch error (treating as free):", profileError.message);
+          safeWarn("Profile fetch error (treating as free):", profileError.message);
           profile = null;
         } else {
           profile = profileRow as ProfileRow;
@@ -418,7 +420,7 @@ serve(async (req) => {
       })
       : reqAllMembersRaw;
 
-    console.log("DEBUG: Received memberData:", JSON.stringify(memberDataNorm));
+    safeLog("DEBUG: Received memberData:", JSON.stringify(memberDataNorm));
 
     const memberName = memberDataNorm?.name?.trim() || "член семьи";
 
@@ -507,7 +509,7 @@ serve(async (req) => {
       }
     }
     const ageCategoryForLog = getAgeCategory(ageMonthsForCategory);
-    console.log("DEBUG: Final age category determined:", ageCategoryForLog, "Months:", ageMonthsForCategory);
+    safeLog("DEBUG: Final age category determined:", ageCategoryForLog, "Months:", ageMonthsForCategory);
     const memberTypeV2 = targetIsFamily
       ? "family"
       : (ageMonthsForCategory > 216 ? "adult" : "child");
@@ -532,7 +534,7 @@ serve(async (req) => {
     if (type === "chat" || type === "recipe" || type === "diet_plan") {
       const templateName = isPremiumUser ? "PREMIUM_RECIPE_TEMPLATE" : "FREE_RECIPE_TEMPLATE";
       const genBlockLen = typeof reqGenerationContextBlock === "string" ? reqGenerationContextBlock.trim().length : 0;
-      console.log(
+      safeLog(
         "Template selected:",
         templateName,
         "subscription_status:",
@@ -585,105 +587,133 @@ serve(async (req) => {
       systemPrompt += "\n\n" + extraSuffix;
     }
 
-    console.log("FINAL_SYSTEM_PROMPT:", systemPrompt);
+    const isRecipeJsonRequest = (type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest;
+    const JSON_RETRY_SUFFIX = "\n\nReturn ONLY valid JSON strictly matching the schema. No extra text.";
 
-    const isExpertSoft = type === "chat" && isPremiumUser && premiumRelevance === "soft";
-    const isMealPlan = type === "single_day" || type === "diet_plan";
-    const maxTokensChat =
-      type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
-    const promptConfig = {
-      maxTokens: maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
-    };
-    const payload = {
-      model: "deepseek-chat",
-      messages: [{ role: "system", content: systemPrompt }, ...messages],
-      stream: isRecipeRequest || type === "sos_consultant" || type === "balance_check" ? false : reqStream,
-      max_tokens: promptConfig.maxTokens,
-      temperature: isRecipeRequest ? 0.3 : 0.7,
-      top_p: 0.8,
-      repetition_penalty: 1.1,
-      ...(isRecipeRequest && { response_format: { type: "json_object" } }),
-    };
+    let currentSystemPrompt = systemPrompt;
+    let assistantMessage = "";
+    let data: { choices?: Array<{ message?: { content?: string } }>; usage?: unknown } = {};
 
-    if (isRecipeRequest) {
-      if ((payload as { stream?: boolean }).stream === true) {
-        throw new Error("Recipe request must not use stream=true");
+    for (let recipeAttempt = 0; recipeAttempt < (isRecipeJsonRequest ? 2 : 1); recipeAttempt++) {
+      if (recipeAttempt > 0) {
+        currentSystemPrompt = systemPrompt + JSON_RETRY_SUFFIX;
+        safeLog("Recipe JSON validation failed, retrying with strict JSON instruction");
       }
-      if (!("response_format" in payload)) {
-        throw new Error("Recipe request must enforce JSON response_format");
+      safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
+
+      const isExpertSoft = type === "chat" && isPremiumUser && premiumRelevance === "soft";
+      const isMealPlan = type === "single_day" || type === "diet_plan";
+      const maxTokensChat =
+        type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
+      const promptConfig = {
+        maxTokens: maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
+      };
+      const payload = {
+        model: "deepseek-chat",
+        messages: [{ role: "system", content: currentSystemPrompt }, ...messages],
+        stream: isRecipeRequest || type === "sos_consultant" || type === "balance_check" ? false : reqStream,
+        max_tokens: promptConfig.maxTokens,
+        temperature: isRecipeRequest ? 0.3 : 0.7,
+        top_p: 0.8,
+        repetition_penalty: 1.1,
+        ...(isRecipeRequest && { response_format: { type: "json_object" } }),
+      };
+
+      if (isRecipeRequest) {
+        if ((payload as { stream?: boolean }).stream === true) {
+          throw new Error("Recipe request must not use stream=true");
+        }
+        if (!("response_format" in payload)) {
+          throw new Error("Recipe request must enforce JSON response_format");
+        }
       }
-    }
 
-    const timeoutMs = type === "single_day" ? 60000 : (payload as { stream?: boolean }).stream ? 90000 : 120000;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const timeoutMs = type === "single_day" ? 60000 : (payload as { stream?: boolean }).stream ? 90000 : 120000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    console.log("SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
-    let response: Response;
-    try {
-      response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if (error instanceof Error && error.name === "AbortError") throw new Error(`Request timeout after ${timeoutMs}ms`);
-      throw error;
-    }
+      safeLog("SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
+      let response: Response;
+      try {
+        response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === "AbortError") throw new Error(`Request timeout after ${timeoutMs}ms`);
+        throw error;
+      }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("DeepSeek API error:", response.status, errorText);
-      if (response.status === 429) {
+      if (!response.ok) {
+        const errorText = await response.text();
+        safeError("DeepSeek API error:", response.status, errorText);
+        if (response.status === 429) {
+          return new Response(
+            JSON.stringify({ error: "rate_limit", message: "Превышен лимит запросов DeepSeek. Попробуйте позже." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const message = "DeepSeek вернул ошибку. Попробуйте ещё раз.";
         return new Response(
-          JSON.stringify({ error: "rate_limit", message: "Превышен лимит запросов DeepSeek. Попробуйте позже." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "api_error", message, status: response.status }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const message = "DeepSeek вернул ошибку. Попробуйте ещё раз.";
-      return new Response(
-        JSON.stringify({ error: "api_error", message, status: response.status }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+      if (stream && response.body) {
+        return new Response(response.body, {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          },
+        });
+      }
+
+      try {
+        data = await response.json();
+      } catch {
+        return new Response(
+          JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
+      if (!assistantMessage) {
+        return new Response(
+          JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (isRecipeJsonRequest) {
+        const validated = validateRecipeJson(assistantMessage);
+        if (validated) {
+          assistantMessage = JSON.stringify(validated);
+          break;
+        }
+        if (recipeAttempt === 1) {
+          safeError("Recipe JSON invalid after retry:", assistantMessage.slice(0, 300));
+          return new Response(
+            JSON.stringify({ error: "invalid_recipe_json", message: "ИИ вернул некорректный JSON. Попробуйте ещё раз." }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        break;
+      }
     }
 
-    // Инкремент после успешной генерации. ТЕСТ СБРОСА (Midnight MSK): RPC increment_usage при last_reset вчера должен сбросить requests_today и выставить 1.
     if (userId && supabase) {
       await supabase.rpc("increment_usage", { target_user_id: userId });
-    }
-
-    if (stream && response.body) {
-      return new Response(response.body, {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          "Connection": "keep-alive",
-        },
-      });
-    }
-
-    let data: { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
-    try {
-      data = await response.json();
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    const assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
-    if (!assistantMessage) {
-      return new Response(
-        JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
     if (type === "balance_check" && userId && supabase) {
@@ -701,7 +731,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error in deepseek-chat:", error);
+    safeError("Error in deepseek-chat:", error);
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";
     return new Response(
       JSON.stringify({ error: "server_error", message }),

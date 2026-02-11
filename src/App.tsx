@@ -104,7 +104,7 @@ const App = () => (
             <TrialSoftBanner />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
-              <Route path="/" element={<Navigate to="/chat" replace />} />
+              <Route path="/" element={<Navigate to="/meal-plan" replace />} />
               <Route
                 path="/home"
                 element={

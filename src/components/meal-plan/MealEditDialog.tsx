@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Sparkles, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { safeError } from "@/utils/safeLogger";
 
 interface GeneratedMeal {
   name: string;
@@ -116,7 +117,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
         setAlternatives(parsed);
       }
     } catch (err) {
-      console.error("Error generating alternatives:", err);
+      safeError("Error generating alternatives:", err);
     } finally {
       setIsGenerating(false);
     }

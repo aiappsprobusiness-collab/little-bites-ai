@@ -78,7 +78,17 @@ function safeCachePut(cacheName, request, responseClone) {
 }
 
 /** Stale-while-revalidate: return cached if present, then revalidate in background. */
+// IMPORTANT: Never cache Supabase/API requests to prevent infinite revalidation loops
 function staleWhileRevalidate(request, cacheName) {
+  const u = new URL(request.url);
+  const isSupabaseApi =
+    u.hostname.includes("supabase.co") ||
+    u.pathname.startsWith("/rest/v1/") ||
+    u.pathname.startsWith("/auth/v1/") ||
+    u.pathname.startsWith("/functions/v1/") ||
+    u.pathname.startsWith("/realtime/v1/");
+  if (isSupabaseApi) return fetch(request);
+
   return caches.open(cacheName).then((cache) =>
     cache.match(request).then((cached) => {
       const fetchPromise = fetch(request).then((response) => {
@@ -119,7 +129,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (isApiRequest(request) || isImageRequest(request)) {
+  // IMPORTANT: Never intercept API requests — let browser handle them directly
+  if (isApiRequest(request)) {
+    return;
+  }
+
+  if (isImageRequest(request)) {
     event.respondWith(staleWhileRevalidate(request, RUNTIME_NAME));
     return;
   }

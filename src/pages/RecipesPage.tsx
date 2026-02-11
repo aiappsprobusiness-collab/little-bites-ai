@@ -6,6 +6,7 @@ import { RecipeListItem } from "@/components/recipes/RecipeListItem";
 import { Loader2, LayoutGrid, List, Grid3x3, Square } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useRecipes } from "@/hooks/useRecipes";
+import { useFavorites } from "@/hooks/useFavorites";
 import { useFamily } from "@/contexts/FamilyContext";
 import { Button } from "@/components/ui/button";
 
@@ -14,6 +15,7 @@ type ViewMode = 'list' | 'large' | 'medium' | 'small';
 export default function RecipesPage() {
   const navigate = useNavigate();
   const { recipes, isLoading } = useRecipes();
+  const { favoriteRecipeIds } = useFavorites();
   const { selectedMember } = useFamily();
   const [viewMode, setViewMode] = useState<ViewMode>('medium');
 
@@ -28,7 +30,7 @@ export default function RecipesPage() {
     cookTime: recipe.cooking_time_minutes ? `${recipe.cooking_time_minutes} мин` : "—",
     childName: selectedMember?.name || "—",
     rating: recipe.rating ? recipe.rating / 1 : undefined,
-    isFavorite: recipe.is_favorite || false,
+    isFavorite: favoriteRecipeIds.has(recipe.id),
   }));
 
   const container = {

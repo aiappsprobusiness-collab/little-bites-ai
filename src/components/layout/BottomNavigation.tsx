@@ -5,12 +5,12 @@ import { cn } from "@/lib/utils";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 
-/** 4 вкладки: Чат | Избранное | Мы рядом | План */
+/** 4 вкладки: План | Чат | Избранное | Мы рядом (порядок совпадает с default route /meal-plan) */
 const TABS = [
+  { icon: Calendar, label: "План", path: "/meal-plan" },
   { icon: MessageCircle, label: "Чат", path: "/chat" },
   { icon: Heart, label: "Избранное", path: "/favorites" },
   { icon: LifeBuoy, label: "Мы рядом", path: "/sos" },
-  { icon: Calendar, label: "План", path: "/meal-plan" },
 ] as const;
 
 export function BottomNavigation() {

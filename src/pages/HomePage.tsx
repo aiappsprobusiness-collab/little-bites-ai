@@ -10,6 +10,7 @@ import { ChefHat, Loader2, LayoutGrid, List, Grid3x3, Square, User } from "lucid
 import { useNavigate } from "react-router-dom";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useRecipes } from "@/hooks/useRecipes";
+import { useFavorites } from "@/hooks/useFavorites";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ export default function HomePage() {
   const { toast } = useToast();
   const { selectedMember } = useFamily();
   const { recentRecipes, isLoading: isLoadingRecipes } = useRecipes();
+  const { favoriteRecipeIds } = useFavorites();
   const { createMember, isCreating } = useMembers();
 
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
@@ -100,7 +102,7 @@ export default function HomePage() {
     cookTime: recipe.cooking_time_minutes ? `${recipe.cooking_time_minutes} мин` : "—",
     childName: selectedMember?.name || "—",
     rating: recipe.rating ? recipe.rating / 1 : undefined,
-    isFavorite: recipe.is_favorite || false,
+    isFavorite: favoriteRecipeIds.has(recipe.id),
   }));
 
   return (

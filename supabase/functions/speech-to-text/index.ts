@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { safeLog, safeError } from "../_shared/safeLogger.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,7 +88,7 @@ serve(async (req) => {
     formData.append("language", language);
     formData.append("response_format", "json");
     
-    console.log(`Processing audio: ${audioData.length} bytes, type: ${mimeType}, extension: ${fileExtension}`);
+    safeLog(`Processing audio: ${audioData.length} bytes, type: ${mimeType}, extension: ${fileExtension}`);
 
     // Call OpenAI Whisper API
     const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -100,7 +101,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("OpenAI Whisper API error:", errorText);
+      safeError("OpenAI Whisper API error:", errorText);
       throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
     }
 
@@ -117,7 +118,7 @@ serve(async (req) => {
       }
     );
   } catch (error: any) {
-    console.error("Speech-to-text error:", error);
+    safeError("Speech-to-text error:", error);
     return new Response(
       JSON.stringify({
         error: error.message || "Failed to transcribe audio",

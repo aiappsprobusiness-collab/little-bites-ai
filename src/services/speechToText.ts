@@ -5,6 +5,7 @@
  */
 
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
+import { safeError } from "@/utils/safeLogger";
 
 export interface SpeechToTextResponse {
   text: string;
@@ -95,7 +96,7 @@ export async function transcribeAudio(
     const result: SpeechToTextResponse = await response.json();
     return result;
   } catch (error: any) {
-    console.error("Speech-to-text error:", error);
+    safeError("Speech-to-text error:", error);
     throw new Error(error.message || "Ошибка при распознавании речи");
   }
 }

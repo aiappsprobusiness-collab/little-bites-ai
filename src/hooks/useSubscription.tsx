@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { safeLog } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
@@ -85,7 +86,7 @@ export function useSubscription() {
   const isTrial = effectiveStatus === "trial";
 
   if (typeof window !== "undefined" && import.meta.env?.DEV && user && !isLoadingProfile) {
-    console.log("[useSubscription] статус и доступы", {
+    safeLog("[useSubscription] статус и доступы", {
       status,
       hasTrialAccess,
       hasPremiumAccess,

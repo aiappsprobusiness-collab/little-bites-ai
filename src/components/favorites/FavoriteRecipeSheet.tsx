@@ -5,7 +5,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ingredientDisplayText } from "@/utils/parseChatRecipes";
+import { ingredientDisplayLabel } from "@/types/recipe";
 import type { ParsedIngredient } from "@/utils/parseChatRecipes";
 import type { SavedFavorite } from "@/hooks/useFavorites";
 
@@ -104,7 +104,7 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
                 <h3 className="text-typo-h2 font-bold text-foreground mb-2">Ингредиенты</h3>
                 <ul className="space-y-1.5">
                   {ingredients.map((ing, i) => {
-                    const text = ingredientDisplayText(ing);
+                    const text = typeof ing === "string" ? ing : ingredientDisplayLabel(ing);
                     if (!text) return null;
                     return (
                       <li key={i} className="flex items-center gap-2 text-typo-muted text-foreground">
