@@ -392,6 +392,7 @@ serve(async (req) => {
     const subscriptionStatus = (profileV2?.status ?? profile?.subscription_status ?? "free") as string;
     const isPremiumUser = subscriptionStatus === "premium" || subscriptionStatus === "trial";
 
+    const requestId = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
     const body = await req.json();
     // Поддержка и нового (memberData/allMembers), и старого (childData/allChildren) формата запроса
     const memberDataRaw = body.memberData ?? body.childData;
@@ -453,8 +454,9 @@ serve(async (req) => {
       }
     }
 
+    // Для Premium: генерируем рецепт и при "soft" (чтобы профили вроде "мама" получали рецепты на общие запросы)
     const isRecipeChat =
-      type === "chat" && (isPremiumUser ? premiumRelevance === true : true);
+      type === "chat" && (isPremiumUser ? (premiumRelevance === true || premiumRelevance === "soft") : true);
     const isRecipeRequest = isRecipeRequestByType || (type === "chat" && isRecipeChat);
     const stream =
       isRecipeRequest || type === "sos_consultant" || type === "balance_check"
@@ -555,7 +557,8 @@ serve(async (req) => {
     let systemPrompt =
       cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContext, promptUserMessage, reqGenerationContextBlock);
 
-    if (type === "chat" && isPremiumUser && premiumRelevance === "soft") {
+    // Только если рецепт не запрашиваем — даём краткий ответ без рецепта (для soft теперь рецепт генерируем)
+    if (type === "chat" && isPremiumUser && premiumRelevance === "soft" && !isRecipeRequest) {
       systemPrompt = "Ты эксперт по питанию Mom Recipes. Отвечай кратко по вопросу пользователя, без генерации рецепта.";
     }
 
@@ -588,43 +591,35 @@ serve(async (req) => {
     }
 
     const isRecipeJsonRequest = (type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest;
-    const JSON_RETRY_SUFFIX = "\n\nReturn ONLY valid JSON strictly matching the schema. No extra text.";
 
     let currentSystemPrompt = systemPrompt;
     let assistantMessage = "";
     let data: { choices?: Array<{ message?: { content?: string } }>; usage?: unknown } = {};
 
-    for (let recipeAttempt = 0; recipeAttempt < (isRecipeJsonRequest ? 2 : 1); recipeAttempt++) {
-      if (recipeAttempt > 0) {
-        currentSystemPrompt = systemPrompt + JSON_RETRY_SUFFIX;
-        safeLog("Recipe JSON validation failed, retrying with strict JSON instruction");
-      }
-      safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
+    safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
 
       const isExpertSoft = type === "chat" && isPremiumUser && premiumRelevance === "soft";
       const isMealPlan = type === "single_day" || type === "diet_plan";
       const maxTokensChat =
         type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
       const promptConfig = {
-        maxTokens: maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
+        maxTokens: isRecipeRequest ? 1500 : maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
       };
       const payload = {
         model: "deepseek-chat",
         messages: [{ role: "system", content: currentSystemPrompt }, ...messages],
         stream: isRecipeRequest || type === "sos_consultant" || type === "balance_check" ? false : reqStream,
         max_tokens: promptConfig.maxTokens,
-        temperature: isRecipeRequest ? 0.3 : 0.7,
+        temperature: isRecipeRequest ? 0.4 : 0.7,
         top_p: 0.8,
         repetition_penalty: 1.1,
         ...(isRecipeRequest && { response_format: { type: "json_object" } }),
       };
 
       if (isRecipeRequest) {
-        if ((payload as { stream?: boolean }).stream === true) {
-          throw new Error("Recipe request must not use stream=true");
-        }
+        (payload as { stream?: boolean }).stream = false;
         if (!("response_format" in payload)) {
-          throw new Error("Recipe request must enforce JSON response_format");
+          (payload as { response_format?: { type: string } }).response_format = { type: "json_object" };
         }
       }
 
@@ -695,22 +690,58 @@ serve(async (req) => {
       }
 
       if (isRecipeJsonRequest) {
-        const validated = validateRecipeJson(assistantMessage);
+        let validated = validateRecipeJson(assistantMessage);
         if (validated) {
           assistantMessage = JSON.stringify(validated);
-          break;
+        } else {
+          safeLog("Recipe JSON parse/validate failed, attempting repair", requestId);
+          const repairRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "deepseek-chat",
+              messages: [
+                { role: "system", content: "Fix this into a single valid JSON object. Output only JSON, no markdown or explanation. Return the complete recipe json." },
+                { role: "user", content: `Broken response:\n${assistantMessage.slice(0, 8000)}\n\nReturn only the fixed complete JSON.` },
+              ],
+              stream: false,
+              max_tokens: 1500,
+              temperature: 0.3,
+              response_format: { type: "json_object" },
+            }),
+          });
+          if (repairRes.ok) {
+            const repairData = (await repairRes.json()) as { choices?: Array<{ message?: { content?: string } }> };
+            const repairedContent = (repairData.choices?.[0]?.message?.content ?? "").trim();
+            if (repairedContent) {
+              validated = validateRecipeJson(repairedContent);
+              if (validated) {
+                assistantMessage = JSON.stringify(validated);
+                safeLog("Recipe JSON repair succeeded", requestId);
+              }
+            }
+          }
         }
-        if (recipeAttempt === 1) {
-          safeError("Recipe JSON invalid after retry:", assistantMessage.slice(0, 300));
+        if (!validated) {
+          const truncate = 2048;
+          const rawTruncated = assistantMessage.length > truncate ? assistantMessage.slice(0, truncate) + "\n...[truncated]" : assistantMessage;
+          safeWarn("INVALID_JSON after repair", requestId, rawTruncated);
           return new Response(
-            JSON.stringify({ error: "invalid_recipe_json", message: "ИИ вернул некорректный JSON. Попробуйте ещё раз." }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({
+              ok: false,
+              error: {
+                code: "INVALID_JSON",
+                message: "Model returned invalid JSON",
+                request_id: requestId,
+              },
+            }),
+            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-      } else {
-        break;
       }
-    }
 
     if (userId && supabase) {
       await supabase.rpc("increment_usage", { target_user_id: userId });

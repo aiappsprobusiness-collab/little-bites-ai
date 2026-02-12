@@ -96,7 +96,8 @@ ${SAFETY_RULES}
 Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом (например "для детей 12–36 месяцев") или не писать вовсе.
 
 [RECIPE TASK]
-Return ONLY valid JSON. No markdown. No text. No explanation before or after.
+Return ONLY valid json. Output must be a single valid JSON object — no markdown, no text before or after, no explanation.
+Example shape: {"title":"...","description":"...","cookingTimeMinutes":30,"ingredients":[{"name":"...","displayText":"...","canonical":null}],"steps":["...","...","...","..."],"advice":null,"chefAdvice":null}
 Схема:
 {
   "title": "string",
@@ -149,7 +150,8 @@ ${SAFETY_RULES}
 Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
 
 [RECIPE TASK]
-Return ONLY valid JSON. No markdown. No text. No explanation before or after.
+Return ONLY valid json. Output must be a single valid JSON object — no markdown, no text before or after, no explanation.
+Example shape: {"title":"...","description":"...","cookingTimeMinutes":30,"mealType":"lunch","ingredients":[{"name":"...","displayText":"...","canonical":null,"substitute":"..."}],"steps":["...","...","...","..."],"advice":"...","chefAdvice":"..."}
 ОБЯЗАТЕЛЬНО: advice и chefAdvice — заполняй. mealType — breakfast|lunch|snack|dinner.
 Схема:
 {

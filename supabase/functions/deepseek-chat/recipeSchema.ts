@@ -83,13 +83,28 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
       description: String(parsed.description ?? ""),
       cookingTimeMinutes: typeof cooking === "number" ? Math.max(1, Math.min(240, Math.floor(cooking))) : 1,
       ingredients: parsed.ingredients.map((ing: unknown) => {
-        if (typeof ing === "string") return { name: ing, displayText: ing, canonical: null };
-        if (ing && typeof ing === "object" && "name" in ing) {
+        let name: string;
+        let displayText: string;
+        let canonical: { amount: number; unit: string } | null = null;
+        let substitute: string | undefined;
+        if (typeof ing === "string") {
+          name = ing;
+          displayText = ing;
+        } else if (ing && typeof ing === "object" && "name" in ing) {
           const o = ing as { name: string; displayText?: string; amount?: string; canonical?: { amount: number; unit: string } | null; substitute?: string };
-          const displayText = o.displayText ?? (o.amount ? `${o.name} — ${o.amount}` : o.name);
-          return { name: o.name, displayText, canonical: o.canonical ?? null, ...(o.substitute != null && { substitute: String(o.substitute) }) };
+          name = o.name;
+          displayText = o.displayText ?? (o.amount ? `${o.name} — ${o.amount}` : o.name);
+          canonical = o.canonical ?? null;
+          substitute = o.substitute;
+        } else {
+          name = String(ing);
+          displayText = String(ing);
         }
-        return { name: String(ing), displayText: String(ing), canonical: null };
+        // Схема требует число/дробь в displayText; во взрослых рецептах часто "по вкусу"/"для жарки" — дополняем
+        if (!DISPLAY_TEXT_QUANTITY_REGEX.test(displayText)) {
+          displayText = displayText.trim() + " (1 порция)";
+        }
+        return { name, displayText, canonical, ...(substitute != null && { substitute: String(substitute) }) };
       }),
       steps: parsed.steps.map((s: unknown) => String(s ?? "").trim()).filter((s) => s.length > 0),
       advice: parsed.advice ?? null,
