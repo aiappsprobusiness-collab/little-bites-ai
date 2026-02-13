@@ -487,15 +487,17 @@ serve(async (req) => {
       } else if (userId && supabase) {
         const { data: rows, error: membersError } = await supabase
           .from("members")
-          .select("name, age_months, allergies")
+          .select("name, age_months, allergies, preferences, difficulty")
           .eq("user_id", userId);
 
         if (!membersError && rows) {
-          allMembers = rows.map((m: { name?: string; age_months?: number; allergies?: string[] }) => ({
+          allMembers = rows.map((m: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; difficulty?: string }) => ({
             name: m.name,
             age_months: m.age_months ?? 0,
             allergies: m.allergies ?? [],
-          }));
+            ...(m.preferences && { preferences: m.preferences }),
+            ...(m.difficulty && { difficulty: m.difficulty }),
+          })) as MemberData[];
         }
       }
     }

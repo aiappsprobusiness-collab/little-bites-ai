@@ -248,6 +248,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           ingredientNames: (effectiveRecipe.ingredients || []).map((ing) =>
             typeof ing === "string" ? ing : (ing as { name?: string }).name ?? ""
           ),
+          chefAdvice: effectiveRecipe.chefAdvice ?? null,
+          advice: effectiveRecipe.advice ?? null,
         };
         await toggleFavorite({ id: idToFavorite!, isFavorite: true, preview });
         toast({ title: "Добавлено в избранное" });

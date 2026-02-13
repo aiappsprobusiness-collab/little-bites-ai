@@ -262,7 +262,7 @@ export function useRecipes(childId?: string) {
   });
 
   const toggleFavorite = useMutation({
-    mutationFn: async ({ id, isFavorite, preview }: { id: string; isFavorite: boolean; preview?: { title?: string; description?: string | null; cookTimeMinutes?: number | null; ingredientNames?: string[] } }) => {
+    mutationFn: async ({ id, isFavorite, preview }: { id: string; isFavorite: boolean; preview?: { title?: string; description?: string | null; cookTimeMinutes?: number | null; ingredientNames?: string[]; chefAdvice?: string | null; advice?: string | null } }) => {
       if (!user) throw new Error('User not authenticated');
       if (isFavorite) {
         const { data: existing } = await supabase
@@ -273,7 +273,15 @@ export function useRecipes(childId?: string) {
           .maybeSingle();
         if (existing) return { id } as Recipe;
         const recipe_data = preview
-          ? { id, title: preview.title ?? '', description: preview.description ?? null, cookingTime: preview.cookTimeMinutes ?? null, ingredients: (preview.ingredientNames ?? []).map((n) => ({ name: n })) }
+          ? {
+              id,
+              title: preview.title ?? '',
+              description: preview.description ?? null,
+              cookingTime: preview.cookTimeMinutes ?? null,
+              ingredients: (preview.ingredientNames ?? []).map((n) => ({ name: n })),
+              ...(preview.chefAdvice != null && preview.chefAdvice !== '' && { chefAdvice: preview.chefAdvice }),
+              ...(preview.advice != null && preview.advice !== '' && { advice: preview.advice }),
+            }
           : { id };
         const { error } = await supabase.from('favorites_v2').insert({ user_id: user.id, recipe_id: id, recipe_data });
         if (error) throw error;

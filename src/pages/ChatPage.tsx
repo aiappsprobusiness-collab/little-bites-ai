@@ -194,9 +194,10 @@ export default function ChatPage() {
         "Не удалось сгенерировать подходящий рецепт. Попробуйте изменить запрос.";
 
       let attempts = 0;
-      let response: { message?: string } | null = null;
+      let response: { message?: string; recipes?: unknown[] } | null = null;
       let rawMessage = "";
       let parsed = parseRecipesFromChat(userMessage.content, "");
+      let apiRecipes: unknown[] = [];
 
       while (attempts < 2) {
         response = await chat({
@@ -223,7 +224,7 @@ export default function ChatPage() {
               : undefined,
         });
         rawMessage = typeof response?.message === "string" ? response.message : "";
-        const apiRecipes = Array.isArray((response as { recipes?: unknown[] }).recipes) ? (response as { recipes: unknown[] }).recipes : [];
+        apiRecipes = Array.isArray(response?.recipes) ? response.recipes : [];
         parsed = apiRecipes.length > 0
           ? parseRecipesFromApiResponse(apiRecipes as Array<Record<string, unknown>>, rawMessage || "Вот рецепт")
           : parseRecipesFromChat(userMessage.content, rawMessage);
@@ -245,8 +246,11 @@ export default function ChatPage() {
 
       const finalRecipe = parsed.recipes[0];
       const finalValidation = finalRecipe ? validateRecipe(finalRecipe, generationContext) : { ok: false };
+      const hasRecipeFromApi = apiRecipes.length > 0;
+      // Рецепт из API показываем всегда; при провале валидации только не сохраняем
+      const showRecipe = !!finalRecipe && (finalValidation.ok || hasRecipeFromApi);
 
-      if (!finalRecipe || !finalValidation.ok) {
+      if (!finalRecipe) {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
@@ -274,44 +278,55 @@ export default function ChatPage() {
                 content: parsed.displayText,
                 rawContent: rawMessage,
                 isStreaming: false,
-                preParsedRecipe: parsed.recipes[0] ?? null,
+                preParsedRecipe: showRecipe ? (parsed.recipes[0] ?? null) : null,
               }
               : m
           )
         );
 
         try {
-          const mealType = detectMealType(userMessage.content);
-          const { savedRecipes } = await saveRecipesFromChat({
-            userMessage: userMessage.content,
-            aiResponse: rawMessage,
-            memberId: memberIdForSave,
-            mealType,
-            parsedResult: parsed,
-          });
-
-          if (savedRecipes?.length > 0) {
-            lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
-            const recipeId = savedRecipes[0]?.id;
-            if (recipeId) {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMessageId ? { ...m, recipeId } : m
-                )
-              );
-            }
-          }
-
-          await saveChat({
-            message: userMessage.content,
-            response: rawMessage,
-          });
-
-          if (savedRecipes?.length > 0) {
+          if (!finalValidation.ok && hasRecipeFromApi) {
             toast({
-              title: "Рецепты сохранены",
-              description: `${savedRecipes.length} рецепт(ов) добавлено в ваш список`,
+              variant: "default",
+              title: "Рецепт показан",
+              description: "Не сохранён в список: не совпадает с аллергиями или предпочтениями.",
             });
+          }
+          if (finalValidation.ok) {
+            const mealType = detectMealType(userMessage.content);
+            const { savedRecipes } = await saveRecipesFromChat({
+              userMessage: userMessage.content,
+              aiResponse: rawMessage,
+              memberId: memberIdForSave,
+              mealType,
+              parsedResult: parsed,
+            });
+
+            if (savedRecipes?.length > 0) {
+              lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
+              const recipeId = savedRecipes[0]?.id;
+              if (recipeId) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMessageId ? { ...m, recipeId } : m
+                  )
+                );
+              }
+            }
+
+            await saveChat({
+              message: userMessage.content,
+              response: rawMessage,
+            });
+
+            if (savedRecipes?.length > 0) {
+              toast({
+                title: "Рецепты сохранены",
+                description: `${savedRecipes.length} рецепт(ов) добавлено в ваш список`,
+              });
+            }
+          } else {
+            await saveChat({ message: userMessage.content, response: rawMessage });
           }
         } catch (e) {
           safeError("Failed to save recipes from chat:", e);

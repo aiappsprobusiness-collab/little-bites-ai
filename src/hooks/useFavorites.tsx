@@ -31,7 +31,7 @@ export function useFavorites() {
 
       const { data: rows, error } = await supabase
         .from('favorites_v2')
-        .select('id, recipe_id, created_at')
+        .select('id, recipe_id, created_at, recipe_data')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -40,7 +40,7 @@ export function useFavorites() {
         throw error;
       }
 
-      const list = (rows ?? []) as { id: string; recipe_id: string; created_at?: string }[];
+      const list = (rows ?? []) as { id: string; recipe_id: string; created_at?: string; recipe_data?: Record<string, unknown> | null }[];
       const recipeIds = list.map((r) => r.recipe_id).filter(Boolean);
       if (recipeIds.length === 0) {
         return list.map((f) => ({
@@ -93,6 +93,15 @@ export function useFavorites() {
               ingredientTotalCount: preview.ingredient_total_count,
             }
           : { id: f.recipe_id } as StoredRecipe;
+        const data = f.recipe_data;
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          if (typeof (data as { chefAdvice?: string }).chefAdvice === 'string') {
+            (recipe as StoredRecipe & { chefAdvice?: string }).chefAdvice = (data as { chefAdvice: string }).chefAdvice;
+          }
+          if (typeof (data as { advice?: string }).advice === 'string') {
+            (recipe as StoredRecipe & { advice?: string }).advice = (data as { advice: string }).advice;
+          }
+        }
         return {
           id: f.id,
           recipe,
