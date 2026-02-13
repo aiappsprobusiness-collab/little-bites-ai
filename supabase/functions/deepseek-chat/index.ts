@@ -595,6 +595,7 @@ serve(async (req) => {
     let currentSystemPrompt = systemPrompt;
     let assistantMessage = "";
     let data: { choices?: Array<{ message?: { content?: string } }>; usage?: unknown } = {};
+    let responseRecipes: Array<Record<string, unknown>> = [];
 
     safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
 
@@ -693,6 +694,7 @@ serve(async (req) => {
         let validated = validateRecipeJson(assistantMessage);
         if (validated) {
           assistantMessage = JSON.stringify(validated);
+          responseRecipes = [validated as Record<string, unknown>];
         } else {
           safeLog("Recipe JSON parse/validate failed, attempting repair", requestId);
           const repairRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -720,6 +722,7 @@ serve(async (req) => {
               validated = validateRecipeJson(repairedContent);
               if (validated) {
                 assistantMessage = JSON.stringify(validated);
+                responseRecipes = [validated as Record<string, unknown>];
                 safeLog("Recipe JSON repair succeeded", requestId);
               }
             }
@@ -757,8 +760,15 @@ serve(async (req) => {
       });
     }
 
+    const responseBody: { message: string; recipes?: Array<Record<string, unknown>>; usage?: unknown } = {
+      message: assistantMessage,
+      usage: data.usage,
+    };
+    if (responseRecipes.length > 0) {
+      responseBody.recipes = responseRecipes;
+    }
     return new Response(
-      JSON.stringify({ message: assistantMessage, usage: data.usage }),
+      JSON.stringify(responseBody),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

@@ -391,6 +391,45 @@ export interface ParseRecipesFromChatResult {
   displayText: string;
 }
 
+/** Формирует ParseRecipesFromChatResult из массива рецептов, возвращённых API (когда бэкенд отдал recipes[]). */
+export function parseRecipesFromApiResponse(
+  apiRecipes: Array<Record<string, unknown>>,
+  fallbackDisplayText = "Вот рецепт"
+): ParseRecipesFromChatResult {
+  const recipes: ParsedRecipe[] = apiRecipes.map((r) => {
+    const title = (r.title as string) || (r.name as string) || "Рецепт";
+    const rawIngredients = Array.isArray(r.ingredients) ? r.ingredients : [];
+    const ingredients: ParsedIngredient[] = rawIngredients.map((item: unknown) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object" && "name" in item) {
+        const o = item as { name: string; displayText?: string; amount?: string; canonical?: { amount?: number; unit?: string } | null; substitute?: string };
+        return {
+          name: o.name,
+          display_text: o.displayText ?? o.amount,
+          amount: o.amount,
+          substitute: o.substitute,
+          canonical_amount: o.canonical?.amount ?? null,
+          canonical_unit: o.canonical?.unit === "g" || o.canonical?.unit === "ml" ? o.canonical.unit : undefined,
+        };
+      }
+      return String(item);
+    });
+    const steps = Array.isArray(r.steps) ? (r.steps as string[]).map((s) => String(s ?? "").trim()).filter(Boolean) : [];
+    return {
+      title: String(title).trim(),
+      description: typeof r.description === "string" ? r.description : undefined,
+      ingredients,
+      steps,
+      cookingTime: typeof r.cookingTimeMinutes === "number" ? r.cookingTimeMinutes : (r.cookingTime as number) ?? (r.cooking_time as number),
+      mealType: r.mealType as ParsedRecipe["mealType"],
+      chefAdvice: typeof r.chefAdvice === "string" ? r.chefAdvice : undefined,
+      advice: typeof r.advice === "string" ? r.advice : undefined,
+    };
+  });
+  const displayText = recipes.length > 0 ? formatRecipeForDisplay(recipes[0]) : fallbackDisplayText;
+  return { recipes, displayText };
+}
+
 /** Форматирует рецепт для отображения в чате (без сырого JSON): название, описание, ингредиенты, шаги. */
 function formatRecipeForDisplay(recipe: ParsedRecipe): string {
   const lines: string[] = [];

@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { buildGenerationContext, validateRecipe } from "@/domain/generation";
 import type { Profile } from "@/domain/generation";
-import { detectMealType, parseRecipesFromChat, type ParsedRecipe } from "@/utils/parseChatRecipes";
+import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type ParsedRecipe } from "@/utils/parseChatRecipes";
 import { safeError } from "@/utils/safeLogger";
 import {
   Select,
@@ -223,7 +223,10 @@ export default function ChatPage() {
               : undefined,
         });
         rawMessage = typeof response?.message === "string" ? response.message : "";
-        parsed = parseRecipesFromChat(userMessage.content, rawMessage);
+        const apiRecipes = Array.isArray((response as { recipes?: unknown[] }).recipes) ? (response as { recipes: unknown[] }).recipes : [];
+        parsed = apiRecipes.length > 0
+          ? parseRecipesFromApiResponse(apiRecipes as Array<Record<string, unknown>>, rawMessage || "Вот рецепт")
+          : parseRecipesFromChat(userMessage.content, rawMessage);
         const recipe = parsed.recipes[0];
 
         if (!recipe) {
