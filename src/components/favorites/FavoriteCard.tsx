@@ -19,7 +19,12 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
   const maxChips = 4;
   const chips = vm.ingredientNames.slice(0, maxChips);
   const extraCount = Math.max(0, vm.ingredientTotalCount - maxChips);
-  const showHint = isPremium && Boolean(vm.hint);
+  const hasHint = Boolean(vm.hint);
+  const hintText = hasHint
+    ? isPremium
+      ? vm.hint!
+      : (vm.hint!.length > 80 ? `${vm.hint!.slice(0, 80).trim()}…` : vm.hint!)
+    : null;
 
   return (
     <motion.div
@@ -98,10 +103,10 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
             </div>
           )}
 
-          {/* Optional hint row — Premium only */}
-          {showHint && (
-            <p className="text-typo-caption text-muted-foreground italic line-clamp-2 pt-1 border-t border-slate-100">
-              💡 {vm.hint}
+          {/* Совет: Premium/триал — полный (до 2 строк); Free — мини (до 80 символов) */}
+          {hintText && (
+            <p className={`text-typo-caption text-muted-foreground italic leading-snug pt-1.5 ${isPremium ? "line-clamp-2" : ""}`}>
+              💡 {hintText}
             </p>
           )}
         </CardContent>

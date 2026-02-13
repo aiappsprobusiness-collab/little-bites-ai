@@ -82,16 +82,16 @@ export function useFavorites() {
         const preview = previewMap.get(f.recipe_id);
         const recipe: StoredRecipe = preview
           ? {
-              id: f.recipe_id,
-              title: preview.title,
-              description: preview.description ?? null,
-              cookingTime: preview.cooking_time_minutes ?? 0,
-              ingredients: [],
-              steps: [],
-              ageRange: '',
-              ingredientNames: preview.ingredient_names,
-              ingredientTotalCount: preview.ingredient_total_count,
-            }
+            id: f.recipe_id,
+            title: preview.title,
+            description: preview.description ?? null,
+            cookingTime: preview.cooking_time_minutes ?? 0,
+            ingredients: [],
+            steps: [],
+            ageRange: '',
+            ingredientNames: preview.ingredient_names,
+            ingredientTotalCount: preview.ingredient_total_count,
+          }
           : { id: f.recipe_id } as StoredRecipe;
         const data = f.recipe_data;
         if (data && typeof data === 'object' && !Array.isArray(data)) {
