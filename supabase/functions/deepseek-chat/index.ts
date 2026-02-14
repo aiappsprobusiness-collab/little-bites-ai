@@ -646,7 +646,7 @@ serve(async (req) => {
       (tariffResult.familyBalanceNote ? "\n" + tariffResult.familyBalanceNote : "") +
       "\n" +
       NO_ARTICLES_RULE +
-      (!isRecipeRequest ? "\n" + GREETING_STYLE_RULE : "");
+      (!isRecipeRequest && type !== "sos_consultant" && type !== "balance_check" ? "\n" + GREETING_STYLE_RULE : "");
 
     if ((type === "chat" || type === "recipe" || type === "diet_plan") && targetIsFamily) {
       systemPrompt += "\n\n" + applyPromptTemplate(

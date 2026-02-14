@@ -1,4 +1,4 @@
-import { useState, useCallback, type ComponentType } from "react";
+import { useState, useCallback, useRef, useEffect, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { Loader2, ArrowLeft, Baby, UtensilsCrossed, Apple, AlertCircle, Clock, D
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useKeyboardInset } from "@/hooks/useKeyboardInset";
 import { SosButton } from "@/components/sos/SosButton";
 import { SosPaywallModal } from "@/components/sos/SosPaywallModal";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -58,6 +59,29 @@ function stripEmojiForDisplay(text: string): string {
     .trim();
 }
 
+const SOS_RESPONSE_PREFIX_PATTERNS = [
+  /^Здравствуйте!?\s*/i,
+  /^Привет!?\s*/i,
+  /Выберите\s+(профиль|ребёнка|ребенка)[^.!?]*[.!?]?\s*/i,
+  /Я\s+мгновенно\s+подберу[^.!?]*[.!?]?\s*/i,
+  /Сначала\s+выберите\s+профиль[^.!?]*[.!?]?\s*/i,
+];
+
+/** Удаляет типовые префиксы приветствия/просьбы выбрать профиль в начале ответа (только в первых ~200 символах). */
+function sanitizeSosResponse(text: string): string {
+  if (!text || text.length < 10) return text;
+  const maxHead = 220;
+  const head = text.slice(0, maxHead);
+  let cleaned = head;
+  for (const re of SOS_RESPONSE_PREFIX_PATTERNS) {
+    cleaned = cleaned.replace(re, "");
+  }
+  cleaned = cleaned.trimStart();
+  const tail = text.slice(maxHead);
+  const result = (cleaned || head) + tail;
+  return result.trimStart() || text;
+}
+
 export default function SosConsultant() {
   const navigate = useNavigate();
   const { session } = useAuth();
@@ -70,6 +94,18 @@ export default function SosConsultant() {
   const [details, setDetails] = useState("");
   const [loadingTopic, setLoadingTopic] = useState<string | null>(null);
   const [result, setResult] = useState<{ topic: string; text: string } | null>(null);
+
+  const resultCardRef = useRef<HTMLDivElement>(null);
+  // visualViewport: клавиатурный offset считается в useKeyboardInset, сдвигаем sheet вверх, чтобы инпут был виден
+  const keyboardInset = useKeyboardInset(inputSheetOpen);
+
+  useEffect(() => {
+    if (result && resultCardRef.current) {
+      requestAnimationFrame(() => {
+        resultCardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    }
+  }, [result]);
 
   const memberData = selectedMember
     ? {
@@ -153,13 +189,23 @@ export default function SosConsultant() {
   );
 
   const handleGetAdvice = useCallback(() => {
-    if (!selectedTopic || !memberData) return;
+    if (!selectedTopic || !memberData || loadingTopic) return;
     const ageMonths = memberData.age_months;
     const userMessage = details.trim()
       ? `${selectedTopic.label}\n${details.trim()}`
       : `${selectedTopic.label}\nДай общий совет по этой проблеме для возраста ${ageMonths} мес`;
     sendSosRequest(selectedTopic, userMessage);
-  }, [selectedTopic, details, memberData, sendSosRequest]);
+  }, [selectedTopic, details, memberData, sendSosRequest, loadingTopic]);
+
+  const handleSosKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        handleGetAdvice();
+      }
+    },
+    [handleGetAdvice]
+  );
 
   return (
     <MobileLayout
@@ -207,13 +253,14 @@ export default function SosConsultant() {
         )}
 
         {result && !loadingTopic && (
-          <Card className="rounded-2xl border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-hidden">
+          <Card ref={resultCardRef} className="rounded-2xl border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-hidden">
             <CardContent className="p-5 pb-4">
               <div className="space-y-4 text-typo-muted text-slate-700 leading-relaxed">
                 {(() => {
-                  const displayText = stripEmojiForDisplay(result.text);
+                  const sanitized = sanitizeSosResponse(result.text);
+                  const displayText = stripEmojiForDisplay(sanitized);
                   const paragraphs = displayText.split(/\n\n+/).filter(Boolean);
-                  if (paragraphs.length === 0) return <p className="whitespace-pre-wrap">{result.text}</p>;
+                  if (paragraphs.length === 0) return <p className="whitespace-pre-wrap">{sanitized}</p>;
                   return paragraphs.map((paragraph, i) => (
                     <p key={i} className="whitespace-pre-wrap">
                       {paragraph.trim()}
@@ -247,7 +294,15 @@ export default function SosConsultant() {
       />
 
       <Sheet open={inputSheetOpen} onOpenChange={setInputSheetOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl pb-safe px-6 pt-6 pb-8">
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl pb-safe px-6 pt-6 pb-8 transition-transform duration-150"
+          style={
+            keyboardInset > 0
+              ? { transform: `translateY(-${keyboardInset}px)` }
+              : undefined
+          }
+        >
           <SheetHeader className="px-0">
             <SheetTitle className="text-typo-title font-semibold text-slate-900">
               {selectedTopic ? selectedTopic.label : "Мы рядом"}
@@ -265,6 +320,7 @@ export default function SosConsultant() {
               }
               value={details}
               onChange={(e) => setDetails(e.target.value)}
+              onKeyDown={handleSosKeyDown}
               rows={4}
               className="resize-none rounded-xl border-slate-200 text-typo-body placeholder:text-slate-400"
               disabled={!!loadingTopic}

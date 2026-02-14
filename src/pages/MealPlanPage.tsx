@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,6 +44,7 @@ function DayTabButton({
   isSelected,
   status,
   isToday,
+  disabled,
   onClick,
 }: {
   dayLabel: string;
@@ -50,13 +52,15 @@ function DayTabButton({
   isSelected: boolean;
   status: DayTabStatus;
   isToday: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   const isActive = isSelected;
   return (
     <motion.button
       type="button"
-      whileTap={{ scale: 0.97 }}
+      disabled={disabled}
+      whileTap={disabled ? undefined : { scale: 0.97 }}
       onClick={onClick}
       className={`
         relative flex flex-col items-center justify-center min-w-[44px] min-h-[44px] py-2.5 px-3 rounded-xl shrink-0 transition-colors border
@@ -69,6 +73,7 @@ function DayTabButton({
               : "bg-white border-slate-200 text-slate-600"
         }
         ${!isActive && isToday ? "ring-1 ring-emerald-400/60" : ""}
+        ${disabled ? "pointer-events-none opacity-70" : ""}
       `}
     >
       {status === "loading" && (
@@ -200,14 +205,20 @@ export default function MealPlanPage() {
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const [replaceSlot, setReplaceSlot] = useState<{ mealType: string; dayKey: string } | null>(null);
   const [replaceLoading, setReplaceLoading] = useState(false);
+  const [guardClickFeedback, setGuardClickFeedback] = useState(false);
 
   const displayName = useMemo(() => {
     if (selectedMemberId === "family" || !selectedMemberId) return "Семья";
     return members.find((c) => c.id === selectedMemberId)?.name ?? "Семья";
   }, [selectedMemberId, members]);
 
-  const showGuardToast = useCallback(() => {
+  const showGuardToast = useCallback((reason?: "member" | "day") => {
+    if (import.meta.env.DEV && reason) {
+      console.log("[DEBUG] blocked navigation:", reason);
+    }
+    setGuardClickFeedback(true);
     toast({ title: "Подождите окончания генерации", description: "Не закрывайте и не обновляйте страницу." });
+    setTimeout(() => setGuardClickFeedback(false), 1500);
   }, [toast]);
 
   useEffect(() => {
@@ -229,11 +240,13 @@ export default function MealPlanPage() {
     return () => window.removeEventListener("beforeunload", handler);
   }, [isAnyGenerating]);
 
-  // Закрыть диалоги при старте генерации
+  // Закрыть диалоги и сбросить feedback при старте генерации / при завершении
   useEffect(() => {
     if (isAnyGenerating) {
       setShowProfilePicker(false);
       setReplaceSlot(null);
+    } else {
+      setGuardClickFeedback(false);
     }
   }, [isAnyGenerating]);
 
@@ -454,14 +467,16 @@ export default function MealPlanPage() {
       headerRight={
         <button
           type="button"
+          disabled={isAnyGenerating}
+          aria-disabled={isAnyGenerating}
           onClick={() => {
             if (isAnyGenerating) {
-              showGuardToast();
+              showGuardToast("member");
               return;
             }
             setShowProfilePicker(true);
           }}
-          className={`flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap ${isAnyGenerating ? "opacity-70 cursor-not-allowed" : ""}`}
+          className={`flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap ${isAnyGenerating ? "opacity-70 cursor-not-allowed pointer-events-none" : ""}`}
           aria-label="Выбрать профиль"
         >
           <span className="truncate max-w-[140px]">{displayName}</span>
@@ -470,31 +485,40 @@ export default function MealPlanPage() {
       }
     >
       <div className="flex flex-col min-h-0 pb-safe px-4 pt-4 relative">
-        {/* Generation guard banner */}
-        {isAnyGenerating && (
-          <div className="sticky top-0 z-50 -mx-4 px-4 py-3 mb-3 bg-amber-50 border-b border-amber-200/80 shadow-sm">
-            <p className="text-typo-body font-semibold text-amber-900">Генерируем план…</p>
-            <p className="text-typo-caption text-amber-800/90 mt-0.5">
-              Не закрывайте и не обновляйте страницу, чтобы не прервать процесс.
-            </p>
-            {isGeneratingWeek && weekProgress.total > 0 && (
-              <p className="text-typo-caption font-medium text-amber-800 mt-1">
-                Готово {weekProgress.done} из {weekProgress.total}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Content wrapper: overlay blocks interaction when generating */}
-        <div className="relative flex-1 min-h-0">
-          {isAnyGenerating && (
+        {/* Generation guard: portal overlay над всем (header z-40, Dialog z-50, toast z-100) */}
+        {isAnyGenerating &&
+          typeof document !== "undefined" &&
+          createPortal(
             <div
-              className="absolute inset-0 z-40 cursor-not-allowed min-h-[200px]"
-              onClick={showGuardToast}
+              className="fixed inset-0 z-[9999] flex flex-col bg-black/10 pointer-events-auto cursor-not-allowed"
+              onClick={() => showGuardToast()}
               onPointerDown={(e) => e.preventDefault()}
+              role="presentation"
               aria-hidden
-            />
+            >
+              {guardClickFeedback && (
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10000] px-4 py-3 rounded-xl bg-amber-900 text-white text-typo-body font-medium shadow-lg animate-in fade-in duration-200">
+                  Подождите окончания генерации
+                </div>
+              )}
+              <div className="shrink-0 px-4 py-3 bg-amber-50 border-b border-amber-200/80 shadow-sm">
+                <p className="text-typo-body font-semibold text-amber-900">Генерируем план…</p>
+                <p className="text-typo-caption text-amber-800/90 mt-0.5">
+                  Не закрывайте и не обновляйте страницу, чтобы не прервать процесс.
+                </p>
+                {isGeneratingWeek && weekProgress.total > 0 && (
+                  <p className="text-typo-caption font-medium text-amber-800 mt-1">
+                    Готово {weekProgress.done} из {weekProgress.total}
+                  </p>
+                )}
+              </div>
+              <div className="flex-1 min-h-0" />
+            </div>,
+            document.body
           )}
+
+        {/* Content wrapper */}
+        <div className="relative flex-1 min-h-0">
         {/* Week calendar — always visible */}
         <div className="mt-2">
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
@@ -508,9 +532,10 @@ export default function MealPlanPage() {
                   isSelected={selectedDay === index}
                   status={getDayStatus(index)}
                   isToday={dayKey === todayKey}
+                  disabled={isAnyGenerating}
                   onClick={() => {
                     if (isAnyGenerating) {
-                      showGuardToast();
+                      showGuardToast("day");
                       return;
                     }
                     setSelectedDay(index);
@@ -705,7 +730,16 @@ export default function MealPlanPage() {
       </div>
 
       {/* Profile picker — opens on tap subtitle (profile name) */}
-      <Dialog open={showProfilePicker} onOpenChange={setShowProfilePicker}>
+      <Dialog
+        open={showProfilePicker}
+        onOpenChange={(open) => {
+          if (isAnyGenerating && open) {
+            showGuardToast("member");
+            return;
+          }
+          setShowProfilePicker(open);
+        }}
+      >
         <DialogContent className="rounded-2xl max-w-[90vw]">
           <DialogHeader>
             <DialogTitle className="text-typo-title font-semibold">Кому готовим?</DialogTitle>
@@ -714,11 +748,16 @@ export default function MealPlanPage() {
             {!isFree && (
               <button
                 type="button"
+                disabled={isAnyGenerating}
                 onClick={() => {
+                  if (isAnyGenerating) {
+                    showGuardToast("member");
+                    return;
+                  }
                   setSelectedMemberId("family");
                   setShowProfilePicker(false);
                 }}
-                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors ${selectedMemberId === "family" ? "bg-emerald-50 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-700"}`}
+                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors disabled:opacity-70 ${selectedMemberId === "family" ? "bg-emerald-50 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-700"}`}
               >
                 Семья
               </button>
@@ -727,23 +766,33 @@ export default function MealPlanPage() {
               <button
                 key={c.id}
                 type="button"
+                disabled={isAnyGenerating}
                 onClick={() => {
+                  if (isAnyGenerating) {
+                    showGuardToast("member");
+                    return;
+                  }
                   setSelectedMemberId(c.id);
                   setShowProfilePicker(false);
                 }}
-                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors ${selectedMemberId === c.id ? "bg-emerald-50 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-700"}`}
+                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors disabled:opacity-70 ${selectedMemberId === c.id ? "bg-emerald-50 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-700"}`}
               >
                 {c.name}
               </button>
             ))}
             <button
               type="button"
+              disabled={isAnyGenerating}
               onClick={() => {
+                if (isAnyGenerating) {
+                  showGuardToast("member");
+                  return;
+                }
                 setShowProfilePicker(false);
                 setSheetCreateMode(true);
                 setShowProfileSheet(true);
               }}
-              className="text-left py-3 px-4 rounded-xl min-h-[44px] text-slate-500 hover:bg-slate-100 flex items-center gap-2"
+              className="text-left py-3 px-4 rounded-xl min-h-[44px] text-slate-500 hover:bg-slate-100 flex items-center gap-2 disabled:opacity-70"
             >
               <Plus className="w-4 h-4" />
               Добавить ребёнка
