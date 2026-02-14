@@ -231,6 +231,8 @@ export function useRecipes(childId?: string) {
       const rpcPayload = {
         ...normalized,
         source,
+        ...(normalized.chef_advice != null && normalized.chef_advice !== '' && { chef_advice: normalized.chef_advice }),
+        ...(normalized.advice != null && normalized.advice !== '' && { advice: normalized.advice }),
         steps: stepsPadded.map((s, i) => ({ instruction: s.instruction, step_number: s.step_number ?? i + 1 })),
         ingredients: ingredientsPadded.map((ing, i) => ({
           name: ing.name,

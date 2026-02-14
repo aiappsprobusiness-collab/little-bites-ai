@@ -99,6 +99,21 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
               </div>
             )}
 
+            {/* Совет: chefAdvice (Premium) или advice (Free) — правила как в ChatMessage */}
+            {(() => {
+              const chefAdvice = (recipe as { chefAdvice?: string }).chefAdvice;
+              const advice = (recipe as { advice?: string }).advice;
+              const tip = (isPremium && chefAdvice?.trim()) ? chefAdvice.trim() : (advice?.trim() ?? chefAdvice?.trim());
+              return tip ? (
+                <div>
+                  <h3 className="text-typo-h2 font-bold text-foreground mb-2">
+                    {isPremium && chefAdvice?.trim() ? "💡 Совет от шефа" : "💡 Мини-совет"}
+                  </h3>
+                  <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{tip}</p>
+                </div>
+              ) : null;
+            })()}
+
             {/* Ingredients */}
             {ingredients.length > 0 && (
               <div>

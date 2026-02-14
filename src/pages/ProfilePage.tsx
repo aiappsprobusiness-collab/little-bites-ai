@@ -76,7 +76,7 @@ export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { members, isLoading, formatAge } = useFamily();
+  const { members, isLoading, formatAge, primaryMemberId, isFreeLocked } = useFamily();
   const { subscriptionStatus, hasAccess, hasPremiumAccess, isTrial, trialDaysRemaining, cancelSubscription, isCancellingSubscription } = useSubscription();
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
@@ -186,54 +186,79 @@ export default function ProfilePage() {
             </p>
           </div>
           <div className="space-y-3">
-            {members.map((member, index) => (
-              <motion.div
-                key={member.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className="rounded-2xl border border-border bg-card p-4 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.06)]"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center text-2xl shrink-0">
-                    {memberAvatar(member, index)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-foreground">
-                      {member.name}
-                      <span className="text-muted-foreground font-normal text-typo-muted ml-1.5">
+            {members.map((member, index) => {
+              const isPrimary = member.id === primaryMemberId;
+              const isLockedForFree = isFreeLocked && !isPrimary;
+              return (
+                <motion.div
+                  key={member.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={`rounded-2xl border p-4 shadow-[0_4px_16px_-4px_rgba(0,0,0,0.06)] ${
+                    isLockedForFree
+                      ? "border-slate-200 bg-slate-50/80"
+                      : "border-border bg-card"
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl shrink-0 relative ${
+                      isLockedForFree ? "bg-slate-200" : "bg-muted"
+                    }`}>
+                      {memberAvatar(member, index)}
+                      {isLockedForFree && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-slate-500/40">
+                          <Lock className="w-5 h-5 text-white" strokeWidth={2.5} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-semibold ${isLockedForFree ? "text-slate-500" : "text-foreground"}`}>
+                        {member.name}
+                        <span className={`font-normal ml-1.5 ${isLockedForFree ? "text-slate-400" : "text-muted-foreground text-typo-muted"}`}>
+                          {[
+                            MEMBER_TYPE_LABEL[(member as MembersRow).type] ??
+                              (member as MembersRow).type,
+                            formatAge(member.age_months ?? null),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </p>
+                      <p className={`text-typo-caption mt-1 line-clamp-2 ${isLockedForFree ? "text-slate-400" : "text-muted-foreground"}`}>
                         {[
-                          MEMBER_TYPE_LABEL[(member as MembersRow).type] ??
-                            (member as MembersRow).type,
-                          formatAge(member.age_months ?? null),
+                          member.allergies?.length &&
+                            `Аллергии: ${(member.allergies as string[]).join(", ")}`,
+                          member.preferences?.length &&
+                            `Предпочтения: ${(member.preferences as string[]).join(", ")}`,
                         ]
                           .filter(Boolean)
-                          .join(" · ")}
-                      </span>
-                    </p>
-                    <p className="text-typo-caption text-muted-foreground mt-1 line-clamp-2">
-                      {[
-                        member.allergies?.length &&
-                          `Аллергии: ${(member.allergies as string[]).join(", ")}`,
-                        member.preferences?.length &&
-                          `Предпочтения: ${(member.preferences as string[]).join(", ")}`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || "Нет ограничений"}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 -ml-2 h-8 text-primary hover:text-primary/90"
-                      onClick={() => navigate(`/profile/child/${member.id}`)}
-                    >
-                      Открыть профиль
-                      <ChevronRight className="h-4 w-4 ml-0.5" />
-                    </Button>
+                          .join(" · ") || "Нет ограничений"}
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`mt-2 -ml-2 h-8 ${isLockedForFree ? "text-slate-400 hover:text-slate-600" : "text-primary hover:text-primary/90"}`}
+                        onClick={() => {
+                          if (isLockedForFree) {
+                            setPaywallCustomMessage("Переключение между профилями детей доступно в Premium");
+                            useAppStore.getState().setShowPaywall(true);
+                            return;
+                          }
+                          navigate(`/profile/child/${member.id}`);
+                        }}
+                      >
+                        {isLockedForFree ? (
+                          <>Доступно в Premium <Lock className="h-3.5 w-3.5 ml-1 inline" /></>
+                        ) : (
+                          <>Открыть профиль <ChevronRight className="h-4 w-4 ml-0.5" /></>
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
             <motion.button
               type="button"
               initial={{ opacity: 0, y: 8 }}

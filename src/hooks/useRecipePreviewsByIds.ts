@@ -47,11 +47,15 @@ export function useRecipePreviewsByIds(recipeIds: string[]) {
     queryKey: ["recipe_previews", user?.id, stableIdsKey],
     queryFn: async (): Promise<Record<string, RecipePreview>> => {
       if (!user || ids.length === 0) return {};
-      const { data, error } = await supabase.rpc("get_recipe_previews", {
-        recipe_ids: ids,
-      });
+      const [previewsResult, tipsResult] = await Promise.all([
+        supabase.rpc("get_recipe_previews", { recipe_ids: ids }),
+        supabase.from("recipes").select("id, chef_advice, advice").in("id", ids).eq("user_id", user.id),
+      ]);
+      const { data: previewRows, error } = previewsResult;
       if (error) throw error;
-      const rows = (data ?? []) as Array<{
+      const tipsRows = (tipsResult.data ?? []) as Array<{ id: string; chef_advice?: string | null; advice?: string | null }>;
+      const tipsMap = new Map(tipsRows.map((r) => [r.id, { chefAdvice: r.chef_advice ?? null, advice: r.advice ?? null }]));
+      const rows = (previewRows ?? []) as Array<{
         id: string;
         title: string | null;
         description: string | null;
@@ -64,7 +68,13 @@ export function useRecipePreviewsByIds(recipeIds: string[]) {
       }>;
       const map: Record<string, RecipePreview> = {};
       rows.forEach((r) => {
-        map[r.id] = toRecipePreview(r);
+        const preview = toRecipePreview(r);
+        const tips = tipsMap.get(r.id);
+        if (tips) {
+          preview.chefAdvice = tips.chefAdvice;
+          preview.advice = tips.advice;
+        }
+        map[r.id] = preview;
       });
       return map;
     },

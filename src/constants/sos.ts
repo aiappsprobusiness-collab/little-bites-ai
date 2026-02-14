@@ -18,6 +18,9 @@ export const SOS_TOPICS: {
 
 export const SOS_TOPIC_IDS = new Set(SOS_TOPICS.map((t) => t.id));
 
+/** Бесплатные SOS-опции для Free (2 шт.). Остальные — Premium. */
+export const FREE_SOS_TOPIC_IDS = new Set(["constipation_diarrhea", "new_food"]);
+
 export function getTopicById(id: string | undefined): (typeof SOS_TOPICS)[number] | null {
   if (!id) return null;
   return SOS_TOPICS.find((t) => t.id === id) ?? null;

@@ -199,10 +199,11 @@ ${VARIETY_AND_MEALS_RULES}
 - amount: строка с количеством. Примеры: "100 g", "2 шт.", "1 ст. л.", "по вкусу", "для подачи", "по необходимости". ЗАПРЕЩЕНО передавать ингредиенты строками или без amount. Если количество неизвестно — укажи "по вкусу" или "для подачи".
 
 ОТВЕЧАЙ СТРОГО JSON. Без markdown, без текста вне JSON.
+Для каждого блюда можно добавить chefAdvice (совет шефа, Premium, макс. 300 символов) и advice (мини-совет, Free).
 {
-  "breakfast": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": ""},
-  "lunch": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": ""},
-  "snack": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": ""},
-  "dinner": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": ""}
+  "breakfast": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": "", "advice": ""},
+  "lunch": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": "", "advice": ""},
+  "snack": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": "", "advice": ""},
+  "dinner": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": "", "advice": ""}
 }
 `;

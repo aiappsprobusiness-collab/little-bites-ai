@@ -8,4 +8,8 @@ export type RecipePreview = {
   minAgeMonths?: number | null;
   maxAgeMonths?: number | null;
   isFavorite: boolean;
+  /** Совет шефа (Premium). */
+  chefAdvice?: string | null;
+  /** Мини-совет (Free). */
+  advice?: string | null;
 };

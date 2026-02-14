@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
-import { Plus, Check } from 'lucide-react';
+import { Plus, Check, Lock } from 'lucide-react';
 import { useFamily } from '@/contexts/FamilyContext';
+import { useAppStore } from '@/store/useAppStore';
 import { cn } from '@/lib/utils';
 
 interface MemberCarouselProps {
@@ -9,7 +10,8 @@ interface MemberCarouselProps {
 }
 
 export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselProps) {
-  const { members, selectedMemberId, setSelectedMemberId, formatAge, isLoading } = useFamily();
+  const { members, selectedMemberId, setSelectedMemberId, primaryMemberId, isFreeLocked, formatAge, isLoading } = useFamily();
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
 
   if (isLoading) {
     return (
@@ -41,18 +43,32 @@ export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselP
     <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
       {members.slice(0, 10).map((member) => {
         const isSelected = selectedMemberId === member.id;
+        const isPrimary = member.id === primaryMemberId;
+        const isLockedForFree = isFreeLocked && !isPrimary;
+
+        const handleClick = () => {
+          if (isLockedForFree) {
+            setPaywallCustomMessage("Переключение между профилями детей доступно в Premium");
+            useAppStore.getState().setShowPaywall(true);
+            return;
+          }
+          setSelectedMemberId(member.id);
+        };
 
         return (
           <motion.button
             key={member.id}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setSelectedMemberId(member.id)}
+            whileTap={isLockedForFree ? undefined : { scale: 0.95 }}
+            onClick={handleClick}
             className={cn(
               "flex-shrink-0 flex flex-col items-center p-2 rounded-xl transition-all relative",
               compact ? "w-14" : "w-16",
+              isLockedForFree && "opacity-75",
               isSelected
                 ? "bg-primary shadow-button"
-                : "bg-card shadow-soft hover:shadow-card"
+                : isLockedForFree
+                  ? "bg-slate-100 shadow-soft"
+                  : "bg-card shadow-soft hover:shadow-card"
             )}
           >
             {isSelected && (
@@ -66,17 +82,23 @@ export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselP
             )}
             <div
               className={cn(
-                "rounded-lg flex items-center justify-center text-xl mb-1",
+                "rounded-lg flex items-center justify-center text-xl mb-1 relative",
                 compact ? "w-8 h-8" : "w-10 h-10",
-                isSelected ? "bg-primary-foreground/20" : "bg-muted"
+                isSelected ? "bg-primary-foreground/20" : isLockedForFree ? "bg-slate-200" : "bg-muted"
               )}
             >
               👤
+              {isLockedForFree && (
+                <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-slate-500/40">
+                  <Lock className="w-4 h-4 text-white" strokeWidth={2.5} />
+                </span>
+              )}
             </div>
             <p
               className={cn(
                 "font-semibold text-typo-caption truncate w-full text-center",
-                isSelected && "text-primary-foreground"
+                isSelected && "text-primary-foreground",
+                isLockedForFree && !isSelected && "text-slate-500"
               )}
             >
               {member.name}
@@ -85,7 +107,7 @@ export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselP
               <p
                 className={cn(
                   "text-typo-caption truncate w-full text-center",
-                  isSelected ? "text-primary-foreground/80" : "text-muted-foreground"
+                  isSelected ? "text-primary-foreground/80" : isLockedForFree ? "text-slate-400" : "text-muted-foreground"
                 )}
               >
                 {formatAge(member.age_months ?? null)}

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Loader2, Sparkles, Plus, ChevronDown } from "lucide-react";
+import { Calendar as CalendarIcon, Loader2, Sparkles, Plus } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
@@ -16,9 +16,8 @@ import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
-import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
+import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useAppStore } from "@/store/useAppStore";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +36,7 @@ function getDayLabel(date: Date): string {
 
 type DayTabStatus = "idle" | "loading" | "done";
 
-/** Кнопка дня в календаре недели: active / today / done / loading / idle. */
+/** Кнопка дня в календаре недели: active / today / done / loading / idle. isLocked — Free: не today, серый, не кликается. */
 function DayTabButton({
   dayLabel,
   dateNum,
@@ -45,6 +44,7 @@ function DayTabButton({
   status,
   isToday,
   disabled,
+  isLocked,
   onClick,
 }: {
   dayLabel: string;
@@ -53,26 +53,30 @@ function DayTabButton({
   status: DayTabStatus;
   isToday: boolean;
   disabled?: boolean;
+  isLocked?: boolean;
   onClick: () => void;
 }) {
   const isActive = isSelected;
+  const effectivelyDisabled = disabled || isLocked;
   return (
     <motion.button
       type="button"
       disabled={disabled}
-      whileTap={disabled ? undefined : { scale: 0.97 }}
+      whileTap={effectivelyDisabled ? undefined : { scale: 0.97 }}
       onClick={onClick}
       className={`
         relative flex flex-col items-center justify-center min-w-[44px] min-h-[44px] py-2.5 px-3 rounded-xl shrink-0 transition-colors border
-        ${isActive
-          ? "bg-emerald-600 text-white border-emerald-600 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
-          : status === "done"
-            ? "bg-emerald-50 border-emerald-200 text-slate-700"
-            : status === "loading"
-              ? "bg-emerald-50 border-emerald-100 text-slate-600 overflow-hidden"
-              : "bg-white border-slate-200 text-slate-600"
+        ${isLocked
+          ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+          : isActive
+            ? "bg-emerald-600 text-white border-emerald-600 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+            : status === "done"
+              ? "bg-emerald-50 border-emerald-200 text-slate-700"
+              : status === "loading"
+                ? "bg-emerald-50 border-emerald-100 text-slate-600 overflow-hidden"
+                : "bg-white border-slate-200 text-slate-600"
         }
-        ${!isActive && isToday ? "ring-1 ring-emerald-400/60" : ""}
+        ${!isActive && isToday && !isLocked ? "ring-1 ring-emerald-400/60" : ""}
         ${disabled ? "pointer-events-none opacity-70" : ""}
       `}
     >
@@ -129,20 +133,11 @@ export default function MealPlanPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isMembersLoading } = useFamily();
-  const { hasAccess, subscriptionStatus } = useSubscription();
-  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
-  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const { selectedMember, members, selectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
+  const { hasAccess } = useSubscription();
   const isFree = !hasAccess;
 
-  // Нет доступа (free/expired): при открытии плана — Paywall
-  useEffect(() => {
-    if (!hasAccess) {
-      setPaywallCustomMessage("Экономьте время с семейным режимом и недельными планами питания.");
-      setShowPaywall(true);
-    }
-    return () => setPaywallCustomMessage(null);
-  }, [hasAccess, setShowPaywall, setPaywallCustomMessage]);
+  // Не открываем paywall автоматически при заходе на План — Free может использовать дневной план (шаблон).
   const isFamilyMode = !isFree && selectedMemberId === "family";
   const mealPlanMemberId = isFree && selectedMemberId === "family"
     ? (members[0]?.id ?? undefined)
@@ -199,18 +194,10 @@ export default function MealPlanPage() {
   const AUTOFILL_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 часов
   const autogenTriggeredRef = useRef(false);
 
-  const [showProfileSheet, setShowProfileSheet] = useState(false);
-  const [sheetCreateMode, setSheetCreateMode] = useState(false);
-  const [showProfilePicker, setShowProfilePicker] = useState(false);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const [replaceSlot, setReplaceSlot] = useState<{ mealType: string; dayKey: string } | null>(null);
   const [replaceLoading, setReplaceLoading] = useState(false);
   const [guardClickFeedback, setGuardClickFeedback] = useState(false);
-
-  const displayName = useMemo(() => {
-    if (selectedMemberId === "family" || !selectedMemberId) return "Семья";
-    return members.find((c) => c.id === selectedMemberId)?.name ?? "Семья";
-  }, [selectedMemberId, members]);
 
   const showGuardToast = useCallback((reason?: "member" | "day") => {
     if (import.meta.env.DEV && reason) {
@@ -243,7 +230,6 @@ export default function MealPlanPage() {
   // Закрыть диалоги и сбросить feedback при старте генерации / при завершении
   useEffect(() => {
     if (isAnyGenerating) {
-      setShowProfilePicker(false);
       setReplaceSlot(null);
     } else {
       setGuardClickFeedback(false);
@@ -279,6 +265,15 @@ export default function MealPlanPage() {
     prevPathnameRef.current = location.pathname;
     if (isOnPlan && !wasOnPlan) setSelectedDay(0);
   }, [location.pathname]);
+
+  const todayIndex = useMemo(() => rollingDates.findIndex((d) => formatLocalDate(d) === todayKey), [rollingDates, todayKey]);
+
+  useEffect(() => {
+    if (isFree && todayIndex >= 0 && selectedDay !== todayIndex) {
+      if (import.meta.env.DEV) console.log("[DEBUG] free day locked to today");
+      setSelectedDay(todayIndex);
+    }
+  }, [isFree, todayIndex, selectedDay]);
 
   const selectedDate = rollingDates[selectedDay];
   const selectedDayKey = formatLocalDate(selectedDate);
@@ -424,9 +419,20 @@ export default function MealPlanPage() {
     return acc;
   }, {} as Record<string, typeof dayMealPlans[0] | null>);
 
-  const showNoProfile =
-    !isFamilyMode && !selectedMember && !isMembersLoading;
+  const showNoProfile = members.length === 0 && !isMembersLoading;
   const showEmptyFamily = isFamilyMode && members.length === 0 && !isMembersLoading;
+
+  if (import.meta.env.DEV) {
+    console.log("[PLAN state]", {
+      isMembersLoading,
+      membersLength: members.length,
+      selectedMemberId,
+      showNoProfile,
+      showEmptyFamily,
+      isFree,
+      mealPlanMemberId,
+    });
+  }
 
   if (isMembersLoading) {
     return (
@@ -465,23 +471,10 @@ export default function MealPlanPage() {
     <MobileLayout
       title="План питания"
       headerRight={
-        <button
-          type="button"
+        <MemberSelectorButton
           disabled={isAnyGenerating}
-          aria-disabled={isAnyGenerating}
-          onClick={() => {
-            if (isAnyGenerating) {
-              showGuardToast("member");
-              return;
-            }
-            setShowProfilePicker(true);
-          }}
-          className={`flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap ${isAnyGenerating ? "opacity-70 cursor-not-allowed pointer-events-none" : ""}`}
-          aria-label="Выбрать профиль"
-        >
-          <span className="truncate max-w-[140px]">{displayName}</span>
-          <ChevronDown className="w-4 h-4 shrink-0 text-emerald-600/80" aria-hidden />
-        </button>
+          onGuardClick={() => showGuardToast("member")}
+        />
       }
     >
       <div className="flex flex-col min-h-0 pb-safe px-4 pt-4 relative">
@@ -524,6 +517,7 @@ export default function MealPlanPage() {
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
             {rollingDates.map((date, index) => {
               const dayKey = formatLocalDate(date);
+              const isDayLockedForFree = isFree && dayKey !== todayKey;
               return (
                 <DayTabButton
                   key={dayKey}
@@ -533,9 +527,17 @@ export default function MealPlanPage() {
                   status={getDayStatus(index)}
                   isToday={dayKey === todayKey}
                   disabled={isAnyGenerating}
+                  isLocked={isDayLockedForFree}
                   onClick={() => {
                     if (isAnyGenerating) {
                       showGuardToast("day");
+                      return;
+                    }
+                    if (isDayLockedForFree) {
+                      toast({
+                        title: "Доступно в Premium",
+                        description: "План на 7 дней — только для подписчиков.",
+                      });
                       return;
                     }
                     setSelectedDay(index);
@@ -591,6 +593,14 @@ export default function MealPlanPage() {
                       cookTimeMinutes={previews[recipeId]?.cookTimeMinutes}
                       ingredientNames={previews[recipeId]?.ingredientNames}
                       ingredientTotalCount={previews[recipeId]?.ingredientTotalCount}
+                      hint={
+                        (() => {
+                          const p = previews[recipeId];
+                          if (!p) return undefined;
+                          const tip = (hasAccess && p.chefAdvice?.trim()) ? p.chefAdvice : (p.advice?.trim() ?? p.chefAdvice?.trim());
+                          return tip ?? undefined;
+                        })()
+                      }
                       isFavorite={previews[recipeId]?.isFavorite ?? false}
                       onToggleFavorite={isValidRecipeId(recipeId) ? handleToggleFavorite : undefined}
                       onShare={isValidRecipeId(recipeId) ? handleShare : undefined}
@@ -679,30 +689,42 @@ export default function MealPlanPage() {
             </div>
           )}
 
-        {/* Очистить 7 дней / Улучшить с AI — below content, когда есть план */}
+        {/* Очистить день (Free) / 7 дней (Premium) / Улучшить с AI — below content, когда есть план */}
         {hasAnyWeekPlan && (
           <div className="mt-6 pb-6 flex flex-col gap-2">
             <button
               type="button"
               onClick={async () => {
-                const msg = hasDbWeekPlan
-                  ? "Удалить все блюда на ближайшие 7 дней? Это действие нельзя отменить."
-                  : "Скрыть шаблонное меню на эти 7 дней?";
-                if (!window.confirm(msg)) return;
-                setMutedWeekKey(startKey);
-                if (hasDbWeekPlan) {
+                if (isFree) {
+                  const msg = "Удалить все блюда на сегодня?";
+                  if (!window.confirm(msg)) return;
+                  setMutedWeekKey(startKey);
                   try {
-                    await clearWeekPlan({ startDate: rollingDates[0], endDate: rollingDates[6] });
-                    toast({ title: "План на 7 дней очищен", description: "План питания удалён" });
+                    await clearWeekPlan({ startDate: selectedDate, endDate: selectedDate });
+                    toast({ title: "План на день очищен", description: "Блюда на сегодня удалены" });
                   } catch (e: any) {
                     toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
+                  }
+                } else {
+                  const msg = hasDbWeekPlan
+                    ? "Удалить все блюда на ближайшие 7 дней? Это действие нельзя отменить."
+                    : "Скрыть шаблонное меню на эти 7 дней?";
+                  if (!window.confirm(msg)) return;
+                  setMutedWeekKey(startKey);
+                  if (hasDbWeekPlan) {
+                    try {
+                      await clearWeekPlan({ startDate: rollingDates[0], endDate: rollingDates[6] });
+                      toast({ title: "План на 7 дней очищен", description: "План питания удалён" });
+                    } catch (e: any) {
+                      toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
+                    }
                   }
                 }
               }}
               disabled={isAnyGenerating}
               className="text-typo-caption text-muted-foreground/80 hover:text-muted-foreground transition-colors text-left"
             >
-              Очистить 7 дней
+              {isFree ? "Очистить день" : "Очистить 7 дней"}
             </button>
             {!isFree && (
               <Button
@@ -728,78 +750,6 @@ export default function MealPlanPage() {
         )}
         </div>
       </div>
-
-      {/* Profile picker — opens on tap subtitle (profile name) */}
-      <Dialog
-        open={showProfilePicker}
-        onOpenChange={(open) => {
-          if (isAnyGenerating && open) {
-            showGuardToast("member");
-            return;
-          }
-          setShowProfilePicker(open);
-        }}
-      >
-        <DialogContent className="rounded-2xl max-w-[90vw]">
-          <DialogHeader>
-            <DialogTitle className="text-typo-title font-semibold">Кому готовим?</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-1 py-2">
-            {!isFree && (
-              <button
-                type="button"
-                disabled={isAnyGenerating}
-                onClick={() => {
-                  if (isAnyGenerating) {
-                    showGuardToast("member");
-                    return;
-                  }
-                  setSelectedMemberId("family");
-                  setShowProfilePicker(false);
-                }}
-                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors disabled:opacity-70 ${selectedMemberId === "family" ? "bg-emerald-50 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-700"}`}
-              >
-                Семья
-              </button>
-            )}
-            {members.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                disabled={isAnyGenerating}
-                onClick={() => {
-                  if (isAnyGenerating) {
-                    showGuardToast("member");
-                    return;
-                  }
-                  setSelectedMemberId(c.id);
-                  setShowProfilePicker(false);
-                }}
-                className={`text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors disabled:opacity-70 ${selectedMemberId === c.id ? "bg-emerald-50 font-medium text-slate-900" : "hover:bg-slate-100 text-slate-700"}`}
-              >
-                {c.name}
-              </button>
-            ))}
-            <button
-              type="button"
-              disabled={isAnyGenerating}
-              onClick={() => {
-                if (isAnyGenerating) {
-                  showGuardToast("member");
-                  return;
-                }
-                setShowProfilePicker(false);
-                setSheetCreateMode(true);
-                setShowProfileSheet(true);
-              }}
-              className="text-left py-3 px-4 rounded-xl min-h-[44px] text-slate-500 hover:bg-slate-100 flex items-center gap-2 disabled:opacity-70"
-            >
-              <Plus className="w-4 h-4" />
-              Добавить ребёнка
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Заменить приём пищи */}
       <Dialog open={!!replaceSlot} onOpenChange={(open) => !open && setReplaceSlot(null)}>
@@ -897,14 +847,6 @@ export default function MealPlanPage() {
         </DialogContent>
       </Dialog>
 
-      <ProfileEditSheet
-        open={showProfileSheet}
-        onOpenChange={setShowProfileSheet}
-        member={selectedMember}
-        createMode={sheetCreateMode}
-        onAddNew={() => setSheetCreateMode(true)}
-        onCreated={(memberId) => setSelectedMemberId(memberId)}
-      />
     </MobileLayout>
   );
 }

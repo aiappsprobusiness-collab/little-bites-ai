@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Send, Loader2, User, Square, HelpCircle } from "lucide-react";
+import { Send, Loader2, Square, HelpCircle } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
 import { ChatMessage } from "@/components/chat/ChatMessage";
-import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
 import { FamilyOnboarding } from "@/components/onboarding/FamilyOnboarding";
 import { ArticleReaderModal } from "@/components/articles/ArticleReaderModal";
 import { useArticle } from "@/hooks/useArticles";
@@ -21,13 +20,7 @@ import type { Profile } from "@/domain/generation";
 import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type ParsedRecipe } from "@/utils/parseChatRecipes";
 import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import {
   Dialog,
   DialogContent,
@@ -74,8 +67,6 @@ export default function ChatPage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [showProfileSheet, setShowProfileSheet] = useState(false);
-  const [sheetCreateMode, setSheetCreateMode] = useState(false);
   const [showHintsModal, setShowHintsModal] = useState(false);
   const [openArticleId, setOpenArticleId] = useState<string | null>(null);
   const [input, setInput] = useState("");
@@ -489,53 +480,18 @@ export default function ChatPage() {
       <div className="sticky top-0 z-40 bg-background/98 backdrop-blur-lg border-b border-slate-200/40 safe-top overflow-hidden max-w-full">
         <div className="container mx-auto px-3 sm:px-4 max-w-full">
           <div className="flex flex-col w-full py-2">
-            {/* Row 1: Title left, Profile icon right */}
-            <div className="flex items-center justify-between w-full min-w-0">
-              <div className="leading-tight min-w-0">
+            {/* Row 1: Title left, Member selector right */}
+            <div className="flex items-center justify-between w-full min-w-0 gap-2">
+              <div className="leading-tight min-w-0 flex-1">
                 <h1 className="text-typo-title font-semibold text-foreground tracking-tight truncate">Mom Recipes</h1>
                 <p className="text-typo-caption text-muted-foreground truncate">рядом на кухне</p>
               </div>
-              <button
-                onClick={() => navigate("/profile")}
-                title="Профиль"
-                className="h-9 w-9 shrink-0 rounded-full bg-slate-100/80 text-slate-600 flex items-center justify-center hover:bg-slate-200/70 hover:text-slate-700 active:scale-95 transition-all"
-              >
-                <User className="w-5 h-5" />
-              </button>
+              {members.length > 0 && (
+                <MemberSelectorButton
+                  onProfileChange={() => setMessages([])}
+                />
+              )}
             </div>
-            {/* Блок с именем профиля под заголовком — по ширине как на Плане (w-fit) */}
-            {members.length > 0 && (
-              <div className="flex justify-start items-center mt-1.5 min-w-0 w-fit">
-                {isFree ? (
-                  <span className="inline-flex items-center w-fit rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 whitespace-nowrap">
-                    <span className="truncate max-w-[140px]">
-                      {members.find((c) => c.id === (selectedMemberId ?? members[0]?.id))?.name ?? members[0]?.name ?? ""}
-                    </span>
-                  </span>
-                ) : (
-                  <Select
-                    value={selectedMemberId ?? "family"}
-                    onValueChange={(v) => {
-                      const prev = selectedMemberId ?? "family";
-                      if (v !== prev) setMessages([]);
-                      setSelectedMemberId(v);
-                    }}
-                  >
-                    <SelectTrigger className="inline-flex items-center w-fit max-w-[180px] rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap [&>span]:truncate [&>span]:max-w-[140px] focus:ring-0 [&>svg]:hidden">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="family">Семья</SelectItem>
-                      {members.map((c, idx) => (
-                        <SelectItem key={`${c.id}-${idx}`} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            )}
           </div>
         </div>
         {isTrial && trialDaysRemaining !== null && (
@@ -673,17 +629,6 @@ export default function ChatPage() {
         open={!!openArticleId}
         onOpenChange={(open) => !open && setOpenArticleId(null)}
         isLoading={isArticleLoading}
-      />
-      <ProfileEditSheet
-        open={showProfileSheet}
-        onOpenChange={(open) => {
-          setShowProfileSheet(open);
-          if (!open) setSheetCreateMode(false);
-        }}
-        member={sheetCreateMode ? null : selectedMember ?? null}
-        createMode={sheetCreateMode}
-        onAddNew={() => setSheetCreateMode(true)}
-        onCreated={(memberId) => setSelectedMemberId(memberId)}
       />
       <Dialog open={showHintsModal} onOpenChange={setShowHintsModal}>
         <DialogContent className="w-[min(280px,calc(100vw-40px))] max-w-[280px] p-4 rounded-xl border-slate-200/50 mx-auto">

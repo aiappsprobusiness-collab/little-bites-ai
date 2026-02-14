@@ -79,10 +79,14 @@ export function useFavorites() {
         });
       }
 
-      const { data: recipeMetaRows } = await supabase.from('recipes').select('id, member_id').in('id', recipeIds);
+      const { data: recipeMetaRows } = await supabase.from('recipes').select('id, member_id, chef_advice, advice').in('id', recipeIds);
       const memberIdByRecipeId = new Map<string, string | null>();
-      for (const row of (recipeMetaRows ?? []) as { id: string; member_id: string | null }[]) {
+      const chefAdviceByRecipeId = new Map<string, string | null>();
+      const adviceByRecipeId = new Map<string, string | null>();
+      for (const row of (recipeMetaRows ?? []) as { id: string; member_id: string | null; chef_advice?: string | null; advice?: string | null }[]) {
         memberIdByRecipeId.set(row.id, row.member_id ?? null);
+        chefAdviceByRecipeId.set(row.id, row.chef_advice ?? null);
+        adviceByRecipeId.set(row.id, row.advice ?? null);
       }
 
       return list.map((f) => {
@@ -101,14 +105,20 @@ export function useFavorites() {
             member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined,
           }
           : { id: f.recipe_id, member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined } as StoredRecipe;
-        const data = f.recipe_data;
-        if (data && typeof data === 'object' && !Array.isArray(data)) {
-          if (typeof (data as { chefAdvice?: string }).chefAdvice === 'string') {
-            (recipe as StoredRecipe & { chefAdvice?: string }).chefAdvice = (data as { chefAdvice: string }).chefAdvice;
-          }
-          if (typeof (data as { advice?: string }).advice === 'string') {
-            (recipe as StoredRecipe & { advice?: string }).advice = (data as { advice: string }).advice;
-          }
+        const chefFromDb = chefAdviceByRecipeId.get(f.recipe_id);
+        const adviceFromDb = adviceByRecipeId.get(f.recipe_id);
+        if (typeof chefFromDb === 'string' && chefFromDb.trim()) {
+          (recipe as StoredRecipe & { chefAdvice?: string }).chefAdvice = chefFromDb.trim();
+        } else if (typeof (f.recipe_data as { chefAdvice?: string })?.chefAdvice === 'string' && (f.recipe_data as { chefAdvice: string }).chefAdvice.trim()) {
+          (recipe as StoredRecipe & { chefAdvice?: string }).chefAdvice = (f.recipe_data as { chefAdvice: string }).chefAdvice.trim();
+        }
+        if (typeof adviceFromDb === 'string' && adviceFromDb.trim()) {
+          (recipe as StoredRecipe & { advice?: string }).advice = adviceFromDb.trim();
+        } else if (typeof (f.recipe_data as { advice?: string })?.advice === 'string' && (f.recipe_data as { advice: string }).advice.trim()) {
+          (recipe as StoredRecipe & { advice?: string }).advice = (f.recipe_data as { advice: string }).advice.trim();
+        }
+        if (import.meta.env.DEV && (chefFromDb || adviceFromDb)) {
+          console.log('[DEBUG] favorites render hasChefAdvice=%s hasAdvice=%s title=%s', !!chefFromDb, !!adviceFromDb, recipe?.title ?? '');
         }
         return {
           id: f.id,

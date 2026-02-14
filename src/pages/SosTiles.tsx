@@ -3,12 +3,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SosButton } from "@/components/sos/SosButton";
 import { SosPaywallModal } from "@/components/sos/SosPaywallModal";
 import { Paywall } from "@/components/subscription/Paywall";
-import { SOS_TOPICS, getTopicById } from "@/constants/sos";
+import { SOS_TOPICS, getTopicById, FREE_SOS_TOPIC_IDS } from "@/constants/sos";
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -44,7 +45,8 @@ export default function SosTiles() {
   const [sosPaywallOpen, setSosPaywallOpen] = useState(false);
 
   const handleSosClick = (topic: (typeof SOS_TOPICS)[number]) => {
-    if (!isPremium) {
+    const isFreeTopic = FREE_SOS_TOPIC_IDS.has(topic.id);
+    if (!isPremium && !isFreeTopic) {
       setSosPaywallOpen(true);
       return;
     }
@@ -60,6 +62,7 @@ export default function SosTiles() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
       }
+      headerRight={members.length > 0 ? <MemberSelectorButton /> : undefined}
     >
       <div className="p-4 space-y-6 bg-slate-50 min-h-full">
         {!memberData && (
@@ -71,6 +74,8 @@ export default function SosTiles() {
         <div className="grid grid-cols-2 gap-3">
           {SOS_TOPICS.map((topic) => {
             const Icon = topic.icon;
+            const isFreeTopic = FREE_SOS_TOPIC_IDS.has(topic.id);
+            const locked = !isPremium && !isFreeTopic;
             return (
               <SosButton
                 key={topic.id}
@@ -80,8 +85,8 @@ export default function SosTiles() {
                 icon={<Icon className="w-5 h-5 text-emerald-700" />}
                 onClick={() => handleSosClick(topic)}
                 disabled={false}
-                showLock={!isPremium}
-                locked={!isPremium}
+                showLock={locked}
+                locked={locked}
               />
             );
           })}

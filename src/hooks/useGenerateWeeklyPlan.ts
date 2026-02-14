@@ -8,7 +8,7 @@ import { useMealPlans } from "./useMealPlans";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey } from "@/utils/dateRange";
 import { resolveUnit } from "@/utils/productUtils";
-import { extractSingleJsonObject } from "@/utils/parseChatRecipes";
+import { extractSingleJsonObject, extractChefAdvice, extractAdvice } from "@/utils/parseChatRecipes";
 import { pickRecipeFromPool, normalizeTitleKey } from "@/utils/recipePool";
 
 const DAY_ABBREV = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -78,6 +78,10 @@ interface SingleDayMeal {
   /** Массив { name, amount } (amount строка: "100 g", "по вкусу"). Поддержка legacy: string[] → amount считается пустым. */
   ingredients?: SingleDayIngredient[] | string[];
   steps?: string[];
+  chefAdvice?: string;
+  chef_advice?: string;
+  chefAdviceText?: string;
+  advice?: string;
 }
 
 interface SingleDayResponse {
@@ -264,7 +268,13 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
               const parsed2 = JSON.parse(jsonStr2) as SingleDayResponse;
               for (const k of weakSlots) {
                 if ((parsed2[k]?.steps?.length ?? 0) >= 2) {
-                  (parsed as SingleDayResponse)[k] = parsed2[k];
+                  const orig = parsed[k];
+                  const next = parsed2[k]!;
+                  (parsed as SingleDayResponse)[k] = {
+                    ...next,
+                    chefAdvice: extractChefAdvice(next as Record<string, unknown>) ?? extractChefAdvice(orig as Record<string, unknown>),
+                    advice: extractAdvice(next as Record<string, unknown>) ?? extractAdvice(orig as Record<string, unknown>),
+                  };
                 }
               }
             }
@@ -321,6 +331,11 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
               console.log("[DEBUG] insufficient steps accepted without padding", { mealKey, title: meal.name, stepCount });
             }
             const normalizedIngredients = meal.ingredients.map((ing) => normalizeSingleDayIngredient(ing));
+            const chefAdvice = extractChefAdvice(meal as Record<string, unknown>);
+            const adviceVal = extractAdvice(meal as Record<string, unknown>);
+            if (IS_DEV && (chefAdvice || adviceVal)) {
+              console.log("[DEBUG] weekly/day save hasChefAdvice=%s hasAdvice=%s title=%s", !!chefAdvice, !!adviceVal, meal.name);
+            }
             const recipe = await createRecipe({
               source: "week_ai",
               recipe: {
@@ -329,6 +344,8 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
                 cooking_time_minutes: meal.cooking_time ?? null,
                 member_id: memberId ?? null,
                 child_id: memberId ?? null,
+                ...(chefAdvice && { chef_advice: chefAdvice }),
+                ...(adviceVal && { advice: adviceVal }),
               },
               ingredients: normalizedIngredients.map(({ name, amountStr }, idx) => ({
                 name,
@@ -362,6 +379,11 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             console.log("[DEBUG] insufficient steps accepted without padding", { mealKey, title: meal.name, stepCount });
           }
           const normalizedIngredients = meal.ingredients.map((ing) => normalizeSingleDayIngredient(ing));
+          const chefAdvice = extractChefAdvice(meal as Record<string, unknown>);
+          const adviceVal = extractAdvice(meal as Record<string, unknown>);
+          if (IS_DEV && (chefAdvice || adviceVal)) {
+            console.log("[DEBUG] weekly/day save hasChefAdvice=%s hasAdvice=%s title=%s", !!chefAdvice, !!adviceVal, meal.name);
+          }
           const recipe = await createRecipe({
             source: "week_ai",
             recipe: {
@@ -370,6 +392,8 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
               cooking_time_minutes: meal.cooking_time ?? null,
               member_id: memberId ?? null,
               child_id: memberId ?? null,
+              ...(chefAdvice && { chef_advice: chefAdvice }),
+              ...(adviceVal && { advice: adviceVal }),
             },
             ingredients: normalizedIngredients.map(({ name, amountStr }, idx) => ({
               name,

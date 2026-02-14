@@ -1,29 +1,21 @@
 import { motion } from "framer-motion";
-import { Heart, Calendar, MessageCircle, LifeBuoy } from "lucide-react";
+import { Heart, Calendar, MessageCircle, LifeBuoy, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { useSubscription } from "@/hooks/useSubscription";
-import { useAppStore } from "@/store/useAppStore";
 
-/** 4 вкладки: План | Чат | Избранное | Мы рядом (порядок совпадает с default route /meal-plan) */
+/** 5 вкладок: План | Чат | Избранное | Мы рядом | Профиль */
 const TABS = [
   { icon: Calendar, label: "План", path: "/meal-plan" },
   { icon: MessageCircle, label: "Чат", path: "/chat" },
   { icon: Heart, label: "Избранное", path: "/favorites" },
   { icon: LifeBuoy, label: "Мы рядом", path: "/sos" },
+  { icon: User, label: "Профиль", path: "/profile" },
 ] as const;
 
 export function BottomNavigation() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isPremium } = useSubscription();
-  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
-
   const handleTabClick = (path: string) => {
-    if (path === "/sos" && !isPremium) {
-      setShowPaywall(true);
-      return;
-    }
     navigate(path);
   };
 
@@ -39,7 +31,8 @@ export function BottomNavigation() {
         {TABS.map((item) => {
           const isActive =
             location.pathname === item.path ||
-            (item.path === "/sos" && location.pathname.startsWith("/sos"));
+            (item.path === "/sos" && location.pathname.startsWith("/sos")) ||
+            (item.path === "/profile" && (location.pathname === "/profile" || location.pathname.startsWith("/profile/")));
           const Icon = item.icon;
           return (
             <motion.button

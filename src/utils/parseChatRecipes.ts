@@ -35,8 +35,14 @@ export function isIngredientObject(ing: ParsedIngredient): ing is IngredientWith
 }
 
 /** Извлекает chefAdvice из объекта, проверяя все возможные ключи (chefAdvice, chef_advice, chefAdviceText). */
-function extractChefAdvice(obj: Record<string, unknown>): string | undefined {
+export function extractChefAdvice(obj: Record<string, unknown>): string | undefined {
   const val = obj.chefAdvice ?? obj.chef_advice ?? obj.chefAdviceText;
+  return typeof val === "string" && val.trim() ? val.trim() : undefined;
+}
+
+/** Извлекает advice из объекта. */
+export function extractAdvice(obj: Record<string, unknown>): string | undefined {
+  const val = obj.advice;
   return typeof val === "string" && val.trim() ? val.trim() : undefined;
 }
 
