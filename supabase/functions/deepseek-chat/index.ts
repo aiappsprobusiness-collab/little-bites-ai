@@ -761,6 +761,19 @@ serve(async (req) => {
 
       if (DEBUG && type === "single_day") {
         safeLog("[DEBUG] single_day: response length:", assistantMessage.length, "recipes created on client only (no server insert); total recipes for plan = 4 per day × 7 days (client-side).");
+        try {
+          const parsed = JSON.parse(assistantMessage) as Record<string, { ingredients?: unknown[] } | undefined>;
+          const mealKeys = ["breakfast", "lunch", "snack", "dinner"];
+          for (const key of mealKeys) {
+            const meal = parsed[key];
+            const arr = meal?.ingredients;
+            if (Array.isArray(arr) && arr.some((item) => typeof item === "string")) {
+              safeWarn("[DEBUG] single_day: meal", key, "has string ingredients (expected [{name, amount}]); response length:", assistantMessage.length);
+            }
+          }
+        } catch {
+          // ignore parse errors for debug
+        }
       }
 
       if (isRecipeJsonRequest) {
@@ -864,61 +877,51 @@ serve(async (req) => {
         const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
         const tags = ["chat"];
         if (validatedRecipe.mealType) tags.push(`chat_${validatedRecipe.mealType}`);
-        const { data: insertedRecipe, error: recipeErr } = await supabase
-          .from("recipes")
-          .insert({
-            user_id: userId,
-            member_id: memberIdForRecipe,
-            child_id: memberIdForRecipe,
-            title: validatedRecipe.title,
-            description: validatedRecipe.description ?? null,
-            cooking_time_minutes: validatedRecipe.cookingTimeMinutes,
-            tags,
-            source: "chat_ai",
-            meal_type: validatedRecipe.mealType ?? null,
-            steps: validatedRecipe.steps,
-            cooking_time: validatedRecipe.cookingTimeMinutes,
-            chef_advice: validatedRecipe.chefAdvice ?? null,
-            advice: validatedRecipe.advice ?? null,
-          } as Record<string, unknown>)
-          .select("id")
-          .single();
-        if (recipeErr) throw recipeErr;
-        savedRecipeId = insertedRecipe?.id ?? null;
-        if (DEBUG && savedRecipeId) {
-          const idSuffix = savedRecipeId.slice(-6);
-          safeLog("[DEBUG] saved recipe source=chat_ai id=...", idSuffix);
-        }
-        if (savedRecipeId) {
-          if (validatedRecipe.ingredients?.length) {
-            const ingredientsRows = validatedRecipe.ingredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
+        const rawSteps = Array.isArray(validatedRecipe.steps) ? validatedRecipe.steps : [];
+        const stepsPayload = rawSteps.length >= 3
+          ? rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 }))
+          : [
+              ...rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 })),
+              ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг по инструкции.", step_number: rawSteps.length + i + 1 })),
+            ];
+        const rawIngredients = Array.isArray(validatedRecipe.ingredients) ? validatedRecipe.ingredients : [];
+        const ingredientsPayload = rawIngredients.length >= 3
+          ? rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
               const nameStr = typeof ing === "string" ? ing : ing.name;
               const displayText = typeof ing === "string" ? ing : (ing.displayText ?? ing.name);
               const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
-              return {
-                recipe_id: savedRecipeId,
-                name: nameStr,
-                display_text: displayText,
-                canonical_amount: canonical?.amount ?? null,
-                canonical_unit: canonical?.unit ?? null,
-              };
-            });
-            const { error: ingErr } = await supabase.from("recipe_ingredients").insert(ingredientsRows);
-            if (ingErr) {
-              safeWarn("recipe_ingredients insert failed, recipe saved:", ingErr.message);
-            }
-          }
-          if (validatedRecipe.steps?.length) {
-            const stepsRows = validatedRecipe.steps.map((step: string, idx: number) => ({
-              recipe_id: savedRecipeId,
-              step_number: idx + 1,
-              instruction: step,
-            }));
-            const { error: stepsErr } = await supabase.from("recipe_steps").insert(stepsRows);
-            if (stepsErr) {
-              safeWarn("recipe_steps insert failed, recipe saved:", stepsErr.message);
-            }
-          }
+              return { name: nameStr, display_text: displayText, canonical_amount: canonical?.amount ?? null, canonical_unit: canonical?.unit ?? null };
+            })
+          : [
+              ...rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
+                const nameStr = typeof ing === "string" ? ing : ing.name;
+                const displayText = typeof ing === "string" ? ing : (ing.displayText ?? ing.name);
+                const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
+                return { name: nameStr, display_text: displayText, canonical_amount: canonical?.amount ?? null, canonical_unit: canonical?.unit ?? null };
+              }),
+              ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({ name: `Ингредиент ${rawIngredients.length + i + 1}`, display_text: null, canonical_amount: null, canonical_unit: null })),
+            ];
+        const payload = {
+          user_id: userId,
+          source: "chat_ai",
+          title: validatedRecipe.title,
+          description: validatedRecipe.description ?? null,
+          cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
+          member_id: memberIdForRecipe,
+          child_id: memberIdForRecipe,
+          tags,
+          meal_type: validatedRecipe.mealType ?? null,
+          chef_advice: validatedRecipe.chefAdvice ?? null,
+          advice: validatedRecipe.advice ?? null,
+          steps: stepsPayload,
+          ingredients: ingredientsPayload,
+        };
+        const { data: recipeId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
+        if (rpcErr) throw rpcErr;
+        savedRecipeId = recipeId ?? null;
+        if (DEBUG && savedRecipeId) {
+          const idSuffix = savedRecipeId.slice(-6);
+          safeLog("[DEBUG] saved recipe source=chat_ai id=...", idSuffix);
         }
       } catch (err) {
         safeWarn("Failed to save recipe to DB, continuing without recipe_id:", err instanceof Error ? err.message : err);

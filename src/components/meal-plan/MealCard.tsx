@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Heart, Share2 } from "lucide-react";
+import { Heart, Share2, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -41,6 +41,8 @@ export interface MealCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: (recipeId: string, next: boolean) => void;
   onShare?: (recipeId: string, recipeTitle: string) => void;
+  /** Заменить этот приём пищи (план). Показывает кнопку ↻. */
+  onReplace?: () => void;
 }
 
 const CHIP_PLACEHOLDER_COUNT = 3;
@@ -61,6 +63,7 @@ export function MealCard({
   isFavorite = false,
   onToggleFavorite,
   onShare,
+  onReplace,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -79,7 +82,11 @@ export function MealCard({
     });
   };
 
-  const showActions = !isLoadingPreviews && (onToggleFavorite ?? onShare) != null;
+  const handleReplaceClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onReplace?.();
+  };
+  const showActions = !isLoadingPreviews && (onToggleFavorite ?? onShare ?? onReplace) != null;
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleFavorite?.(recipeId, !isFavorite);
@@ -172,6 +179,17 @@ export function MealCard({
                   aria-label="Поделиться"
                 >
                   <Share2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+              {onReplace && (
+                <button
+                  type="button"
+                  onClick={handleReplaceClick}
+                  className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-emerald-600 bg-emerald-50/80 border border-emerald-200/60 hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 transition-all"
+                  title="Заменить"
+                  aria-label="Заменить блюдо"
+                >
+                  <RotateCw className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { formatLocalDate } from '@/utils/dateUtils';
+import { isDateInRollingRange } from '@/utils/dateRange';
 import { STARTER_DAILY_PLANS, STARTER_NEUTRAL_DAY } from '@/data/starterDailyPlans';
 import { selectStarterVariant, STARTER_NEUTRAL_INDEX, type StarterProfile } from '@/data/starterResolver';
 import { ensureStarterRecipesSeeded, toStarterRecipeDbId } from '@/data/starterRecipeSeed';
@@ -118,10 +119,8 @@ export function useMealPlans(
         if (error) throw error;
         const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as unknown as MealPlansV2Row));
         if (expanded.length === 0) {
-          const mon = new Date(startStr + "T12:00:00");
-          mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
-          const weekKeyForRange = formatLocalDate(mon);
-          if (mutedWeekKey !== null && weekKeyForRange === mutedWeekKey) return [];
+          const rangeKeyForMute = startStr;
+          if (mutedWeekKey !== null && rangeKeyForMute === mutedWeekKey) return [];
           const dates: string[] = [];
           const startD = new Date(startStr + 'T12:00:00');
           const endD = new Date(endStr + 'T12:00:00');
@@ -167,10 +166,7 @@ export function useMealPlans(
         if (error) throw error;
         const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as unknown as MealPlansV2Row));
         if (expanded.length === 0) {
-          const mon = new Date(dateStr + "T12:00:00"); //Это нормальный трюк, чтобы избежать timezone-дыр. 👍
-          mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
-          const weekKeyForDate = formatLocalDate(mon);
-          if (mutedWeekKey !== null && weekKeyForDate === mutedWeekKey) return [];
+          if (mutedWeekKey !== null && isDateInRollingRange(dateStr, mutedWeekKey)) return [];
           return await buildStarterItems(dateStr, selectStarterVariant(dateStr, memberId, profile), user.id, memberId);
         }
         return expanded;
@@ -225,6 +221,10 @@ export function useMealPlans(
           .select()
           .single();
         if (error) throw error;
+        const slotCount = Object.keys(newMeals).filter((k) => (newMeals as MealsJson)[k]?.recipe_id).length;
+        if (import.meta.env.DEV) {
+          console.log("[PLAN save]", { dayKey: payload.planned_date, dayLabel: payload.planned_date, mealsCount: slotCount });
+        }
         return updated as unknown as MealPlansV2Row;
       }
 
@@ -239,6 +239,10 @@ export function useMealPlans(
         .select()
         .single();
       if (error) throw error;
+      const slotCount = Object.keys(newMeals).filter((k) => (newMeals as MealsJson)[k]?.recipe_id).length;
+      if (import.meta.env.DEV) {
+        console.log("[PLAN save]", { dayKey: payload.planned_date, dayLabel: payload.planned_date, mealsCount: slotCount });
+      }
       return inserted as unknown as MealPlansV2Row;
     },
     onSuccess: () => {

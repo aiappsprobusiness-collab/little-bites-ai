@@ -185,11 +185,16 @@ ${VARIETY_AND_MEALS_RULES}
 [VARIETY_RULES — ОБЯЗАТЕЛЬНО]
 {{varietyRules}}
 
-ОТВЕЧАЙ СТРОГО JSON. Не пиши текст вне JSON.
+[ФОРМАТ ИНГРЕДИЕНТОВ — ОБЯЗАТЕЛЬНО]
+Для каждого блюда (breakfast, lunch, snack, dinner) поле ingredients — массив объектов строго вида { "name": "...", "amount": "..." }.
+- name: название ингредиента.
+- amount: строка с количеством. Примеры: "100 g", "2 шт.", "1 ст. л.", "по вкусу", "для подачи", "по необходимости". ЗАПРЕЩЕНО передавать ингредиенты строками или без amount. Если количество неизвестно — укажи "по вкусу" или "для подачи".
+
+ОТВЕЧАЙ СТРОГО JSON. Без markdown, без текста вне JSON.
 {
-  "breakfast": {"name": "", "ingredients": [], "steps": [], "cookingTime": ""},
-  "lunch": {"name": "", "ingredients": [], "steps": [], "cookingTime": ""},
-  "snack": {"name": "", "ingredients": [], "steps": [], "cookingTime": ""},
-  "dinner": {"name": "", "ingredients": [], "steps": [], "cookingTime": ""}
+  "breakfast": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": ""},
+  "lunch": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": ""},
+  "snack": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": ""},
+  "dinner": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": ""}
 }
 `;

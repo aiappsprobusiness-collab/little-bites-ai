@@ -194,47 +194,60 @@ export function useRecipes(childId?: string) {
     });
   };
 
+  const MIN_STEPS = 3;
+  const MIN_INGREDIENTS = 3;
+
   const createRecipe = useMutation({
     mutationFn: async ({
       recipe,
       ingredients = [],
       steps = [],
+      source = 'chat_ai',
     }: {
       recipe: Omit<RecipeInsert, 'user_id'>;
       ingredients?: Omit<RecipeIngredient, 'id' | 'recipe_id'>[];
       steps?: Omit<RecipeStep, 'id' | 'recipe_id'>[];
+      source?: 'week_ai' | 'chat_ai' | 'starter' | 'seed' | 'manual';
     }) => {
       if (!user) throw new Error('User not authenticated');
       if (!isValidUUID(user.id)) throw new Error('Invalid user_id');
 
-      const payload = normalizeRecipePayload({
+      const normalized = normalizeRecipePayload({
         ...recipe,
         user_id: user.id,
-      } as Record<string, unknown>) as RecipeInsert;
+      } as Record<string, unknown>) as Record<string, unknown>;
 
-      const { data: newRecipe, error: recipeError } = await supabase
-        .from('recipes')
-        .insert(payload)
-        .select()
-        .single();
+      const stepsPadded =
+        steps.length >= MIN_STEPS
+          ? steps
+          : [...steps, ...Array.from({ length: MIN_STEPS - steps.length }, (_, i) => ({ instruction: `Шаг ${steps.length + i + 1}`, step_number: steps.length + i + 1 }))];
+      const ingredientsPadded =
+        ingredients.length >= MIN_INGREDIENTS
+          ? ingredients
+          : [...ingredients, ...Array.from({ length: MIN_INGREDIENTS - ingredients.length }, (_, i) => ({ name: `Ингредиент ${ingredients.length + i + 1}`, order_index: ingredients.length + i }))];
 
-      if (recipeError) throw recipeError;
+      const rpcPayload = {
+        ...normalized,
+        source,
+        steps: stepsPadded.map((s, i) => ({ instruction: s.instruction, step_number: s.step_number ?? i + 1 })),
+        ingredients: ingredientsPadded.map((ing, i) => ({
+          name: ing.name,
+          amount: ing.amount ?? null,
+          unit: ing.unit ?? null,
+          substitute: (ing as Record<string, unknown>).substitute ?? null,
+          display_text: (ing as Record<string, unknown>).display_text ?? null,
+          canonical_amount: (ing as Record<string, unknown>).canonical_amount ?? null,
+          canonical_unit: (ing as Record<string, unknown>).canonical_unit ?? null,
+          order_index: ing.order_index ?? i,
+          category: (ing as Record<string, unknown>).category ?? 'other',
+        })),
+      };
 
-      if (ingredients.length > 0) {
-        const { error: ingredientsError } = await supabase
-          .from('recipe_ingredients')
-          .insert(ingredients.map((ing, index) => ({ ...ing, recipe_id: newRecipe.id, order_index: ing.order_index ?? index })));
-        if (ingredientsError) throw ingredientsError;
-      }
+      const { data: recipeId, error: rpcError } = await supabase.rpc('create_recipe_with_steps', { payload: rpcPayload });
+      if (rpcError) throw rpcError;
+      if (!recipeId) throw new Error('create_recipe_with_steps returned no id');
 
-      if (steps.length > 0) {
-        const { error: stepsError } = await supabase
-          .from('recipe_steps')
-          .insert(steps.map((step) => ({ ...step, recipe_id: newRecipe.id })));
-        if (stepsError) throw stepsError;
-      }
-
-      return newRecipe as Recipe;
+      return { id: recipeId, ...normalized, title: normalized.title ?? '' } as Recipe;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes', user?.id] });
