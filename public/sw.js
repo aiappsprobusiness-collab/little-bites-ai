@@ -2,7 +2,7 @@
  * Custom Service Worker — PWA (no vite-plugin-pwa).
  * Precache core assets, runtime stale-while-revalidate, offline fallback.
  */
-const CACHE_VERSION = "mom-recipes-v3";
+const CACHE_VERSION = "mom-recipes-v4";
 const PRECACHE_NAME = CACHE_VERSION + "-precache";
 const RUNTIME_NAME = CACHE_VERSION + "-runtime";
 const OFFLINE_URL = "/offline.html";

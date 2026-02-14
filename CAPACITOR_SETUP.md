@@ -91,9 +91,21 @@ npm run cap:open:ios
 npx cap open ios
 ```
 
+## Иконка приложения (Android / iOS)
+
+Иконки для PWA генерируются при сборке из `public/icon-source.png`. Для нативных иконок Android и iOS после добавления платформ (`npx cap add android` / `npx cap add ios`) выполните:
+
+```bash
+npm run generate:capacitor-icons
+```
+
+Используется `assets/icon.png` (1024×1024), он создаётся при `npm run generate:icons` из `public/icon-source.png`.
+
 ## Полезные команды
 
-- `npm run build` - Сборка веб-приложения
+- `npm run build` - Сборка веб-приложения (включает генерацию иконок)
+- `npm run generate:icons` - Генерация иконок PWA и `assets/icon.png`
+- `npm run generate:capacitor-icons` - Генерация иконок для Android/iOS (нужны папки android/ и ios/)
 - `npm run cap:sync` - Синхронизация с нативными платформами
 - `npm run cap:copy` - Копирование веб-файлов
 - `npm run cap:open:android` - Открытие Android Studio
