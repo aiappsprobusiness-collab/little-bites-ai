@@ -2,12 +2,14 @@ import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useSubscription } from "./useSubscription";
 import { useRecipes } from "./useRecipes";
 import { useMealPlans } from "./useMealPlans";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey } from "@/utils/dateRange";
 import { resolveUnit } from "@/utils/productUtils";
 import { extractSingleJsonObject } from "@/utils/parseChatRecipes";
+import { pickRecipeFromPool, normalizeTitleKey } from "@/utils/recipePool";
 
 const DAY_ABBREV = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 import type { Tables } from "@/integrations/supabase/types";
@@ -41,6 +43,10 @@ export interface WeekContextAccumulated {
   chosenTitles: string[];
   chosenBreakfastTitles: string[];
   chosenBreakfastBases: string[];
+  /** Для pool-first: уже использованные recipe_id за неделю. */
+  usedRecipeIds: string[];
+  /** Для pool-first: normalizeTitleKey уже выбранных блюд. */
+  usedTitleKeys: string[];
 }
 
 /** Эвристика базы завтрака по названию/ингредиентам (без ML). */
@@ -113,6 +119,7 @@ function getShortDayLabel(date: Date): string {
 
 export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: string | null) {
   const { user, session } = useAuth();
+  const { hasAccess } = useSubscription();
   const queryClient = useQueryClient();
   const { createRecipe } = useRecipes();
   const { createMealPlan } = useMealPlans(memberId ?? undefined);
@@ -138,7 +145,8 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       date: Date,
       dayName: string,
       token: string,
-      weekContext?: WeekContextAccumulated | string
+      weekContext?: WeekContextAccumulated | string,
+      options?: { usePool: boolean }
     ): Promise<SingleDayResponse | null> => {
       const dateStrForLog = formatLocalDate(date);
       const ctxTitlesCount =
@@ -203,11 +211,19 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
         if (memberId == null) existingQuery = existingQuery.is("member_id", null);
         else existingQuery = existingQuery.eq("member_id", memberId);
         const { data: existingRow } = await existingQuery.maybeSingle();
-        const existingMeals = (existingRow as { meals?: Record<string, unknown> } | null)?.meals ?? {};
+        const existingMeals = (existingRow as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
         const hasMeals = typeof existingMeals === "object" && Object.keys(existingMeals).length > 0;
         if (hasMeals) {
           if (IS_DEV) {
             console.log("[DEBUG] skip day apply: plan already exists planned_date=%s", dateStr);
+          }
+          if (options?.usePool && weekContext && typeof weekContext === "object" && !Array.isArray(weekContext)) {
+            const acc = weekContext as WeekContextAccumulated;
+            for (const slot of MEAL_KEYS) {
+              const slotData = existingMeals[slot];
+              if (slotData?.recipe_id) acc.usedRecipeIds.push(slotData.recipe_id);
+              if (slotData?.title) acc.usedTitleKeys.push(normalizeTitleKey(slotData.title));
+            }
           }
           setCompletedDays((prev) => ({ ...prev, [dayIndex]: true }));
           return parsed;
@@ -259,67 +275,144 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       }
 
       const generatedIds: string[] = [];
+      let selectedFromPoolCount = 0;
+      const acc = options?.usePool && weekContext && typeof weekContext === "object" && !Array.isArray(weekContext) ? (weekContext as WeekContextAccumulated) : null;
+      const usePool = options?.usePool && hasAccess && user?.id && acc;
 
       for (const mealKey of MEAL_KEYS) {
         const meal = parsed[mealKey];
         if (!meal?.name || !Array.isArray(meal.ingredients)) continue;
 
-        const stepCount = meal.steps?.length ?? 0;
-        if (stepCount < 2 && IS_DEV) {
-          console.log("[DEBUG] insufficient steps accepted without padding", { mealKey, title: meal.name, stepCount });
+        let recipeId: string;
+        let recipeTitle: string;
+
+        if (usePool) {
+          const poolRecipe = await pickRecipeFromPool({
+            supabase,
+            userId: user.id,
+            memberId: memberId ?? null,
+            mealType: mealKey,
+            memberData: memberData ? { allergies: memberData.allergies, preferences: memberData.preferences as string | string[] | undefined, age_months: memberData.age_months ?? memberData.ageMonths } : undefined,
+            excludeRecipeIds: acc.usedRecipeIds,
+            excludeTitleKeys: acc.usedTitleKeys,
+            limitCandidates: 60,
+          });
+
+          if (poolRecipe) {
+            recipeId = poolRecipe.id;
+            recipeTitle = poolRecipe.title;
+            selectedFromPoolCount++;
+            acc.usedRecipeIds.push(poolRecipe.id);
+            acc.usedTitleKeys.push(normalizeTitleKey(poolRecipe.title));
+            acc.chosenTitles.push(poolRecipe.title);
+            if (mealKey === "breakfast") {
+              acc.chosenBreakfastTitles.push(poolRecipe.title);
+              acc.chosenBreakfastBases.push(classifyBreakfastBase(poolRecipe.title));
+            }
+            if (IS_DEV) {
+              console.log("[DEBUG] pool hit meal=%s title=%s id=%s", mealKey, poolRecipe.title, poolRecipe.id.slice(-6));
+            }
+          } else {
+            if (IS_DEV) {
+              console.log("[DEBUG] pool miss meal=%s -> ai", mealKey);
+            }
+            const stepCount = meal.steps?.length ?? 0;
+            if (stepCount < 2 && IS_DEV) {
+              console.log("[DEBUG] insufficient steps accepted without padding", { mealKey, title: meal.name, stepCount });
+            }
+            const normalizedIngredients = meal.ingredients.map((ing) => normalizeSingleDayIngredient(ing));
+            const recipe = await createRecipe({
+              source: "week_ai",
+              recipe: {
+                title: meal.name,
+                description: "",
+                cooking_time_minutes: meal.cooking_time ?? null,
+                member_id: memberId ?? null,
+                child_id: memberId ?? null,
+              },
+              ingredients: normalizedIngredients.map(({ name, amountStr }, idx) => ({
+                name,
+                display_text: amountStr || null,
+                amount: null,
+                unit: resolveUnit(null, name),
+                category: "other" as const,
+                order_index: idx,
+              })),
+              steps: (meal.steps || []).map((step, idx) => ({
+                instruction: typeof step === "string" ? step : String(step),
+                step_number: idx + 1,
+                duration_minutes: null,
+                image_url: null,
+              })),
+            });
+            recipeId = recipe.id;
+            recipeTitle = recipe.title;
+            generatedIds.push(recipe.id);
+            acc.usedRecipeIds.push(recipe.id);
+            acc.usedTitleKeys.push(normalizeTitleKey(recipe.title));
+            acc.chosenTitles.push(recipe.title);
+            if (mealKey === "breakfast") {
+              acc.chosenBreakfastTitles.push(recipe.title);
+              acc.chosenBreakfastBases.push(classifyBreakfastBase(recipe.title));
+            }
+          }
+        } else {
+          const stepCount = meal.steps?.length ?? 0;
+          if (stepCount < 2 && IS_DEV) {
+            console.log("[DEBUG] insufficient steps accepted without padding", { mealKey, title: meal.name, stepCount });
+          }
+          const normalizedIngredients = meal.ingredients.map((ing) => normalizeSingleDayIngredient(ing));
+          const recipe = await createRecipe({
+            source: "week_ai",
+            recipe: {
+              title: meal.name,
+              description: "",
+              cooking_time_minutes: meal.cooking_time ?? null,
+              member_id: memberId ?? null,
+              child_id: memberId ?? null,
+            },
+            ingredients: normalizedIngredients.map(({ name, amountStr }, idx) => ({
+              name,
+              display_text: amountStr || null,
+              amount: null,
+              unit: resolveUnit(null, name),
+              category: "other" as const,
+              order_index: idx,
+            })),
+            steps: (meal.steps || []).map((step, idx) => ({
+              instruction: typeof step === "string" ? step : String(step),
+              step_number: idx + 1,
+              duration_minutes: null,
+              image_url: null,
+            })),
+          });
+          recipeId = recipe.id;
+          recipeTitle = recipe.title;
+          generatedIds.push(recipe.id);
         }
-
-        const normalizedIngredients = meal.ingredients.map((ing) => normalizeSingleDayIngredient(ing));
-
-        const recipe = await createRecipe({
-          source: 'week_ai',
-          recipe: {
-            title: meal.name,
-            description: "",
-            cooking_time_minutes: meal.cooking_time ?? null,
-            member_id: memberId ?? null,
-            child_id: memberId ?? null,
-          },
-          ingredients: normalizedIngredients.map(({ name, amountStr }, idx) => ({
-            name,
-            display_text: amountStr || null,
-            amount: null,
-            unit: resolveUnit(null, name),
-            category: "other" as const,
-            order_index: idx,
-          })),
-          steps: (meal.steps || []).map((step, idx) => ({
-            instruction: typeof step === "string" ? step : String(step),
-            step_number: idx + 1,
-            duration_minutes: null,
-            image_url: null,
-          })),
-        });
 
         await createMealPlan({
           child_id: memberId ?? null,
           member_id: memberId ?? null,
-          recipe_id: recipe.id,
+          recipe_id: recipeId,
           planned_date: dateStr,
           meal_type: mealKey,
           is_completed: false,
-          title: recipe.title,
+          title: recipeTitle,
         });
-        generatedIds.push(recipe.id);
       }
 
       if (IS_DEV) {
-        const selectedFromPoolCount = 0;
         const generatedCount = generatedIds.length;
         const idSuffixes = generatedIds.map((id) => id.slice(-6));
-        console.log("[DEBUG] single_day done: selectedFromPoolCount=%s generatedCount=%s recipeIds=[...%s] (source not set on client, DB default)", selectedFromPoolCount, generatedCount, idSuffixes.join(", "));
-        console.log("[PLAN save]", { dayKey: dateStr, dayLabel: dayName, mealsCount: generatedIds.length });
+        console.log("[DEBUG] single_day done: selectedFromPoolCount=%s generatedCount=%s recipeIds=[...%s]", selectedFromPoolCount, generatedCount, idSuffixes.join(", "));
+        console.log("[PLAN save]", { dayKey: dateStr, dayLabel: dayName, mealsCount: selectedFromPoolCount + generatedIds.length });
       }
 
       setCompletedDays((prev) => ({ ...prev, [dayIndex]: true }));
       return parsed;
     },
-    [user?.id, memberId, memberData, createRecipe, createMealPlan]
+    [user?.id, memberId, memberData, createRecipe, createMealPlan, hasAccess]
   );
 
   /** Перегенерировать один день (с контекстом остальных дней диапазона) */
@@ -355,17 +448,23 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           chosenTitles: [],
           chosenBreakfastTitles: [],
           chosenBreakfastBases: [],
+          usedRecipeIds: [],
+          usedTitleKeys: [],
         };
-        (weekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string }> }) => {
+        (weekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string; recipe_id?: string }> }) => {
           if (!p.planned_date || p.planned_date === dateStr) return;
           const meals = p.meals ?? {};
           (["breakfast", "lunch", "snack", "dinner"] as const).forEach((mealKey) => {
-            const title = meals[mealKey]?.title?.trim();
-            if (!title) return;
-            accumulated.chosenTitles.push(title);
-            if (mealKey === "breakfast") {
-              accumulated.chosenBreakfastTitles.push(title);
-              accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
+            const slot = meals[mealKey];
+            const title = slot?.title?.trim();
+            if (slot?.recipe_id) accumulated.usedRecipeIds.push(slot.recipe_id);
+            if (title) {
+              accumulated.chosenTitles.push(title);
+              accumulated.usedTitleKeys.push(normalizeTitleKey(title));
+              if (mealKey === "breakfast") {
+                accumulated.chosenBreakfastTitles.push(title);
+                accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
+              }
             }
           });
         });
@@ -382,7 +481,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
         }
         await deleteQuery;
 
-        await generateSingleDay(dayIndex, date, DAY_NAMES[getWeekdayIndex(date)], session.access_token, accumulated);
+        await generateSingleDay(dayIndex, date, DAY_NAMES[getWeekdayIndex(date)], session.access_token, accumulated, { usePool: false });
 
         queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
         queryClient.refetchQueries({ queryKey: ["meal_plans_v2", user?.id] });
@@ -431,17 +530,23 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           chosenTitles: [],
           chosenBreakfastTitles: [],
           chosenBreakfastBases: [],
+          usedRecipeIds: [],
+          usedTitleKeys: [],
         };
-        (weekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string }> }) => {
+        (weekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string; recipe_id?: string }> }) => {
           if (!p.planned_date || p.planned_date === dayKey) return;
           const meals = p.meals ?? {};
           (["breakfast", "lunch", "snack", "dinner"] as const).forEach((mealKey) => {
-            const title = meals[mealKey]?.title?.trim();
-            if (!title) return;
-            accumulated.chosenTitles.push(title);
-            if (mealKey === "breakfast") {
-              accumulated.chosenBreakfastTitles.push(title);
-              accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
+            const slot = meals[mealKey];
+            const title = slot?.title?.trim();
+            if (slot?.recipe_id) accumulated.usedRecipeIds.push(slot.recipe_id);
+            if (title) {
+              accumulated.chosenTitles.push(title);
+              accumulated.usedTitleKeys.push(normalizeTitleKey(title));
+              if (mealKey === "breakfast") {
+                accumulated.chosenBreakfastTitles.push(title);
+                accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
+              }
             }
           });
         });
@@ -451,7 +556,8 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           date,
           DAY_NAMES[getWeekdayIndex(date)],
           session.access_token,
-          accumulated
+          accumulated,
+          { usePool: false }
         );
 
         queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
@@ -501,11 +607,43 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
     let completedCount = 0;
 
     try {
+      let weekQuery = supabase
+        .from("meal_plans_v2")
+        .select("planned_date, meals")
+        .eq("user_id", user.id)
+        .gte("planned_date", formatLocalDate(rollingDates[0]))
+        .lte("planned_date", formatLocalDate(rollingDates[6]))
+        .order("planned_date");
+      if (memberId != null && memberId !== "") {
+        weekQuery = weekQuery.eq("member_id", memberId);
+      } else {
+        weekQuery = weekQuery.is("member_id", null);
+      }
+      const { data: initialWeekPlans } = await weekQuery;
+
       const accumulated: WeekContextAccumulated = {
         chosenTitles: [],
         chosenBreakfastTitles: [],
         chosenBreakfastBases: [],
+        usedRecipeIds: [],
+        usedTitleKeys: [],
       };
+      (initialWeekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string; recipe_id?: string }> }) => {
+        const meals = p.meals ?? {};
+        (["breakfast", "lunch", "snack", "dinner"] as const).forEach((mealKey) => {
+          const slot = meals[mealKey];
+          const title = slot?.title?.trim();
+          if (slot?.recipe_id) accumulated.usedRecipeIds.push(slot.recipe_id);
+          if (title) {
+            accumulated.chosenTitles.push(title);
+            accumulated.usedTitleKeys.push(normalizeTitleKey(title));
+            if (mealKey === "breakfast") {
+              accumulated.chosenBreakfastTitles.push(title);
+              accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
+            }
+          }
+        });
+      });
 
       for (const batch of batchedIndices) {
         const keys = batch.map((i) => formatLocalDate(rollingDates[i]));
@@ -545,7 +683,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           for (const dayIndex of batch) {
             const date = rollingDates[dayIndex];
             const dayName = DAY_NAMES[getWeekdayIndex(date)];
-            const result = await generateSingleDay(dayIndex, date, dayName, token, accumulated);
+            const result = await generateSingleDay(dayIndex, date, dayName, token, accumulated, { usePool: true });
             mergeParsedIntoAccumulated(result);
           }
         } else {
@@ -553,7 +691,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             batch.map((dayIndex) => {
               const date = rollingDates[dayIndex];
               const dayName = DAY_NAMES[getWeekdayIndex(date)];
-              return generateSingleDay(dayIndex, date, dayName, token, accumulated);
+              return generateSingleDay(dayIndex, date, dayName, token, accumulated, { usePool: true });
             })
           );
           for (const parsed of results) mergeParsedIntoAccumulated(parsed);
