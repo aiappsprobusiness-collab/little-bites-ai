@@ -16,7 +16,7 @@ import {
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
-import { validateRecipeJson } from "./recipeSchema.ts";
+import { validateRecipeJson, type RecipeJson } from "./recipeSchema.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -762,12 +762,103 @@ serve(async (req) => {
       });
     }
 
-    const responseBody: { message: string; recipes?: Array<Record<string, unknown>>; usage?: unknown } = {
+    // Учёт токенов по типу действия (рецепт в чате, план на неделю, Мы рядом и т.д.)
+    const usageObj = data.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; input_tokens?: number; output_tokens?: number } | undefined;
+    if (usageObj && supabase) {
+      const inputTokens = usageObj.prompt_tokens ?? usageObj.input_tokens ?? 0;
+      const outputTokens = usageObj.completion_tokens ?? usageObj.output_tokens ?? 0;
+      const totalTokens = usageObj.total_tokens ?? inputTokens + outputTokens;
+      const actionType =
+        type === "single_day" ? "weekly_plan"
+        : type === "sos_consultant" ? "sos_consultant"
+        : type === "balance_check" ? "balance_check"
+        : type === "diet_plan" ? "diet_plan"
+        : (type === "chat" || type === "recipe") ? "chat_recipe"
+        : "other";
+      await supabase.from("token_usage_log").insert({
+        user_id: userId ?? null,
+        action_type: actionType,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        total_tokens: totalTokens,
+      }).then(({ error }) => {
+        if (error) safeWarn("token_usage_log insert failed", error.message);
+      });
+    }
+
+    let savedRecipeId: string | null = null;
+    if (responseRecipes.length > 0 && userId && supabase) {
+      const validatedRecipe = responseRecipes[0] as RecipeJson;
+      try {
+        const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
+        const tags = ["chat"];
+        if (validatedRecipe.mealType) tags.push(`chat_${validatedRecipe.mealType}`);
+        const { data: insertedRecipe, error: recipeErr } = await supabase
+          .from("recipes")
+          .insert({
+            user_id: userId,
+            member_id: memberIdForRecipe,
+            child_id: memberIdForRecipe,
+            title: validatedRecipe.title,
+            description: validatedRecipe.description ?? null,
+            cooking_time_minutes: validatedRecipe.cookingTimeMinutes,
+            tags,
+            source: "chat_ai",
+            meal_type: validatedRecipe.mealType ?? null,
+            steps: validatedRecipe.steps,
+            cooking_time: validatedRecipe.cookingTimeMinutes,
+            chef_advice: validatedRecipe.chefAdvice ?? null,
+            advice: validatedRecipe.advice ?? null,
+          } as Record<string, unknown>)
+          .select("id")
+          .single();
+        if (recipeErr) throw recipeErr;
+        savedRecipeId = insertedRecipe?.id ?? null;
+        if (savedRecipeId) {
+          if (validatedRecipe.ingredients?.length) {
+            const ingredientsRows = validatedRecipe.ingredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
+              const nameStr = typeof ing === "string" ? ing : ing.name;
+              const displayText = typeof ing === "string" ? ing : (ing.displayText ?? ing.name);
+              const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
+              return {
+                recipe_id: savedRecipeId,
+                name: nameStr,
+                display_text: displayText,
+                canonical_amount: canonical?.amount ?? null,
+                canonical_unit: canonical?.unit ?? null,
+              };
+            });
+            const { error: ingErr } = await supabase.from("recipe_ingredients").insert(ingredientsRows);
+            if (ingErr) {
+              safeWarn("recipe_ingredients insert failed, recipe saved:", ingErr.message);
+            }
+          }
+          if (validatedRecipe.steps?.length) {
+            const stepsRows = validatedRecipe.steps.map((step: string, idx: number) => ({
+              recipe_id: savedRecipeId,
+              step_number: idx + 1,
+              instruction: step,
+            }));
+            const { error: stepsErr } = await supabase.from("recipe_steps").insert(stepsRows);
+            if (stepsErr) {
+              safeWarn("recipe_steps insert failed, recipe saved:", stepsErr.message);
+            }
+          }
+        }
+      } catch (err) {
+        safeWarn("Failed to save recipe to DB, continuing without recipe_id:", err instanceof Error ? err.message : err);
+      }
+    }
+
+    const responseBody: { message: string; recipes?: Array<Record<string, unknown>>; recipe_id?: string | null; usage?: unknown } = {
       message: assistantMessage,
       usage: data.usage,
     };
     if (responseRecipes.length > 0) {
       responseBody.recipes = responseRecipes;
+    }
+    if (savedRecipeId) {
+      responseBody.recipe_id = savedRecipeId;
     }
     return new Response(
       JSON.stringify(responseBody),

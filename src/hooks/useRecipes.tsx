@@ -65,6 +65,18 @@ function normalizeRecipePayload<T extends Record<string, unknown>>(payload: T): 
     const cid = out.child_id;
     (out as Record<string, unknown>).child_id = cid != null && isValidUUID(cid) ? cid : null;
   }
+  if ('member_id' in out) {
+    const mid = out.member_id;
+    (out as Record<string, unknown>).member_id = mid != null && isValidUUID(mid) ? mid : null;
+  }
+  if (!('member_id' in out) || (out as Record<string, unknown>).member_id === undefined) {
+    const cid = (out as Record<string, unknown>).child_id;
+    if (cid != null && isValidUUID(cid)) (out as Record<string, unknown>).member_id = cid;
+  }
+  if (!('child_id' in out) || (out as Record<string, unknown>).child_id === undefined) {
+    const mid = (out as Record<string, unknown>).member_id;
+    if (mid != null && isValidUUID(mid)) (out as Record<string, unknown>).child_id = mid;
+  }
   if ('user_id' in out && out.user_id !== undefined && !isValidUUID(out.user_id)) {
     safeWarn('recipes: user_id is not a valid UUID', out.user_id);
   }
@@ -90,7 +102,7 @@ export function useRecipes(childId?: string) {
       .from('recipes')
       .select(RECIPES_LIST_SELECT)
       .eq('user_id', user!.id);
-    if (childId) q = q.or(`child_id.is.null,child_id.eq.${childId}`);
+    if (childId) q = q.or(`member_id.is.null,member_id.eq.${childId}`);
     return q
       .order('created_at', { ascending: false })
       .range(page * RECIPES_PAGE_SIZE, (page + 1) * RECIPES_PAGE_SIZE - 1)

@@ -20,6 +20,7 @@ import { buildGenerationContext, validateRecipe } from "@/domain/generation";
 import type { Profile } from "@/domain/generation";
 import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type ParsedRecipe } from "@/utils/parseChatRecipes";
 import { safeError } from "@/utils/safeLogger";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Select,
   SelectContent,
@@ -104,27 +105,79 @@ export default function ChatPage() {
       setMessages([]);
       return;
     }
-    const formatted: Message[] = [];
-    historyMessages.forEach((msg: any) => {
-      formatted.push({
-        id: `${msg.id}-user`,
-        role: "user",
-        content: msg.message ?? "",
-        timestamp: new Date(msg.created_at),
-      });
-      if (msg.response) {
-        const { displayText, recipes } = parseRecipesFromChat(msg.message ?? "", msg.response);
+    const recipeIds = [...new Set(historyMessages.map((m: { recipe_id?: string | null }) => m.recipe_id).filter(Boolean))] as string[];
+    const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>) => {
+      const formatted: Message[] = [];
+      historyMessages.forEach((msg: { id: string; message?: string; response?: string; created_at: string; recipe_id?: string | null }) => {
         formatted.push({
-          id: `${msg.id}-assistant`,
-          role: "assistant",
-          content: displayText,
+          id: `${msg.id}-user`,
+          role: "user",
+          content: msg.message ?? "",
           timestamp: new Date(msg.created_at),
-          rawContent: msg.response,
-          preParsedRecipe: recipes[0] ?? null,
         });
-      }
-    });
-    setMessages(formatted);
+        if (msg.response) {
+          const dbRecipe = msg.recipe_id ? recipeMap[msg.recipe_id] : null;
+          const { displayText, recipes } = dbRecipe
+            ? { displayText: `Вот рецепт: ${dbRecipe.title}`, recipes: [dbRecipe] }
+            : parseRecipesFromChat(msg.message ?? "", msg.response);
+          formatted.push({
+            id: `${msg.id}-assistant`,
+            role: "assistant",
+            content: displayText,
+            timestamp: new Date(msg.created_at),
+            rawContent: msg.response,
+            preParsedRecipe: recipes[0] ?? null,
+            recipeId: msg.recipe_id ?? undefined,
+          });
+        }
+      });
+      setMessages(formatted);
+    };
+    if (recipeIds.length === 0) {
+      formatWithRecipeMap({});
+      return;
+    }
+    supabase
+      .from("recipes")
+      .select("id, title, description, cooking_time_minutes, meal_type, chef_advice, advice, recipe_ingredients(name, display_text, canonical_amount, canonical_unit), recipe_steps(instruction, step_number)")
+      .in("id", recipeIds)
+      .then(({ data: rows, error }) => {
+        const recipeMap: Record<string, ParsedRecipe> = {};
+        if (error) {
+          formatWithRecipeMap({});
+          return;
+        }
+        (rows ?? []).forEach((r: {
+          id: string;
+          title?: string;
+          description?: string | null;
+          cooking_time_minutes?: number | null;
+          meal_type?: string | null;
+          chef_advice?: string | null;
+          advice?: string | null;
+          recipe_ingredients?: Array<{ name: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null }>;
+          recipe_steps?: Array<{ instruction: string; step_number: number }>;
+        }) => {
+          const stepsArr = (r.recipe_steps ?? []).sort((a, b) => a.step_number - b.step_number).map((s) => s.instruction);
+          const ingredients = (r.recipe_ingredients ?? []).map((ing) => ({
+            name: ing.name,
+            display_text: ing.display_text ?? ing.name,
+            ...(ing.canonical_amount != null && ing.canonical_unit && { canonical_amount: ing.canonical_amount, canonical_unit: ing.canonical_unit as "g" | "ml" }),
+          }));
+          recipeMap[r.id] = {
+            id: r.id,
+            title: r.title ?? "",
+            description: r.description ?? undefined,
+            ingredients,
+            steps: stepsArr,
+            cookingTime: r.cooking_time_minutes ?? undefined,
+            mealType: (r.meal_type as ParsedRecipe["mealType"]) ?? undefined,
+            chefAdvice: r.chef_advice ?? undefined,
+            advice: r.advice ?? undefined,
+          };
+        });
+        formatWithRecipeMap(recipeMap);
+      });
   }, [historyMessages]);
 
   useEffect(() => {
@@ -194,7 +247,7 @@ export default function ChatPage() {
         "Не удалось сгенерировать подходящий рецепт. Попробуйте изменить запрос.";
 
       let attempts = 0;
-      let response: { message?: string; recipes?: unknown[] } | null = null;
+      let response: { message?: string; recipes?: unknown[]; recipe_id?: string | null } | null = null;
       let rawMessage = "";
       let parsed = parseRecipesFromChat(userMessage.content, "");
       let apiRecipes: unknown[] = [];
@@ -292,45 +345,59 @@ export default function ChatPage() {
               description: "Не сохранён в список: не совпадает с аллергиями или предпочтениями.",
             });
           }
+          let recipeIdForHistory: string | null = response?.recipe_id ?? null;
           if (finalValidation.ok) {
-            const mealType = detectMealType(userMessage.content);
-            const { savedRecipes } = await saveRecipesFromChat({
-              userMessage: userMessage.content,
-              aiResponse: rawMessage,
-              memberId: memberIdForSave,
-              mealType,
-              parsedResult: parsed,
-            });
-
-            if (savedRecipes?.length > 0) {
-              lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
-              const recipeId = savedRecipes[0]?.id;
-              if (recipeId) {
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMessageId ? { ...m, recipeId } : m
-                  )
-                );
+            if (recipeIdForHistory) {
+              lastSavedRecipeTitleRef.current = finalRecipe?.title ?? null;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantMessageId ? { ...m, recipeId: recipeIdForHistory } : m
+                )
+              );
+            } else {
+              const mealType = detectMealType(userMessage.content);
+              const { savedRecipes } = await saveRecipesFromChat({
+                userMessage: userMessage.content,
+                aiResponse: rawMessage,
+                memberId: memberIdForSave,
+                mealType,
+                parsedResult: parsed,
+              });
+              if (savedRecipes?.length > 0) {
+                lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
+                recipeIdForHistory = savedRecipes[0]?.id ?? null;
+                if (recipeIdForHistory) {
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMessageId ? { ...m, recipeId: recipeIdForHistory } : m
+                    )
+                  );
+                }
+                toast({
+                  title: "Рецепты сохранены",
+                  description: `${savedRecipes.length} рецепт(ов) добавлено в ваш список`,
+                });
               }
             }
-
             await saveChat({
               message: userMessage.content,
               response: rawMessage,
+              recipeId: recipeIdForHistory,
             });
-
-            if (savedRecipes?.length > 0) {
-              toast({
-                title: "Рецепты сохранены",
-                description: `${savedRecipes.length} рецепт(ов) добавлено в ваш список`,
-              });
-            }
           } else {
-            await saveChat({ message: userMessage.content, response: rawMessage });
+            await saveChat({
+              message: userMessage.content,
+              response: rawMessage,
+              recipeId: recipeIdForHistory,
+            });
           }
         } catch (e) {
           safeError("Failed to save recipes from chat:", e);
-          await saveChat({ message: userMessage.content, response: rawMessage });
+          await saveChat({
+            message: userMessage.content,
+            response: rawMessage,
+            recipeId: response?.recipe_id ?? null,
+          });
         }
       }
     } catch (err: any) {

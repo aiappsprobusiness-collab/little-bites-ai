@@ -22,6 +22,7 @@ export type Database = {
           id: string
           message: string
           message_type: string | null
+          recipe_id: string | null
           response: string | null
           user_id: string
         }
@@ -31,6 +32,7 @@ export type Database = {
           id?: string
           message: string
           message_type?: string | null
+          recipe_id?: string | null
           response?: string | null
           user_id: string
         }
@@ -40,6 +42,7 @@ export type Database = {
           id?: string
           message?: string
           message_type?: string | null
+          recipe_id?: string | null
           response?: string | null
           user_id?: string
         }
@@ -281,6 +284,7 @@ export type Database = {
           calories: number | null
           carbs: number | null
           child_id: string | null
+          member_id: string | null
           cooking_time_minutes: number | null
           created_at: string
           description: string | null
@@ -305,6 +309,7 @@ export type Database = {
           calories?: number | null
           carbs?: number | null
           child_id?: string | null
+          member_id?: string | null
           cooking_time_minutes?: number | null
           created_at?: string
           description?: string | null
@@ -329,6 +334,7 @@ export type Database = {
           calories?: number | null
           carbs?: number | null
           child_id?: string | null
+          member_id?: string | null
           cooking_time_minutes?: number | null
           created_at?: string
           description?: string | null

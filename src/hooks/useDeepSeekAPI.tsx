@@ -281,10 +281,13 @@ export function useDeepSeekAPI() {
       message,
       response,
       messageType = 'text',
+      recipeId,
     }: {
       message: string;
       response: string;
       messageType?: 'text' | 'image' | 'recipe';
+      /** ID рецепта в БД (из Edge function или saveRecipesFromChat) */
+      recipeId?: string | null;
     }) => {
       if (!user) throw new Error('Not authenticated');
 
@@ -296,6 +299,7 @@ export function useDeepSeekAPI() {
           message,
           response,
           message_type: messageType,
+          recipe_id: recipeId ?? null,
         });
 
       if (insertError) {

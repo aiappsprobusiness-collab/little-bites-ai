@@ -173,7 +173,7 @@ export function useChatRecipes() {
           safeLog('Ingredients count:', parsedRecipe.ingredients.length);
           safeLog('Steps count:', parsedRecipe.steps.length);
 
-          // Схема recipes: cooking_time_minutes — integer; child_id — UUID или null; tags — text[]
+          // Схема recipes: cooking_time_minutes — integer; member_id/child_id — UUID или null; tags — text[]
           const cookingMinutes =
             parsedRecipe.cookingTime != null
               ? (typeof parsedRecipe.cookingTime === 'number'
@@ -190,6 +190,7 @@ export function useChatRecipes() {
               title: parsedRecipe.title,
               description: parsedRecipe.description || 'Рецепт предложен AI ассистентом',
               cooking_time_minutes: Number.isFinite(cookingMinutes) ? cookingMinutes : null,
+              member_id: validChildId,
               child_id: validChildId,
               tags,
             },

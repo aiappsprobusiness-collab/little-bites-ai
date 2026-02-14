@@ -127,6 +127,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             title: meal.name,
             description: "",
             cooking_time_minutes: meal.cooking_time ?? null,
+            member_id: memberId ?? null,
             child_id: memberId ?? null,
           },
           ingredients: meal.ingredients.map((ing, idx) => ({
