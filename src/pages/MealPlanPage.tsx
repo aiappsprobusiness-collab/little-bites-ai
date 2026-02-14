@@ -180,12 +180,15 @@ export default function MealPlanPage() {
     regenerateSingleDay,
     generateSingleRollingDay,
     isGenerating: isPlanGenerating,
+    isGeneratingWeek,
+    isGeneratingAnyDay,
+    weekProgress,
     completedDays,
     progress,
     generatingDayKeys,
   } = useGenerateWeeklyPlan(memberDataForPlan, memberIdForPlan);
 
-  const isAnyGenerating = isPlanGenerating || generatingDayKeys.size > 0;
+  const isAnyGenerating = isGeneratingAnyDay;
 
   const AUTOFILL_STORAGE_KEY = "mealPlan_autofill_lastRunAt";
   const AUTOFILL_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 часов
@@ -208,6 +211,25 @@ export default function MealPlanPage() {
       setGenerationMessageIndex((i) => (i + 1) % GENERATION_MESSAGES.length);
     }, 2800);
     return () => clearInterval(t);
+  }, [isAnyGenerating]);
+
+  // beforeunload: предупреждение при закрытии/обновлении во время генерации
+  useEffect(() => {
+    if (!isAnyGenerating) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isAnyGenerating]);
+
+  // Закрыть диалоги при старте генерации
+  useEffect(() => {
+    if (isAnyGenerating) {
+      setShowProfilePicker(false);
+      setReplaceSlot(null);
+    }
   }, [isAnyGenerating]);
 
   // Rolling 7 дней: today..today+6 (без прошедших)
@@ -333,6 +355,10 @@ export default function MealPlanPage() {
   }, [startKey, endKey, missingDayKeys]);
 
   useEffect(() => {
+    if (isAnyGenerating) {
+      if (import.meta.env.DEV) console.log("[DEBUG] skip autofill due to generation guard");
+      return;
+    }
     if (
       isWeekPlansLoading ||
       isAnyGenerating ||
@@ -417,14 +443,24 @@ export default function MealPlanPage() {
     );
   }
 
+  const showGuardToast = useCallback(() => {
+    toast({ title: "Подождите окончания генерации", description: "Не закрывайте и не обновляйте страницу." });
+  }, [toast]);
+
   return (
     <MobileLayout
       title="План питания"
       headerRight={
         <button
           type="button"
-          onClick={() => setShowProfilePicker(true)}
-          className="flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap"
+          onClick={() => {
+            if (isAnyGenerating) {
+              showGuardToast();
+              return;
+            }
+            setShowProfilePicker(true);
+          }}
+          className={`flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100/90 active:bg-emerald-100 border-0 shadow-none transition-colors whitespace-nowrap ${isAnyGenerating ? "opacity-70 cursor-not-allowed" : ""}`}
           aria-label="Выбрать профиль"
         >
           <span className="truncate max-w-[140px]">{displayName}</span>
@@ -432,7 +468,32 @@ export default function MealPlanPage() {
         </button>
       }
     >
-      <div className="flex flex-col min-h-0 pb-safe px-4 pt-4">
+      <div className="flex flex-col min-h-0 pb-safe px-4 pt-4 relative">
+        {/* Generation guard banner */}
+        {isAnyGenerating && (
+          <div className="sticky top-0 z-50 -mx-4 px-4 py-3 mb-3 bg-amber-50 border-b border-amber-200/80 shadow-sm">
+            <p className="text-typo-body font-semibold text-amber-900">Генерируем план…</p>
+            <p className="text-typo-caption text-amber-800/90 mt-0.5">
+              Не закрывайте и не обновляйте страницу, чтобы не прервать процесс.
+            </p>
+            {isGeneratingWeek && weekProgress.total > 0 && (
+              <p className="text-typo-caption font-medium text-amber-800 mt-1">
+                Готово {weekProgress.done} из {weekProgress.total}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Content wrapper: overlay blocks interaction when generating */}
+        <div className="relative flex-1 min-h-0">
+          {isAnyGenerating && (
+            <div
+              className="absolute inset-0 z-40 cursor-not-allowed min-h-[200px]"
+              onClick={showGuardToast}
+              onPointerDown={(e) => e.preventDefault()}
+              aria-hidden
+            />
+          )}
         {/* Week calendar — always visible */}
         <div className="mt-2">
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
@@ -446,7 +507,13 @@ export default function MealPlanPage() {
                   isSelected={selectedDay === index}
                   status={getDayStatus(index)}
                   isToday={dayKey === todayKey}
-                  onClick={() => setSelectedDay(index)}
+                  onClick={() => {
+                    if (isAnyGenerating) {
+                      showGuardToast();
+                      return;
+                    }
+                    setSelectedDay(index);
+                  }}
                 />
               );
             })}
@@ -454,7 +521,7 @@ export default function MealPlanPage() {
         </div>
 
         {/* Day content — always show plan structure */}
-        <div className="flex-1 mt-5">
+        <div className="flex-1 mt-5 min-h-0">
           <h2 className="text-typo-title font-semibold text-foreground mb-3">
             {formatDayHeader(selectedDate)}
           </h2>
@@ -633,6 +700,7 @@ export default function MealPlanPage() {
             )}
           </div>
         )}
+        </div>
       </div>
 
       {/* Profile picker — opens on tap subtitle (profile name) */}

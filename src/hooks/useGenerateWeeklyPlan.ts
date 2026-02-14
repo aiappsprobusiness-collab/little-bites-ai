@@ -117,6 +117,8 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
   const { createRecipe } = useRecipes();
   const { createMealPlan } = useMealPlans(memberId ?? undefined);
   const [isGenerating, setIsGenerating] = useState(false);
+  /** true = полная неделя (generateWeeklyPlan) запущена, weekLockRef содержит lockKey */
+  const [isGeneratingWeek, setIsGeneratingWeek] = useState(false);
   const [completedDays, setCompletedDays] = useState<Record<number, boolean>>({});
   /** Ключи дней, которые сейчас генерируются (в т.ч. autofill одного дня). Для shimmer в табах. */
   const [generatingDayKeys, setGeneratingDayKeys] = useState<Set<string>>(new Set());
@@ -328,6 +330,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       if (dayIndex < 0 || dayIndex > 6) return;
 
       setIsGenerating(true);
+      if (IS_DEV) console.log("[DEBUG] generation guard active (day)");
 
       const rollingDates = getRolling7Dates();
       const date = rollingDates[dayIndex];
@@ -478,8 +481,10 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       return;
     }
     weekLockRef.current.add(lockKey);
+    setIsGeneratingWeek(true);
     if (IS_DEV) {
       console.log("[DEBUG] week generate start lockKey=%s", lockKey);
+      console.log("[DEBUG] generation guard active (week)");
     }
 
     setIsGenerating(true);
@@ -577,16 +582,26 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       return null;
     } finally {
       weekLockRef.current.delete(lockKey);
+      setIsGeneratingWeek(false);
       setProgress(null);
       setIsGenerating(false);
     }
   }, [user, session, memberData, memberId, generateSingleDay, queryClient]);
+
+  /** true когда идёт хотя бы один single_day (autofill или regenerate) */
+  const isGeneratingAnyDay = isGenerating || generatingDayKeys.size > 0;
+  const weekProgress = isGeneratingWeek
+    ? { done: Object.values(completedDays).filter(Boolean).length, total: 7 }
+    : { done: 0, total: 7 };
 
   return {
     generateWeeklyPlan,
     regenerateSingleDay,
     generateSingleRollingDay,
     isGenerating,
+    isGeneratingWeek,
+    isGeneratingAnyDay,
+    weekProgress,
     completedDays,
     progress,
     generatingDayKeys,
