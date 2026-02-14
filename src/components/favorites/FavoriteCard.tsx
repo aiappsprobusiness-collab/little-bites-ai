@@ -4,27 +4,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toFavoriteCardViewModel } from "./favoriteCardViewModel";
 import type { SavedFavorite } from "@/hooks/useFavorites";
+import { getRecipeAudience } from "@/utils/recipeAudience";
 
 interface FavoriteCardProps {
   favorite: SavedFavorite;
   onTap: () => void;
   onToggleFavorite: (e: React.MouseEvent) => void;
   index?: number;
-  /** Premium/trial: hint, subtle highlight, star. Free: clean, no hint. */
+  /** Premium/trial: subtle highlight, star. */
   isPremium?: boolean;
+  /** Family members for resolving recipe audience from recipe.member_id. */
+  members: Array<{ id: string; age_months?: number | null }>;
 }
 
-export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isPremium = false }: FavoriteCardProps) {
+export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isPremium = false, members }: FavoriteCardProps) {
   const vm = toFavoriteCardViewModel(favorite.recipe);
+  const audience = getRecipeAudience(favorite.recipe, members);
   const maxChips = 4;
   const chips = vm.ingredientNames.slice(0, maxChips);
   const extraCount = Math.max(0, vm.ingredientTotalCount - maxChips);
-  const hasHint = Boolean(vm.hint);
-  const hintText = hasHint
-    ? isPremium
-      ? vm.hint!
-      : (vm.hint!.length > 80 ? `${vm.hint!.slice(0, 80).trim()}…` : vm.hint!)
-    : null;
 
   return (
     <motion.div
@@ -66,12 +64,8 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
             <p className="text-typo-muted text-muted-foreground truncate mb-2">{vm.subtitle}</p>
           )}
 
-          {/* Meta row: 👶 child | 🕒 cook time | 🍽 meal type */}
+          {/* Meta row: 🕒 cook time | 🍽 meal type | audience chip */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-typo-caption text-muted-foreground mb-2">
-            <span className="flex items-center gap-1">
-              <span>👶</span>
-              <span>{vm.childLabel}</span>
-            </span>
             <span className="flex items-center gap-1">
               <span>🕒</span>
               <span>{vm.cookTimeLabel}</span>
@@ -82,6 +76,10 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
                 <span>{vm.mealTypeLabel}</span>
               </span>
             )}
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200/60 px-2 py-0.5 text-typo-caption font-medium text-slate-700">
+              {audience.showChildEmoji && <span>👶</span>}
+              <span>{audience.label}</span>
+            </span>
           </div>
 
           {/* Ingredients chips (max 4, names only) */}
@@ -101,13 +99,6 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
                 </span>
               )}
             </div>
-          )}
-
-          {/* Совет: Premium/триал — полный (до 2 строк); Free — мини (до 80 символов) */}
-          {hintText && (
-            <p className={`text-typo-caption text-muted-foreground italic leading-snug pt-1.5 ${isPremium ? "line-clamp-2" : ""}`}>
-              💡 {hintText}
-            </p>
           )}
         </CardContent>
       </Card>

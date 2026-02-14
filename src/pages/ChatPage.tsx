@@ -259,6 +259,7 @@ export default function ChatPage() {
           overrideSelectedMemberId: selectedMemberId,
           overrideSelectedMember: selectedMember,
           overrideMembers: members,
+          mealType: detectMealType(userMessage.content) || undefined,
           ...(attempts > 0 && {
             extraSystemSuffix:
               "Previous recipe was duplicated. Generate a DIFFERENT recipe now.",
@@ -303,6 +304,17 @@ export default function ChatPage() {
       // Рецепт из API показываем всегда; при провале валидации только не сохраняем
       const showRecipe = !!finalRecipe && (finalValidation.ok || hasRecipeFromApi);
 
+      if (import.meta.env.DEV && finalRecipe) {
+        const recipeFromApi = apiRecipes[0] as Record<string, unknown> | undefined;
+        console.log("[DEBUG recipe]", {
+          messageId: assistantMessageId,
+          recipeId: recipeFromApi?.id ?? (finalRecipe as { id?: string }).id,
+          recipeIdFromBackend: response?.recipe_id,
+          title: (finalRecipe as { title?: string }).title,
+          source: recipeFromApi?.source,
+        });
+      }
+
       if (!finalRecipe) {
         setMessages((prev) =>
           prev.map((m) =>
@@ -346,6 +358,9 @@ export default function ChatPage() {
             });
           }
           let recipeIdForHistory: string | null = response?.recipe_id ?? null;
+          if (import.meta.env.DEV) {
+            console.log("[DEBUG recipe id]", recipeIdForHistory);
+          }
           if (finalValidation.ok) {
             if (recipeIdForHistory) {
               lastSavedRecipeTitleRef.current = finalRecipe?.title ?? null;
@@ -366,6 +381,9 @@ export default function ChatPage() {
               if (savedRecipes?.length > 0) {
                 lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
                 recipeIdForHistory = savedRecipes[0]?.id ?? null;
+                if (import.meta.env.DEV) {
+                  console.log("[DEBUG recipe id]", recipeIdForHistory, "(from saveRecipesFromChat)");
+                }
                 if (recipeIdForHistory) {
                   setMessages((prev) =>
                     prev.map((m) =>
@@ -577,6 +595,7 @@ export default function ChatPage() {
                 onDelete={handleDeleteMessage}
                 memberId={selectedMember?.id}
                 memberName={selectedMember?.name}
+                ageMonths={selectedMember?.age_months ?? undefined}
                 onOpenArticle={setOpenArticleId}
               />
             ))}

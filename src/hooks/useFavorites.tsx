@@ -4,10 +4,11 @@ import { safeError } from "@/utils/safeLogger";
 import { useAuth } from './useAuth';
 import type { RecipeSuggestion } from '@/services/deepseek';
 
-/** Рецепт в БД: в recipe_data JSONB сохраняются child_id/child_name (контекст при добавлении из чата, ключи в БД не меняем). */
+/** Рецепт в БД: в recipe_data JSONB сохраняются child_id/child_name (контекст при добавлении из чата). member_id приходит из таблицы recipes для аудитории карточек. */
 export type StoredRecipe = RecipeSuggestion & {
   child_id?: string;
   child_name?: string;
+  member_id?: string | null;
   ingredientNames?: string[];
   ingredientTotalCount?: number;
 };
@@ -78,6 +79,12 @@ export function useFavorites() {
         });
       }
 
+      const { data: recipeMetaRows } = await supabase.from('recipes').select('id, member_id').in('id', recipeIds);
+      const memberIdByRecipeId = new Map<string, string | null>();
+      for (const row of (recipeMetaRows ?? []) as { id: string; member_id: string | null }[]) {
+        memberIdByRecipeId.set(row.id, row.member_id ?? null);
+      }
+
       return list.map((f) => {
         const preview = previewMap.get(f.recipe_id);
         const recipe: StoredRecipe = preview
@@ -91,8 +98,9 @@ export function useFavorites() {
             ageRange: '',
             ingredientNames: preview.ingredient_names,
             ingredientTotalCount: preview.ingredient_total_count,
+            member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined,
           }
-          : { id: f.recipe_id } as StoredRecipe;
+          : { id: f.recipe_id, member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined } as StoredRecipe;
         const data = f.recipe_data;
         if (data && typeof data === 'object' && !Array.isArray(data)) {
           if (typeof (data as { chefAdvice?: string }).chefAdvice === 'string') {

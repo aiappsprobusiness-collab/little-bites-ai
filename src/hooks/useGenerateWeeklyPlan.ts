@@ -30,6 +30,28 @@ const DAY_NAMES = [
 
 const MEAL_KEYS = ["breakfast", "lunch", "snack", "dinner"] as const;
 
+const IS_DEV = import.meta.env.DEV;
+
+/** Накопленный контекст недели для разнообразия (передаётся в каждый следующий single_day). */
+export interface WeekContextAccumulated {
+  chosenTitles: string[];
+  chosenBreakfastTitles: string[];
+  chosenBreakfastBases: string[];
+}
+
+/** Эвристика базы завтрака по названию/ингредиентам (без ML). */
+function classifyBreakfastBase(title: string, _ingredientsText?: string): string {
+  const t = (title || "").toLowerCase();
+  if (/овсян|oat/.test(t)) return "oatmeal";
+  if (/омлет|яичниц|яйц/.test(t)) return "eggs";
+  if (/творог|сырник|запеканк/.test(t)) return "cottage";
+  if (/йогурт|гранол/.test(t)) return "yogurt";
+  if (/бутер|тост|лаваш|сэндвич/.test(t)) return "sandwich";
+  if (/гречк|рис\s|рисов|пшен|пшён/.test(t)) return "grain";
+  if (/блин|оладь/.test(t)) return "pancakes";
+  return "other";
+}
+
 interface SingleDayMeal {
   name?: string;
   calories?: number;
@@ -75,8 +97,11 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       date: Date,
       dayName: string,
       token: string,
-      weekContext?: string
+      weekContext?: WeekContextAccumulated | string
     ): Promise<SingleDayResponse | null> => {
+      if (IS_DEV) {
+        console.log("[DEBUG] single_day request: type=single_day dayName=%s hasMemberId=%s (no pool query on client)", dayName, !!memberId);
+      }
       const res = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
         method: "POST",
         headers: {
@@ -88,7 +113,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           stream: false,
           dayName,
           memberData,
-          weekContext,
+          weekContext: weekContext ?? undefined,
           messages: [
             {
               role: "user",
@@ -117,6 +142,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       }
 
       const dateStr = date.toISOString().split("T")[0];
+      const generatedIds: string[] = [];
 
       for (const mealKey of MEAL_KEYS) {
         const meal = parsed[mealKey];
@@ -154,6 +180,14 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           is_completed: false,
           title: recipe.title,
         });
+        generatedIds.push(recipe.id);
+      }
+
+      if (IS_DEV) {
+        const selectedFromPoolCount = 0;
+        const generatedCount = generatedIds.length;
+        const idSuffixes = generatedIds.map((id) => id.slice(-6));
+        console.log("[DEBUG] single_day done: selectedFromPoolCount=%s generatedCount=%s recipeIds=[...%s] (source not set on client, DB default)", selectedFromPoolCount, generatedCount, idSuffixes.join(", "));
       }
 
       setCompletedDays((prev) => ({ ...prev, [dayIndex]: true }));
@@ -173,11 +207,36 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
     const token = session.access_token;
 
     try {
-      const results = await Promise.all(
-        weekDates.map((date, i) =>
-          generateSingleDay(i, date, DAY_NAMES[i], token)
-        )
-      );
+      if (IS_DEV) {
+        console.log("[DEBUG] generateWeeklyPlan: sequential generation (no pool); generating 7 days via AI.");
+      }
+      const accumulated: WeekContextAccumulated = {
+        chosenTitles: [],
+        chosenBreakfastTitles: [],
+        chosenBreakfastBases: [],
+      };
+      const results: (SingleDayResponse | null)[] = [];
+      for (let i = 0; i < 7; i++) {
+        const date = weekDates[i];
+        const dayName = DAY_NAMES[i];
+        const parsed = await generateSingleDay(i, date, dayName, token, accumulated);
+        results.push(parsed);
+        if (parsed) {
+          for (const mealKey of MEAL_KEYS) {
+            const meal = parsed[mealKey];
+            if (meal?.name) {
+              accumulated.chosenTitles.push(meal.name.trim());
+              if (mealKey === "breakfast") {
+                accumulated.chosenBreakfastTitles.push(meal.name.trim());
+                accumulated.chosenBreakfastBases.push(classifyBreakfastBase(meal.name));
+              }
+            }
+          }
+        }
+      }
+      if (IS_DEV) {
+        console.log("[DEBUG] total recipes for plan: up to 28 (all from AI, no pool); accumulated chosenTitles count:", accumulated.chosenTitles.length);
+      }
       queryClient.invalidateQueries({ queryKey: ["meal_plans_v2"] });
       queryClient.invalidateQueries({ queryKey: ["recipes"] });
       await queryClient.refetchQueries({ queryKey: ["meal_plans_v2"] });
@@ -215,27 +274,24 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
         }
         const { data: weekPlans } = await weekQuery;
 
-        const weekContextParts: string[] = [];
-        const byDate = new Map<string, string[]>();
+        const accumulated: WeekContextAccumulated = {
+          chosenTitles: [],
+          chosenBreakfastTitles: [],
+          chosenBreakfastBases: [],
+        };
         (weekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string }> }) => {
           if (!p.planned_date || p.planned_date === dateStr) return;
           const meals = p.meals ?? {};
-          const titles = (["breakfast", "lunch", "snack", "dinner"] as const)
-            .map((k) => meals[k]?.title)
-            .filter(Boolean) as string[];
-          if (titles.length === 0) return;
-          if (!byDate.has(p.planned_date)) byDate.set(p.planned_date, []);
-          byDate.get(p.planned_date)!.push(...titles);
+          (["breakfast", "lunch", "snack", "dinner"] as const).forEach((mealKey) => {
+            const title = meals[mealKey]?.title?.trim();
+            if (!title) return;
+            accumulated.chosenTitles.push(title);
+            if (mealKey === "breakfast") {
+              accumulated.chosenBreakfastTitles.push(title);
+              accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
+            }
+          });
         });
-        weekDates.forEach((d, i) => {
-          if (i === dayIndex) return;
-          const ds = d.toISOString().split("T")[0];
-          const titles = byDate.get(ds);
-          if (titles?.length) {
-            weekContextParts.push(`${DAY_ABBREV[i]} — ${titles.slice(0, 2).join(", ")}`);
-          }
-        });
-        const weekContext = weekContextParts.join(". ");
 
         let deleteQuery = supabase
           .from("meal_plans_v2")
@@ -249,7 +305,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
         }
         await deleteQuery;
 
-        await generateSingleDay(dayIndex, date, DAY_NAMES[dayIndex], session.access_token, weekContext);
+        await generateSingleDay(dayIndex, date, DAY_NAMES[dayIndex], session.access_token, accumulated);
 
         queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
         queryClient.refetchQueries({ queryKey: ["meal_plans_v2", user?.id] });

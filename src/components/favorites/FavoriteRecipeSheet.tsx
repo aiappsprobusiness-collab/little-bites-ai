@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ingredientDisplayLabel } from "@/types/recipe";
 import type { ParsedIngredient } from "@/utils/parseChatRecipes";
 import type { SavedFavorite } from "@/hooks/useFavorites";
+import { getRecipeAudience } from "@/utils/recipeAudience";
 
 const MEAL_LABELS: Record<string, string> = {
   breakfast: "Завтрак",
@@ -48,11 +49,14 @@ interface FavoriteRecipeSheetProps {
   onOpenChange: (open: boolean) => void;
   /** Premium/trial: show hint. Free: no hint. */
   isPremium?: boolean;
+  /** Family members for resolving recipe audience from recipe.member_id. */
+  members: Array<{ id: string; age_months?: number | null }>;
 }
 
-export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = false }: FavoriteRecipeSheetProps) {
+export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = false, members }: FavoriteRecipeSheetProps) {
   if (!favorite) return null;
 
+  const audience = getRecipeAudience(favorite.recipe, members);
   const recipe = favorite.recipe;
   const title = typeof recipe?.title === "string" ? recipe.title.trim() : "Рецепт";
   const description = typeof recipe?.description === "string" ? recipe.description.trim() : "";
@@ -62,10 +66,6 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
   const steps = normalizeSteps(recipe?.steps);
   const mealType = (recipe as { mealType?: string })?.mealType;
   const mealLabel = mealType && MEAL_LABELS[mealType] ? MEAL_LABELS[mealType] : null;
-  const chefAdvice = (recipe as { chefAdvice?: string })?.chefAdvice;
-  const advice = (recipe as { advice?: string })?.advice;
-  const hint = (typeof chefAdvice === "string" && chefAdvice.trim()) ? chefAdvice : (typeof advice === "string" && advice.trim()) ? advice : null;
-  const childName = typeof recipe?.child_name === "string" ? recipe.child_name.trim() : "";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -78,17 +78,18 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
         </SheetHeader>
         <ScrollArea className="h-[calc(85vh-80px)] pr-2">
           <div className="space-y-5 pb-6">
-            {/* Meta row */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-typo-muted text-muted-foreground">
-              {childName && (
-                <span>👶 {childName}</span>
-              )}
+            {/* Meta row: time | meal type | audience chip */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-typo-muted text-muted-foreground">
               {(Number.isFinite(numTime) && numTime != null) && (
                 <span>🕒 {numTime} мин</span>
               )}
               {mealLabel && (
                 <span>🍽 {mealLabel}</span>
               )}
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200/60 px-2 py-0.5 text-typo-caption font-medium text-slate-700">
+                {audience.showChildEmoji && <span>👶</span>}
+                <span>{audience.label}</span>
+              </span>
             </div>
 
             {/* Description */}
@@ -114,14 +115,6 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
                     );
                   })}
                 </ul>
-              </div>
-            )}
-
-            {/* Hint / Chef advice — Premium only */}
-            {isPremium && hint && (
-              <div className="rounded-xl p-4 bg-emerald-50/60 border border-emerald-100/80">
-                <p className="text-typo-caption font-medium text-emerald-800/90 mb-1">Совет от шефа</p>
-                <p className="text-typo-muted text-foreground leading-snug">{hint}</p>
               </div>
             )}
 

@@ -125,7 +125,7 @@ function applyPromptTemplate(
   memberData: MemberData | null | undefined,
   targetIsFamily: boolean,
   allMembers: MemberData[] = [],
-  options?: { weekContext?: string; userMessage?: string; generationContextBlock?: string }
+  options?: { weekContext?: string; varietyRules?: string; userMessage?: string; generationContextBlock?: string; mealType?: string; maxCookingTime?: number }
 ): string {
   // Семья: для ageMonths используем самого младшего члена; иначе — выбранный Member
   const youngestMember = targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : null;
@@ -161,8 +161,11 @@ function applyPromptTemplate(
   const ageCategory = getAgeCategory(rawMonths === 999 ? 0 : rawMonths);
   const ageRule = ageCategory in AGE_CONTEXTS ? AGE_CONTEXTS[ageCategory as keyof typeof AGE_CONTEXTS] : AGE_CONTEXTS.adult;
   const weekContext = options?.weekContext?.trim() || "";
+  const varietyRules = options?.varietyRules?.trim() || "";
   const userMessage = options?.userMessage?.trim() || "";
   const generationContextBlock = options?.generationContextBlock?.trim() || "";
+  const mealType = options?.mealType?.trim() || "";
+  const maxCookingTime = options?.maxCookingTime != null && Number.isFinite(options.maxCookingTime) ? String(options.maxCookingTime) : "";
 
   const ADULT_AGE_MONTHS = 336; // 28+ лет — взрослое меню
   let familyContext = `Профиль: ${name}`;
@@ -197,8 +200,11 @@ function applyPromptTemplate(
     .split("{{difficulty}}").join(difficultyText)
     .split("{{generationContextBlock}}").join(generationContextBlock)
     .split("{{weekContext}}").join(weekContext)
+    .split("{{varietyRules}}").join(varietyRules)
     .split("{{familyContext}}").join(familyContext)
-    .split("{{userMessage}}").join(userMessage);
+    .split("{{userMessage}}").join(userMessage)
+    .split("{{mealType}}").join(mealType)
+    .split("{{maxCookingTime}}").join(maxCookingTime);
 
   if (out.includes("{{")) {
     const replacers: [RegExp, string][] = [
@@ -213,8 +219,11 @@ function applyPromptTemplate(
       [/\{\{\s*difficulty\s*\}\}/g, difficultyText],
       [/\{\{\s*generationContextBlock\s*\}\}/g, generationContextBlock],
       [/\{\{\s*weekContext\s*\}\}/g, weekContext],
+      [/\{\{\s*varietyRules\s*\}\}/g, varietyRules],
       [/\{\{\s*familyContext\s*\}\}/g, familyContext],
       [/\{\{\s*userMessage\s*\}\}/g, userMessage],
+      [/\{\{\s*mealType\s*\}\}/g, mealType],
+      [/\{\{\s*maxCookingTime\s*\}\}/g, maxCookingTime],
     ];
     for (const [re, val] of replacers) out = out.replace(re, val);
     out = out.replace(/\{\{[^}]*\}\}/g, "не указано");
@@ -242,21 +251,28 @@ function getSystemPromptForType(
   allMembers: MemberData[] = [],
   weekContext?: string,
   userMessage?: string,
-  generationContextBlock?: string
+  generationContextBlock?: string,
+  mealType?: string,
+  maxCookingTime?: number,
+  varietyRules?: string
 ): string {
   const genBlockOpt = generationContextBlock?.trim() ? { generationContextBlock: generationContextBlock.trim() } : undefined;
+  const recipeOpts = {
+    ...genBlockOpt,
+    ...(mealType && { mealType: String(mealType).trim() }),
+    ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime: Number(maxCookingTime) }),
+  };
   if (type === "chat") {
-    return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers, genBlockOpt);
+    return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers, recipeOpts);
   }
   if (type === "recipe" || type === "diet_plan") {
     const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
-    return applyPromptTemplate(template, memberData, targetIsFamily, allMembers, genBlockOpt);
+    return applyPromptTemplate(template, memberData, targetIsFamily, allMembers, recipeOpts);
   }
   if (type === "single_day") {
-    const ctx = weekContext?.trim()
-      ? `Уже запланировано: ${weekContext.trim()}. Сделай этот день максимально непохожим на уже запланированные.`
-      : "";
-    return applyPromptTemplate(SINGLE_DAY_PLAN_TEMPLATE, memberData, targetIsFamily, allMembers, { weekContext: ctx, ...genBlockOpt });
+    const ctx = weekContext?.trim() || "Пока ничего не запланировано.";
+    const variety = varietyRules?.trim() || "Избегай повторов с уже запланированными блюдами; разнообразь базы завтраков.";
+    return applyPromptTemplate(SINGLE_DAY_PLAN_TEMPLATE, memberData, targetIsFamily, allMembers, { weekContext: ctx, varietyRules: variety, ...genBlockOpt });
   }
   if (type === "sos_consultant") {
     return applyPromptTemplate(SOS_PROMPT_TEMPLATE, memberData, false, allMembers, { userMessage: userMessage || "" });
@@ -284,7 +300,32 @@ interface ChatRequest {
   /** Optional suffix appended to system prompt (e.g. anti-duplicate hint) */
   extraSystemSuffix?: string;
   dayName?: string;
-  weekContext?: string;
+  /** string = legacy "Уже запланировано: ..."; object = накопленный контекст для VARIETY_RULES */
+  weekContext?: string | WeekContextPayload;
+}
+
+interface WeekContextPayload {
+  chosenTitles?: string[];
+  chosenBreakfastTitles?: string[];
+  chosenBreakfastBases?: string[];
+}
+
+/** Строит блок [VARIETY_RULES] для single_day из накопленного контекста недели. */
+function buildVarietyRules(w: WeekContextPayload): string {
+  const chosen = w.chosenTitles ?? [];
+  const breakfastTitles = w.chosenBreakfastTitles ?? [];
+  const bases = w.chosenBreakfastBases ?? [];
+  const lines: string[] = [];
+  if (chosen.length > 0) {
+    lines.push("- ЗАПРЕЩЕНО повторять точные названия блюд из списка уже запланированных: " + chosen.join(", ") + ".");
+  }
+  const hasOatmeal = breakfastTitles.some((t) => /овсян|oat/i.test(t)) || bases.includes("oatmeal");
+  if (hasOatmeal) {
+    lines.push("- Овсянка/каша овсяная уже есть на неделе. ЗАПРЕЩЕНО предлагать овсянку снова. Выбери другую базу завтрака: омлет/яйца, творог/сырники, йогурт/гранола, гречка/рис, бутерброд/тост/лаваш, запеканка, блинчики.");
+  }
+  lines.push("- Разнообразие завтраков: за неделю должно быть минимум 5 разных баз (яйца, творог, йогурт, крупы кроме овсянки, бутерброды, запеканка, блинчики). Не овсянка каждый день.");
+  lines.push("- Если не можешь выполнить ограничения — замени завтрак на другую базу из списка выше, а не повторяй уже использованные.");
+  return lines.join("\n");
 }
 
 serve(async (req) => {
@@ -407,10 +448,33 @@ serve(async (req) => {
       weekContext,
       generationContextBlock: reqGenerationContextBlock,
       extraSystemSuffix: reqExtraSystemSuffix,
+      mealType: reqMealType,
+      maxCookingTime: reqMaxCookingTime,
     } = body;
 
     const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
     const isRecipeRequestByType = recipeTypes.includes(type as (typeof recipeTypes)[number]);
+
+    let weekContextForPrompt = typeof weekContext === "string" ? (weekContext ?? "") : "";
+    let varietyRulesForPrompt = "";
+    if (type === "single_day") {
+      if (weekContext && typeof weekContext === "object" && !Array.isArray(weekContext)) {
+        const w = weekContext as WeekContextPayload;
+        weekContextForPrompt = w.chosenTitles?.length
+          ? "Уже запланировано на неделю: " + w.chosenTitles.join(", ") + ". Не повторяй эти блюда и названия."
+          : "Пока ничего не запланировано.";
+        varietyRulesForPrompt = buildVarietyRules(w);
+      } else if (typeof weekContext === "string" && weekContext.trim()) {
+        weekContextForPrompt = "Уже запланировано: " + weekContext.trim() + ". Сделай этот день максимально непохожим на уже запланированные.";
+      } else {
+        weekContextForPrompt = "Пока ничего не запланировано.";
+      }
+    }
+
+    const DEBUG = Deno.env.get("DEBUG") === "1" || Deno.env.get("DEBUG") === "true";
+    if (DEBUG && type === "single_day") {
+      safeLog("[DEBUG] single_day: no pool used; plan generated by AI only; recipes will be created on client. dayName:", dayName ?? "(none)", "memberId present:", !!memberId);
+    }
 
     // Нормализация: фронт может присылать ageMonths (camelCase), без age_months
     const memberDataNorm = normalizeMemberData(memberDataRaw);
@@ -557,7 +621,7 @@ serve(async (req) => {
     const promptUserMessage = (type === "sos_consultant" || type === "balance_check") ? userMessage : undefined;
     const cached = getCachedSystemPrompt(type, memberDataForPrompt, isPremiumUser);
     let systemPrompt =
-      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContext, promptUserMessage, reqGenerationContextBlock);
+      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContextForPrompt, promptUserMessage, reqGenerationContextBlock, reqMealType, reqMaxCookingTime, varietyRulesForPrompt);
 
     // Только если рецепт не запрашиваем — даём краткий ответ без рецепта (для soft теперь рецепт генерируем)
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft" && !isRecipeRequest) {
@@ -608,9 +672,12 @@ serve(async (req) => {
       const promptConfig = {
         maxTokens: isRecipeRequest ? 1500 : maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
       };
+      const messagesForPayload = isRecipeRequest
+        ? [{ role: "user" as const, content: userMessage }]
+        : messages;
       const payload = {
         model: "deepseek-chat",
-        messages: [{ role: "system", content: currentSystemPrompt }, ...messages],
+        messages: [{ role: "system", content: currentSystemPrompt }, ...messagesForPayload],
         stream: isRecipeRequest || type === "sos_consultant" || type === "balance_check" ? false : reqStream,
         max_tokens: promptConfig.maxTokens,
         temperature: isRecipeRequest ? 0.4 : 0.7,
@@ -690,6 +757,10 @@ serve(async (req) => {
           JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
+      }
+
+      if (DEBUG && type === "single_day") {
+        safeLog("[DEBUG] single_day: response length:", assistantMessage.length, "recipes created on client only (no server insert); total recipes for plan = 4 per day × 7 days (client-side).");
       }
 
       if (isRecipeJsonRequest) {
@@ -814,6 +885,10 @@ serve(async (req) => {
           .single();
         if (recipeErr) throw recipeErr;
         savedRecipeId = insertedRecipe?.id ?? null;
+        if (DEBUG && savedRecipeId) {
+          const idSuffix = savedRecipeId.slice(-6);
+          safeLog("[DEBUG] saved recipe source=chat_ai id=...", idSuffix);
+        }
         if (savedRecipeId) {
           if (validatedRecipe.ingredients?.length) {
             const ingredientsRows = validatedRecipe.ingredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {

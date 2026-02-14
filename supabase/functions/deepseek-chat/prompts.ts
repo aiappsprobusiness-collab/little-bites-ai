@@ -59,6 +59,32 @@ export const SAFETY_RULES = `
 - СТИЛЬ: Экспертный нутрициолог. Без лишних слов.
 `;
 
+/** Strict JSON contract for single-recipe chat response. */
+export const RECIPE_STRICT_JSON_CONTRACT = `
+Return ONLY valid JSON. No markdown, no text before or after, no explanation, no comments.
+
+{
+  "title": string,
+  "description": string (max 200 chars),
+  "ingredients": [
+    { "name": string, "amount": string (e.g. "150 g", "1 tbsp") }
+  ],
+  "steps": string[] (max 7 short steps),
+  "cookingTime": number,
+  "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "chefAdvice": string (max 300 chars, no age breakdown unless multiple members explicitly provided)
+}
+`;
+
+/** Output rules for recipe: one member → no other family; no reasoning; no markdown; no extra text. */
+export const RECIPE_OUTPUT_RULES = `
+- If only one member provided → DO NOT mention other family members.
+- Do not explain reasoning.
+- No markdown.
+- No extra text.
+- No comments.
+`;
+
 /** v2: Обязательное разнообразие и правила приёмов пищи (планы на день/неделю). */
 export const VARIETY_AND_MEALS_RULES = `
 ### ОБЯЗАТЕЛЬНОЕ РАЗНООБРАЗИЕ
@@ -78,7 +104,7 @@ export const AGE_CONTEXTS = {
 };
 
 /**
- * // v2: Шаблон для FREE пользователей. Возвращать ТОЛЬКО валидный JSON.
+ * // v2: Шаблон для FREE пользователей. Контекст — только member(s), allergies, preferences, mealType, maxCookingTime.
  */
 export const FREE_RECIPE_TEMPLATE = `
 ${STRICT_RULES}
@@ -87,33 +113,22 @@ ${SAFETY_RULES}
 [ROLE]
 Ты — ИИ Mom Recipes (Free). Выдай 1 рецепт.
 
-[CONTEXT]
-ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
-Предпочтения: {{preferences}}. Сложность: {{difficulty}}.
-{{generationContextBlock}}
+[CONTEXT — передаётся только это]
+Профиль: {{target_profile}}. {{ageRule}} Возраст (мес): {{ageMonths}}.
+{{familyContext}}
+Аллергии: {{allergies}}
+Предпочтения: {{preferences}}
+Тип приёма пищи: {{mealType}}
+Макс. время готовки (мин): {{maxCookingTime}}
 
 [ЗАПРЕЩЕНО В ТЕКСТЕ]
-Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом (например "для детей 12–36 месяцев") или не писать вовсе.
+Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
 
 [RECIPE TASK]
-Return ONLY valid json. Output must be a single valid JSON object — no markdown, no text before or after, no explanation.
-Example shape: {"title":"...","description":"...","cookingTimeMinutes":30,"ingredients":[{"name":"...","displayText":"...","canonical":null}],"steps":["...","...","...","..."],"advice":null,"chefAdvice":null}
-Схема:
-{
-  "title": "string",
-  "description": "string — 1–2 предложения о пользе",
-  "cookingTimeMinutes": number,
-  "ingredients": [
-    { "name": "string", "displayText": "string — обязательно с количеством", "canonical": { "amount": number, "unit": "g" или "ml" } или null }
-  ],
-  "steps": ["шаг 1", "шаг 2", ...] — минимум 4 шага,
-  "advice": "string или null",
-  "chefAdvice": null
-}
+${RECIPE_STRICT_JSON_CONTRACT}
+${RECIPE_OUTPUT_RULES}
 
-ИНГРЕДИЕНТЫ: displayText ВСЕГДА с количеством. canonical — ТОЛЬКО где уместно г/мл: молоко, вода, крупы, масла, мясо, рыба, йогурт → canonical. Яблоко, банан, морковь, лук в шт/половина → canonical = null. Не переводить фрукты/овощи в граммы.
-
-ШАГИ: минимум 4. Добавить детские уточнения: мягкая текстура, без соли/сахара для маленьких, при необходимости "измельчить блендером". Шаги полезные, не "смешать и приготовить".
+ИНГРЕДИЕНТЫ: amount — строка с количеством (e.g. "150 g", "1 tbsp"). ШАГИ: максимум 7 коротких шагов. chefAdvice: макс. 300 символов; без разбивки по возрастам, если передан один член семьи.
 `;
 
 /**
@@ -125,7 +140,7 @@ export const FAMILY_RECIPE_INSTRUCTION = `
 `;
 
 /**
- * // v2: Шаблон для PREMIUM пользователей. Возвращать ТОЛЬКО валидный JSON.
+ * // v2: Шаблон для PREMIUM пользователей. Контекст — только member(s), allergies, preferences, mealType, maxCookingTime.
  */
 export const PREMIUM_RECIPE_TEMPLATE = `
 ${STRICT_RULES}
@@ -134,40 +149,27 @@ ${SAFETY_RULES}
 [ROLE]
 Ты — Шеф-нутрициолог Mom Recipes (Premium).
 
-[CONTEXT]
-ВОЗРАСТ (месяцев): {{ageMonths}}. {{ageRule}}
+[CONTEXT — передаётся только это]
+Профиль: {{target_profile}}. {{ageRule}} Возраст (мес): {{ageMonths}}.
 {{familyContext}}
-Предпочтения: {{preferences}}. Сложность: {{difficulty}}.
-{{generationContextBlock}}
+Аллергии: {{allergies}}
+Предпочтения: {{preferences}}
+Тип приёма пищи: {{mealType}}
+Макс. время готовки (мин): {{maxCookingTime}}
 
 [ЗАПРЕЩЕНО В ТЕКСТЕ]
 Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
 
 [RECIPE TASK]
-Return ONLY valid json. Output must be a single valid JSON object — no markdown, no text before or after, no explanation.
-Example shape: {"title":"...","description":"...","cookingTimeMinutes":30,"mealType":"lunch","ingredients":[{"name":"...","displayText":"...","canonical":null,"substitute":"..."}],"steps":["...","...","...","..."],"advice":"...","chefAdvice":"..."}
-ОБЯЗАТЕЛЬНО: advice и chefAdvice — заполняй. mealType — breakfast|lunch|snack|dinner.
-Схема:
-{
-  "title": "string",
-  "description": "string — 1–2 предложения о пользе",
-  "cookingTimeMinutes": number,
-  "mealType": "breakfast",
-  "ingredients": [
-    { "name": "string", "displayText": "string — обязательно с количеством", "canonical": { "amount": number, "unit": "g" или "ml" } или null, "substitute": "string — на что заменить" }
-  ],
-  "steps": ["шаг 1", ...] — 4–7 шагов,
-  "advice": "string",
-  "chefAdvice": "string — расширенный совет от шефа"
-}
+${RECIPE_STRICT_JSON_CONTRACT}
+${RECIPE_OUTPUT_RULES}
 
-ИНГРЕДИЕНТЫ: displayText ВСЕГДА с количеством. canonical — ТОЛЬКО где уместно г/мл. Фрукты/овощи в шт/половина → canonical = null.
-
-ШАГИ: 4–7 штук. Детские уточнения: мягкая текстура, без соли/сахара, "измельчить блендером" при необходимости.
+ИНГРЕДИЕНТЫ: amount — строка с количеством (e.g. "150 g", "1 tbsp"). ШАГИ: максимум 7 коротких шагов. chefAdvice: макс. 300 символов; без разбивки по возрастам, если передан один член семьи.
 `;
 
 /**
  * // v2: Шаблон ПЛАНА НА ДЕНЬ. Порядок: STRICT_RULES → SAFETY_RULES → ROLE → TASK.
+ * {{weekContext}} — уже запланированные блюда (кратко). {{varietyRules}} — строгие правила разнообразия по контексту недели.
  */
 export const SINGLE_DAY_PLAN_TEMPLATE = `
 ${STRICT_RULES}
@@ -176,6 +178,12 @@ ${VARIETY_AND_MEALS_RULES}
 {{ageRule}}
 
 Диетолог Mom Recipes. План на день ({{ageMonths}} мес).
+
+[УЖЕ ЗАПЛАНИРОВАНО НА НЕДЕЛЮ]
+{{weekContext}}
+
+[VARIETY_RULES — ОБЯЗАТЕЛЬНО]
+{{varietyRules}}
 
 ОТВЕЧАЙ СТРОГО JSON. Не пиши текст вне JSON.
 {

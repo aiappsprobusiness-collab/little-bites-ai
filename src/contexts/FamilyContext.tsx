@@ -1,6 +1,32 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import { useMembers } from "@/hooks/useMembers";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
+
+const SELECTED_MEMBER_ID_KEY = "selectedMemberId";
+
+function readStoredMemberId(): string | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const s = localStorage.getItem(SELECTED_MEMBER_ID_KEY);
+    if (s === "family" || (typeof s === "string" && s.length > 0)) return s;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredMemberId(id: string | null): void {
+  try {
+    if (typeof window === "undefined") return;
+    if (id == null || id === "") {
+      localStorage.removeItem(SELECTED_MEMBER_ID_KEY);
+    } else {
+      localStorage.setItem(SELECTED_MEMBER_ID_KEY, id);
+    }
+  } catch {
+    // ignore (SSR / private mode / quota)
+  }
+}
 
 export interface FamilyContextType {
   selectedMemberId: string | null;
@@ -15,19 +41,48 @@ const FamilyContext = createContext<FamilyContextType | undefined>(undefined);
 
 export function FamilyProvider({ children }: { children: ReactNode }) {
   const { members, isLoading, formatAge } = useMembers();
-  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
+  const [selectedMemberId, setSelectedMemberIdState] = useState<string | null>(() => readStoredMemberId());
+  const restoredRef = useRef(false);
+
+  const setSelectedMemberId = useCallback((id: string | null) => {
+    setSelectedMemberIdState(id);
+    writeStoredMemberId(id);
+  }, []);
 
   const existingIds = new Set(members.map((m) => m.id));
 
+  // Restore from localStorage when members become available (e.g. after reload)
+  useEffect(() => {
+    if (isLoading || members.length === 0) return;
+    const ids = new Set(members.map((m) => m.id));
+    const stored = readStoredMemberId();
+    if (stored === null) {
+      if (!selectedMemberId) setSelectedMemberIdState(members[0].id);
+      restoredRef.current = true;
+      return;
+    }
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    if (stored === "family") {
+      setSelectedMemberIdState("family");
+      return;
+    }
+    if (ids.has(stored)) {
+      setSelectedMemberIdState(stored);
+      return;
+    }
+    setSelectedMemberIdState(members[0].id);
+  }, [isLoading, members, selectedMemberId]);
+
   useEffect(() => {
     if (members.length > 0 && !selectedMemberId) {
-      setSelectedMemberId(members[0].id);
+      setSelectedMemberIdState(members[0].id);
     }
     if (selectedMemberId && selectedMemberId !== "family" && !existingIds.has(selectedMemberId)) {
-      setSelectedMemberId(members.length > 0 ? members[0].id : null);
+      setSelectedMemberIdState(members.length > 0 ? members[0].id : null);
     }
     if (members.length === 0 && selectedMemberId && selectedMemberId !== "family") {
-      setSelectedMemberId(null);
+      setSelectedMemberIdState(null);
     }
   }, [members, selectedMemberId]);
 

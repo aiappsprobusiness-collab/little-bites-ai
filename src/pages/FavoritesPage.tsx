@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
+import { useFamily } from "@/contexts/FamilyContext";
 import { FavoriteCard } from "@/components/favorites/FavoriteCard";
 import type { SavedFavorite } from "@/hooks/useFavorites";
 import { safeError } from "@/utils/safeLogger";
@@ -19,6 +20,7 @@ function getRecipeId(favorite: SavedFavorite): string | null {
 export default function FavoritesPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { members } = useFamily();
   const { hasAccess } = useSubscription();
   const { favorites, removeFavorite } = useFavorites();
 
@@ -83,6 +85,7 @@ export default function FavoritesPage() {
                 favorite={favorite}
                 index={index}
                 isPremium={hasAccess}
+                members={members}
                 onTap={() => handleCardTap(favorite)}
                 onToggleFavorite={(e) => handleRemove(e, favorite.id)}
               />

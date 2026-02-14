@@ -85,6 +85,8 @@ export function useDeepSeekAPI() {
       overrideMembers,
       onChunk,
       extraSystemSuffix,
+      mealType,
+      maxCookingTime,
     }: {
       messages: ChatMessage[];
       type?: 'chat' | 'recipe' | 'diet_plan';
@@ -94,6 +96,10 @@ export function useDeepSeekAPI() {
       onChunk?: (chunk: string) => void;
       /** Optional suffix for system prompt (e.g. anti-duplicate hint). */
       extraSystemSuffix?: string;
+      /** Optional meal type for recipe prompt (breakfast | lunch | dinner | snack). */
+      mealType?: string;
+      /** Optional max cooking time in minutes. */
+      maxCookingTime?: number;
     }) => {
       if (!canGenerate) {
         throw new Error('usage_limit_exceeded');
@@ -172,6 +178,8 @@ export function useDeepSeekAPI() {
             ...((activeProfileId === 'family' || targetIsFamily) && allMembers.length > 0 && { allMembers }),
             ...(generationContextBlock && { generationContextBlock }),
             ...(extraSystemSuffix && extraSystemSuffix.trim() && { extraSystemSuffix: extraSystemSuffix.trim() }),
+            ...(mealType && { mealType }),
+            ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime }),
           }),
         });
       } catch (err) {

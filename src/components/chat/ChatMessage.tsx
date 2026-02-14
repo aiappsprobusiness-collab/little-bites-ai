@@ -19,6 +19,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
 import { safeError } from "@/utils/safeLogger";
+import { getBenefitLabel } from "@/utils/ageCategory";
 
 const UUID_REGEX = /\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
 
@@ -55,6 +56,8 @@ interface ChatMessageProps {
   /** Контекст члена семьи для сохранения в избранное */
   memberId?: string;
   memberName?: string;
+  /** Возраст выбранного члена (мес.) для подписи «Польза»: ребёнок / взрослый / нейтрально */
+  ageMonths?: number | null;
   /** При клике на ссылку «Читать статью» в ответе ИИ (база знаний) */
   onOpenArticle?: (articleId: string) => void;
   /** Уже распарсенный рецепт (из parseRecipesFromChat), чтобы не показывать «Данные повреждены» при расхождении парсеров */
@@ -128,7 +131,7 @@ function isValidRecipeId(v: string): boolean {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, onOpenArticle }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const { user } = useAuth();
@@ -161,11 +164,16 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       role === "assistant" && onOpenArticle ? injectArticleLinks(displayContent) : displayContent;
 
     const recipeId = recipeIdProp ?? localRecipeId;
-    const favoriteEntry = effectiveRecipe
-      ? favorites.find((f) => f.recipe.title?.toLowerCase().trim() === effectiveRecipe.title?.toLowerCase().trim())
-      : null;
     const isFavorite =
-      (recipeId && isValidRecipeId(recipeId) && favoriteRecipeIds.has(recipeId)) || !!favoriteEntry;
+      !!(recipeId && isValidRecipeId(recipeId) && favoriteRecipeIds.has(recipeId));
+
+    if (import.meta.env.DEV && effectiveRecipe) {
+      console.log("[DEBUG render]", {
+        keyUsed: id,
+        recipeId: recipeId ?? undefined,
+        likedComputed: isFavorite,
+      });
+    }
 
     const handleToggleFavorite = async () => {
       if (!effectiveRecipe) return;
@@ -173,8 +181,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         try {
           if (recipeId && isValidRecipeId(recipeId)) {
             await toggleFavorite({ id: recipeId, isFavorite: false });
-          } else if (favoriteEntry) {
-            await removeFavorite(favoriteEntry.id);
           }
           toast({ title: "Удалено из избранного" });
         } catch (e: unknown) {
@@ -332,8 +338,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 <h3 className="text-typo-body sm:text-typo-title font-semibold leading-snug text-[#2D3436] mb-1 sm:mb-1.5 line-clamp-2">{effectiveRecipe.title}</h3>
                 {effectiveRecipe.description && (
                   <div className="mb-3 sm:mb-4">
-                    <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-0.5 sm:mb-1">Польза для ребёнка</p>
-                    <p className="text-typo-caption sm:text-typo-muted text-muted-foreground leading-relaxed line-clamp-2">{effectiveRecipe.description}</p>
+                    <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-0.5 sm:mb-1">{getBenefitLabel(ageMonths)}</p>
+                    <p className="text-typo-caption sm:text-typo-muted text-muted-foreground leading-relaxed whitespace-normal break-words">{effectiveRecipe.description}</p>
                   </div>
                 )}
                 <div className="mb-3 sm:mb-4">

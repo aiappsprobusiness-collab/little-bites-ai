@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { ingredientDisplayLabel } from "@/types/recipe";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
+import { useFamily } from "@/contexts/FamilyContext";
+import { getBenefitLabel } from "@/utils/ageCategory";
 
 function formatAge(ageMonths: number | null | undefined): string {
   if (ageMonths == null) return "";
@@ -47,6 +49,7 @@ export default function RecipePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const { selectedMember } = useFamily();
   const { getRecipeById } = useRecipes();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
   const fromMealPlan = (location.state as { fromMealPlan?: boolean; mealTypeLabel?: string } | null)?.fromMealPlan;
@@ -87,12 +90,14 @@ export default function RecipePage() {
     description?: string;
     steps?: { instruction?: string; step_number?: number }[];
     chefAdvice?: string;
+    advice?: string | null;
     cooking_time_minutes?: number | null;
     min_age_months?: number | null;
   };
   const displayIngredients = getDisplayIngredients(recipeDisplay);
   const steps = recipeDisplay.steps ?? [];
-  const chefAdvice = recipeDisplay.chefAdvice;
+  const chefAdvice = recipeDisplay.chefAdvice ?? (recipeDisplay as { chef_advice?: string | null }).chef_advice;
+  const advice = recipeDisplay.advice ?? (recipeDisplay as { advice?: string | null }).advice;
   const cookingTime = recipeDisplay.cooking_time_minutes;
   const minAgeMonths = recipeDisplay.min_age_months;
   const description = recipeDisplay.description;
@@ -130,10 +135,9 @@ export default function RecipePage() {
             </h1>
           </section>
 
-          {/* Польза для ребёнка */}
           {description && description.trim() !== "" && (
             <section className="mb-3 sm:mb-4">
-              <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-0.5 sm:mb-1">Польза для ребёнка</p>
+              <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-0.5 sm:mb-1">{getBenefitLabel(selectedMember?.age_months ?? undefined)}</p>
               <p className="text-typo-caption sm:text-typo-muted text-muted-foreground leading-relaxed">{description.trim()}</p>
             </section>
           )}
@@ -167,6 +171,25 @@ export default function RecipePage() {
               </div>
             </section>
           )}
+
+          {/* Совет: только один блок — chefAdvice или advice (после Ингредиенты, перед Приготовлением) */}
+          {chefAdvice?.trim() ? (
+            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start">
+              <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
+              <div className="min-w-0">
+                <p className="text-typo-caption font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
+                <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{chefAdvice.trim()}</p>
+              </div>
+            </div>
+          ) : advice?.trim() ? (
+            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-slate-50/80 border border-slate-200/60 flex gap-2 sm:gap-3 items-start">
+              <span className="text-typo-title shrink-0" aria-hidden>💡</span>
+              <div className="min-w-0">
+                <p className="text-typo-caption font-medium text-slate-600 mb-0.5">Мини-совет</p>
+                <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{advice.trim()}</p>
+              </div>
+            </div>
+          ) : null}
 
           <IngredientSubstituteSheet
             open={!!substituteSheet?.open}
@@ -204,17 +227,6 @@ export default function RecipePage() {
                 })}
               </div>
             </section>
-          )}
-
-          {/* Совет от шефа — блок как в чате */}
-          {chefAdvice && (
-            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start">
-              <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
-              <div className="min-w-0">
-                <p className="text-typo-caption font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
-                <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{chefAdvice}</p>
-              </div>
-            </div>
           )}
         </div>
       </div>
