@@ -205,6 +205,11 @@ export default function MealPlanPage() {
     if (selectedMemberId === "family" || !selectedMemberId) return "Семья";
     return members.find((c) => c.id === selectedMemberId)?.name ?? "Семья";
   }, [selectedMemberId, members]);
+
+  const showGuardToast = useCallback(() => {
+    toast({ title: "Подождите окончания генерации", description: "Не закрывайте и не обновляйте страницу." });
+  }, [toast]);
+
   useEffect(() => {
     if (!isAnyGenerating) return;
     const t = setInterval(() => {
@@ -442,10 +447,6 @@ export default function MealPlanPage() {
       </MobileLayout>
     );
   }
-
-  const showGuardToast = useCallback(() => {
-    toast({ title: "Подождите окончания генерации", description: "Не закрывайте и не обновляйте страницу." });
-  }, [toast]);
 
   return (
     <MobileLayout
