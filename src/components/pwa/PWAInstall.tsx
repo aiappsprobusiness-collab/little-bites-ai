@@ -36,7 +36,7 @@ export function PWAInstall() {
               className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
               onClick={() => {
                 promptInstall();
-                dismissModal();
+                dismissModal({ skipIncrement: true });
               }}
             >
               <Download className="mr-2 h-4 w-4" />

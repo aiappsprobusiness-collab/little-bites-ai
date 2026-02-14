@@ -22,6 +22,7 @@ if (typeof window !== "undefined") {
     e.preventDefault();
     const ev = e as BeforeInstallPromptEvent;
     window.__beforeInstallPromptEvent = ev;
+    window.dispatchEvent(new CustomEvent("a2hs-prompt-available", { detail: ev }));
     window.__promptPWAInstall = async () => {
       if (!window.__beforeInstallPromptEvent) return;
       await window.__beforeInstallPromptEvent.prompt();

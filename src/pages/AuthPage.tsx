@@ -9,9 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { useA2HSInstall } from "@/hooks/useA2HSInstall";
+import { Eye, EyeOff, Loader2, Download } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
@@ -40,10 +42,17 @@ const VALUE_CARDS = [
   { icon: "🆘", title: "Помощь 24/7", text: "Ответы, когда ребёнку тревожно или плохо" },
 ];
 
+function isIOS(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator as { platform?: string }).platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const { signIn, signUp } = useAuth();
+  const { promptInstall, isInstalled, hasA2HSSupport } = useA2HSInstall();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -113,6 +122,31 @@ export default function AuthPage() {
             От первого прикорма до семейных ужинов без стресса
           </p>
         </motion.div>
+
+        {/* Кнопка "Установить" — только на мобильных */}
+        {!isInstalled && hasA2HSSupport && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.08 }}
+            className="md:hidden w-full flex justify-center mb-3"
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground text-sm gap-2"
+              onClick={async () => {
+                const result = await promptInstall();
+                if (result === "no-prompt") {
+                  setShowInstallInstructions(true);
+                }
+              }}
+            >
+              <Download className="w-4 h-4" />
+              Установить приложение
+            </Button>
+          </motion.div>
+        )}
 
         {/* Карточки ценностей — мини-карточки с иконкой сверху */}
         <motion.div
@@ -306,6 +340,27 @@ export default function AuthPage() {
           </Card>
         </motion.div>
       </div>
+
+      <Dialog open={showInstallInstructions} onOpenChange={setShowInstallInstructions}>
+        <DialogContent className="sm:max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-center">Как установить приложение</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-muted-foreground">
+            {isIOS() ? (
+              <>
+                <p className="font-medium text-foreground">iPhone / iPad (Safari):</p>
+                <p>Нажмите <strong>«Поделиться»</strong> (иконка квадрата со стрелкой) → <strong>«На экран „Домой“»</strong></p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium text-foreground">Android (Chrome):</p>
+                <p>Нажмите <strong>«⋮»</strong> (три точки) в меню браузера → <strong>«Установить приложение»</strong></p>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
