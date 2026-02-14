@@ -34,6 +34,12 @@ export function isIngredientObject(ing: ParsedIngredient): ing is IngredientWith
   return typeof ing === 'object' && ing !== null && 'name' in ing && typeof (ing as IngredientWithSubstitute).name === 'string';
 }
 
+/** Извлекает chefAdvice из объекта, проверяя все возможные ключи (chefAdvice, chef_advice, chefAdviceText). */
+function extractChefAdvice(obj: Record<string, unknown>): string | undefined {
+  const val = obj.chefAdvice ?? obj.chef_advice ?? obj.chefAdviceText;
+  return typeof val === "string" && val.trim() ? val.trim() : undefined;
+}
+
 /** Текст ингредиента для отображения. Приоритет: display_text > "name — amount" > name. */
 export function ingredientDisplayText(ing: ParsedIngredient | { name?: string; display_text?: string | null; amount?: string }): string {
   if (typeof ing === 'string') return ing;
@@ -252,22 +258,31 @@ function parseRecipeFromFormattedText(text: string): ParsedRecipe | null {
   }
 
   const steps: string[] = [];
-  const stepsSection = trimmed.match(/(?:👨‍🍳\s*)?\*\*Приготовление:\*\*\s*\n([\s\S]*)$/i);
+  // Шаги до блока "Совет от шефа" или "Мини-совет" (если есть)
+  const stepsSection = trimmed.match(/(?:👨‍🍳\s*)?\*\*Приготовление:\*\*\s*\n([\s\S]*?)(?=\n\n(?:👨‍🍳\s*)?\*\*Совет от шефа:|\n\n\*\*Мини-совет:|$)/i) ?? trimmed.match(/(?:👨‍🍳\s*)?\*\*Приготовление:\*\*\s*\n([\s\S]*)$/i);
   if (stepsSection?.[1]) {
     stepsSection[1]
       .trim()
       .split(/\n/)
       .forEach((line) => {
         const cleaned = line.replace(/^\d+\.\s*/, "").trim();
-        if (cleaned) steps.push(cleaned);
+        if (cleaned && !cleaned.includes("Совет от шефа") && !cleaned.includes("Мини-совет")) steps.push(cleaned);
       });
   }
+
+  // Совет от шефа (формат: 👨‍🍳 **Совет от шефа:** текст)
+  const chefAdviceMatch = trimmed.match(/\*\*Совет от шефа:\*\*\s*\n([\s\S]*?)(?=\n\n|\*\*Мини-совет|\*\*Приготовление|$)/i);
+  const chefAdvice = chefAdviceMatch?.[1]?.trim();
+  const adviceMatch = trimmed.match(/\*\*Мини-совет:\*\*\s*\n([\s\S]*?)(?=\n\n|$)/i);
+  const advice = adviceMatch?.[1]?.trim();
 
   return {
     title,
     ingredients: ingredients.length ? ingredients : [],
     steps: steps.length ? steps : [],
     cookingTime,
+    ...(chefAdvice && { chefAdvice }),
+    ...(advice && { advice }),
   };
 }
 
@@ -422,7 +437,7 @@ export function parseRecipesFromApiResponse(
       steps,
       cookingTime: typeof r.cookingTimeMinutes === "number" ? r.cookingTimeMinutes : (r.cookingTime as number) ?? (r.cooking_time as number),
       mealType: r.mealType as ParsedRecipe["mealType"],
-      chefAdvice: typeof r.chefAdvice === "string" ? r.chefAdvice : undefined,
+      chefAdvice: extractChefAdvice(r as Record<string, unknown>),
       advice: typeof r.advice === "string" ? r.advice : undefined,
     };
   });
@@ -658,7 +673,7 @@ export function parseRecipesFromChat(
               steps,
               cookingTime: parsed.cookingTimeMinutes ?? parsed.cookingTime ?? parsed.cooking_time ?? parsed.time,
               mealType,
-              chefAdvice: typeof parsed.chefAdvice === 'string' ? parsed.chefAdvice : undefined,
+              chefAdvice: extractChefAdvice(parsed as Record<string, unknown>),
               advice: typeof parsed.advice === 'string' ? parsed.advice : undefined,
             });
           }
@@ -697,7 +712,7 @@ export function parseRecipesFromChat(
                 steps,
                 cookingTime: recipe.cookingTimeMinutes ?? recipe.cookingTime ?? recipe.cooking_time ?? recipe.time,
                 mealType: recipe.mealType || mealType,
-                chefAdvice: typeof recipe.chefAdvice === 'string' ? recipe.chefAdvice : undefined,
+                chefAdvice: extractChefAdvice(recipe as Record<string, unknown>),
                 advice: typeof recipe.advice === 'string' ? recipe.advice : undefined,
               });
             }

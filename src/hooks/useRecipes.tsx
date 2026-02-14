@@ -218,9 +218,11 @@ export function useRecipes(childId?: string) {
       } as Record<string, unknown>) as Record<string, unknown>;
 
       const stepsPadded =
-        steps.length >= MIN_STEPS
+        source === 'week_ai'
           ? steps
-          : [...steps, ...Array.from({ length: MIN_STEPS - steps.length }, (_, i) => ({ instruction: `Шаг ${steps.length + i + 1}`, step_number: steps.length + i + 1 }))];
+          : steps.length >= MIN_STEPS
+            ? steps
+            : [...steps, ...Array.from({ length: MIN_STEPS - steps.length }, (_, i) => ({ instruction: `Шаг ${steps.length + i + 1}`, step_number: steps.length + i + 1 }))];
       const ingredientsPadded =
         ingredients.length >= MIN_INGREDIENTS
           ? ingredients

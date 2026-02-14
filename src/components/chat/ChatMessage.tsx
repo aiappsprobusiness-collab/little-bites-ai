@@ -168,10 +168,17 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       !!(recipeId && isValidRecipeId(recipeId) && favoriteRecipeIds.has(recipeId));
 
     if (import.meta.env.DEV && effectiveRecipe) {
+      const hasChefAdvice = !!(effectiveRecipe.chefAdvice && effectiveRecipe.chefAdvice.trim());
       console.log("[DEBUG render]", {
         keyUsed: id,
         recipeId: recipeId ?? undefined,
         likedComputed: isFavorite,
+        isPremium,
+        isTrial,
+        showChefTip,
+        hasChefAdvice,
+        chefAdviceLen: effectiveRecipe.chefAdvice?.length ?? 0,
+        recipeKeys: Object.keys(effectiveRecipe),
       });
     }
 

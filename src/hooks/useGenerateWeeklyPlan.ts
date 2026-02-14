@@ -33,6 +33,8 @@ const DAY_NAMES = [
 const MEAL_KEYS = ["breakfast", "lunch", "snack", "dinner"] as const;
 
 const IS_DEV = import.meta.env.DEV;
+/** Последовательная генерация дней (внутри батча): каждый день видит контекст предыдущих, меньше дублей. В DEV — вкл., в prod можно включить через VITE_SEQUENTIAL_WEEK_PLAN. */
+const USE_SEQUENTIAL_WEEK_GENERATION = IS_DEV || (import.meta.env.VITE_SEQUENTIAL_WEEK_PLAN === "true" || import.meta.env.VITE_SEQUENTIAL_WEEK_PLAN === "1");
 
 /** Накопленный контекст недели для разнообразия (передаётся в каждый следующий single_day). */
 export interface WeekContextAccumulated {
@@ -99,6 +101,11 @@ function getWeekdayIndex(date: Date): number {
   return (date.getDay() + 6) % 7;
 }
 
+/** Нормализация названия рецепта для сравнения на дубли (аудит/логи). */
+function normalizeRecipeTitleForDedup(title: string): string {
+  return (title ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /** Краткая подпись дня для прогресса: Пн, Вт, ... Сб, Вс. */
 function getShortDayLabel(date: Date): string {
   return DAY_ABBREV[getWeekdayIndex(date)];
@@ -131,8 +138,13 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       token: string,
       weekContext?: WeekContextAccumulated | string
     ): Promise<SingleDayResponse | null> => {
+      const dateStrForLog = formatLocalDate(date);
+      const ctxTitlesCount =
+        weekContext && typeof weekContext === "object" && !Array.isArray(weekContext)
+          ? (weekContext as WeekContextAccumulated).chosenTitles?.length ?? 0
+          : 0;
       if (IS_DEV) {
-        console.log("[DEBUG] single_day request: type=single_day dayName=%s hasMemberId=%s (no pool query on client)", dayName, !!memberId);
+        console.log("[DEBUG] single_day request: dayName=%s planned_date=%s member_id=%s hasWeekContext=%s weekContextTitlesCount=%s", dayName, dateStrForLog, memberId ?? "null", !!weekContext, ctxTitlesCount);
       }
       const res = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
         method: "POST",
@@ -173,6 +185,11 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
         throw new Error("Не удалось распарсить ответ ИИ");
       }
 
+      if (IS_DEV) {
+        const titles = MEAL_KEYS.map((k) => ({ key: k, title: (parsed as SingleDayResponse)[k]?.name ?? "", norm: normalizeRecipeTitleForDedup((parsed as SingleDayResponse)[k]?.name ?? "") }));
+        console.log("[DEBUG] single_day parsed: planned_date=%s titles=%s", dateStrForLog, JSON.stringify(titles.map((t) => ({ [t.key]: t.title, norm: t.norm }))));
+      }
+
       const dateStr = formatLocalDate(date);
 
       if (user?.id) {
@@ -195,11 +212,60 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
         }
       }
 
+      const weakSlots = MEAL_KEYS.filter((k) => ((parsed as SingleDayResponse)[k]?.steps?.length ?? 0) < 2);
+      if (weakSlots.length > 0) {
+        if (IS_DEV) {
+          console.log("[DEBUG] insufficient steps -> regen meal", weakSlots.join(", "));
+        }
+        try {
+          const res2 = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              type: "single_day",
+              stream: false,
+              dayName,
+              memberData,
+              weekContext: weekContext ?? undefined,
+              messages: [
+                {
+                  role: "user",
+                  content: `Составь план питания на ${dayName}. Укажи завтрак, обед, полдник и ужин в формате JSON.`,
+                },
+              ],
+            }),
+          });
+          if (res2.ok) {
+            const data2 = await res2.json();
+            const raw2 = data2?.message ?? "";
+            const jsonStr2 = extractSingleJsonObject(raw2);
+            if (jsonStr2) {
+              const parsed2 = JSON.parse(jsonStr2) as SingleDayResponse;
+              for (const k of weakSlots) {
+                if ((parsed2[k]?.steps?.length ?? 0) >= 2) {
+                  (parsed as SingleDayResponse)[k] = parsed2[k];
+                }
+              }
+            }
+          }
+        } catch {
+          // keep original parsed
+        }
+      }
+
       const generatedIds: string[] = [];
 
       for (const mealKey of MEAL_KEYS) {
         const meal = parsed[mealKey];
         if (!meal?.name || !Array.isArray(meal.ingredients)) continue;
+
+        const stepCount = meal.steps?.length ?? 0;
+        if (stepCount < 2 && IS_DEV) {
+          console.log("[DEBUG] insufficient steps accepted without padding", { mealKey, title: meal.name, stepCount });
+        }
 
         const normalizedIngredients = meal.ingredients.map((ing) => normalizeSingleDayIngredient(ing));
 
@@ -453,30 +519,39 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           generatingDayIndex: -1,
         });
         if (IS_DEV) {
-          console.log("[PLAN batch]", { keys, current: completedCount + batch.length, total: 7 });
+          console.log("[PLAN batch]", { keys, current: completedCount + batch.length, total: 7, sequential: USE_SEQUENTIAL_WEEK_GENERATION });
         }
 
-        const results = await Promise.all(
-          batch.map((dayIndex) => {
-            const date = rollingDates[dayIndex];
-            const dayName = DAY_NAMES[getWeekdayIndex(date)];
-            return generateSingleDay(dayIndex, date, dayName, token, accumulated);
-          })
-        );
-
-        for (const parsed of results) {
-          if (parsed) {
-            for (const mealKey of MEAL_KEYS) {
-              const meal = parsed[mealKey];
-              if (meal?.name) {
-                accumulated.chosenTitles.push(meal.name.trim());
-                if (mealKey === "breakfast") {
-                  accumulated.chosenBreakfastTitles.push(meal.name.trim());
-                  accumulated.chosenBreakfastBases.push(classifyBreakfastBase(meal.name));
-                }
+        const mergeParsedIntoAccumulated = (parsed: SingleDayResponse | null) => {
+          if (!parsed) return;
+          for (const mealKey of MEAL_KEYS) {
+            const meal = parsed[mealKey];
+            if (meal?.name) {
+              accumulated.chosenTitles.push(meal.name.trim());
+              if (mealKey === "breakfast") {
+                accumulated.chosenBreakfastTitles.push(meal.name.trim());
+                accumulated.chosenBreakfastBases.push(classifyBreakfastBase(meal.name));
               }
             }
           }
+        };
+
+        if (USE_SEQUENTIAL_WEEK_GENERATION) {
+          for (const dayIndex of batch) {
+            const date = rollingDates[dayIndex];
+            const dayName = DAY_NAMES[getWeekdayIndex(date)];
+            const result = await generateSingleDay(dayIndex, date, dayName, token, accumulated);
+            mergeParsedIntoAccumulated(result);
+          }
+        } else {
+          const results = await Promise.all(
+            batch.map((dayIndex) => {
+              const date = rollingDates[dayIndex];
+              const dayName = DAY_NAMES[getWeekdayIndex(date)];
+              return generateSingleDay(dayIndex, date, dayName, token, accumulated);
+            })
+          );
+          for (const parsed of results) mergeParsedIntoAccumulated(parsed);
         }
 
         completedCount += batch.length;
@@ -492,7 +567,11 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       }
 
       if (IS_DEV) {
-        console.log("[DEBUG] total recipes for plan: up to 28 (all from AI, no pool); accumulated chosenTitles count:", accumulated.chosenTitles.length);
+        const allNorm = accumulated.chosenTitles.map((t) => normalizeRecipeTitleForDedup(t));
+        const countByNorm = new Map<string, number>();
+        allNorm.forEach((n) => countByNorm.set(n, (countByNorm.get(n) ?? 0) + 1));
+        const duplicates = [...countByNorm.entries()].filter(([, c]) => c > 1).map(([k]) => k);
+        console.log("[DEBUG] week apply done: chosenTitles count=%s all normalized (sample)=%s duplicates count=%s list=%s", accumulated.chosenTitles.length, allNorm.slice(0, 12).join(" | "), duplicates.length, duplicates.length ? duplicates.join(", ") : "(none)");
       }
       queryClient.invalidateQueries({ queryKey: ["recipes", user?.id] });
       return null;

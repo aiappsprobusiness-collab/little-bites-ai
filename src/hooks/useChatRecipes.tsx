@@ -193,6 +193,8 @@ export function useChatRecipes() {
               member_id: validChildId,
               child_id: validChildId,
               tags,
+              ...(parsedRecipe.chefAdvice != null && parsedRecipe.chefAdvice !== '' && { chef_advice: parsedRecipe.chefAdvice }),
+              ...(parsedRecipe.advice != null && parsedRecipe.advice !== '' && { advice: parsedRecipe.advice }),
             },
             ingredients: parsedRecipe.ingredients.map((ing, index) => {
               const o = typeof ing === 'object' && ing && 'name' in ing ? (ing as { name: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; substitute?: string }) : null;

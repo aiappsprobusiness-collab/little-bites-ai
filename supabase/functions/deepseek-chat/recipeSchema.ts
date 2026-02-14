@@ -140,7 +140,9 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
         .filter((s) => s.length > 0)
         .slice(0, 7),
       advice: parsed.advice ?? null,
-      chefAdvice: parsed.chefAdvice != null ? String(parsed.chefAdvice).slice(0, 300) : null,
+      chefAdvice: (parsed.chefAdvice ?? parsed.chef_advice ?? parsed.chefAdviceText) != null
+        ? String(parsed.chefAdvice ?? parsed.chef_advice ?? parsed.chefAdviceText).slice(0, 300)
+        : null,
       mealType: parsed.mealType ?? undefined,
     };
     const result = RecipeJsonSchema.safeParse(normalized);

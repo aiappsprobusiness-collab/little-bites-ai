@@ -306,12 +306,17 @@ export default function ChatPage() {
 
       if (import.meta.env.DEV && finalRecipe) {
         const recipeFromApi = apiRecipes[0] as Record<string, unknown> | undefined;
+        const chefAdvice = (finalRecipe as { chefAdvice?: string }).chefAdvice;
         console.log("[DEBUG recipe]", {
           messageId: assistantMessageId,
           recipeId: recipeFromApi?.id ?? (finalRecipe as { id?: string }).id,
           recipeIdFromBackend: response?.recipe_id,
           title: (finalRecipe as { title?: string }).title,
           source: recipeFromApi?.source,
+          hasChefAdvice: !!(chefAdvice && chefAdvice.trim()),
+          chefAdviceLen: chefAdvice?.length ?? 0,
+          recipeKeys: Object.keys(finalRecipe),
+          fromApi: apiRecipes.length > 0,
         });
       }
 
