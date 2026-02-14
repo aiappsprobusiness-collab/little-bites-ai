@@ -17,7 +17,9 @@ import RecipeEditPage from "./pages/RecipeEditPage";
 import RecipesPage from "./pages/RecipesPage";
 import ChatPage from "./pages/ChatPage";
 import FavoritesPage from "./pages/FavoritesPage";
-import SosConsultant from "./pages/SosConsultant";
+import SosLayout from "./pages/SosLayout";
+import SosTiles from "./pages/SosTiles";
+import SosScenarioScreen from "./pages/SosScenarioScreen";
 import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
@@ -197,10 +199,13 @@ const App = () => (
                 path="/sos"
                 element={
                   <ProtectedRoute>
-                    <SosConsultant />
+                    <SosLayout />
                   </ProtectedRoute>
                 }
-              />
+              >
+                <Route index element={<SosTiles />} />
+                <Route path=":scenarioKey" element={<SosScenarioScreen />} />
+              </Route>
               <Route path="/plate-analysis" element={<Navigate to="/diary" replace />} />
               <Route
                 path="/diary"

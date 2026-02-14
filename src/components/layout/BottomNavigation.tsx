@@ -37,7 +37,9 @@ export function BottomNavigation() {
     >
       <div className="flex items-stretch justify-around h-16 px-1">
         {TABS.map((item) => {
-          const isActive = location.pathname === item.path;
+          const isActive =
+            location.pathname === item.path ||
+            (item.path === "/sos" && location.pathname.startsWith("/sos"));
           const Icon = item.icon;
           return (
             <motion.button
