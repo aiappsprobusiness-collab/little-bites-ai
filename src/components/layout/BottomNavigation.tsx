@@ -3,12 +3,12 @@ import { Heart, Calendar, MessageCircle, LifeBuoy, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
-/** 5 вкладок: План | Чат | Избранное | Мы рядом | Профиль */
+/** 5 вкладок: План | Чат | Избранное | Помощь маме | Профиль */
 const TABS = [
   { icon: Calendar, label: "План", path: "/meal-plan" },
   { icon: MessageCircle, label: "Чат", path: "/chat" },
   { icon: Heart, label: "Избранное", path: "/favorites" },
-  { icon: LifeBuoy, label: "Мы рядом", path: "/sos" },
+  { icon: LifeBuoy, label: "Помощь маме", path: "/sos" },
   { icon: User, label: "Профиль", path: "/profile" },
 ] as const;
 

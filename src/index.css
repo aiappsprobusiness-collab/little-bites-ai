@@ -124,6 +124,8 @@
   body {
     @apply bg-background text-foreground antialiased leading-relaxed;
     font-feature-settings: "rlig" 1, "calt" 1;
+    min-height: 100dvh;
+    min-height: 100vh;
   }
 }
 

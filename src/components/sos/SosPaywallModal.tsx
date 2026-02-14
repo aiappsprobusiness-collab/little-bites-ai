@@ -27,7 +27,7 @@ export function SosPaywallModal({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-typo-title font-semibold">
-            💛 Мы рядом — доступно в Premium
+            💛 Помощь маме — доступно в Premium
           </DialogTitle>
         </DialogHeader>
         <p className="text-muted-foreground text-typo-muted leading-relaxed">

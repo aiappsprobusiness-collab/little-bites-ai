@@ -71,6 +71,9 @@ export default function ChatPage() {
   const [openArticleId, setOpenArticleId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  /** Пользователь близко к низу (<= 150px) — автоскролл. Обновляется в onScroll. */
+  const userNearBottomRef = useRef(true);
 
   const { article: openArticle, isLoading: isArticleLoading } = useArticle(openArticleId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -171,8 +174,33 @@ export default function ChatPage() {
       });
   }, [historyMessages]);
 
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    userNearBottomRef.current = scrollHeight - scrollTop - clientHeight <= 150;
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!userNearBottomRef.current) return;
+    const last = messages[messages.length - 1];
+    const isRecipeMessage =
+      last?.role === "assistant" &&
+      last?.preParsedRecipe != null &&
+      !last?.isStreaming;
+    if (isRecipeMessage && last) {
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-message-id="${last.id}"]`) as HTMLElement | null;
+        if (el) {
+          if (import.meta.env.DEV) {
+            console.log("[DEBUG] chat scroll: recipe message -> scrollIntoView start id=", last.id);
+          }
+          el.scrollIntoView({ block: "start", behavior: "smooth" });
+        }
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   const showStarter = messages.length === 0 && !isLoadingHistory;
@@ -190,6 +218,7 @@ export default function ChatPage() {
     }
 
     setInput("");
+    userNearBottomRef.current = true;
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -513,7 +542,11 @@ export default function ChatPage() {
 
       <div className="flex flex-col h-[calc(100vh-110px)] container mx-auto max-w-full overflow-x-hidden px-3 sm:px-4">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-5 space-y-5 pb-4">
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleMessagesScroll}
+          className="flex-1 overflow-y-auto overflow-x-hidden py-5 space-y-5 pb-4"
+        >
           {!isLoadingMembers && members.length === 0 && (
             <FamilyOnboarding onComplete={() => { }} />
           )}

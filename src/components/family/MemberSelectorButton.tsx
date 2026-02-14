@@ -1,9 +1,8 @@
 import { useState, useMemo, useCallback } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
-import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +24,7 @@ export interface MemberSelectorButtonProps {
 /**
  * Универсальная кнопка выбора профиля ребёнка.
  * Free: по клику — paywall (Переключение профилей доступно в Premium).
- * Premium/Trial: по клику — диалог выбора (Семья / дети / добавить).
+ * Premium/Trial: по клику — диалог выбора (Семья / дети). Добавление — только в Профиле.
  */
 export function MemberSelectorButton({
   disabled = false,
@@ -40,8 +39,6 @@ export function MemberSelectorButton({
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
 
   const [showPicker, setShowPicker] = useState(false);
-  const [showAddSheet, setShowAddSheet] = useState(false);
-  const [addSheetCreateMode, setAddSheetCreateMode] = useState(false);
 
   const displayName = useMemo(() => {
     if (selectedMemberId === "family" || !selectedMemberId) return "Семья";
@@ -80,12 +77,6 @@ export function MemberSelectorButton({
     },
     [disabled, onGuardClick]
   );
-
-  const handleAddChild = useCallback(() => {
-    setShowPicker(false);
-    setAddSheetCreateMode(true);
-    setShowAddSheet(true);
-  }, []);
 
   if (members.length === 0) return null;
 
@@ -144,29 +135,9 @@ export function MemberSelectorButton({
                 {c.name}
               </button>
             ))}
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={handleAddChild}
-              className="text-left py-3 px-4 rounded-xl min-h-[44px] text-slate-500 hover:bg-slate-100 flex items-center gap-2 disabled:opacity-70"
-            >
-              <Plus className="w-4 h-4" />
-              Добавить ребёнка
-            </button>
           </div>
         </DialogContent>
       </Dialog>
-
-      <ProfileEditSheet
-        open={showAddSheet}
-        onOpenChange={setShowAddSheet}
-        member={null}
-        createMode={addSheetCreateMode}
-        onCreated={() => {
-          setShowAddSheet(false);
-          setAddSheetCreateMode(false);
-        }}
-      />
     </>
   );
 }

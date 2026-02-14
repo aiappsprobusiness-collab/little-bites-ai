@@ -623,10 +623,19 @@ export default function MealPlanPage() {
                 <Button
                   size="lg"
                   className="w-full h-12 rounded-xl font-medium min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
-                  onClick={() => setMutedWeekKey(null)}
+                  onClick={async () => {
+                    if (todayIndex < 0) return;
+                    try {
+                      await regenerateSingleDay(todayIndex);
+                      toast({ description: "План на сегодня готов" });
+                    } catch (e: any) {
+                      toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать план" });
+                    }
+                  }}
                   disabled={isAnyGenerating}
                 >
-                  Заполнить шаблоном
+                  <Sparkles className="w-5 h-5 mr-2 shrink-0" />
+                  Улучшить с AI
                 </Button>
               ) : (
                 <>

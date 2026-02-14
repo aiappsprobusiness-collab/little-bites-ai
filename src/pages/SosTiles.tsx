@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { useFamily } from "@/contexts/FamilyContext";
@@ -55,13 +53,8 @@ export default function SosTiles() {
 
   return (
     <MobileLayout
-      title="Мы рядом"
+      title="Помощь маме"
       showNav
-      headerLeft={
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-      }
       headerRight={members.length > 0 ? <MemberSelectorButton /> : undefined}
     >
       <div className="p-4 space-y-6 bg-slate-50 min-h-full">

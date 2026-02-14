@@ -316,7 +316,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     return (
       <div
         ref={ref}
-        className={`relative flex ${role === "user" ? "justify-end" : "justify-start"}`}
+        data-message-id={id}
+        className={`relative flex ${role === "user" ? "justify-end" : "justify-start"} ${role === "assistant" && effectiveRecipe ? "scroll-mt-[60px]" : ""}`}
       >
         <motion.div
           initial={{ opacity: 0, y: 10 }}
