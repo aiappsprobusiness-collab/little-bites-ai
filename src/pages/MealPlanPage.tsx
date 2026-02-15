@@ -11,7 +11,7 @@ import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
-import { useGenerateWeeklyPlan } from "@/hooks/useGenerateWeeklyPlan";
+import { usePlanGenerationJob } from "@/hooks/usePlanGenerationJob";
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -27,6 +27,12 @@ import {
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey } from "@/utils/dateRange";
 import { Check } from "lucide-react";
+
+/** Включить визуальный debug пула: window.__PLAN_DEBUG = true или ?debugPool=1 */
+function isPlanDebug(): boolean {
+  if (typeof window === "undefined") return false;
+  return (window as Window & { __PLAN_DEBUG?: boolean }).__PLAN_DEBUG === true || new URLSearchParams(window.location.search).get("debugPool") === "1";
+}
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -100,12 +106,6 @@ const mealTypes = [
   { id: "dinner", label: "Ужин", emoji: "🍽", time: "18:00" },
 ];
 
-const GENERATION_MESSAGES = [
-  "Подбираем меню с учётом возраста",
-  "Следим за балансом и разнообразием",
-  "Проверяем, чтобы блюда не повторялись",
-];
-
 /** Russian date: "Понедельник, 9 февраля" — weekday capitalized, month genitive lowercase */
 function formatDayHeader(date: Date): string {
   const weekday = date.toLocaleDateString("ru-RU", { weekday: "long" });
@@ -125,6 +125,8 @@ export default function MealPlanPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { selectedMember, members, selectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
   const { hasAccess, subscriptionStatus } = useSubscription();
   const isFree = !hasAccess;
@@ -180,66 +182,53 @@ export default function MealPlanPage() {
   const { getMealPlans, getMealPlansByDate, clearWeekPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
 
   const memberIdForPlan = mealPlanMemberId ?? null;
+  const planGenType = isFree ? "day" : "week";
   const {
-    generateWeeklyPlan,
-    regenerateSingleDay,
-    generateSingleRollingDay,
-    isGenerating: isPlanGenerating,
-    isGeneratingWeek,
-    isGeneratingAnyDay,
-    weekProgress,
-    completedDays,
-    progress,
-    generatingDayKeys,
-  } = useGenerateWeeklyPlan(memberDataForPlan, memberIdForPlan);
+    job: planJob,
+    isRunning: isPlanGenerating,
+    progressDone: planProgressDone,
+    progressTotal: planProgressTotal,
+    errorText: planErrorText,
+    startGeneration: startPlanGeneration,
+  } = usePlanGenerationJob(memberIdForPlan, planGenType);
 
-  const isAnyGenerating = isGeneratingAnyDay;
+  const isAnyGenerating = isPlanGenerating;
 
   const AUTOFILL_STORAGE_KEY = "mealPlan_autofill_lastRunAt";
   const AUTOFILL_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 часов
   const autogenTriggeredRef = useRef(false);
 
-  const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const [replaceSlot, setReplaceSlot] = useState<{ mealType: string; dayKey: string } | null>(null);
   const [replaceLoading, setReplaceLoading] = useState(false);
-  const [guardClickFeedback, setGuardClickFeedback] = useState(false);
 
-  const showGuardToast = useCallback((reason?: "member" | "day") => {
-    if (import.meta.env.DEV && reason) {
-      console.log("[DEBUG] blocked navigation:", reason);
-    }
-    setGuardClickFeedback(true);
-    toast({ title: "Подождите окончания генерации", description: "Не закрывайте и не обновляйте страницу." });
-    setTimeout(() => setGuardClickFeedback(false), 1500);
-  }, [toast]);
-
+  const planJobNotifiedRef = useRef<string | null>(null);
+  const planJobWasRunningRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!isAnyGenerating) return;
+    if (!planJob) return;
+    if (planJob.status === "running") {
+      planJobWasRunningRef.current = planJob.id;
+      return;
+    }
+    queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+    if (planJobNotifiedRef.current === planJob.id) return;
+    const wasRunning = planJobWasRunningRef.current === planJob.id;
+    planJobNotifiedRef.current = planJob.id;
+    if (planJob.status === "done" && wasRunning) {
+      toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов" });
+    } else if (planJob.status === "error" && wasRunning) {
+      toast({ variant: "destructive", title: "Ошибка генерации", description: planErrorText ?? "Не удалось сгенерировать план" });
+    }
+  }, [planJob?.id, planJob?.status, planGenType, planErrorText, queryClient, user?.id, toast]);
+
+  // Во время генерации периодически подтягиваем планы из БД, чтобы отображать уже готовые дни (день 1, 2, …) по мере появления
+  useEffect(() => {
+    if (!isAnyGenerating || !user?.id) return;
+    const intervalMs = 2500;
     const t = setInterval(() => {
-      setGenerationMessageIndex((i) => (i + 1) % GENERATION_MESSAGES.length);
-    }, 2800);
+      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user.id] });
+    }, intervalMs);
     return () => clearInterval(t);
-  }, [isAnyGenerating]);
-
-  // beforeunload: предупреждение при закрытии/обновлении во время генерации
-  useEffect(() => {
-    if (!isAnyGenerating) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [isAnyGenerating]);
-
-  // Закрыть диалоги и сбросить feedback при старте генерации / при завершении
-  useEffect(() => {
-    if (isAnyGenerating) {
-      setReplaceSlot(null);
-    } else {
-      setGuardClickFeedback(false);
-    }
-  }, [isAnyGenerating]);
+  }, [isAnyGenerating, user?.id, queryClient]);
 
   // Rolling 7 дней: today..today+6 (без прошедших)
   const startKey = getRollingStartKey();
@@ -273,11 +262,15 @@ export default function MealPlanPage() {
   }, [startKey, endKey]);
 
   const prevPathnameRef = useRef(location.pathname);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const isOnPlan = location.pathname === "/meal-plan";
     const wasOnPlan = prevPathnameRef.current === "/meal-plan";
     prevPathnameRef.current = location.pathname;
-    if (isOnPlan && !wasOnPlan) setSelectedDay(0);
+    if (isOnPlan && !wasOnPlan) {
+      setSelectedDay(0);
+      requestAnimationFrame(() => scrollContainerRef.current?.scrollTo(0, 0));
+    }
   }, [location.pathname]);
 
   const todayIndex = useMemo(() => rollingDates.findIndex((d) => formatLocalDate(d) === todayKey), [rollingDates, todayKey]);
@@ -299,8 +292,6 @@ export default function MealPlanPage() {
     }
   }, [selectedDayKey, dayMealPlans.length]);
 
-  const queryClient = useQueryClient();
-  const { user } = useAuth();
   const recipeIdsForPreviews = useMemo(
     () => dayMealPlans.map((m) => m.recipe_id).filter((id): id is string => !!id),
     [dayMealPlans]
@@ -366,12 +357,11 @@ export default function MealPlanPage() {
   /** Диапазон полностью пустой: нет DB и starter скрыт. */
   const isCompletelyEmpty = mutedWeekKey === startKey && !hasAnyWeekPlan;
 
-  /** Индекс дня, который сейчас генерируется (полная неделя). + generatingDayKeys для autofill. */
-  const generatingDayIndex = isPlanGenerating && progress ? progress.generatingDayIndex : -1;
+  /** Индекс дня, который сейчас генерируется (по прогрессу job). */
+  const generatingDayIndex = isPlanGenerating && planProgressTotal > 0 ? planProgressDone : -1;
   const getDayStatus = (index: number): DayTabStatus => {
-    const dayKey = dayKeys[index];
-    if (generatingDayIndex === index || (dayKey && generatingDayKeys.has(dayKey))) return "loading";
-    if (hasMealsByDayIndex[index] || completedDays[index]) return "done";
+    if (isPlanGenerating && index === planProgressDone) return "loading";
+    if (hasMealsByDayIndex[index] || (isPlanGenerating && index < planProgressDone)) return "done";
     return "idle";
   };
 
@@ -382,19 +372,31 @@ export default function MealPlanPage() {
   }, [startKey, endKey, missingDayKeys]);
 
   useEffect(() => {
-    if (isAnyGenerating) {
-      if (import.meta.env.DEV) console.log("[DEBUG] skip autofill due to generation guard");
+    if (missingDayKeys.length === 0) {
+      if (import.meta.env.DEV) console.log("[AUTOFILL] nothing to fill");
       return;
     }
     if (
-      isWeekPlansLoading ||
-      isAnyGenerating ||
       missingDayKeys.length !== 1 ||
       missingDayKeys[0] !== endKey ||
       !hasAccess ||
       autogenTriggeredRef.current
     )
       return;
+    if (isAnyGenerating) {
+      if (import.meta.env.DEV) {
+        console.log("[AUTOFILL] blocked by guard");
+        console.log("[GEN_GUARD]", {
+          isGenerating: isAnyGenerating,
+          planProgressDone,
+          planProgressTotal,
+          selectedMemberId,
+          missingDayKeys,
+        });
+      }
+      return;
+    }
+    if (isWeekPlansLoading) return;
 
     const lastRunAt = typeof localStorage !== "undefined" ? localStorage.getItem(AUTOFILL_STORAGE_KEY) : null;
     const lastRun = lastRunAt ? parseInt(lastRunAt, 10) : 0;
@@ -404,7 +406,12 @@ export default function MealPlanPage() {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
     }
-    generateSingleRollingDay(rollingDates[6]).catch(() => {
+    startPlanGeneration({
+      type: "day",
+      member_id: memberIdForPlan,
+      member_data: memberDataForPlan,
+      day_key: formatLocalDate(rollingDates[6]),
+    }).catch(() => {
       autogenTriggeredRef.current = false;
     });
   }, [
@@ -414,7 +421,12 @@ export default function MealPlanPage() {
     endKey,
     hasAccess,
     rollingDates,
-    generateSingleRollingDay,
+    startPlanGeneration,
+    memberIdForPlan,
+    memberDataForPlan,
+    planProgressDone,
+    planProgressTotal,
+    selectedMemberId,
   ]);
 
   const getPlannedMealRecipe = (plannedMeal: any) => {
@@ -433,6 +445,22 @@ export default function MealPlanPage() {
     return acc;
   }, {} as Record<string, typeof dayMealPlans[0] | null>);
 
+  const planDebug = isPlanDebug();
+  const { dbCount: dayDbCount, aiCount: dayAiCount } = useMemo(() => {
+    let db = 0;
+    let ai = 0;
+    for (const item of dayMealPlans) {
+      if (item.plan_source === "pool") db++;
+      else if (item.plan_source === "ai") ai++;
+      else {
+        const src = previews[item.recipe_id ?? ""]?.source;
+        if (src === "seed" || src === "manual") db++;
+        else if (item.recipe_id) ai++;
+      }
+    }
+    return { dbCount: db, aiCount: ai };
+  }, [dayMealPlans, previews]);
+
   const showNoProfile = members.length === 0 && !isMembersLoading;
   const showEmptyFamily = isFamilyMode && members.length === 0 && !isMembersLoading;
 
@@ -450,7 +478,13 @@ export default function MealPlanPage() {
 
   if (isMembersLoading) {
     return (
-      <MobileLayout title="План питания">
+      <MobileLayout
+        headerCenter={
+          <span className="text-typo-title font-semibold text-foreground tracking-tight">
+            Mom Recipes <span className="text-primary" aria-hidden>🌿</span>
+          </span>
+        }
+      >
         <div className="flex items-center justify-center min-h-[50vh]">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
@@ -460,7 +494,13 @@ export default function MealPlanPage() {
 
   if (showNoProfile || showEmptyFamily) {
     return (
-      <MobileLayout title="План питания">
+      <MobileLayout
+        headerCenter={
+          <span className="text-typo-title font-semibold text-foreground tracking-tight">
+            Mom Recipes <span className="text-primary" aria-hidden>🌿</span>
+          </span>
+        }
+      >
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card variant="default" className="p-8 text-center">
             <CardContent className="p-0">
@@ -482,42 +522,16 @@ export default function MealPlanPage() {
   }
 
   return (
-    <MobileLayout title="План питания">
+    <MobileLayout
+        headerCenter={
+          <span className="text-typo-title font-semibold text-foreground tracking-tight">
+            Mom Recipes <span className="text-primary" aria-hidden>🌿</span>
+          </span>
+        }
+      >
       <div className="flex flex-col min-h-0 flex-1 px-4 relative">
-        {/* Generation guard: portal overlay над всем (header z-40, Dialog z-50, toast z-100) */}
-        {isAnyGenerating &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div
-              className="fixed inset-0 z-[9999] flex flex-col bg-black/10 pointer-events-auto cursor-not-allowed"
-              onClick={() => showGuardToast()}
-              onPointerDown={(e) => e.preventDefault()}
-              role="presentation"
-              aria-hidden
-            >
-              {guardClickFeedback && (
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10000] px-4 py-3 rounded-xl bg-amber-900 text-white text-typo-body font-medium shadow-lg animate-in fade-in duration-200">
-                  Подождите окончания генерации
-                </div>
-              )}
-              <div className="shrink-0 px-4 py-3 bg-amber-50 border-b border-amber-200/80 shadow-sm">
-                <p className="text-typo-body font-semibold text-amber-900">Генерируем план…</p>
-                <p className="text-typo-caption text-amber-800/90 mt-0.5">
-                  Не закрывайте и не обновляйте страницу, чтобы не прервать процесс.
-                </p>
-                {isGeneratingWeek && weekProgress.total > 0 && (
-                  <p className="text-typo-caption font-medium text-amber-800 mt-1">
-                    Готово {weekProgress.done} из {weekProgress.total}
-                  </p>
-                )}
-              </div>
-              <div className="flex-1 min-h-0" />
-            </div>,
-            document.body
-          )}
-
-        {/* Content wrapper: один скролл */}
-        <div className="relative flex-1 min-h-0 overflow-y-auto">
+        {/* Content wrapper: один скролл; при переходе на вкладку План скролл сбрасывается вверх */}
+        <div ref={scrollContainerRef} className="relative flex-1 min-h-0 overflow-y-auto">
           {/* 1) Today Card: заголовок, дата + селектор профиля, бейдж, действия */}
           <div className="rounded-2xl bg-white border border-slate-200/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.08)] p-4 mb-4">
             <div className="flex items-start justify-between gap-3">
@@ -532,12 +546,13 @@ export default function MealPlanPage() {
                     {formatShortDate(selectedDate)}
                     {memberDataForPlan?.name && ` · ${memberDataForPlan.name}`}
                   </span>
+                  {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
+                    <span className="text-typo-caption text-slate-500 font-medium">
+                      DB: {dayDbCount} | AI: {dayAiCount}
+                    </span>
+                  )}
                   {members.length > 0 && (
-                    <MemberSelectorButton
-                      disabled={isAnyGenerating}
-                      onGuardClick={() => showGuardToast("member")}
-                      className="shrink-0"
-                    />
+                    <MemberSelectorButton className="shrink-0" />
                   )}
                 </div>
               </div>
@@ -560,16 +575,21 @@ export default function MealPlanPage() {
                       onClick={async () => {
                         if (todayIndex < 0) return;
                         try {
-                          await regenerateSingleDay(todayIndex);
-                          toast({ description: "План на сегодня готов" });
-                        } catch (e: any) {
-                          toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать план" });
+                          await startPlanGeneration({
+                            type: "day",
+                            member_id: memberIdForPlan,
+                            member_data: memberDataForPlan,
+                            day_key: todayKey,
+                          });
+                          toast({ description: "Генерация запущена" });
+                        } catch (e: unknown) {
+                          toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
                         }
                       }}
                       disabled={isAnyGenerating}
                     >
                       <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                      Улучшить с AI
+                      {isAnyGenerating ? "Генерация…" : "Улучшить с AI"}
                     </Button>
                   ) : (
                     <>
@@ -578,17 +598,22 @@ export default function MealPlanPage() {
                         className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                         onClick={async () => {
                           try {
-                            await generateWeeklyPlan();
+                            await startPlanGeneration({
+                              type: "week",
+                              member_id: memberIdForPlan,
+                              member_data: memberDataForPlan,
+                              start_key: getRollingStartKey(),
+                            });
                             setMutedWeekKeyAndStorage(null);
-                            toast({ description: "План на 7 дней готов" });
-                          } catch (e: any) {
-                            toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                            toast({ description: "Генерация запущена" });
+                          } catch (e: unknown) {
+                            toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
                           }
                         }}
                         disabled={isAnyGenerating}
                       >
                         <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                        Улучшить с AI
+                        {isAnyGenerating ? "Генерация…" : "Улучшить с AI"}
                       </Button>
                       <button
                         type="button"
@@ -611,21 +636,31 @@ export default function MealPlanPage() {
                     onClick={async () => {
                       try {
                         if (isFree && todayIndex >= 0) {
-                          await regenerateSingleDay(todayIndex);
+                          await startPlanGeneration({
+                            type: "day",
+                            member_id: memberIdForPlan,
+                            member_data: memberDataForPlan,
+                            day_key: todayKey,
+                          });
                           setMutedWeekKeyAndStorage(null);
-                          toast({ description: "План на сегодня готов" });
+                          toast({ description: "Генерация запущена" });
                         } else {
-                          await generateWeeklyPlan();
+                          await startPlanGeneration({
+                            type: "week",
+                            member_id: memberIdForPlan,
+                            member_data: memberDataForPlan,
+                            start_key: getRollingStartKey(),
+                          });
                           setMutedWeekKeyAndStorage(null);
-                          toast({ description: "План на 7 дней готов" });
+                          toast({ description: "Генерация запущена" });
                         }
-                      } catch (e: any) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                      } catch (e: unknown) {
+                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
                       }
                     }}
                   >
                     <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                    Улучшить с AI
+                    {isAnyGenerating ? "Генерация…" : "Улучшить с AI"}
                   </Button>
                   <button
                     type="button"
@@ -678,13 +713,9 @@ export default function MealPlanPage() {
                   isSelected={selectedDay === index}
                   status={getDayStatus(index)}
                   isToday={dayKey === todayKey}
-                  disabled={isAnyGenerating}
+                  disabled={false}
                   isLocked={isDayLockedForFree}
                   onClick={() => {
-                    if (isAnyGenerating) {
-                      showGuardToast("day");
-                      return;
-                    }
                     if (isDayLockedForFree) {
                       toast({
                         title: "Доступно в Premium",
@@ -699,24 +730,14 @@ export default function MealPlanPage() {
             })}
           </div>
 
+          {isAnyGenerating && planProgressTotal > 0 && (
+            <p className="text-typo-caption text-amber-700 font-medium mt-1 -mx-4 px-4">
+              Генерируем… {planProgressDone}/{planProgressTotal}
+            </p>
+          )}
+
           {/* 3) Приёмы пищи: блоки с заголовком и карточкой/плейсхолдером */}
           <div className="mt-4 space-y-4 pb-6">
-            {(isLoading || isAnyGenerating) && (
-              <div className="mb-2 space-y-1">
-                <p className="text-typo-caption text-muted-foreground">
-                  {isPlanGenerating && progress
-                    ? GENERATION_MESSAGES[generationMessageIndex]
-                    : generatingDayKeys.size > 0
-                      ? "Добавляем следующий день…"
-                      : "Подбираем меню на день…"}
-                </p>
-                {isPlanGenerating && progress && (
-                  <p className="text-typo-caption text-muted-foreground/90">
-                    Генерируем план: {progress.current}/{progress.total} ({progress.currentDayLabel || (progress.generatingDayIndex >= 0 ? getDayLabel(rollingDates[progress.generatingDayIndex] ?? new Date()) : "")})
-                  </p>
-                )}
-              </div>
-            )}
             {mealTypes.map((slot) => {
               const plannedMeal = mealsByType[slot.id];
               const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
@@ -725,9 +746,7 @@ export default function MealPlanPage() {
               return (
                 <div key={slot.id}>
                   <p className="text-typo-caption font-medium text-foreground mb-1.5">{slot.label}</p>
-                  {isLoading || isAnyGenerating ? (
-                    <MealCardSkeleton />
-                  ) : hasDish ? (
+                  {hasDish ? (
                     <MealCard
                       mealType={plannedMeal!.meal_type}
                       recipeTitle={recipe!.title}
@@ -749,12 +768,21 @@ export default function MealPlanPage() {
                       isFavorite={previews[recipeId!]?.isFavorite ?? false}
                       onToggleFavorite={isValidRecipeId(recipeId!) ? handleToggleFavorite : undefined}
                       onShare={isValidRecipeId(recipeId!) ? handleShare : undefined}
-                      onReplace={
-                        !isAnyGenerating
-                          ? () => setReplaceSlot({ mealType: slot.id, dayKey: selectedDayKey })
+                      onReplace={() => setReplaceSlot({ mealType: slot.id, dayKey: selectedDayKey })}
+                      debugSource={
+                        planDebug
+                          ? (plannedMeal as { plan_source?: "pool" | "ai" })?.plan_source === "pool"
+                            ? "db"
+                            : (plannedMeal as { plan_source?: "pool" | "ai" })?.plan_source === "ai"
+                              ? "ai"
+                              : previews[recipeId!]?.source === "seed" || previews[recipeId!]?.source === "manual"
+                                ? "db"
+                                : "ai"
                           : undefined
                       }
                     />
+                  ) : isLoading || isAnyGenerating ? (
+                    <MealCardSkeleton />
                   ) : (
                     <div className="flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/60 min-h-[48px] justify-center px-4 py-3">
                       <p className="text-typo-caption text-muted-foreground">Пока нет блюда</p>
@@ -765,21 +793,31 @@ export default function MealPlanPage() {
                           onClick={async () => {
                             if (isFree && todayIndex >= 0) {
                               try {
-                                await regenerateSingleDay(todayIndex);
+                                await startPlanGeneration({
+                                  type: "day",
+                                  member_id: memberIdForPlan,
+                                  member_data: memberDataForPlan,
+                                  day_key: todayKey,
+                                });
                                 setMutedWeekKeyAndStorage(null);
-                                toast({ description: "План на сегодня готов" });
-                              } catch (e: any) {
-                                toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать план" });
+                                toast({ description: "Генерация запущена" });
+                              } catch (e: unknown) {
+                                toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
                               }
                             } else if (!isFree && isCompletelyEmpty) {
                               setMutedWeekKeyAndStorage(null);
                             } else if (!isFree) {
                               try {
-                                await generateWeeklyPlan();
+                                await startPlanGeneration({
+                                  type: "week",
+                                  member_id: memberIdForPlan,
+                                  member_data: memberDataForPlan,
+                                  start_key: getRollingStartKey(),
+                                });
                                 setMutedWeekKeyAndStorage(null);
-                                toast({ description: "План на 7 дней готов" });
-                              } catch (e: any) {
-                                toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                                toast({ description: "Генерация запущена" });
+                              } catch (e: unknown) {
+                                toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
                               }
                             }
                           }}
@@ -811,10 +849,15 @@ export default function MealPlanPage() {
                         localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
                       }
                       try {
-                        await generateSingleRollingDay(rollingDates[6]);
-                        toast({ description: "День добавлен" });
-                      } catch (e: any) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать день" });
+                        await startPlanGeneration({
+                          type: "day",
+                          member_id: memberIdForPlan,
+                          member_data: memberDataForPlan,
+                          day_key: formatLocalDate(rollingDates[6]),
+                        });
+                        toast({ description: "Генерация запущена" });
+                      } catch (e: unknown) {
+                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
                       }
                     }}
                   >

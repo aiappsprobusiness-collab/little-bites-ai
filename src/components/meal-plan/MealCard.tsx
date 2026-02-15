@@ -51,6 +51,8 @@ export interface MealCardProps {
   onShare?: (recipeId: string, recipeTitle: string) => void;
   /** Заменить этот приём пищи (план). Показывает кнопку ↻. */
   onReplace?: () => void;
+  /** При включённом __PLAN_DEBUG / ?debugPool=1: показывать бейдж DB или AI. */
+  debugSource?: "db" | "ai";
 }
 
 const CHIP_PLACEHOLDER_COUNT = 3;
@@ -72,6 +74,7 @@ export function MealCard({
   onToggleFavorite,
   onShare,
   onReplace,
+  debugSource,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -126,8 +129,20 @@ export function MealCard({
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <div className="text-typo-body font-semibold text-foreground leading-tight">
-              {recipeTitle}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-typo-body font-semibold text-foreground leading-tight">
+                {recipeTitle}
+              </span>
+              {debugSource && (
+                <span
+                  className={cn(
+                    "text-[10px] font-semibold px-1.5 py-0.5 rounded",
+                    debugSource === "db" ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"
+                  )}
+                >
+                  {debugSource === "db" ? "DB" : "AI"}
+                </span>
+              )}
             </div>
             {showCookTime && (
               <div className="text-typo-caption text-muted-foreground">⏱️ {cookTimeMinutes} мин</div>

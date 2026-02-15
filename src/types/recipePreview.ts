@@ -12,4 +12,6 @@ export type RecipePreview = {
   chefAdvice?: string | null;
   /** Мини-совет (Free). */
   advice?: string | null;
+  /** source из БД: seed | manual | week_ai | chat_ai | starter. Для debug-бейджа: seed/manual → DB, остальное → AI. */
+  source?: string | null;
 };

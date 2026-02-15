@@ -49,12 +49,12 @@ export function useRecipePreviewsByIds(recipeIds: string[]) {
       if (!user || ids.length === 0) return {};
       const [previewsResult, tipsResult] = await Promise.all([
         supabase.rpc("get_recipe_previews", { recipe_ids: ids }),
-        supabase.from("recipes").select("id, chef_advice, advice").in("id", ids).eq("user_id", user.id),
+        supabase.from("recipes").select("id, chef_advice, advice, source").in("id", ids).eq("user_id", user.id),
       ]);
       const { data: previewRows, error } = previewsResult;
       if (error) throw error;
-      const tipsRows = (tipsResult.data ?? []) as Array<{ id: string; chef_advice?: string | null; advice?: string | null }>;
-      const tipsMap = new Map(tipsRows.map((r) => [r.id, { chefAdvice: r.chef_advice ?? null, advice: r.advice ?? null }]));
+      const tipsRows = (tipsResult.data ?? []) as Array<{ id: string; chef_advice?: string | null; advice?: string | null; source?: string | null }>;
+      const tipsMap = new Map(tipsRows.map((r) => [r.id, { chefAdvice: r.chef_advice ?? null, advice: r.advice ?? null, source: r.source ?? null }]));
       const rows = (previewRows ?? []) as Array<{
         id: string;
         title: string | null;
@@ -73,6 +73,7 @@ export function useRecipePreviewsByIds(recipeIds: string[]) {
         if (tips) {
           preview.chefAdvice = tips.chefAdvice;
           preview.advice = tips.advice;
+          preview.source = tips.source;
         }
         map[r.id] = preview;
       });

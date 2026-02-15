@@ -324,7 +324,12 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             }
           } else {
             if (IS_DEV) {
-              console.log("[DEBUG] pool miss meal=%s -> ai", mealKey);
+              console.log("[POOL DEBUG] ai fallback", {
+                mealType: mealKey,
+                memberId: memberId ?? null,
+                pickedSource: "ai",
+                rejectReason: "no_candidates_or_filtered",
+              });
             }
             const stepCount = meal.steps?.length ?? 0;
             if (stepCount < 2 && IS_DEV) {

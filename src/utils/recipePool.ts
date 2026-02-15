@@ -179,11 +179,23 @@ export async function pickRecipeFromPool(
   const { data: rows, error } = await q;
 
   if (error) {
-    if (IS_DEV) console.warn("[DEBUG] pool query error:", error);
+    if (IS_DEV) {
+      console.warn("[DEBUG] pool query error:", error);
+      console.log("[POOL DEBUG]", {
+        mealType,
+        memberId,
+        candidatesFromDb: 0,
+        afterFiltersCount: 0,
+        pickedSource: "ai",
+        pickedRecipeId: null,
+        rejectReason: "query_error",
+      });
+    }
     return null;
   }
 
   const rawCandidates = (rows ?? []) as RecipeRow[];
+  const candidatesFromDb = rawCandidates.length;
   let filtered = rawCandidates;
 
   if (excludeRecipeIds.length >= 50 || excludeSet.size > 0) {
@@ -207,20 +219,39 @@ export async function pickRecipeFromPool(
   }
   filtered = filtered.filter((r) => passesProfileFilter(r, memberData).pass);
 
-  if (IS_DEV) {
-    console.log(
-      "[DEBUG] pool candidates meal=%s raw=%s filtered=%s",
-      mealType,
-      rawCandidates.length,
-      filtered.length
-    );
-  }
+  const afterFiltersCount = filtered.length;
 
-  if (filtered.length === 0) return null;
+  if (filtered.length === 0) {
+    if (IS_DEV) {
+      console.log("[POOL DEBUG]", {
+        mealType,
+        memberId,
+        candidatesFromDb,
+        afterFiltersCount: 0,
+        pickedSource: "ai",
+        pickedRecipeId: null,
+        rejectReason: candidatesFromDb === 0 ? "no_candidates" : "all_filtered_out",
+      });
+    }
+    return null;
+  }
 
   const topN = Math.min(15, filtered.length);
   const fromTop = filtered.slice(0, topN);
   const idx = Math.floor(Math.random() * fromTop.length);
   const picked = fromTop[idx];
+
+  if (IS_DEV) {
+    console.log("[POOL DEBUG]", {
+      mealType,
+      memberId,
+      candidatesFromDb,
+      afterFiltersCount,
+      pickedSource: "db",
+      pickedRecipeId: picked.id,
+      rejectReason: undefined,
+    });
+  }
+
   return { id: picked.id, title: picked.title };
 }

@@ -39,8 +39,8 @@ async function buildStarterItems(
 const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'] as const;
 type MealType = (typeof MEAL_SLOTS)[number];
 
-/** V2: one row per day; meals = { breakfast?: { recipe_id, title? }, ... } */
-type MealsJson = Record<string, { recipe_id?: string; title?: string } | undefined>;
+/** V2: one row per day; meals = { breakfast?: { recipe_id, title?, plan_source? }, ... } */
+type MealsJson = Record<string, { recipe_id?: string; title?: string; plan_source?: "pool" | "ai" } | undefined>;
 
 /** Expanded item for UI compatibility: one "row" per meal slot (like old meal_plans). */
 export interface MealPlanItemV2 {
@@ -56,6 +56,8 @@ export interface MealPlanItemV2 {
   is_completed?: boolean;
   /** true = starter, отсутствует/false = из БД */
   isStarter?: boolean;
+  /** 'pool' = из БД (pool-first), 'ai' = сгенерировано AI. Для debug-бейджа DB/AI. */
+  plan_source?: "pool" | "ai";
 }
 
 function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
@@ -72,6 +74,7 @@ function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
       recipe: slot.title ? { id: slot.recipe_id, title: slot.title } : null,
       child_id: row.member_id,
       member_id: row.member_id,
+      plan_source: slot.plan_source,
     });
   }
   return result;

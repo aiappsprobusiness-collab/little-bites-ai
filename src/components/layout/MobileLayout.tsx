@@ -24,6 +24,8 @@ interface MobileLayoutProps {
   headerMeta?: ReactNode;
   /** Left block: по умолчанию пусто; false = не показывать, ReactNode = кастом (headerLeft тоже можно передать) */
   headerBrand?: ReactNode | false;
+  /** Кастомный контент по центру вместо title (например логотип) */
+  headerCenter?: ReactNode;
   /** Убрать блюр у хедера (только фон) */
   headerNoBlur?: boolean;
 }
@@ -36,10 +38,12 @@ export function MobileLayout({
   headerRight,
   headerMeta,
   headerBrand = undefined,
+  headerCenter,
   headerNoBlur = false,
 }: MobileLayoutProps) {
   const showHeader =
     (title != null && title !== "") ||
+    headerCenter != null ||
     headerLeft != null ||
     headerRight != null ||
     (headerBrand != null && headerBrand !== false);
@@ -60,14 +64,18 @@ export function MobileLayout({
               </div>
             )}
             {/* Заголовок строго по центру; не сдвигается слотами */}
-            {title != null && title !== "" && (
+            {headerCenter != null ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-12">
+                {headerCenter}
+              </div>
+            ) : title != null && title !== "" ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-12">
                 <h1 className="text-typo-title font-semibold text-foreground truncate w-full">{title}</h1>
                 {headerMeta != null && (
                   <div className="text-typo-caption text-muted-foreground mt-1 truncate w-full">{headerMeta}</div>
                 )}
               </div>
-            )}
+            ) : null}
             {/* Правый слот (селектор профиля): всегда top-right */}
             <div className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-4 z-10">
               {headerRight}
