@@ -406,23 +406,34 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 {effectiveRecipe.cookingTime != null && effectiveRecipe.cookingTime > 0 && (
                   <p className="text-typo-caption text-muted-foreground mb-3 sm:mb-4">⏱️ {effectiveRecipe.cookingTime} мин</p>
                 )}
-                {(showChefTip && effectiveRecipe.chefAdvice) ? (
-                  <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
-                    <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
-                    <div className="min-w-0">
-                      <p className="text-typo-caption font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
-                      <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{effectiveRecipe.chefAdvice}</p>
-                    </div>
-                  </div>
-                ) : (effectiveRecipe.advice && (
-                  <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-slate-50/80 border border-slate-200/60 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
-                    <span className="text-typo-title shrink-0" aria-hidden>💡</span>
-                    <div className="min-w-0">
-                      <p className="text-typo-caption font-medium text-slate-600 mb-0.5">Мини-совет</p>
-                      <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{effectiveRecipe.advice}</p>
-                    </div>
-                  </div>
-                ))}
+                {(() => {
+                  const chefTip = effectiveRecipe.chefAdvice?.trim();
+                  const miniTip = effectiveRecipe.advice?.trim();
+                  const tipForFree = miniTip || chefTip;
+                  if (showChefTip && chefTip) {
+                    return (
+                      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
+                        <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
+                        <div className="min-w-0">
+                          <p className="text-typo-caption font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
+                          <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{chefTip}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (tipForFree) {
+                    return (
+                      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-slate-50/80 border border-slate-200/60 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
+                        <span className="text-typo-title shrink-0" aria-hidden>💡</span>
+                        <div className="min-w-0">
+                          <p className="text-typo-caption font-medium text-slate-600 mb-0.5">Мини-совет</p>
+                          <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{tipForFree}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 {effectiveRecipe.steps && effectiveRecipe.steps.length > 0 && (
                   <div>
                     <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-1.5 sm:mb-2">Шаги приготовления</p>

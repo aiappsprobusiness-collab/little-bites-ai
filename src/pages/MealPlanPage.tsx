@@ -36,7 +36,7 @@ function getDayLabel(date: Date): string {
 
 type DayTabStatus = "idle" | "loading" | "done";
 
-/** Кнопка дня в календаре недели: active / today / done / loading / idle. isLocked — Free: не today, серый, не кликается. */
+/** Компактная кнопка дня: активный = заливка, остальные = тонкая рамка; индикатор «день заполнен». */
 function DayTabButton({
   dayLabel,
   dateNum,
@@ -62,47 +62,34 @@ function DayTabButton({
     <motion.button
       type="button"
       disabled={disabled}
-      whileTap={effectivelyDisabled ? undefined : { scale: 0.97 }}
+      whileTap={effectivelyDisabled ? undefined : { scale: 0.98 }}
       onClick={onClick}
       className={`
-        relative flex flex-col items-center justify-center min-w-[44px] min-h-[44px] py-2.5 px-3 rounded-xl shrink-0 transition-colors border
+        relative flex flex-col items-center justify-center min-w-[40px] min-h-[36px] py-1.5 px-2.5 rounded-lg shrink-0 transition-colors border text-[13px]
         ${isLocked
-          ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+          ? "bg-slate-50 border-slate-200/80 text-slate-400 cursor-not-allowed"
           : isActive
-            ? "bg-emerald-600 text-white border-emerald-600 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
-            : status === "done"
-              ? "bg-emerald-50 border-emerald-200 text-slate-700"
-              : status === "loading"
-                ? "bg-emerald-50 border-emerald-100 text-slate-600 overflow-hidden"
-                : "bg-white border-slate-200 text-slate-600"
+            ? "bg-emerald-600 text-white border-emerald-600 shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
+            : "bg-white/80 border-slate-200/90 text-slate-600 hover:border-slate-300"
         }
-        ${!isActive && isToday && !isLocked ? "ring-1 ring-emerald-400/60" : ""}
+        ${!isActive && isToday && !isLocked ? "ring-1 ring-emerald-400/50" : ""}
         ${disabled ? "pointer-events-none opacity-70" : ""}
       `}
     >
       {status === "loading" && (
         <span
-          className="absolute inset-0 after:absolute after:inset-0 after:bg-gradient-to-r after:from-transparent after:via-white/40 after:to-transparent after:animate-shimmer pointer-events-none"
+          className="absolute inset-0 rounded-lg after:absolute after:inset-0 after:rounded-lg after:bg-gradient-to-r after:from-transparent after:via-white/30 after:to-transparent after:animate-shimmer pointer-events-none"
           aria-hidden
         />
       )}
       {status === "done" && !isActive && (
-        <span className="absolute top-1 right-1.5 text-emerald-600 animate-fade-in" aria-hidden>
-          <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-        </span>
+        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-fade-in" aria-hidden />
       )}
       {status === "done" && isActive && (
-        <span className="absolute top-1 right-1.5 text-white/90 animate-fade-in" aria-hidden>
-          <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-        </span>
+        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-white/90 animate-fade-in" aria-hidden />
       )}
-      <span className="text-typo-caption font-medium relative z-0">{dayLabel}</span>
-      <span className="text-typo-body font-semibold leading-tight relative z-0">{dateNum}</span>
-      {!isActive && isToday && (
-        <span className="relative z-0 text-[10px] font-medium text-emerald-700 bg-emerald-100/60 rounded-full px-2 py-0.5 mt-0.5">
-          Сегодня
-        </span>
-      )}
+      <span className="font-medium relative z-0 opacity-90">{dayLabel}</span>
+      <span className="font-semibold leading-tight relative z-0">{dateNum}</span>
     </motion.button>
   );
 }
@@ -129,13 +116,19 @@ function formatDayHeader(date: Date): string {
   return `${capitalized}, ${day} ${month}`;
 }
 
+/** Короткая дата для карточки: "15 фев" */
+function formatShortDate(date: Date): string {
+  return `${date.getDate()} ${date.toLocaleDateString("ru-RU", { month: "short" })}`;
+}
+
 export default function MealPlanPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   const { selectedMember, members, selectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
-  const { hasAccess } = useSubscription();
+  const { hasAccess, subscriptionStatus } = useSubscription();
   const isFree = !hasAccess;
+  const statusBadgeLabel = subscriptionStatus === "premium" ? "Premium" : subscriptionStatus === "trial" ? "Триал" : "Free";
 
   // Не открываем paywall автоматически при заходе на План — Free может использовать дневной план (шаблон).
   const isFamilyMode = !isFree && selectedMemberId === "family";
@@ -489,15 +482,7 @@ export default function MealPlanPage() {
   }
 
   return (
-    <MobileLayout
-      title="План питания"
-      headerRight={
-        <MemberSelectorButton
-          disabled={isAnyGenerating}
-          onGuardClick={() => showGuardToast("member")}
-        />
-      }
-    >
+    <MobileLayout title="План питания">
       <div className="flex flex-col min-h-0 flex-1 px-4 relative">
         {/* Generation guard: portal overlay над всем (header z-40, Dialog z-50, toast z-100) */}
         {isAnyGenerating &&
@@ -531,11 +516,157 @@ export default function MealPlanPage() {
             document.body
           )}
 
-        {/* Content wrapper */}
-        <div className="relative flex-1 min-h-0">
-        {/* Week calendar — always visible */}
-        <div>
-          <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
+        {/* Content wrapper: один скролл */}
+        <div className="relative flex-1 min-h-0 overflow-y-auto">
+          {/* 1) Today Card: заголовок, дата + селектор профиля, бейдж, действия */}
+          <div className="rounded-2xl bg-white border border-slate-200/80 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.08)] p-4 mb-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-semibold text-foreground leading-tight">
+                  {selectedDayKey === todayKey
+                    ? "Сегодня, " + formatDayHeader(selectedDate).split(", ")[0].toLowerCase()
+                    : formatDayHeader(selectedDate).split(", ")[0] + ", " + formatShortDate(selectedDate)}
+                </h2>
+                <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                  <span className="text-typo-caption text-muted-foreground">
+                    {formatShortDate(selectedDate)}
+                    {memberDataForPlan?.name && ` · ${memberDataForPlan.name}`}
+                  </span>
+                  {members.length > 0 && (
+                    <MemberSelectorButton
+                      disabled={isAnyGenerating}
+                      onGuardClick={() => showGuardToast("member")}
+                      className="shrink-0"
+                    />
+                  )}
+                </div>
+              </div>
+              <span
+                className={`
+                  shrink-0 text-[11px] font-medium px-2 py-0.5 rounded-md
+                  ${subscriptionStatus === "premium" ? "bg-emerald-100 text-emerald-800" : subscriptionStatus === "trial" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}
+                `}
+              >
+                {statusBadgeLabel}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {isCompletelyEmpty && !isAnyGenerating && (
+                <>
+                  {isFree ? (
+                    <Button
+                      size="sm"
+                      className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                      onClick={async () => {
+                        if (todayIndex < 0) return;
+                        try {
+                          await regenerateSingleDay(todayIndex);
+                          toast({ description: "План на сегодня готов" });
+                        } catch (e: any) {
+                          toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать план" });
+                        }
+                      }}
+                      disabled={isAnyGenerating}
+                    >
+                      <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                      Улучшить с AI
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        size="sm"
+                        className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                        onClick={async () => {
+                          try {
+                            await generateWeeklyPlan();
+                            setMutedWeekKeyAndStorage(null);
+                            toast({ description: "План на 7 дней готов" });
+                          } catch (e: any) {
+                            toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                          }
+                        }}
+                        disabled={isAnyGenerating}
+                      >
+                        <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                        Улучшить с AI
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setMutedWeekKeyAndStorage(null)}
+                        className="text-typo-caption text-emerald-600 hover:text-emerald-700 transition-colors"
+                      >
+                        Заполнить шаблоном
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+              {hasAnyWeekPlan && !isCompletelyEmpty && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-xl border-slate-200"
+                    disabled={isAnyGenerating || (isFree && todayIndex < 0)}
+                    onClick={async () => {
+                      try {
+                        if (isFree && todayIndex >= 0) {
+                          await regenerateSingleDay(todayIndex);
+                          setMutedWeekKeyAndStorage(null);
+                          toast({ description: "План на сегодня готов" });
+                        } else {
+                          await generateWeeklyPlan();
+                          setMutedWeekKeyAndStorage(null);
+                          toast({ description: "План на 7 дней готов" });
+                        }
+                      } catch (e: any) {
+                        toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                      }
+                    }}
+                  >
+                    <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                    Улучшить с AI
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (isFree) {
+                        if (!window.confirm("Удалить все блюда на сегодня?")) return;
+                        setMutedWeekKeyAndStorage(startKey);
+                        try {
+                          await clearWeekPlan({ startDate: selectedDate, endDate: selectedDate });
+                          toast({ title: "План на день очищен", description: "Блюда на сегодня удалены" });
+                        } catch (e: any) {
+                          toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
+                        }
+                      } else {
+                        const msg = hasDbWeekPlan
+                          ? "Удалить все блюда на ближайшие 7 дней? Это действие нельзя отменить."
+                          : "Скрыть шаблонное меню на эти 7 дней?";
+                        if (!window.confirm(msg)) return;
+                        setMutedWeekKeyAndStorage(startKey);
+                        if (hasDbWeekPlan) {
+                          try {
+                            await clearWeekPlan({ startDate: rollingDates[0], endDate: rollingDates[6] });
+                            toast({ title: "План на 7 дней очищен", description: "План питания удалён" });
+                          } catch (e: any) {
+                            toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
+                          }
+                        }
+                      }
+                    }}
+                    disabled={isAnyGenerating}
+                    className="text-typo-caption text-muted-foreground/80 hover:text-muted-foreground"
+                  >
+                    {isFree ? "Очистить день" : "Очистить 7 дней"}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* 2) Чипсы дней — компактно, вторично */}
+          <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
             {rollingDates.map((date, index) => {
               const dayKey = formatLocalDate(date);
               const isDayLockedForFree = isFree && dayKey !== todayKey;
@@ -567,64 +698,57 @@ export default function MealPlanPage() {
               );
             })}
           </div>
-        </div>
 
-        {/* Day content — always show plan structure */}
-        <div className="flex-1 mt-5 min-h-0">
-          <h2 className="text-typo-title font-semibold text-foreground mb-3">
-            {formatDayHeader(selectedDate)}
-          </h2>
-
-          {(isLoading || isAnyGenerating) && (
-            <div className="mb-3 space-y-1">
-              <p className="text-typo-muted text-muted-foreground">
-                {isPlanGenerating && progress
-                  ? GENERATION_MESSAGES[generationMessageIndex]
-                  : generatingDayKeys.size > 0
-                    ? "Добавляем следующий день…"
-                    : "Подбираем меню на день…"}
-              </p>
-              {isPlanGenerating && progress && (
-                <p className="text-typo-caption text-muted-foreground/90">
-                  Генерируем план: {progress.current}/{progress.total} ({progress.currentDayLabel || (progress.generatingDayIndex >= 0 ? getDayLabel(rollingDates[progress.generatingDayIndex] ?? new Date()) : "")})
+          {/* 3) Приёмы пищи: блоки с заголовком и карточкой/плейсхолдером */}
+          <div className="mt-4 space-y-4 pb-6">
+            {(isLoading || isAnyGenerating) && (
+              <div className="mb-2 space-y-1">
+                <p className="text-typo-caption text-muted-foreground">
+                  {isPlanGenerating && progress
+                    ? GENERATION_MESSAGES[generationMessageIndex]
+                    : generatingDayKeys.size > 0
+                      ? "Добавляем следующий день…"
+                      : "Подбираем меню на день…"}
                 </p>
-              )}
-            </div>
-          )}
-          <div className="space-y-4">
+                {isPlanGenerating && progress && (
+                  <p className="text-typo-caption text-muted-foreground/90">
+                    Генерируем план: {progress.current}/{progress.total} ({progress.currentDayLabel || (progress.generatingDayIndex >= 0 ? getDayLabel(rollingDates[progress.generatingDayIndex] ?? new Date()) : "")})
+                  </p>
+                )}
+              </div>
+            )}
             {mealTypes.map((slot) => {
               const plannedMeal = mealsByType[slot.id];
               const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
               const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
+              const hasDish = !!(plannedMeal && recipeId && recipe?.title);
               return (
                 <div key={slot.id}>
-                  <p className="text-typo-caption text-muted-foreground mb-1.5">
-                    {slot.emoji} {slot.label} · {slot.time}
-                  </p>
+                  <p className="text-typo-caption font-medium text-foreground mb-1.5">{slot.label}</p>
                   {isLoading || isAnyGenerating ? (
                     <MealCardSkeleton />
-                  ) : plannedMeal && recipeId && recipe?.title ? (
+                  ) : hasDish ? (
                     <MealCard
-                      mealType={plannedMeal.meal_type}
-                      recipeTitle={recipe.title}
-                      recipeId={recipeId}
+                      mealType={plannedMeal!.meal_type}
+                      recipeTitle={recipe!.title}
+                      recipeId={recipeId!}
                       mealTypeLabel={slot.label}
                       compact
                       isLoadingPreviews={isLoadingPreviews}
-                      cookTimeMinutes={previews[recipeId]?.cookTimeMinutes}
-                      ingredientNames={previews[recipeId]?.ingredientNames}
-                      ingredientTotalCount={previews[recipeId]?.ingredientTotalCount}
+                      cookTimeMinutes={previews[recipeId!]?.cookTimeMinutes}
+                      ingredientNames={previews[recipeId!]?.ingredientNames}
+                      ingredientTotalCount={previews[recipeId!]?.ingredientTotalCount}
                       hint={
                         (() => {
-                          const p = previews[recipeId];
+                          const p = previews[recipeId!];
                           if (!p) return undefined;
                           const tip = (hasAccess && p.chefAdvice?.trim()) ? p.chefAdvice : (p.advice?.trim() ?? p.chefAdvice?.trim());
                           return tip ?? undefined;
                         })()
                       }
-                      isFavorite={previews[recipeId]?.isFavorite ?? false}
-                      onToggleFavorite={isValidRecipeId(recipeId) ? handleToggleFavorite : undefined}
-                      onShare={isValidRecipeId(recipeId) ? handleShare : undefined}
+                      isFavorite={previews[recipeId!]?.isFavorite ?? false}
+                      onToggleFavorite={isValidRecipeId(recipeId!) ? handleToggleFavorite : undefined}
+                      onShare={isValidRecipeId(recipeId!) ? handleShare : undefined}
                       onReplace={
                         !isAnyGenerating
                           ? () => setReplaceSlot({ mealType: slot.id, dayKey: selectedDayKey })
@@ -632,158 +756,74 @@ export default function MealPlanPage() {
                       }
                     />
                   ) : (
-                    <p className="text-typo-muted text-muted-foreground/80 py-3">— пока без блюда</p>
+                    <div className="flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/60 min-h-[48px] justify-center px-4 py-3">
+                      <p className="text-typo-caption text-muted-foreground">Пока нет блюда</p>
+                      {(isCompletelyEmpty && !isAnyGenerating) || (hasAnyWeekPlan && !isAnyGenerating) ? (
+                        <button
+                          type="button"
+                          className="text-typo-caption text-emerald-600 hover:text-emerald-700 font-medium w-fit"
+                          onClick={async () => {
+                            if (isFree && todayIndex >= 0) {
+                              try {
+                                await regenerateSingleDay(todayIndex);
+                                setMutedWeekKeyAndStorage(null);
+                                toast({ description: "План на сегодня готов" });
+                              } catch (e: any) {
+                                toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать план" });
+                              }
+                            } else if (!isFree && isCompletelyEmpty) {
+                              setMutedWeekKeyAndStorage(null);
+                            } else if (!isFree) {
+                              try {
+                                await generateWeeklyPlan();
+                                setMutedWeekKeyAndStorage(null);
+                                toast({ description: "План на 7 дней готов" });
+                              } catch (e: any) {
+                                toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                              }
+                            }
+                          }}
+                          disabled={isAnyGenerating}
+                        >
+                          {isCompletelyEmpty && !isFree ? "Заполнить шаблоном" : "Улучшить с AI"}
+                        </button>
+                      ) : null}
+                    </div>
                   )}
                 </div>
               );
             })}
           </div>
-          {isCompletelyEmpty && !isAnyGenerating && (
-            <div className="mt-5 flex flex-col gap-2">
-              {isFree ? (
-                <Button
-                  size="lg"
-                  className="w-full h-12 rounded-xl font-medium min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
-                  onClick={async () => {
-                    if (todayIndex < 0) return;
-                    try {
-                      await regenerateSingleDay(todayIndex);
-                      toast({ description: "План на сегодня готов" });
-                    } catch (e: any) {
-                      toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать план" });
-                    }
-                  }}
-                  disabled={isAnyGenerating}
-                >
-                  <Sparkles className="w-5 h-5 mr-2 shrink-0" />
-                  Улучшить с AI
-                </Button>
-              ) : (
-                <>
+
+            {hasAnyWeekPlan &&
+              missingDayKeys.length === 1 &&
+              missingDayKeys[0] === endKey &&
+              !isFree &&
+              !isAnyGenerating && (
+                <div className="mt-4 flex flex-col gap-1">
+                  <p className="text-typo-caption text-muted-foreground">Последний день без плана</p>
                   <Button
-                    size="lg"
-                    className="w-full h-12 rounded-xl font-medium min-h-[44px] bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_3px_rgba(0,0,0,0.06)]"
+                    size="sm"
+                    variant="outline"
+                    className="w-fit rounded-xl"
                     onClick={async () => {
+                      if (typeof localStorage !== "undefined") {
+                        localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
+                      }
                       try {
-                        await generateWeeklyPlan();
-                        setMutedWeekKeyAndStorage(null);
-                        toast({ description: "План на 7 дней готов" });
+                        await generateSingleRollingDay(rollingDates[6]);
+                        toast({ description: "День добавлен" });
                       } catch (e: any) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                        toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать день" });
                       }
                     }}
-                    disabled={isAnyGenerating}
                   >
-                    <Sparkles className="w-5 h-5 mr-2 shrink-0" />
-                    Улучшить с AI
+                    Заполнить день
                   </Button>
-                  <button
-                    type="button"
-                    onClick={() => setMutedWeekKeyAndStorage(null)}
-                    className="text-typo-caption text-emerald-600 hover:text-emerald-700 transition-colors"
-                  >
-                    Заполнить шаблоном
-                  </button>
-                </>
+                </div>
               )}
-            </div>
-          )}
-        </div>
-
-        {/* Заполнить один день (последний пустой) — когда не сработал autofill или cooldown */}
-        {hasAnyWeekPlan &&
-          missingDayKeys.length === 1 &&
-          missingDayKeys[0] === endKey &&
-          !isFree &&
-          !isAnyGenerating && (
-            <div className="mt-4 flex flex-col gap-1">
-              <p className="text-typo-caption text-muted-foreground">Последний день без плана</p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-fit"
-                onClick={async () => {
-                  if (typeof localStorage !== "undefined") {
-                    localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
-                  }
-                  try {
-                    await generateSingleRollingDay(rollingDates[6]);
-                    toast({ description: "День добавлен" });
-                  } catch (e: any) {
-                    toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось сгенерировать день" });
-                  }
-                }}
-              >
-                Заполнить день
-              </Button>
-            </div>
-          )}
-
-        {/* Очистить день (Free) / 7 дней (Premium) / Улучшить с AI — below content, когда есть план */}
-        {hasAnyWeekPlan && (
-          <div className="mt-6 pb-6 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={async () => {
-                if (isFree) {
-                  const msg = "Удалить все блюда на сегодня?";
-                  if (!window.confirm(msg)) return;
-                  setMutedWeekKeyAndStorage(startKey);
-                  try {
-                    await clearWeekPlan({ startDate: selectedDate, endDate: selectedDate });
-                    toast({ title: "План на день очищен", description: "Блюда на сегодня удалены" });
-                  } catch (e: any) {
-                    toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
-                  }
-                } else {
-                  const msg = hasDbWeekPlan
-                    ? "Удалить все блюда на ближайшие 7 дней? Это действие нельзя отменить."
-                    : "Скрыть шаблонное меню на эти 7 дней?";
-                  if (!window.confirm(msg)) return;
-                  setMutedWeekKeyAndStorage(startKey);
-                  if (hasDbWeekPlan) {
-                    try {
-                      await clearWeekPlan({ startDate: rollingDates[0], endDate: rollingDates[6] });
-                      toast({ title: "План на 7 дней очищен", description: "План питания удалён" });
-                    } catch (e: any) {
-                      toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
-                    }
-                  }
-                }
-              }}
-              disabled={isAnyGenerating}
-              className="text-typo-caption text-muted-foreground/80 hover:text-muted-foreground transition-colors text-left"
-            >
-              {isFree ? "Очистить день" : "Очистить 7 дней"}
-            </button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-fit"
-              disabled={isAnyGenerating || (isFree && todayIndex < 0)}
-              onClick={async () => {
-                try {
-                  if (isFree && todayIndex >= 0) {
-                    await regenerateSingleDay(todayIndex);
-                    setMutedWeekKeyAndStorage(null);
-                    toast({ description: "План на сегодня готов" });
-                  } else {
-                    await generateWeeklyPlan();
-                    setMutedWeekKeyAndStorage(null);
-                    toast({ description: "План на 7 дней готов" });
-                  }
-                } catch (e: any) {
-                  toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
-                }
-              }}
-            >
-              <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-              Улучшить с AI
-            </Button>
           </div>
-        )}
         </div>
-      </div>
 
       {/* Заменить приём пищи */}
       <Dialog open={!!replaceSlot} onOpenChange={(open) => !open && setReplaceSlot(null)}>

@@ -11,6 +11,14 @@ const MEAL_LABELS: Record<string, { label: string; emoji: string; time: string }
 };
 
 const INGREDIENT_CHIPS_MAX = 4;
+/** В compact (план): показываем не больше стольких чипсов + "+N" */
+const INGREDIENT_CHIPS_MAX_COMPACT = 3;
+/** Укоротить название ингредиента для чипа (убрать скобки и длинные пояснения). */
+function shortIngredientName(name: string): string {
+  const trimmed = name.trim();
+  const beforeParen = trimmed.split(/\s*\(/)[0].trim();
+  return beforeParen.length <= 20 ? beforeParen : beforeParen.slice(0, 17) + "…";
+}
 
 function formatAge(ageMonths: number | null | undefined): string {
   if (ageMonths == null) return "";
@@ -71,9 +79,11 @@ export function MealCard({
   const ageStr = formatAge(ageMonths ?? null);
   const cookStr = cookTimeMinutes != null ? `${cookTimeMinutes} мин` : "";
   const metaLine2 = [ageStr, cookStr].filter(Boolean).join(" · ");
-  const chips = ingredientNames.slice(0, INGREDIENT_CHIPS_MAX);
+  const maxChips = compact ? INGREDIENT_CHIPS_MAX_COMPACT : INGREDIENT_CHIPS_MAX;
+  const rawChips = ingredientNames.slice(0, maxChips);
+  const chips = compact ? rawChips.map(shortIngredientName) : rawChips;
   const total = ingredientTotalCount ?? ingredientNames.length;
-  const extraCount = total > INGREDIENT_CHIPS_MAX ? total - INGREDIENT_CHIPS_MAX : 0;
+  const extraCount = total > maxChips ? total - maxChips : 0;
   const showPlaceholderChips = compact && isLoadingPreviews && chips.length === 0 && extraCount === 0;
 
   const handleClick = () => {
@@ -133,13 +143,14 @@ export function MealCard({
                       {chips.map((name, i) => (
                         <span
                           key={`${name}-${i}`}
-                          className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-typo-caption"
+                          className="inline-flex items-center max-w-[120px] px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-typo-caption h-6 box-border truncate"
+                          title={name}
                         >
                           {name}
                         </span>
                       ))}
                       {extraCount > 0 && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-typo-caption">
+                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-typo-caption h-6 shrink-0">
                           +{extraCount}
                         </span>
                       )}
@@ -154,6 +165,17 @@ export function MealCard({
               onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => e.stopPropagation()}
             >
+              {onReplace && (
+                <button
+                  type="button"
+                  onClick={handleReplaceClick}
+                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-emerald-600 bg-emerald-50/90 border border-emerald-200/70 hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 transition-all"
+                  title="Заменить"
+                  aria-label="Заменить блюдо"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </button>
+              )}
               {onToggleFavorite && (
                 <button
                   type="button"
@@ -179,17 +201,6 @@ export function MealCard({
                   aria-label="Поделиться"
                 >
                   <Share2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-              {onReplace && (
-                <button
-                  type="button"
-                  onClick={handleReplaceClick}
-                  className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-emerald-600 bg-emerald-50/80 border border-emerald-200/60 hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 transition-all"
-                  title="Заменить"
-                  aria-label="Заменить блюдо"
-                >
-                  <RotateCw className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
