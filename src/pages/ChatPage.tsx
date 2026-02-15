@@ -81,6 +81,8 @@ export default function ChatPage() {
   const prevProfileKeyRef = useRef<string>("");
   /** Last saved recipe title (for anti-duplicate: retry once if model returns the same). */
   const lastSavedRecipeTitleRef = useRef<string | null>(null);
+  /** Скролл к рецепту выполняем один раз при появлении карточки; повторный скролл через несколько секунд даёт «уплывание». */
+  const lastScrolledRecipeIdRef = useRef<string | null>(null);
 
   // Очищаем сообщения при смене профиля или списка членов семьи
   useEffect(() => {
@@ -189,16 +191,21 @@ export default function ChatPage() {
       last?.preParsedRecipe != null &&
       !last?.isStreaming;
     if (isRecipeMessage && last) {
+      if (lastScrolledRecipeIdRef.current === last.id) return;
+      lastScrolledRecipeIdRef.current = last.id;
       requestAnimationFrame(() => {
         const el = document.querySelector(`[data-message-id="${last.id}"]`) as HTMLElement | null;
         if (el) {
           if (import.meta.env.DEV) {
-            console.log("[DEBUG] chat scroll: recipe message -> scrollIntoView start id=", last.id);
+            console.log("[DEBUG] chat scroll: recipe message -> scrollIntoView once id=", last.id);
           }
-          el.scrollIntoView({ block: "start", behavior: "smooth" });
+          el.scrollIntoView({ block: "nearest", behavior: "smooth" });
         }
       });
     } else {
+      if (last?.role === "user" || !last) {
+        lastScrolledRecipeIdRef.current = null;
+      }
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
@@ -266,6 +273,16 @@ export default function ChatPage() {
       const FAILED_MESSAGE =
         "Не удалось сгенерировать подходящий рецепт. Попробуйте изменить запрос.";
 
+      // Названия рецептов из текущей сессии чата — чтобы не повторять одно и то же блюдо
+      const recentRecipeTitles = messages
+        .filter((m) => m.role === "assistant" && m.preParsedRecipe?.title)
+        .map((m) => m.preParsedRecipe!.title)
+        .slice(-6);
+      const varietySuffix =
+        recentRecipeTitles.length > 0
+          ? ` Не повторяй названия блюд, уже предложенных в этом чате: ${recentRecipeTitles.join(", ")}. Предложи другой рецепт.`
+          : "";
+
       let attempts = 0;
       let response: { message?: string; recipes?: unknown[]; recipe_id?: string | null } | null = null;
       let rawMessage = "";
@@ -280,10 +297,8 @@ export default function ChatPage() {
           overrideSelectedMember: selectedMember,
           overrideMembers: members,
           mealType: detectMealType(userMessage.content) || undefined,
-          ...(attempts > 0 && {
-            extraSystemSuffix:
-              "Previous recipe was duplicated. Generate a DIFFERENT recipe now.",
-          }),
+          extraSystemSuffix:
+            (attempts > 0 ? "Previous recipe was duplicated. Generate a DIFFERENT recipe now. " : "") + varietySuffix,
           onChunk:
             attempts === 0
               ? (chunk) => {
@@ -504,43 +519,27 @@ export default function ChatPage() {
     }
   };
 
-  return (
-    <MobileLayout showNav>
-      <div className="sticky top-0 z-40 bg-background/98 backdrop-blur-lg border-b border-slate-200/40 safe-top overflow-hidden max-w-full">
-        <div className="container mx-auto px-3 sm:px-4 max-w-full">
-          <div className="flex flex-col w-full py-2">
-            {/* Row 1: Title left, Member selector right */}
-            <div className="flex items-center justify-between w-full min-w-0 gap-2">
-              <div className="leading-tight min-w-0 flex-1">
-                <h1 className="text-typo-title font-semibold text-foreground tracking-tight truncate">Mom Recipes</h1>
-                <p className="text-typo-caption text-muted-foreground truncate">рядом на кухне</p>
-              </div>
-              {members.length > 0 && (
-                <MemberSelectorButton
-                  onProfileChange={() => setMessages([])}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-        {isTrial && trialDaysRemaining !== null && (
-          <div className="container mx-auto px-3 sm:px-4 pb-1.5 max-w-full">
-            <p className="text-typo-caption text-amber-700 dark:text-amber-400 font-medium">
-              Trial: осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
-            </p>
-          </div>
-        )}
-        {isFree && (
-          <div className="container mx-auto px-3 sm:px-4 pb-1.5 max-w-full">
-            <p className="text-[11px] text-muted-foreground/80">
-              Осталось {remaining} из {dailyLimit} сегодня
-            </p>
-            <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1 mt-0.5" />
-          </div>
-        )}
-      </div>
+  const chatHeaderMeta =
+    isTrial && trialDaysRemaining !== null ? (
+      <span className="text-typo-caption text-amber-700 dark:text-amber-400 font-medium">
+        Trial: осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
+      </span>
+    ) : isFree ? (
+      <span className="block">
+        <span className="text-[11px] text-muted-foreground/80">Осталось {remaining} из {dailyLimit} сегодня</span>
+        <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1 mt-0.5" />
+      </span>
+    ) : undefined;
 
-      <div className="flex flex-col h-[calc(100vh-110px)] container mx-auto max-w-full overflow-x-hidden px-3 sm:px-4">
+  return (
+    <MobileLayout
+      showNav
+      title="Чат"
+      headerNoBlur
+      headerRight={members.length > 0 ? <MemberSelectorButton onProfileChange={() => setMessages([])} /> : undefined}
+      headerMeta={chatHeaderMeta}
+    >
+      <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-3 sm:px-4">
         {/* Messages */}
         <div
           ref={messagesContainerRef}

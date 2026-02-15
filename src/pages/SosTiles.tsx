@@ -13,7 +13,7 @@ export default function SosTiles() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { selectedMember, members, formatAge } = useFamily();
-  const { isPremium } = useSubscription();
+  const { hasAccess } = useSubscription();
 
   const memberData = selectedMember
     ? {
@@ -44,7 +44,7 @@ export default function SosTiles() {
 
   const handleSosClick = (topic: (typeof SOS_TOPICS)[number]) => {
     const isFreeTopic = FREE_SOS_TOPIC_IDS.has(topic.id);
-    if (!isPremium && !isFreeTopic) {
+    if (!hasAccess && !isFreeTopic) {
       setSosPaywallOpen(true);
       return;
     }
@@ -67,8 +67,8 @@ export default function SosTiles() {
         <div className="grid grid-cols-2 gap-3">
           {SOS_TOPICS.map((topic) => {
             const Icon = topic.icon;
-            const isFreeTopic = FREE_SOS_TOPIC_IDS.has(topic.id);
-            const locked = !isPremium && !isFreeTopic;
+const isFreeTopic = FREE_SOS_TOPIC_IDS.has(topic.id);
+    const locked = !hasAccess && !isFreeTopic;
             return (
               <SosButton
                 key={topic.id}

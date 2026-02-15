@@ -41,7 +41,7 @@ export default function ChildProfileEditPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { members, createMember, updateMember, deleteMember, isCreating, isUpdating, isDeleting } = useMembers();
-  const { isPremium } = useSubscription();
+  const { isPremium, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -84,7 +84,7 @@ export default function ChildProfileEditPage() {
     add: (raw: string) => {
       const toAdd = parseTags(raw);
       if (!toAdd.length) return;
-      if (!isPremium && allergies.length >= 1) {
+      if (!hasAccess && allergies.length >= 1) {
         setShowPaywall(true);
         return;
       }
@@ -126,7 +126,7 @@ export default function ChildProfileEditPage() {
           type: "child",
           age_months: ageMonths || null,
           allergies,
-          ...(isPremium && {
+          ...(hasAccess && {
             preferences,
             difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
           }),
@@ -141,7 +141,7 @@ export default function ChildProfileEditPage() {
         name: trimmedName,
         age_months: ageMonths || null,
         allergies,
-        ...(isPremium && {
+        ...(hasAccess && {
           preferences,
           difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
         }),
@@ -233,7 +233,7 @@ export default function ChildProfileEditPage() {
               placeholder="Добавить аллергию (запятая или Enter)"
             />
 
-            {isPremium && (
+            {hasAccess && (
               <>
                 <TagListEditor
                   label="Предпочтения в питании"

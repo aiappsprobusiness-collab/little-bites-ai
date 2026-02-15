@@ -39,6 +39,13 @@
 
     --radius: 1rem;
 
+    /* Layout: хедер и нижняя навигация (поддержка safe-area) */
+    --header-content-height: 3.5rem;
+    --header-row-py: 0.75rem;
+    --layout-header-offset: calc(env(safe-area-inset-top, 0px) + var(--header-content-height) + var(--header-row-py) * 2);
+    --layout-nav-height: 4rem;
+    --layout-main-bottom: calc(var(--layout-nav-height) + env(safe-area-inset-bottom, 0px));
+
     /* Custom colors */
     --mint: 160 45% 65%;
     --mint-light: 160 45% 92%;
@@ -173,6 +180,26 @@
   
   .safe-top {
     padding-top: env(safe-area-inset-top, 1rem);
+  }
+
+  /** Хедер: отступ сверху под статус-бар/вырез (используется в MobileLayout) */
+  .layout-header-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /** Отступ main под хедер (хедер sticky; контент не заходит под него) */
+  .main-below-header {
+    padding-top: var(--layout-header-offset);
+  }
+
+  /** Страницы без хедера: только safe-area сверху, чтобы контент не заходил под вырез */
+  .main-safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  /** Отступ main над нижней навигацией + safe-area */
+  .main-above-nav {
+    padding-bottom: var(--layout-main-bottom);
   }
 }
 

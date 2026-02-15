@@ -22,7 +22,7 @@ export default function ArticlesPage() {
 
   const { articles, isLoading, categories } = useArticles(selectedCategory);
   const { article: articleFromUrl, isLoading: isLoadingUrlArticle } = useArticle(idFromUrl);
-  const { isPremium } = useSubscription();
+  const { isPremium, hasAccess } = useSubscription();
   const { toast } = useToast();
 
   // Deep-link: open article when URL has ?id=...
@@ -30,7 +30,7 @@ export default function ArticlesPage() {
     if (!idFromUrl) return;
     if (isLoadingUrlArticle) return;
     if (articleFromUrl) {
-      if (articleFromUrl.is_premium && !isPremium) {
+      if (articleFromUrl.is_premium && !hasAccess) {
         setShowPaywall(true);
         setSearchParams((prev) => {
           const next = new URLSearchParams(prev);
@@ -49,10 +49,10 @@ export default function ArticlesPage() {
         return next;
       });
     }
-  }, [idFromUrl, articleFromUrl, isLoadingUrlArticle, isPremium, setSearchParams, toast]);
+  }, [idFromUrl, articleFromUrl, isLoadingUrlArticle, hasAccess, setSearchParams, toast]);
 
   const handleCardClick = (article: ArticlesRow) => {
-    if (article.is_premium && !isPremium) {
+    if (article.is_premium && !hasAccess) {
       setShowPaywall(true);
       return;
     }
@@ -118,7 +118,7 @@ export default function ArticlesPage() {
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                  {article.is_premium && (
+                  {article.is_premium && !hasAccess && (
                     <span className="absolute top-2 right-2 w-8 h-8 rounded-full bg-background/90 flex items-center justify-center shadow">
                       <Lock className="w-4 h-4 text-amber-600" />
                     </span>

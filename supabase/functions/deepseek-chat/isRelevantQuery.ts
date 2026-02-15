@@ -62,8 +62,14 @@ export function isRelevantQuery(text: string): boolean {
   return true;
 }
 
+/** Вопросные паттерны — не считать запросом «название блюда». */
+const QUESTION_PATTERNS = [
+  "как ", "почему ", "что такое", "чем полезен", "чем полезно", "можно ли", "расскажи про", "расскажи о",
+];
+
 /**
  * Проверка для PREMIUM: false = бред (0 гласных или нет кулинарных/экспертных слов), 'soft' = мягкий запрос, true = запрос рецепта.
+ * Короткая фраза без вопроса (например «хачапури», «хачапури по аджарски») считается запросом конкретного блюда → true.
  */
 export function isRelevantPremiumQuery(text: string): false | "soft" | true {
   const trimmed = (text ?? "").trim();
@@ -71,6 +77,14 @@ export function isRelevantPremiumQuery(text: string): false | "soft" | true {
   if (!checkVowelRatio(trimmed)) return false;
 
   const lower = normalizeForMatch(trimmed);
+  const words = trimmed.split(/\s+/).filter(Boolean);
+
+  // Короткий запрос без «?» и без вопросительных слов — вероятно название блюда → выдаём рецепт
+  if (words.length <= 5 && trimmed.length <= 80 && !trimmed.includes("?")) {
+    const looksLikeQuestion = QUESTION_PATTERNS.some((p) => lower.startsWith(p) || lower.includes(" " + p));
+    if (!looksLikeQuestion) return true;
+  }
+
   const hasCulinary = CULINARY_TERMS.some(term => lower.includes(term));
   const hasExpert = PREMIUM_EXPERT_TERMS.some(term => lower.includes(term));
   const hasRecipeRequest = RECIPE_REQUEST_TERMS.some(term => lower.includes(term));

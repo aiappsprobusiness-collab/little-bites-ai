@@ -169,7 +169,19 @@ export default function MealPlanPage() {
     return null;
   }, [isFamilyMode, members, selectedMember, isFree, selectedMemberId]);
 
-  const [mutedWeekKey, setMutedWeekKey] = useState<string | null>(null);
+  const MUTED_WEEK_STORAGE_KEY = "mealPlan_mutedWeekKey";
+  const [mutedWeekKey, setMutedWeekKey] = useState<string | null>(() => {
+    if (typeof localStorage === "undefined") return null;
+    const stored = localStorage.getItem(MUTED_WEEK_STORAGE_KEY);
+    const currentStart = getRollingStartKey();
+    return stored === currentStart ? stored : null;
+  });
+  const setMutedWeekKeyAndStorage = useCallback((key: string | null) => {
+    setMutedWeekKey(key);
+    if (typeof localStorage === "undefined") return;
+    if (key) localStorage.setItem(MUTED_WEEK_STORAGE_KEY, key);
+    else localStorage.removeItem(MUTED_WEEK_STORAGE_KEY);
+  }, []);
 
   const starterProfile = memberDataForPlan ? { allergies: memberDataForPlan.allergies, preferences: memberDataForPlan.preferences } : null;
   const { getMealPlans, getMealPlansByDate, clearWeekPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
@@ -242,6 +254,15 @@ export default function MealPlanPage() {
   const rollingDates = useMemo(() => getRolling7Dates(), [startKey]);
   const todayKey = formatLocalDate(new Date());
   const [selectedDay, setSelectedDay] = useState(0);
+
+  // При смене дня (startKey) сбрасываем мьют, чтобы не тянуть его с прошлой недели
+  useEffect(() => {
+    if (!mutedWeekKey) return;
+    if (mutedWeekKey !== startKey) {
+      setMutedWeekKey(null);
+      if (typeof localStorage !== "undefined") localStorage.removeItem(MUTED_WEEK_STORAGE_KEY);
+    }
+  }, [startKey, mutedWeekKey]);
 
   const { replaceWithPool, replaceWithAI, getFreeSwapUsedForDay } = useReplaceMealSlot(
     memberIdForPlan,
@@ -645,7 +666,7 @@ export default function MealPlanPage() {
                     onClick={async () => {
                       try {
                         await generateWeeklyPlan();
-                        setMutedWeekKey(null);
+                        setMutedWeekKeyAndStorage(null);
                         toast({ description: "План на 7 дней готов" });
                       } catch (e: any) {
                         toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
@@ -658,7 +679,7 @@ export default function MealPlanPage() {
                   </Button>
                   <button
                     type="button"
-                    onClick={() => setMutedWeekKey(null)}
+                    onClick={() => setMutedWeekKeyAndStorage(null)}
                     className="text-typo-caption text-emerald-600 hover:text-emerald-700 transition-colors"
                   >
                     Заполнить шаблоном
@@ -707,7 +728,7 @@ export default function MealPlanPage() {
                 if (isFree) {
                   const msg = "Удалить все блюда на сегодня?";
                   if (!window.confirm(msg)) return;
-                  setMutedWeekKey(startKey);
+                  setMutedWeekKeyAndStorage(startKey);
                   try {
                     await clearWeekPlan({ startDate: selectedDate, endDate: selectedDate });
                     toast({ title: "План на день очищен", description: "Блюда на сегодня удалены" });
@@ -719,7 +740,7 @@ export default function MealPlanPage() {
                     ? "Удалить все блюда на ближайшие 7 дней? Это действие нельзя отменить."
                     : "Скрыть шаблонное меню на эти 7 дней?";
                   if (!window.confirm(msg)) return;
-                  setMutedWeekKey(startKey);
+                  setMutedWeekKeyAndStorage(startKey);
                   if (hasDbWeekPlan) {
                     try {
                       await clearWeekPlan({ startDate: rollingDates[0], endDate: rollingDates[6] });
@@ -735,26 +756,30 @@ export default function MealPlanPage() {
             >
               {isFree ? "Очистить день" : "Очистить 7 дней"}
             </button>
-            {!isFree && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-fit"
-                disabled={isAnyGenerating}
-                onClick={async () => {
-                  try {
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-fit"
+              disabled={isAnyGenerating || (isFree && todayIndex < 0)}
+              onClick={async () => {
+                try {
+                  if (isFree && todayIndex >= 0) {
+                    await regenerateSingleDay(todayIndex);
+                    setMutedWeekKeyAndStorage(null);
+                    toast({ description: "План на сегодня готов" });
+                  } else {
                     await generateWeeklyPlan();
-                    setMutedWeekKey(null);
+                    setMutedWeekKeyAndStorage(null);
                     toast({ description: "План на 7 дней готов" });
-                  } catch (e: any) {
-                    toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
                   }
-                }}
-              >
-                <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                Улучшить с AI
-              </Button>
-            )}
+                } catch (e: any) {
+                  toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось создать план" });
+                }
+              }}
+            >
+              <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+              Улучшить с AI
+            </Button>
           </div>
         )}
         </div>

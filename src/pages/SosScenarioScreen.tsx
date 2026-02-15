@@ -143,7 +143,7 @@ export default function SosScenarioScreen() {
       className="flex flex-col bg-background text-foreground"
       style={{ height: "100dvh", minHeight: "100dvh" }}
     >
-      <header className="sticky top-0 z-40 flex items-center gap-2 min-h-14 px-4 border-b border-slate-200/40 bg-background/98 backdrop-blur safe-top shrink-0">
+      <header className="sticky top-0 z-40 flex items-center gap-2 min-h-[var(--header-content-height)] px-4 py-[var(--header-row-py)] border-b border-slate-200/40 bg-background/98 backdrop-blur layout-header-safe shrink-0">
         <Button
           variant="ghost"
           size="icon"

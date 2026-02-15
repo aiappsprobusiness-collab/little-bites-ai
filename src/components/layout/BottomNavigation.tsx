@@ -26,8 +26,9 @@ export function BottomNavigation() {
         "bg-white border-t border-slate-200",
         "rounded-t-2xl max-w-lg mx-auto shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
       )}
+      style={{ minHeight: "var(--layout-nav-height)" }}
     >
-      <div className="flex items-stretch justify-around h-16 px-1">
+      <div className="flex items-stretch justify-around px-1 h-[var(--layout-nav-height)]">
         {TABS.map((item) => {
           const isActive =
             location.pathname === item.path ||
