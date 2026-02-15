@@ -57,7 +57,7 @@ export default function SosTiles() {
       showNav
       headerRight={members.length > 0 ? <MemberSelectorButton /> : undefined}
     >
-      <div className="p-4 space-y-6 bg-slate-50 min-h-full">
+      <div className="px-4 pb-4 space-y-6 bg-slate-50 min-h-full">
         {!memberData && (
           <p className="text-typo-muted text-muted-foreground text-center py-4">
             Добавьте ребёнка в профиле, чтобы получать персональные рекомендации.

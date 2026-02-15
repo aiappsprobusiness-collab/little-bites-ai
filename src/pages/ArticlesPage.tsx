@@ -62,7 +62,7 @@ export default function ArticlesPage() {
 
   return (
     <MobileLayout title="База знаний" showNav>
-      <div className="px-4 pt-4 pb-24">
+      <div className="px-4 pb-6">
         {/* Горизонтальный скролл категорий */}
         <div className="overflow-x-auto scrollbar-hide -mx-4 px-4 pb-4">
           <div className="flex gap-2 min-w-max">

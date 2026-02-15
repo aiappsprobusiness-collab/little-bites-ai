@@ -44,7 +44,7 @@ export default function FavoritesPage() {
 
   return (
     <MobileLayout title="Избранное">
-      <div className="px-4 pt-4 pb-24">
+      <div className="px-4 pb-6">
         {/* Subtitle */}
         <p className="text-typo-muted text-muted-foreground mb-5 px-0.5">
           Любимые рецепты для вашей семьи

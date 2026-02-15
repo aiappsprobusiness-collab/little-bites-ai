@@ -179,7 +179,7 @@ export default function ScanPage() {
 
   return (
     <MobileLayout title="Сканировать продукты">
-      <div className="px-4 pt-4 space-y-4">
+      <div className="px-4 space-y-4">
         {step === "capture" && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}

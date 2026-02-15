@@ -94,8 +94,8 @@ export default function FoodDiary() {
         </Button>
       }
     >
-      <div className="flex flex-col h-[calc(100vh-3.5rem)] pb-16">
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex flex-col min-h-0 flex-1">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4 space-y-4">
           {!memberData && (
             <p className="text-typo-muted text-muted-foreground text-center py-4">
               Добавьте ребёнка в профиле для персональных рекомендаций.

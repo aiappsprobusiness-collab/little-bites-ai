@@ -498,7 +498,7 @@ export default function MealPlanPage() {
         />
       }
     >
-      <div className="flex flex-col min-h-0 pb-safe px-4 pt-4 relative">
+      <div className="flex flex-col min-h-0 flex-1 px-4 relative">
         {/* Generation guard: portal overlay над всем (header z-40, Dialog z-50, toast z-100) */}
         {isAnyGenerating &&
           typeof document !== "undefined" &&
@@ -534,7 +534,7 @@ export default function MealPlanPage() {
         {/* Content wrapper */}
         <div className="relative flex-1 min-h-0">
         {/* Week calendar — always visible */}
-        <div className="mt-2">
+        <div>
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
             {rollingDates.map((date, index) => {
               const dayKey = formatLocalDate(date);

@@ -78,7 +78,7 @@ export default function RecipesPage() {
 
   return (
     <MobileLayout title="Все рецепты">
-      <div className="px-4 pt-4 pb-20">
+      <div className="px-4 pb-6">
         {/* Переключатель видов отображения */}
         <div className="flex items-center justify-end gap-2 mb-4">
           <div className="flex items-center gap-1 bg-muted rounded-lg p-1">

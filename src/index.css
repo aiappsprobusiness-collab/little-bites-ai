@@ -39,10 +39,13 @@
 
     --radius: 1rem;
 
-    /* Layout: хедер и нижняя навигация (поддержка safe-area) */
-    --header-content-height: 3.5rem;
-    --header-row-py: 0.75rem;
-    --layout-header-offset: calc(env(safe-area-inset-top, 0px) + var(--header-content-height) + var(--header-row-py) * 2);
+    /* Layout: единый источник истины для safe-area и отступов (см. контракт в MobileLayout.tsx)
+     * header-offset = safe-area + контентная строка + опциональный gap; main-below-header = этот же offset.
+     * Уменьшить зазор: --header-content-height, --header-row-py; точечно: --layout-header-gap. */
+    --header-content-height: 2.25rem;
+    --header-row-py: 0.125rem;
+    --layout-header-gap: 0px;
+    --layout-header-offset: calc(env(safe-area-inset-top, 0px) + var(--header-content-height) + var(--header-row-py) * 2 + var(--layout-header-gap));
     --layout-nav-height: 4rem;
     --layout-main-bottom: calc(var(--layout-nav-height) + env(safe-area-inset-bottom, 0px));
 
@@ -56,13 +59,13 @@
     --cream: 40 40% 96%;
     --soft-pink: 350 60% 90%;
     --soft-blue: 200 60% 88%;
-    
+
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(160, 45%, 65%) 0%, hsl(180, 50%, 70%) 100%);
     --gradient-peach: linear-gradient(135deg, hsl(25, 80%, 85%) 0%, hsl(350, 60%, 90%) 100%);
     --gradient-lavender: linear-gradient(135deg, hsl(270, 50%, 88%) 0%, hsl(200, 60%, 88%) 100%);
     --gradient-hero: linear-gradient(180deg, hsl(30, 40%, 98%) 0%, hsl(160, 45%, 95%) 100%);
-    
+
     /* Shadows */
     --shadow-soft: 0 4px 20px -4px hsl(160 45% 65% / 0.15);
     --shadow-card: 0 8px 30px -8px hsl(240 10% 25% / 0.08);
@@ -140,56 +143,77 @@
   .gradient-primary {
     background: var(--gradient-primary);
   }
-  
+
   .gradient-peach {
     background: var(--gradient-peach);
   }
-  
+
   .gradient-lavender {
     background: var(--gradient-lavender);
   }
-  
+
   .gradient-hero {
     background: var(--gradient-hero);
   }
-  
+
   .shadow-soft {
     box-shadow: var(--shadow-soft);
   }
-  
+
   .shadow-card {
     box-shadow: var(--shadow-card);
   }
-  
+
   .shadow-button {
     box-shadow: var(--shadow-button);
   }
-  
+
   .text-balance {
     text-wrap: balance;
   }
-  
+
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
 
-  /** PWA bottom nav: at least 12px, or safe area */
+  /** Нижняя навигация: внутренний padding под home indicator. main-above-nav уже учитывает (navHeight + safe-area). */
   .safe-bottom-nav {
     padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
   }
-  
+
   .safe-top {
     padding-top: env(safe-area-inset-top, 1rem);
   }
 
-  /** Хедер: отступ сверху под статус-бар/вырез (используется в MobileLayout) */
-  .layout-header-safe {
+  /** Хедер: фиксированная высота = --layout-header-offset (один источник истины для main-below-header).
+   * Внутри: padding-top = safe-area, остальное — контентная зона. */
+  .layout-header {
+    height: var(--layout-header-offset);
+    min-height: var(--layout-header-offset);
     padding-top: env(safe-area-inset-top, 0px);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
   }
 
-  /** Отступ main под хедер (хедер sticky; контент не заходит под него) */
+  .layout-header-inner {
+    flex: 1;
+    min-height: 0;
+    padding-block: var(--header-row-py);
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+  }
+
+  /** Отступ main под хедер (должен совпадать с высотой хедера). Не дублировать pt-* / safe-area сверху. */
   .main-below-header {
     padding-top: var(--layout-header-offset);
+  }
+
+  /** Убрать overscroll (резинку): контент не оттягивается вниз, белая полоса не показывается. */
+  .main-scroll-contain,
+  .overscroll-y-contain {
+    overscroll-behavior-y: contain;
   }
 
   /** Страницы без хедера: только safe-area сверху, чтобы контент не заходил под вырез */
@@ -197,7 +221,7 @@
     padding-top: env(safe-area-inset-top, 0px);
   }
 
-  /** Отступ main над нижней навигацией + safe-area */
+  /** Отступ main над таббаром (один источник: navHeight + safe-area). Не дублировать pb-* на страницах. */
   .main-above-nav {
     padding-bottom: var(--layout-main-bottom);
   }

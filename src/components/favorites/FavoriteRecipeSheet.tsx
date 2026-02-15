@@ -71,7 +71,7 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="h-[85vh] rounded-t-3xl border-t px-4 pt-4 pb-8"
+        className="h-[85dvh] rounded-t-3xl border-t px-4 pt-4 pb-8"
       >
         <SheetHeader className="text-left pb-3">
           <SheetTitle className="text-typo-title font-semibold text-foreground">{title}</SheetTitle>
