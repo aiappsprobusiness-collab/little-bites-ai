@@ -228,6 +228,11 @@ export default function MealPlanPage() {
   const [poolUpgradeLoading, setPoolUpgradeLoading] = useState(false);
   const isAnyGenerating = isPlanGenerating || poolUpgradeLoading;
 
+  useEffect(() => {
+    setPoolUpgradeLoading(false);
+    setReplacingSlotKey(null);
+  }, [mealPlanMemberId]);
+
   const startKey = getRollingStartKey();
   const endKey = getRollingEndKey();
   const rollingDates = useMemo(() => getRolling7Dates(), [startKey]);
