@@ -22,6 +22,11 @@ export function getRollingStartKey(): string {
   return formatLocalDate(new Date());
 }
 
+/** day_keys для rolling 7 дней: ["YYYY-MM-DD", ...]. */
+export function getRollingDayKeys(): string[] {
+  return getRolling7Dates().map((d) => formatLocalDate(d));
+}
+
 /** endKey для rolling диапазона (седьмой день). */
 export function getRollingEndKey(): string {
   return formatLocalDate(addDays(new Date(), 6));

@@ -122,6 +122,8 @@ export function usePlanGenerationJob(
     refetchOnWindowFocus: true,
   });
 
+  const POOL_UPGRADE_TIMEOUT_MS = 150_000; // 2.5 мин — Edge Function может долго обрабатывать неделю + AI fallback
+
   const runPoolUpgrade = useCallback(
     async (params: StartPlanGenerationParams): Promise<PoolUpgradeResult> => {
       if (!user?.id) throw new Error("Необходима авторизация");
@@ -142,13 +144,24 @@ export function usePlanGenerationJob(
         }),
         ...(params.debug_pool && { debug_pool: true }),
       };
-      const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as { error?: string }).error ?? `Ошибка: ${res.status}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), POOL_UPGRADE_TIMEOUT_MS);
+      try {
+        const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error ?? `Ошибка: ${res.status}`);
+        }
+        const data = (await res.json()) as PoolUpgradeResult;
+        return data;
+      } catch (e) {
+        clearTimeout(timeoutId);
+        if (e instanceof Error && e.name === "AbortError") {
+          throw new Error("Подбор занял слишком много времени. Попробуйте ещё раз или выберите меньше дней.");
+        }
+        throw e;
       }
-      const data = (await res.json()) as PoolUpgradeResult;
-      return data;
     },
     [user?.id, session?.access_token]
   );

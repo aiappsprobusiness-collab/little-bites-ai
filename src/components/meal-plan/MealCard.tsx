@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Heart, Share2, RotateCw } from "lucide-react";
+import { Heart, Share2, RotateCw, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -51,6 +51,8 @@ export interface MealCardProps {
   onShare?: (recipeId: string, recipeTitle: string) => void;
   /** Заменить этот приём пищи (план). Показывает кнопку ↻. */
   onReplace?: () => void;
+  /** true = кнопка замены в состоянии загрузки (pool/AI). */
+  isReplaceLoading?: boolean;
   /** При включённом __PLAN_DEBUG / ?debugPool=1: показывать бейдж DB или AI. */
   debugSource?: "db" | "ai";
 }
@@ -74,6 +76,7 @@ export function MealCard({
   onToggleFavorite,
   onShare,
   onReplace,
+  isReplaceLoading = false,
   debugSource,
 }: MealCardProps) {
   const navigate = useNavigate();
@@ -173,6 +176,11 @@ export function MealCard({
                   )}
               </div>
             )}
+            {hint && (
+              <p className="text-typo-caption text-muted-foreground mt-1 leading-snug line-clamp-2" title={hint}>
+                💡 {hint}
+              </p>
+            )}
           </div>
           {showActions && (
             <div
@@ -184,11 +192,12 @@ export function MealCard({
                 <button
                   type="button"
                   onClick={handleReplaceClick}
-                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-emerald-600 bg-emerald-50/90 border border-emerald-200/70 hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 transition-all"
+                  disabled={isReplaceLoading}
+                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-emerald-600 bg-emerald-50/90 border border-emerald-200/70 hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none"
                   title="Заменить"
                   aria-label="Заменить блюдо"
                 >
-                  <RotateCw className="h-4 w-4" />
+                  {isReplaceLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
                 </button>
               )}
               {onToggleFavorite && (

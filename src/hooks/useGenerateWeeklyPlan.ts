@@ -323,7 +323,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
               console.log("[DEBUG] pool hit meal=%s title=%s id=%s", mealKey, poolRecipe.title, poolRecipe.id.slice(-6));
             }
           } else {
-            if (IS_DEV) {
+            if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debugPool") === "1") {
               console.log("[POOL DEBUG] ai fallback", {
                 mealType: mealKey,
                 memberId: memberId ?? null,

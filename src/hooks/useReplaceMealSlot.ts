@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { resolveUnit } from "@/utils/productUtils";
 import { extractSingleJsonObject } from "@/utils/parseChatRecipes";
+import { normalizeMealType, isSoupLikeTitle, passesProfileFilter, getSanityBlockedReasons, type MemberDataForPool } from "@/utils/recipePool";
 
 const MEAL_SWAP_FREE_KEY = "mealSwap_free_dayKey";
 
@@ -59,63 +60,53 @@ export function useReplaceMealSlot(
     );
   }
 
-  /** Быстрая замена из пула: PASS A (строгий) → PASS B (member fallback) → PASS C (legacy meal_type). */
+  /** Быстрая замена из пула: loose member (NULL + selected), sources seed/manual/week_ai/chat_ai, нормализация meal_type, профильные фильтры, без супов на завтрак. */
   const pickReplacementFromPool = useCallback(
     async (params: {
       mealType: string;
       dayKey: string;
       excludeTitles: string[];
       excludeRecipeIds: string[];
+      memberData?: MemberDataForPool | null;
     }): Promise<{ id: string; title: string; fromLegacy?: boolean } | null> => {
       if (!user) return null;
       const memberIdFilter = memberId ?? null;
-      const runQuery = async (
-        mealTypeFilter: "strict" | "legacy",
-        memberAllowNull: boolean
-      ): Promise<{ id: string; title: string }[]> => {
-        let q = supabase
-          .from("recipes")
-          .select("id, title")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(50);
-        if (mealTypeFilter === "strict") {
-          q = q.eq("meal_type", params.mealType);
-        } else {
-          q = q.is("meal_type", null);
-        }
-        if (memberIdFilter === null) {
-          q = q.is("member_id", null);
-        } else if (memberAllowNull) {
-          q = q.or(`member_id.eq.${memberIdFilter},member_id.is.null`);
-        } else {
-          q = q.eq("member_id", memberIdFilter);
-        }
-        const { data: rows, error } = await q;
-        if (error || !rows?.length) return [];
-        return filterCandidates(
-          rows as { id: string; title: string }[],
-          params.excludeRecipeIds,
-          params.excludeTitles
-        );
-      };
+      const slotNorm = normalizeMealType(params.mealType) ?? (params.mealType as "breakfast" | "lunch" | "snack" | "dinner");
 
-      let candidates = await runQuery("strict", false);
-      if (candidates.length > 0) {
-        const shuffled = shuffle(candidates);
-        return { id: shuffled[0].id, title: shuffled[0].title };
+      let q = supabase
+        .from("recipes")
+        .select("id, title, tags, description, meal_type")
+        .eq("user_id", user.id)
+        .in("source", ["seed", "manual", "week_ai", "chat_ai"])
+        .order("created_at", { ascending: false })
+        .limit(80);
+      if (memberIdFilter === null) {
+        q = q.is("member_id", null);
+      } else {
+        q = q.or(`member_id.eq.${memberIdFilter},member_id.is.null`);
       }
-      candidates = await runQuery("strict", true);
-      if (candidates.length > 0) {
-        const shuffled = shuffle(candidates);
-        return { id: shuffled[0].id, title: shuffled[0].title };
+      const { data: rows, error } = await q;
+      if (error || !rows?.length) return null;
+
+      type Row = { id: string; title: string; tags?: string[] | null; description?: string | null; meal_type?: string | null };
+      let filtered = rows as Row[];
+      filtered = filtered.filter((r) => {
+        const recNorm = normalizeMealType(r.meal_type);
+        return recNorm === null ? slotNorm === "snack" : recNorm === slotNorm;
+      });
+      if (slotNorm === "breakfast") {
+        filtered = filtered.filter((r) => !isSoupLikeTitle(r.title));
       }
-      candidates = await runQuery("legacy", true);
-      if (candidates.length > 0) {
-        const shuffled = shuffle(candidates);
-        return { id: shuffled[0].id, title: shuffled[0].title, fromLegacy: true };
-      }
-      return null;
+      filtered = filtered.filter((r) => getSanityBlockedReasons(r.title, slotNorm).length === 0);
+      filtered = filtered.filter((r) => passesProfileFilter(r, params.memberData).pass);
+      const afterPool = filterCandidates(
+        filtered.map((r) => ({ id: r.id, title: r.title })),
+        params.excludeRecipeIds,
+        params.excludeTitles
+      );
+      if (afterPool.length === 0) return null;
+      const shuffled = shuffle(afterPool);
+      return { id: shuffled[0].id, title: shuffled[0].title };
     },
     [user, memberId]
   );
@@ -141,7 +132,7 @@ export function useReplaceMealSlot(
     [createMealPlan, memberId, options?.startKey, options?.endKey, queryClient, user?.id]
   );
 
-  /** Замена из пула: PASS A → B → C, обновить план. */
+  /** Замена из пула: loose member + chat_ai, нормализация meal_type, профиль, без супов на завтрак. Не подставляем тот же recipe_id. */
   const replaceWithPool = useCallback(
     async (params: {
       dayKey: string;
@@ -149,6 +140,8 @@ export function useReplaceMealSlot(
       excludeTitles: string[];
       excludeRecipeIds: string[];
       isFree: boolean;
+      memberData?: MemberDataForPool | null;
+      currentRecipeId?: string | null;
     }): Promise<"ok" | "ok_legacy" | "limit" | "not_found"> => {
       if (params.isFree && getFreeSwapUsedForDay(params.dayKey)) {
         return "limit";
@@ -158,8 +151,11 @@ export function useReplaceMealSlot(
         dayKey: params.dayKey,
         excludeTitles: params.excludeTitles,
         excludeRecipeIds: params.excludeRecipeIds,
+        memberData: params.memberData,
       });
-      if (!picked) return "not_found";
+      if (!picked || (params.currentRecipeId != null && picked.id === params.currentRecipeId)) {
+        return "not_found";
+      }
       setFreeSwapUsedForDay(params.dayKey);
       await replaceSlotWithRecipe({
         dayKey: params.dayKey,
@@ -194,6 +190,10 @@ export function useReplaceMealSlot(
         params.excludeTitles.length > 0
           ? ` Не повторяй: ${params.excludeTitles.slice(0, 15).join(", ")}.`
           : "";
+      const slotConstraint =
+        params.mealType === "breakfast"
+          ? " Не предлагай супы, рагу, плов, тушёное — только блюда для завтрака."
+          : "";
       const res = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
         method: "POST",
         headers: {
@@ -208,7 +208,7 @@ export function useReplaceMealSlot(
           messages: [
             {
               role: "user",
-              content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr} Верни только JSON.`,
+              content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${slotConstraint} Верни только JSON.`,
             },
           ],
         }),
@@ -226,6 +226,9 @@ export function useReplaceMealSlot(
       const title =
         data.recipes?.[0]?.title ?? (typeof data.message === "string" ? data.message.slice(0, 100) : "Рецепт");
       if (recipeId) {
+        if (params.mealType === "breakfast" && (isSoupLikeTitle(title) || getSanityBlockedReasons(title, "breakfast").length > 0)) {
+          throw new Error("Рецепт не подходит для завтрака (суп/рагу). Попробуйте ещё раз.");
+        }
         await replaceSlotWithRecipe({
           dayKey: params.dayKey,
           mealType: params.mealType,
@@ -261,6 +264,9 @@ export function useReplaceMealSlot(
           image_url: null,
         })),
       });
+      if (params.mealType === "breakfast" && (isSoupLikeTitle(recipe.title) || getSanityBlockedReasons(recipe.title, "breakfast").length > 0)) {
+        throw new Error("Рецепт не подходит для завтрака (суп/рагу). Попробуйте ещё раз.");
+      }
       await replaceSlotWithRecipe({
         dayKey: params.dayKey,
         mealType: params.mealType,
@@ -281,9 +287,80 @@ export function useReplaceMealSlot(
     ]
   );
 
+  /** Одна кнопка замены: pool-first → AI fallback через Edge (action replace_slot). Без модалки.
+   * При успехе НЕ инвалидируем кэш — вызывающая сторона делает optimistic update по данным ответа. */
+  const replaceMealSlotAuto = useCallback(
+    async (params: {
+      dayKey: string;
+      mealType: string;
+      excludeRecipeIds: string[];
+      excludeTitleKeys: string[];
+      memberData?: MemberDataForPool | null;
+      isFree: boolean;
+    }): Promise<
+      | { ok: true; pickedSource: "pool" | "ai"; newRecipeId: string; title: string; plan_source: "pool" | "ai" }
+      | { ok: false; error: string }
+    > => {
+      if (params.isFree && getFreeSwapUsedForDay(params.dayKey)) {
+        return { ok: false, error: "limit" };
+      }
+      if (!user?.id) return { ok: false, error: "unauthorized" };
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const token = freshSession?.access_token ?? undefined;
+      if (!token) return { ok: false, error: "unauthorized" };
+
+      const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          action: "replace_slot",
+          member_id: memberId ?? null,
+          day_key: params.dayKey,
+          meal_type: params.mealType,
+          member_data: params.memberData
+            ? { allergies: params.memberData.allergies, preferences: params.memberData.preferences, age_months: params.memberData.age_months }
+            : null,
+          exclude_recipe_ids: params.excludeRecipeIds,
+          exclude_title_keys: params.excludeTitleKeys,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({})) as {
+        pickedSource?: "pool" | "ai";
+        newRecipeId?: string;
+        title?: string;
+        plan_source?: "pool" | "ai";
+        error?: string;
+        reasonIfAi?: string;
+      };
+
+      if (!res.ok) {
+        return { ok: false, error: (data as { error?: string }).error ?? `Ошибка ${res.status}` };
+      }
+      if (data.error === "replace_failed") {
+        const reason = data.reasonIfAi ?? "ai_failed";
+        return { ok: false, error: reason === "no_recipe_in_response" ? "Не удалось подобрать рецепт" : "Не удалось заменить" };
+      }
+      if (data.pickedSource && data.newRecipeId && data.title != null) {
+        setFreeSwapUsedForDay(params.dayKey);
+        return {
+          ok: true,
+          pickedSource: data.pickedSource,
+          newRecipeId: data.newRecipeId,
+          title: data.title,
+          plan_source: (data.plan_source === "pool" || data.plan_source === "ai" ? data.plan_source : data.pickedSource) ?? "pool",
+        };
+      }
+      return { ok: false, error: "unknown_response" };
+    },
+    [user?.id, memberId, getFreeSwapUsedForDay, setFreeSwapUsedForDay]
+  );
+
   return {
     replaceWithPool,
     replaceWithAI,
+    replaceMealSlotAuto,
     getFreeSwapUsedForDay,
     replaceSlotWithRecipe,
   };

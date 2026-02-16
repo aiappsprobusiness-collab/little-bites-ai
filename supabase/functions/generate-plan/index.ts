@@ -245,10 +245,11 @@ function containsAnyToken(haystack: string, tokens: string[]): boolean {
 }
 type MemberDataPool = { allergies?: string[]; preferences?: string[]; age_months?: number };
 
-/** [3] Расширенные токены для аллергии на молоко/лактозу (RU + EN). */
+/** [3] Расширенные токены для аллергии на молоко/лактозу (RU + EN). Не включать "масло" — банит растительное масло. */
 const DAIRY_ALLERGY_TOKENS = [
-  "молоко", "молочный", "сливки", "сметана", "творог", "сыр", "йогурт", "кефир", "ряженка", "масло", "мороженое", "сгущенка", "лактоза", "казеин", "сливочн",
-  "milk", "dairy", "cream", "sour cream", "curd", "cheese", "yogurt", "kefir", "butter", "lactose", "casein",
+  "молоко", "молочный", "сливки", "сметана", "творог", "сыр", "йогурт", "кефир", "ряженка", "мороженое", "сгущенка", "лактоза", "казеин",
+  "сливочн", "сливочное масло",
+  "milk", "dairy", "cream", "sour cream", "curd", "cheese", "yogurt", "kefir", "butter", "ghee", "lactose", "casein",
 ];
 
 function getAllergyTokens(memberData: MemberDataPool | null | undefined): string[] {
@@ -607,6 +608,20 @@ async function pickFromPool(
         foundAllergyTokens: detail.foundTokens.slice(0, 10),
         matchedIn: detail.matchedIn,
       });
+    }
+    if (beforeProfile > 0 && afterProfile === 0 && firstFailReason.current === "filtered_by_allergies") {
+      const tokenCounts = new Map<string, number>();
+      for (const r of candidatesBeforeProfile) {
+        const { foundTokens } = checkAllergyWithDetail(r, memberData);
+        for (const tok of foundTokens) {
+          tokenCounts.set(tok, (tokenCounts.get(tok) ?? 0) + 1);
+        }
+      }
+      const topTokens = [...tokenCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([tok, cnt]) => `${tok}:${cnt}`);
+      safeLog("[ALLERGY DEBUG] all_filtered", { slotType: mealType, candidates: beforeProfile, topTokens });
     }
   }
 

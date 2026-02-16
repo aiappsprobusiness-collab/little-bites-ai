@@ -1,12 +1,18 @@
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import type { RecipePreview } from "@/types/recipePreview";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const DEBOUNCE_MS = 80;
 
 function isValidUUID(s: string): boolean {
   return UUID_REGEX.test(s);
+}
+
+function stableIdsKey(recipeIds: string[]): string {
+  return [...new Set(recipeIds)].filter(isValidUUID).sort().join(",");
 }
 
 function toRecipePreview(row: {
@@ -35,16 +41,28 @@ function toRecipePreview(row: {
 
 /**
  * Fetches recipe previews by IDs. Filters to valid UUIDs only (starter recipe IDs like "s1-r1" are skipped).
- * Returns Record<recipeId, RecipePreview> + loading/error.
+ * IDs are stabilized (unique + sort) and debounced (80ms) so rapid changes during generation don't trigger many requests.
  */
 export function useRecipePreviewsByIds(recipeIds: string[]) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const ids = Array.from(new Set(recipeIds)).filter(isValidUUID);
-  const stableIdsKey = [...ids].sort().join(",");
+  const inputKey = useMemo(() => stableIdsKey(recipeIds), [recipeIds]);
+  const [debouncedKey, setDebouncedKey] = useState(inputKey);
+
+  useEffect(() => {
+    if (inputKey === debouncedKey) return;
+    if (!debouncedKey && inputKey) {
+      setDebouncedKey(inputKey);
+      return;
+    }
+    const t = setTimeout(() => setDebouncedKey(inputKey), DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [inputKey, debouncedKey]);
+
+  const ids = useMemo(() => (debouncedKey ? debouncedKey.split(",").filter(Boolean) : []), [debouncedKey]);
 
   const query = useQuery({
-    queryKey: ["recipe_previews", user?.id, stableIdsKey],
+    queryKey: ["recipe_previews", user?.id, debouncedKey],
     queryFn: async (): Promise<Record<string, RecipePreview>> => {
       if (!user || ids.length === 0) return {};
       const [previewsResult, tipsResult] = await Promise.all([
