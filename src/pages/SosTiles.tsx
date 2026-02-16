@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useLayoutEffect, useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
@@ -53,7 +53,7 @@ export default function SosTiles() {
     }
   }, [searchParams, navigate]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const main = document.querySelector("main.main-scroll-contain");
     main?.scrollTo(0, 0);
   }, []);

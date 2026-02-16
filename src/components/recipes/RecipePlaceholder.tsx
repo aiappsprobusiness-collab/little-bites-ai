@@ -139,7 +139,7 @@ function hashString(str: string): number {
 // Используем приоритетную систему: сначала ищем специфичные ингредиенты, потом общие
 function findMatchingEmoji(title: string): { icon: string; from: string; to: string } | null {
   const lowerTitle = title.toLowerCase();
-  
+
   // Приоритетные категории (более специфичные ингредиенты)
   const priorityCategories = [
     // Рыба и морепродукты (высокий приоритет)
@@ -147,17 +147,17 @@ function findMatchingEmoji(title: string): { icon: string; from: string; to: str
     { keywords: ["креветк", "креветоч"], icon: "🦐", gradient: { from: "from-orange-200/60", to: "to-pink-200/40" } },
     { keywords: ["краб"], icon: "🦀", gradient: { from: "from-red-200/60", to: "to-orange-300/40" } },
     { keywords: ["кальмар"], icon: "🦑", gradient: { from: "from-pink-200/60", to: "to-purple-200/40" } },
-    
+
     // Крупы и каши (высокий приоритет)
     { keywords: ["каш", "овсян", "геркулес", "манн", "каша"], icon: "🥣", gradient: { from: "from-amber-100/60", to: "to-yellow-200/40" } },
     { keywords: ["рис", "рисов", "ризотто"], icon: "🍚", gradient: { from: "from-stone-100/60", to: "to-amber-100/40" } },
     { keywords: ["греч", "гречнев"], icon: "🌾", gradient: { from: "from-amber-200/60", to: "to-stone-300/40" } },
-    
+
     // Мясо (высокий приоритет)
     { keywords: ["мяс", "мясн", "говядин", "свинин", "телятин"], icon: "🥩", gradient: { from: "from-red-200/60", to: "to-rose-300/40" } },
     { keywords: ["курин", "куриц", "курочк", "птиц"], icon: "🍗", gradient: { from: "from-orange-100/60", to: "to-amber-200/40" } },
     { keywords: ["индейк", "индюш"], icon: "🍗", gradient: { from: "from-amber-100/60", to: "to-orange-200/40" } },
-    
+
     // Овощи (средний приоритет)
     { keywords: ["морков", "каротел"], icon: "🥕", gradient: { from: "from-orange-200/60", to: "to-amber-300/40" } },
     { keywords: ["капуст", "брокколи", "цветн"], icon: "🥦", gradient: { from: "from-emerald-200/60", to: "to-teal-300/40" } },
@@ -165,11 +165,11 @@ function findMatchingEmoji(title: string): { icon: string; from: string; to: str
     { keywords: ["картофел", "картошк"], icon: "🥔", gradient: { from: "from-amber-200/60", to: "to-yellow-300/40" } },
     { keywords: ["баклажан"], icon: "🍆", gradient: { from: "from-purple-200/60", to: "to-fuchsia-300/40" } },
     { keywords: ["тыкв", "тыквен"], icon: "🎃", gradient: { from: "from-orange-200/60", to: "to-amber-300/40" } },
-    
+
     // Бобовые
     { keywords: ["фасол", "чечевиц", "нут", "бобов"], icon: "🫘", gradient: { from: "from-amber-200/60", to: "to-red-200/40" } },
   ];
-  
+
   // Сначала проверяем приоритетные категории
   for (const category of priorityCategories) {
     for (const keyword of category.keywords) {
@@ -182,15 +182,15 @@ function findMatchingEmoji(title: string): { icon: string; from: string; to: str
       }
     }
   }
-  
+
   // Если не нашли в приоритетных, ищем в остальных
   for (const mapping of keywordEmojiMap) {
     // Пропускаем уже проверенные категории
-    const isPriorityCategory = priorityCategories.some(pc => 
+    const isPriorityCategory = priorityCategories.some(pc =>
       pc.keywords.some(k => mapping.keywords.includes(k))
     );
     if (isPriorityCategory) continue;
-    
+
     for (const keyword of mapping.keywords) {
       if (lowerTitle.includes(keyword)) {
         return {

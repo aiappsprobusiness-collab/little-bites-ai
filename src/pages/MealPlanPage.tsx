@@ -594,8 +594,8 @@ export default function MealPlanPage() {
           <Card variant="default" className="p-8 text-center">
             <CardContent className="p-0">
               <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-<h3 className="text-typo-title font-semibold mb-2">Нет профиля ребенка</h3>
-            <p className="text-typo-muted text-muted-foreground mb-4">
+              <h3 className="text-typo-title font-semibold mb-2">Нет профиля ребенка</h3>
+              <p className="text-typo-muted text-muted-foreground mb-4">
                 {isFree
                   ? "Добавьте профиль ребёнка, чтобы строить план питания."
                   : "Добавьте профиль ребёнка или выберите «Семья» для общего плана"}
@@ -612,12 +612,12 @@ export default function MealPlanPage() {
 
   return (
     <MobileLayout
-        headerCenter={
-          <span className="text-typo-title font-semibold text-foreground tracking-tight">
-            Mom Recipes <span className="text-primary" aria-hidden>🌿</span>
-          </span>
-        }
-      >
+      headerCenter={
+        <span className="text-typo-title font-semibold text-foreground tracking-tight">
+          Mom Recipes <span className="text-primary" aria-hidden>🌿</span>
+        </span>
+      }
+    >
       <div className="flex flex-col min-h-0 flex-1 px-4 relative">
         {/* Content wrapper: один скролл; при переходе на вкладку План скролл сбрасывается вверх */}
         <div ref={scrollContainerRef} className="relative flex-1 min-h-0 overflow-y-auto">
@@ -771,44 +771,44 @@ export default function MealPlanPage() {
                       {isAnyGenerating ? "Подбираем…" : "Подобрать рецепты"}
                     </Button>
                     <button
-                    type="button"
-                    onClick={async () => {
-                      if (isAnyGenerating) {
-                        toast({ description: "Идёт генерация плана, подождите…" });
-                        return;
-                      }
-                      if (isFree) {
-                        if (!window.confirm("Удалить все блюда на сегодня?")) return;
-                        setMutedWeekKeyAndStorage(startKey);
-                        try {
-                          await clearWeekPlan({ startDate: selectedDate, endDate: selectedDate });
-                          toast({ title: "План на день очищен", description: "Блюда на сегодня удалены" });
-                        } catch (e: any) {
-                          toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
+                      type="button"
+                      onClick={async () => {
+                        if (isAnyGenerating) {
+                          toast({ description: "Идёт генерация плана, подождите…" });
+                          return;
                         }
-                      } else {
-                        const msg = hasDbWeekPlan
-                          ? "Удалить все блюда на ближайшие 7 дней? Это действие нельзя отменить."
-                          : "Скрыть шаблонное меню на эти 7 дней?";
-                        if (!window.confirm(msg)) return;
-                        setMutedWeekKeyAndStorage(startKey);
-                        if (hasDbWeekPlan) {
+                        if (isFree) {
+                          if (!window.confirm("Удалить все блюда на сегодня?")) return;
+                          setMutedWeekKeyAndStorage(startKey);
                           try {
-                            await clearWeekPlan({ startDate: rollingDates[0], endDate: rollingDates[6] });
-                            toast({ title: "План на 7 дней очищен", description: "План питания удалён" });
+                            await clearWeekPlan({ startDate: selectedDate, endDate: selectedDate });
+                            toast({ title: "План на день очищен", description: "Блюда на сегодня удалены" });
                           } catch (e: any) {
                             toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
                           }
+                        } else {
+                          const msg = hasDbWeekPlan
+                            ? "Удалить все блюда на ближайшие 7 дней? Это действие нельзя отменить."
+                            : "Скрыть шаблонное меню на эти 7 дней?";
+                          if (!window.confirm(msg)) return;
+                          setMutedWeekKeyAndStorage(startKey);
+                          if (hasDbWeekPlan) {
+                            try {
+                              await clearWeekPlan({ startDate: rollingDates[0], endDate: rollingDates[6] });
+                              toast({ title: "План на 7 дней очищен", description: "План питания удалён" });
+                            } catch (e: any) {
+                              toast({ variant: "destructive", title: "Ошибка", description: e?.message || "Не удалось очистить" });
+                            }
+                          }
                         }
-                      }
-                    }}
-                    className={`text-typo-caption text-muted-foreground/80 hover:text-muted-foreground ${isAnyGenerating ? "opacity-70 cursor-wait" : ""}`}
-                    title={isAnyGenerating ? "Идёт генерация плана" : undefined}
-                  >
-                    {isFree ? "Очистить день" : "Очистить 7 дней"}
-                  </button>
-                </>
-              )}
+                      }}
+                      className={`text-typo-caption text-muted-foreground/80 hover:text-muted-foreground ${isAnyGenerating ? "opacity-70 cursor-wait" : ""}`}
+                      title={isAnyGenerating ? "Идёт генерация плана" : undefined}
+                    >
+                      {isFree ? "Очистить день" : "Очистить 7 дней"}
+                    </button>
+                  </>
+                )}
               </div>
               {(memberDataForPlan?.allergies?.length || memberDataForPlan?.preferences?.length) ? (
                 <p className="text-[11px] text-muted-foreground">
@@ -927,10 +927,10 @@ export default function MealPlanPage() {
                             excludeTitleKeys: replaceExcludeTitleKeys,
                             memberData: memberDataForPlan
                               ? {
-                                  allergies: memberDataForPlan.allergies,
-                                  preferences: memberDataForPlan.preferences,
-                                  age_months: memberDataForPlan.age_months,
-                                }
+                                allergies: memberDataForPlan.allergies,
+                                preferences: memberDataForPlan.preferences,
+                                age_months: memberDataForPlan.age_months,
+                              }
                               : undefined,
                             isFree,
                           });
@@ -1012,10 +1012,10 @@ export default function MealPlanPage() {
                                 excludeTitleKeys: replaceExcludeTitleKeys,
                                 memberData: memberDataForPlan
                                   ? {
-                                      allergies: memberDataForPlan.allergies,
-                                      preferences: memberDataForPlan.preferences,
-                                      age_months: memberDataForPlan.age_months,
-                                    }
+                                    allergies: memberDataForPlan.allergies,
+                                    preferences: memberDataForPlan.preferences,
+                                    age_months: memberDataForPlan.age_months,
+                                  }
                                   : undefined,
                                 isFree,
                               });
@@ -1069,48 +1069,48 @@ export default function MealPlanPage() {
             })}
           </div>
 
-            {hasAnyWeekPlan &&
-              missingDayKeys.length === 1 &&
-              missingDayKeys[0] === endKey &&
-              !isFree &&
-              !isAnyGenerating && (
-                <div className="mt-4 flex flex-col gap-1">
-                  <p className="text-typo-caption text-muted-foreground">Последний день без плана</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-fit rounded-xl"
-                    onClick={async () => {
-                      if (typeof localStorage !== "undefined") {
-                        localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
-                      }
-                      setPoolUpgradeLoading(true);
-                      try {
-                        const result = await runPoolUpgrade({
-                          type: "day",
-                          member_id: memberIdForPlan,
-                          member_data: memberDataForPlan,
-                          day_key: formatLocalDate(rollingDates[6]),
-                        });
-                        queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                        const aiFallback = result.aiFallbackCount ?? 0;
-                        const desc = aiFallback > 0
-                          ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
-                          : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
-                        toast({ title: "Подобрать рецепты", description: desc });
-                      } catch (e: unknown) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
-                      } finally {
-                        setPoolUpgradeLoading(false);
-                      }
-                    }}
-                  >
-                    Заполнить день
-                  </Button>
-                </div>
-              )}
-          </div>
+          {hasAnyWeekPlan &&
+            missingDayKeys.length === 1 &&
+            missingDayKeys[0] === endKey &&
+            !isFree &&
+            !isAnyGenerating && (
+              <div className="mt-4 flex flex-col gap-1">
+                <p className="text-typo-caption text-muted-foreground">Последний день без плана</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-fit rounded-xl"
+                  onClick={async () => {
+                    if (typeof localStorage !== "undefined") {
+                      localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
+                    }
+                    setPoolUpgradeLoading(true);
+                    try {
+                      const result = await runPoolUpgrade({
+                        type: "day",
+                        member_id: memberIdForPlan,
+                        member_data: memberDataForPlan,
+                        day_key: formatLocalDate(rollingDates[6]),
+                      });
+                      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                      const aiFallback = result.aiFallbackCount ?? 0;
+                      const desc = aiFallback > 0
+                        ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                        : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
+                      toast({ title: "Подобрать рецепты", description: desc });
+                    } catch (e: unknown) {
+                      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
+                    } finally {
+                      setPoolUpgradeLoading(false);
+                    }
+                  }}
+                >
+                  Заполнить день
+                </Button>
+              </div>
+            )}
         </div>
+      </div>
 
     </MobileLayout>
   );

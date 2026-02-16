@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Send, Loader2, Square, HelpCircle } from "lucide-react";
@@ -171,6 +171,14 @@ export default function ChatPage() {
       // ignore quota / private mode
     }
   }, [mode, messages]);
+
+  // Скролл в начало при открытии help-чата (из чипсов или ввода)
+  useLayoutEffect(() => {
+    if (mode !== "help") return;
+    const main = document.querySelector("main.main-scroll-contain");
+    main?.scrollTo(0, 0);
+    messagesContainerRef.current?.scrollTo(0, 0);
+  }, [mode]);
 
   // Fade-in бейджа «Помощник рядом» при входе в help mode
   useEffect(() => {
@@ -852,7 +860,7 @@ export default function ChatPage() {
         <div className="border-t border-slate-200/40 bg-background/98 backdrop-blur py-3 safe-bottom max-w-full overflow-x-hidden">
           {mode === "help" && (
             <p className="text-[11px] text-muted-foreground mb-1.5 px-0.5">
-              Я отвечу безопасно и по шагам. Диагнозов не ставлю.
+              Ответы носят информационный характер и не заменяют консультацию врача.
             </p>
           )}
           <div className="flex w-full items-center gap-2 min-w-0">

@@ -39,16 +39,16 @@ export default function SosScenarioScreen() {
 
   const memberData = selectedMember
     ? {
-        name: selectedMember.name,
-        age_months: selectedMember.age_months ?? 0,
-        allergies: selectedMember.allergies ?? [],
-      }
+      name: selectedMember.name,
+      age_months: selectedMember.age_months ?? 0,
+      allergies: selectedMember.allergies ?? [],
+    }
     : members[0]
       ? {
-          name: members[0].name,
-          age_months: members[0].age_months ?? 0,
-          allergies: members[0].allergies ?? [],
-        }
+        name: members[0].name,
+        age_months: members[0].age_months ?? 0,
+        allergies: members[0].allergies ?? [],
+      }
       : null;
 
   const messages = validKey ? messagesByScenario[validKey] ?? [] : [];
@@ -201,11 +201,10 @@ export default function SosScenarioScreen() {
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`rounded-2xl px-4 py-3 max-w-[90%] ${
-                msg.role === "user"
+              className={`rounded-2xl px-4 py-3 max-w-[90%] ${msg.role === "user"
                   ? "ml-auto rounded-br-sm bg-emerald-600 text-white"
                   : "mr-auto rounded-bl-sm bg-slate-100 text-slate-800"
-              }`}
+                }`}
             >
               <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
                 {msg.role === "assistant" ? stripEmojiForDisplay(msg.content) : msg.content}

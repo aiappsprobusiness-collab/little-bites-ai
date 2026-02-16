@@ -82,7 +82,7 @@ export function exportMealPlanToPDF(
   // Child info
   addText(`Rebenok: ${childName}`, margin, yPos, { fontSize: 12 });
   yPos += 6;
-  
+
   if (goals.length > 0) {
     addText(`Celi: ${goals.join(', ')}`, margin, yPos, { fontSize: 10, color: [100, 100, 100] });
     yPos += 6;
@@ -122,7 +122,7 @@ export function exportMealPlanToPDF(
 
     // Meals
     const mealTypes: (keyof GeneratedDay)[] = ['breakfast', 'lunch', 'snack', 'dinner'];
-    
+
     for (const mealType of mealTypes) {
       const meal = dayPlan[mealType];
       if (!meal) continue;
@@ -133,12 +133,12 @@ export function exportMealPlanToPDF(
       const mealLabel = mealTypeLabels[mealType];
       addText(`${mealLabel}:`, margin + 2, yPos, { fontSize: 10, fontStyle: 'bold' });
       addText(meal.name, margin + 22, yPos, { fontSize: 10 });
-      
+
       // Macros
       const macroText = `${meal.calories} kkal | B:${meal.protein}g | U:${meal.carbs}g | ZH:${meal.fat}g`;
       addText(macroText, pageWidth - margin - 2, yPos, { fontSize: 8, color: [120, 120, 120] });
       pdf.text(macroText, pageWidth - margin - pdf.getTextWidth(macroText), yPos);
-      
+
       yPos += 6;
     }
 

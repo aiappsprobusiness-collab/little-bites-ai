@@ -154,8 +154,8 @@ export function MealCard({
               <div className="flex flex-wrap gap-1.5 mt-0.5">
                 {showPlaceholderChips
                   ? Array.from({ length: CHIP_PLACEHOLDER_COUNT }).map((_, i) => (
-                      <Skeleton key={i} className="h-5 w-14 rounded-md shrink-0" />
-                    ))
+                    <Skeleton key={i} className="h-5 w-14 rounded-md shrink-0" />
+                  ))
                   : (
                     <>
                       {chips.map((name, i) => (

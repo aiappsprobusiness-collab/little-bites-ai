@@ -65,7 +65,7 @@ export function MealEditDialog({
 
   const generateAlternatives = async () => {
     if (!meal) return;
-    
+
     setIsGenerating(true);
     setAlternatives([]);
 
@@ -109,7 +109,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
       }
 
       const data = await response.json();
-      
+
       // Parse JSON from response
       const jsonMatch = data.message.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
@@ -255,11 +255,10 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
                   onClick={() => selectAlternative(alt)}
-                  className={`w-full p-3 rounded-lg border text-left transition-all ${
-                    editedMeal?.name === alt.name
+                  className={`w-full p-3 rounded-lg border text-left transition-all ${editedMeal?.name === alt.name
                       ? "border-primary bg-primary/5"
                       : "border-border hover:border-primary/50"
-                  }`}
+                    }`}
                 >
                   <p className="text-typo-muted font-semibold">{alt.name}</p>
                   <p className="text-typo-caption text-muted-foreground mt-1">
