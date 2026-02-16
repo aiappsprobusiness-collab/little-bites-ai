@@ -1,0 +1,539 @@
+{
+  "request": {
+    "type": "day",
+    "member_id": null,
+    "member_data": null,
+    "start_key": "2026-02-16",
+    "debug_pool": true,
+    "timeoutSec": 180,
+    "day_key": "2026-02-16"
+  },
+  "job": {
+    "status": "done",
+    "progress_done": 1,
+    "progress_total": 1,
+    "error_text": null,
+    "started_at": "2026-02-16T01:27:14.172Z",
+    "finished_at": "2026-02-16T01:27:53.424Z"
+  },
+  "mealPlansSnapshot": [
+    {
+      "planned_date": "2026-02-16",
+      "meals": {
+        "lunch": {
+          "title": "Суп-пюре из тыквы с курицей",
+          "recipe_id": "afe61890-8771-41b7-810e-a6f2c31ad696"
+        },
+        "snack": {
+          "title": "Йогурт с персиком и орехами",
+          "recipe_id": "762c98ce-3a4c-4073-8d14-b671f2d1c400"
+        },
+        "dinner": {
+          "title": "Тефтели из индейки с рисом и кабачком",
+          "recipe_id": "49f02b9d-fe5e-4699-82fb-7f556b2bb49e"
+        },
+        "breakfast": {
+          "title": "Омлет с брокколи и сыром",
+          "recipe_id": "e067be83-1e1e-4ed7-8b68-24cf766a87d8"
+        }
+      }
+    }
+  ],
+  "logs": {
+    "candidates_snapshot": [
+      {
+        "event_message": "[POOL DEBUG] candidates_snapshot {\n  slotType: \"breakfast\",\n  memberId: \"null\",\n  usedTitleKeysCount: 4,\n  proteinCounts: { dairy: 2, chicken: 2 },\n  top5: [\n    {\n      id: \"5b48a32e-f149-4aab-8b78-ceffb1b43f1b\",\n      title: \"Омлет с помидорами и зеленью\",\n      meal_type_raw: \"breakfast\",\n      meal_type_norm_raw: \"breakfast\",\n      meal_type_resolved: \"breakfast\",\n      meal_type_wasInferred: false,\n      proteinKey: \"egg\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4,\n      proteinCountBefore: 0,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 4,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"60c8c494-feea-4c83-b1cc-6b186cd9c137\",\n      title: \"Тыквенные оладьи с яблочным пюре\",\n      meal_type_raw: null,\n      meal_type_norm_raw: null,\n      meal_type_resolved: \"breakfast\",\n      meal_type_wasInferred: true,\n      proteinKey: \"egg\",\n      baseScore: 1,\n      diversityPenalty: 0,\n      finalScore: 1,\n      proteinCountBefore: 0,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 5,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: true,\n        isBreakfastLike: true,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"3d4497cf-8130-4f47-82e6-65d935742323\",\n      title: \"Омлет с цукини и сыром\",\n      meal_type_raw: \"breakfast\",\n      meal_type_norm_raw: \"breakfast\",\n      meal_type_resolved: \"breakfast\",\n      meal_type_wasInferred: false,\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11,\n      proteinCountBefore: 2,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 5,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"909f316d-88c9-4de5-9abf-1c590d8a9339\",\n      title: \"Творожные сырники с яблочным пюре\",\n      meal_type_raw: \"breakfast\",\n      meal_type_norm_raw: \"breakfast\",\n      meal_type_resolved: \"breakfast\",\n      meal_type_wasInferred: false,\n      proteinKey: \"chicken\",\n      baseScore: 1,\n      diversityPenalty: -15,\n      finalScore: -14,\n      proteinCountBefore: 2,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 5,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: true,\n        isBreakfastLike: true,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"178e9ad9-1d02-46bb-bdb0-84fe0d9cc2ae\",\n      title: \"Творожные кексы с грушей\",\n      meal_type_raw: \"breakfast\",\n      meal_type_norm_raw: \"breakfast\",\n      meal_type_resolved: \"breakfast\",\n      meal_type_wasInferred: false,\n      proteinKey: \"dairy\",\n      baseScore: 4,\n      diversityPenalty: -20,\n      finalScore: -16,\n      proteinCountBefore: 2,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 5,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:18.407Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] candidates_snapshot {\n  slotType: \"lunch\",\n  memberId: \"null\",\n  usedTitleKeysCount: 5,\n  proteinCounts: { dairy: 3, chicken: 2 },\n  top5: [\n    {\n      id: \"ad33a3e6-8e67-4e4f-97e0-c98ea715f1e7\",\n      title: \"Суп-пюре из тыквы и чечевицы\",\n      meal_type_raw: \"lunch\",\n      meal_type_norm_raw: \"lunch\",\n      meal_type_resolved: \"lunch\",\n      meal_type_wasInferred: false,\n      proteinKey: \"legumes\",\n      baseScore: 1,\n      diversityPenalty: 0,\n      finalScore: 1,\n      proteinCountBefore: 0,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 7,\n      flags: {\n        isSoupLike: true,\n        isSnackLike: true,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"80cb76d3-9890-4c22-b516-bba41646d63d\",\n      title: \"Тефтели из индейки с гречкой и тушеными овощами\",\n      meal_type_raw: \"lunch\",\n      meal_type_norm_raw: \"lunch\",\n      meal_type_resolved: \"lunch\",\n      meal_type_wasInferred: false,\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11,\n      proteinCountBefore: 2,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 7,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"acd32c4c-04cc-496e-b28e-92373f526d1e\",\n      title: \"Индейка с гречкой и морковью\",\n      meal_type_raw: \"lunch\",\n      meal_type_norm_raw: \"lunch\",\n      meal_type_resolved: \"lunch\",\n      meal_type_wasInferred: false,\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11,\n      proteinCountBefore: 2,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 6,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"e38b2ed3-a609-4c79-bf4c-126632b7e553\",\n      title: \"Куриный суп с овощами и рисом\",\n      meal_type_raw: \"lunch\",\n      meal_type_norm_raw: \"lunch\",\n      meal_type_resolved: \"lunch\",\n      meal_type_wasInferred: false,\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11,\n      proteinCountBefore: 2,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 7,\n      flags: {\n        isSoupLike: true,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"647619e6-6004-4b6c-a0f9-2b8a4ab8637e\",\n      title: \"Куриный суп с овощами и вермишелью\",\n      meal_type_raw: null,\n      meal_type_norm_raw: null,\n      meal_type_resolved: \"lunch\",\n      meal_type_wasInferred: true,\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11,\n      proteinCountBefore: 2,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 7,\n      flags: {\n        isSoupLike: true,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:18.730Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] candidates_snapshot {\n  slotType: \"snack\",\n  memberId: \"null\",\n  usedTitleKeysCount: 6,\n  proteinCounts: { dairy: 3, chicken: 3 },\n  top5: [\n    {\n      id: \"b464ac6b-4937-4771-b695-c27776f38084\",\n      title: \"Яблочное пюре с печеньем\",\n      meal_type_raw: \"snack\",\n      meal_type_norm_raw: \"snack\",\n      meal_type_resolved: \"snack\",\n      meal_type_wasInferred: false,\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24,\n      proteinCountBefore: 3,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 3,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: true,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"569f6b73-dc15-4f70-9849-137d0f474b6a\",\n      title: \"Йогурт с яблоком и орехами\",\n      meal_type_raw: \"snack\",\n      meal_type_norm_raw: \"snack\",\n      meal_type_resolved: \"snack\",\n      meal_type_wasInferred: false,\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24,\n      proteinCountBefore: 3,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 3,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: true,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"a58f1302-bc74-44cc-91d2-fc8f379098ae\",\n      title: \"Творог с грушей и орехами\",\n      meal_type_raw: \"snack\",\n      meal_type_norm_raw: \"snack\",\n      meal_type_resolved: \"snack\",\n      meal_type_wasInferred: false,\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24,\n      proteinCountBefore: 3,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 3,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: true,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"4636f337-36bf-468f-9330-16017f6752f9\",\n      title: \"Йогурт с бананом и ягодами\",\n      meal_type_raw: \"snack\",\n      meal_type_norm_raw: \"snack\",\n      meal_type_resolved: \"snack\",\n      meal_type_wasInferred: false,\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24,\n      proteinCountBefore: 3,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 3,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: true,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"c99f1e99-d93e-40b4-8c88-9a25524a06e5\",\n      title: \"Йогурт с грушей и грецкими орехами\",\n      meal_type_raw: \"snack\",\n      meal_type_norm_raw: \"snack\",\n      meal_type_resolved: \"snack\",\n      meal_type_wasInferred: false,\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24,\n      proteinCountBefore: 3,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 3,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: true,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.074Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] candidates_snapshot {\n  slotType: \"dinner\",\n  memberId: \"null\",\n  usedTitleKeysCount: 7,\n  proteinCounts: { dairy: 4, chicken: 3 },\n  top5: [\n    {\n      id: \"9617e016-351c-43b3-9ebb-440000afa395\",\n      title: \"Запечённый минтай с цветной капустой и картофелем\",\n      meal_type_raw: \"dinner\",\n      meal_type_norm_raw: \"dinner\",\n      meal_type_resolved: \"dinner\",\n      meal_type_wasInferred: false,\n      proteinKey: \"fish\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4,\n      proteinCountBefore: 0,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 5,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"185ce171-ac78-49f7-9be6-3ef4c935f131\",\n      title: \"Запечённая треска с цукини и морковью\",\n      meal_type_raw: \"dinner\",\n      meal_type_norm_raw: \"dinner\",\n      meal_type_resolved: \"dinner\",\n      meal_type_wasInferred: false,\n      proteinKey: \"fish\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4,\n      proteinCountBefore: 0,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 5,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"fb7d7710-2ba7-43be-b03a-6cf0efb169c7\",\n      title: \"Тефтели из говядины с рисом и томатным соусом\",\n      meal_type_raw: \"dinner\",\n      meal_type_norm_raw: \"dinner\",\n      meal_type_resolved: \"dinner\",\n      meal_type_wasInferred: false,\n      proteinKey: \"beef_pork\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4,\n      proteinCountBefore: 0,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 5,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"b60ef2fc-67b5-4c08-b747-0f2a95093cbb\",\n      title: \"Овощное рагу с нутом\",\n      meal_type_raw: \"dinner\",\n      meal_type_norm_raw: \"dinner\",\n      meal_type_resolved: \"dinner\",\n      meal_type_wasInferred: false,\n      proteinKey: \"legumes\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4,\n      proteinCountBefore: 0,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 6,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    },\n    {\n      id: \"fe7904ee-1197-45bf-acb8-b17dc42dccd8\",\n      title: \"Запеченная треска с овощами\",\n      meal_type_raw: null,\n      meal_type_norm_raw: null,\n      meal_type_resolved: \"dinner\",\n      meal_type_wasInferred: true,\n      proteinKey: \"fish\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4,\n      proteinCountBefore: 0,\n      source: \"week_ai\",\n      hasSteps: true,\n      ingredientsCount: 5,\n      flags: {\n        isSoupLike: false,\n        isSnackLike: false,\n        isBreakfastLike: false,\n        sanityRejected: false,\n        allergyHit: false\n      }\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.385Z",
+            "version": "23"
+          }
+        ]
+      }
+    ],
+    "allergy": [],
+    "sanity": [
+      {
+        "event_message": "[SANITY DEBUG] {\n  slotType: \"snack\",\n  recipeId: \"16b1ac91-e4df-448b-b887-1d1712b069e4\",\n  title: \"Рыбные котлеты с картофельным пюре и брокколи\",\n  hitTokens: \"[REDACTED]\"\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.072Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[SANITY DEBUG] {\n  slotType: \"dinner\",\n  recipeId: \"a99915bf-6cd1-41eb-9556-319a6981c996\",\n  title: \"Рыбные котлеты с картофельным пюре и брокколи\",\n  hitTokens: \"[REDACTED]\"\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.384Z",
+            "version": "23"
+          }
+        ]
+      }
+    ],
+    "plan_quality": [
+      {
+        "event_message": "[PLAN QUALITY] slotSummary (last day) {\n  dayKey: \"2026-02-16\",\n  slotSummary: [\n    {\n      slotType: \"breakfast\",\n      pickedSource: \"pool\",\n      pickedRecipeId: \"9aae1320-b3b4-4790-bbef-e37b158ef166\",\n      pickedTitle: \"Творожные сырники с яблоком\",\n      pickedMealTypeNorm: \"breakfast\",\n      proteinKey: \"dairy\",\n      score: -16,\n      sanityRejectedCount: 0,\n      allergyRejectedCount: 0,\n      proteinRejectedCount: 0,\n      mealTypeRejectedCount: 47\n    },\n    {\n      slotType: \"lunch\",\n      pickedSource: \"pool\",\n      pickedRecipeId: \"af9cd537-912b-4bc9-84ac-34c7a5e836d9\",\n      pickedTitle: \"Суп-пюре из брокколи с картофелем и курицей\",\n      pickedMealTypeNorm: \"lunch\",\n      proteinKey: \"chicken\",\n      score: -14,\n      sanityRejectedCount: 0,\n      allergyRejectedCount: 0,\n      proteinRejectedCount: 0,\n      mealTypeRejectedCount: 43\n    },\n    {\n      slotType: \"snack\",\n      pickedSource: \"pool\",\n      pickedRecipeId: \"a58f1302-bc74-44cc-91d2-fc8f379098ae\",\n      pickedTitle: \"Творог с грушей и орехами\",\n      pickedMealTypeNorm: \"snack\",\n      proteinKey: \"dairy\",\n      score: -24,\n      sanityRejectedCount: 1,\n      allergyRejectedCount: 0,\n      proteinRejectedCount: 0,\n      mealTypeRejectedCount: 43\n    },\n    {\n      slotType: \"dinner\",\n      pickedSource: \"pool\",\n      pickedRecipeId: \"b60ef2fc-67b5-4c08-b747-0f2a95093cbb\",\n      pickedTitle: \"Овощное рагу с нутом\",\n      pickedMealTypeNorm: \"dinner\",\n      proteinKey: \"legumes\",\n      score: 4,\n      sanityRejectedCount: 1,\n      allergyRejectedCount: 0,\n      proteinRejectedCount: 0,\n      mealTypeRejectedCount: 40\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:52.245Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[PLAN QUALITY] {\n  dbCount: 4,\n  aiCount: 0,\n  rejectsByReason: { sanity_hit: 1 },\n  proteinCounts: { dairy: 4, chicken: 3, legumes: 1 },\n  usedTitleKeysCount: 8,\n  weekSummary: {\n    totalCandidatesSeen: 240,\n    totalRejectedBySanity: 2,\n    totalRejectedByAllergy: 0,\n    totalRejectedByMealType: 173,\n    totalRejectedByProteinDiversity: 0,\n    poolFillRate: 100,\n    aiFallbackRate: 0,\n    proteinCounts: { dairy: 4, chicken: 3, legumes: 1 },\n    topRepeatedProteinKeys: [ \"dairy:4\", \"chicken:3\" ]\n  },\n  slotDiagnostics: [\n    {\n      slotType: \"breakfast\",\n      pickedSource: \"pool\",\n      pickedRecipeId: \"9aae1320-b3b4-4790-bbef-e37b158ef166\",\n      pickedTitle: \"Творожные сырники с яблоком\",\n      pickedMealTypeNorm: \"breakfast\",\n      proteinKey: \"dairy\",\n      pickedProteinKey: \"dairy\",\n      pickedBaseScore: 4,\n      pickedPenalty: -20,\n      pickedFinalScore: -16,\n      score: -16,\n      sanityRejectedCount: 0,\n      allergyRejectedCount: 0,\n      proteinRejectedCount: 0,\n      mealTypeRejectedCount: 47,\n      mealTypeRecoveredFromTitle: true,\n      recoveredCount: 2,\n      wasRecoveredFromTitle: true\n    },\n    {\n      slotType: \"lunch\",\n      pickedSource: \"pool\",\n      pickedRecipeId: \"af9cd537-912b-4bc9-84ac-34c7a5e836d9\",\n      pickedTitle: \"Суп-пюре из брокколи с картофелем и курицей\",\n      pickedMealTypeNorm: \"lunch\",\n      proteinKey: \"chicken\",\n      pickedProteinKey: \"chicken\",\n      pickedBaseScore: 1,\n      pickedPenalty: -15,\n      pickedFinalScore: -14,\n      score: -14,\n      sanityRejectedCount: 0,\n      allergyRejectedCount: 0,\n      proteinRejectedCount: 0,\n      mealTypeRejectedCount: 43,\n      mealTypeRecoveredFromTitle: true,\n      recoveredCount: 4,\n      wasRecoveredFromTitle: true\n    },\n    {\n      slotType: \"snack\",\n      pickedSource: \"pool\",\n      pickedRecipeId: \"a58f1302-bc74-44cc-91d2-fc8f379098ae\",\n      pickedTitle: \"Творог с грушей и орехами\",\n      pickedMealTypeNorm: \"snack\",\n      proteinKey: \"dairy\",\n      pickedProteinKey: \"dairy\",\n      pickedBaseScore: 6,\n      pickedPenalty: -30,\n      pickedFinalScore: -24,\n      score: -24,\n      sanityRejectedCount: 1,\n      allergyRejectedCount: 0,\n      proteinRejectedCount: 0,\n      mealTypeRejectedCount: 43,\n      mealTypeRecoveredFromTitle: true,\n      recoveredCount: 4,\n      wasRecoveredFromTitle: true\n    },\n    {\n      slotType: \"dinner\",\n      pickedSource: \"pool\",\n      pickedRecipeId: \"b60ef2fc-67b5-4c08-b747-0f2a95093cbb\",\n      pickedTitle: \"Овощное рагу с нутом\",\n      pickedMealTypeNorm: \"dinner\",\n      proteinKey: \"legumes\",\n      pickedProteinKey: \"legumes\",\n      pickedBaseScore: 4,\n      pickedPenalty: 0,\n      pickedFinalScore: 4,\n      score: 4,\n      sanityRejectedCount: 1,\n      allergyRejectedCount: 0,\n      proteinRejectedCount: 0,\n      mealTypeRejectedCount: 40,\n      mealTypeRecoveredFromTitle: true,\n      recoveredCount: 5,\n      wasRecoveredFromTitle: true\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:52.510Z",
+            "version": "23"
+          }
+        ]
+      }
+    ],
+    "job": [
+      {
+        "event_message": "[JOB] day start { dayKey: \"2026-02-16\", index: 1, total: 1 }\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:17.693Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[JOB] day done { dayKey: \"2026-02-16\", tookMs: 34553, dbCount: 4, aiCount: 0 }\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:52.244Z",
+            "version": "23"
+          }
+        ]
+      }
+    ],
+    "pool_upgrade": [],
+    "other": [
+      {
+        "event_message": "[POOL DEBUG] reject_breakdown {\n  slotType: \"breakfast\",\n  afterExcludeIds: 60,\n  afterExcludeTitleKeys: 59,\n  afterMealType: 12,\n  afterSanity: 12,\n  afterProfile: 12,\n  finalCount: 12,\n  rejectedTotal: 48,\n  topRejectReasonsPrimary: { titleKey: 1, mealType: 47, sanity: 0, profile: 0, protein: 0 },\n  topRejectReasonsDetails: { allergy: 0 },\n  invariant: true,\n  candidatesStrict: 60,\n  candidatesLoose: 60\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:18.404Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] candidates snapshot {\n  top5: [\n    {\n      id: \"5b48a32e-f149-4aab-8b78-ceffb1b43f1b\",\n      title: \"Омлет с помидорами и зеленью\",\n      meal_type: \"breakfast\",\n      proteinKey: \"egg\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4\n    },\n    {\n      id: \"60c8c494-feea-4c83-b1cc-6b186cd9c137\",\n      title: \"Тыквенные оладьи с яблочным пюре\",\n      meal_type: null,\n      proteinKey: \"egg\",\n      baseScore: 1,\n      diversityPenalty: 0,\n      finalScore: 1\n    },\n    {\n      id: \"3d4497cf-8130-4f47-82e6-65d935742323\",\n      title: \"Омлет с цукини и сыром\",\n      meal_type: \"breakfast\",\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11\n    },\n    {\n      id: \"909f316d-88c9-4de5-9abf-1c590d8a9339\",\n      title: \"Творожные сырники с яблочным пюре\",\n      meal_type: \"breakfast\",\n      proteinKey: \"chicken\",\n      baseScore: 1,\n      diversityPenalty: -15,\n      finalScore: -14\n    },\n    {\n      id: \"178e9ad9-1d02-46bb-bdb0-84fe0d9cc2ae\",\n      title: \"Творожные кексы с грушей\",\n      meal_type: \"breakfast\",\n      proteinKey: \"dairy\",\n      baseScore: 4,\n      diversityPenalty: -20,\n      finalScore: -16\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:18.407Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] {\n  mealType: \"breakfast\",\n  normalizedSlot: \"breakfast\",\n  hadRecipeId: undefined,\n  replaced: true,\n  candidatesFromDb: 60,\n  candidatesStrict: 60,\n  candidatesLoose: 60,\n  afterExclude: 60,\n  beforeMealType: 59,\n  candidatesAfterMealType: 12,\n  afterMealType: 12,\n  blockedBySanityRules: [],\n  afterProfile: 12,\n  afterFiltersCount: 12,\n  pickedRecipeId: \"9aae1320-b3b4-4790-bbef-e37b158ef166\",\n  rejectReason: undefined,\n  topReason: \"finalScore=4\",\n  pickedMealTypeRaw: \"breakfast\",\n  pickedMealTypeNorm: \"breakfast\",\n  pickedProteinKey: \"dairy\",\n  pickedBaseScore: 4,\n  pickedPenalty: -20,\n  pickedFinalScore: -16,\n  slotTypeNorm: \"breakfast\",\n  usedTitleKeysCount: 4,\n  excludedTitleKeysHit: 1,\n  mealTypeRecoveredFromTitle: true,\n  recoveredCount: 2\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:18.408Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] reject_breakdown {\n  slotType: \"lunch\",\n  afterExcludeIds: 60,\n  afterExcludeTitleKeys: 58,\n  afterMealType: 15,\n  afterSanity: 15,\n  afterProfile: 15,\n  finalCount: 15,\n  rejectedTotal: 45,\n  topRejectReasonsPrimary: { titleKey: 2, mealType: 43, sanity: 0, profile: 0, protein: 0 },\n  topRejectReasonsDetails: { allergy: 0 },\n  invariant: true,\n  candidatesStrict: 60,\n  candidatesLoose: 60\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:18.728Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] candidates snapshot {\n  top5: [\n    {\n      id: \"ad33a3e6-8e67-4e4f-97e0-c98ea715f1e7\",\n      title: \"Суп-пюре из тыквы и чечевицы\",\n      meal_type: \"lunch\",\n      proteinKey: \"legumes\",\n      baseScore: 1,\n      diversityPenalty: 0,\n      finalScore: 1\n    },\n    {\n      id: \"80cb76d3-9890-4c22-b516-bba41646d63d\",\n      title: \"Тефтели из индейки с гречкой и тушеными овощами\",\n      meal_type: \"lunch\",\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11\n    },\n    {\n      id: \"acd32c4c-04cc-496e-b28e-92373f526d1e\",\n      title: \"Индейка с гречкой и морковью\",\n      meal_type: \"lunch\",\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11\n    },\n    {\n      id: \"e38b2ed3-a609-4c79-bf4c-126632b7e553\",\n      title: \"Куриный суп с овощами и рисом\",\n      meal_type: \"lunch\",\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11\n    },\n    {\n      id: \"647619e6-6004-4b6c-a0f9-2b8a4ab8637e\",\n      title: \"Куриный суп с овощами и вермишелью\",\n      meal_type: null,\n      proteinKey: \"chicken\",\n      baseScore: 4,\n      diversityPenalty: -15,\n      finalScore: -11\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:18.730Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] {\n  mealType: \"lunch\",\n  normalizedSlot: \"lunch\",\n  hadRecipeId: undefined,\n  replaced: true,\n  candidatesFromDb: 60,\n  candidatesStrict: 60,\n  candidatesLoose: 60,\n  afterExclude: 60,\n  beforeMealType: 58,\n  candidatesAfterMealType: 15,\n  afterMealType: 15,\n  blockedBySanityRules: [],\n  afterProfile: 15,\n  afterFiltersCount: 15,\n  pickedRecipeId: \"af9cd537-912b-4bc9-84ac-34c7a5e836d9\",\n  rejectReason: undefined,\n  topReason: \"finalScore=1\",\n  pickedMealTypeRaw: \"lunch\",\n  pickedMealTypeNorm: \"lunch\",\n  pickedProteinKey: \"chicken\",\n  pickedBaseScore: 1,\n  pickedPenalty: -15,\n  pickedFinalScore: -14,\n  slotTypeNorm: \"lunch\",\n  usedTitleKeysCount: 5,\n  excludedTitleKeysHit: 2,\n  mealTypeRecoveredFromTitle: true,\n  recoveredCount: 4\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:18.731Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] reject_breakdown {\n  slotType: \"snack\",\n  afterExcludeIds: 60,\n  afterExcludeTitleKeys: 58,\n  afterMealType: 15,\n  afterSanity: 14,\n  afterProfile: 14,\n  finalCount: 14,\n  rejectedTotal: 46,\n  topRejectReasonsPrimary: { titleKey: 2, mealType: 43, sanity: 1, profile: 0, protein: 0 },\n  topRejectReasonsDetails: { allergy: 0 },\n  invariant: true,\n  candidatesStrict: 60,\n  candidatesLoose: 60\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.073Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] candidates snapshot {\n  top5: [\n    {\n      id: \"b464ac6b-4937-4771-b695-c27776f38084\",\n      title: \"Яблочное пюре с печеньем\",\n      meal_type: \"snack\",\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24\n    },\n    {\n      id: \"569f6b73-dc15-4f70-9849-137d0f474b6a\",\n      title: \"Йогурт с яблоком и орехами\",\n      meal_type: \"snack\",\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24\n    },\n    {\n      id: \"a58f1302-bc74-44cc-91d2-fc8f379098ae\",\n      title: \"Творог с грушей и орехами\",\n      meal_type: \"snack\",\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24\n    },\n    {\n      id: \"4636f337-36bf-468f-9330-16017f6752f9\",\n      title: \"Йогурт с бананом и ягодами\",\n      meal_type: \"snack\",\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24\n    },\n    {\n      id: \"c99f1e99-d93e-40b4-8c88-9a25524a06e5\",\n      title: \"Йогурт с грушей и грецкими орехами\",\n      meal_type: \"snack\",\n      proteinKey: \"dairy\",\n      baseScore: 6,\n      diversityPenalty: -30,\n      finalScore: -24\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.075Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] {\n  mealType: \"snack\",\n  normalizedSlot: \"snack\",\n  hadRecipeId: undefined,\n  replaced: true,\n  candidatesFromDb: 60,\n  candidatesStrict: 60,\n  candidatesLoose: 60,\n  afterExclude: 60,\n  beforeMealType: 58,\n  candidatesAfterMealType: 15,\n  afterMealType: 15,\n  blockedBySanityRules: [ \"котлет\" ],\n  afterProfile: 14,\n  afterFiltersCount: 14,\n  pickedRecipeId: \"a58f1302-bc74-44cc-91d2-fc8f379098ae\",\n  rejectReason: undefined,\n  topReason: \"finalScore=-24\",\n  pickedMealTypeRaw: \"snack\",\n  pickedMealTypeNorm: \"snack\",\n  pickedProteinKey: \"dairy\",\n  pickedBaseScore: 6,\n  pickedPenalty: -30,\n  pickedFinalScore: -24,\n  slotTypeNorm: \"snack\",\n  usedTitleKeysCount: 6,\n  excludedTitleKeysHit: 2,\n  mealTypeRecoveredFromTitle: true,\n  recoveredCount: 4\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.075Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] reject_breakdown {\n  slotType: \"dinner\",\n  afterExcludeIds: 60,\n  afterExcludeTitleKeys: 57,\n  afterMealType: 17,\n  afterSanity: 16,\n  afterProfile: 16,\n  finalCount: 16,\n  rejectedTotal: 44,\n  topRejectReasonsPrimary: { titleKey: 3, mealType: 40, sanity: 1, profile: 0, protein: 0 },\n  topRejectReasonsDetails: { allergy: 0 },\n  invariant: true,\n  candidatesStrict: 60,\n  candidatesLoose: 60\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.384Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] {\n  mealType: \"dinner\",\n  normalizedSlot: \"dinner\",\n  hadRecipeId: undefined,\n  replaced: true,\n  candidatesFromDb: 60,\n  candidatesStrict: 60,\n  candidatesLoose: 60,\n  afterExclude: 60,\n  beforeMealType: 57,\n  candidatesAfterMealType: 17,\n  afterMealType: 17,\n  blockedBySanityRules: [ \"пюре\" ],\n  afterProfile: 16,\n  afterFiltersCount: 16,\n  pickedRecipeId: \"b60ef2fc-67b5-4c08-b747-0f2a95093cbb\",\n  rejectReason: undefined,\n  topReason: \"finalScore=4\",\n  pickedMealTypeRaw: \"dinner\",\n  pickedMealTypeNorm: \"dinner\",\n  pickedProteinKey: \"legumes\",\n  pickedBaseScore: 4,\n  pickedPenalty: 0,\n  pickedFinalScore: 4,\n  slotTypeNorm: \"dinner\",\n  usedTitleKeysCount: 7,\n  excludedTitleKeysHit: 3,\n  mealTypeRecoveredFromTitle: true,\n  recoveredCount: 5\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.386Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] candidates snapshot {\n  top5: [\n    {\n      id: \"9617e016-351c-43b3-9ebb-440000afa395\",\n      title: \"Запечённый минтай с цветной капустой и картофелем\",\n      meal_type: \"dinner\",\n      proteinKey: \"fish\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4\n    },\n    {\n      id: \"185ce171-ac78-49f7-9be6-3ef4c935f131\",\n      title: \"Запечённая треска с цукини и морковью\",\n      meal_type: \"dinner\",\n      proteinKey: \"fish\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4\n    },\n    {\n      id: \"fb7d7710-2ba7-43be-b03a-6cf0efb169c7\",\n      title: \"Тефтели из говядины с рисом и томатным соусом\",\n      meal_type: \"dinner\",\n      proteinKey: \"beef_pork\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4\n    },\n    {\n      id: \"b60ef2fc-67b5-4c08-b747-0f2a95093cbb\",\n      title: \"Овощное рагу с нутом\",\n      meal_type: \"dinner\",\n      proteinKey: \"legumes\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4\n    },\n    {\n      id: \"fe7904ee-1197-45bf-acb8-b17dc42dccd8\",\n      title: \"Запеченная треска с овощами\",\n      meal_type: null,\n      proteinKey: \"fish\",\n      baseScore: 4,\n      diversityPenalty: 0,\n      finalScore: 4\n    }\n  ]\n}\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:19.386Z",
+            "version": "23"
+          }
+        ]
+      },
+      {
+        "event_message": "[POOL DEBUG] day summary { dayKey: \"2026-02-16\", dbCount: 4, aiCount: 0 }\n",
+        "metadata": [
+          {
+            "boot_time": null,
+            "cpu_time_used": null,
+            "deployment_id": "hidgiyyunigqazssnydm_68d27ef6-8413-4eb9-8105-2cfc2b1290c9_23",
+            "event_type": "Log",
+            "execution_id": "440dc9ab-7f41-435f-bb77-38c82740b035",
+            "function_id": "68d27ef6-8413-4eb9-8105-2cfc2b1290c9",
+            "level": "info",
+            "memory_used": [],
+            "project_ref": "hidgiyyunigqazssnydm",
+            "reason": null,
+            "region": "us-east-1",
+            "served_by": "supabase-edge-runtime-1.70.3 (compatible with Deno v2.1.4)",
+            "timestamp": "2026-02-16T01:27:52.244Z",
+            "version": "23"
+          }
+        ]
+      }
+    ]
+  }
+}

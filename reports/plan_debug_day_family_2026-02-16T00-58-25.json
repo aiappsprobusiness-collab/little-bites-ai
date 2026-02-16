@@ -1,0 +1,51 @@
+{
+  "request": {
+    "type": "day",
+    "member_id": null,
+    "member_data": null,
+    "start_key": "2026-02-16",
+    "debug_pool": true,
+    "timeoutSec": 180,
+    "day_key": "2026-02-16"
+  },
+  "job": {
+    "status": "done",
+    "progress_done": 1,
+    "progress_total": 1,
+    "error_text": null,
+    "started_at": "2026-02-16T00:57:41.610Z",
+    "finished_at": "2026-02-16T00:58:24.746Z"
+  },
+  "mealPlansSnapshot": [
+    {
+      "planned_date": "2026-02-16",
+      "meals": {
+        "lunch": {
+          "title": "Суп-пюре из тыквы с курицей",
+          "recipe_id": "afe61890-8771-41b7-810e-a6f2c31ad696"
+        },
+        "snack": {
+          "title": "Йогурт с персиком и орехами",
+          "recipe_id": "762c98ce-3a4c-4073-8d14-b671f2d1c400"
+        },
+        "dinner": {
+          "title": "Тефтели из индейки с рисом и кабачком",
+          "recipe_id": "49f02b9d-fe5e-4699-82fb-7f556b2bb49e"
+        },
+        "breakfast": {
+          "title": "Омлет с брокколи и сыром",
+          "recipe_id": "e067be83-1e1e-4ed7-8b68-24cf766a87d8"
+        }
+      }
+    }
+  ],
+  "logs": {
+    "candidates_snapshot": [],
+    "allergy": [],
+    "sanity": [],
+    "plan_quality": [],
+    "job": [],
+    "pool_upgrade": [],
+    "other": []
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "request": {
+    "type": "week",
+    "member_id": null,
+    "member_data": null,
+    "start_key": "2026-02-16",
+    "debug_pool": true,
+    "timeoutSec": 420
+  },
+  "job": {
+    "status": "error",
+    "error_text": "run failed: 504",
+    "started_at": "2026-02-16T00:48:25.765Z",
+    "finished_at": "2026-02-16T00:50:57.483Z"
+  },
+  "mealPlansSnapshot": [
+    {
+      "planned_date": "2026-02-21",
+      "meals": {
+        "lunch": {
+          "title": "Суп-пюре из шпината и картофеля с фрикадельками из индейки",
+          "recipe_id": "79826502-c77c-4ce0-a930-69fcd9e53e3a"
+        },
+        "snack": {
+          "title": "Йогурт с киви и семенами чиа",
+          "recipe_id": "e3182ffb-da58-4eb1-9554-0a739a0434ec"
+        },
+        "breakfast": {
+          "title": "Творожные сырники с яблочным пюре",
+          "recipe_id": "909f316d-88c9-4de5-9abf-1c590d8a9339"
+        }
+      }
+    },
+    {
+      "planned_date": "2026-02-20",
+      "meals": {
+        "lunch": {
+          "title": "Суп-пюре из кабачка и картофеля с индейкой",
+          "recipe_id": "a19c48df-42a5-4ca7-9101-45e2aa1ac6ff"
+        },
+        "snack": {
+          "title": "Йогурт с малиной и миндалём",
+          "recipe_id": "fdeb2769-9f67-4737-91f2-efa48ad411b8"
+        },
+        "dinner": {
+          "title": "Запечённая курица с тыквой и брокколи",
+          "recipe_id": "62ceddc2-16e5-4bd0-8fae-9142dc4f2438"
+        },
+        "breakfast": {
+          "title": "Творожные кексы с грушей",
+          "recipe_id": "178e9ad9-1d02-46bb-bdb0-84fe0d9cc2ae"
+        }
+      }
+    },
+    {
+      "planned_date": "2026-02-15",
+      "meals": {
+        "lunch": {
+          "title": "Индейка с гречкой и морковью",
+          "recipe_id": "acd32c4c-04cc-496e-b28e-92373f526d1e"
+        },
+        "snack": {
+          "title": "Творог с грушей и орехами",
+          "recipe_id": "a58f1302-bc74-44cc-91d2-fc8f379098ae"
+        },
+        "dinner": {
+          "title": "Овощное рагу с нутом",
+          "recipe_id": "b60ef2fc-67b5-4c08-b747-0f2a95093cbb"
+        },
+        "breakfast": {
+          "title": "Омлет с цукини и сыром",
+          "recipe_id": "3d4497cf-8130-4f47-82e6-65d935742323"
+        }
+      }
+    },
+    {
+      "planned_date": "2026-02-16",
+      "meals": {
+        "lunch": {
+          "title": "Суп-пюре из тыквы с курицей",
+          "recipe_id": "afe61890-8771-41b7-810e-a6f2c31ad696"
+        },
+        "snack": {
+          "title": "Йогурт с персиком и орехами",
+          "recipe_id": "762c98ce-3a4c-4073-8d14-b671f2d1c400"
+        },
+        "dinner": {
+          "title": "Тефтели из индейки с рисом и кабачком",
+          "recipe_id": "49f02b9d-fe5e-4699-82fb-7f556b2bb49e"
+        },
+        "breakfast": {
+          "title": "Омлет с брокколи и сыром",
+          "recipe_id": "e067be83-1e1e-4ed7-8b68-24cf766a87d8"
+        }
+      }
+    },
+    {
+      "planned_date": "2026-02-17",
+      "meals": {
+        "lunch": {
+          "title": "Суп-пюре из цветной капусты с курицей и картофелем",
+          "recipe_id": "8801a4a8-d1f6-49c5-aa5b-3535c46ff770"
+        },
+        "snack": {
+          "title": "Йогурт с черникой и миндалём",
+          "recipe_id": "5d806b67-103e-4538-8e68-ffcaa8c1693c"
+        },
+        "dinner": {
+          "title": "Тефтели из говядины с рисом и томатным соусом",
+          "recipe_id": "fb7d7710-2ba7-43be-b03a-6cf0efb169c7"
+        },
+        "breakfast": {
+          "title": "Творожная запеканка с яблоком и изюмом",
+          "recipe_id": "901c0766-2bc3-4f79-8959-891fcdcf6287"
+        }
+      }
+    },
+    {
+      "planned_date": "2026-02-18",
+      "meals": {
+        "lunch": {
+          "title": "Суп-пюре из брокколи с картофелем и курицей",
+          "recipe_id": "af9cd537-912b-4bc9-84ac-34c7a5e836d9"
+        },
+        "snack": {
+          "title": "Йогурт с яблоком и орехами",
+          "recipe_id": "569f6b73-dc15-4f70-9849-137d0f474b6a"
+        },
+        "dinner": {
+          "title": "Тефтели из индейки с рисом и томатным соусом",
+          "recipe_id": "c8dea1a5-d5d8-42c3-afca-0f182912b4a1"
+        },
+        "breakfast": {
+          "title": "Творожные оладьи с ягодами",
+          "recipe_id": "54608df4-7d54-407f-be8e-82acf424bd29"
+        }
+      }
+    },
+    {
+      "planned_date": "2026-02-19",
+      "meals": {
+        "lunch": {
+          "title": "Суп-пюре из моркови и картофеля с индейкой",
+          "recipe_id": "13cb8e31-b4b1-43d0-8f6b-df932eb6d6a3"
+        },
+        "snack": {
+          "title": "Йогурт с клубникой и миндалём",
+          "recipe_id": "e0a6c7fe-e0a7-4719-b01f-11655db601cd"
+        },
+        "dinner": {
+          "title": "Запечённая треска с цукини и морковью",
+          "recipe_id": "185ce171-ac78-49f7-9be6-3ef4c935f131"
+        },
+        "breakfast": {
+          "title": "Творожные панкейки с бананом",
+          "recipe_id": "4bce887f-6d0b-4d3e-a2c7-ca5cf217ee29"
+        }
+      }
+    }
+  ],
+  "logs": {
+    "candidates_snapshot": [],
+    "allergy": [],
+    "sanity": [],
+    "plan_quality": [],
+    "job": [],
+    "pool_upgrade": [],
+    "other": []
+  }
+}
