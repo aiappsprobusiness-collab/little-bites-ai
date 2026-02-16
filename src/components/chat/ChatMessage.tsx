@@ -66,6 +66,8 @@ interface ChatMessageProps {
   recipeId?: string | null;
   /** true = ответ ещё стримится; не показываем ошибку парсинга до завершения */
   isStreaming?: boolean;
+  /** В режиме help: всегда показывать сообщение как текст, без парсинга рецептов и без RecipeCard */
+  forcePlainText?: boolean;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
@@ -131,7 +133,7 @@ function isValidRecipeId(v: string): boolean {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const { user } = useAuth();
@@ -150,16 +152,20 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       ing: ParsedIngredient;
     } | null>(null);
 
-    const effectiveRecipe = preParsedRecipe ?? null;
+    const effectiveRecipe = forcePlainText ? null : (preParsedRecipe ?? null);
     const isRecipeParseFailure =
+      !forcePlainText &&
       role === "assistant" &&
       (expectRecipe === true || (rawContent != null && rawContent.trim().length > 0)) &&
       effectiveRecipe === null;
     /** Ошибку показываем только после завершения стрима; во время генерации — loader, без мигания */
     const showParseError = !isStreaming && isRecipeParseFailure;
     const hasSubstitutes = isPremium && effectiveRecipe?.ingredients?.some((ing) => isIngredientObject(ing) && (ing as { substitute?: string }).substitute);
-    // Для отображения: убираем ведущий JSON, чтобы в чате был только читаемый текст с Markdown
-    const displayContent = role === "assistant" ? getTextForDisplay(content) : content;
+    // Для отображения: в forcePlainText (help) показываем как есть; иначе убираем ведущий JSON
+    const displayContent =
+      role === "assistant"
+        ? (forcePlainText ? content : getTextForDisplay(content))
+        : content;
     const displayWithArticleLinks =
       role === "assistant" && onOpenArticle ? injectArticleLinks(displayContent) : displayContent;
 

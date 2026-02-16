@@ -53,7 +53,7 @@ export function MobileLayout({
     : "sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border/50 layout-header";
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col">
+    <div className="h-dvh min-h-dvh bg-background flex flex-col overflow-hidden">
       {showHeader ? (
         <header className={headerClassName}>
           <div className="layout-header-inner relative flex items-center">
@@ -87,7 +87,7 @@ export function MobileLayout({
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className={`flex flex-col min-h-0 flex-1 main-scroll-contain ${showHeader ? "main-below-header" : "main-safe-top"} ${showNav ? "main-above-nav" : ""}`}
+        className={`flex flex-col min-h-0 flex-1 overflow-y-auto main-scroll-contain ${showHeader ? "main-below-header" : "main-safe-top"} ${showNav ? "main-above-nav" : ""}`}
       >
         {children}
       </motion.main>

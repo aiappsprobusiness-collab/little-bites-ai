@@ -19,6 +19,7 @@ import ChatPage from "./pages/ChatPage";
 import FavoritesPage from "./pages/FavoritesPage";
 import SosLayout from "./pages/SosLayout";
 import SosTiles from "./pages/SosTiles";
+import SosTopicPage from "./pages/SosTopicPage";
 import SosScenarioScreen from "./pages/SosScenarioScreen";
 import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
@@ -204,6 +205,7 @@ const App = () => (
                 }
               >
                 <Route index element={<SosTiles />} />
+                <Route path="topic/:topicId" element={<SosTopicPage />} />
                 <Route path=":scenarioKey" element={<SosScenarioScreen />} />
               </Route>
               <Route path="/plate-analysis" element={<Navigate to="/diary" replace />} />

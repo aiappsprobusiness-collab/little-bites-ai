@@ -89,7 +89,7 @@ export function useDeepSeekAPI() {
       maxCookingTime,
     }: {
       messages: ChatMessage[];
-      type?: 'chat' | 'recipe' | 'diet_plan';
+      type?: 'chat' | 'recipe' | 'diet_plan' | 'sos_consultant';
       overrideSelectedMemberId?: string | null;
       overrideSelectedMember?: typeof selectedMember;
       overrideMembers?: Array<{ id: string; name: string; age_months?: number | null; allergies?: string[] }>;
@@ -150,8 +150,9 @@ export function useDeepSeekAPI() {
         generationContextBlockPreview: generationContextBlock ? generationContextBlock.slice(0, 300) : '',
       });
 
-      const allergyCheck = checkChatAllergyBlock(lastUserMessage, memberData?.allergies);
-      if (allergyCheck.blocked && allergyCheck.found.length > 0) {
+      const isHelpMode = type === 'sos_consultant';
+      const allergyCheck = !isHelpMode && checkChatAllergyBlock(lastUserMessage, memberData?.allergies);
+      if (allergyCheck?.blocked && allergyCheck?.found.length > 0) {
         const text = `У нас аллергия на ${allergyCheck.found.join(', ')}, давайте приготовим что-то другое`;
         return { message: text };
       }
@@ -171,8 +172,8 @@ export function useDeepSeekAPI() {
             messages,
             memberData,
             type,
-            stream: true,
-            maxRecipes: 1,
+            stream: !isHelpMode,
+            maxRecipes: isHelpMode ? undefined : 1,
             targetIsFamily: activeProfileId === 'family' || targetIsFamily,
             memberId: activeProfileId === 'family' ? 'family' : (currentSelectedMemberId ?? undefined),
             ...((activeProfileId === 'family' || targetIsFamily) && allMembers.length > 0 && { allMembers }),
@@ -198,6 +199,12 @@ export function useDeepSeekAPI() {
         const msg = error?.message || error?.error || `HTTP ${response.status}`;
         safeError('deepseek-chat error:', response.status, error);
         throw new Error(typeof msg === 'string' ? msg : 'Ошибка API');
+      }
+
+      if (isHelpMode) {
+        const data = await response.json().catch(() => ({}));
+        await refetchUsage();
+        return { message: (data?.message ?? '').trim() || 'Нет ответа.' };
       }
 
       const contentType = response.headers.get('Content-Type') || '';

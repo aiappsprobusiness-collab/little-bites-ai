@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Send, Loader2, Square, HelpCircle } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { buildGenerationContext, validateRecipe } from "@/domain/generation";
 import type { Profile } from "@/domain/generation";
 import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type ParsedRecipe } from "@/utils/parseChatRecipes";
 import { safeError } from "@/utils/safeLogger";
+import { getHelpFollowups } from "@/utils/helpFollowups";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import {
@@ -38,6 +39,8 @@ const CHAT_HINT_PHRASES = [
   "Полезный десерт для малыша",
 ];
 
+const HELP_CHAT_STORAGE_KEY = "help_chat_messages_v1";
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -52,11 +55,44 @@ interface Message {
   recipeId?: string | null;
 }
 
+/** Формат сообщений help-чата в localStorage (timestamp как строка). */
+interface HelpMessageStored {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  rawContent?: string;
+}
+
+function parseHelpMessagesFromStorage(raw: string | null): Message[] {
+  if (!raw || typeof raw !== "string") return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((m): m is HelpMessageStored => m != null && typeof m === "object" && typeof m.id === "string" && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && typeof m.timestamp === "string")
+      .map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.timestamp),
+        ...(m.rawContent != null && { rawContent: String(m.rawContent) }),
+      }));
+  } catch {
+    return [];
+  }
+}
+
 const STARTER_MESSAGE = "Здравствуйте! Выберите профиль, и я мгновенно подберу идеальный рецепт.";
+
+export type ChatMode = "recipes" | "help";
 
 export default function ChatPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const mode: ChatMode = (searchParams.get("mode") === "help" ? "help" : "recipes");
+  const prefillFromQuery = searchParams.get("prefill");
   const { toast } = useToast();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
   const { canGenerate, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining } = useSubscription();
@@ -68,6 +104,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showHintsModal, setShowHintsModal] = useState(false);
+  const [badgeVisible, setBadgeVisible] = useState(false);
   const [openArticleId, setOpenArticleId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -78,25 +115,100 @@ export default function ChatPage() {
   const { article: openArticle, isLoading: isArticleLoading } = useArticle(openArticleId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prefillSentRef = useRef(false);
+  const lastAppliedPrefillRef = useRef<string | null>(null);
+  const prefillQueryAppliedRef = useRef(false);
   const prevProfileKeyRef = useRef<string>("");
+  const prevModeRef = useRef<ChatMode | null>(null);
   /** Last saved recipe title (for anti-duplicate: retry once if model returns the same). */
   const lastSavedRecipeTitleRef = useRef<string | null>(null);
   /** Скролл к рецепту выполняем один раз при появлении карточки; повторный скролл через несколько секунд даёт «уплывание». */
   const lastScrolledRecipeIdRef = useRef<string | null>(null);
 
-  // Очищаем сообщения при смене профиля или списка членов семьи
+  const lastAssistantContent = useMemo(() => {
+    const last = [...messages].reverse().find((m) => m.role === "assistant");
+    return last?.content ?? "";
+  }, [messages]);
+
+  const helpFollowups = useMemo(() => getHelpFollowups(lastAssistantContent), [lastAssistantContent]);
+
+  // Очищаем сообщения при смене профиля или списка членов семьи (только в recipes)
   useEffect(() => {
+    if (mode !== "recipes") return;
     const memberIds = members.map((c) => c.id).join(",");
     const key = `${selectedMemberId ?? "family"}|${memberIds}`;
     if (prevProfileKeyRef.current && prevProfileKeyRef.current !== key) {
       setMessages([]);
     }
     prevProfileKeyRef.current = key;
-  }, [selectedMemberId, members]);
+  }, [mode, selectedMemberId, members]);
+
+  // При переходе в help — загружаем сообщения из localStorage (recipes state не трогаем при help → recipes)
+  useEffect(() => {
+    if (mode !== "help") {
+      prevModeRef.current = mode;
+      return;
+    }
+    if (prevModeRef.current !== "help") {
+      const saved = localStorage.getItem(HELP_CHAT_STORAGE_KEY);
+      setMessages(parseHelpMessagesFromStorage(saved));
+    }
+    prevModeRef.current = mode;
+  }, [mode]);
+
+  // Сохранение help-чата в localStorage при каждом изменении messages
+  useEffect(() => {
+    if (mode !== "help") return;
+    const toStore: HelpMessageStored[] = messages.map((m) => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : new Date(m.timestamp).toISOString(),
+      ...(m.rawContent != null && { rawContent: m.rawContent }),
+    }));
+    try {
+      localStorage.setItem(HELP_CHAT_STORAGE_KEY, JSON.stringify(toStore));
+    } catch {
+      // ignore quota / private mode
+    }
+  }, [mode, messages]);
+
+  // Fade-in бейджа «Помощник рядом» при входе в help mode
+  useEffect(() => {
+    if (mode !== "help") {
+      setBadgeVisible(false);
+      return;
+    }
+    setBadgeVisible(false);
+    const raf = requestAnimationFrame(() => {
+      setBadgeVisible(true);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [mode]);
+
+  // Prefill из query (?prefill=...) для help — только вставить в input, очистить param
+  useEffect(() => {
+    if (mode !== "help" || !prefillFromQuery) {
+      if (!prefillFromQuery) prefillQueryAppliedRef.current = false;
+      return;
+    }
+    if (prefillQueryAppliedRef.current) return;
+    prefillQueryAppliedRef.current = true;
+    try {
+      setInput(decodeURIComponent(prefillFromQuery));
+    } catch {
+      setInput(prefillFromQuery);
+    }
+    setSearchParams((p) => {
+      p.delete("prefill");
+      return p;
+    }, { replace: true });
+  }, [mode, prefillFromQuery, setSearchParams]);
 
   const memberIdForSave = selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : undefined;
 
+  // В help-режиме историю рецептов не подгружаем — сообщения только в local state
   useEffect(() => {
+    if (mode === "help") return;
     if (historyMessages.length === 0) {
       setMessages([]);
       return;
@@ -174,7 +286,7 @@ export default function ChatPage() {
         });
         formatWithRecipeMap(recipeMap);
       });
-  }, [historyMessages]);
+  }, [mode, historyMessages]);
 
   const handleMessagesScroll = useCallback(() => {
     const el = messagesContainerRef.current;
@@ -210,7 +322,7 @@ export default function ChatPage() {
     }
   }, [messages]);
 
-  const showStarter = messages.length === 0 && !isLoadingHistory;
+  const showStarter = messages.length === 0 && (mode === "help" || !isLoadingHistory);
   const hasUserMessage = messages.some((m) => m.role === "user");
 
   const sendInProgressRef = useRef(false);
@@ -246,6 +358,26 @@ export default function ChatPage() {
     try {
       const chatMessages = messages.map((m) => ({ role: m.role, content: m.content }));
       chatMessages.push({ role: "user", content: userMessage.content });
+
+      if (mode === "help") {
+        const response = await chat({
+          messages: chatMessages,
+          type: "sos_consultant",
+          overrideSelectedMemberId: selectedMemberId,
+          overrideSelectedMember: selectedMember,
+          overrideMembers: members,
+        });
+        const rawMessage = (response?.message ?? "").trim() || "Не удалось получить ответ.";
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: rawMessage, isStreaming: false }
+              : m
+          )
+        );
+        sendInProgressRef.current = false;
+        return;
+      }
 
       const activeProfileId = selectedMemberId ?? "family";
       const profiles: Profile[] = members.map((m) => ({
@@ -480,22 +612,33 @@ export default function ChatPage() {
     }
   }, [input, isChatting, canGenerate, isPremium, messages, selectedMemberId, selectedMember, members, memberIdForSave, chat, saveRecipesFromChat, saveChat, toast]);
 
-  // Обработка предзаполненного сообщения из ScanPage (после загрузки истории и определения handleSend)
+  // Обработка предзаполненного сообщения из state (ScanPage — только для recipes)
+  // В help используем только query prefill (?prefill=...)
   useEffect(() => {
-    const state = location.state as { prefillMessage?: string; sourceProducts?: string[] } | null;
-    if (state?.prefillMessage && !prefillSentRef.current && !isLoadingHistory && messages.length === 0) {
-      prefillSentRef.current = true;
-      const prefillText = state.prefillMessage;
-      setInput(prefillText);
-      // Автоматически отправляем сообщение после небольшой задержки
+    if (mode === "help") return;
+    const state = location.state as {
+      prefillMessage?: string;
+      sourceProducts?: string[];
+      prefillOnly?: boolean;
+    } | null;
+    const prefillText = state?.prefillMessage;
+    if (!prefillText) {
+      lastAppliedPrefillRef.current = null;
+      return;
+    }
+    if (isLoadingHistory || messages.length > 0) return;
+    if (lastAppliedPrefillRef.current === prefillText) return;
+    lastAppliedPrefillRef.current = prefillText;
+    prefillSentRef.current = true;
+    setInput(prefillText);
+    window.history.replaceState({}, document.title);
+    if (!state.prefillOnly) {
       const timer = setTimeout(() => {
         handleSend(prefillText);
-        // Очищаем state после использования
-        window.history.replaceState({}, document.title);
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [location.state, isLoadingHistory, messages.length, handleSend]);
+  }, [mode, location.state, isLoadingHistory, messages.length, handleSend]);
 
   const handleDeleteMessage = async (messageId: string) => {
     const originalId = messageId.replace(/-user$/, "").replace(/-assistant$/, "");
@@ -519,32 +662,90 @@ export default function ChatPage() {
     }
   };
 
+  const memberName = selectedMember?.name ?? members[0]?.name ?? null;
+  const ageMonths = selectedMember?.age_months ?? members[0]?.age_months ?? null;
+  const ageLabel = ageMonths != null ? (ageMonths < 12 ? `${ageMonths} мес` : `${Math.floor(ageMonths / 12)} ${ageMonths % 12 === 0 ? "лет" : "г."}`) : null;
   const chatHeaderMeta =
-    isTrial && trialDaysRemaining !== null ? (
-      <span className="text-typo-caption text-amber-700 dark:text-amber-400 font-medium">
-        Trial: осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
+    mode !== "help" && isTrial && trialDaysRemaining !== null
+      ? (
+        <span className="text-typo-caption text-amber-700 dark:text-amber-400 font-medium">
+          Trial: осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
+        </span>
+      )
+      : mode !== "help" && isFree
+        ? (
+          <span className="block">
+            <span className="text-[11px] text-muted-foreground/80">Осталось {remaining} из {dailyLimit} сегодня</span>
+            <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1 mt-0.5" />
+          </span>
+        )
+        : undefined;
+
+  const helpHeaderCenter = mode === "help" ? (
+    <div className="flex flex-col items-center justify-center text-center w-full px-4">
+      <h1 className="text-typo-title font-semibold text-foreground truncate w-full">
+        Помощник по питанию ребёнка
+      </h1>
+      {members.length > 0 && (
+        <span className="text-typo-caption text-muted-foreground truncate w-full mt-0.5">
+          Для {memberName ?? ""}{ageLabel ? ` · ${ageLabel}` : ""}
+        </span>
+      )}
+      <span
+        className="inline-flex items-center gap-1.5 mt-1.5 shrink-0"
+        style={{
+          fontSize: 12,
+          fontWeight: 500,
+          padding: "4px 8px",
+          borderRadius: 9999,
+          background: "rgba(104, 143, 59, 0.12)",
+          color: "#5E7E2F",
+          border: "1px solid rgba(104, 143, 59, 0.25)",
+          opacity: badgeVisible ? 1 : 0,
+          transform: badgeVisible ? "translateY(0)" : "translateY(-2px)",
+          transition: "opacity 180ms ease-out, transform 180ms ease-out",
+        }}
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: "#6C8F3B",
+          }}
+          aria-hidden
+        />
+        Помощник рядом
       </span>
-    ) : isFree ? (
-      <span className="block">
-        <span className="text-[11px] text-muted-foreground/80">Осталось {remaining} из {dailyLimit} сегодня</span>
-        <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1 mt-0.5" />
+      <span
+        className="block w-full mt-1.5 text-muted-foreground"
+        style={{
+          fontSize: 13,
+          opacity: 0.75,
+          maxWidth: 320,
+          lineHeight: 1.4,
+        }}
+      >
+        Я не ставлю диагнозы, но подскажу, на что обратить внимание.
       </span>
-    ) : undefined;
+    </div>
+  ) : null;
 
   return (
     <MobileLayout
       showNav
-      title="Чат"
+      title={mode === "help" ? "" : "Чат"}
+      headerCenter={helpHeaderCenter}
       headerNoBlur
-      headerRight={members.length > 0 ? <MemberSelectorButton onProfileChange={() => setMessages([])} /> : undefined}
-      headerMeta={chatHeaderMeta}
+      headerRight={members.length > 0 ? <MemberSelectorButton onProfileChange={() => mode === "recipes" && setMessages([])} /> : undefined}
+      headerMeta={mode === "help" ? undefined : chatHeaderMeta}
     >
       <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-3 sm:px-4">
         {/* Messages */}
         <div
           ref={messagesContainerRef}
           onScroll={handleMessagesScroll}
-          className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain py-3 space-y-5 pb-4"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-3 space-y-5 pb-4"
         >
           {!isLoadingMembers && members.length === 0 && (
             <FamilyOnboarding onComplete={() => { }} />
@@ -557,12 +758,16 @@ export default function ChatPage() {
               className="flex justify-start"
             >
               <div className="rounded-2xl rounded-bl-sm px-5 py-4 bg-slate-50/80 border border-slate-200/40 max-w-[85%]">
-                <p className="text-typo-body text-foreground/90 leading-relaxed whitespace-pre-wrap">{STARTER_MESSAGE}</p>
+                <p className="text-typo-body text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                  {mode === "help"
+                    ? "Задайте вопрос про питание, стул, аллергию, режим или самочувствие ребёнка. Отвечу по шагам и подскажу, когда к врачу."
+                    : STARTER_MESSAGE}
+                </p>
               </div>
             </motion.div>
           )}
 
-          {isLoadingHistory && (
+          {mode === "recipes" && isLoadingHistory && (
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
@@ -575,21 +780,22 @@ export default function ChatPage() {
                 id={m.id}
                 role={m.role}
                 content={
-                  m.role === "assistant" && m.isStreaming && m.content.trim().startsWith("{")
+                  m.role === "assistant" && m.isStreaming && mode === "recipes" && m.content.trim().startsWith("{")
                     ? "Готовлю рецепт…"
                     : m.content
                 }
                 timestamp={m.timestamp}
-                rawContent={m.rawContent}
-                expectRecipe={m.role === "assistant"}
-                preParsedRecipe={m.preParsedRecipe}
-                recipeId={m.recipeId}
+                rawContent={mode === "recipes" ? m.rawContent : undefined}
+                expectRecipe={mode === "recipes" && m.role === "assistant"}
+                preParsedRecipe={mode === "recipes" ? m.preParsedRecipe : null}
+                recipeId={mode === "recipes" ? m.recipeId : undefined}
                 isStreaming={m.isStreaming}
                 onDelete={handleDeleteMessage}
                 memberId={selectedMember?.id}
                 memberName={selectedMember?.name}
                 ageMonths={selectedMember?.age_months ?? undefined}
                 onOpenArticle={setOpenArticleId}
+                forcePlainText={mode === "help"}
               />
             ))}
           </AnimatePresence>
@@ -607,10 +813,36 @@ export default function ChatPage() {
               <div className="rounded-2xl rounded-bl-sm px-5 py-4 bg-slate-50/80 border border-slate-200/40">
                 <div className="flex items-center gap-3">
                   <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                  <span className="text-typo-muted text-muted-foreground">Готовим кулинарное чудо...</span>
+                  <span className="text-typo-muted text-muted-foreground">
+                    {mode === "help" ? "Получаю ответ…" : "Готовим кулинарное чудо..."}
+                  </span>
                 </div>
               </div>
             </motion.div>
+          )}
+
+          {mode === "help" && !isChatting && messages.some((m) => m.role === "assistant") && helpFollowups.length > 0 && (
+            <div className="pt-1 pb-2">
+              <p className="text-xs font-medium text-muted-foreground mb-2 px-0.5">Спросить ещё</p>
+              <div
+                className="flex gap-2 overflow-x-auto overflow-y-hidden pb-1 min-w-0 scrollbar-none"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
+                {helpFollowups.map((chip) => (
+                  <button
+                    key={chip.prefill}
+                    type="button"
+                    onClick={() => {
+                      setInput(chip.prefill);
+                      textareaRef.current?.focus();
+                    }}
+                    className="shrink-0 h-8 px-3 rounded-full text-[13px] leading-tight border border-slate-200/60 bg-slate-50/80 text-foreground hover:bg-slate-100/80 active:scale-[0.98] transition-colors whitespace-nowrap"
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
 
           <div ref={messagesEndRef} />
@@ -618,25 +850,32 @@ export default function ChatPage() {
 
         {/* Input */}
         <div className="border-t border-slate-200/40 bg-background/98 backdrop-blur py-3 safe-bottom max-w-full overflow-x-hidden">
+          {mode === "help" && (
+            <p className="text-[11px] text-muted-foreground mb-1.5 px-0.5">
+              Я отвечу безопасно и по шагам. Диагнозов не ставлю.
+            </p>
+          )}
           <div className="flex w-full items-center gap-2 min-w-0">
             <Textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Что приготовить?"
+              placeholder={mode === "help" ? "Например: Сыпь после творога — что делать?" : "Что приготовить?"}
               className="min-h-[44px] max-h-[120px] flex-1 min-w-0 resize-none rounded-2xl bg-slate-50/80 border-slate-200/50 py-3 px-4 text-typo-body placeholder:text-muted-foreground/70 focus-visible:ring-emerald-500/30"
               rows={1}
             />
             <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowHintsModal(true)}
-                title="Подсказки"
-                className="h-9 w-9 rounded-full bg-slate-100/80 text-slate-500 flex items-center justify-center hover:bg-slate-200/60 hover:text-slate-600 active:scale-95 transition-all"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
+              {mode === "recipes" && (
+                <button
+                  type="button"
+                  onClick={() => setShowHintsModal(true)}
+                  title="Подсказки"
+                  className="h-9 w-9 rounded-full bg-slate-100/80 text-slate-500 flex items-center justify-center hover:bg-slate-200/60 hover:text-slate-600 active:scale-95 transition-all"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                </button>
+              )}
               <button
                 type="button"
                 disabled={!input.trim() || isChatting}

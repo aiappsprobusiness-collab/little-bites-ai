@@ -18,11 +18,10 @@ export interface SosButtonProps {
   locked?: boolean;
 }
 
-/** Карточка сценария: спокойный стиль, белый фон, мягкая рамка и тень. */
+/** Карточка сценария: только Lucide-иконка в круге, адаптивные размеры (clamp), press-эффект. */
 export function SosButton({
   label,
   subtext,
-  emoji,
   icon,
   onClick,
   className,
@@ -37,13 +36,17 @@ export function SosButton({
       disabled={disabled}
       whileTap={disabled ? undefined : { scale: 0.98 }}
       className={cn(
-        "relative flex flex-col items-start justify-center gap-3 p-4 min-h-[100px]",
-        "rounded-[18px] bg-white border border-slate-200 shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-        "hover:bg-slate-50 hover:border-slate-200 transition-colors text-left",
+        "relative flex flex-col items-start justify-center gap-2.5 min-h-0",
+        "rounded-[22px] bg-white border border-slate-100",
+        "shadow-[0_2px_8px_rgba(0,0,0,0.06),0_1px_2px_rgba(0,0,0,0.04)]",
+        "hover:bg-slate-50/80 active:bg-slate-100/80 transition-colors text-left",
         disabled && "opacity-70 cursor-not-allowed",
         locked && "opacity-90",
         className
       )}
+      style={{
+        padding: "clamp(14px, 3vw, 20px)",
+      }}
     >
       {showLock && (
         <span
@@ -55,17 +58,19 @@ export function SosButton({
         </span>
       )}
       <span
-        className={cn(
-          "flex items-center justify-center w-10 h-10 rounded-full bg-emerald-50 text-emerald-700 shrink-0"
-        )}
+        className="flex items-center justify-center rounded-full bg-slate-100 text-slate-600 shrink-0"
+        style={{
+          width: "clamp(36px, 8vw, 44px)",
+          height: "clamp(36px, 8vw, 44px)",
+        }}
       >
-        {icon ?? (emoji ? <span className="text-xl leading-none" role="img" aria-hidden>{emoji}</span> : null)}
+        {icon ?? null}
       </span>
       <span className="text-typo-h2 font-bold text-slate-900 leading-tight">
         {label}
       </span>
       {subtext != null && subtext !== "" && (
-        <span className="text-typo-caption text-slate-500 leading-snug">{subtext}</span>
+        <span className="text-typo-caption text-gray-500 leading-snug">{subtext}</span>
       )}
     </motion.button>
   );

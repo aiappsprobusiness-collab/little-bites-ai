@@ -11,10 +11,16 @@ import {
   getTopicById,
   SOS_TOPIC_IDS,
   sosHints,
+  SOS_TOPIC_DESCRIPTIONS,
+  SOS_TOPIC_CHIPS,
+  SOS_URGENT_HELP_SYSTEM_INSTRUCTION,
   sanitizeSosResponse,
   stripEmojiForDisplay,
 } from "@/constants/sos";
 import { SUPABASE_URL } from "@/integrations/supabase/client";
+
+const DISCLAIMER_TEXT =
+  "Ответы носят информационный характер и не заменяют консультацию врача.";
 
 export default function SosScenarioScreen() {
   const { scenarioKey } = useParams<{ scenarioKey: string }>();
@@ -92,6 +98,17 @@ export default function SosScenarioScreen() {
     setLoading(true);
     scrollToBottom();
 
+    const isUrgentHelp = topic.id === "urgent_help";
+    const body: Record<string, unknown> = {
+      type: "sos_consultant",
+      stream: false,
+      memberData,
+      messages: [{ role: "user", content: userMessage }],
+    };
+    if (isUrgentHelp) {
+      body.extraSystemSuffix = SOS_URGENT_HELP_SYSTEM_INSTRUCTION;
+    }
+
     try {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
         method: "POST",
@@ -99,12 +116,7 @@ export default function SosScenarioScreen() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          type: "sos_consultant",
-          stream: false,
-          memberData,
-          messages: [{ role: "user", content: userMessage }],
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -152,37 +164,61 @@ export default function SosScenarioScreen() {
         >
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <h1 className="flex-1 text-typo-title font-semibold truncate">
-          {topic.label}
+        <h1 className="flex-1 flex items-center gap-1.5 text-typo-title font-semibold truncate">
+          <span className="shrink-0" role="img" aria-hidden>
+            {topic.emoji}
+          </span>
+          <span className="truncate">{topic.label}</span>
         </h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-4 space-y-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-4 flex flex-col">
+        {/* Персонализированное описание и чипсы (пока нет сообщений или всегда сверху) */}
         {messages.length === 0 && (
-          <p className="text-typo-muted text-slate-600 text-sm">
-            Опишите ситуацию — получите персональный совет. Можно отправить и общий запрос.
-          </p>
-        )}
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`rounded-2xl px-4 py-3 max-w-[90%] ${
-              msg.role === "user"
-                ? "ml-auto rounded-br-sm bg-emerald-600 text-white"
-                : "mr-auto rounded-bl-sm bg-slate-100 text-slate-800"
-            }`}
-          >
-            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
-              {msg.role === "assistant" ? stripEmojiForDisplay(msg.content) : msg.content}
+          <>
+            <p className="text-slate-600 text-sm leading-relaxed mb-4">
+              {SOS_TOPIC_DESCRIPTIONS[topic.id] ?? "Опишите ситуацию — получите персональный совет."}
             </p>
-          </div>
-        ))}
-        {loading && (
-          <div className="mr-auto rounded-2xl rounded-bl-sm px-4 py-3 bg-slate-100 text-slate-600 flex items-center gap-2">
-            <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-            <span className="text-sm">Получаем рекомендацию...</span>
-          </div>
+            {SOS_TOPIC_CHIPS[topic.id]?.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {SOS_TOPIC_CHIPS[topic.id].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setDetails((prev) => (prev ? `${prev} ${chip}` : chip))}
+                    className="px-3 py-2 rounded-full text-sm bg-slate-100 text-slate-700 hover:bg-slate-200 active:scale-[0.98] transition-colors"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
+
+        {/* Сообщения */}
+        <div className="space-y-4">
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`rounded-2xl px-4 py-3 max-w-[90%] ${
+                msg.role === "user"
+                  ? "ml-auto rounded-br-sm bg-emerald-600 text-white"
+                  : "mr-auto rounded-bl-sm bg-slate-100 text-slate-800"
+              }`}
+            >
+              <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
+                {msg.role === "assistant" ? stripEmojiForDisplay(msg.content) : msg.content}
+              </p>
+            </div>
+          ))}
+          {loading && (
+            <div className="mr-auto rounded-2xl rounded-bl-sm px-4 py-3 bg-slate-100 text-slate-600 flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              <span className="text-sm">Получаем рекомендацию...</span>
+            </div>
+          )}
+        </div>
         <div ref={messagesEndRef} />
       </div>
 
@@ -190,6 +226,9 @@ export default function SosScenarioScreen() {
         className="sticky bottom-0 border-t border-slate-200/40 bg-background/98 backdrop-blur py-3 px-4 safe-bottom shrink-0"
         style={keyboardInset > 0 ? { transform: `translateY(-${keyboardInset}px)` } : undefined}
       >
+        <p className="mb-2 text-xs text-gray-400">
+          {DISCLAIMER_TEXT}
+        </p>
         <div className="flex gap-2 items-end">
           <Textarea
             placeholder={sosHints[topic.id] ?? "Опишите ситуацию (необязательно)"}
