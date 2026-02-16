@@ -1,11 +1,17 @@
 /**
  * Pool-first v1: подбор рецептов из пула (seed, manual, week_ai) для Premium weekly генерации.
- * Используется ТОЛЬКО при генерации недельного плана по кнопке «Улучшить с AI».
+ * Используется при подборе рецептов по кнопке «Подобрать рецепты».
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const IS_DEV = import.meta.env.DEV;
+
+/** [POOL DEBUG] логи только при ?debugPool=1 (не спамим в проде). */
+function isDebugPool(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("debugPool") === "1";
+}
 
 /** Нормализованный ключ названия для сравнения и исключения дублей. */
 export function normalizeTitleKey(title: string): string {
@@ -39,6 +45,54 @@ export function containsAnyToken(haystack: string, tokens: string[]): boolean {
 
 export type MealType = "breakfast" | "lunch" | "snack" | "dinner";
 
+const MEAL_TYPE_ALIASES: Record<string, MealType> = {
+  breakfast: "breakfast",
+  lunch: "lunch",
+  snack: "snack",
+  dinner: "dinner",
+  завтрак: "breakfast",
+  обед: "lunch",
+  полдник: "snack",
+  перекус: "snack",
+  ужин: "dinner",
+  supper: "dinner",
+  afternoon_snack: "snack",
+};
+
+/** Нормализация meal_type к enum breakfast | lunch | snack | dinner. */
+export function normalizeMealType(value: string | null | undefined): MealType | null {
+  if (value == null || typeof value !== "string") return null;
+  const key = value.trim().toLowerCase();
+  return MEAL_TYPE_ALIASES[key] ?? MEAL_TYPE_ALIASES[value.trim()] ?? null;
+}
+
+const SOUP_TITLE_TOKENS = ["суп", "борщ", "щи", "солянка", "soup"];
+/** Не подставлять на завтрак. */
+export function isSoupLikeTitle(title: string | null | undefined): boolean {
+  if (!title || typeof title !== "string") return false;
+  const t = title.toLowerCase();
+  return SOUP_TITLE_TOKENS.some((tok) => t.includes(tok));
+}
+
+/** Обед/ужин: не подставлять явные перекусы/десерты. */
+const SNACK_DESSERT_TITLE_TOKENS = ["йогурт", "пюре", "дольки", "печенье", "батончик", "пудинг", "творожок", "фруктовый", "яблочн", "перекус", "смузи"];
+/** Завтрак: не подставлять явно обеденные/ужинные блюда. */
+const DINNER_STYLE_TITLE_TOKENS = ["рагу", "нут", "тушен", "тушён", "плов", "гриль"];
+
+/** Sanity: причины блокировки по слоту. Пустой массив = ок. */
+export function getSanityBlockedReasons(title: string | null | undefined, slot: MealType): string[] {
+  if (!title || typeof title !== "string") return [];
+  const t = title.toLowerCase();
+  const reasons: string[] = [];
+  if (slot === "dinner" || slot === "lunch") {
+    if (SNACK_DESSERT_TITLE_TOKENS.some((tok) => t.includes(tok))) reasons.push("snack_dessert_on_meal");
+  }
+  if (slot === "breakfast") {
+    if (DINNER_STYLE_TITLE_TOKENS.some((tok) => t.includes(tok))) reasons.push("dinner_style_on_breakfast");
+  }
+  return reasons;
+}
+
 export interface MemberDataForPool {
   allergies?: string | string[];
   preferences?: string | string[];
@@ -67,16 +121,24 @@ type RecipeRow = {
   meal_type?: string | null;
 };
 
-/** Извлечь токены аллергенов из allergies (строка или массив). */
+/** Расширенные токены для аллергии на молоко/лактозу. */
+const DAIRY_ALLERGY_TOKENS = ["молоко", "творог", "йогурт", "сыр", "кефир", "сливки", "сметана", "ряженка", "простокваша", "молочн", "лактоз", "сливочн"];
+
+/** Извлечь токены аллергенов из allergies (строка или массив). При молоке/лактозе добавляет молочные токены. */
 function getAllergyTokens(memberData: MemberDataForPool | null | undefined): string[] {
   if (!memberData?.allergies) return [];
   const raw = memberData.allergies;
   const arr = Array.isArray(raw) ? raw : [String(raw ?? "")];
   const tokens = new Set<string>();
+  const rawLower = arr.map((a) => String(a).toLowerCase()).join(" ");
+  const isMilkAllergy = /молок|milk|лактоз|dairy/.test(rawLower);
   for (const a of arr) {
     for (const t of tokenize(String(a))) {
       if (t.length >= 2) tokens.add(t);
     }
+  }
+  if (isMilkAllergy) {
+    for (const t of DAIRY_ALLERGY_TOKENS) tokens.add(t);
   }
   return [...tokens];
 }
@@ -103,8 +165,8 @@ function getPreferenceExcludeTokens(memberData: MemberDataForPool | null | undef
 const AGE_RESTRICTED_TOKENS = ["остр", "кофе", "гриб"];
 
 /** Фильтрация кандидата по профилю (аллергии, предпочтения, возраст). */
-function passesProfileFilter(
-  recipe: RecipeRow,
+export function passesProfileFilter(
+  recipe: { title?: string | null; description?: string | null; tags?: string[] | null },
   memberData: MemberDataForPool | null | undefined
 ): { pass: boolean; reason?: string } {
   const allergyTokens = getAllergyTokens(memberData);
@@ -155,15 +217,15 @@ export async function pickRecipeFromPool(
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
 
+  const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
+
   let q = supabase
     .from("recipes")
     .select("id, title, tags, description, cooking_time_minutes, source, meal_type")
     .eq("user_id", userId)
-    .in("source", ["seed", "manual", "week_ai"])
+    .in("source", ["seed", "manual", "week_ai", "chat_ai"])
     .order("created_at", { ascending: false })
     .limit(limitCandidates);
-
-  q = q.or(`meal_type.eq.${mealType},meal_type.is.null`);
 
   if (memberId == null) {
     q = q.is("member_id", null);
@@ -179,7 +241,7 @@ export async function pickRecipeFromPool(
   const { data: rows, error } = await q;
 
   if (error) {
-    if (IS_DEV) {
+    if (isDebugPool()) {
       console.warn("[DEBUG] pool query error:", error);
       console.log("[POOL DEBUG]", {
         mealType,
@@ -208,10 +270,16 @@ export async function pickRecipeFromPool(
   });
 
   filtered = filtered.filter((r) => {
-    if (r.meal_type) return r.meal_type === mealType;
-    const tags = (r.tags ?? []) as string[];
-    return tags.some((t) => t === `chat_${mealType}` || t === mealType);
+    const recNorm = normalizeMealType(r.meal_type);
+    return recNorm !== null && recNorm === slotNorm;
   });
+  const candidatesAfterMealType = filtered.length;
+
+  if (slotNorm === "breakfast") {
+    filtered = filtered.filter((r) => !isSoupLikeTitle(r.title));
+  }
+
+  filtered = filtered.filter((r) => getSanityBlockedReasons(r.title, slotNorm).length === 0);
 
   for (const r of filtered) {
     const { pass } = passesProfileFilter(r, memberData);
@@ -222,11 +290,12 @@ export async function pickRecipeFromPool(
   const afterFiltersCount = filtered.length;
 
   if (filtered.length === 0) {
-    if (IS_DEV) {
+    if (isDebugPool()) {
       console.log("[POOL DEBUG]", {
         mealType,
         memberId,
         candidatesFromDb,
+        candidatesAfterMealType,
         afterFiltersCount: 0,
         pickedSource: "ai",
         pickedRecipeId: null,
@@ -241,11 +310,12 @@ export async function pickRecipeFromPool(
   const idx = Math.floor(Math.random() * fromTop.length);
   const picked = fromTop[idx];
 
-  if (IS_DEV) {
+  if (isDebugPool()) {
     console.log("[POOL DEBUG]", {
       mealType,
       memberId,
       candidatesFromDb,
+      candidatesAfterMealType,
       afterFiltersCount,
       pickedSource: "db",
       pickedRecipeId: picked.id,

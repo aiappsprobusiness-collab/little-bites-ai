@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { getRollingStartKey } from "@/utils/dateRange";
+import { getRollingStartKey, getRollingDayKeys } from "@/utils/dateRange";
 import { formatLocalDate } from "@/utils/dateUtils";
 
 export type PlanGenerationType = "day" | "week";
@@ -21,7 +21,38 @@ export interface PlanGenerationJobRow {
   updated_at: string;
 }
 
-const JOB_POLL_MS = 2500;
+const POLL_FAST_MS = 800;
+const POLL_NORMAL_MS = 1800;
+const POLL_SLOW_MS = 3000;
+const POLL_VERY_SLOW_MS = 6000;
+const POLL_FAST_UNTIL_MS = 10_000;
+const POLL_SLOW_AFTER_MS = 60_000;
+const LONG_RUN_WARN_DAY_MS = 3 * 60 * 1000;
+const LONG_RUN_WARN_WEEK_MS = 6 * 60 * 1000;
+const JOB_STORAGE_PREFIX = "plan_job:";
+
+function getPollInterval(elapsedMs: number, type: "day" | "week"): number {
+  if (elapsedMs < POLL_FAST_UNTIL_MS) return POLL_FAST_MS;
+  if (elapsedMs < POLL_SLOW_AFTER_MS) return POLL_NORMAL_MS;
+  if (elapsedMs < (type === "week" ? LONG_RUN_WARN_WEEK_MS : LONG_RUN_WARN_DAY_MS)) return POLL_SLOW_MS;
+  return POLL_VERY_SLOW_MS;
+}
+
+export function getStoredJobKey(userId: string, memberId: string | null, startKey: string): string {
+  return `${JOB_STORAGE_PREFIX}${userId}:${memberId ?? "family"}:${startKey}`;
+}
+
+export function getStoredJobId(userId: string, memberId: string | null, startKey: string): string | null {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage.getItem(getStoredJobKey(userId, memberId, startKey));
+}
+
+export function setStoredJobId(userId: string, memberId: string | null, startKey: string, jobId: string | null): void {
+  if (typeof localStorage === "undefined") return;
+  const key = getStoredJobKey(userId, memberId, startKey);
+  if (jobId) localStorage.setItem(key, jobId);
+  else localStorage.removeItem(key);
+}
 
 async function fetchJob(
   userId: string,
@@ -51,6 +82,17 @@ export interface StartPlanGenerationParams {
   member_data: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[] } | null;
   day_key?: string;
   start_key?: string;
+  /** Явный массив ключей дней для week upgrade (приоритет над start_key). */
+  day_keys?: string[];
+  /** Включить debug-логи в Edge (для pool upgrade / run). */
+  debug_pool?: boolean;
+}
+
+export interface PoolUpgradeResult {
+  replacedCount: number;
+  unchangedCount: number;
+  aiFallbackCount?: number;
+  totalSlots: number;
 }
 
 export function usePlanGenerationJob(
@@ -72,10 +114,44 @@ export function usePlanGenerationJob(
     enabled,
     refetchInterval: (query) => {
       const j = query.state.data as PlanGenerationJobRow | null | undefined;
-      return j?.status === "running" ? JOB_POLL_MS : false;
+      if (j?.status !== "running") return false;
+      const createdAt = j?.created_at ? new Date(j.created_at).getTime() : 0;
+      const elapsedMs = createdAt ? Date.now() - createdAt : 0;
+      return getPollInterval(elapsedMs, type);
     },
     refetchOnWindowFocus: true,
   });
+
+  const runPoolUpgrade = useCallback(
+    async (params: StartPlanGenerationParams): Promise<PoolUpgradeResult> => {
+      if (!user?.id) throw new Error("Необходима авторизация");
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const token = freshSession?.access_token ?? session?.access_token;
+      if (!token) throw new Error("Необходима авторизация");
+      const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
+      const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+      const body = {
+        mode: "upgrade",
+        type: params.type,
+        member_id: params.member_id,
+        member_data: params.member_data,
+        ...(params.type === "day" && params.day_key && { day_key: params.day_key }),
+        ...(params.type === "week" && {
+          start_key: params.start_key ?? getRollingStartKey(),
+          ...(Array.isArray(params.day_keys) && params.day_keys.length > 0 && { day_keys: params.day_keys }),
+        }),
+        ...(params.debug_pool && { debug_pool: true }),
+      };
+      const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? `Ошибка: ${res.status}`);
+      }
+      const data = (await res.json()) as PoolUpgradeResult;
+      return data;
+    },
+    [user?.id, session?.access_token]
+  );
 
   const startGeneration = useCallback(
     async (params: StartPlanGenerationParams) => {
@@ -105,6 +181,8 @@ export function usePlanGenerationJob(
 
       refetchJob();
 
+      const startKey = params.type === "week" ? (params.start_key ?? getRollingStartKey()) : params.day_key ?? "";
+      if (user?.id && startKey) setStoredJobId(user.id, params.member_id, startKey, jobId);
       const runBody = {
         action: "run",
         job_id: jobId,
@@ -113,10 +191,32 @@ export function usePlanGenerationJob(
         member_data: params.member_data,
         ...(params.type === "day" && params.day_key && { day_key: params.day_key }),
         ...(params.type === "week" && { start_key: params.start_key ?? getRollingStartKey() }),
+        ...(params.debug_pool && { debug_pool: true }),
       };
       fetch(url, { method: "POST", headers, body: JSON.stringify(runBody) }).catch(() => {});
     },
     [user?.id, session?.access_token, refetchJob]
+  );
+
+  const cancelJob = useCallback(
+    async () => {
+      if (!user?.id || !job?.id || job.status !== "running") return;
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const token = freshSession?.access_token ?? session?.access_token;
+      if (!token) return;
+      const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: "cancel", job_id: job.id }),
+      });
+      if (res.ok) {
+        const clearKey = type === "week" ? getRollingStartKey() : (job.last_day_key ?? "");
+        if (clearKey) setStoredJobId(user.id, memberId, clearKey, null);
+        refetchJob();
+      }
+    },
+    [user?.id, job?.id, job?.status, job?.last_day_key, memberId, type, session?.access_token, refetchJob]
   );
 
   const isRunning = job?.status === "running";
@@ -132,6 +232,8 @@ export function usePlanGenerationJob(
     progressTotal,
     errorText,
     startGeneration,
+    runPoolUpgrade,
+    cancelJob,
     refetchJob,
   };
 }

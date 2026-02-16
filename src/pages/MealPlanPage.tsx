@@ -11,27 +11,45 @@ import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
-import { usePlanGenerationJob } from "@/hooks/usePlanGenerationJob";
+import { usePlanGenerationJob, getStoredJobId, setStoredJobId } from "@/hooks/usePlanGenerationJob";
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { useSubscription } from "@/hooks/useSubscription";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { formatLocalDate } from "@/utils/dateUtils";
-import { getRolling7Dates, getRollingStartKey, getRollingEndKey } from "@/utils/dateRange";
+import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { Check } from "lucide-react";
 
 /** Включить визуальный debug пула: window.__PLAN_DEBUG = true или ?debugPool=1 */
 function isPlanDebug(): boolean {
   if (typeof window === "undefined") return false;
   return (window as Window & { __PLAN_DEBUG?: boolean }).__PLAN_DEBUG === true || new URLSearchParams(window.location.search).get("debugPool") === "1";
+}
+
+/** Включить perf-логи: ?perf=1 */
+function isPerf(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("perf") === "1";
+}
+
+/** Обновить кэш планов после replace_slot (optimistic update). */
+function applyReplaceSlotToPlanCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  keys: { mealPlansKeyWeek: unknown[]; mealPlansKeyDay: unknown[] },
+  payload: { dayKey: string; mealType: string; newRecipeId: string; title: string; plan_source: "pool" | "ai" }
+) {
+  const updater = (old: Array<{ planned_date: string; meal_type: string; recipe_id: string | null; recipe: { id: string; title: string } | null; plan_source?: string }> | undefined) => {
+    if (!old) return old;
+    return old.map((item) =>
+      item.planned_date === payload.dayKey && item.meal_type === payload.mealType
+        ? { ...item, recipe_id: payload.newRecipeId, recipe: { id: payload.newRecipeId, title: payload.title }, plan_source: payload.plan_source }
+        : item
+    );
+  };
+  queryClient.setQueryData(keys.mealPlansKeyWeek, updater);
+  queryClient.setQueryData(keys.mealPlansKeyDay, updater);
 }
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
@@ -190,25 +208,54 @@ export default function MealPlanPage() {
     progressTotal: planProgressTotal,
     errorText: planErrorText,
     startGeneration: startPlanGeneration,
+    runPoolUpgrade,
+    cancelJob: cancelPlanJob,
+    refetchJob,
   } = usePlanGenerationJob(memberIdForPlan, planGenType);
 
-  const isAnyGenerating = isPlanGenerating;
+  const [poolUpgradeLoading, setPoolUpgradeLoading] = useState(false);
+  const isAnyGenerating = isPlanGenerating || poolUpgradeLoading;
+
+  const startKey = getRollingStartKey();
+  const endKey = getRollingEndKey();
+  const rollingDates = useMemo(() => getRolling7Dates(), [startKey]);
+  const todayKey = formatLocalDate(new Date());
 
   const AUTOFILL_STORAGE_KEY = "mealPlan_autofill_lastRunAt";
   const AUTOFILL_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 часов
   const autogenTriggeredRef = useRef(false);
 
-  const [replaceSlot, setReplaceSlot] = useState<{ mealType: string; dayKey: string } | null>(null);
-  const [replaceLoading, setReplaceLoading] = useState(false);
+  const [replacingSlotKey, setReplacingSlotKey] = useState<string | null>(null);
 
   const planJobNotifiedRef = useRef<string | null>(null);
   const planJobWasRunningRef = useRef<string | null>(null);
+  const lastProgressRef = useRef<number>(-1);
+  const longRunToastRef = useRef(false);
+
   useEffect(() => {
     if (!planJob) return;
     if (planJob.status === "running") {
       planJobWasRunningRef.current = planJob.id;
+      const prev = lastProgressRef.current;
+      if (prev !== planJob.progress_done) {
+        lastProgressRef.current = planJob.progress_done;
+        const t = setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+        }, 300);
+        return () => clearTimeout(t);
+      }
+      const createdAt = planJob.created_at ? new Date(planJob.created_at).getTime() : 0;
+      const elapsed = createdAt ? Date.now() - createdAt : 0;
+      const limit = planGenType === "week" ? 6 * 60 * 1000 : 3 * 60 * 1000;
+      if (elapsed > limit && !longRunToastRef.current) {
+        longRunToastRef.current = true;
+        toast({ description: "Генерация занимает больше обычного. Продолжаем в фоне." });
+      }
       return;
     }
+    if (user?.id) setStoredJobId(user.id, memberIdForPlan, startKey, null);
+    lastProgressRef.current = -1;
+    longRunToastRef.current = false;
     queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
     if (planJobNotifiedRef.current === planJob.id) return;
     const wasRunning = planJobWasRunningRef.current === planJob.id;
@@ -216,25 +263,22 @@ export default function MealPlanPage() {
     if (planJob.status === "done" && wasRunning) {
       toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов" });
     } else if (planJob.status === "error" && wasRunning) {
-      toast({ variant: "destructive", title: "Ошибка генерации", description: planErrorText ?? "Не удалось сгенерировать план" });
+      const errDesc =
+        planErrorText === "timeout_stalled"
+          ? "Генерация заняла слишком много времени. Попробуйте снова."
+          : planErrorText === "cancelled_by_user"
+            ? "Генерация отменена."
+            : planErrorText ?? "Не удалось сгенерировать план";
+      toast({ variant: planErrorText === "cancelled_by_user" ? "default" : "destructive", title: planErrorText === "cancelled_by_user" ? undefined : "Ошибка генерации", description: errDesc });
     }
-  }, [planJob?.id, planJob?.status, planGenType, planErrorText, queryClient, user?.id, toast]);
+  }, [planJob?.id, planJob?.status, planJob?.progress_done, planJob?.created_at, planGenType, planErrorText, queryClient, user?.id, memberIdForPlan, startKey, toast]);
 
-  // Во время генерации периодически подтягиваем планы из БД, чтобы отображать уже готовые дни (день 1, 2, …) по мере появления
+  // При заходе на страницу — resume polling если есть сохранённый job
   useEffect(() => {
-    if (!isAnyGenerating || !user?.id) return;
-    const intervalMs = 2500;
-    const t = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user.id] });
-    }, intervalMs);
-    return () => clearInterval(t);
-  }, [isAnyGenerating, user?.id, queryClient]);
-
-  // Rolling 7 дней: today..today+6 (без прошедших)
-  const startKey = getRollingStartKey();
-  const endKey = getRollingEndKey();
-  const rollingDates = useMemo(() => getRolling7Dates(), [startKey]);
-  const todayKey = formatLocalDate(new Date());
+    if (!user?.id) return;
+    const stored = getStoredJobId(user.id, memberIdForPlan, startKey);
+    if (stored) refetchJob();
+  }, [user?.id, memberIdForPlan, startKey, refetchJob]);
   const [selectedDay, setSelectedDay] = useState(0);
 
   // При смене дня (startKey) сбрасываем мьют, чтобы не тянуть его с прошлой недели
@@ -246,18 +290,14 @@ export default function MealPlanPage() {
     }
   }, [startKey, mutedWeekKey]);
 
-  const { replaceWithPool, replaceWithAI, getFreeSwapUsedForDay } = useReplaceMealSlot(
+  const { replaceMealSlotAuto, getFreeSwapUsedForDay } = useReplaceMealSlot(
     memberIdForPlan,
     { startKey, endKey, hasAccess }
   );
 
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log("[ROLLING range]", {
-        startKey,
-        endKey,
-        keys: rollingDates.map((d) => formatLocalDate(d)),
-      });
+    if (isPlanDebug() || isPerf()) {
+      console.log("[ROLLING range]", { startKey, endKey });
     }
   }, [startKey, endKey]);
 
@@ -284,14 +324,43 @@ export default function MealPlanPage() {
 
   const selectedDate = rollingDates[selectedDay];
   const selectedDayKey = formatLocalDate(selectedDate);
+
+  /** Ключи кэша планов для optimistic update после replace_slot. */
+  const profileKey = useMemo(() => {
+    const p = memberDataForPlan;
+    if (!p) return null;
+    return [
+      [...(p.allergies ?? [])].sort().join(","),
+      (p.preferences ?? []).map((s) => String(s).trim().toLowerCase()).join("|"),
+    ].join(";");
+  }, [memberDataForPlan]);
+  const mealPlansKeyWeek = useMemo(
+    () => ["meal_plans_v2", user?.id, mealPlanMemberId, formatLocalDate(rollingDates[0]), formatLocalDate(rollingDates[6]), profileKey, mutedWeekKey],
+    [user?.id, mealPlanMemberId, rollingDates, profileKey, mutedWeekKey]
+  );
+  const mealPlansKeyDay = useMemo(
+    () => ["meal_plans_v2", user?.id, mealPlanMemberId, selectedDayKey, profileKey, mutedWeekKey],
+    [user?.id, mealPlanMemberId, selectedDayKey, profileKey, mutedWeekKey]
+  );
+
   const { data: dayMealPlans = [], isLoading } = getMealPlansByDate(selectedDate);
 
+  const renderStartRef = useRef(0);
+  if (isPerf()) renderStartRef.current = performance.now();
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log("[PLAN render]", { selectedDayKey, found: dayMealPlans.length > 0, mealsCount: dayMealPlans.length });
+    if (isPlanDebug() || isPerf()) {
+      console.log("[PLAN render]", { selectedDayKey, mealsCount: dayMealPlans.length });
+    }
+    if (isPerf()) {
+      const start = renderStartRef.current;
+      requestAnimationFrame(() => {
+        const elapsed = performance.now() - start;
+        console.log("[perf] render list (rAF)", elapsed.toFixed(2), "ms");
+      });
     }
   }, [selectedDayKey, dayMealPlans.length]);
 
+  /** Только валидные recipe_id для превью; broken-слоты (recipe_id null) не попадают в dayMealPlans. */
   const recipeIdsForPreviews = useMemo(
     () => dayMealPlans.map((m) => m.recipe_id).filter((id): id is string => !!id),
     [dayMealPlans]
@@ -343,13 +412,29 @@ export default function MealPlanPage() {
     }
   }, []);
   const { data: weekPlans = [], isLoading: isWeekPlansLoading } = getMealPlans(rollingDates[0], rollingDates[6]);
-  const hasMealsByDayIndex = rollingDates.map(
-    (d) => weekPlans.some((p) => p.planned_date === formatLocalDate(d))
+  const hasMealsByDayIndex = useMemo(
+    () => rollingDates.map((d) => weekPlans.some((p) => p.planned_date === formatLocalDate(d))),
+    [rollingDates, weekPlans]
   );
   const dayKeys = useMemo(() => rollingDates.map((d) => formatLocalDate(d)), [rollingDates]);
   const missingDayKeys = useMemo(
     () => dayKeys.filter((_, i) => !hasMealsByDayIndex[i]),
     [dayKeys, hasMealsByDayIndex]
+  );
+
+  /** Мемоизированные exclude для replace_slot, чтобы не пересчитывать на каждый рендер. */
+  const replaceExcludeRecipeIds = useMemo(() => {
+    const t0 = isPerf() ? performance.now() : 0;
+    const out = [...new Set(weekPlans.map((p) => p.recipe_id).filter(Boolean))] as string[];
+    if (isPerf() && t0) {
+      const dur = performance.now() - t0;
+      console.log("[perf] excludes build (ids)", dur.toFixed(2), "ms");
+    }
+    return out;
+  }, [weekPlans]);
+  const replaceExcludeTitleKeys = useMemo(
+    () => [...new Set(weekPlans.map((p) => p.recipe?.title).filter(Boolean))] as string[],
+    [weekPlans]
   );
 
   const hasDbWeekPlan = weekPlans.some((p) => !p.isStarter);
@@ -366,14 +451,14 @@ export default function MealPlanPage() {
   };
 
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log("[ROLLING autofill check]", { startKey, endKey, missing: missingDayKeys });
+    if (isPlanDebug() || isPerf()) {
+      console.log("[ROLLING autofill]", { missingCount: missingDayKeys.length });
     }
   }, [startKey, endKey, missingDayKeys]);
 
   useEffect(() => {
     if (missingDayKeys.length === 0) {
-      if (import.meta.env.DEV) console.log("[AUTOFILL] nothing to fill");
+      if (isPlanDebug() || isPerf()) console.log("[AUTOFILL] nothing to fill");
       return;
     }
     if (
@@ -384,16 +469,7 @@ export default function MealPlanPage() {
     )
       return;
     if (isAnyGenerating) {
-      if (import.meta.env.DEV) {
-        console.log("[AUTOFILL] blocked by guard");
-        console.log("[GEN_GUARD]", {
-          isGenerating: isAnyGenerating,
-          planProgressDone,
-          planProgressTotal,
-          selectedMemberId,
-          missingDayKeys,
-        });
-      }
+      if (isPlanDebug() || isPerf()) console.log("[AUTOFILL] blocked by guard");
       return;
     }
     if (isWeekPlansLoading) return;
@@ -464,14 +540,10 @@ export default function MealPlanPage() {
   const showNoProfile = members.length === 0 && !isMembersLoading;
   const showEmptyFamily = isFamilyMode && members.length === 0 && !isMembersLoading;
 
-  if (import.meta.env.DEV) {
+  if ((isPlanDebug() || isPerf()) && (typeof window !== "undefined")) {
     console.log("[PLAN state]", {
-      isMembersLoading,
-      membersLength: members.length,
+      selectedDayKey,
       selectedMemberId,
-      showNoProfile,
-      showEmptyFamily,
-      isFree,
       mealPlanMemberId,
     });
   }
@@ -565,106 +637,129 @@ export default function MealPlanPage() {
                 {statusBadgeLabel}
               </span>
             </div>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {isCompletelyEmpty && !isAnyGenerating && (
-                <>
-                  {isFree ? (
-                    <Button
-                      size="sm"
-                      className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-                      onClick={async () => {
-                        if (todayIndex < 0) return;
-                        try {
-                          await startPlanGeneration({
-                            type: "day",
-                            member_id: memberIdForPlan,
-                            member_data: memberDataForPlan,
-                            day_key: todayKey,
-                          });
-                          toast({ description: "Генерация запущена" });
-                        } catch (e: unknown) {
-                          toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
-                        }
-                      }}
-                      disabled={isAnyGenerating}
-                    >
-                      <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                      {isAnyGenerating ? "Генерация…" : "Улучшить с AI"}
-                    </Button>
-                  ) : (
-                    <>
+            <div className="mt-3 flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {isCompletelyEmpty && !isAnyGenerating && (
+                  <>
+                    {isFree ? (
                       <Button
                         size="sm"
                         className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                         onClick={async () => {
+                          if (todayIndex < 0) return;
+                          setPoolUpgradeLoading(true);
                           try {
-                            await startPlanGeneration({
-                              type: "week",
+                            const result = await runPoolUpgrade({
+                              type: "day",
                               member_id: memberIdForPlan,
                               member_data: memberDataForPlan,
-                              start_key: getRollingStartKey(),
+                              day_key: todayKey,
                             });
-                            setMutedWeekKeyAndStorage(null);
-                            toast({ description: "Генерация запущена" });
+                            queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                            const aiFallback = result.aiFallbackCount ?? 0;
+                            const desc = aiFallback > 0
+                              ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                              : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
+                            toast({ title: "Подобрать рецепты", description: desc });
                           } catch (e: unknown) {
-                            toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
+                            toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
+                          } finally {
+                            setPoolUpgradeLoading(false);
                           }
                         }}
                         disabled={isAnyGenerating}
                       >
                         <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                        {isAnyGenerating ? "Генерация…" : "Улучшить с AI"}
+                        {isAnyGenerating ? "Подбираем…" : "Подобрать рецепты"}
                       </Button>
-                      <button
-                        type="button"
-                        onClick={() => setMutedWeekKeyAndStorage(null)}
-                        className="text-typo-caption text-emerald-600 hover:text-emerald-700 transition-colors"
-                      >
-                        Заполнить шаблоном
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
-              {hasAnyWeekPlan && !isCompletelyEmpty && (
-                <>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="rounded-xl border-slate-200"
-                    disabled={isAnyGenerating || (isFree && todayIndex < 0)}
-                    onClick={async () => {
-                      try {
-                        if (isFree && todayIndex >= 0) {
-                          await startPlanGeneration({
-                            type: "day",
-                            member_id: memberIdForPlan,
-                            member_data: memberDataForPlan,
-                            day_key: todayKey,
-                          });
-                          setMutedWeekKeyAndStorage(null);
-                          toast({ description: "Генерация запущена" });
-                        } else {
-                          await startPlanGeneration({
-                            type: "week",
-                            member_id: memberIdForPlan,
-                            member_data: memberDataForPlan,
-                            start_key: getRollingStartKey(),
-                          });
-                          setMutedWeekKeyAndStorage(null);
-                          toast({ description: "Генерация запущена" });
+                    ) : (
+                      <>
+                        <Button
+                          size="sm"
+                          className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                          onClick={async () => {
+                            setPoolUpgradeLoading(true);
+                            try {
+                              const result = await runPoolUpgrade({
+                                type: "week",
+                                member_id: memberIdForPlan,
+                                member_data: memberDataForPlan,
+                                start_key: getRollingStartKey(),
+                                day_keys: getRollingDayKeys(),
+                              });
+                              setMutedWeekKeyAndStorage(null);
+                              queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                              const aiFallback = result.aiFallbackCount ?? 0;
+                              const desc = aiFallback > 0
+                                ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                                : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
+                              toast({ title: "Подобрать рецепты", description: desc });
+                            } catch (e: unknown) {
+                              toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
+                            } finally {
+                              setPoolUpgradeLoading(false);
+                            }
+                          }}
+                          disabled={isAnyGenerating}
+                        >
+                          <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                          {isAnyGenerating ? "Подбираем…" : "Подобрать рецепты"}
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => setMutedWeekKeyAndStorage(null)}
+                          className="text-typo-caption text-emerald-600 hover:text-emerald-700 transition-colors"
+                        >
+                          Заполнить шаблоном
+                        </button>
+                      </>
+                    )}
+                  </>
+                )}
+                {hasAnyWeekPlan && !isCompletelyEmpty && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={`rounded-xl border-slate-200 ${isAnyGenerating ? "opacity-70 cursor-wait" : ""}`}
+                      disabled={(isFree && todayIndex < 0) || undefined}
+                      onClick={async () => {
+                        if (isAnyGenerating) {
+                          toast({ description: "Идёт подбор рецептов, подождите…" });
+                          return;
                         }
-                      } catch (e: unknown) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
-                      }
-                    }}
-                  >
-                    <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                    {isAnyGenerating ? "Генерация…" : "Улучшить с AI"}
-                  </Button>
-                  <button
+                        setPoolUpgradeLoading(true);
+                        try {
+                          const result = await runPoolUpgrade({
+                            type: isFree ? "day" : "week",
+                            member_id: memberIdForPlan,
+                            member_data: memberDataForPlan,
+                            ...(isFree ? { day_key: todayKey } : { start_key: getRollingStartKey(), day_keys: getRollingDayKeys() }),
+                          });
+                          setMutedWeekKeyAndStorage(null);
+                          queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                          const aiFallback = result.aiFallbackCount ?? 0;
+                          const desc = aiFallback > 0
+                            ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                            : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? (isFree ? 4 : 28)}`;
+                          toast({ title: "Подобрать рецепты", description: desc });
+                        } catch (e: unknown) {
+                          toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
+                        } finally {
+                          setPoolUpgradeLoading(false);
+                        }
+                      }}
+                    >
+                      <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                      {isAnyGenerating ? "Подбираем…" : "Подобрать рецепты"}
+                    </Button>
+                    <button
                     type="button"
                     onClick={async () => {
+                      if (isAnyGenerating) {
+                        toast({ description: "Идёт генерация плана, подождите…" });
+                        return;
+                      }
                       if (isFree) {
                         if (!window.confirm("Удалить все блюда на сегодня?")) return;
                         setMutedWeekKeyAndStorage(startKey);
@@ -690,13 +785,28 @@ export default function MealPlanPage() {
                         }
                       }
                     }}
-                    disabled={isAnyGenerating}
-                    className="text-typo-caption text-muted-foreground/80 hover:text-muted-foreground"
+                    className={`text-typo-caption text-muted-foreground/80 hover:text-muted-foreground ${isAnyGenerating ? "opacity-70 cursor-wait" : ""}`}
+                    title={isAnyGenerating ? "Идёт генерация плана" : undefined}
                   >
                     {isFree ? "Очистить день" : "Очистить 7 дней"}
                   </button>
                 </>
               )}
+              </div>
+              {(memberDataForPlan?.allergies?.length || memberDataForPlan?.preferences?.length) ? (
+                <p className="text-[11px] text-muted-foreground">
+                  {[
+                    memberDataForPlan?.allergies?.length
+                      ? `Аллергии: ${memberDataForPlan.allergies.join(", ")}`
+                      : null,
+                    memberDataForPlan?.preferences?.length
+                      ? `Предпочтения: ${memberDataForPlan.preferences.join(", ")}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -730,10 +840,25 @@ export default function MealPlanPage() {
             })}
           </div>
 
-          {isAnyGenerating && planProgressTotal > 0 && (
-            <p className="text-typo-caption text-amber-700 font-medium mt-1 -mx-4 px-4">
-              Генерируем… {planProgressDone}/{planProgressTotal}
-            </p>
+          {isAnyGenerating && (
+            <div className="flex items-center justify-between gap-3 mt-1 -mx-4 px-4">
+              <p className="text-typo-caption text-amber-700 font-medium">
+                {poolUpgradeLoading
+                  ? "Подбираем из базы…"
+                  : planProgressTotal > 0
+                    ? `Генерируем… ${planProgressDone}/${planProgressTotal}`
+                    : "Генерируем…"}
+              </p>
+              {isPlanGenerating && (
+                <button
+                  type="button"
+                  onClick={() => cancelPlanJob()}
+                  className="text-typo-caption text-amber-800 hover:text-amber-900 underline"
+                >
+                  Отменить
+                </button>
+              )}
+            </div>
           )}
 
           {/* 3) Приёмы пищи: блоки с заголовком и карточкой/плейсхолдером */}
@@ -768,7 +893,71 @@ export default function MealPlanPage() {
                       isFavorite={previews[recipeId!]?.isFavorite ?? false}
                       onToggleFavorite={isValidRecipeId(recipeId!) ? handleToggleFavorite : undefined}
                       onShare={isValidRecipeId(recipeId!) ? handleShare : undefined}
-                      onReplace={() => setReplaceSlot({ mealType: slot.id, dayKey: selectedDayKey })}
+                      isReplaceLoading={replacingSlotKey === `${selectedDayKey}_${slot.id}`}
+                      onReplace={async () => {
+                        if (isAnyGenerating) {
+                          toast({ description: "Идёт генерация плана…" });
+                          return;
+                        }
+                        const slotKey = `${selectedDayKey}_${slot.id}`;
+                        if (replacingSlotKey != null) return;
+                        setReplacingSlotKey(slotKey);
+                        try {
+                          const result = await replaceMealSlotAuto({
+                            dayKey: selectedDayKey,
+                            mealType: slot.id,
+                            excludeRecipeIds: replaceExcludeRecipeIds,
+                            excludeTitleKeys: replaceExcludeTitleKeys,
+                            memberData: memberDataForPlan
+                              ? {
+                                  allergies: memberDataForPlan.allergies,
+                                  preferences: memberDataForPlan.preferences,
+                                  age_months: memberDataForPlan.age_months,
+                                }
+                              : undefined,
+                            isFree,
+                          });
+                          if (result.ok) {
+                            if (result.newRecipeId === recipeId) {
+                              toast({ description: "Нет других вариантов" });
+                              return;
+                            }
+                            applyReplaceSlotToPlanCache(queryClient, { mealPlansKeyWeek, mealPlansKeyDay }, {
+                              dayKey: selectedDayKey,
+                              mealType: slot.id,
+                              newRecipeId: result.newRecipeId,
+                              title: result.title,
+                              plan_source: result.plan_source,
+                            });
+                            toast({
+                              description: result.pickedSource === "ai" ? "Подбираем новый вариант…" : "Блюдо заменено",
+                            });
+                          } else {
+                            const err = "error" in result ? result.error : "";
+                            if (err === "limit") {
+                              toast({
+                                variant: "destructive",
+                                title: "Лимит",
+                                description: "1 замена в день (Free). В Premium — без ограничений.",
+                              });
+                            } else {
+                              toast({
+                                variant: "destructive",
+                                title: "Не удалось заменить",
+                                description: err === "unauthorized" ? "Нужна авторизация" : err,
+                              });
+                            }
+                          }
+                        } catch (e: unknown) {
+                          toast({
+                            variant: "destructive",
+                            title: "Ошибка",
+                            description: e instanceof Error ? e.message : "Не удалось заменить",
+                          });
+                        } finally {
+                          setReplacingSlotKey(null);
+                        }
+                      }}
                       debugSource={
                         planDebug
                           ? (plannedMeal as { plan_source?: "pool" | "ai" })?.plan_source === "pool"
@@ -792,38 +981,55 @@ export default function MealPlanPage() {
                           className="text-typo-caption text-emerald-600 hover:text-emerald-700 font-medium w-fit"
                           onClick={async () => {
                             if (isFree && todayIndex >= 0) {
+                              setPoolUpgradeLoading(true);
                               try {
-                                await startPlanGeneration({
+                                const result = await runPoolUpgrade({
                                   type: "day",
                                   member_id: memberIdForPlan,
                                   member_data: memberDataForPlan,
                                   day_key: todayKey,
                                 });
                                 setMutedWeekKeyAndStorage(null);
-                                toast({ description: "Генерация запущена" });
+                                queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                                const aiFallback = result.aiFallbackCount ?? 0;
+                                const desc = aiFallback > 0
+                                  ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                                  : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
+                                toast({ title: "Подобрать рецепты", description: desc });
                               } catch (e: unknown) {
-                                toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
+                                toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
+                              } finally {
+                                setPoolUpgradeLoading(false);
                               }
                             } else if (!isFree && isCompletelyEmpty) {
                               setMutedWeekKeyAndStorage(null);
                             } else if (!isFree) {
+                              setPoolUpgradeLoading(true);
                               try {
-                                await startPlanGeneration({
+                                const result = await runPoolUpgrade({
                                   type: "week",
                                   member_id: memberIdForPlan,
                                   member_data: memberDataForPlan,
                                   start_key: getRollingStartKey(),
+                                  day_keys: getRollingDayKeys(),
                                 });
                                 setMutedWeekKeyAndStorage(null);
-                                toast({ description: "Генерация запущена" });
+                                queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                                const aiFallback = result.aiFallbackCount ?? 0;
+                                const desc = aiFallback > 0
+                                  ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                                  : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
+                                toast({ title: "Подобрать рецепты", description: desc });
                               } catch (e: unknown) {
-                                toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
+                                toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
+                              } finally {
+                                setPoolUpgradeLoading(false);
                               }
                             }
                           }}
                           disabled={isAnyGenerating}
                         >
-                          {isCompletelyEmpty && !isFree ? "Заполнить шаблоном" : "Улучшить с AI"}
+                          {isCompletelyEmpty && !isFree ? "Заполнить шаблоном" : "Подобрать рецепты"}
                         </button>
                       ) : null}
                     </div>
@@ -848,16 +1054,24 @@ export default function MealPlanPage() {
                       if (typeof localStorage !== "undefined") {
                         localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
                       }
+                      setPoolUpgradeLoading(true);
                       try {
-                        await startPlanGeneration({
+                        const result = await runPoolUpgrade({
                           type: "day",
                           member_id: memberIdForPlan,
                           member_data: memberDataForPlan,
                           day_key: formatLocalDate(rollingDates[6]),
                         });
-                        toast({ description: "Генерация запущена" });
+                        queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                        const aiFallback = result.aiFallbackCount ?? 0;
+                        const desc = aiFallback > 0
+                          ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                          : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
+                        toast({ title: "Подобрать рецепты", description: desc });
                       } catch (e: unknown) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось запустить генерацию" });
+                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
+                      } finally {
+                        setPoolUpgradeLoading(false);
                       }
                     }}
                   >
@@ -867,102 +1081,6 @@ export default function MealPlanPage() {
               )}
           </div>
         </div>
-
-      {/* Заменить приём пищи */}
-      <Dialog open={!!replaceSlot} onOpenChange={(open) => !open && setReplaceSlot(null)}>
-        <DialogContent className="rounded-2xl max-w-[90vw]">
-          <DialogHeader>
-            <DialogTitle className="text-typo-title font-semibold">
-              Заменить {replaceSlot ? mealTypes.find((s) => s.id === replaceSlot.mealType)?.label ?? replaceSlot.mealType : ""}
-            </DialogTitle>
-            <p className="text-typo-caption text-muted-foreground">
-              Заменится только этот приём пищи.
-            </p>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 py-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              disabled={replaceLoading || (isFree && getFreeSwapUsedForDay(replaceSlot?.dayKey ?? ""))}
-              onClick={async () => {
-                if (!replaceSlot) return;
-                setReplaceLoading(true);
-                try {
-                  const excludeTitles = [...new Set(weekPlans.map((p) => p.recipe?.title).filter(Boolean))] as string[];
-                  const excludeRecipeIds = [...new Set(weekPlans.map((p) => p.recipe_id).filter(Boolean))] as string[];
-                  const result = await replaceWithPool({
-                    dayKey: replaceSlot.dayKey,
-                    mealType: replaceSlot.mealType,
-                    excludeTitles,
-                    excludeRecipeIds,
-                    isFree,
-                  });
-                  if (result === "ok") {
-                    toast({ description: "Блюдо заменено" });
-                    setReplaceSlot(null);
-                  } else if (result === "ok_legacy") {
-                    toast({ description: "Блюдо заменено (из старых рецептов)" });
-                    setReplaceSlot(null);
-                  } else if (result === "limit") {
-                    toast({
-                      variant: "destructive",
-                      title: "Лимит",
-                      description: "1 замена в день (Free). Доступна замена с AI в Premium.",
-                    });
-                  } else {
-                    toast({
-                      variant: "destructive",
-                      title: "Не нашли",
-                      description: "Не нашли в ваших рецептах. Доступна замена с AI (Premium).",
-                    });
-                  }
-                } catch (e: any) {
-                  toast({ variant: "destructive", title: "Ошибка", description: e?.message ?? "Не удалось заменить" });
-                } finally {
-                  setReplaceLoading(false);
-                }
-              }}
-            >
-              Быстрая замена (из ваших рецептов)
-            </Button>
-            {!isFree && (
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                disabled={replaceLoading}
-                onClick={async () => {
-                  if (!replaceSlot) return;
-                  setReplaceLoading(true);
-                  try {
-                    const excludeTitles = [...new Set(weekPlans.map((p) => p.recipe?.title).filter(Boolean))] as string[];
-                    await replaceWithAI({
-                      dayKey: replaceSlot.dayKey,
-                      mealType: replaceSlot.mealType,
-                      memberData: memberDataForPlan
-                        ? {
-                            allergies: memberDataForPlan.allergies,
-                            preferences: memberDataForPlan.preferences,
-                            age_months: memberDataForPlan.age_months,
-                          }
-                        : null,
-                      excludeTitles,
-                    });
-                    toast({ description: "Блюдо заменено" });
-                    setReplaceSlot(null);
-                  } catch (e: any) {
-                    toast({ variant: "destructive", title: "Ошибка", description: e?.message ?? "Не удалось сгенерировать" });
-                  } finally {
-                    setReplaceLoading(false);
-                  }
-                }}
-              >
-                <Sparkles className="w-4 h-4 mr-2 shrink-0" />
-                С AI
-              </Button>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
 
     </MobileLayout>
   );
