@@ -105,14 +105,26 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
   const jsonStr = extractJsonFromResponse(assistantMessage);
   if (!jsonStr) return null;
   try {
-    const parsed = JSON.parse(jsonStr);
-    if (!parsed.title || !Array.isArray(parsed.ingredients) || !Array.isArray(parsed.steps)) return null;
-    const cooking = parsed.cookingTimeMinutes ?? parsed.cookingTime;
+    let parsed: unknown = JSON.parse(jsonStr);
+    // Если модель вернула массив рецептов — берём первый, остальные игнорируем
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      parsed = parsed[0];
+    } else if (parsed && typeof parsed === "object" && Array.isArray((parsed as { recipes?: unknown[] }).recipes)) {
+      const arr = (parsed as { recipes: unknown[] }).recipes;
+      if (arr.length > 0) parsed = arr[0];
+    }
+    if (!parsed || typeof parsed !== "object" || !("title" in parsed) || !Array.isArray((parsed as { ingredients?: unknown }).ingredients) || !Array.isArray((parsed as { steps?: unknown }).steps))
+      return null;
+    const p = parsed as Record<string, unknown> & {
+      title?: string; description?: string; cookingTimeMinutes?: number; cookingTime?: number;
+      ingredients: unknown[]; steps: unknown[]; advice?: string; chefAdvice?: string; chef_advice?: string; chefAdviceText?: string; mealType?: string;
+    };
+    const cooking = p.cookingTimeMinutes ?? p.cookingTime;
     const normalized = {
-      title: String(parsed.title).trim(),
-      description: String(parsed.description ?? "").slice(0, 200),
+      title: String(p.title).trim(),
+      description: String(p.description ?? "").slice(0, 200),
       cookingTimeMinutes: typeof cooking === "number" ? Math.max(1, Math.min(240, Math.floor(cooking))) : 1,
-      ingredients: parsed.ingredients.map((ing: unknown) => {
+      ingredients: p.ingredients.map((ing: unknown) => {
         let name: string;
         let displayText: string;
         let canonical: { amount: number; unit: string } | null = null;
@@ -135,15 +147,15 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
         }
         return { name, displayText, canonical, ...(substitute != null && { substitute: String(substitute) }) };
       }),
-      steps: parsed.steps
+      steps: p.steps
         .map((s: unknown) => String(s ?? "").trim())
         .filter((s) => s.length > 0)
         .slice(0, 7),
-      advice: parsed.advice ?? null,
-      chefAdvice: (parsed.chefAdvice ?? parsed.chef_advice ?? parsed.chefAdviceText) != null
-        ? String(parsed.chefAdvice ?? parsed.chef_advice ?? parsed.chefAdviceText).slice(0, 300)
+      advice: p.advice ?? null,
+      chefAdvice: (p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText) != null
+        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 300)
         : null,
-      mealType: parsed.mealType ?? undefined,
+      mealType: p.mealType ?? undefined,
     };
     const result = RecipeJsonSchema.safeParse(normalized);
     return result.success ? result.data : null;

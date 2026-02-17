@@ -186,7 +186,7 @@ export function AddMealDialog({
 
         <Button
           type="submit"
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+          className="w-full bg-primary hover:opacity-90 text-white border-0"
           disabled={isLoading || !hasSelection}
         >
           {isLoading ? (

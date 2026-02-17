@@ -686,9 +686,11 @@ export function parseRecipesFromChat(
         }
       }
 
-      if (Array.isArray(parsed) || Array.isArray(parsed.recipes)) {
+      // Если модель вернула массив рецептов — берём только первый, остальные игнорируем
+      if (recipes.length === 0 && (Array.isArray(parsed) || Array.isArray(parsed.recipes))) {
         const recipeList = Array.isArray(parsed) ? parsed : parsed.recipes;
-        recipeList.forEach((recipe: any) => {
+        const recipe = recipeList[0];
+        if (recipe && (recipe.title || recipe.name)) {
           const title = recipe.title || recipe.name;
           if (title && title.trim() && title !== 'Рецепт из чата' && title.length >= 3 && title.length <= 80) {
             const rawIng = Array.isArray(recipe.ingredients) ? recipe.ingredients : recipe.ingredients?.split(',').map((i: string) => i.trim()) || [];
@@ -723,7 +725,7 @@ export function parseRecipesFromChat(
               });
             }
           }
-        });
+        }
       }
       jsonParsedSuccessfully = true;
     } catch (e) {

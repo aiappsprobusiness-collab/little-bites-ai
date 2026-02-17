@@ -289,7 +289,7 @@ export function useDeepSeekAPI() {
     },
   });
 
-  // Save chat to history (без привязки к ребёнку). После вставки — карусель: оставляем только последние 10.
+  // Save chat to history (с контекстом: child_id = null для Семья, иначе id члена). Карусель — по контексту, последние 10.
   const CHAT_HISTORY_LIMIT = 10;
   const saveChatMutation = useMutation({
     mutationFn: async ({
@@ -297,20 +297,25 @@ export function useDeepSeekAPI() {
       response,
       messageType = 'text',
       recipeId,
+      childId,
     }: {
       message: string;
       response: string;
       messageType?: 'text' | 'image' | 'recipe';
       /** ID рецепта в БД (из Edge function или saveRecipesFromChat) */
       recipeId?: string | null;
+      /** Контекст чата: null = Семья, иначе id члена семьи */
+      childId?: string | null;
     }) => {
       if (!user) throw new Error('Not authenticated');
+
+      const childIdVal = childId ?? null;
 
       const { error: insertError } = await supabase
         .from('chat_history')
         .insert({
           user_id: user.id,
-          child_id: null,
+          child_id: childIdVal,
           message,
           response,
           message_type: messageType,
@@ -322,12 +327,15 @@ export function useDeepSeekAPI() {
         throw insertError;
       }
 
-      // Карусель: удалить самые старые записи, если больше лимита
-      const { data: rows } = await supabase
+      // Карусель по контексту: оставить только последние CHAT_HISTORY_LIMIT записей (неархивных, тот же child_id)
+      let trimQ = supabase
         .from('chat_history')
         .select('id')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: true });
+        .is('archived_at', null);
+      if (childIdVal == null) trimQ = trimQ.is('child_id', null);
+      else trimQ = trimQ.eq('child_id', childIdVal);
+      const { data: rows } = await trimQ.order('created_at', { ascending: true });
       if (rows && rows.length > CHAT_HISTORY_LIMIT) {
         const toDelete = rows.slice(0, rows.length - CHAT_HISTORY_LIMIT).map((r) => r.id);
         const { error: deleteError } = await supabase

@@ -13,7 +13,7 @@ export const RECIPES_LIST_SELECT =
 export const RECIPES_DETAIL_SELECT = `${RECIPES_LIST_SELECT}, chef_advice, advice, ingredients:recipe_ingredients(name, amount, unit, substitute, display_text, canonical_amount, canonical_unit), steps:recipe_steps(instruction, step_number)`;
 
 /** Минимальные поля chat_history для отображения. */
-export const CHAT_HISTORY_SELECT = 'id, message, response, created_at, user_id, child_id, message_type, recipe_id';
+export const CHAT_HISTORY_SELECT = 'id, message, response, created_at, user_id, child_id, message_type, recipe_id, archived_at';
 
 export const RECIPES_PAGE_SIZE = 10;
 /** Лимит чата: храним только последние 10 записей (карусель). */

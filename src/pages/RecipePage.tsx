@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, RotateCcw } from "lucide-react";
+import { Loader2, ArrowLeft, RotateCcw, Heart, Share2 } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -50,10 +50,53 @@ export default function RecipePage() {
   const location = useLocation();
   const { toast } = useToast();
   const { selectedMember } = useFamily();
-  const { getRecipeById } = useRecipes();
+  const { getRecipeById, favoriteRecipes = [], toggleFavorite } = useRecipes();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
   const fromMealPlan = (location.state as { fromMealPlan?: boolean; mealTypeLabel?: string } | null)?.fromMealPlan;
   const mealTypeLabel = (location.state as { mealTypeLabel?: string } | null)?.mealTypeLabel;
+
+  const isFavorite = !!id && favoriteRecipes.some((r) => r.id === id);
+  const handleToggleFavorite = async () => {
+    if (!id || !recipe) return;
+    try {
+      await toggleFavorite({
+        id,
+        isFavorite: !isFavorite,
+        preview: {
+          title: (recipe as { title?: string }).title,
+          description: (recipe as { description?: string }).description,
+          cookTimeMinutes: (recipe as { cooking_time_minutes?: number }).cooking_time_minutes,
+          ingredientNames: Array.isArray((recipe as { ingredients?: unknown[] }).ingredients)
+            ? (recipe as { ingredients: { name?: string }[] }).ingredients.map((i) => i.name ?? "").filter(Boolean)
+            : [],
+          chefAdvice: (recipe as { chefAdvice?: string }).chefAdvice ?? (recipe as { chef_advice?: string }).chef_advice,
+          advice: (recipe as { advice?: string }).advice,
+        },
+      });
+      toast({ title: isFavorite ? "Удалено из избранного" : "Добавлено в избранное" });
+    } catch (e: unknown) {
+      toast({ variant: "destructive", title: "Ошибка", description: (e as Error)?.message ?? "Не удалось обновить избранное" });
+    }
+  };
+  const handleShare = async () => {
+    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/recipe/${id}`;
+    const title = (recipe as { title?: string })?.title ?? "Рецепт";
+    try {
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title, url });
+        toast({ title: "Рецепт отправлен" });
+      } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Ссылка скопирована" });
+      } else {
+        toast({ variant: "destructive", title: "Поделиться недоступно" });
+      }
+    } catch (e: unknown) {
+      if ((e as Error)?.name !== "AbortError") {
+        toast({ variant: "destructive", title: "Ошибка", description: (e as Error)?.message ?? "Не удалось поделиться" });
+      }
+    }
+  };
 
   const [overrides, setOverrides] = useState<Record<number, string>>({});
   const [substituteSheet, setSubstituteSheet] = useState<{
@@ -77,7 +120,7 @@ export default function RecipePage() {
       <MobileLayout title="Рецепт" headerLeft={<Button variant="ghost" size="icon" className="min-w-[44px] min-h-[44px]" onClick={() => navigate(-1)} aria-label="Назад"><ArrowLeft className="w-5 h-5" /></Button>}>
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <p className="text-muted-foreground mb-4">Рецепт не найден</p>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={() => (fromMealPlan ? navigate("/meal-plan") : navigate("/home"))}>
+          <Button className="bg-primary hover:opacity-90 text-white border-0" onClick={() => (fromMealPlan ? navigate("/meal-plan") : navigate("/home"))}>
             {fromMealPlan ? "К плану питания" : "На главную"}
           </Button>
         </div>
@@ -119,6 +162,28 @@ export default function RecipePage() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
       }
+      headerRight={
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="min-w-[44px] min-h-[44px] rounded-full"
+            onClick={handleToggleFavorite}
+            aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
+          >
+            <Heart className={`h-5 w-5 ${isFavorite ? "fill-amber-500 text-amber-600" : "text-muted-foreground"}`} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="min-w-[44px] min-h-[44px] rounded-full"
+            onClick={handleShare}
+            aria-label="Поделиться"
+          >
+            <Share2 className="h-5 w-5 text-muted-foreground" />
+          </Button>
+        </div>
+      }
     >
       <div className="px-4 pb-6 max-w-[100%] mx-auto">
         {/* Карточка рецепта — те же стили, что и в чате */}
@@ -126,7 +191,7 @@ export default function RecipePage() {
           {/* Тип приёма пищи + заголовок */}
           <section className="space-y-1.5 sm:space-y-2">
             {mealStr && (
-              <span className="inline-block text-typo-caption sm:text-typo-muted font-medium text-emerald-700 bg-emerald-50/80 border border-emerald-100 rounded-full px-2.5 py-0.5 sm:px-3 sm:py-1">
+              <span className="inline-block text-typo-caption sm:text-typo-muted font-medium text-primary bg-primary-light border border-primary-border rounded-full px-2.5 py-0.5 sm:px-3 sm:py-1">
                 {mealStr}
               </span>
             )}
@@ -154,13 +219,13 @@ export default function RecipePage() {
                   return (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1.5 sm:gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-2 py-1 sm:px-3 sm:py-1.5"
+                      className="inline-flex items-center gap-1.5 sm:gap-2 bg-primary-light/80 border border-primary-border rounded-full px-2 py-1 sm:px-3 sm:py-1.5"
                     >
                       <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 truncate max-w-[200px]">{label}</span>
                       <button
                         type="button"
                         onClick={() => setSubstituteSheet({ open: true, index, ing })}
-                        className="shrink-0 p-0.5 rounded-full hover:bg-[#6B8E23]/15 text-[#6B8E23] touch-manipulation"
+                        className="shrink-0 p-0.5 rounded-full hover:bg-primary/15 text-primary touch-manipulation"
                         aria-label={`Заменить: ${ing.name}`}
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
@@ -174,10 +239,10 @@ export default function RecipePage() {
 
           {/* Совет: только один блок — chefAdvice или advice (после Ингредиенты, перед Приготовлением) */}
           {chefAdvice?.trim() ? (
-            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start">
+            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-primary-light/80 border border-primary-border flex gap-2 sm:gap-3 items-start">
               <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
               <div className="min-w-0">
-                <p className="text-typo-caption font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
+                <p className="text-typo-caption font-medium text-primary mb-0.5">Совет от шефа</p>
                 <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{chefAdvice.trim()}</p>
               </div>
             </div>
@@ -218,7 +283,7 @@ export default function RecipePage() {
                   const num = step.step_number ?? index + 1;
                   return (
                     <div key={index} className="flex gap-2 sm:gap-3 items-start">
-                      <span className="text-typo-caption font-bold text-[#6B8E23] shrink-0">{num}.</span>
+                      <span className="text-typo-caption font-bold text-primary shrink-0">{num}.</span>
                       <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-relaxed flex-1 min-w-0">
                         {step.instruction ?? ""}
                       </p>

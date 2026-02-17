@@ -135,7 +135,7 @@ export default function SosTopicPage() {
               <ul className="space-y-2">
                 {(locked ? topic.checklistNow.slice(0, 2) : topic.checklistNow).map((item, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" />
                     <span>{item}</span>
                   </li>
                 ))}

@@ -23,7 +23,7 @@ export function BottomNavigation() {
     <nav
       className={cn(
         "fixed bottom-0 left-0 right-0 z-50 safe-bottom-nav",
-        "bg-white border-t border-slate-200",
+        "bg-white border-t border-primary-border/50",
         "rounded-t-2xl max-w-lg mx-auto shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
       )}
       style={{ minHeight: "var(--layout-nav-height)" }}
@@ -41,20 +41,14 @@ export function BottomNavigation() {
               onClick={() => handleTabClick(item.path)}
               className={cn(
                 "relative flex flex-col items-center justify-center gap-1 py-2.5 px-2 min-w-0 flex-1 rounded-xl transition-colors",
-                isActive ? "text-emerald-600" : "text-slate-500"
+                isActive ? "text-primary" : "text-[#8A8A8A]"
               )}
               whileTap={{ scale: 0.95 }}
             >
               <Icon className={cn("w-5 h-5 shrink-0", isActive && "opacity-90")} />
-              <span className={cn("text-xs truncate w-full text-center", isActive ? "font-semibold text-emerald-600" : "font-normal text-slate-500")}>
+              <span className={cn("text-xs truncate w-full text-center", isActive ? "font-semibold text-primary" : "font-normal text-[#8A8A8A]")}>
                 {item.label}
               </span>
-              {isActive && (
-                <motion.div
-                  layoutId="navIndicator"
-                  className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-600"
-                />
-              )}
             </motion.button>
           );
         })}

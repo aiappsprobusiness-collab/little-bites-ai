@@ -278,7 +278,7 @@ ${childData.allergies.length ? `- ИСКЛЮЧИ (аллергия): ${childData
             >
               Отмена
             </Button>
-            <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white border-0" onClick={handleSave}>
+            <Button className="flex-1 bg-primary hover:opacity-90 text-white border-0" onClick={handleSave}>
               <RefreshCw className="w-4 h-4 mr-2" />
               Заменить
             </Button>

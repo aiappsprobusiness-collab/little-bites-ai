@@ -5,18 +5,25 @@
 
 @layer base {
   :root {
-    /* Светлый серо-бежевый фон приложения */
-    --background: 210 14% 98%;
-    --foreground: 240 10% 25%;
+    /* Единая оливковая палитра */
+    --color-primary: #6E7F3B;
+    --color-primary-light: #F3F6EC;
+    --color-primary-border: #DCE3C7;
+    --color-bg-main: #FAFAF7;
+    --color-text-main: #2F2F2F;
+
+    /* Фон приложения #FAFAF7 */
+    --background: 60 20% 97.5%;
+    --foreground: 0 0% 18%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 25%;
+    --card-foreground: 0 0% 18%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 25%;
+    --popover-foreground: 0 0% 18%;
 
-    /* Оливковый/шалфейный акцент #6B8E23 */
-    --primary: 80 60% 34%;
+    /* Primary = оливковый #6E7F3B */
+    --primary: 75 37% 36%;
     --primary-foreground: 0 0% 100%;
 
     /* Warm peach - secondary */
@@ -27,15 +34,15 @@
     --accent: 270 50% 88%;
     --accent-foreground: 270 40% 30%;
 
-    --muted: 30 20% 94%;
-    --muted-foreground: 240 5% 50%;
+    --muted: 40 20% 94%;
+    --muted-foreground: 0 0% 40%;
 
     --destructive: 0 70% 65%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 30 20% 90%;
-    --input: 30 20% 90%;
-    --ring: 160 45% 65%;
+    --border: 40 20% 88%;
+    --input: 40 20% 88%;
+    --ring: 75 37% 36%;
 
     --radius: 1rem;
 
@@ -49,9 +56,10 @@
     --layout-nav-height: 4rem;
     --layout-main-bottom: calc(var(--layout-nav-height) + env(safe-area-inset-bottom, 0px));
 
-    /* Custom colors */
-    --mint: 160 45% 65%;
-    --mint-light: 160 45% 92%;
+    /* Совместимость: mint → primary-light (оливковая система) */
+    --mint: 75 37% 92%;
+    --mint-light: 75 33% 96%;
+
     --peach: 25 80% 85%;
     --peach-dark: 25 60% 70%;
     --lavender: 270 50% 88%;
@@ -60,16 +68,16 @@
     --soft-pink: 350 60% 90%;
     --soft-blue: 200 60% 88%;
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(160, 45%, 65%) 0%, hsl(180, 50%, 70%) 100%);
+    /* Gradients — оливковые оттенки */
+    --gradient-primary: linear-gradient(135deg, #6E7F3B 0%, #8A9B4B 100%);
     --gradient-peach: linear-gradient(135deg, hsl(25, 80%, 85%) 0%, hsl(350, 60%, 90%) 100%);
     --gradient-lavender: linear-gradient(135deg, hsl(270, 50%, 88%) 0%, hsl(200, 60%, 88%) 100%);
-    --gradient-hero: linear-gradient(180deg, hsl(30, 40%, 98%) 0%, hsl(160, 45%, 95%) 100%);
+    --gradient-hero: linear-gradient(180deg, #FAFAF7 0%, #F3F6EC 100%);
 
-    /* Shadows */
-    --shadow-soft: 0 4px 20px -4px hsl(160 45% 65% / 0.15);
-    --shadow-card: 0 8px 30px -8px hsl(240 10% 25% / 0.08);
-    --shadow-button: 0 4px 14px -4px hsl(160 45% 65% / 0.35);
+    /* Shadows — мягкие, без мятных оттенков */
+    --shadow-soft: 0 4px 20px -4px rgba(110, 127, 59, 0.12);
+    --shadow-card: 0 8px 30px -8px rgba(47, 47, 47, 0.08);
+    --shadow-button: 0 4px 14px -4px rgba(110, 127, 59, 0.25);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -91,8 +99,8 @@
     --popover: 240 10% 15%;
     --popover-foreground: 30 20% 95%;
 
-    --primary: 160 45% 55%;
-    --primary-foreground: 160 45% 95%;
+    --primary: 75 37% 45%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 25 50% 25%;
     --secondary-foreground: 25 80% 90%;
@@ -225,6 +233,88 @@
   .main-above-nav {
     padding-bottom: var(--layout-main-bottom);
   }
+
+  /** Вкладка План: деликатный точечный паттерн (оливковый, opacity 0.03–0.05). */
+  .plan-page-bg {
+    background-color: var(--color-bg-main);
+    background-image: radial-gradient(circle at center, rgba(110, 127, 59, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /** Вкладка Чат: светлее Плана, ощущение AI-ассистента. */
+  .chat-page-bg {
+    background-color: #FCFCFA;
+  }
+
+  /** Типографика: H1 24px/700, Section/Header 18px/600, Body 15px/400–500, Subtext 13–14px/muted. Токены: text-typo-h1, text-typo-header, text-typo-body, text-typo-subtext. */
+
+  /** AI thinking: 3 точки с staggered анимацией (~1.2s цикл). */
+  .chat-thinking-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: hsl(var(--primary) / 0.6);
+    animation: chat-thinking-bounce 1.2s ease-in-out infinite;
+  }
+  .chat-thinking-dot:nth-child(1) { animation-delay: 0s; }
+  .chat-thinking-dot:nth-child(2) { animation-delay: 0.15s; }
+  .chat-thinking-dot:nth-child(3) { animation-delay: 0.3s; }
+}
+
+@keyframes chat-thinking-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/** Шторка подсказок: плавное открытие/закрытие без рывка (200–250ms, ease-out). */
+@keyframes sheet-hints-in {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes sheet-hints-out {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(20px); opacity: 0; }
+}
+@keyframes sheet-hints-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheet-hints-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.sheet-hints-content[data-state=open] {
+  animation: sheet-hints-in 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.sheet-hints-content[data-state=closed] {
+  animation: sheet-hints-out 180ms ease-in forwards;
+}
+.sheet-hints-overlay {
+  background-color: rgba(0, 0, 0, 0.4);
+}
+.sheet-hints-overlay[data-state=open] {
+  animation: sheet-hints-overlay-in 180ms ease-out forwards;
+}
+.sheet-hints-overlay[data-state=closed] {
+  animation: sheet-hints-overlay-out 150ms ease-in forwards;
+}
+
+/** Тултип «Подсказки» у кнопки ?: появление 150–200ms. */
+@keyframes chat-help-tooltip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.chat-help-tooltip {
+  animation: chat-help-tooltip-in 180ms ease-out forwards;
+}
+
+/** Мягкий акцент на кнопке "?" при пустом чате: 2 pulse, затем остановить. */
+@keyframes chat-hint-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(110, 127, 59, 0.25); }
+  50% { box-shadow: 0 0 0 6px rgba(110, 127, 59, 0.12); }
+}
+.chat-hint-btn-pulse {
+  animation: chat-hint-pulse 1s ease-in-out 2 forwards;
 }
 
 /* Custom scrollbar */

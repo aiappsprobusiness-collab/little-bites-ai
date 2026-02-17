@@ -10,7 +10,7 @@ export function PaymentSuccess() {
   return (
     <MobileLayout>
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
-        <CheckCircle className="h-16 w-16 text-green-500 mb-4" />
+        <CheckCircle className="h-16 w-16 text-primary mb-4" />
         <h1 className="text-typo-title font-semibold mb-2">Оплата прошла успешно</h1>
         <p className="text-muted-foreground mb-6">
           Подписка активирована. Обновите страницу или вернитесь в приложение, если статус не

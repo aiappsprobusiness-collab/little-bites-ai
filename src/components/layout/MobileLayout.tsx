@@ -28,6 +28,8 @@ interface MobileLayoutProps {
   headerCenter?: ReactNode;
   /** Убрать блюр у хедера (только фон) */
   headerNoBlur?: boolean;
+  /** Доп. классы для header (например граница) */
+  headerClassName?: string;
 }
 
 export function MobileLayout({
@@ -40,6 +42,7 @@ export function MobileLayout({
   headerBrand = undefined,
   headerCenter,
   headerNoBlur = false,
+  headerClassName,
 }: MobileLayoutProps) {
   const showHeader =
     (title != null && title !== "") ||
@@ -48,14 +51,14 @@ export function MobileLayout({
     headerRight != null ||
     (headerBrand != null && headerBrand !== false);
   const leftContent = headerBrand === false ? headerLeft : (headerBrand ?? headerLeft);
-  const headerClassName = headerNoBlur
+  const baseHeaderClass = headerNoBlur
     ? "sticky top-0 z-40 bg-background border-b border-border/50 layout-header"
     : "sticky top-0 z-40 bg-background/95 backdrop-blur-lg border-b border-border/50 layout-header";
 
   return (
     <div className="h-dvh min-h-dvh bg-background flex flex-col overflow-hidden">
       {showHeader ? (
-        <header className={headerClassName}>
+        <header className={headerClassName ? `${baseHeaderClass} ${headerClassName}` : baseHeaderClass}>
           <div className="layout-header-inner relative flex items-center">
             {/* Левый слот: absolute left (назад и т.д.) */}
             {leftContent != null && leftContent !== false && (

@@ -124,12 +124,18 @@ export function usePlanGenerationJob(
 
   const POOL_UPGRADE_TIMEOUT_MS = 150_000; // 2.5 мин — Edge Function может долго обрабатывать неделю + AI fallback
 
+  /** Получить актуальный access_token (при необходимости обновить сессию). */
+  const getValidAccessToken = useCallback(async (): Promise<string> => {
+    const { data: { session: afterRefresh } } = await supabase.auth.refreshSession();
+    const token = afterRefresh?.access_token ?? session?.access_token;
+    if (!token) throw new Error("Необходима авторизация");
+    return token;
+  }, [session?.access_token]);
+
   const runPoolUpgrade = useCallback(
     async (params: StartPlanGenerationParams): Promise<PoolUpgradeResult> => {
       if (!user?.id) throw new Error("Необходима авторизация");
-      const { data: { session: freshSession } } = await supabase.auth.getSession();
-      const token = freshSession?.access_token ?? session?.access_token;
-      if (!token) throw new Error("Необходима авторизация");
+      const token = await getValidAccessToken();
       const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
       const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
       const body = {
@@ -163,15 +169,13 @@ export function usePlanGenerationJob(
         throw e;
       }
     },
-    [user?.id, session?.access_token]
+    [user?.id, getValidAccessToken]
   );
 
   const startGeneration = useCallback(
     async (params: StartPlanGenerationParams) => {
       if (!user?.id) return;
-      const { data: { session: freshSession } } = await supabase.auth.getSession();
-      const token = freshSession?.access_token ?? session?.access_token;
-      if (!token) throw new Error("Необходима авторизация");
+      const token = await getValidAccessToken();
       const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
       const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
 
@@ -208,14 +212,13 @@ export function usePlanGenerationJob(
       };
       fetch(url, { method: "POST", headers, body: JSON.stringify(runBody) }).catch(() => {});
     },
-    [user?.id, session?.access_token, refetchJob]
+    [user?.id, getValidAccessToken, refetchJob]
   );
 
   const cancelJob = useCallback(
     async () => {
       if (!user?.id || !job?.id || job.status !== "running") return;
-      const { data: { session: freshSession } } = await supabase.auth.getSession();
-      const token = freshSession?.access_token ?? session?.access_token;
+      const token = await getValidAccessToken().catch(() => null);
       if (!token) return;
       const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
       const res = await fetch(url, {
@@ -229,7 +232,7 @@ export function usePlanGenerationJob(
         refetchJob();
       }
     },
-    [user?.id, job?.id, job?.status, job?.last_day_key, memberId, type, session?.access_token, refetchJob]
+    [user?.id, job?.id, job?.status, job?.last_day_key, memberId, type, getValidAccessToken, refetchJob]
   );
 
   const isRunning = job?.status === "running";

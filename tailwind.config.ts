@@ -16,14 +16,24 @@ export default {
       fontFamily: {
         sans: ['ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
       },
-      /** Typography scale (source: onboarding/auth). Use with font-semibold/font-bold for titles. */
+      /** Typography scale: H1 24/700, Section/Header 18/600, Body 15/400–500, Subtext 13–14/muted */
       fontSize: {
+        "typo-h1": ["1.5rem", { lineHeight: "1.25" }],       /* 24px */
+        "typo-section": ["1.125rem", { lineHeight: "1.3" }], /* 18px */
+        "typo-header": ["1.125rem", { lineHeight: "1.3" }],  /* 18px */
         "typo-title": ["1.125rem", { lineHeight: "1.3" }],
+        "typo-body": ["0.9375rem", { lineHeight: "1.5" }],   /* 15px */
+        "typo-subtext": ["0.8125rem", { lineHeight: "1.45" }], /* 13px */
         "typo-h2": ["0.875rem", { lineHeight: "1.4" }],
-        "typo-body": ["1rem", { lineHeight: "1.5" }],
         "typo-muted": ["0.875rem", { lineHeight: "1.5" }],
         "typo-caption": ["0.75rem", { lineHeight: "1.4" }],
         "typo-button": ["1rem", { lineHeight: "1.25" }],
+        /** Plan tab: премиум-типографика */
+        "plan-hero-title": ["1.5rem", { lineHeight: "1.25" }],
+        "plan-subheader": ["0.8125rem", { lineHeight: "1.4" }],
+        "plan-meal-label": ["1rem", { lineHeight: "1.3" }],
+        "plan-recipe-title": ["1.125rem", { lineHeight: "1.2" }],
+        "plan-secondary": ["0.9375rem", { lineHeight: "1.45" }],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -34,7 +44,11 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          light: "var(--color-primary-light)",
+          border: "var(--color-primary-border)",
         },
+        "app-bg": "var(--color-bg-main)",
+        "text-main": "var(--color-text-main)",
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
@@ -63,6 +77,7 @@ export default {
           DEFAULT: "hsl(var(--mint))",
           light: "hsl(var(--mint-light))",
         },
+        "primary-pill": "#E6EDD5",
         peach: {
           DEFAULT: "hsl(var(--peach))",
           dark: "hsl(var(--peach-dark))",

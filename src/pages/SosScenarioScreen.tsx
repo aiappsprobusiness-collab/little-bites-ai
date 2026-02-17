@@ -202,7 +202,7 @@ export default function SosScenarioScreen() {
             <div
               key={i}
               className={`rounded-2xl px-4 py-3 max-w-[90%] ${msg.role === "user"
-                  ? "ml-auto rounded-br-sm bg-emerald-600 text-white"
+                  ? "ml-auto rounded-br-sm bg-primary text-white"
                   : "mr-auto rounded-bl-sm bg-slate-100 text-slate-800"
                 }`}
             >
@@ -240,7 +240,7 @@ export default function SosScenarioScreen() {
           />
           <Button
             size="icon"
-            className="h-11 w-11 shrink-0 rounded-xl bg-emerald-600 hover:bg-emerald-700"
+            className="h-11 w-11 shrink-0 rounded-xl bg-primary hover:opacity-90"
             onClick={() => sendRequest()}
             disabled={loading}
           >

@@ -187,7 +187,7 @@ export default function ScanPage() {
             className="space-y-4"
           >
             {/* Camera Preview Area */}
-            <div className="relative aspect-[4/5] rounded-3xl bg-gradient-to-br from-mint-light to-secondary overflow-hidden border-2 border-primary/20">
+            <div className="relative aspect-[4/5] rounded-3xl bg-gradient-to-br from-primary-light to-secondary overflow-hidden border-2 border-primary/20">
               {imagePreview ? (
                 <img
                   src={imagePreview}

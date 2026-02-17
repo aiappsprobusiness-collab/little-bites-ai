@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, Share2, RotateCw, Loader2 } from "lucide-react";
+import { Heart, Share2, RotateCw, Loader2, Trash2 } from "lucide-react";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -53,6 +55,8 @@ export interface MealCardProps {
   onReplace?: () => void;
   /** true = кнопка замены в состоянии загрузки (pool/AI). */
   isReplaceLoading?: boolean;
+  /** Удалить блюдо из плана (Premium). Показывает кнопку 🗑. */
+  onDelete?: () => void;
   /** При включённом __PLAN_DEBUG / ?debugPool=1: показывать бейдж DB или AI. */
   debugSource?: "db" | "ai";
 }
@@ -77,6 +81,7 @@ export function MealCard({
   onShare,
   onReplace,
   isReplaceLoading = false,
+  onDelete,
   debugSource,
 }: MealCardProps) {
   const navigate = useNavigate();
@@ -98,11 +103,16 @@ export function MealCard({
     });
   };
 
+  const [replaceSpin, setReplaceSpin] = useState(false);
   const handleReplaceClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isReplaceLoading) {
+      setReplaceSpin(true);
+      setTimeout(() => setReplaceSpin(false), 400);
+    }
     onReplace?.();
   };
-  const showActions = !isLoadingPreviews && (onToggleFavorite ?? onShare ?? onReplace) != null;
+  const showActions = !isLoadingPreviews && (onToggleFavorite ?? onShare ?? onReplace ?? onDelete) != null;
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onToggleFavorite?.(recipeId, !isFavorite);
@@ -133,7 +143,7 @@ export function MealCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-typo-body font-semibold text-foreground leading-tight">
+              <span className="text-plan-recipe-title font-bold text-foreground leading-tight">
                 {recipeTitle}
               </span>
               {debugSource && (
@@ -193,14 +203,37 @@ export function MealCard({
                   type="button"
                   onClick={handleReplaceClick}
                   disabled={isReplaceLoading}
-                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-emerald-600 bg-emerald-50/90 border border-emerald-200/70 hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none"
+                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-primary bg-primary-pill border border-primary-border hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none"
                   title="Заменить"
                   aria-label="Заменить блюдо"
                 >
-                  {isReplaceLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
+                  {isReplaceLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <motion.span
+                      animate={{ rotate: replaceSpin ? 360 : 0 }}
+                      transition={{ duration: 0.4, ease: "easeInOut" }}
+                    >
+                      <RotateCw className="h-4 w-4" />
+                    </motion.span>
+                  )}
                 </button>
               )}
-              {onToggleFavorite && (
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-slate-200/60 hover:border-destructive/30 active:scale-95 transition-all"
+                  title="Удалить из плана"
+                  aria-label="Удалить блюдо из плана"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+              {!compact && onToggleFavorite && (
                 <button
                   type="button"
                   onClick={handleFavoriteClick}
@@ -216,7 +249,7 @@ export function MealCard({
                   <Heart className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
                 </button>
               )}
-              {onShare && (
+              {!compact && onShare && (
                 <button
                   type="button"
                   onClick={handleShareClick}

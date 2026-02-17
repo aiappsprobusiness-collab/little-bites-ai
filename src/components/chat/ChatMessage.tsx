@@ -326,8 +326,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         className={`relative flex ${role === "user" ? "justify-end" : "justify-start"} ${role === "assistant" && effectiveRecipe ? "scroll-mt-[60px]" : ""}`}
       >
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
           exit={{ opacity: 0 }}
           className={`relative ${role === "user" ? "max-w-[75%]" : "max-w-[85%]"}`}
         >
@@ -335,17 +336,17 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             className={`relative ${role === "user"
               ? "px-4 py-2.5 text-typo-muted bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
               : role === "assistant" && effectiveRecipe
-                ? "rounded-bl-sm overflow-hidden px-3 pb-3 sm:px-4"
-                : "px-4 py-4 sm:px-5 bg-slate-50/90 border border-slate-200/40 rounded-2xl rounded-bl-sm"
+                ? "rounded-bl-sm overflow-hidden px-3 pb-3 sm:px-4 bg-[#F7F8F3]"
+                : "px-4 py-4 sm:px-5 bg-[#F7F8F3] rounded-2xl rounded-bl-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
               }`}
           >
             {role === "assistant" && showParseError ? (
-              <p className="text-typo-muted text-destructive">Не удалось распознать рецепт. Попробуйте ещё раз.</p>
+              <p className="text-typo-muted text-muted-foreground">Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
             ) : role === "assistant" && effectiveRecipe ? (
               /* Карточка рецепта в чате: child_only, порядок: mealType → title → benefit → ingredients → chef tip (premium/trial) → steps */
-              <div className="bg-white rounded-2xl sm:rounded-[28px] px-3 py-3 sm:px-6 sm:py-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100/80 max-w-[100%] w-full">
+              <div className="bg-white rounded-2xl sm:rounded-[28px] px-3 py-3 sm:px-6 sm:py-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] max-w-[100%] w-full">
                 {effectiveRecipe.mealType && MEAL_LABELS[effectiveRecipe.mealType] && (
-                  <span className="inline-block text-typo-caption sm:text-typo-muted font-medium text-emerald-700 bg-emerald-50/80 border border-emerald-100 rounded-full px-2.5 py-0.5 sm:px-3 sm:py-1 mb-2 sm:mb-3">
+                  <span className="inline-block text-typo-caption sm:text-typo-muted font-medium text-primary bg-primary-light rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 mb-2 sm:mb-3 border-0">
                     {MEAL_LABELS[effectiveRecipe.mealType]}
                   </span>
                 )}
@@ -369,7 +370,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                         return (
                           <div
                             key={idx}
-                            className="flex items-center gap-1.5 sm:gap-2 bg-[#F1F5E9]/60 border border-[#6B8E23]/10 rounded-full px-2 py-1 sm:px-3 sm:py-1.5"
+                            className={
+                              showChefTip
+                                ? "flex items-center gap-1.5 sm:gap-2 bg-primary-light rounded-full px-2 py-1 sm:px-2.5 sm:py-1.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+                                : "flex items-center gap-1 sm:gap-1.5 bg-primary-light rounded-full px-1.5 py-0.5 sm:px-2 sm:py-1 border border-primary-border/40"
+                            }
                           >
                             <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted">
                               {displayText}
@@ -378,7 +383,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                               <button
                                 type="button"
                                 onClick={() => setSubstituteSheet({ open: true, idx, ing })}
-                                className="shrink-0 p-0.5 rounded-full hover:bg-[#6B8E23]/15 text-[#6B8E23] touch-manipulation"
+                                className="shrink-0 p-0.5 rounded-full hover:bg-primary/15 text-primary touch-manipulation"
                                 aria-label={`Заменить: ${ingName}`}
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
@@ -418,10 +423,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   const tipForFree = miniTip || chefTip;
                   if (showChefTip && chefTip) {
                     return (
-                      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-emerald-50/60 border border-emerald-100/80 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
+                      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 pl-4 sm:pl-5 bg-[#F5F6F0] border-l-[3px] border-l-primary flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
                         <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
                         <div className="min-w-0">
-                          <p className="text-typo-caption font-medium text-emerald-800/90 mb-0.5">Совет от шефа</p>
+                          <p className="text-typo-caption font-medium text-primary mb-0.5">Совет от шефа</p>
                           <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{chefTip}</p>
                         </div>
                       </div>
@@ -429,7 +434,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   }
                   if (tipForFree) {
                     return (
-                      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-slate-50/80 border border-slate-200/60 flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
+                      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-[#F7F8F3] flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
                         <span className="text-typo-title shrink-0" aria-hidden>💡</span>
                         <div className="min-w-0">
                           <p className="text-typo-caption font-medium text-slate-600 mb-0.5">Мини-совет</p>
@@ -446,7 +451,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     <div className="space-y-1.5 sm:space-y-2">
                       {(effectiveRecipe.steps?.map((step, idx) => (
                         <div key={idx} className="flex gap-2 sm:gap-3 items-start">
-                          <span className="text-typo-caption font-bold text-[#6B8E23] shrink-0">{idx + 1}.</span>
+                          <span className="text-typo-caption font-bold text-primary shrink-0">{idx + 1}.</span>
                           <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-relaxed flex-1 min-w-0 break-words">{step}</p>
                         </div>
                       )) ?? null)}

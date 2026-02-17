@@ -115,9 +115,9 @@ export function exportMealPlanToPDF(
     checkNewPage(45);
 
     // Day header with background
-    pdf.setFillColor(240, 253, 244); // Light green
+    pdf.setFillColor(243, 246, 236); // primary-light #F3F6EC
     pdf.rect(margin, yPos - 4, contentWidth, 8, 'F');
-    addText(daysTranslit[dayName] || dayName, margin + 2, yPos, { fontSize: 11, fontStyle: 'bold', color: [34, 139, 34] });
+    addText(daysTranslit[dayName] || dayName, margin + 2, yPos, { fontSize: 11, fontStyle: 'bold', color: [110, 127, 59] }); // primary #6E7F3B
     yPos += 8;
 
     // Meals

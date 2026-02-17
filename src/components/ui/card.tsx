@@ -10,7 +10,7 @@ const cardVariants = cva(
       variant: {
         default: "bg-card text-card-foreground border border-border/50",
         elevated: "bg-card text-card-foreground shadow-card",
-        mint: "bg-mint-light text-foreground border border-mint/30",
+        mint: "bg-primary-light text-foreground border border-primary-border",
         peach: "bg-secondary text-secondary-foreground border border-peach-dark/20",
         lavender: "bg-lavender text-accent-foreground border border-lavender-dark/20",
       },

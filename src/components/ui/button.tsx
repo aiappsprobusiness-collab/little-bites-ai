@@ -15,7 +15,7 @@ const buttonVariants = cva(
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline rounded-none",
-        mint: "gradient-primary text-primary-foreground shadow-button hover:opacity-90",
+        mint: "bg-primary text-primary-foreground shadow-soft hover:opacity-90",
         peach: "gradient-peach text-secondary-foreground shadow-soft hover:opacity-90",
         lavender: "gradient-lavender text-accent-foreground shadow-soft hover:opacity-90",
         fab: "gradient-primary text-primary-foreground shadow-button",

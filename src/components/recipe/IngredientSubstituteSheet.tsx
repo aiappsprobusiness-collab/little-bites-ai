@@ -40,7 +40,7 @@ export function IngredientSubstituteSheet({
               key={i}
               type="button"
               onClick={() => handleSelect(opt)}
-              className="w-full text-left rounded-xl p-4 border border-slate-200/80 bg-slate-50/50 hover:bg-emerald-50/60 hover:border-emerald-200/80 transition-colors"
+              className="w-full text-left rounded-xl p-4 border border-slate-200/80 bg-slate-50/50 hover:bg-primary-light hover:border-primary-border transition-colors"
             >
               <p className="font-medium text-typo-body text-foreground">{opt.option}</p>
               <p className="text-typo-caption text-muted-foreground mt-0.5">Почему: {opt.why}</p>

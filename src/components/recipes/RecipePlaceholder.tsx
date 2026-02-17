@@ -13,23 +13,23 @@ const keywordEmojiMap: { keywords: string[]; icon: string; gradient: { from: str
   // Овощные блюда
   { keywords: ["рагу", "овощ", "овощн"], icon: "🍲", gradient: { from: "from-orange-200/60", to: "to-amber-300/40" } },
   { keywords: ["морков", "каротел"], icon: "🥕", gradient: { from: "from-orange-200/60", to: "to-amber-300/40" } },
-  { keywords: ["капуст", "брокколи", "цветн"], icon: "🥦", gradient: { from: "from-emerald-200/60", to: "to-teal-300/40" } },
-  { keywords: ["огурец", "огурч"], icon: "🥒", gradient: { from: "from-lime-200/60", to: "to-green-300/40" } },
+  { keywords: ["капуст", "брокколи", "цветн"], icon: "🥦", gradient: { from: "from-primary-light", to: "to-primary/30" } },
+  { keywords: ["огурец", "огурч"], icon: "🥒", gradient: { from: "from-primary-light", to: "to-primary/30" } },
   { keywords: ["помидор", "томат"], icon: "🍅", gradient: { from: "from-red-200/60", to: "to-orange-300/40" } },
-  { keywords: ["кабачок", "кабачк", "цуккини"], icon: "🥒", gradient: { from: "from-green-200/60", to: "to-lime-300/40" } },
+  { keywords: ["кабачок", "кабачк", "цуккини"], icon: "🥒", gradient: { from: "from-primary-light", to: "to-primary/30" } },
   { keywords: ["тыкв", "тыквен"], icon: "🎃", gradient: { from: "from-orange-200/60", to: "to-amber-300/40" } },
   { keywords: ["картофел", "картошк", "пюре"], icon: "🥔", gradient: { from: "from-amber-200/60", to: "to-yellow-300/40" } },
   { keywords: ["баклажан"], icon: "🍆", gradient: { from: "from-purple-200/60", to: "to-fuchsia-300/40" } },
   { keywords: ["перец", "болгарск"], icon: "🫑", gradient: { from: "from-red-200/60", to: "to-orange-300/40" } },
-  { keywords: ["горох", "горошек"], icon: "🫛", gradient: { from: "from-green-200/60", to: "to-lime-300/40" } },
+  { keywords: ["горох", "горошек"], icon: "🫛", gradient: { from: "from-primary-light", to: "to-primary/30" } },
   { keywords: ["кукуруз"], icon: "🌽", gradient: { from: "from-yellow-200/60", to: "to-amber-300/40" } },
-  { keywords: ["шпинат", "салат", "зелен"], icon: "🥬", gradient: { from: "from-green-200/60", to: "to-emerald-300/40" } },
+  { keywords: ["шпинат", "салат", "зелен"], icon: "🥬", gradient: { from: "from-primary-light", to: "to-primary/30" } },
   { keywords: ["лук", "луков"], icon: "🧅", gradient: { from: "from-amber-100/60", to: "to-yellow-200/40" } },
   { keywords: ["чеснок", "чесноч"], icon: "🧄", gradient: { from: "from-stone-200/60", to: "to-amber-200/40" } },
 
   // Фрукты и ягоды
   { keywords: ["яблок", "яблочн"], icon: "🍎", gradient: { from: "from-red-200/60", to: "to-rose-300/40" } },
-  { keywords: ["груш"], icon: "🍐", gradient: { from: "from-green-200/60", to: "to-yellow-200/40" } },
+  { keywords: ["груш"], icon: "🍐", gradient: { from: "from-primary-light", to: "to-yellow-200/40" } },
   { keywords: ["банан"], icon: "🍌", gradient: { from: "from-yellow-200/60", to: "to-amber-300/40" } },
   { keywords: ["клубник", "клубничн"], icon: "🍓", gradient: { from: "from-rose-200/60", to: "to-pink-300/40" } },
   { keywords: ["черник", "черничн", "голубик"], icon: "🫐", gradient: { from: "from-indigo-200/60", to: "to-blue-300/40" } },
@@ -37,13 +37,13 @@ const keywordEmojiMap: { keywords: string[]; icon: string; gradient: { from: str
   { keywords: ["виноград"], icon: "🍇", gradient: { from: "from-purple-200/60", to: "to-violet-300/40" } },
   { keywords: ["персик", "персиков"], icon: "🍑", gradient: { from: "from-peach/60", to: "to-peach-dark/40" } },
   { keywords: ["апельсин", "цитрус", "мандарин"], icon: "🍊", gradient: { from: "from-orange-200/60", to: "to-amber-300/40" } },
-  { keywords: ["лимон"], icon: "🍋", gradient: { from: "from-yellow-200/60", to: "to-lime-200/40" } },
+  { keywords: ["лимон"], icon: "🍋", gradient: { from: "from-yellow-200/60", to: "to-amber-200/40" } },
   { keywords: ["вишн", "черешн"], icon: "🍒", gradient: { from: "from-red-200/60", to: "to-rose-300/40" } },
-  { keywords: ["арбуз"], icon: "🍉", gradient: { from: "from-red-200/60", to: "to-green-200/40" } },
-  { keywords: ["дын"], icon: "🍈", gradient: { from: "from-yellow-200/60", to: "to-green-200/40" } },
+  { keywords: ["арбуз"], icon: "🍉", gradient: { from: "from-red-200/60", to: "to-primary-light" } },
+  { keywords: ["дын"], icon: "🍈", gradient: { from: "from-yellow-200/60", to: "to-primary-light" } },
   { keywords: ["манго"], icon: "🥭", gradient: { from: "from-orange-200/60", to: "to-yellow-300/40" } },
   { keywords: ["ананас"], icon: "🍍", gradient: { from: "from-yellow-200/60", to: "to-amber-300/40" } },
-  { keywords: ["авокадо"], icon: "🥑", gradient: { from: "from-green-200/60", to: "to-lime-300/40" } },
+  { keywords: ["авокадо"], icon: "🥑", gradient: { from: "from-primary-light", to: "to-primary/30" } },
 
   // Запеканки и выпечка
   { keywords: ["запеканк"], icon: "🥧", gradient: { from: "from-amber-200/60", to: "to-orange-200/40" } },
@@ -87,12 +87,12 @@ const keywordEmojiMap: { keywords: string[]; icon: string; gradient: { from: str
 
   // Супы
   { keywords: ["суп", "борщ", "щи", "бульон", "солянк"], icon: "🍲", gradient: { from: "from-orange-200/60", to: "to-red-200/40" } },
-  { keywords: ["крем-суп", "пюре суп"], icon: "🥣", gradient: { from: "from-green-200/60", to: "to-amber-200/40" } },
+  { keywords: ["крем-суп", "пюре суп"], icon: "🥣", gradient: { from: "from-primary-light", to: "to-amber-200/40" } },
 
   // Напитки
   { keywords: ["смузи", "коктейл", "напиток", "сок"], icon: "🧃", gradient: { from: "from-pink-200/60", to: "to-orange-200/40" } },
   { keywords: ["компот", "морс", "кисел"], icon: "🍹", gradient: { from: "from-red-200/60", to: "to-pink-200/40" } },
-  { keywords: ["чай"], icon: "🍵", gradient: { from: "from-green-200/60", to: "to-amber-200/40" } },
+  { keywords: ["чай"], icon: "🍵", gradient: { from: "from-primary-light", to: "to-amber-200/40" } },
 
   // Десерты
   { keywords: ["десерт", "пудинг", "крем", "мусс"], icon: "🍮", gradient: { from: "from-amber-100/60", to: "to-yellow-200/40" } },
@@ -111,15 +111,15 @@ const keywordEmojiMap: { keywords: string[]; icon: string; gradient: { from: str
 
 // Fallback gradient pairs when no keyword matches
 const fallbackGradients = [
-  { from: "from-mint/60", to: "to-mint-dark/40", icon: "🥗" },
+  { from: "from-primary-light", to: "to-primary/30", icon: "🥗" },
   { from: "from-peach/60", to: "to-peach-dark/40", icon: "🍽️" },
   { from: "from-lavender/60", to: "to-lavender-dark/40", icon: "🥄" },
   { from: "from-amber-200/60", to: "to-orange-300/40", icon: "🍴" },
-  { from: "from-emerald-200/60", to: "to-teal-300/40", icon: "🥢" },
+  { from: "from-primary-light", to: "to-primary/30", icon: "🥢" },
   { from: "from-rose-200/60", to: "to-pink-300/40", icon: "👶" },
   { from: "from-sky-200/60", to: "to-blue-300/40", icon: "🍼" },
   { from: "from-yellow-200/60", to: "to-amber-300/40", icon: "🥣" },
-  { from: "from-lime-200/60", to: "to-green-300/40", icon: "🌿" },
+  { from: "from-primary-light", to: "to-primary/30", icon: "🌿" },
   { from: "from-fuchsia-200/60", to: "to-purple-300/40", icon: "✨" },
 ];
 
@@ -160,7 +160,7 @@ function findMatchingEmoji(title: string): { icon: string; from: string; to: str
 
     // Овощи (средний приоритет)
     { keywords: ["морков", "каротел"], icon: "🥕", gradient: { from: "from-orange-200/60", to: "to-amber-300/40" } },
-    { keywords: ["капуст", "брокколи", "цветн"], icon: "🥦", gradient: { from: "from-emerald-200/60", to: "to-teal-300/40" } },
+    { keywords: ["капуст", "брокколи", "цветн"], icon: "🥦", gradient: { from: "from-primary-light", to: "to-primary/30" } },
     { keywords: ["помидор", "томат"], icon: "🍅", gradient: { from: "from-red-200/60", to: "to-orange-300/40" } },
     { keywords: ["картофел", "картошк"], icon: "🥔", gradient: { from: "from-amber-200/60", to: "to-yellow-300/40" } },
     { keywords: ["баклажан"], icon: "🍆", gradient: { from: "from-purple-200/60", to: "to-fuchsia-300/40" } },

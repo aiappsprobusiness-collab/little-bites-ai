@@ -102,7 +102,7 @@ export default function AuthPage() {
     <div
       className="min-h-screen min-h-dvh flex flex-col items-center justify-center sm:justify-start p-4 pt-5 sm:p-5 sm:pt-8 pb-8 sm:pb-14"
       style={{
-        background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F1F5E9 100%)",
+        background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F3F6EC 100%)",
       }}
     >
       <div className="w-full max-w-md mx-auto flex flex-col items-center">
@@ -161,7 +161,7 @@ export default function AuthPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.12 + i * 0.05 }}
-              className="rounded-2xl bg-emerald-50/80 border border-emerald-100/80 px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm"
+              className="rounded-2xl bg-primary-light border border-primary-border px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm"
             >
               <div className="flex flex-row items-start gap-3">
                 <span className="text-2xl sm:text-3xl leading-none shrink-0">{card.icon}</span>
@@ -238,8 +238,7 @@ export default function AuthPage() {
                       />
                       <Button
                         type="submit"
-                        className="w-full rounded-[24px] h-14 px-6 py-6 text-white font-semibold tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 hover:shadow-xl hover:shadow-emerald-900/30 hover:brightness-105 active:scale-[0.99] transition-all duration-200"
-                        style={{ background: "linear-gradient(135deg, #6B8E23 0%, #8FBC4C 100%)" }}
+                        className="w-full rounded-[24px] h-14 px-6 py-6 text-white font-semibold tracking-wide flex items-center justify-center gap-2 shadow-soft hover:opacity-95 active:scale-[0.99] transition-all duration-200 bg-primary"
                         disabled={isLoading}
                       >
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
@@ -326,7 +325,7 @@ export default function AuthPage() {
                       <Button
                         type="submit"
                         variant="outline"
-                        className="w-full rounded-[24px] h-14 px-6 py-6 font-semibold tracking-wide flex items-center justify-center gap-2 border-2 border-emerald-200 bg-transparent text-emerald-800 hover:bg-emerald-50 hover:border-emerald-300 active:scale-[0.99] transition-all duration-200"
+                        className="w-full rounded-[24px] h-14 px-6 py-6 font-semibold tracking-wide flex items-center justify-center gap-2 border-2 border-primary-border bg-transparent text-primary hover:bg-primary-light hover:border-primary active:scale-[0.99] transition-all duration-200"
                         disabled={isLoading}
                       >
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
