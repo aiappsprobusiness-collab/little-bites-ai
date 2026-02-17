@@ -397,18 +397,39 @@ export default function ChatPage() {
     }
   }, [messages]);
 
+  const suggestionChips = useMemo(() => {
+    if (mode !== "recipes") return [];
+    const isFamily = selectedMemberId === "family";
+    const allergies = isFamily
+      ? [...new Set(members.flatMap((m) => m.allergies ?? []))]
+      : (selectedMember?.allergies ?? []);
+    const ageMonths = isFamily
+      ? (() => {
+        const ages = members.map((m) => m.age_months).filter((a): a is number => a != null);
+        return ages.length > 0 ? Math.min(...ages) : null;
+      })()
+      : (selectedMember?.age_months ?? null);
+    return getSuggestionChips({
+      selectedMemberId: selectedMemberId ?? null,
+      ageMonths,
+      allergies,
+      isFamily,
+      memberName: isFamily ? null : selectedMember?.name ?? null,
+    });
+  }, [mode, selectedMemberId, selectedMember, members]);
+
   const showStarter = messages.length === 0 && (mode === "help" || !isLoadingHistory);
   const hasUserMessage = messages.some((m) => m.role === "user");
 
-  /** Пустой чат (recipes): один раз за сессию 2 pulse на кнопке "?". */
-  const isEmptyHintState = showStarter && !hasUserMessage && members.length > 0 && mode === "recipes" && (hintsSeen || suggestionChips.length === 0);
+  /** Пустой чат (recipes): один раз за сессию 2 pulse на кнопке "?". Без зависимости от производной константы — только примитивы, чтобы избежать TDZ в prod-бандле. */
   useEffect(() => {
+    const isEmptyHintState = showStarter && !hasUserMessage && members.length > 0 && mode === "recipes" && (hintsSeen || suggestionChips.length === 0);
     if (!isEmptyHintState || hintPulseShownRef.current) return;
     hintPulseShownRef.current = true;
     setShowHintPulseAccent(true);
     const t = setTimeout(() => setShowHintPulseAccent(false), 2000);
     return () => clearTimeout(t);
-  }, [isEmptyHintState]);
+  }, [showStarter, hasUserMessage, members.length, mode, hintsSeen, suggestionChips]);
 
   const sendInProgressRef = useRef(false);
   const handleSend = useCallback(async (text?: string) => {
@@ -776,27 +797,6 @@ export default function ChatPage() {
   const memberName = selectedMember?.name ?? members[0]?.name ?? null;
   const ageMonths = selectedMember?.age_months ?? members[0]?.age_months ?? null;
   const ageLabel = ageMonths != null ? (ageMonths < 12 ? `${ageMonths} мес` : `${Math.floor(ageMonths / 12)} ${ageMonths % 12 === 0 ? "лет" : "г."}`) : null;
-
-  const suggestionChips = useMemo(() => {
-    if (mode !== "recipes") return [];
-    const isFamily = selectedMemberId === "family";
-    const allergies = isFamily
-      ? [...new Set(members.flatMap((m) => m.allergies ?? []))]
-      : (selectedMember?.allergies ?? []);
-    const ageMonths = isFamily
-      ? (() => {
-        const ages = members.map((m) => m.age_months).filter((a): a is number => a != null);
-        return ages.length > 0 ? Math.min(...ages) : null;
-      })()
-      : (selectedMember?.age_months ?? null);
-    return getSuggestionChips({
-      selectedMemberId: selectedMemberId ?? null,
-      ageMonths,
-      allergies,
-      isFamily,
-      memberName: isFamily ? null : selectedMember?.name ?? null,
-    });
-  }, [mode, selectedMemberId, selectedMember, members]);
 
   const chatHeaderMeta =
     mode !== "help" && isTrial && trialDaysRemaining !== null
