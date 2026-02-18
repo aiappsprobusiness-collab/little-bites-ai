@@ -18,6 +18,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import { useAppStore } from "@/store/useAppStore";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +79,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const { members, isLoading, formatAge, primaryMemberId, isFreeLocked } = useFamily();
   const { subscriptionStatus, hasAccess, hasPremiumAccess, isTrial, trialDaysRemaining, cancelSubscription, isCancellingSubscription } = useSubscription();
+  const subscriptionLimits = getSubscriptionLimits(subscriptionStatus);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
@@ -249,7 +251,7 @@ export default function ProfilePage() {
                         }}
                       >
                         {isLockedForFree ? (
-                          <>Доступно в Premium <Lock className="h-3.5 w-3.5 ml-1 inline" /></>
+                          <>Активно в Premium <Lock className="h-3.5 w-3.5 ml-1 inline" /></>
                         ) : (
                           <>Открыть профиль <ChevronRight className="h-4 w-4 ml-0.5" /></>
                         )}
@@ -265,16 +267,11 @@ export default function ProfilePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: members.length * 0.05 }}
               onClick={() => {
-                if (!hasAccess && members.length >= 1) {
-                  setPaywallCustomMessage(
-                    "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу"
-                  );
-                  useAppStore.getState().setShowPaywall(true);
-                  return;
-                }
+                if (members.length >= subscriptionLimits.maxProfiles) return;
                 setShowMemberSheet(true);
               }}
-              className="w-full rounded-2xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-5 flex items-center justify-center gap-3 text-muted-foreground hover:bg-muted/50 hover:border-muted-foreground/50 transition-colors"
+              disabled={members.length >= subscriptionLimits.maxProfiles}
+              className="w-full rounded-2xl border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-5 flex items-center justify-center gap-3 text-muted-foreground hover:bg-muted/50 hover:border-muted-foreground/50 transition-colors disabled:opacity-60 disabled:pointer-events-none"
             >
               <Plus className="h-6 w-6" />
               <span className="font-medium">

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { safeLog } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { getSubscriptionLimits, isAiDailyLimitExceeded } from "@/utils/subscriptionRules";
 
 /** Единая логика доступа: true если подписка активна (premium/trial) и не истекла. */
 export function hasPremiumAccessFromSubscription(subscription: {
@@ -72,9 +73,14 @@ export function useSubscription() {
   const effectiveStatus = hasPremiumAccess ? "premium" : hasTrialAccess ? "trial" : "free";
 
   const usedToday = profileV2?.requests_today ?? 0;
-  const dailyLimit = profileV2?.daily_limit ?? 5;
-  const remaining = Math.max(0, dailyLimit - usedToday);
-  const canGenerate = hasUnlimitedAccess ? true : hasAccess ? true : remaining > 0;
+  const dailyLimitFromDb = profileV2?.daily_limit ?? 5;
+  const limits = getSubscriptionLimits(effectiveStatus);
+  const aiDailyLimit = limits.aiDailyLimit;
+  const effectiveDailyLimit = aiDailyLimit ?? dailyLimitFromDb;
+  const remaining = aiDailyLimit === null ? null : Math.max(0, aiDailyLimit - usedToday);
+  const limitExceeded = isAiDailyLimitExceeded(usedToday, aiDailyLimit);
+  const canGenerate = hasUnlimitedAccess ? true : hasAccess ? true : !limitExceeded;
+  const canSendAi = !limitExceeded;
 
   /** Дни до окончания trial (то же значение для UI). */
   const trialDaysRemaining = trialRemainingDays;
@@ -206,9 +212,12 @@ export function useSubscription() {
     isTrial,
     subscriptionStatus: effectiveStatus,
     canGenerate,
+    canSendAi,
     remaining,
     usedToday,
-    dailyLimit,
+    dailyLimit: effectiveDailyLimit,
+    dailyLimitFromDb,
+    aiDailyLimit,
     trialDaysRemaining,
     favoritesLimit,
     isLoading: isLoadingProfile,

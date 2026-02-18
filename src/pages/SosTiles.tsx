@@ -81,7 +81,7 @@ export default function SosTiles() {
   };
 
   const handleLockedTopic = () => {
-    setSosPaywallOpen(true);
+    setPaywallOpen(true);
   };
 
   return (
@@ -134,7 +134,7 @@ export default function SosTiles() {
             topics={allTopics}
             hasAccess={hasAccess}
             onSelect={handleTopicSelect}
-            onLockedSelect={openPaywall}
+            onLockedSelect={handleLockedTopic}
           />
         </div>
       </div>

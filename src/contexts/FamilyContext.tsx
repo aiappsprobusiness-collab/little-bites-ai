@@ -88,13 +88,25 @@ const FamilyContext = createContext<FamilyContextType | undefined>(undefined);
 
 export function FamilyProvider({ children }: { children: ReactNode }) {
   const { hasAccess } = useSubscription();
-  const { members, isLoading, formatAge } = useMembers();
+  const { members, isLoading, formatAge, normalizeAllergiesForFree } = useMembers();
   const isFreeLocked = !hasAccess;
+  const normalizedAllergiesForFreeRef = useRef(false);
 
   const [selectedMemberId, setSelectedMemberIdState] = useState<string | null>(() => readStoredMemberId());
   const restoredRef = useRef(false);
 
   const existingIds = useMemo(() => new Set(members.map((m) => m.id)), [members]);
+  useEffect(() => {
+    if (!isFreeLocked || members.length === 0 || normalizedAllergiesForFreeRef.current) return;
+    normalizedAllergiesForFreeRef.current = true;
+    normalizeAllergiesForFree().catch(() => {});
+  }, [isFreeLocked, members.length, normalizeAllergiesForFree]);
+
+  useEffect(() => {
+    if (!isFreeLocked) normalizedAllergiesForFreeRef.current = false;
+  }, [isFreeLocked]);
+
+  /** Safe downgrade (paid → free): только один профиль активен. Вызывается при логине, инициализации и смене subscriptionStatus. */
   const primaryMemberId = useMemo(
     () => (isFreeLocked ? computePrimaryMemberId(members, existingIds) : null),
     [isFreeLocked, members, existingIds]

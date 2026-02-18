@@ -8,6 +8,7 @@ import { useMembers } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
+import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
 function ageMonthsFromYearsMonths(years: number, months: number): number {
@@ -25,9 +26,7 @@ const ONBOARDING_FAMILY_LIMIT_MESSAGE =
   "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу";
 
 export function getMaxMembersByTariff(status: string): number {
-  if (status === "premium") return 15;
-  if (status === "trial") return 10;
-  return 1;
+  return getSubscriptionLimits(status as "free" | "trial" | "premium").maxProfiles;
 }
 
 interface AddChildFormProps {
@@ -60,7 +59,8 @@ export function AddChildForm({
 
   const maxMembers = getMaxMembersByTariff(subscriptionStatus);
   const canAddMore = memberCount < maxMembers;
-  const isFreeLimitReached = !hasAccess && memberCount >= 1;
+  const limits = getSubscriptionLimits(subscriptionStatus as "free" | "trial" | "premium");
+  const isFreeLimitReached = !hasAccess && memberCount >= limits.maxActiveProfiles;
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 

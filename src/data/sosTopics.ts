@@ -20,6 +20,9 @@ export interface SosTopicAskChip {
   prefill: string;
 }
 
+/** Тир, требуемый для доступа к блоку. Блокировка по конфигу, не по индексу. */
+export type HelpRequiredTier = "free" | "paid";
+
 export interface SosTopicConfig {
   id: string;
   title: string;
@@ -31,6 +34,8 @@ export interface SosTopicConfig {
   action: "sos" | "chat";
   prefillText?: string;
   requiresPremium: boolean;
+  /** Тир для доступа: paid = только Premium/Trial. Используется вместо индекса. */
+  requiredTier: HelpRequiredTier;
   chipExamples: string[];
   /** Контент детальной страницы */
   intro: string[];
@@ -56,6 +61,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: Apple,
     action: "sos",
     requiresPremium: false,
+    requiredTier: "free",
     chipExamples: [
       "Как вводить яйцо?",
       "Можно ли рыбу в 8 месяцев?",
@@ -108,6 +114,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: AlertCircle,
     action: "sos",
     requiresPremium: false,
+    requiredTier: "free",
     chipExamples: [
       "Сыпь после яблока",
       "Покраснели щеки",
@@ -159,6 +166,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: Baby,
     action: "sos",
     requiresPremium: false,
+    requiredTier: "free",
     chipExamples: [
       "Зеленый стул 2 дня",
       "Жидкий после прикорма",
@@ -210,6 +218,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: Droplets,
     action: "sos",
     requiresPremium: true,
+    requiredTier: "paid",
     chipExamples: [
       "Срыгивает после каждого кормления",
       "Немного — это нормально?",
@@ -260,6 +269,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: UtensilsCrossed,
     action: "sos",
     requiresPremium: true,
+    requiredTier: "paid",
     chipExamples: [
       "Отказывается от прикорма",
       "Ест только пюре",
@@ -310,6 +320,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: Clock,
     action: "sos",
     requiresPremium: true,
+    requiredTier: "paid",
     chipExamples: [
       "Сколько раз кормить в 6 месяцев?",
       "Ночные кормления — норма?",
@@ -409,6 +420,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: AlertTriangle,
     action: "sos",
     requiresPremium: false,
+    requiredTier: "free",
     chipExamples: [
       "Кровь в стуле",
       "Высокая температура и понос",

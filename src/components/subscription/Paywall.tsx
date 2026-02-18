@@ -15,11 +15,13 @@ interface PaywallProps {
 }
 
 const FEATURES = [
-  "До 10 профилей в семье",
-  "Рецепты под аллергии и предпочтения",
-  "Один рецепт сразу для всей семьи",
-  "Недельные планы питания",
-  "Безлимитный AI-помощник",
+  "План питания на 7 дней",
+  "Замена любого блюда",
+  "До 10 профилей детей",
+  "Несколько аллергий на профиль",
+  "Предпочтения (любит / не любит)",
+  "Все 8 блоков «Помощь маме»",
+  "Безлимитный AI",
 ] as const;
 
 export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
@@ -118,7 +120,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
             {/* Title */}
             <div className="text-center mb-5">
               <h2 className="text-typo-title font-semibold mb-2 text-foreground">
-                Mama Premium — забота о семье на автопилоте
+                Откройте полный функционал Mom Recipes
               </h2>
               <p className="text-muted-foreground text-typo-muted leading-relaxed">
                 Персональные рецепты, планы питания и ИИ-помощник для всей семьи.
@@ -196,7 +198,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                     disabled={isStartingTrial}
                   >
                     <Heart className="w-5 h-5 mr-2" />
-                    {isStartingTrial ? "Активация…" : "Попробовать Premium бесплатно"}
+                    {isStartingTrial ? "Активация…" : "Попробовать 3 дня бесплатно"}
                   </Button>
                 )}
 

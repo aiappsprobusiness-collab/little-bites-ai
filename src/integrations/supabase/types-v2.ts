@@ -59,6 +59,13 @@ export interface ProfilesV2Update {
   email?: string | null;
 }
 
+/** Один элемент аллергии (allergy_items в members). */
+export interface AllergyItemRow {
+  value: string;
+  is_active: boolean;
+  sort_order?: number;
+}
+
 // v2: members — family/child/adult profiles. Maps to domain Profile (id, role=type, name, age from age_months, allergies, preferences, difficulty).
 export interface MembersRow {
   id: string;
@@ -66,7 +73,10 @@ export interface MembersRow {
   name: string;
   type: MemberTypeV2;
   age_months: number | null;
+  /** Активные значения аллергий (для генерации/API). Источник: allergy_items с is_active или колонка allergies. */
   allergies: string[];
+  /** Полный список с is_active (для UI и safe downgrade). Если пусто — берётся из allergies (все активны). */
+  allergy_items?: AllergyItemRow[];
   /** Food/cooking preferences. Default [] for existing rows. */
   preferences: string[];
   /** Recipe difficulty: easy | medium | any. Null for backward compat. */
@@ -79,6 +89,7 @@ export interface MembersInsert {
   type?: MemberTypeV2;
   age_months?: number | null;
   allergies?: string[];
+  allergy_items?: AllergyItemRow[];
   preferences?: string[];
   difficulty?: string | null;
 }
@@ -89,6 +100,7 @@ export interface MembersUpdate {
   type?: MemberTypeV2;
   age_months?: number | null;
   allergies?: string[];
+  allergy_items?: AllergyItemRow[];
   preferences?: string[];
   difficulty?: string | null;
 }

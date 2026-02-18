@@ -25,6 +25,13 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
+/** Лимит AI в день для free (синхрон с subscriptionRules в приложении). Paid/trial → null = без лимита. */
+const FREE_AI_DAILY_LIMIT = 2;
+
+function getAiDailyLimitForStatus(isPremiumOrTrial: boolean): number | null {
+  return isPremiumOrTrial ? null : FREE_AI_DAILY_LIMIT;
+}
+
 // ——— Кэш: префикс v_template_system, принудительно отключён ———
 const CACHE_KEY_PREFIX = "v_template_system";
 
@@ -375,12 +382,12 @@ serve(async (req) => {
           if (Date.now() > until) {
             await supabase
               .from("profiles_v2")
-              .update({ status: "free", daily_limit: 5 })
+              .update({ status: "free", daily_limit: FREE_AI_DAILY_LIMIT })
               .eq("user_id", userId);
             profileV2 = {
               status: "free",
               requests_today: p.requests_today ?? 0,
-              daily_limit: 5,
+              daily_limit: FREE_AI_DAILY_LIMIT,
             };
           }
         }
@@ -391,7 +398,8 @@ serve(async (req) => {
           const hasPremium = premiumUntil && new Date(premiumUntil) > new Date();
           const hasTrial = trialUntil && new Date(trialUntil) > new Date();
           const isPremiumOrTrial = hasPremium || hasTrial;
-          if (!isPremiumOrTrial && profileV2.requests_today >= profileV2.daily_limit) {
+          const effectiveLimit = getAiDailyLimitForStatus(isPremiumOrTrial);
+          if (effectiveLimit !== null && profileV2.requests_today >= effectiveLimit) {
             return new Response(
               JSON.stringify({
                 error: "usage_limit_exceeded",

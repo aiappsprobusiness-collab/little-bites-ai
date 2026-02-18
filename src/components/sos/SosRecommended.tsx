@@ -23,7 +23,7 @@ export function SosRecommended({
       <div className="grid grid-cols-2 gap-3">
         {topics.slice(0, 3).map((topic) => {
           const Icon = topic.icon;
-          const locked = topic.requiresPremium && !hasAccess;
+          const locked = topic.requiredTier === "paid" && !hasAccess;
           return (
             <motion.button
               key={topic.id}
@@ -36,7 +36,7 @@ export function SosRecommended({
                 "flex flex-col gap-2 min-h-[100px]"
               )}
             >
-              {topic.requiresPremium && (
+              {locked && (
                 <span className="absolute top-2 right-2 text-[10px] font-medium text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded">
                   Premium
                 </span>

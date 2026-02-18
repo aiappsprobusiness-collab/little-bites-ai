@@ -18,6 +18,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { Check } from "lucide-react";
@@ -155,6 +156,8 @@ export default function MealPlanPage() {
   const { user } = useAuth();
   const { selectedMember, members, selectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
   const { hasAccess, subscriptionStatus } = useSubscription();
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const isFree = !hasAccess;
   const statusBadgeLabel = subscriptionStatus === "premium" ? "Premium" : subscriptionStatus === "trial" ? "Триал" : "Free";
 
@@ -702,7 +705,7 @@ export default function MealPlanPage() {
                   </button>
                 )}
               </div>
-              {hasAccess && (
+              <div className="flex flex-col gap-0.5 w-full sm:w-auto">
                 <Button
                   size="sm"
                   variant="outline"
@@ -713,33 +716,42 @@ export default function MealPlanPage() {
                       toast({ description: "Идёт подбор рецептов, подождите…" });
                       return;
                     }
-                    setPoolUpgradeLoading(true);
-                    try {
-                      const result = await runPoolUpgrade({
-                        type: "week",
-                        member_id: memberIdForPlan,
-                        member_data: memberDataForPlan,
-                        start_key: getRollingStartKey(),
-                        day_keys: getRollingDayKeys(),
-                      });
-                      setMutedWeekKeyAndStorage(null);
-                      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                      const aiFallback = result.aiFallbackCount ?? 0;
-                      const desc = aiFallback > 0
-                        ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
-                        : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
-                      toast({ title: "Заполнить всю неделю", description: desc });
-                    } catch (e: unknown) {
-                      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить неделю" });
-                    } finally {
-                      setPoolUpgradeLoading(false);
+                    if (isFree) {
+                      setPaywallCustomMessage("План питания на 7 дней доступен в Premium.");
+                      setShowPaywall(true);
+                      return;
                     }
-                  }}
+                    setPoolUpgradeLoading(true);
+                  try {
+                    const result = await runPoolUpgrade({
+                      type: "week",
+                      member_id: memberIdForPlan,
+                      member_data: memberDataForPlan,
+                      start_key: getRollingStartKey(),
+                      day_keys: getRollingDayKeys(),
+                    });
+                    setMutedWeekKeyAndStorage(null);
+                    queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                    const aiFallback = result.aiFallbackCount ?? 0;
+                    const desc = aiFallback > 0
+                      ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                      : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
+                    toast({ title: "Заполнить всю неделю", description: desc });
+                  } catch (e: unknown) {
+                    toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить неделю" });
+                  } finally {
+                    setPoolUpgradeLoading(false);
+                  }
+                }}
                 >
+                  <span className="mr-1.5 shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">Premium</span>
                   <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
                   {isAnyGenerating ? "Подбираем…" : "Заполнить всю неделю"}
                 </Button>
-              )}
+                <p className="text-plan-secondary text-muted-foreground text-xs">
+                  Экономит до 30 минут планирования
+                </p>
+              </div>
               <p className="text-plan-secondary font-medium text-muted-foreground mt-0.5" aria-live="polite">
                 {heroStatusText}
               </p>
@@ -846,6 +858,11 @@ export default function MealPlanPage() {
                           toast({ description: "Идёт генерация плана…" });
                           return;
                         }
+                        if (isFree) {
+                          setPaywallCustomMessage("Замена любого блюда доступна в Premium.");
+                          setShowPaywall(true);
+                          return;
+                        }
                         const slotKey = `${selectedDayKey}_${slot.id}`;
                         if (replacingSlotKey != null) return;
                         setReplacingSlotKey(slotKey);
@@ -939,6 +956,11 @@ export default function MealPlanPage() {
                           className="text-typo-caption text-primary hover:opacity-80 font-medium w-fit"
                           onClick={async () => {
                             if (replacingSlotKey != null) return;
+                            if (isFree) {
+                              setPaywallCustomMessage("Подбор рецептов и замена блюд — в Premium.");
+                              setShowPaywall(true);
+                              return;
+                            }
                             const slotKey = `${selectedDayKey}_${slot.id}`;
                             setReplacingSlotKey(slotKey);
                             try {

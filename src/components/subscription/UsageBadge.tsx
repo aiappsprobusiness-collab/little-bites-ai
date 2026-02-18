@@ -36,9 +36,23 @@ export function UsageBadge({ onClick, className }: UsageBadgeProps) {
     );
   }
 
-  const percentage = (usedToday / dailyLimit) * 100;
-  const isLow = remaining <= 2;
-  const isEmpty = remaining === 0;
+  const hasLimit = remaining !== null && dailyLimit > 0;
+  const percentage = hasLimit ? (usedToday / dailyLimit) * 100 : 0;
+  const isLow = hasLimit && remaining !== null && remaining <= 2;
+  const isEmpty = hasLimit && remaining !== null && remaining === 0;
+
+  if (!hasLimit) {
+    return (
+      <motion.button
+        onClick={onClick}
+        whileTap={{ scale: 0.95 }}
+        className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/30", className)}
+      >
+        <Zap className="w-4 h-4" />
+        <span className="text-typo-muted font-semibold">Безлимит AI</span>
+      </motion.button>
+    );
+  }
 
   return (
     <motion.button
@@ -58,19 +72,13 @@ export function UsageBadge({ onClick, className }: UsageBadgeProps) {
       <span className="text-typo-muted font-semibold">
         {remaining}/{dailyLimit} AI
       </span>
-      
-      {/* Progress bar */}
       <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${100 - percentage}%` }}
           className={cn(
             "h-full rounded-full",
-            isEmpty
-              ? "bg-destructive"
-              : isLow
-              ? "bg-amber-500"
-              : "bg-primary"
+            isEmpty ? "bg-destructive" : isLow ? "bg-amber-500" : "bg-primary"
           )}
         />
       </div>

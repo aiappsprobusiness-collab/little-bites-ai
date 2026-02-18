@@ -20,7 +20,9 @@ import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
-import type { MembersRow } from "@/integrations/supabase/types-v2";
+import { getSubscriptionLimits } from "@/utils/subscriptionRules";
+import type { MembersRow, AllergyItemRow } from "@/integrations/supabase/types-v2";
+import { Lock } from "lucide-react";
 
 function ageMonthsToBirthDate(ageMonths: number | null): string {
   if (ageMonths == null || ageMonths < 0) return "";
@@ -41,11 +43,13 @@ export default function ChildProfileEditPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { members, createMember, updateMember, deleteMember, isCreating, isUpdating, isDeleting } = useMembers();
-  const { isPremium, hasAccess } = useSubscription();
+  const { subscriptionStatus, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const limits = getSubscriptionLimits(subscriptionStatus);
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
-  const [allergies, setAllergies] = useState<string[]>([]);
+  const [allergyItems, setAllergyItems] = useState<AllergyItemRow[]>([]);
   const [allergyInput, setAllergyInput] = useState("");
   const [preferences, setPreferences] = useState<string[]>([]);
   const [preferenceInput, setPreferenceInput] = useState("");
@@ -55,12 +59,13 @@ export default function ChildProfileEditPage() {
 
   const isNew = id === "new";
   const member = !isNew && id ? members.find((m) => m.id === id) : null;
+  const activeAllergyCount = allergyItems.filter((i) => i.is_active).length;
 
   useEffect(() => {
     if (isNew) {
       setName("");
       setBirthDate("");
-      setAllergies([]);
+      setAllergyItems([]);
       setAllergyInput("");
       setPreferences([]);
       setPreferenceInput("");
@@ -72,7 +77,8 @@ export default function ChildProfileEditPage() {
     initRef.current = true;
     setName(member.name ?? "");
     setBirthDate(ageMonthsToBirthDate(member.age_months ?? null));
-    setAllergies(member.allergies ?? []);
+    const items = (member as MembersRow).allergy_items ?? (member.allergies ?? []).map((value, sort_order) => ({ value, is_active: true, sort_order }));
+    setAllergyItems(items);
     setAllergyInput("");
     setPreferences((member as MembersRow).preferences ?? []);
     setPreferenceInput("");
@@ -84,17 +90,33 @@ export default function ChildProfileEditPage() {
     add: (raw: string) => {
       const toAdd = parseTags(raw);
       if (!toAdd.length) return;
-      if (!hasAccess && allergies.length >= 1) {
+      if (activeAllergyCount >= limits.maxAllergiesPerProfile) {
+        setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
         setShowPaywall(true);
         return;
       }
-      setAllergies((prev) => [...new Set([...prev, ...toAdd])]);
+      const nextActive = hasAccess ? true : activeAllergyCount === 0;
+      const existing = allergyItems.map((i) => i.value.toLowerCase());
+      const newItems = toAdd.filter((v) => !existing.includes(v.trim().toLowerCase())).map((value, i) => ({
+        value: value.trim(),
+        is_active: nextActive && i === 0,
+        sort_order: allergyItems.length + i,
+      }));
+      if (newItems.length) setAllergyItems((prev) => [...prev, ...newItems]);
       setAllergyInput("");
     },
-    remove: (index: number) => setAllergies((prev) => prev.filter((_, i) => i !== index)),
+    remove: (index: number) => setAllergyItems((prev) => prev.filter((_, i) => i !== index)),
     edit: (value: string, index: number) => {
       setAllergyInput(value);
-      setAllergies((prev) => prev.filter((_, i) => i !== index));
+      setAllergyItems((prev) => prev.filter((_, i) => i !== index));
+    },
+    setActive: (index: number, active: boolean) => {
+      if (!hasAccess && active) {
+        setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+        setShowPaywall(true);
+        return;
+      }
+      setAllergyItems((prev) => prev.map((item, i) => (i === index ? { ...item, is_active: active } : item)));
     },
   };
 
@@ -119,19 +141,25 @@ export default function ChildProfileEditPage() {
       toast({ variant: "destructive", title: "Введите имя" });
       return;
     }
+    if (activeAllergyCount > limits.maxAllergiesPerProfile) {
+      setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+      setShowPaywall(true);
+      return;
+    }
     try {
       if (isNew) {
         const newMember = await createMember({
           name: trimmedName,
           type: "child",
           age_months: ageMonths || null,
-          allergies,
-          ...(hasAccess && {
-            preferences,
-            difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
-          }),
-        });
-        toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
+          allergy_items: allergyItems.length ? allergyItems : undefined,
+          allergies: allergyItems.filter((i) => i.is_active).map((i) => i.value),
+        ...(limits.preferencesEnabled && {
+          preferences,
+          difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
+        }),
+      });
+      toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
         navigate("/profile", { replace: true });
         return;
       }
@@ -140,8 +168,9 @@ export default function ChildProfileEditPage() {
         id: member.id,
         name: trimmedName,
         age_months: ageMonths || null,
-        allergies,
-        ...(hasAccess && {
+        allergy_items: allergyItems.length ? allergyItems : undefined,
+        allergies: allergyItems.filter((i) => i.is_active).map((i) => i.value),
+        ...(limits.preferencesEnabled && {
           preferences,
           difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
         }),
@@ -222,19 +251,93 @@ export default function ChildProfileEditPage() {
               </p>
             </div>
 
-            <TagListEditor
-              label="Аллергии"
-              items={allergies}
-              inputValue={allergyInput}
-              onInputChange={setAllergyInput}
-              onAdd={allergiesHandlers.add}
-              onEdit={allergiesHandlers.edit}
-              onRemove={allergiesHandlers.remove}
-              placeholder="Добавить аллергию (запятая или Enter)"
-            />
+            <div className="space-y-2">
+              <Label className="text-typo-muted font-medium">Аллергии</Label>
+              <p className="text-typo-caption text-muted-foreground">
+                Нажмите на чип для редактирования, крестик — удалить. {!hasAccess && "Активна одна аллергия — остальные в Premium."}
+              </p>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {allergyItems.map((item, i) => {
+                  const isLocked = !hasAccess && !item.is_active;
+                  return (
+                    <div key={i} className="relative">
+                      {isLocked ? (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+                            setShowPaywall(true);
+                          }}
+                          onKeyDown={(e) => e.key === "Enter" && (setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium."), setShowPaywall(true))}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50/80 px-2 py-1 text-sm text-amber-800 cursor-pointer hover:bg-amber-100/80"
+                        >
+                          {item.value}
+                          <Lock className="w-3.5 h-3.5 shrink-0" />
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1 rounded-md border bg-secondary px-2 py-1 text-sm pr-1">
+                          <span
+                            className="cursor-pointer"
+                            onClick={() => allergiesHandlers.edit(item.value, i)}
+                          >
+                            {item.value}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); allergiesHandlers.remove(i); }}
+                            className="rounded-full p-0.5 hover:bg-muted"
+                            aria-label="Удалить"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  value={allergyInput}
+                  onChange={(e) => setAllergyInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === ",") {
+                      e.preventDefault();
+                      allergiesHandlers.add(allergyInput);
+                    }
+                  }}
+                  placeholder="Добавить аллергию (запятая или Enter)"
+                  className="h-11 rounded-xl"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0 rounded-xl"
+                  onClick={() => allergiesHandlers.add(allergyInput)}
+                  aria-label="Добавить"
+                >
+                  +
+                </Button>
+              </div>
+            </div>
 
-            {hasAccess && (
-              <>
+            <div className={limits.preferencesEnabled ? "" : "relative"}>
+              {!limits.preferencesEnabled && (
+                <div
+                  className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/80 backdrop-blur-[1px]"
+                  onClick={() => {
+                    setPaywallCustomMessage("Предпочтения (любит / не любит) и сложность блюд — в Premium.");
+                    setShowPaywall(true);
+                  }}
+                >
+                  <Button type="button" variant="secondary" size="sm" className="pointer-events-none">
+                    Доступно в Premium
+                  </Button>
+                </div>
+              )}
+              <div className={limits.preferencesEnabled ? "" : "pointer-events-none select-none opacity-70"}>
                 <TagListEditor
                   label="Предпочтения в питании"
                   items={preferences}
@@ -245,7 +348,7 @@ export default function ChildProfileEditPage() {
                   onRemove={preferencesHandlers.remove}
                   placeholder="Например: вегетарианское (запятая или Enter)"
                 />
-                <div className="space-y-2">
+                <div className="space-y-2 mt-4">
                   <Label>Сложность блюд</Label>
                   <div className="flex flex-wrap gap-2">
                     {[
@@ -265,8 +368,8 @@ export default function ChildProfileEditPage() {
                     ))}
                   </div>
                 </div>
-              </>
-            )}
+              </div>
+            </div>
 
             <div className="flex flex-col gap-3 pt-4">
               <Button

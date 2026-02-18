@@ -2,8 +2,24 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import type { MembersRow, MembersInsert, MembersUpdate, MemberTypeV2 } from "@/integrations/supabase/types-v2";
+import type { MembersRow, MembersInsert, MembersUpdate, AllergyItemRow } from "@/integrations/supabase/types-v2";
 import { ensureStringArray } from "@/utils/typeUtils";
+
+function parseAllergyItems(raw: unknown): AllergyItemRow[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((x): x is Record<string, unknown> => x != null && typeof x === "object")
+    .map((x) => ({
+      value: String(x.value ?? "").trim(),
+      is_active: x.is_active === true,
+      sort_order: typeof x.sort_order === "number" ? x.sort_order : undefined,
+    }))
+    .filter((x) => x.value.length > 0);
+}
+
+function allergyItemsToActiveValues(items: AllergyItemRow[]): string[] {
+  return items.filter((i) => i.is_active).map((i) => i.value);
+}
 
 function normalizeMemberPayload<T extends Record<string, unknown>>(payload: T): T {
   const out = { ...payload };
@@ -12,6 +28,12 @@ function normalizeMemberPayload<T extends Record<string, unknown>>(payload: T): 
     if (key in out && out[key] !== undefined) {
       (out as Record<string, unknown>)[key] = ensureStringArray(out[key]);
     }
+  }
+  if ("allergy_items" in out && Array.isArray(out.allergy_items) && out.allergy_items.length > 0) {
+    (out as Record<string, unknown>).allergy_items = parseAllergyItems(out.allergy_items);
+  } else if ("allergies" in out && Array.isArray(out.allergies)) {
+    const arr = ensureStringArray(out.allergies);
+    (out as Record<string, unknown>).allergy_items = arr.map((value, sort_order) => ({ value, is_active: true, sort_order }));
   }
   if ("age_months" in out && out.age_months !== undefined) {
     const n = Number(out.age_months);
@@ -66,9 +88,22 @@ export function useMembers() {
       if (err) throw err;
       return (data ?? []).map((m) => {
         const row = m as Record<string, unknown>;
+        const rawItems = row.allergy_items;
+        const items = Array.isArray(rawItems) && rawItems.length > 0
+          ? parseAllergyItems(rawItems)
+          : null;
+        const allergiesDerived = items
+          ? allergyItemsToActiveValues(items)
+          : ensureStringArray(m.allergies);
+        const allergy_items = items ?? allergiesDerived.map((value, sort_order) => ({
+          value,
+          is_active: true,
+          sort_order,
+        }));
         return {
           ...m,
-          allergies: ensureStringArray(m.allergies),
+          allergies: allergiesDerived,
+          allergy_items,
           preferences: ensureStringArray(row.preferences),
           difficulty: row.difficulty != null ? String(row.difficulty) : null,
         } as MembersRow;
@@ -125,6 +160,18 @@ export function useMembers() {
     },
   });
 
+  /** Safe downgrade: для free оставить активной только первую аллергию по профилю. Вызывать при логине / смене на free. */
+  const normalizeAllergiesForFree = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("User not authenticated");
+      const { error } = await supabase.rpc("normalize_allergies_for_free", { p_user_id: user.id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members", user?.id] });
+    },
+  });
+
   const formatAge = (ageMonths: number | null) => formatAgeFromMonths(ageMonths);
 
   return {
@@ -134,6 +181,7 @@ export function useMembers() {
     createMember: createMember.mutateAsync,
     updateMember: updateMember.mutateAsync,
     deleteMember: deleteMember.mutateAsync,
+    normalizeAllergiesForFree: normalizeAllergiesForFree.mutateAsync,
     formatAge,
     isCreating: createMember.isPending,
     isUpdating: updateMember.isPending,

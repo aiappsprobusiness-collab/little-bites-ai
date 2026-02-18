@@ -97,7 +97,7 @@ export default function ChatPage() {
   const prefillFromQuery = searchParams.get("prefill");
   const { toast } = useToast();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
-  const { canGenerate, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining } = useSubscription();
+  const { canGenerate, canSendAi, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining, aiDailyLimit } = useSubscription();
   const isFree = subscriptionStatus === "free";
   const { chat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage, archiveChat } = useChatHistory(selectedMemberId ?? null);
@@ -805,11 +805,13 @@ export default function ChatPage() {
           Trial: осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
         </span>
       )
-      : mode !== "help" && isFree
+      : mode !== "help" && isFree && aiDailyLimit !== null
         ? (
           <span className="block">
-            <span className="text-[11px] text-muted-foreground/80">Осталось {remaining} из {dailyLimit} сегодня</span>
-            <Progress value={dailyLimit ? (usedToday / dailyLimit) * 100 : 0} className="h-1 mt-0.5" />
+            <span className="text-[11px] text-muted-foreground/80">
+              Сегодня осталось {remaining} из {aiDailyLimit} AI-запросов
+            </span>
+            <Progress value={(usedToday / aiDailyLimit) * 100} className="h-1 mt-0.5" />
           </span>
         )
         : undefined;
