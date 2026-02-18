@@ -345,3 +345,32 @@
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
+/* Help-чат / Consultation Mode: спокойный медицинский формат */
+.consultationCard {
+  background: #fff;
+  padding: 16px;
+  border-radius: 16px;
+  line-height: 1.65;
+  box-shadow: none;
+}
+
+.consultationCard-inner {
+  padding: 0;
+}
+
+.consultationWarning {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(111, 126, 55, 0.08);
+  margin-top: 12px;
+}
+
+.consultationDisclaimer {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-top: 12px;
+  color: var(--muted-foreground);
+}

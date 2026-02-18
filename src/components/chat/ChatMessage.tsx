@@ -1,6 +1,6 @@
-import { useState, useRef, forwardRef, useMemo } from "react";
+import { useState, useRef, forwardRef, useMemo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock, RotateCcw } from "lucide-react";
+import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock, RotateCcw, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -44,6 +44,17 @@ function injectArticleLinks(text: string): string {
   return text.replace(UUID_REGEX, (_, id) => `[Читать статью](article:${id})`);
 }
 
+/** Разбивает текст ответа Help на основной блок и блок "К врачу" / "Когда к врачу" / "Срочно к врачу" (если есть). */
+function splitHelpContent(content: string): { main: string; doctorPart: string | null } {
+  const re = /(?:^|\n)\s*(?:\*\*)?(?:К\s+врачу\s*:?|Когда\s+к\s+врачу|Срочно\s+к\s+врачу|К\s+врачу\s+если)(?:\*\*)?\s*:?\s*\n/i;
+  const match = content.match(re);
+  if (!match) return { main: content.trim(), doctorPart: null };
+  const idx = content.indexOf(match[0]);
+  const main = content.slice(0, idx).trim();
+  const doctorPart = content.slice(idx + match[0].length).trim();
+  return { main, doctorPart: doctorPart || null };
+}
+
 interface ChatMessageProps {
   id: string;
   role: "user" | "assistant";
@@ -68,6 +79,8 @@ interface ChatMessageProps {
   isStreaming?: boolean;
   /** В режиме help: всегда показывать сообщение как текст, без парсинга рецептов и без RecipeCard */
   forcePlainText?: boolean;
+  /** Режим консультации (Help Chat): карточка рекомендации, без action icons */
+  isConsultationMode?: boolean;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
@@ -133,7 +146,7 @@ function isValidRecipeId(v: string): boolean {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false, isConsultationMode = false }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const { user } = useAuth();
@@ -337,7 +350,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               ? "px-4 py-2.5 text-typo-muted bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
               : role === "assistant" && effectiveRecipe
                 ? "rounded-bl-sm overflow-hidden px-3 pb-3 sm:px-4 bg-[#F7F8F3]"
-                : "px-4 py-4 sm:px-5 bg-[#F7F8F3] rounded-2xl rounded-bl-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+                : role === "assistant" && forcePlainText
+                  ? "consultationCard rounded-2xl rounded-bl-sm"
+                  : "px-4 py-4 sm:px-5 bg-[#F7F8F3] rounded-2xl rounded-bl-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
               }`}
           >
             {role === "assistant" && showParseError ? (
@@ -460,7 +475,54 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 )}
               </div>
             ) : role === "assistant" ? (
-              <div className="chat-message-content text-typo-caption sm:text-typo-muted select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-typo-muted prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-typo-muted prose-strong:text-typo-muted [&>*]:text-typo-muted px-4 py-3 sm:px-5 sm:py-4">
+              <div className={`chat-message-content text-typo-caption sm:text-typo-muted select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-typo-muted prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-typo-muted prose-strong:text-typo-muted [&>*]:text-typo-muted ${forcePlainText ? "consultationCard-inner" : "px-4 py-3 sm:px-5 sm:py-4"}`}>
+                {forcePlainText ? (() => {
+                  const { main, doctorPart } = splitHelpContent(displayWithArticleLinks);
+                  const markdownProps = {
+                    remarkPlugins: [remarkGfm] as const,
+                    components: {
+                      a: ({ href, children }: { href?: string; children?: ReactNode }) => {
+                        if (href?.startsWith("article:") && onOpenArticle) {
+                          const articleId = href.slice(8);
+                          return (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              className="h-8 gap-1.5 mt-1 inline-flex"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                onOpenArticle(articleId);
+                              }}
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              Читать статью
+                            </Button>
+                          );
+                        }
+                        return (
+                          <a href={href} target="_blank" rel="noopener noreferrer">
+                            {children}
+                          </a>
+                        );
+                      },
+                    },
+                  };
+                  return (
+                    <>
+                      <ReactMarkdown {...markdownProps}>{main}</ReactMarkdown>
+                      {doctorPart != null && (
+                        <div className="consultationWarning">
+                          <AlertCircle className="w-4 h-4 shrink-0 text-primary mt-0.5" aria-hidden />
+                          <div className="min-w-0 flex-1 prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-typo-muted">
+                            <ReactMarkdown {...markdownProps}>{doctorPart}</ReactMarkdown>
+                          </div>
+                        </div>
+                      )}
+                      <p className="consultationDisclaimer">Это справочная информация.</p>
+                    </>
+                  );
+                })() : (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
                   components={{
@@ -493,17 +555,20 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 >
                   {displayWithArticleLinks}
                 </ReactMarkdown>
+                )}
               </div>
             ) : (
               <p className="text-typo-muted whitespace-pre-wrap select-none leading-snug break-words">{displayContent}</p>
             )}
+            {!forcePlainText && (
             <p className="text-[10px] opacity-60 mt-1">
               {timestamp.toLocaleTimeString("ru-RU", {
                 hour: "2-digit",
                 minute: "2-digit",
               })}
             </p>
-            {role === "assistant" && !isStreaming && (
+            )}
+            {role === "assistant" && !isStreaming && !isConsultationMode && (
               <div
                 className="flex flex-row items-center justify-between gap-2 mt-2 pt-2 min-h-[36px] border-t border-slate-200/30 shrink-0"
                 style={{ touchAction: "manipulation" }}

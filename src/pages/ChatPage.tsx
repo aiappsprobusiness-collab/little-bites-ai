@@ -19,7 +19,6 @@ import { buildGenerationContext, validateRecipe } from "@/domain/generation";
 import type { Profile } from "@/domain/generation";
 import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type ParsedRecipe } from "@/utils/parseChatRecipes";
 import { safeError } from "@/utils/safeLogger";
-import { getHelpFollowups } from "@/utils/helpFollowups";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import {
@@ -94,6 +93,7 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const mode: ChatMode = (searchParams.get("mode") === "help" ? "help" : "recipes");
+  const isConsultationMode = mode === "help";
   const prefillFromQuery = searchParams.get("prefill");
   const { toast } = useToast();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
@@ -164,13 +164,6 @@ export default function ChatPage() {
     const t = setTimeout(dismissHelpTooltip, 3000);
     return () => clearTimeout(t);
   }, [showHelpTooltip, mode, dismissHelpTooltip]);
-
-  const lastAssistantContent = useMemo(() => {
-    const last = [...messages].reverse().find((m) => m.role === "assistant");
-    return last?.content ?? "";
-  }, [messages]);
-
-  const helpFollowups = useMemo(() => getHelpFollowups(lastAssistantContent), [lastAssistantContent]);
 
   // Очищаем сообщения при смене профиля или списка членов семьи (только в recipes)
   useEffect(() => {
@@ -849,54 +842,10 @@ export default function ChatPage() {
     return `Аллергии: ${first}${rest}`;
   }, [mode, selectedMemberId, selectedMember, members]);
 
-  const helpHeaderCenter = mode === "help" ? (
-    <div className="flex flex-col items-center justify-center text-center w-full px-4">
-      <h1 className="text-typo-title font-semibold text-foreground truncate w-full">
-        Помощник по питанию ребёнка
-      </h1>
-      {members.length > 0 && (
-        <span className="text-typo-caption text-muted-foreground truncate w-full mt-0.5">
-          Для {memberName ?? ""}{ageLabel ? ` · ${ageLabel}` : ""}
-        </span>
-      )}
-      <span
-        className="inline-flex items-center gap-1.5 mt-1.5 shrink-0"
-        style={{
-          fontSize: 12,
-          fontWeight: 500,
-          padding: "4px 8px",
-          borderRadius: 9999,
-          background: "rgba(110, 127, 59, 0.12)",
-          color: "#6E7F3B",
-          border: "1px solid rgba(110, 127, 59, 0.25)",
-          opacity: badgeVisible ? 1 : 0,
-          transform: badgeVisible ? "translateY(0)" : "translateY(-2px)",
-          transition: "opacity 180ms ease-out, transform 180ms ease-out",
-        }}
-      >
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: "#6E7F3B",
-          }}
-          aria-hidden
-        />
-        Помощник рядом
-      </span>
-      <span
-        className="block w-full mt-1.5 text-muted-foreground"
-        style={{
-          fontSize: 13,
-          opacity: 0.75,
-          maxWidth: 320,
-          lineHeight: 1.4,
-        }}
-      >
-        Я не ставлю диагнозы, но подскажу, на что обратить внимание.
-      </span>
-    </div>
+  const helpHeaderCenter = isConsultationMode ? (
+    <h1 className="text-typo-title font-semibold text-foreground truncate w-full text-center px-2">
+      Помощник рядом
+    </h1>
   ) : null;
 
   return (
@@ -1089,6 +1038,7 @@ export default function ChatPage() {
                 ageMonths={selectedMember?.age_months ?? undefined}
                 onOpenArticle={setOpenArticleId}
                 forcePlainText={mode === "help"}
+                isConsultationMode={isConsultationMode}
               />
             ))}
           </AnimatePresence>
@@ -1116,40 +1066,11 @@ export default function ChatPage() {
             )}
           </AnimatePresence>
 
-          {mode === "help" && !isChatting && messages.some((m) => m.role === "assistant") && helpFollowups.length > 0 && (
-            <div className="pt-1 pb-2">
-              <p className="text-xs font-medium text-muted-foreground mb-2 px-0.5">Спросить ещё</p>
-              <div
-                className="flex gap-2 overflow-x-auto overflow-y-hidden pb-1 min-w-0 scrollbar-none"
-                style={{ WebkitOverflowScrolling: "touch" }}
-              >
-                {helpFollowups.map((chip) => (
-                  <button
-                    key={chip.prefill}
-                    type="button"
-                    onClick={() => {
-                      setInput(chip.prefill);
-                      textareaRef.current?.focus();
-                    }}
-                    className="shrink-0 h-8 px-3 rounded-full text-[13px] leading-tight bg-primary-light/80 text-foreground hover:bg-primary-light active:scale-[0.98] transition-colors whitespace-nowrap"
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div ref={messagesEndRef} />
         </div>
 
         {/* Input: ниже MessagesScroll, непрозрачный фон, без лишнего отступа под nav */}
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200/30 bg-[#FCFCFA] py-3 max-w-full overflow-x-hidden">
-          {mode === "help" && (
-            <p className="text-[11px] text-muted-foreground mb-1.5 px-0.5">
-              Ответы носят информационный характер и не заменяют консультацию врача.
-            </p>
-          )}
           <div className="flex w-full items-center gap-2 min-w-0">
             <Textarea
               ref={textareaRef}
