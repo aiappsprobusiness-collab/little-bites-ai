@@ -522,86 +522,6 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
     [user, session, memberData, memberId, generateSingleDay, queryClient]
   );
 
-  /** Сгенерировать один день в rolling-диапазоне (контекст из остальных 6 дней). Для autofill endKey. Не трогает isGenerating. */
-  const generateSingleRollingDay = useCallback(
-    async (date: Date) => {
-      if (!user || !session?.access_token) throw new Error("Необходима авторизация");
-      if (!memberData) throw new Error("Выберите профиль (члена семьи)");
-
-      const rollingDates = getRolling7Dates();
-      const dayKey = formatLocalDate(date);
-      const dayIndex = rollingDates.findIndex((d) => formatLocalDate(d) === dayKey);
-      if (dayIndex < 0) return;
-
-      setGeneratingDayKeys((prev) => new Set(prev).add(dayKey));
-
-      try {
-        if (IS_DEV) {
-          console.log("[ROLLING autofill run]", { endKey: dayKey });
-          console.log("[GEN state]", { weekly: isGenerating, rollingKeys: [dayKey] });
-        }
-
-        let weekQuery = supabase
-          .from("meal_plans_v2")
-          .select("planned_date, meals")
-          .eq("user_id", user.id)
-          .gte("planned_date", formatLocalDate(rollingDates[0]))
-          .lte("planned_date", formatLocalDate(rollingDates[6]))
-          .order("planned_date");
-        if (memberId != null && memberId !== "") {
-          weekQuery = weekQuery.eq("member_id", memberId);
-        } else {
-          weekQuery = weekQuery.is("member_id", null);
-        }
-        const { data: weekPlans } = await weekQuery;
-
-        const accumulated: WeekContextAccumulated = {
-          chosenTitles: [],
-          chosenBreakfastTitles: [],
-          chosenBreakfastBases: [],
-          usedRecipeIds: [],
-          usedTitleKeys: [],
-        };
-        (weekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string; recipe_id?: string }> }) => {
-          if (!p.planned_date || p.planned_date === dayKey) return;
-          const meals = p.meals ?? {};
-          (["breakfast", "lunch", "snack", "dinner"] as const).forEach((mealKey) => {
-            const slot = meals[mealKey];
-            const title = slot?.title?.trim();
-            if (slot?.recipe_id) accumulated.usedRecipeIds.push(slot.recipe_id);
-            if (title) {
-              accumulated.chosenTitles.push(title);
-              accumulated.usedTitleKeys.push(normalizeTitleKey(title));
-              if (mealKey === "breakfast") {
-                accumulated.chosenBreakfastTitles.push(title);
-                accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
-              }
-            }
-          });
-        });
-
-        await generateSingleDay(
-          dayIndex,
-          date,
-          DAY_NAMES[getWeekdayIndex(date)],
-          session.access_token,
-          accumulated,
-          { usePool: false }
-        );
-
-        queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-        queryClient.invalidateQueries({ queryKey: ["recipes", user?.id] });
-      } finally {
-        setGeneratingDayKeys((prev) => {
-          const next = new Set(prev);
-          next.delete(dayKey);
-          return next;
-        });
-      }
-    },
-    [user, session, memberData, memberId, generateSingleDay, queryClient, isGenerating]
-  );
-
   const generateWeeklyPlan = useCallback(async () => {
     if (!user || !session?.access_token) throw new Error("Необходима авторизация");
     if (!memberData) throw new Error("Выберите профиль (члена семьи)");
@@ -764,7 +684,6 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
   return {
     generateWeeklyPlan,
     regenerateSingleDay,
-    generateSingleRollingDay,
     isGenerating,
     isGeneratingWeek,
     isGeneratingAnyDay,

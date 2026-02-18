@@ -80,6 +80,21 @@ function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
   return result;
 }
 
+/** Единый формат query key для meal_plans_v2: invalidate/refetch по predicate работают предсказуемо. */
+export function mealPlansKey(params: {
+  userId: string | undefined;
+  memberId: string | null | undefined;
+  start: string;
+  end?: string;
+  profileKey?: string | null;
+  mutedWeekKey?: string | null;
+}): unknown[] {
+  const k: unknown[] = ['meal_plans_v2', params.userId, params.memberId ?? null, params.start];
+  if (params.end !== undefined) k.push(params.end);
+  k.push(params.profileKey ?? null, params.mutedWeekKey ?? null);
+  return k;
+}
+
 /** memberId: конкретный id = планы этого члена; null = "Семья" (member_id is null); undefined = не фильтровать. */
 export function useMealPlans(
   memberId?: string | null,
@@ -102,7 +117,7 @@ export function useMealPlans(
     const startStr = formatLocalDate(startDate);
     const endStr = formatLocalDate(endDate);
     return useQuery({
-      queryKey: ['meal_plans_v2', user?.id, memberId, startStr, endStr, profileKey, mutedWeekKey],
+      queryKey: mealPlansKey({ userId: user?.id, memberId, start: startStr, end: endStr, profileKey, mutedWeekKey }),
       queryFn: async ({ signal }): Promise<MealPlanItemV2[]> => {
         if (!user) return [];
         let query = supabase
@@ -121,26 +136,26 @@ export function useMealPlans(
 
         if (error) throw error;
         const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as unknown as MealPlansV2Row));
-        if (expanded.length === 0) {
-          const rangeKeyForMute = startStr;
-          if (mutedWeekKey !== null && rangeKeyForMute === mutedWeekKey) return [];
-          const dates: string[] = [];
-          const startD = new Date(startStr + 'T12:00:00');
-          const endD = new Date(endStr + 'T12:00:00');
-          for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
-            dates.push(formatLocalDate(d));
-          }
-          const usedIndices = new Set<number>();
-          const results: MealPlanItemV2[] = [];
-          for (const d of dates) {
-            const idx = selectStarterVariant(d, memberId, profile, usedIndices);
-            if (idx >= 0) usedIndices.add(idx);
-            const items = await buildStarterItems(d, idx, user.id, memberId);
-            results.push(...items);
-          }
-          return results;
+        if ((rows ?? []).length > 0) {
+          return expanded;
         }
-        return expanded;
+        const rangeKeyForMute = startStr;
+        if (mutedWeekKey !== null && rangeKeyForMute === mutedWeekKey) return [];
+        const dates: string[] = [];
+        const startD = new Date(startStr + 'T12:00:00');
+        const endD = new Date(endStr + 'T12:00:00');
+        for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+          dates.push(formatLocalDate(d));
+        }
+        const usedIndices = new Set<number>();
+        const results: MealPlanItemV2[] = [];
+        for (const d of dates) {
+          const idx = selectStarterVariant(d, memberId, profile, usedIndices);
+          if (idx >= 0) usedIndices.add(idx);
+          const items = await buildStarterItems(d, idx, user.id, memberId);
+          results.push(...items);
+        }
+        return results;
       },
       enabled: !!user,
       staleTime: 60_000,
@@ -151,7 +166,7 @@ export function useMealPlans(
   const getMealPlansByDate = (date: Date) => {
     const dateStr = formatLocalDate(date);
     return useQuery({
-      queryKey: ['meal_plans_v2', user?.id, memberId, dateStr, profileKey, mutedWeekKey],
+      queryKey: mealPlansKey({ userId: user?.id, memberId, start: dateStr, profileKey, mutedWeekKey }),
       queryFn: async ({ signal }): Promise<MealPlanItemV2[]> => {
         if (!user) return [];
 
@@ -168,11 +183,38 @@ export function useMealPlans(
 
         if (error) throw error;
         const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as unknown as MealPlansV2Row));
-        if (expanded.length === 0) {
-          if (mutedWeekKey !== null && isDateInRollingRange(dateStr, mutedWeekKey)) return [];
-          return await buildStarterItems(dateStr, selectStarterVariant(dateStr, memberId, profile), user.id, memberId);
+        if ((rows ?? []).length > 0) {
+          return expanded;
         }
-        return expanded;
+        if (mutedWeekKey !== null && isDateInRollingRange(dateStr, mutedWeekKey)) return [];
+        return await buildStarterItems(dateStr, selectStarterVariant(dateStr, memberId, profile), user.id, memberId);
+      },
+      enabled: !!user,
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+    });
+  };
+
+  /** Есть ли строка плана на дату и пустой ли день (meals = {}). Для различения EMPTY_DAY vs STARTER. */
+  const getMealPlanRowExists = (date: Date) => {
+    const dateStr = formatLocalDate(date);
+    return useQuery({
+      queryKey: [...mealPlansKey({ userId: user?.id, memberId, start: dateStr, profileKey, mutedWeekKey }), 'row_exists'] as const,
+      queryFn: async ({ signal }): Promise<{ exists: boolean; isEmpty: boolean }> => {
+        if (!user) return { exists: false, isEmpty: false };
+        let query = supabase
+          .from('meal_plans_v2')
+          .select('id, meals')
+          .eq('user_id', user.id)
+          .eq('planned_date', dateStr);
+        if (memberId === null) query = query.is('member_id', null);
+        else if (memberId) query = query.eq('member_id', memberId);
+        const { data: row, error } = await query.abortSignal(signal).maybeSingle();
+        if (error) throw error;
+        const exists = !!row;
+        const meals = (row as { meals?: MealsJson } | null)?.meals ?? {};
+        const isEmpty = exists && Object.keys(meals).length === 0;
+        return { exists, isEmpty };
       },
       enabled: !!user,
       staleTime: 60_000,
@@ -271,6 +313,7 @@ export function useMealPlans(
 
   const deleteMealPlan = useMutation({
     mutationFn: async (id: string) => {
+      if (!id) return;
       const match = id.match(/^(.+)_(breakfast|lunch|snack|dinner)$/);
       if (!match) throw new Error('Invalid meal plan id');
       const [, rowId, mealType] = match;
@@ -280,7 +323,7 @@ export function useMealPlans(
         .select('meals')
         .eq('id', rowId)
         .single();
-      if (fetchError || !row) throw fetchError || new Error('Plan not found');
+      if (fetchError || !row) return;
       const rowData = row as unknown as { meals?: MealsJson };
       const meals = { ...(rowData.meals ?? {}) } as MealsJson;
       delete meals[mealType];
@@ -298,6 +341,7 @@ export function useMealPlans(
 
   const markAsCompleted = useMutation({
     mutationFn: async (id: string) => {
+      if (!id) return;
       const match = id.match(/^(.+)_(breakfast|lunch|snack|dinner)$/);
       if (!match) throw new Error('Invalid meal plan id');
       const [, rowId, mealType] = match;
@@ -307,7 +351,7 @@ export function useMealPlans(
         .select('meals')
         .eq('id', rowId)
         .single();
-      if (fetchError || !row) throw fetchError || new Error('Plan not found');
+      if (fetchError || !row) return;
       const rowData = row as unknown as { meals?: MealsJson };
       const meals = { ...(rowData.meals ?? {}) } as MealsJson;
       const slot = meals[mealType];
@@ -326,16 +370,27 @@ export function useMealPlans(
     },
   });
 
+  /** Очистка дня/недели: только обнуляем meals у существующих строк. Генерация не вызывается. */
   const clearWeekPlan = useMutation({
     mutationFn: async ({ startDate, endDate }: { startDate: Date; endDate: Date }) => {
       if (!user) throw new Error('User not authenticated');
 
+      const startStr = formatLocalDate(startDate);
+      const endStr = formatLocalDate(endDate);
+
+      console.log('[clearWeekPlan] start', {
+        userId: user.id,
+        memberId: memberId ?? 'null',
+        startKey: startStr,
+        endKey: endStr,
+      });
+
       let query = supabase
         .from('meal_plans_v2')
-        .delete()
+        .select('id, planned_date, meals')
         .eq('user_id', user.id)
-        .gte('planned_date', formatLocalDate(startDate))
-        .lte('planned_date', formatLocalDate(endDate));
+        .gte('planned_date', startStr)
+        .lte('planned_date', endStr);
 
       if (memberId != null && memberId !== '') {
         query = query.eq('member_id', memberId);
@@ -343,11 +398,37 @@ export function useMealPlans(
         query = query.is('member_id', null);
       }
 
-      const { error } = await query;
-      if (error) throw error;
+      const { data: rows, error: fetchError } = await query;
+      if (fetchError) {
+        console.error('[clearWeekPlan] select error', fetchError);
+        throw fetchError;
+      }
+
+      const rowList = (rows ?? []) as { id: string; planned_date: string; meals?: MealsJson }[];
+      console.log('[clearWeekPlan] rows found', rowList.length, rowList.map((r) => ({ id: r.id, day_key: r.planned_date, meals_keys: Object.keys(r.meals ?? {}) })));
+
+      if (rowList.length === 0) {
+        console.warn('[clearWeekPlan] no rows to clear — check filter (member_id / date range)');
+        return;
+      }
+
+      for (const row of rowList) {
+        const { data: updated, error: updateError } = await supabase
+          .from('meal_plans_v2')
+          .update({ meals: {} })
+          .eq('id', row.id)
+          .select('id, planned_date, meals')
+          .single();
+        if (updateError) {
+          console.error('[clearWeekPlan] update error', { rowId: row.id, day_key: row.planned_date, error: updateError });
+          throw updateError;
+        }
+        console.log('[clearWeekPlan] updated', { id: updated?.id, day_key: (updated as { planned_date?: string })?.planned_date, meals: (updated as { meals?: unknown })?.meals });
+      }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'meal_plans_v2' });
+      queryClient.refetchQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === 'meal_plans_v2' });
     },
   });
 
@@ -394,6 +475,7 @@ export function useMealPlans(
   return {
     getMealPlans,
     getMealPlansByDate,
+    getMealPlanRowExists,
     createMealPlan: createMealPlan.mutateAsync,
     updateMealPlan: updateMealPlan.mutateAsync,
     deleteMealPlan: deleteMealPlan.mutateAsync,

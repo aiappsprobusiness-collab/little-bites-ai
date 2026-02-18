@@ -25,7 +25,7 @@ export function useSubscription() {
       if (!user) return null;
       const { data, error } = await supabase
         .from("profiles_v2")
-        .select("status, requests_today, daily_limit, premium_until, trial_until, trial_used")
+        .select("status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized")
         .eq("user_id", user.id)
         .maybeSingle();
       if (error) throw error;
@@ -36,6 +36,7 @@ export function useSubscription() {
         premium_until: string | null;
         trial_until: string | null;
         trial_used: boolean | null;
+        plan_initialized: boolean;
       } | null;
     },
     enabled: !!user,
@@ -48,6 +49,7 @@ export function useSubscription() {
   const expiresAt = profileV2?.premium_until ?? null;
   const trialUntil = profileV2?.trial_until ?? null;
   const trialUsed = profileV2?.trial_used ?? false;
+  const planInitialized = profileV2?.plan_initialized ?? false;
 
   /** Trial: источник истины — trial_until. Доступ пока trial_until > now(). */
   const hasTrialAccess =
@@ -104,6 +106,20 @@ export function useSubscription() {
   const refetchUsage = () => {
     queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
   };
+
+  const setPlanInitialized = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("User not authenticated");
+      const { error } = await supabase
+        .from("profiles_v2")
+        .update({ plan_initialized: true })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+    },
+  });
 
   const incrementUsage = useMutation({
     mutationFn: async () => {
@@ -200,6 +216,8 @@ export function useSubscription() {
 
   return {
     status,
+    planInitialized,
+    setPlanInitialized: setPlanInitialized.mutateAsync,
     expiresAt,
     isExpired,
     isPremium,

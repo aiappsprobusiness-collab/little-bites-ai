@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Loader2, Sparkles, Plus } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMealPlans } from "@/hooks/useMealPlans";
+import { useMealPlans, mealPlansKey } from "@/hooks/useMealPlans";
 import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,7 +21,18 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
-import { Check } from "lucide-react";
+import { Check, Trash2 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /** Включить визуальный debug пула: window.__PLAN_DEBUG = true или ?debugPool=1 */
 function isPlanDebug(): boolean {
@@ -155,7 +166,7 @@ export default function MealPlanPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { selectedMember, members, selectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
-  const { hasAccess, subscriptionStatus } = useSubscription();
+  const { hasAccess, subscriptionStatus, planInitialized, setPlanInitialized } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const isFree = !hasAccess;
@@ -207,7 +218,7 @@ export default function MealPlanPage() {
   }, []);
 
   const starterProfile = memberDataForPlan ? { allergies: memberDataForPlan.allergies, preferences: memberDataForPlan.preferences } : null;
-  const { getMealPlans, getMealPlansByDate, clearWeekPlan, deleteMealPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
+  const { getMealPlans, getMealPlansByDate, getMealPlanRowExists, clearWeekPlan, deleteMealPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
 
   const memberIdForPlan = mealPlanMemberId ?? null;
   const planGenType = isFree ? "day" : "week";
@@ -236,11 +247,13 @@ export default function MealPlanPage() {
   const rollingDates = useMemo(() => getRolling7Dates(), [startKey]);
   const todayKey = formatLocalDate(new Date());
 
-  const AUTOFILL_STORAGE_KEY = "mealPlan_autofill_lastRunAt";
-  const AUTOFILL_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 часов
-  const autogenTriggeredRef = useRef(false);
+  const initialPlanRanRef = useRef(false);
 
   const [replacingSlotKey, setReplacingSlotKey] = useState<string | null>(null);
+  const [clearSheetOpen, setClearSheetOpen] = useState(false);
+  const [clearConfirm, setClearConfirm] = useState<"day" | "week" | null>(null);
+  /** Локальная коррекция week-индикаторов до завершения refetch после очистки дня/недели. dayKey -> true = считать день пустым. */
+  const [pendingClears, setPendingClears] = useState<Record<string, true>>({});
   /** Один раз за сессию: glow у CTA "Подобрать рецепты" при первом заходе на вкладку */
   const ctaGlowShownRef = useRef(false);
   const [ctaGlow, setCtaGlow] = useState(false);
@@ -362,15 +375,17 @@ export default function MealPlanPage() {
     ].join(";");
   }, [memberDataForPlan]);
   const mealPlansKeyWeek = useMemo(
-    () => ["meal_plans_v2", user?.id, mealPlanMemberId, formatLocalDate(rollingDates[0]), formatLocalDate(rollingDates[6]), profileKey, mutedWeekKey],
+    () => mealPlansKey({ userId: user?.id, memberId: mealPlanMemberId, start: formatLocalDate(rollingDates[0]), end: formatLocalDate(rollingDates[6]), profileKey, mutedWeekKey }),
     [user?.id, mealPlanMemberId, rollingDates, profileKey, mutedWeekKey]
   );
   const mealPlansKeyDay = useMemo(
-    () => ["meal_plans_v2", user?.id, mealPlanMemberId, selectedDayKey, profileKey, mutedWeekKey],
+    () => mealPlansKey({ userId: user?.id, memberId: mealPlanMemberId, start: selectedDayKey, profileKey, mutedWeekKey }),
     [user?.id, mealPlanMemberId, selectedDayKey, profileKey, mutedWeekKey]
   );
 
   const { data: dayMealPlans = [], isLoading } = getMealPlansByDate(selectedDate);
+  const { data: rowExistsData } = getMealPlanRowExists(selectedDate);
+  const isEmptyDay = !!(rowExistsData?.exists && rowExistsData?.isEmpty);
 
   const renderStartRef = useRef(0);
   if (isPerf()) renderStartRef.current = performance.now();
@@ -395,11 +410,15 @@ export default function MealPlanPage() {
   const { previews, isLoading: isLoadingPreviews } = useRecipePreviewsByIds(recipeIdsForPreviews);
 
   const { data: weekPlans = [], isLoading: isWeekPlansLoading } = getMealPlans(rollingDates[0], rollingDates[6]);
-  const hasMealsByDayIndex = useMemo(
-    () => rollingDates.map((d) => weekPlans.some((p) => p.planned_date === formatLocalDate(d))),
-    [rollingDates, weekPlans]
-  );
   const dayKeys = useMemo(() => rollingDates.map((d) => formatLocalDate(d)), [rollingDates]);
+  const hasMealsByDayIndex = useMemo(
+    () =>
+      dayKeys.map((dayKey) => {
+        if (pendingClears[dayKey]) return false;
+        return weekPlans.some((p) => p.planned_date === dayKey);
+      }),
+    [dayKeys, weekPlans, pendingClears]
+  );
   const missingDayKeys = useMemo(
     () => dayKeys.filter((_, i) => !hasMealsByDayIndex[i]),
     [dayKeys, hasMealsByDayIndex]
@@ -435,57 +454,39 @@ export default function MealPlanPage() {
 
   useEffect(() => {
     if (isPlanDebug() || isPerf()) {
-      console.log("[ROLLING autofill]", { missingCount: missingDayKeys.length });
+      console.log("[ROLLING]", { missingCount: missingDayKeys.length });
     }
   }, [startKey, endKey, missingDayKeys]);
 
+  /** Один раз при первом заходе: если план ещё не инициализирован и на сегодня нет meal_plan из БД — сгенерировать 1 день. */
   useEffect(() => {
-    if (missingDayKeys.length === 0) {
-      if (isPlanDebug() || isPerf()) console.log("[AUTOFILL] nothing to fill");
-      return;
-    }
-    if (
-      missingDayKeys.length !== 1 ||
-      missingDayKeys[0] !== endKey ||
-      !hasAccess ||
-      autogenTriggeredRef.current
-    )
-      return;
-    if (isAnyGenerating) {
-      if (isPlanDebug() || isPerf()) console.log("[AUTOFILL] blocked by guard");
-      return;
-    }
-    if (isWeekPlansLoading) return;
-
-    const lastRunAt = typeof localStorage !== "undefined" ? localStorage.getItem(AUTOFILL_STORAGE_KEY) : null;
-    const lastRun = lastRunAt ? parseInt(lastRunAt, 10) : 0;
-    if (Number.isNaN(lastRun) || Date.now() - lastRun < AUTOFILL_COOLDOWN_MS) return;
-
-    autogenTriggeredRef.current = true;
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
-    }
+    if (location.pathname !== "/meal-plan" || !user?.id || planInitialized || initialPlanRanRef.current) return;
+    if (isAnyGenerating || isWeekPlansLoading) return;
+    const hasDbPlanForToday = weekPlans.some((p) => p.planned_date === todayKey && !p.isStarter);
+    if (hasDbPlanForToday) return;
+    initialPlanRanRef.current = true;
     startPlanGeneration({
       type: "day",
       member_id: memberIdForPlan,
       member_data: memberDataForPlan,
-      day_key: formatLocalDate(rollingDates[6]),
-    }).catch(() => {
-      autogenTriggeredRef.current = false;
-    });
+      day_key: todayKey,
+    })
+      .then(() => setPlanInitialized())
+      .catch(() => {
+        initialPlanRanRef.current = false;
+      });
   }, [
+    location.pathname,
+    user?.id,
+    planInitialized,
     isWeekPlansLoading,
     isAnyGenerating,
-    missingDayKeys,
-    endKey,
-    hasAccess,
-    rollingDates,
-    startPlanGeneration,
+    weekPlans,
+    todayKey,
     memberIdForPlan,
     memberDataForPlan,
-    planProgressDone,
-    planProgressTotal,
-    selectedMemberId,
+    startPlanGeneration,
+    setPlanInitialized,
   ]);
 
   const getPlannedMealRecipe = (plannedMeal: any) => {
@@ -681,29 +682,16 @@ export default function MealPlanPage() {
                   <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
                   {isAnyGenerating ? "Подбираем…" : "Заполнить день"}
                 </Button>
-                {hasAccess && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (isAnyGenerating) {
-                        toast({ description: "Идёт подбор рецептов, подождите…" });
-                        return;
-                      }
-                      if (!window.confirm("Удалить все блюда на этот день?")) return;
-                      try {
-                        await clearWeekPlan({ startDate: selectedDate, endDate: selectedDate });
-                        queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                        toast({ title: "День очищен", description: "Блюда удалены" });
-                      } catch (e: unknown) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось очистить" });
-                      }
-                    }}
-                    className="text-plan-secondary font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-70"
-                    disabled={isAnyGenerating}
-                  >
-                    Очистить день
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setClearSheetOpen(true)}
+                  className="text-plan-secondary font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-70 flex items-center gap-1.5"
+                  disabled={isAnyGenerating}
+                  aria-label="Очистить день или неделю"
+                >
+                  <Trash2 className="w-4 h-4 shrink-0" />
+                  Очистить
+                </button>
               </div>
               <div className="flex flex-col gap-0.5 w-full sm:w-auto">
                 <Button
@@ -823,7 +811,73 @@ export default function MealPlanPage() {
             </div>
           )}
 
-          {/* 3) Приёмы пищи: блоки с заголовком и карточкой/плейсхолдером */}
+          {/* 3) Приёмы пищи: empty state (EMPTY_DAY) или слоты */}
+          {isEmptyDay ? (
+            <div className="mt-4 rounded-2xl border border-primary-border/60 bg-primary-light/30 p-6 text-center">
+              <p className="text-4xl mb-2" aria-hidden>✨</p>
+              <h3 className="text-plan-hero-title font-semibold text-foreground mb-1">День пустой</h3>
+              <p className="text-plan-secondary text-muted-foreground text-sm mb-5">
+                Нажмите «Заполнить день», чтобы подобрать блюда с учётом аллергий и предпочтений.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  size="sm"
+                  className="rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-soft"
+                  disabled={isAnyGenerating || (isFree && todayIndex < 0)}
+                  onClick={async () => {
+                    if (isAnyGenerating) return;
+                    if (isFree) {
+                      try {
+                        await startPlanGeneration({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: todayKey });
+                      } catch (e: unknown) {
+                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить день" });
+                      }
+                      return;
+                    }
+                    setPoolUpgradeLoading(true);
+                    try {
+                      const result = await runPoolUpgrade({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: selectedDayKey });
+                      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                      const desc = (result.aiFallbackCount ?? 0) > 0 ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${result.aiFallbackCount}` : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
+                      toast({ title: "Заполнить день", description: desc });
+                    } catch (e: unknown) {
+                      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить день" });
+                    } finally {
+                      setPoolUpgradeLoading(false);
+                    }
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                  Заполнить день
+                </Button>
+                {hasAccess && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-2xl border-primary-border"
+                    disabled={isAnyGenerating}
+                    onClick={async () => {
+                      if (isAnyGenerating) return;
+                      setPoolUpgradeLoading(true);
+                      try {
+                        const result = await runPoolUpgrade({ type: "week", member_id: memberIdForPlan, member_data: memberDataForPlan, start_key: getRollingStartKey(), day_keys: getRollingDayKeys() });
+                        setMutedWeekKeyAndStorage(null);
+                        queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                        const desc = (result.aiFallbackCount ?? 0) > 0 ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${result.aiFallbackCount}` : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
+                        toast({ title: "Заполнить всю неделю", description: desc });
+                      } catch (e: unknown) {
+                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить неделю" });
+                      } finally {
+                        setPoolUpgradeLoading(false);
+                      }
+                    }}
+                  >
+                    Заполнить неделю
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
           <div className="mt-4 space-y-4 pb-6">
             {mealTypes.map((slot) => {
               const plannedMeal = mealsByType[slot.id];
@@ -1026,6 +1080,7 @@ export default function MealPlanPage() {
               );
             })}
           </div>
+          )}
 
           {hasAnyWeekPlan &&
             missingDayKeys.length === 1 &&
@@ -1039,9 +1094,6 @@ export default function MealPlanPage() {
                   variant="outline"
                   className="w-fit rounded-xl"
                   onClick={async () => {
-                    if (typeof localStorage !== "undefined") {
-                      localStorage.setItem(AUTOFILL_STORAGE_KEY, String(Date.now()));
-                    }
                     setPoolUpgradeLoading(true);
                     try {
                       const result = await runPoolUpgrade({
@@ -1070,6 +1122,88 @@ export default function MealPlanPage() {
         </div>
       </div>
 
+      <Sheet open={clearSheetOpen} onOpenChange={setClearSheetOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl">
+          <SheetHeader className="text-left pb-4">
+            <SheetTitle>Очистить</SheetTitle>
+          </SheetHeader>
+          <div className="flex flex-col gap-2 pb-6">
+            <button
+              type="button"
+              className="w-full py-3 px-4 rounded-xl text-left font-medium text-foreground bg-muted/50 hover:bg-muted transition-colors"
+              onClick={() => {
+                setClearSheetOpen(false);
+                setClearConfirm("day");
+              }}
+              aria-label="Очистить меню на этот день"
+            >
+              Очистить день
+            </button>
+            <button
+              type="button"
+              disabled={!hasAccess}
+              className={`w-full py-3 px-4 rounded-xl text-left font-medium transition-colors ${hasAccess ? "text-foreground bg-muted/50 hover:bg-muted" : "text-muted-foreground cursor-not-allowed opacity-70"}`}
+              onClick={() => {
+                if (!hasAccess) return;
+                setClearSheetOpen(false);
+                setClearConfirm("week");
+              }}
+              aria-label="Очистить меню на всю неделю"
+              title={!hasAccess ? "Доступно в Premium" : undefined}
+            >
+              Очистить неделю
+              {!hasAccess && <span className="block text-xs font-normal text-muted-foreground mt-0.5">Доступно в Premium</span>}
+            </button>
+            <button
+              type="button"
+              className="w-full py-3 px-4 rounded-xl text-left font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
+              onClick={() => setClearSheetOpen(false)}
+            >
+              Отмена
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <AlertDialog open={clearConfirm !== null} onOpenChange={(open) => !open && setClearConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{clearConfirm === "week" ? "Очистить меню на всю неделю?" : "Очистить меню на этот день?"}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {clearConfirm === "week" ? "Все блюда на 7 дней будут удалены. Это действие нельзя отменить." : "Все блюда на выбранный день будут удалены."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                const which = clearConfirm;
+                if (!which || isAnyGenerating) return;
+                setClearConfirm(null);
+                const isDay = which === "day";
+                const startDate = isDay ? selectedDate : rollingDates[0];
+                const endDate = isDay ? selectedDate : rollingDates[6];
+                const keysToClear = isDay ? [selectedDayKey] : dayKeys;
+                setPendingClears((prev) => ({ ...prev, ...Object.fromEntries(keysToClear.map((k) => [k, true as const])) }));
+                try {
+                  await queryClient.cancelQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                  queryClient.setQueryData(mealPlansKeyDay, []);
+                  await clearWeekPlan({ startDate, endDate });
+                  await queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                  await queryClient.refetchQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                  toast({ title: isDay ? "День очищен" : "Неделя очищена", description: "Блюда удалены" });
+                } catch (e: unknown) {
+                  toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось очистить" });
+                } finally {
+                  setPendingClears({});
+                }
+              }}
+            >
+              Очистить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MobileLayout>
   );
 }

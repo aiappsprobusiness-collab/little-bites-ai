@@ -18,7 +18,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-// v2: profiles schema — user_id FK auth.users, status, daily_limit, last_reset, premium_until, requests_today, trial_until, trial_used, trial_started_at, email
+// v2: profiles schema — user_id FK auth.users, status, daily_limit, last_reset, premium_until, requests_today, trial_until, trial_used, trial_started_at, email, plan_initialized
 export interface ProfilesV2Row {
   id: string;
   user_id: string;
@@ -31,6 +31,7 @@ export interface ProfilesV2Row {
   trial_used: boolean;
   trial_started_at: string | null;
   email: string | null;
+  plan_initialized: boolean;
 }
 export interface ProfilesV2Insert {
   id?: string;
@@ -44,6 +45,7 @@ export interface ProfilesV2Insert {
   trial_used?: boolean;
   trial_started_at?: string | null;
   email?: string | null;
+  plan_initialized?: boolean;
 }
 export interface ProfilesV2Update {
   id?: string;
@@ -57,6 +59,7 @@ export interface ProfilesV2Update {
   trial_used?: boolean;
   trial_started_at?: string | null;
   email?: string | null;
+  plan_initialized?: boolean;
 }
 
 /** Один элемент аллергии (allergy_items в members). */
