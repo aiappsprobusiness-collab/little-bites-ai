@@ -99,17 +99,17 @@ export default function SosTiles() {
           profileSelector={
             members.length > 0 ? (
               <MemberSelectorButton
-                className="!min-h-8 h-8 !py-1.5 !px-2.5 !rounded-full text-[13px] font-medium !max-w-[140px] border border-white/20 bg-white/10 text-foreground hover:bg-white/20"
+                className="!min-h-7 h-7 !py-1 !px-2.5 !rounded-full text-[12px] font-medium !max-w-[120px] border border-primary-border bg-primary/[0.06] text-foreground hover:bg-primary/[0.1]"
               />
             ) : (
               <button
                 type="button"
                 onClick={() => navigate("/profile")}
-                className="flex items-center gap-1.5 h-8 min-h-8 py-1.5 px-2.5 rounded-full text-[13px] font-medium border border-white/20 bg-white/10 text-foreground hover:bg-white/20 transition-colors"
+                className="flex items-center gap-1.5 h-7 min-h-7 py-1 px-2.5 rounded-full text-[12px] font-medium border border-primary-border bg-primary/[0.06] text-foreground hover:bg-primary/[0.1] transition-colors"
                 aria-label="Выбрать профиль"
               >
                 <span>Выбрать</span>
-                <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" aria-hidden />
+                <ChevronDown className="w-3 h-3 shrink-0 opacity-80" aria-hidden />
               </button>
             )
           }

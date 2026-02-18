@@ -31,8 +31,8 @@ export function SosRecommended({
               whileTap={{ scale: 0.98 }}
               onClick={() => (locked ? onLockedSelect() : onSelect(topic))}
               className={cn(
-                "relative rounded-2xl p-4 text-left border bg-card shadow-[var(--shadow-card)]",
-                "hover:bg-muted/50 active:bg-muted/70 transition-colors",
+                "relative rounded-2xl p-4 text-left border border-border bg-card",
+                "hover:bg-muted/40 active:bg-muted/60 transition-colors",
                 "flex flex-col gap-2 min-h-[100px]"
               )}
             >
@@ -41,13 +41,13 @@ export function SosRecommended({
                   Premium
                 </span>
               )}
-              <span className="flex items-center justify-center w-10 h-10 rounded-full bg-muted shrink-0">
-                <Icon className="w-5 h-5 text-muted-foreground" />
+              <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/[0.06] shrink-0">
+                <Icon className="w-5 h-5 text-primary/80" />
               </span>
-              <span className="text-sm font-semibold text-foreground leading-tight line-clamp-2">
+              <span className="text-[15px] font-semibold text-foreground leading-snug line-clamp-2">
                 {topic.title}
               </span>
-              <span className="text-xs text-muted-foreground line-clamp-1">
+              <span className="text-[12px] text-muted-foreground leading-normal line-clamp-1">
                 {topic.subtitle}
               </span>
             </motion.button>

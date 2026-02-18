@@ -43,7 +43,7 @@ export default function SosTopicPage() {
   };
 
   const cardClass =
-    "rounded-2xl border bg-card p-4 shadow-[var(--shadow-card)]";
+    "rounded-2xl border border-border bg-card p-4";
 
   return (
     <div className="min-h-dvh bg-background flex flex-col">
@@ -61,7 +61,7 @@ export default function SosTopicPage() {
             {topic.title}
           </h1>
           {personalization && (
-            <p className="text-xs text-muted-foreground truncate">{personalization}</p>
+            <p className="text-[11px] text-muted-foreground/80 truncate mt-0.5">{personalization}</p>
           )}
         </div>
       </header>
@@ -71,11 +71,11 @@ export default function SosTopicPage() {
           <div className={cn(
             "rounded-2xl border p-4",
             hasAccess
-              ? "bg-primary/5 border-primary/20"
-              : "bg-amber-50/80 border-amber-200/60"
+              ? "bg-primary/[0.06] border-primary/20"
+              : "bg-primary/[0.06] border-primary/20"
           )}>
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+              <Sparkles className="w-4 h-4 text-primary shrink-0" />
               <span>
                 {hasAccess ? "Персональные рекомендации" : "Premium: персональные рекомендации"}
               </span>
@@ -84,7 +84,7 @@ export default function SosTopicPage() {
               <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                 {topic.premiumValue.map((v, i) => (
                   <li key={i} className="flex items-start gap-2">
-                    <span className="text-amber-600 mt-0.5">•</span>
+                    <span className="text-primary mt-0.5">•</span>
                     <span>{v}</span>
                   </li>
                 ))}
@@ -104,7 +104,7 @@ export default function SosTopicPage() {
         )}
 
         {locked && (
-          <div className={cardClass + " bg-muted/30 border-amber-200/50"}>
+          <div className={cardClass + " bg-muted/30 border-border"}>
             <p className="text-sm text-muted-foreground">
               Откройте персональные рекомендации и план действий по этой теме.
             </p>
@@ -142,12 +142,12 @@ export default function SosTopicPage() {
               </ul>
             </section>
 
-            <section className={cn(cardClass, "border-amber-200/60 bg-amber-50/50")}>
+            <section className={cn(cardClass, "border-primary/20 bg-primary/[0.06]")}>
               <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <AlertTriangle className="w-4 h-4 text-primary shrink-0" strokeWidth={2} />
                 Когда к врачу
               </h2>
-              <ul className="space-y-1.5 text-sm text-amber-900/90">
+              <ul className="space-y-1.5 text-sm text-muted-foreground">
                 {topic.redFlags.map((f, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className="shrink-0">•</span>
@@ -160,26 +160,26 @@ export default function SosTopicPage() {
             {!locked && topic.faq.length > 0 && (
               <section className={cardClass}>
                 <h2 className="text-sm font-semibold text-foreground mb-2">Частые вопросы</h2>
-                <div className="space-y-1">
+                <div className="space-y-0.5">
                   {topic.faq.map((item, i) => (
                     <div
                       key={i}
-                      className="rounded-xl border border-border/60 overflow-hidden"
+                      className="rounded-xl border border-border overflow-hidden"
                     >
                       <button
                         type="button"
                         onClick={() => setOpenFaqIndex(openFaqIndex === i ? null : i)}
-                        className="w-full flex items-center justify-between gap-2 py-3 px-3 text-left text-sm font-medium text-foreground hover:bg-muted/50"
+                        className="w-full flex items-center justify-between gap-2 py-2.5 px-3 text-left text-sm font-medium text-foreground hover:bg-muted/40"
                       >
                         <span className="flex-1 min-w-0">{item.q}</span>
                         {openFaqIndex === i ? (
-                          <ChevronUp className="w-4 h-4 shrink-0" />
+                          <ChevronUp className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         ) : (
-                          <ChevronDown className="w-4 h-4 shrink-0" />
+                          <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         )}
                       </button>
                       {openFaqIndex === i && (
-                        <div className="px-3 pb-3 text-sm text-muted-foreground leading-relaxed border-t border-border/40 pt-2">
+                        <div className="px-3 pb-2.5 text-sm text-muted-foreground leading-relaxed border-t border-border pt-2">
                           {item.a}
                         </div>
                       )}
@@ -190,24 +190,24 @@ export default function SosTopicPage() {
             )}
 
             <section className={cardClass}>
-              <h2 className="text-sm font-semibold text-foreground mb-2">Спросить помощника</h2>
-              <p className="text-xs text-muted-foreground mb-3">
-                Выберите вопрос или задайте свой — откроется чат с готовым текстом.
+              <h2 className="text-sm font-semibold text-foreground mb-1.5">Спросить помощника</h2>
+              <p className="text-[12px] text-muted-foreground mb-3">
+                Задайте свой вопрос — откроется чат с помощником.
               </p>
-              <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 scrollbar-none">
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 scrollbar-none">
                 {topic.askChips.map((chip, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => handleAskAssistant(chip.prefill)}
-                    className="shrink-0 h-9 px-4 rounded-full border border-border bg-card text-sm text-foreground hover:bg-muted/80 active:scale-[0.98] transition-colors"
+                    className="shrink-0 h-9 px-4 rounded-xl border border-border bg-card text-sm text-foreground hover:border-primary/40 hover:bg-primary/[0.06] active:scale-[0.98] transition-colors whitespace-nowrap"
                   >
                     {chip.label}
                   </button>
                 ))}
               </div>
               <Button
-                className="w-full mt-3 rounded-xl"
+                className="w-full mt-3 h-10 rounded-2xl font-medium bg-primary text-primary-foreground hover:opacity-90 border-0"
                 onClick={() => handleAskAssistant()}
               >
                 Спросить у помощника
