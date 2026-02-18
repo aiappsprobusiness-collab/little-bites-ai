@@ -7,14 +7,14 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { SosHero } from "@/components/sos/SosHero";
 import { ChevronDown } from "lucide-react";
 import { SosQuickChips } from "@/components/sos/SosQuickChips";
-import { SosRecommended } from "@/components/sos/SosRecommended";
 import { SosTopicGrid } from "@/components/sos/SosTopicGrid";
 import { SosPaywallModal } from "@/components/sos/SosPaywallModal";
 import { Paywall } from "@/components/subscription/Paywall";
+import { HelpSectionCard } from "@/components/help-ui";
+import { Button } from "@/components/ui/button";
 import {
-  getSosTopicsInOrder,
-  getRecommendedTopicIds,
-  getSosTopicConfig,
+  getQuickHelpTopics,
+  getRegimeTopics,
   type SosTopicConfig,
 } from "@/data/sosTopics";
 import { getTopicById } from "@/constants/sos";
@@ -29,19 +29,9 @@ export default function SosTiles() {
   const [sosPaywallOpen, setSosPaywallOpen] = useState(false);
 
   const memberName = selectedMember?.name ?? members[0]?.name ?? null;
-  const ageMonths = selectedMember?.age_months ?? members[0]?.age_months ?? null;
 
-  const recommendedIds = useMemo(
-    () => getRecommendedTopicIds(ageMonths ?? null),
-    [ageMonths]
-  );
-  const recommendedTopics = useMemo(() => {
-    return recommendedIds
-      .map((id) => getSosTopicConfig(id))
-      .filter(Boolean) as SosTopicConfig[];
-  }, [recommendedIds]);
-
-  const allTopics = useMemo(() => getSosTopicsInOrder(), []);
+  const quickHelpTopics = useMemo(() => getQuickHelpTopics(), []);
+  const regimeTopics = useMemo(() => getRegimeTopics(), []);
 
   // Deep-link: /sos?scenario=key → /sos/key
   useEffect(() => {
@@ -84,6 +74,10 @@ export default function SosTiles() {
     setPaywallOpen(true);
   };
 
+  const openPremiumPaywall = () => {
+    setPaywallOpen(true);
+  };
+
   return (
     <MobileLayout showNav>
       <div className="px-4 pb-6 pt-2 bg-background min-h-full">
@@ -121,21 +115,40 @@ export default function SosTiles() {
             <SosQuickChips onSelect={handleQuickChip} />
           </section>
 
-          {recommendedTopics.length > 0 && (
-            <SosRecommended
-              topics={recommendedTopics}
-              hasAccess={hasAccess}
-              onSelect={handleTopicSelect}
-              onLockedSelect={openPaywall}
-            />
-          )}
-
           <SosTopicGrid
-            topics={allTopics}
-            hasAccess={hasAccess}
+            title="Быстрая помощь"
+            topics={quickHelpTopics}
+            hasAccess={true}
             onSelect={handleTopicSelect}
             onLockedSelect={handleLockedTopic}
           />
+
+          {hasAccess ? (
+            <SosTopicGrid
+              title="Режим и развитие"
+              topics={regimeTopics}
+              hasAccess={true}
+              onSelect={handleTopicSelect}
+              onLockedSelect={handleLockedTopic}
+            />
+          ) : (
+            <HelpSectionCard
+              title="Режим и развитие"
+              className="border-primary/20 bg-primary/[0.06]"
+            >
+              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+                Системный разбор питания, график кормлений и наблюдение за состоянием ребёнка.
+              </p>
+              <Button
+                variant="default"
+                size="sm"
+                className="rounded-xl"
+                onClick={openPremiumPaywall}
+              >
+                Открыть Premium
+              </Button>
+            </HelpSectionCard>
+          )}
         </div>
       </div>
 

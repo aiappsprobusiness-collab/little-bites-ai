@@ -473,6 +473,21 @@ export const SOS_TOPIC_ORDER: string[] = [
   "urgent_help",
 ];
 
+/** Темы блока «Быстрая помощь» — доступны всем. */
+export const QUICK_HELP_TOPIC_IDS: string[] = [
+  "food_refusal",
+  "allergy",
+  "constipation_diarrhea",
+];
+
+/** Темы блока «Режим и развитие» — только Premium. */
+export const REGIME_TOPIC_IDS: string[] = [
+  "spitting_up",
+  "routine",
+  "food_diary",
+  "urgent_help",
+];
+
 export function getSosTopicConfig(id: string): SosTopicConfig | null {
   return TOPICS.find((t) => t.id === id) ?? null;
 }
@@ -484,6 +499,16 @@ export function getAllSosTopics(): SosTopicConfig[] {
 export function getSosTopicsInOrder(): SosTopicConfig[] {
   const byId = new Map(TOPICS.map((t) => [t.id, t]));
   return SOS_TOPIC_ORDER.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];
+}
+
+export function getQuickHelpTopics(): SosTopicConfig[] {
+  const byId = new Map(TOPICS.map((t) => [t.id, t]));
+  return QUICK_HELP_TOPIC_IDS.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];
+}
+
+export function getRegimeTopics(): SosTopicConfig[] {
+  const byId = new Map(TOPICS.map((t) => [t.id, t]));
+  return REGIME_TOPIC_IDS.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];
 }
 
 export function getRecommendedTopicIds(ageMonths: number | null): string[] {

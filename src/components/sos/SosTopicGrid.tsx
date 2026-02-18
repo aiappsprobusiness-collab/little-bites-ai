@@ -3,13 +3,19 @@ import type { SosTopicConfig } from "@/data/sosTopics";
 import { cn } from "@/lib/utils";
 
 export interface SosTopicGridProps {
+  /** Заголовок секции (например «Быстрая помощь», «Режим и развитие») */
+  title: string;
   topics: SosTopicConfig[];
+  /** Если false, все карточки считаются доступными (блок для Free). */
   hasAccess: boolean;
   onSelect: (topic: SosTopicConfig) => void;
   onLockedSelect: () => void;
 }
 
+const CARD_MIN_HEIGHT = 112;
+
 export function SosTopicGrid({
+  title,
   topics,
   hasAccess,
   onSelect,
@@ -17,7 +23,7 @@ export function SosTopicGrid({
 }: SosTopicGridProps) {
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-foreground">Все темы</h3>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
       <div className="grid grid-cols-2 gap-3">
         {topics.map((topic) => {
           const Icon = topic.icon;
@@ -31,8 +37,9 @@ export function SosTopicGrid({
               className={cn(
                 "relative rounded-2xl p-4 text-left border border-border bg-card",
                 "hover:bg-muted/40 active:bg-muted/60 transition-colors",
-                "flex flex-col gap-2 min-h-0"
+                "flex flex-col gap-2"
               )}
+              style={{ minHeight: CARD_MIN_HEIGHT }}
             >
               {locked && (
                 <span className="absolute top-2 right-2 text-[10px] font-medium text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded">
