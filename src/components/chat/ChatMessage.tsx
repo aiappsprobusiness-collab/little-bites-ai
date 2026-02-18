@@ -234,13 +234,19 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               ? Math.floor(typeof effectiveRecipe.cookingTime === "number" ? effectiveRecipe.cookingTime : parseInt(String(effectiveRecipe.cookingTime), 10))
               : null;
           const newRecipe = await createRecipe({
+            source: "chat_ai",
             recipe: {
               title: effectiveRecipe.title,
               description: effectiveRecipe.description || "Рецепт предложен AI ассистентом",
               cooking_time_minutes: Number.isFinite(cookingMinutes) ? cookingMinutes : null,
               member_id: validChildId,
               child_id: validChildId,
-              tags: ["chat"],
+              tags: (effectiveRecipe as { mealType?: string }).mealType
+                ? ["chat", `chat_${(effectiveRecipe as { mealType: string }).mealType}`]
+                : ["chat"],
+              ...((effectiveRecipe as { mealType?: string }).mealType && {
+                meal_type: (effectiveRecipe as { mealType: string }).mealType,
+              }),
             },
             ingredients: (effectiveRecipe.ingredients || []).map((ing, index) => {
               const o = typeof ing === "object" && ing && "name" in ing ? (ing as { name: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; substitute?: string }) : null;

@@ -556,7 +556,6 @@ export type Database = {
     Functions: {
       check_usage_limit: { Args: { _user_id: string }; Returns: Json }
       create_recipe_with_steps: { Args: { payload: Json }; Returns: string }
-      ensure_starter_recipes_seeded: { Args: { p_recipes: Json }; Returns: undefined }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

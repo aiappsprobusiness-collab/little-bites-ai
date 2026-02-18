@@ -17,12 +17,13 @@ interface FavoriteCardProps {
   members: Array<{ id: string; age_months?: number | null }>;
 }
 
+const MAX_INGREDIENT_CHIPS = 3;
+
 export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isPremium = false, members }: FavoriteCardProps) {
   const vm = toFavoriteCardViewModel(favorite.recipe);
   const audience = getRecipeAudience(favorite.recipe, members);
-  const maxChips = 4;
-  const chips = vm.ingredientNames.slice(0, maxChips);
-  const extraCount = Math.max(0, vm.ingredientTotalCount - maxChips);
+  const chips = vm.ingredientNames.slice(0, MAX_INGREDIENT_CHIPS);
+  const extraCount = Math.max(0, vm.ingredientTotalCount - MAX_INGREDIENT_CHIPS);
 
   return (
     <motion.div
@@ -31,70 +32,59 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
       transition={{ delay: index * 0.04, duration: 0.25 }}
     >
       <Card
-        className={`overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)] active:scale-[0.995] ${
-          isPremium
-            ? "border-amber-200/50 bg-amber-50/30"
-            : "border-slate-200/60 bg-white"
-        }`}
+        className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-[var(--shadow-soft)] transition-shadow hover:shadow-card active:scale-[0.995]"
         onClick={onTap}
       >
-        <CardContent className="p-4">
-          {/* Header: Title + Favorite toggle */}
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <h3 className="text-typo-body font-semibold text-foreground leading-snug line-clamp-2 flex-1 min-w-0 flex items-center gap-1.5">
-              {isPremium && <span className="text-amber-500/80 shrink-0 text-typo-muted" aria-hidden>⭐</span>}
-              <span>{vm.title}</span>
+        <CardContent className="p-5">
+          {/* Top row: Title (2 lines max) + heart */}
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h3 className="text-typo-body font-semibold text-foreground leading-snug line-clamp-2 flex-1 min-w-0">
+              {vm.title}
             </h3>
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 shrink-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-full"
+              className="h-9 w-9 shrink-0 text-primary hover:bg-primary/10 rounded-full"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleFavorite(e);
               }}
               aria-label="Убрать из избранного"
             >
-              <Heart className="w-5 h-5 fill-rose-500" />
+              <Heart className="w-5 h-5 fill-primary" />
             </Button>
           </div>
 
-          {/* Subtitle (1 line max, ellipsis) */}
+          {/* Second row: description (1–2 lines, muted) */}
           {vm.subtitle && (
-            <p className="text-typo-muted text-muted-foreground truncate mb-2">{vm.subtitle}</p>
+            <p className="text-typo-muted text-muted-foreground line-clamp-2 mb-3">{vm.subtitle}</p>
           )}
 
-          {/* Meta row: 🕒 cook time | 🍽 meal type | audience chip */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-typo-caption text-muted-foreground mb-2">
+          {/* Meta row: time + audience pill only */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-typo-caption text-muted-foreground mb-3">
             <span className="flex items-center gap-1">
               <span>🕒</span>
               <span>{vm.cookTimeLabel}</span>
             </span>
-            {vm.mealTypeLabel && (
-              <span className="flex items-center gap-1">
-                <span>🍽</span>
-                <span>{vm.mealTypeLabel}</span>
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200/60 px-2 py-0.5 text-typo-caption font-medium text-slate-700">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-typo-caption font-medium text-foreground/80 px-2.5 py-1">
               {audience.showChildEmoji && <span>👶</span>}
               <span>{audience.label}</span>
             </span>
           </div>
 
-          {/* Ingredients chips (max 4, names only) */}
+          {/* Ingredients: max 2–3 chips + "+N" (informational only) */}
           {(chips.length > 0 || extraCount > 0) && (
-            <div className="flex flex-wrap gap-1.5 mb-2">
+            <div className="flex flex-wrap gap-1.5">
               {chips.map((name, i) => (
                 <span
                   key={i}
-                  className="inline-flex items-center px-2 py-0.5 rounded-full text-typo-caption font-medium bg-slate-100 text-slate-700 border border-slate-200/60"
+                  className="inline-flex items-center rounded-full bg-muted/80 text-typo-caption font-medium text-muted-foreground px-2 py-1"
                 >
                   {name}
                 </span>
               ))}
               {extraCount > 0 && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-typo-caption font-medium bg-slate-100 text-slate-600 border border-slate-200/60">
+                <span className="inline-flex items-center rounded-full bg-muted/80 text-typo-caption font-medium text-muted-foreground px-2 py-1">
                   +{extraCount}
                 </span>
               )}

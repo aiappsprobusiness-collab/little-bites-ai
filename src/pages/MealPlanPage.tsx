@@ -34,7 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-/** Включить визуальный debug пула: window.__PLAN_DEBUG = true или ?debugPool=1 */
+/** Включить визуальный debug пула и логи replace_slot: window.__PLAN_DEBUG = true или ?debugPool=1 */
 function isPlanDebug(): boolean {
   if (typeof window === "undefined") return false;
   return (window as Window & { __PLAN_DEBUG?: boolean }).__PLAN_DEBUG === true || new URLSearchParams(window.location.search).get("debugPool") === "1";
@@ -45,6 +45,14 @@ function isPerf(): boolean {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("perf") === "1";
 }
+
+/**
+ * ТЕСТ-ПЛАН (план питания, Fill / Replace):
+ * 1) Fill day (Free/Premium): только POOL, без AI. Пустые слоты остаются пустыми. В dev: [FILL] source=POOL only.
+ * 2) Fill week (Premium): только POOL. В dev: [FILL] source=POOL only.
+ * 3) Replace (↻): Free — paywall; Premium/Trial — pool-first, затем AI. В dev: [REPLACE] source=AI premiumOnly.
+ * 4) Edge replace_slot: при Free и пустом пуле возвращает premium_required (без вызова AI).
+ */
 
 /** Обновить кэш планов после replace_slot (optimistic update). Поддерживает замену существующего слота и добавление в пустой. */
 function applyReplaceSlotToPlanCache(
@@ -385,7 +393,9 @@ export default function MealPlanPage() {
 
   const { data: dayMealPlans = [], isLoading } = getMealPlansByDate(selectedDate);
   const { data: rowExistsData } = getMealPlanRowExists(selectedDate);
-  const isEmptyDay = !!(rowExistsData?.exists && rowExistsData?.isEmpty);
+  /** Единое отображение пустого дня: и когда строки нет, и когда строка есть с пустыми meals. */
+  const hasNoDishes = dayMealPlans.filter((p) => p.recipe_id).length === 0;
+  const isEmptyDay = hasNoDishes;
 
   const renderStartRef = useRef(0);
   if (isPerf()) renderStartRef.current = performance.now();
@@ -441,7 +451,7 @@ export default function MealPlanPage() {
 
   const hasDbWeekPlan = weekPlans.some((p) => !p.isStarter);
   const hasAnyWeekPlan = weekPlans.length > 0;
-  /** Диапазон полностью пустой: нет DB и starter скрыт. */
+  /** Диапазон полностью пустой: нет записей в meal_plans_v2. */
   const isCompletelyEmpty = mutedWeekKey === startKey && !hasAnyWeekPlan;
 
   /** Индекс дня, который сейчас генерируется (по прогрессу job). */
@@ -458,20 +468,23 @@ export default function MealPlanPage() {
     }
   }, [startKey, endKey, missingDayKeys]);
 
-  /** Один раз при первом заходе: если план ещё не инициализирован и на сегодня нет meal_plan из БД — сгенерировать 1 день. */
+  /** Один раз при первом заходе: если план ещё не инициализирован и на сегодня нет meal_plan из БД — заполнить день из пула (POOL only, без AI). */
   useEffect(() => {
     if (location.pathname !== "/meal-plan" || !user?.id || planInitialized || initialPlanRanRef.current) return;
     if (isAnyGenerating || isWeekPlansLoading) return;
     const hasDbPlanForToday = weekPlans.some((p) => p.planned_date === todayKey && !p.isStarter);
     if (hasDbPlanForToday) return;
     initialPlanRanRef.current = true;
-    startPlanGeneration({
+    runPoolUpgrade({
       type: "day",
       member_id: memberIdForPlan,
       member_data: memberDataForPlan,
       day_key: todayKey,
     })
-      .then(() => setPlanInitialized())
+      .then(() => {
+        setPlanInitialized();
+        queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+      })
       .catch(() => {
         initialPlanRanRef.current = false;
       });
@@ -485,8 +498,9 @@ export default function MealPlanPage() {
     todayKey,
     memberIdForPlan,
     memberDataForPlan,
-    startPlanGeneration,
+    runPoolUpgrade,
     setPlanInitialized,
+    queryClient,
   ]);
 
   const getPlannedMealRecipe = (plannedMeal: any) => {
@@ -645,19 +659,7 @@ export default function MealPlanPage() {
                   disabled={isAnyGenerating || (isFree && todayIndex < 0)}
                   onClick={async () => {
                     if (isAnyGenerating) return;
-                    if (isFree) {
-                      try {
-                        await startPlanGeneration({
-                          type: "day",
-                          member_id: memberIdForPlan,
-                          member_data: memberDataForPlan,
-                          day_key: todayKey,
-                        });
-                      } catch (e: unknown) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить день" });
-                      }
-                      return;
-                    }
+                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
                     setPoolUpgradeLoading(true);
                     try {
                       const result = await runPoolUpgrade({
@@ -666,11 +668,8 @@ export default function MealPlanPage() {
                         member_data: memberDataForPlan,
                         day_key: selectedDayKey,
                       });
-                      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                      const aiFallback = result.aiFallbackCount ?? 0;
-                      const desc = aiFallback > 0
-                        ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
-                        : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
+                      await queryClient.refetchQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                      const desc = `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
                       toast({ title: "Заполнить день", description: desc });
                     } catch (e: unknown) {
                       toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить день" });
@@ -709,28 +708,26 @@ export default function MealPlanPage() {
                       setShowPaywall(true);
                       return;
                     }
+                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
                     setPoolUpgradeLoading(true);
-                  try {
-                    const result = await runPoolUpgrade({
-                      type: "week",
-                      member_id: memberIdForPlan,
-                      member_data: memberDataForPlan,
-                      start_key: getRollingStartKey(),
-                      day_keys: getRollingDayKeys(),
-                    });
-                    setMutedWeekKeyAndStorage(null);
-                    queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                    const aiFallback = result.aiFallbackCount ?? 0;
-                    const desc = aiFallback > 0
-                      ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
-                      : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
-                    toast({ title: "Заполнить всю неделю", description: desc });
-                  } catch (e: unknown) {
-                    toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить неделю" });
-                  } finally {
-                    setPoolUpgradeLoading(false);
-                  }
-                }}
+                    try {
+                      const result = await runPoolUpgrade({
+                        type: "week",
+                        member_id: memberIdForPlan,
+                        member_data: memberDataForPlan,
+                        start_key: getRollingStartKey(),
+                        day_keys: getRollingDayKeys(),
+                      });
+                      setMutedWeekKeyAndStorage(null);
+                      await queryClient.refetchQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                      const desc = `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
+                      toast({ title: "Заполнить всю неделю", description: desc });
+                    } catch (e: unknown) {
+                      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить неделю" });
+                    } finally {
+                      setPoolUpgradeLoading(false);
+                    }
+                  }}
                 >
                   <span className="mr-1.5 shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary">Premium</span>
                   <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
@@ -815,9 +812,9 @@ export default function MealPlanPage() {
           {isEmptyDay ? (
             <div className="mt-4 rounded-2xl border border-primary-border/60 bg-primary-light/30 p-6 text-center">
               <p className="text-4xl mb-2" aria-hidden>✨</p>
-              <h3 className="text-plan-hero-title font-semibold text-foreground mb-1">День пустой</h3>
+              <h3 className="text-plan-hero-title font-semibold text-foreground mb-1">План на день пока пуст</h3>
               <p className="text-plan-secondary text-muted-foreground text-sm mb-5">
-                Нажмите «Заполнить день», чтобы подобрать блюда с учётом аллергий и предпочтений.
+                Нажми «Заполнить день» или подбери рецепт для нужного приёма пищи.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <Button
@@ -826,19 +823,12 @@ export default function MealPlanPage() {
                   disabled={isAnyGenerating || (isFree && todayIndex < 0)}
                   onClick={async () => {
                     if (isAnyGenerating) return;
-                    if (isFree) {
-                      try {
-                        await startPlanGeneration({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: todayKey });
-                      } catch (e: unknown) {
-                        toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить день" });
-                      }
-                      return;
-                    }
+                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
                     setPoolUpgradeLoading(true);
                     try {
                       const result = await runPoolUpgrade({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: selectedDayKey });
-                      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
-                      const desc = (result.aiFallbackCount ?? 0) > 0 ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${result.aiFallbackCount}` : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
+                      await queryClient.refetchQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                      const desc = `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
                       toast({ title: "Заполнить день", description: desc });
                     } catch (e: unknown) {
                       toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить день" });
@@ -850,6 +840,15 @@ export default function MealPlanPage() {
                   <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
                   Заполнить день
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-2xl border-primary-border"
+                  onClick={() => navigate("/chat")}
+                >
+                  <Plus className="w-4 h-4 mr-1.5 shrink-0" />
+                  Подобрать рецепт
+                </Button>
                 {hasAccess && (
                   <Button
                     size="sm"
@@ -858,12 +857,13 @@ export default function MealPlanPage() {
                     disabled={isAnyGenerating}
                     onClick={async () => {
                       if (isAnyGenerating) return;
+                      if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
                       setPoolUpgradeLoading(true);
                       try {
                         const result = await runPoolUpgrade({ type: "week", member_id: memberIdForPlan, member_data: memberDataForPlan, start_key: getRollingStartKey(), day_keys: getRollingDayKeys() });
                         setMutedWeekKeyAndStorage(null);
-                        queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
-                        const desc = (result.aiFallbackCount ?? 0) > 0 ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${result.aiFallbackCount}` : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
+                        await queryClient.refetchQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+                        const desc = `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
                         toast({ title: "Заполнить всю неделю", description: desc });
                       } catch (e: unknown) {
                         toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить неделю" });
@@ -917,6 +917,7 @@ export default function MealPlanPage() {
                           setShowPaywall(true);
                           return;
                         }
+                        if (import.meta.env.DEV) console.info("[REPLACE] source=AI premiumOnly", { dayKey: selectedDayKey, slot: slot.id });
                         const slotKey = `${selectedDayKey}_${slot.id}`;
                         if (replacingSlotKey != null) return;
                         setReplacingSlotKey(slotKey);
@@ -947,9 +948,13 @@ export default function MealPlanPage() {
                               title: result.title,
                               plan_source: result.plan_source,
                             }, mealPlanMemberId ?? null);
+                            await queryClient.refetchQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
                             toast({
                               description: result.pickedSource === "ai" ? "Подбираем новый вариант…" : "Блюдо заменено",
                             });
+                            if (isPlanDebug()) {
+                              console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: true, reason: result.reason });
+                            }
                           } else {
                             const err = "error" in result ? result.error : "";
                             if (err === "limit") {
@@ -958,12 +963,18 @@ export default function MealPlanPage() {
                                 title: "Лимит",
                                 description: "1 замена в день (Free). В Premium — без ограничений.",
                               });
+                            } else if (err === "premium_required") {
+                              setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
+                              setShowPaywall(true);
                             } else {
                               toast({
                                 variant: "destructive",
                                 title: "Не удалось заменить",
                                 description: err === "unauthorized" ? "Нужна авторизация" : err,
                               });
+                            }
+                            if (isPlanDebug()) {
+                              console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: false, reason: result.reason, error: "error" in result ? result.error : undefined });
                             }
                           }
                         } catch (e: unknown) {
@@ -1015,6 +1026,7 @@ export default function MealPlanPage() {
                               setShowPaywall(true);
                               return;
                             }
+                            if (import.meta.env.DEV) console.info("[REPLACE] source=AI premiumOnly", { dayKey: selectedDayKey, slot: slot.id });
                             const slotKey = `${selectedDayKey}_${slot.id}`;
                             setReplacingSlotKey(slotKey);
                             try {
@@ -1040,10 +1052,13 @@ export default function MealPlanPage() {
                                   title: result.title,
                                   plan_source: result.plan_source,
                                 }, mealPlanMemberId ?? null);
-                                queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                                await queryClient.refetchQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
                                 toast({
                                   description: result.pickedSource === "ai" ? "Рецепт подобран (AI)" : "Рецепт подобран из базы",
                                 });
+                                if (isPlanDebug()) {
+                                  console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: true, reason: result.reason });
+                                }
                               } else {
                                 const err = "error" in result ? result.error : "";
                                 if (err === "limit") {
@@ -1052,12 +1067,18 @@ export default function MealPlanPage() {
                                     title: "Лимит",
                                     description: "1 замена в день (Free). В Premium — без ограничений.",
                                   });
+                                } else if (err === "premium_required") {
+                                  setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
+                                  setShowPaywall(true);
                                 } else {
                                   toast({
                                     variant: "destructive",
                                     title: "Не удалось подобрать",
                                     description: err === "unauthorized" ? "Нужна авторизация" : err,
                                   });
+                                }
+                                if (isPlanDebug()) {
+                                  console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: false, reason: result.reason, error: "error" in result ? result.error : undefined });
                                 }
                               }
                             } catch (e: unknown) {

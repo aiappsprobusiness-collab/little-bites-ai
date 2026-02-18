@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { MessageCircle } from "lucide-react";
+import { Heart, MessageCircle } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,29 +43,34 @@ export default function FavoritesPage() {
   };
 
   return (
-    <MobileLayout title="Избранное">
+    <MobileLayout
+      title="Избранное"
+      headerMeta="Любимые рецепты для вашей семьи"
+      headerRight={
+        favorites.length > 0 ? (
+          <span className="text-typo-caption font-medium text-muted-foreground tabular-nums">
+            {favorites.length}
+          </span>
+        ) : undefined
+      }
+    >
       <div className="px-4 pb-6">
-        {/* Subtitle */}
-        <p className="text-typo-muted text-muted-foreground mb-5 px-0.5">
-          Любимые рецепты для вашей семьи
-        </p>
-
         {favorites.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.25 }}
           >
-            <Card className="rounded-2xl border border-slate-200/40 bg-slate-50/90 overflow-hidden">
+            <Card className="rounded-2xl border border-border/60 bg-card overflow-hidden shadow-sm">
               <CardContent className="p-8 text-center">
-                <p className="text-4xl mb-4">💚</p>
+                <div className="flex justify-center mb-4">
+                  <Heart className="w-12 h-12 text-primary/40 stroke-[1.5]" />
+                </div>
                 <h3 className="text-typo-title font-semibold text-foreground mb-2">
-                  Здесь будут ваши любимые рецепты
+                  Пока нет избранных рецептов
                 </h3>
                 <p className="text-typo-muted text-muted-foreground mb-6 leading-relaxed max-w-[260px] mx-auto">
-                  Сохраняйте блюда из чата или рецептов,
-                  <br />
-                  чтобы быстро возвращаться к ним
+                  Добавляйте понравившиеся рецепты сердечком — они появятся здесь.
                 </p>
                 <Button
                   onClick={() => navigate("/chat")}

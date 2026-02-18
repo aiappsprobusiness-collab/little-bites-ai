@@ -186,6 +186,7 @@ export function useChatRecipes() {
               : null;
 
           const newRecipe = await createRecipe({
+            source: 'chat_ai',
             recipe: {
               title: parsedRecipe.title,
               description: parsedRecipe.description || 'Рецепт предложен AI ассистентом',
@@ -193,6 +194,7 @@ export function useChatRecipes() {
               member_id: validChildId,
               child_id: validChildId,
               tags,
+              ...(recipeMealType && { meal_type: recipeMealType }),
               ...(parsedRecipe.chefAdvice != null && parsedRecipe.chefAdvice !== '' && { chef_advice: parsedRecipe.chefAdvice }),
               ...(parsedRecipe.advice != null && parsedRecipe.advice !== '' && { advice: parsedRecipe.advice }),
             },

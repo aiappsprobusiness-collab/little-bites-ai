@@ -40,7 +40,7 @@ function toRecipePreview(row: {
 }
 
 /**
- * Fetches recipe previews by IDs. Filters to valid UUIDs only (starter recipe IDs like "s1-r1" are skipped).
+ * Fetches recipe previews by IDs. Filters to valid UUIDs only (non-UUIDs are skipped).
  * IDs are stabilized (unique + sort) and debounced (80ms) so rapid changes during generation don't trigger many requests.
  */
 export function useRecipePreviewsByIds(recipeIds: string[]) {

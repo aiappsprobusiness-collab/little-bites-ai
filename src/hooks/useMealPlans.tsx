@@ -3,38 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { formatLocalDate } from '@/utils/dateUtils';
 import { isDateInRollingRange } from '@/utils/dateRange';
-import { STARTER_DAILY_PLANS, STARTER_NEUTRAL_DAY } from '@/data/starterDailyPlans';
-import { selectStarterVariant, STARTER_NEUTRAL_INDEX, type StarterProfile } from '@/data/starterResolver';
-import { ensureStarterRecipesSeeded, toStarterRecipeDbId } from '@/data/starterRecipeSeed';
 import type { MealPlansV2Row, MealPlansV2Insert, MealPlansV2Update } from '@/integrations/supabase/types-v2';
-
-async function buildStarterItems(
-  plannedDate: string,
-  variantIndex: number,
-  userId: string,
-  memberId: string | null | undefined
-): Promise<MealPlanItemV2[]> {
-  await ensureStarterRecipesSeeded(userId);
-  const useNeutral = variantIndex === STARTER_NEUTRAL_INDEX;
-  const template = useNeutral ? STARTER_NEUTRAL_DAY : (STARTER_DAILY_PLANS[variantIndex] ?? STARTER_DAILY_PLANS[0]);
-  const mid = memberId ?? null;
-  const idPrefix = useNeutral ? `starter_neutral_${plannedDate}` : `starter_${plannedDate}`;
-  return template.map((item) => {
-    const starterId = item.recipe_id ?? item.recipe?.id;
-    const dbId = starterId ? toStarterRecipeDbId(userId, starterId) : null;
-    return {
-      ...item,
-      id: useNeutral ? `${idPrefix}_${item.meal_type}` : `${idPrefix}_${item.meal_type}_${variantIndex}`,
-      planned_date: plannedDate,
-      recipe_id: dbId,
-      recipe: item.recipe && dbId ? { id: dbId, title: item.recipe.title } : item.recipe,
-      child_id: mid,
-      member_id: mid,
-      user_id: userId,
-      isStarter: true,
-    };
-  });
-}
 
 const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'] as const;
 type MealType = (typeof MEAL_SLOTS)[number];
@@ -54,7 +23,7 @@ export interface MealPlanItemV2 {
   member_id: string | null;
   user_id?: string;
   is_completed?: boolean;
-  /** true = starter, отсутствует/false = из БД */
+  /** @deprecated Starter fallback removed; always false. Kept for type compatibility. */
   isStarter?: boolean;
   /** 'pool' = из БД (pool-first), 'ai' = сгенерировано AI. Для debug-бейджа DB/AI. */
   plan_source?: "pool" | "ai";
@@ -98,16 +67,16 @@ export function mealPlansKey(params: {
 /** memberId: конкретный id = планы этого члена; null = "Семья" (member_id is null); undefined = не фильтровать. */
 export function useMealPlans(
   memberId?: string | null,
-  profile?: StarterProfile | null,
+  _profile?: { allergies?: string[]; preferences?: string[] } | null,
   options?: { mutedWeekKey?: string | null }
 ) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const profileKey: string | null = profile
+  const profileKey: string | null = _profile
     ? [
-        [...(profile.allergies ?? [])].sort().join(","),
-        (profile.preferences ?? []).map((p) => String(p).trim().toLowerCase()).join("|"),
+        [...(_profile.allergies ?? [])].sort().join(","),
+        (_profile.preferences ?? []).map((p) => String(p).trim().toLowerCase()).join("|"),
       ].join(";")
     : null;
 
@@ -136,26 +105,10 @@ export function useMealPlans(
 
         if (error) throw error;
         const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as unknown as MealPlansV2Row));
-        if ((rows ?? []).length > 0) {
-          return expanded;
-        }
+        if ((rows ?? []).length > 0) return expanded;
         const rangeKeyForMute = startStr;
         if (mutedWeekKey !== null && rangeKeyForMute === mutedWeekKey) return [];
-        const dates: string[] = [];
-        const startD = new Date(startStr + 'T12:00:00');
-        const endD = new Date(endStr + 'T12:00:00');
-        for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
-          dates.push(formatLocalDate(d));
-        }
-        const usedIndices = new Set<number>();
-        const results: MealPlanItemV2[] = [];
-        for (const d of dates) {
-          const idx = selectStarterVariant(d, memberId, profile, usedIndices);
-          if (idx >= 0) usedIndices.add(idx);
-          const items = await buildStarterItems(d, idx, user.id, memberId);
-          results.push(...items);
-        }
-        return results;
+        return [];
       },
       enabled: !!user,
       staleTime: 60_000,
@@ -183,11 +136,9 @@ export function useMealPlans(
 
         if (error) throw error;
         const expanded = (rows ?? []).flatMap((r) => expandMealsRow(r as unknown as MealPlansV2Row));
-        if ((rows ?? []).length > 0) {
-          return expanded;
-        }
+        if ((rows ?? []).length > 0) return expanded;
         if (mutedWeekKey !== null && isDateInRollingRange(dateStr, mutedWeekKey)) return [];
-        return await buildStarterItems(dateStr, selectStarterVariant(dateStr, memberId, profile), user.id, memberId);
+        return [];
       },
       enabled: !!user,
       staleTime: 60_000,

@@ -854,7 +854,9 @@ function validateAiMeal(
   const normSlot = normalizeMealType(mealKey) ?? (mealKey as NormalizedMealType);
   const ingText = ingredients.map((i) => (typeof i === "string" ? i : i.name ?? "")).join(" ");
   const combinedText = [title, ingText, steps.join(" ")].join(" ");
-  const sanity = slotSanityReject(normSlot, combinedText);
+  // Для завтрака проверяем только название: типичный завтрак (оладьи, каша) не должен отклоняться из-за слова в ингредиентах (напр. "нутовая мука").
+  const sanityText = normSlot === "breakfast" ? title : combinedText;
+  const sanity = slotSanityReject(normSlot, sanityText);
   if (sanity) return sanity;
   const allergyTokens = getAllergyTokens(memberData);
   if (allergyTokens.length > 0) {
@@ -925,6 +927,7 @@ serve(async (req) => {
       exclude_recipe_ids?: string[];
       exclude_title_keys?: string[];
       debug_pool?: boolean;
+      debug_plan?: boolean | string;
     };
     const mode = body.mode === "upgrade" ? "upgrade" : "autofill";
     const debugPool = body.debug_pool ?? false;
@@ -962,14 +965,20 @@ serve(async (req) => {
     }
 
     if (action === "replace_slot") {
+      const requestId = typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const debugPlan = body.debug_plan === true || body.debug_plan === "1" || Deno.env.get("DEBUG_PLAN") === "1";
+
       const dayKey = typeof body.day_key === "string" ? body.day_key : null;
       const mealType = typeof body.meal_type === "string" ? body.meal_type : null;
       if (!dayKey || !mealType || !MEAL_KEYS.includes(mealType as (typeof MEAL_KEYS)[number])) {
         return new Response(
-          JSON.stringify({ error: "missing_day_key_or_meal_type" }),
+          JSON.stringify({ error: "missing_day_key_or_meal_type", requestId, reason: "bad_input" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      if (debugPlan) safeLog("[REPLACE_SLOT] start", { requestId, dayKey, memberId, mealType });
       const memberDataPool: MemberDataPool | null = memberData
         ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], age_months: memberData.age_months }
         : null;
@@ -1016,20 +1025,54 @@ serve(async (req) => {
       );
 
       if (picked) {
+        if (debugPlan) safeLog("[REPLACE_SLOT] pool_search", { requestId, pickedSource: "pool", newRecipeId: picked.id });
         const newMeals = { ...currentMeals, [mealType]: { recipe_id: picked.id, title: picked.title, plan_source: "pool" as const } };
         if (existingRow.data?.id) {
-          await supabase.from("meal_plans_v2").update({ meals: newMeals }).eq("id", (existingRow.data as { id: string }).id);
+          const { error: updateErr } = await supabase.from("meal_plans_v2").update({ meals: newMeals }).eq("id", (existingRow.data as { id: string }).id);
+          if (updateErr) {
+            safeWarn("[REPLACE_SLOT] attach_failed (update)", requestId, updateErr.message);
+            return new Response(
+              JSON.stringify({ error: "replace_failed", pickedSource: "pool", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         } else {
-          await supabase.from("meal_plans_v2").insert({
+          const { error: insertErr } = await supabase.from("meal_plans_v2").insert({
             user_id: userId,
             member_id: memberId,
             planned_date: dayKey,
             meals: newMeals,
           });
+          if (insertErr) {
+            safeWarn("[REPLACE_SLOT] attach_failed (insert)", requestId, insertErr.message);
+            return new Response(
+              JSON.stringify({ error: "replace_failed", pickedSource: "pool", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         }
-        safeLog("[REPLACE_SLOT]", { mealType, pickedSource: "pool", newRecipeId: picked.id });
+        if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId: picked.id, reason: "pool" });
         return new Response(
-          JSON.stringify({ pickedSource: "pool", newRecipeId: picked.id, title: picked.title, plan_source: "pool" }),
+          JSON.stringify({ pickedSource: "pool", newRecipeId: picked.id, title: picked.title, plan_source: "pool", requestId, reason: "pool" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (debugPlan) safeLog("[REPLACE_SLOT] pool_search", { requestId, pickedSource: null, reason: "pool_empty" });
+
+      // Replace with AI: only Premium/Trial. Free must not trigger AI from replace_slot.
+      const { data: profileRow } = await supabase
+        .from("profiles_v2")
+        .select("status, premium_until, trial_until")
+        .eq("user_id", userId)
+        .maybeSingle();
+      const prof = profileRow as { status?: string; premium_until?: string | null; trial_until?: string | null } | null;
+      const hasPremium = prof?.premium_until && new Date(prof.premium_until) > new Date();
+      const hasTrial = prof?.trial_until && new Date(prof.trial_until) > new Date();
+      const isPremiumOrTrial = prof?.status === "premium" || prof?.status === "trial" || hasPremium || hasTrial;
+      if (!isPremiumOrTrial) {
+        if (debugPlan) safeLog("[REPLACE_SLOT] AI blocked", { requestId, reason: "free_no_ai" });
+        return new Response(
+          JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "premium_required", requestId, reason: "premium_required" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -1073,31 +1116,48 @@ serve(async (req) => {
               ],
             }),
           },
-          { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
+          { timeoutMs: FETCH_TIMEOUT_MS, retries: 2 }
         );
 
       let aiRes: Response;
       try {
         aiRes = await doAiRequest(allergyHint);
+        if (aiRes && !aiRes.ok && aiRes.status >= 500) {
+          if (debugPool) safeLog("[REPLACE_SLOT] AI 5xx, retrying once", aiRes.status);
+          aiRes = await doAiRequest(allergyHint);
+        }
       } catch (e) {
         safeWarn("[REPLACE_SLOT] AI timeout/fetch error", e instanceof Error ? e.message : String(e).slice(0, 80));
-        return new Response(
-          JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "ai_timeout" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        try {
+          aiRes = await doAiRequest(allergyHint);
+        } catch (e2) {
+          if (debugPlan) safeLog("[REPLACE_SLOT] ai_call", { requestId, status: "timeout" });
+          return new Response(
+            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "ai_timeout", requestId, reason: "ai_timeout" }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
 
       if (!aiRes.ok) {
         const errText = await aiRes.text();
         safeWarn("[REPLACE_SLOT] AI request failed", aiRes.status, errText);
+        if (debugPlan) safeLog("[REPLACE_SLOT] ai_call", { requestId, status: aiRes.status });
         return new Response(
-          JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "ai_request_failed" }),
+          JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "ai_request_failed", requestId, reason: "ai_request_failed" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      if (debugPlan) safeLog("[REPLACE_SLOT] ai_call", { requestId, status: "ok" });
 
       const aiData = (await aiRes.json()) as { message?: string; recipe_id?: string | null; recipes?: Array<{ title?: string }> };
-      let recipeId: string | null = aiData.recipe_id ?? null;
+      const rawRecipeId = aiData.recipe_id;
+      let recipeId: string | null =
+        rawRecipeId == null
+          ? null
+          : typeof rawRecipeId === "string"
+            ? rawRecipeId
+            : (rawRecipeId as { id?: string })?.id ?? String(rawRecipeId);
       let title = aiData.recipes?.[0]?.title ?? (typeof aiData.message === "string" ? aiData.message.slice(0, 100) : "Рецепт");
 
       const parseAndValidateAi = (
@@ -1105,7 +1165,12 @@ serve(async (req) => {
       ): { parsed: { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }; failReason: string | null } => {
         const jsonStr = extractFirstJsonObject(msg);
         if (!jsonStr) return { parsed: {}, failReason: "no_json" };
-        const parsed = JSON.parse(jsonStr) as { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] };
+        let parsed: { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] };
+        try {
+          parsed = JSON.parse(jsonStr) as { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] };
+        } catch {
+          return { parsed: {}, failReason: "no_json" };
+        }
         const ingredients = (parsed.ingredients ?? []).map((ing) =>
           typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
         );
@@ -1138,7 +1203,10 @@ serve(async (req) => {
           }
         } else if (isSanityFail) {
           try {
-            const sanityHint = ` Для ${mealLabel} нельзя: ${slotForbiddenByType[mealType] ?? ""}. Предложи подходящее блюдо.`;
+            const sanityHint =
+              mealType === "breakfast"
+                ? " Строго только блюдо для завтрака: каша, омлет, сырники, оладьи, запеканка, тост, яичница, гранола. Никаких супов, борща, рагу, плова, рыбы, карри, нута, тушёного. Верни один рецепт именно для завтрака."
+                : ` Для ${mealLabel} нельзя: ${slotForbiddenByType[mealType] ?? ""}. Предложи подходящее блюдо.`;
             aiRes = await doAiRequest(sanityHint);
             if (aiRes.ok) {
               const retryData = (await aiRes.json()) as { message?: string };
@@ -1149,9 +1217,18 @@ serve(async (req) => {
           }
         }
         if (parsedResult.failReason) {
-          safeLog("[REPLACE_SLOT] AI meal validation failed", { mealType, failReason: parsedResult.failReason });
+          const titleForLog = parsedResult.parsed?.title ?? "";
+          const ingText = (parsedResult.parsed?.ingredients ?? []).map((i) => (typeof i === "string" ? i : i.name ?? "")).join(" ");
+          const combinedForSanity = [titleForLog, ingText].join(" ");
+          const { hitTokens: sanityHitTokens } = slotSanityCheck(mealType as NormalizedMealType, combinedForSanity);
+          safeLog("[REPLACE_SLOT] AI meal validation failed", {
+            mealType,
+            failReason: parsedResult.failReason,
+            title: titleForLog.slice(0, 80),
+            hitTokens: parsedResult.failReason === "sanity_hit" ? sanityHitTokens : undefined,
+          });
           return new Response(
-            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "validation_failed" }),
+            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "validation_failed", requestId, reason: "validation_failed" }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
@@ -1173,6 +1250,7 @@ serve(async (req) => {
           child_id: memberId,
           source: "chat_ai",
           meal_type: mealType,
+          tags: ["chat", `chat_${mealType}`],
           title: parsed.title ?? "Рецепт",
           description: "",
           cooking_time_minutes: null,
@@ -1191,36 +1269,123 @@ serve(async (req) => {
         const { data: createdId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
         if (rpcErr || !createdId) {
           safeWarn("[REPLACE_SLOT] create_recipe failed", rpcErr?.message);
+          if (debugPlan) safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: false });
           return new Response(
-            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "create_recipe_failed" }),
+            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "create_recipe_failed", requestId, reason: "create_recipe_failed" }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        recipeId = createdId;
+        if (debugPlan) safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: true, recipeId: createdId });
+        recipeId = typeof createdId === "string" ? createdId : (createdId as { id?: string })?.id ?? String(createdId);
         title = parsed.title ?? title;
       }
 
       if (recipeId) {
         const newMeals = { ...currentMeals, [mealType]: { recipe_id: recipeId, title, plan_source: "ai" as const } };
         if (existingRow.data?.id) {
-          await supabase.from("meal_plans_v2").update({ meals: newMeals }).eq("id", (existingRow.data as { id: string }).id);
+          const { error: updateErr } = await supabase.from("meal_plans_v2").update({ meals: newMeals }).eq("id", (existingRow.data as { id: string }).id);
+          if (updateErr) {
+            safeWarn("[REPLACE_SLOT] attach_failed (update)", requestId, updateErr.message);
+            return new Response(
+              JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         } else {
-          await supabase.from("meal_plans_v2").insert({
+          const { error: insertErr } = await supabase.from("meal_plans_v2").insert({
             user_id: userId,
             member_id: memberId,
             planned_date: dayKey,
             meals: newMeals,
           });
+          if (insertErr) {
+            safeWarn("[REPLACE_SLOT] attach_failed (insert)", requestId, insertErr.message);
+            return new Response(
+              JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         }
-        safeLog("[REPLACE_SLOT]", { mealType, pickedSource: "ai", newRecipeId: recipeId });
+        if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId, reason: "ai" });
         return new Response(
-          JSON.stringify({ pickedSource: "ai", newRecipeId: recipeId, title, plan_source: "ai" }),
+          JSON.stringify({ pickedSource: "ai", newRecipeId: recipeId, title, plan_source: "ai", requestId, reason: "ai" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
+      const recipesFromResponse = aiData.recipes as Array<{ title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }> | undefined;
+      const firstRecipe = Array.isArray(recipesFromResponse) && recipesFromResponse.length > 0 ? recipesFromResponse[0] : null;
+      if (firstRecipe?.title) {
+        const ingList = (firstRecipe.ingredients ?? []).map((ing) =>
+          typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
+        );
+        const stepList = (firstRecipe.steps ?? []).filter(Boolean).map((s) => String(s));
+        const failReason = validateAiMeal(firstRecipe.title, ingList, stepList, mealType, memberDataPool);
+        if (!failReason) {
+          while (stepList.length < 3) stepList.push(`Шаг ${stepList.length + 1}`);
+          while (ingList.length < 3) ingList.push({ name: `Ингредиент ${ingList.length + 1}`, amount: "" });
+          const payload = {
+            user_id: userId,
+            member_id: memberId,
+            child_id: memberId,
+            source: "chat_ai",
+            meal_type: mealType,
+            tags: ["chat", `chat_${mealType}`],
+            title: firstRecipe.title,
+            description: "",
+            cooking_time_minutes: null,
+            chef_advice: null,
+            advice: null,
+            steps: stepList.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
+            ingredients: ingList.slice(0, 20).map((ing, idx) => ({
+              name: ing.name,
+              display_text: ing.amount ? `${ing.name} — ${ing.amount}` : ing.name,
+              amount: null,
+              unit: null,
+              order_index: idx,
+              category: "other",
+            })),
+          };
+          const { data: createdId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
+          if (!rpcErr && createdId) {
+            const idStr = typeof createdId === "string" ? createdId : (createdId as { id?: string })?.id ?? String(createdId);
+            const newMeals = { ...currentMeals, [mealType]: { recipe_id: idStr, title: firstRecipe.title, plan_source: "ai" as const } };
+            if (existingRow.data?.id) {
+              const { error: updateErr } = await supabase.from("meal_plans_v2").update({ meals: newMeals }).eq("id", (existingRow.data as { id: string }).id);
+              if (updateErr) {
+                safeWarn("[REPLACE_SLOT] attach_failed (update)", requestId, updateErr.message);
+                return new Response(
+                  JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+                  { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+              }
+            } else {
+              const { error: insertErr } = await supabase.from("meal_plans_v2").insert({
+                user_id: userId,
+                member_id: memberId,
+                planned_date: dayKey,
+                meals: newMeals,
+              });
+              if (insertErr) {
+                safeWarn("[REPLACE_SLOT] attach_failed (insert)", requestId, insertErr.message);
+                return new Response(
+                  JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+                  { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+                );
+              }
+            }
+            if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId: idStr, reason: "ai_recipes_array" });
+            return new Response(
+              JSON.stringify({ pickedSource: "ai", newRecipeId: idStr, title: firstRecipe.title, plan_source: "ai", requestId, reason: "ai_recipes_array" }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+      }
+
+      if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: false, reason: "no_recipe_in_response" });
       return new Response(
-        JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "no_recipe_in_response" }),
+        JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "no_recipe_in_response", requestId, reason: "no_recipe_in_response" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -1247,11 +1412,6 @@ serve(async (req) => {
         ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], age_months: memberData.age_months }
         : null;
       const allergyTokens = getAllergyTokens(memberDataPool);
-      const allergyWeekHint =
-        allergyTokens.length > 0
-          ? " СТРОГО БЕЗ МОЛОЧНЫХ ПРОДУКТОВ: молоко, творог, йогурт, сыр, кефир, сливки, сметана, масло, ряженка, мороженое, сгущенка. "
-          : "";
-      const deepseekUrl = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/deepseek-chat";
       let weekContext: string[] = [];
       let usedRecipeIds: string[] = [];
       let usedTitleKeys: string[] = [];
@@ -1351,96 +1511,9 @@ serve(async (req) => {
           }
         }
 
-        const slotsNeedingAi = MEAL_KEYS.filter((k) => !poolPicks[k] && !currentMeals[k]?.recipe_id);
-        if (slotsNeedingAi.length > 0) {
-          const dayName = getDayName(dayKey);
-          const doDayRequest = (extraHint: string) =>
-            fetchWithRetry(
-              deepseekUrl,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: authHeader },
-                body: JSON.stringify({
-                  type: "single_day",
-                  stream: false,
-                  dayName,
-                  memberData,
-                  weekContext: weekContext.length ? weekContext.join(", ") : "Пока ничего не запланировано.",
-                  messages: [
-                    {
-                      role: "user",
-                      content: `Составь план питания на ${dayName}. Укажи завтрак, обед, полдник и ужин в формате JSON.${extraHint}`,
-                    },
-                  ],
-                }),
-              },
-              { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
-            );
-          let res: Response | undefined;
-          try {
-            res = await doDayRequest(allergyWeekHint);
-          } catch {
-            if (debugPool) safeLog("[POOL UPGRADE] AI fallback skipped", { dayKey, reason: "fetch_error" });
-          }
-          if (res?.ok) {
-            const data = await res.json();
-            const raw = data?.message ?? "";
-            const jsonStr = extractFirstJsonObject(raw);
-            if (jsonStr) {
-              const parsed = JSON.parse(jsonStr) as SingleDayResponse;
-              for (const mealKey of slotsNeedingAi) {
-                const meal = parsed[mealKey];
-                if (!meal?.name || !Array.isArray(meal.ingredients)) continue;
-                const ingredients = meal.ingredients.map((ing) =>
-                  typeof ing === "string" ? { name: ing.trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
-                );
-                const steps = (meal.steps ?? []).filter(Boolean).map((s) => String(s));
-                const failReason = validateAiMeal(meal.name, ingredients, steps, mealKey, memberDataPool);
-                if (failReason) {
-                  if (debugPool) safeLog("[POOL UPGRADE] AI meal rejected", { dayKey, mealKey, title: meal.name, failReason });
-                  continue;
-                }
-                while (steps.length < 3) steps.push(`Шаг ${steps.length + 1}`);
-                while (ingredients.length < 3) ingredients.push({ name: `Ингредиент ${ingredients.length + 1}`, amount: "" });
-                const chefAdvice = extractChefAdvice(meal as Record<string, unknown>);
-                const adviceVal = extractAdvice(meal as Record<string, unknown>);
-                const payload = {
-                  user_id: userId,
-                  member_id: memberId,
-                  child_id: memberId,
-                  source: "week_ai",
-                  meal_type: mealKey,
-                  title: meal.name,
-                  description: "",
-                  cooking_time_minutes: meal.cooking_time ?? null,
-                  chef_advice: chefAdvice ?? null,
-                  advice: adviceVal ?? null,
-                  steps: steps.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
-                  ingredients: ingredients.slice(0, 20).map((ing, idx) => ({
-                    name: ing.name,
-                    display_text: ing.amount ? `${ing.name} — ${ing.amount}` : ing.name,
-                    amount: null,
-                    unit: null,
-                    order_index: idx,
-                    category: "other",
-                  })),
-                };
-                const { data: recipeId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
-                if (rpcErr) {
-                  safeWarn("[POOL UPGRADE] create_recipe failed", mealKey, rpcErr.message);
-                  continue;
-                }
-                newMeals[mealKey] = { recipe_id: recipeId, title: meal.name, plan_source: "ai" };
-                aiFallbackCount++;
-                usedRecipeIds.push(recipeId);
-                usedTitleKeys.push(normalizeTitleKey(meal.name));
-                const pk = inferProteinKey(meal.name, null);
-                if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
-                weekContext.push(meal.name);
-                unchangedCount--;
-              }
-            }
-          }
+        // Fill Day/Week: POOL only. Slots that pool could not fill stay empty (no AI fallback).
+        if (debugPool && MEAL_KEYS.some((k) => !poolPicks[k] && !currentMeals[k]?.recipe_id)) {
+          safeLog("[POOL UPGRADE] slots left empty (pool only, no AI)", { dayKey, emptySlots: MEAL_KEYS.filter((k) => !poolPicks[k] && !currentMeals[k]?.recipe_id) });
         }
 
         if (existingRow.data?.id) {
@@ -1876,6 +1949,7 @@ serve(async (req) => {
           child_id: memberId,
           source: "week_ai",
           meal_type: mealKey,
+          tags: ["week_ai", `week_${mealKey}`],
           title: meal.name,
           description: "",
           cooking_time_minutes: meal.cooking_time ?? null,

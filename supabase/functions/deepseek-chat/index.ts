@@ -889,8 +889,16 @@ serve(async (req) => {
       const validatedRecipe = responseRecipes[0] as RecipeJson;
       try {
         const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
-        const tags = ["chat"];
-        if (validatedRecipe.mealType) tags.push(`chat_${validatedRecipe.mealType}`);
+        const mealTypeResolved =
+          validatedRecipe.mealType && ["breakfast", "lunch", "snack", "dinner"].includes(validatedRecipe.mealType)
+            ? validatedRecipe.mealType
+            : (() => {
+                const t = ["chat_breakfast", "chat_lunch", "chat_snack", "chat_dinner"].find((tag) =>
+                  (validatedRecipe as { tags?: string[] }).tags?.includes(tag)
+                );
+                return t ? t.replace("chat_", "") : "snack";
+              })();
+        const tags = [...new Set(["chat", `chat_${mealTypeResolved}`])];
         const rawSteps = Array.isArray(validatedRecipe.steps) ? validatedRecipe.steps : [];
         const stepsPayload = rawSteps.length >= 3
           ? rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 }))
@@ -924,7 +932,7 @@ serve(async (req) => {
           member_id: memberIdForRecipe,
           child_id: memberIdForRecipe,
           tags,
-          meal_type: validatedRecipe.mealType ?? null,
+          meal_type: mealTypeResolved,
           chef_advice: validatedRecipe.chefAdvice ?? null,
           advice: validatedRecipe.advice ?? null,
           steps: stepsPayload,

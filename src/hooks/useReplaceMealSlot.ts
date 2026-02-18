@@ -287,7 +287,7 @@ export function useReplaceMealSlot(
     ]
   );
 
-  /** Одна кнопка замены: pool-first → AI fallback через Edge (action replace_slot). Без модалки.
+  /** Одна кнопка замены: pool-first → AI fallback через Edge (action replace_slot). Только Premium/Trial могут вызвать AI.
    * При успехе НЕ инвалидируем кэш — вызывающая сторона делает optimistic update по данным ответа. */
   const replaceMealSlotAuto = useCallback(
     async (params: {
@@ -298,9 +298,12 @@ export function useReplaceMealSlot(
       memberData?: MemberDataForPool | null;
       isFree: boolean;
     }): Promise<
-      | { ok: true; pickedSource: "pool" | "ai"; newRecipeId: string; title: string; plan_source: "pool" | "ai" }
-      | { ok: false; error: string }
+      | { ok: true; pickedSource: "pool" | "ai"; newRecipeId: string; title: string; plan_source: "pool" | "ai"; requestId?: string; reason?: string }
+      | { ok: false; error: string; requestId?: string; reason?: string }
     > => {
+      if (!hasAccess) {
+        return { ok: false, error: "premium_required" };
+      }
       if (params.isFree && getFreeSwapUsedForDay(params.dayKey)) {
         return { ok: false, error: "limit" };
       }
@@ -329,32 +332,46 @@ export function useReplaceMealSlot(
       const data = await res.json().catch(() => ({})) as {
         pickedSource?: "pool" | "ai";
         newRecipeId?: string;
+        recipe_id?: string;
         title?: string;
         plan_source?: "pool" | "ai";
         error?: string;
         reasonIfAi?: string;
+        requestId?: string;
+        reason?: string;
       };
 
+      const requestId = data.requestId;
+      const reason = data.reason;
+
       if (!res.ok) {
-        return { ok: false, error: (data as { error?: string }).error ?? `Ошибка ${res.status}` };
+        return { ok: false, error: (data as { error?: string }).error ?? `Ошибка ${res.status}`, requestId, reason: "http_error" };
       }
       if (data.error === "replace_failed") {
-        const reason = data.reasonIfAi ?? "ai_failed";
-        return { ok: false, error: reason === "no_recipe_in_response" ? "Не удалось подобрать рецепт" : "Не удалось заменить" };
+        const failReason = data.reasonIfAi ?? data.reason ?? "ai_failed";
+        return {
+          ok: false,
+          error: failReason === "no_recipe_in_response" ? "Не удалось подобрать рецепт" : "Не удалось заменить",
+          requestId,
+          reason: failReason,
+        };
       }
-      if (data.pickedSource && data.newRecipeId && data.title != null) {
+      const recipeId = data.newRecipeId ?? data.recipe_id;
+      if (data.pickedSource && recipeId && data.title != null) {
         setFreeSwapUsedForDay(params.dayKey);
         return {
           ok: true,
           pickedSource: data.pickedSource,
-          newRecipeId: data.newRecipeId,
+          newRecipeId: recipeId,
           title: data.title,
           plan_source: (data.plan_source === "pool" || data.plan_source === "ai" ? data.plan_source : data.pickedSource) ?? "pool",
+          requestId,
+          reason: reason ?? "ok",
         };
       }
-      return { ok: false, error: "unknown_response" };
+      return { ok: false, error: "unknown_response", requestId, reason: "unknown_response" };
     },
-    [user?.id, memberId, getFreeSwapUsedForDay, setFreeSwapUsedForDay]
+    [user?.id, memberId, hasAccess, getFreeSwapUsedForDay, setFreeSwapUsedForDay]
   );
 
   return {

@@ -10,6 +10,7 @@ import {
 } from '@/lib/supabase-constants';
 import { getCachedRecipe, setCachedRecipe, invalidateRecipeCache } from '@/utils/recipeCache';
 import { ensureStringArray } from '@/utils/typeUtils';
+import { normalizeRecipeMeta } from '@/utils/recipeMeta';
 import mockRecipes from '@/mocks/mockRecipes.json';
 
 type Recipe = Tables<'recipes'>;
@@ -228,7 +229,7 @@ export function useRecipes(childId?: string) {
           ? ingredients
           : [...ingredients, ...Array.from({ length: MIN_INGREDIENTS - ingredients.length }, (_, i) => ({ name: `Ингредиент ${ingredients.length + i + 1}`, order_index: ingredients.length + i }))];
 
-      const rpcPayload = {
+      const rpcPayload: Record<string, unknown> = {
         ...normalized,
         source,
         ...(normalized.chef_advice != null && normalized.chef_advice !== '' && { chef_advice: normalized.chef_advice }),
@@ -246,6 +247,16 @@ export function useRecipes(childId?: string) {
           category: (ing as Record<string, unknown>).category ?? 'other',
         })),
       };
+
+      if (source === 'chat_ai' || source === 'week_ai') {
+        const meta = normalizeRecipeMeta({
+          source,
+          mealType: (normalized as Record<string, unknown>).meal_type ?? null,
+          tags: (normalized as Record<string, unknown>).tags ?? null,
+        });
+        rpcPayload.meal_type = meta.meal_type;
+        rpcPayload.tags = meta.tags;
+      }
 
       const { data: recipeId, error: rpcError } = await supabase.rpc('create_recipe_with_steps', { payload: rpcPayload });
       if (rpcError) throw rpcError;
