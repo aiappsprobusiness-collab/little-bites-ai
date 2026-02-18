@@ -18,6 +18,7 @@ import { ingredientDisplayLabel, type IngredientItem } from "@/types/recipe";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
+import { HelpSectionCard, HelpWarningCard } from "@/components/help-ui";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
 
@@ -345,16 +346,18 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           exit={{ opacity: 0 }}
           className={`relative ${role === "user" ? "max-w-[75%]" : "max-w-[85%]"}`}
         >
-          <div
-            className={`relative ${role === "user"
-              ? "px-4 py-2.5 text-typo-muted bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
-              : role === "assistant" && effectiveRecipe
-                ? "rounded-bl-sm overflow-hidden px-3 pb-3 sm:px-4 bg-[#F7F8F3]"
-                : role === "assistant" && forcePlainText
-                  ? "consultationCard rounded-2xl rounded-bl-sm"
-                  : "px-4 py-4 sm:px-5 bg-[#F7F8F3] rounded-2xl rounded-bl-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
-              }`}
-          >
+          {(() => {
+            const isConsultationBubble = role === "assistant" && forcePlainText;
+            const Wrapper = isConsultationBubble ? HelpSectionCard : "div";
+            const wrapperClassName = isConsultationBubble
+              ? "rounded-bl-sm"
+              : role === "user"
+                ? "relative px-4 py-2.5 text-typo-muted bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
+                : role === "assistant" && effectiveRecipe
+                  ? "relative rounded-bl-sm overflow-hidden px-3 pb-3 sm:px-4 bg-[#F7F8F3]"
+                  : "relative px-4 py-4 sm:px-5 bg-[#F7F8F3] rounded-2xl rounded-bl-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]";
+            return (
+              <Wrapper className={wrapperClassName}>
             {role === "assistant" && showParseError ? (
               <p className="text-typo-muted text-muted-foreground">Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
             ) : role === "assistant" && effectiveRecipe ? (
@@ -512,12 +515,14 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     <>
                       <ReactMarkdown {...markdownProps}>{main}</ReactMarkdown>
                       {doctorPart != null && (
-                        <div className="consultationWarning">
-                          <AlertCircle className="w-4 h-4 shrink-0 text-primary mt-0.5" aria-hidden />
-                          <div className="min-w-0 flex-1 prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-typo-muted">
+                        <HelpWarningCard
+                          className="mt-3"
+                          icon={<AlertCircle className="w-4 h-4 text-primary shrink-0" aria-hidden />}
+                        >
+                          <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-typo-muted">
                             <ReactMarkdown {...markdownProps}>{doctorPart}</ReactMarkdown>
                           </div>
-                        </div>
+                        </HelpWarningCard>
                       )}
                       <p className="consultationDisclaimer">Это справочная информация.</p>
                     </>
@@ -621,7 +626,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 </button>
               </div>
             )}
-          </div>
+              </Wrapper>
+            );
+          })()}
         </motion.div>
 
         {/* Delete confirmation - bottom sheet style */}

@@ -1,12 +1,19 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Sparkles } from "lucide-react";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSosTopicConfig } from "@/data/sosTopics";
 import { cn } from "@/lib/utils";
 import { Paywall } from "@/components/subscription/Paywall";
+import {
+  HelpSectionCard,
+  HelpWarningCard,
+  HelpChipRow,
+  HelpPrimaryCTA,
+  HelpAccordion,
+} from "@/components/help-ui";
 
 export default function SosTopicPage() {
   const { topicId } = useParams<{ topicId: string }>();
@@ -41,9 +48,6 @@ export default function SosTopicPage() {
   const handleUpgrade = () => {
     setPaywallOpen(true);
   };
-
-  const cardClass =
-    "rounded-2xl border border-border bg-card p-4";
 
   return (
     <div className="min-h-dvh bg-background flex flex-col">
@@ -104,7 +108,7 @@ export default function SosTopicPage() {
         )}
 
         {locked && (
-          <div className={cardClass + " bg-muted/30 border-border"}>
+          <HelpSectionCard className="bg-muted/30">
             <p className="text-sm text-muted-foreground">
               Откройте персональные рекомендации и план действий по этой теме.
             </p>
@@ -116,22 +120,23 @@ export default function SosTopicPage() {
             >
               Оформить Premium
             </Button>
-          </div>
+          </HelpSectionCard>
         )}
 
         {showFullContent && (
           <>
-            <section className={cardClass}>
-              <h2 className="text-sm font-semibold text-foreground mb-2">Коротко</h2>
-              <div className="space-y-2 text-sm text-muted-foreground leading-relaxed">
+            <HelpSectionCard title="Коротко">
+              <div className="space-y-2 text-sm text-muted-foreground">
                 {(locked ? topic.intro.slice(0, 1) : topic.intro).map((p, i) => (
                   <p key={i}>{p}</p>
                 ))}
               </div>
-            </section>
+            </HelpSectionCard>
 
-            <section className={cardClass}>
-              <h2 className="text-sm font-semibold text-foreground mb-2">Что сделать сейчас</h2>
+            <HelpSectionCard
+              title="Что сделать сейчас"
+              icon={<CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
+            >
               <ul className="space-y-2">
                 {(locked ? topic.checklistNow.slice(0, 2) : topic.checklistNow).map((item, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -140,14 +145,10 @@ export default function SosTopicPage() {
                   </li>
                 ))}
               </ul>
-            </section>
+            </HelpSectionCard>
 
-            <section className={cn(cardClass, "border-primary/20 bg-primary/[0.06]")}>
-              <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-2">
-                <AlertTriangle className="w-4 h-4 text-primary shrink-0" strokeWidth={2} />
-                Когда к врачу
-              </h2>
-              <ul className="space-y-1.5 text-sm text-muted-foreground">
+            <HelpWarningCard title="Когда к врачу">
+              <ul className="space-y-1.5">
                 {topic.redFlags.map((f, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <span className="shrink-0">•</span>
@@ -155,69 +156,36 @@ export default function SosTopicPage() {
                   </li>
                 ))}
               </ul>
-            </section>
+            </HelpWarningCard>
 
             {!locked && topic.faq.length > 0 && (
-              <section className={cardClass}>
-                <h2 className="text-sm font-semibold text-foreground mb-2">Частые вопросы</h2>
-                <div className="space-y-0.5">
-                  {topic.faq.map((item, i) => (
-                    <div
-                      key={i}
-                      className="rounded-xl border border-border overflow-hidden"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setOpenFaqIndex(openFaqIndex === i ? null : i)}
-                        className="w-full flex items-center justify-between gap-2 py-2.5 px-3 text-left text-sm font-medium text-foreground hover:bg-muted/40"
-                      >
-                        <span className="flex-1 min-w-0">{item.q}</span>
-                        {openFaqIndex === i ? (
-                          <ChevronUp className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-                        )}
-                      </button>
-                      {openFaqIndex === i && (
-                        <div className="px-3 pb-2.5 text-sm text-muted-foreground leading-relaxed border-t border-border pt-2">
-                          {item.a}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </section>
+              <HelpSectionCard>
+                <HelpAccordion
+                  title="Частые вопросы"
+                  items={topic.faq}
+                  openIndex={openFaqIndex}
+                  onToggle={(i) => setOpenFaqIndex(openFaqIndex === i ? null : i)}
+                />
+              </HelpSectionCard>
             )}
 
-            <section className={cardClass}>
-              <h2 className="text-sm font-semibold text-foreground mb-1.5">Спросить помощника</h2>
+            <HelpSectionCard title="Спросить помощника">
               <p className="text-[12px] text-muted-foreground mb-3">
                 Задайте свой вопрос — откроется чат с помощником.
               </p>
-              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 scrollbar-none">
-                {topic.askChips.map((chip, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => handleAskAssistant(chip.prefill)}
-                    className="shrink-0 h-9 px-4 rounded-xl border border-border bg-card text-sm text-foreground hover:border-primary/40 hover:bg-primary/[0.06] active:scale-[0.98] transition-colors whitespace-nowrap"
-                  >
-                    {chip.label}
-                  </button>
-                ))}
-              </div>
-              <Button
-                className="w-full mt-3 h-10 rounded-2xl font-medium bg-primary text-primary-foreground hover:opacity-90 border-0"
-                onClick={() => handleAskAssistant()}
-              >
+              <HelpChipRow
+                items={topic.askChips.map((c) => ({ label: c.label, value: c.prefill }))}
+                onSelect={(value) => handleAskAssistant(value)}
+              />
+              <HelpPrimaryCTA className="mt-3" onClick={() => handleAskAssistant()}>
                 Спросить у помощника
-              </Button>
-            </section>
+              </HelpPrimaryCTA>
+            </HelpSectionCard>
           </>
         )}
 
         {!topic.requiresPremium && topic.premiumValue && topic.premiumValue.length > 0 && (
-          <section className={cn(cardClass, "bg-muted/20 border-primary/10")}>
+          <HelpSectionCard className="bg-muted/20 border-primary/10">
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <Sparkles className="w-4 h-4 text-primary shrink-0" />
               <span>Premium: персональный план</span>
@@ -238,7 +206,7 @@ export default function SosTopicPage() {
             >
               Подробнее про Premium
             </Button>
-          </section>
+          </HelpSectionCard>
         )}
       </main>
 

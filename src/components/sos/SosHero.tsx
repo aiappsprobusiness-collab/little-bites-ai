@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { LifeBuoy, MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { HelpSectionCard, HelpHeader, HelpPrimaryCTA } from "@/components/help-ui";
 
 export interface SosHeroProps {
   /** Имя ребёнка/члена семьи (для ссылки «Как сегодня себя чувствует …?») */
@@ -21,7 +21,7 @@ export function SosHero({
   const handleSecondary = () => onSecondaryQuestion?.();
 
   return (
-    <div className="rounded-2xl p-4 sm:p-5 w-full border border-border bg-card">
+    <HelpSectionCard>
       <div className="flex items-start gap-3">
         <div
           className="flex items-center justify-center shrink-0 w-9 h-9 rounded-full bg-primary/10 text-primary"
@@ -30,25 +30,13 @@ export function SosHero({
           <LifeBuoy className="w-5 h-5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-[18px] font-semibold text-foreground tracking-tight">
-              Помощник рядом
-            </h2>
-            {profileSelector != null && (
-              <div className="flex items-center shrink-0">{profileSelector}</div>
-            )}
-          </div>
-          <p className="text-[12px] sm:text-[13px] text-muted-foreground mt-1 leading-snug">
-            Отвечу про питание, реакции, режим и самочувствие ребёнка.
-          </p>
+          <HelpHeader
+            title="Помощник рядом"
+            subtitle="Отвечу про питание, реакции, режим и самочувствие ребёнка."
+            rightSlot={profileSelector}
+          />
           <div className="flex flex-col gap-2 mt-3">
-            <Button
-              size="default"
-              className="w-full sm:w-auto h-10 rounded-2xl font-medium bg-primary text-primary-foreground hover:opacity-90 border-0 shadow-[0_2px_12px_rgba(110,127,59,0.15)]"
-              onClick={handleAsk}
-            >
-              Задать вопрос
-            </Button>
+            <HelpPrimaryCTA onClick={handleAsk}>Задать вопрос</HelpPrimaryCTA>
             {memberName && (
               <button
                 type="button"
@@ -62,6 +50,6 @@ export function SosHero({
           </div>
         </div>
       </div>
-    </div>
+    </HelpSectionCard>
   );
 }
