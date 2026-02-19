@@ -501,6 +501,31 @@ export function getSosTopicsInOrder(): SosTopicConfig[] {
   return SOS_TOPIC_ORDER.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];
 }
 
+/** Категория темы для фильтра на главной Help. */
+export type HelpTopicCategory = "all" | "feeding" | "routine" | "allergy";
+
+const TOPIC_CATEGORY_MAP: Record<string, HelpTopicCategory> = {
+  new_food: "feeding",
+  allergy: "allergy",
+  constipation_diarrhea: "feeding",
+  spitting_up: "feeding",
+  food_refusal: "feeding",
+  routine: "routine",
+  food_diary: "routine",
+  urgent_help: "feeding",
+};
+
+export function getTopicCategory(topicId: string): HelpTopicCategory {
+  return TOPIC_CATEGORY_MAP[topicId] ?? "feeding";
+}
+
+export const HELP_CATEGORY_LABELS: Record<HelpTopicCategory, string> = {
+  all: "Все",
+  feeding: "Питание",
+  routine: "Режим",
+  allergy: "Аллергии",
+};
+
 export function getQuickHelpTopics(): SosTopicConfig[] {
   const byId = new Map(TOPICS.map((t) => [t.id, t]));
   return QUICK_HELP_TOPIC_IDS.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];

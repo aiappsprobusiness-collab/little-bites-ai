@@ -33,7 +33,7 @@ export function HelpWarningCard({
         {title != null && (
           <h2 className="text-sm font-semibold text-foreground mb-1.5">{title}</h2>
         )}
-        <div className="text-sm text-muted-foreground [&>*]:leading-relaxed">
+        <div className="text-sm text-foreground [&>*]:leading-[1.5]">
           {children}
         </div>
       </div>

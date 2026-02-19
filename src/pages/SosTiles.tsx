@@ -6,18 +6,19 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SosHero } from "@/components/sos/SosHero";
 import { ChevronDown } from "lucide-react";
-import { SosQuickChips } from "@/components/sos/SosQuickChips";
 import { SosTopicGrid } from "@/components/sos/SosTopicGrid";
 import { SosPaywallModal } from "@/components/sos/SosPaywallModal";
 import { Paywall } from "@/components/subscription/Paywall";
-import { HelpSectionCard } from "@/components/help-ui";
-import { Button } from "@/components/ui/button";
 import {
   getQuickHelpTopics,
   getRegimeTopics,
+  getTopicCategory,
+  HELP_CATEGORY_LABELS,
   type SosTopicConfig,
+  type HelpTopicCategory,
 } from "@/data/sosTopics";
 import { getTopicById } from "@/constants/sos";
+import { cn } from "@/lib/utils";
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -27,19 +28,27 @@ export default function SosTiles() {
 
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [sosPaywallOpen, setSosPaywallOpen] = useState(false);
+  const [topicFilter, setTopicFilter] = useState<HelpTopicCategory>("all");
 
   const memberName = selectedMember?.name ?? members[0]?.name ?? null;
 
-  const quickHelpTopics = useMemo(() => getQuickHelpTopics(), []);
-  const regimeTopics = useMemo(() => getRegimeTopics(), []);
+  const allTopics = useMemo(
+    () => [...getQuickHelpTopics(), ...getRegimeTopics()],
+    []
+  );
 
-  // Deep-link: /sos?scenario=key → /sos/key
+  const filteredTopics = useMemo(() => {
+    if (topicFilter === "all") return allTopics;
+    return allTopics.filter((t) => getTopicCategory(t.id) === topicFilter);
+  }, [allTopics, topicFilter]);
+
+  // Deep-link: /sos?scenario=key → /sos/topic/key
   useEffect(() => {
     const key = searchParams.get("scenario");
     if (!key) return;
     const topic = getTopicById(key);
     if (topic) {
-      navigate(`/sos/${key}`, { replace: true });
+      navigate(`/sos/topic/${key}`, { replace: true });
     }
   }, [searchParams, navigate]);
 
@@ -62,19 +71,11 @@ export default function SosTiles() {
     navigate(`/chat?mode=help&prefill=${encodeURIComponent(text)}`);
   };
 
-  const handleQuickChip = (prefillText: string) => {
-    navigate(`/chat?mode=help&prefill=${encodeURIComponent(prefillText)}`);
-  };
-
   const handleTopicSelect = (topic: SosTopicConfig) => {
     navigate(`/sos/topic/${topic.id}`);
   };
 
   const handleLockedTopic = () => {
-    setPaywallOpen(true);
-  };
-
-  const openPremiumPaywall = () => {
     setPaywallOpen(true);
   };
 
@@ -109,46 +110,37 @@ export default function SosTiles() {
           }
         />
 
-        <div className="mt-6 space-y-6">
-          <section>
-            <h3 className="text-sm font-semibold text-foreground mb-2">Быстрые вопросы</h3>
-            <SosQuickChips onSelect={handleQuickChip} />
+        <div className="mt-8">
+          <section className="space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Темы</h2>
+              <p className="text-[12px] text-muted-foreground mt-0.5">Выберите ситуацию</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["all", "feeding", "routine", "allergy"] as HelpTopicCategory[]).map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setTopicFilter(cat)}
+                  className={cn(
+                    "text-[13px] font-medium px-3 py-1.5 rounded-full border transition-colors",
+                    topicFilter === cat
+                      ? "bg-primary/10 border-primary/30 text-foreground"
+                      : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-primary/20"
+                  )}
+                >
+                  {HELP_CATEGORY_LABELS[cat]}
+                </button>
+              ))}
+            </div>
           </section>
-
           <SosTopicGrid
-            title="Быстрая помощь"
-            topics={quickHelpTopics}
-            hasAccess={true}
+            className="mt-4"
+            topics={filteredTopics}
+            hasAccess={hasAccess}
             onSelect={handleTopicSelect}
             onLockedSelect={handleLockedTopic}
           />
-
-          {hasAccess ? (
-            <SosTopicGrid
-              title="Режим и развитие"
-              topics={regimeTopics}
-              hasAccess={true}
-              onSelect={handleTopicSelect}
-              onLockedSelect={handleLockedTopic}
-            />
-          ) : (
-            <HelpSectionCard
-              title="Режим и развитие"
-              className="border-primary/20 bg-primary/[0.06]"
-            >
-              <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
-                Системный разбор питания, график кормлений и наблюдение за состоянием ребёнка.
-              </p>
-              <Button
-                variant="default"
-                size="sm"
-                className="rounded-xl"
-                onClick={openPremiumPaywall}
-              >
-                Открыть Premium
-              </Button>
-            </HelpSectionCard>
-          )}
         </div>
       </div>
 

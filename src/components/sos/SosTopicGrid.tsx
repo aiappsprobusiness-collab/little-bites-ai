@@ -3,68 +3,61 @@ import type { SosTopicConfig } from "@/data/sosTopics";
 import { cn } from "@/lib/utils";
 
 export interface SosTopicGridProps {
-  /** Заголовок секции (например «Быстрая помощь», «Режим и развитие») */
-  title: string;
   topics: SosTopicConfig[];
-  /** Если false, все карточки считаются доступными (блок для Free). */
   hasAccess: boolean;
   onSelect: (topic: SosTopicConfig) => void;
   onLockedSelect: () => void;
+  className?: string;
 }
 
-const CARD_MIN_HEIGHT = 112;
-
 export function SosTopicGrid({
-  title,
   topics,
   hasAccess,
   onSelect,
   onLockedSelect,
+  className,
 }: SosTopicGridProps) {
   return (
-    <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-      <div className="grid grid-cols-2 gap-3">
-        {topics.map((topic) => {
-          const Icon = topic.icon;
-          const locked = topic.requiredTier === "paid" && !hasAccess;
-          return (
-            <motion.button
-              key={topic.id}
-              type="button"
-              whileTap={{ scale: 0.98 }}
-              onClick={() => (locked ? onLockedSelect() : onSelect(topic))}
-              className={cn(
-                "relative rounded-2xl p-4 text-left border border-border bg-card",
-                "hover:bg-muted/40 active:bg-muted/60 transition-colors",
-                "flex flex-col gap-2"
-              )}
-              style={{ minHeight: CARD_MIN_HEIGHT }}
-            >
-              {locked && (
-                <span className="absolute top-2 right-2 text-[10px] font-medium text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded">
-                  Premium
-                </span>
-              )}
-              <span className="flex items-center justify-center w-9 h-9 rounded-full bg-primary/[0.06] shrink-0 self-start">
-                <Icon className="w-4 h-4 text-primary/80" />
+    <div className={cn("grid grid-cols-2 gap-4 items-stretch", className)}>
+      {topics.map((topic) => {
+        const Icon = topic.icon;
+        const locked = topic.requiredTier === "paid" && !hasAccess;
+        return (
+          <motion.button
+            key={topic.id}
+            type="button"
+            whileTap={{ scale: 0.98 }}
+            onClick={() => (locked ? onLockedSelect() : onSelect(topic))}
+            className={cn(
+              "relative rounded-2xl p-5 text-left border bg-card",
+              "flex flex-col gap-3 min-w-0",
+              "border-border hover:bg-muted/20",
+              "active:bg-primary/[0.03] active:border-primary/20",
+              "transition-colors"
+            )}
+          >
+            {locked && (
+              <span className="absolute top-2.5 right-2.5 text-[10px] font-medium text-amber-700 bg-amber-100/90 px-1.5 py-0.5 rounded">
+                Premium
               </span>
-              <span className="text-[15px] font-semibold text-foreground leading-snug line-clamp-2 pr-12">
-                {topic.title}
-              </span>
-              {topic.bullets.length > 0 && (
-                <ul className="text-[12px] text-muted-foreground space-y-0.5 list-disc list-inside leading-normal">
-                  {topic.bullets.slice(0, 3).map((b, i) => (
-                    <li key={i} className="line-clamp-1">
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </motion.button>
-          );
-        })}
-      </div>
-    </section>
+            )}
+            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/[0.06] shrink-0 self-start">
+              <Icon className="w-5 h-5 text-primary/80" />
+            </span>
+            <span className="text-[15px] font-semibold text-foreground leading-snug line-clamp-2 pr-8">
+              {topic.title}
+            </span>
+            <span className="text-[13px] text-muted-foreground leading-snug line-clamp-2 mt-auto">
+              {topic.shortSubtitle}
+            </span>
+            <span className="absolute bottom-3 right-3 text-muted-foreground/50" aria-hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </span>
+          </motion.button>
+        );
+      })}
+    </div>
   );
 }

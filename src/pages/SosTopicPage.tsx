@@ -1,17 +1,27 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CheckCircle2, Sparkles } from "lucide-react";
+import { ArrowLeft, Circle } from "lucide-react";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSosTopicConfig } from "@/data/sosTopics";
-import { cn } from "@/lib/utils";
 import { Paywall } from "@/components/subscription/Paywall";
-import {
-  HelpChipRow,
-  HelpPrimaryCTA,
-  HelpAccordion,
-} from "@/components/help-ui";
+import { HelpPrimaryCTA, HelpWarningCard } from "@/components/help-ui";
+
+/** Обрезает текст до конца последнего предложения в пределах maxChars (~4–5 строк). */
+function trimToSentenceEnd(text: string, maxChars: number = 320): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  const slice = trimmed.slice(0, maxChars);
+  const lastEnd = Math.max(
+    slice.lastIndexOf(". "),
+    slice.lastIndexOf("? "),
+    slice.lastIndexOf("! ")
+  );
+  if (lastEnd > maxChars * 0.4) return slice.slice(0, lastEnd + 1).trim();
+  const lastSpace = slice.lastIndexOf(" ");
+  return (lastSpace > 0 ? slice.slice(0, lastSpace) : slice).trim();
+}
 
 export default function SosTopicPage() {
   const { topicId } = useParams<{ topicId: string }>();
@@ -19,7 +29,6 @@ export default function SosTopicPage() {
   const { selectedMember, members, formatAge } = useFamily();
   const { hasAccess } = useSubscription();
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   const topic = topicId ? getSosTopicConfig(topicId) : null;
 
@@ -30,22 +39,33 @@ export default function SosTopicPage() {
     memberName && ageLabel ? `Для ${memberName} · ${ageLabel}` : memberName ? `Для ${memberName}` : null;
 
   const locked = topic?.requiresPremium && !hasAccess;
-  const showFreePart = true;
-  const showFullContent = !locked || showFreePart;
 
   if (!topicId || !topic) {
     navigate("/sos", { replace: true });
     return null;
   }
 
-  const handleAskAssistant = (prefill?: string) => {
-    const text = prefill || topic.title;
-    navigate(`/chat?mode=help&prefill=${encodeURIComponent(text)}`);
+  const handlePersonalAnalysis = () => {
+    if (locked) {
+      setPaywallOpen(true);
+      return;
+    }
+    const prefill = topic.prefillText || topic.title;
+    navigate(`/chat?mode=help&prefill=${encodeURIComponent(prefill)}`);
   };
 
-  const handleUpgrade = () => {
-    setPaywallOpen(true);
+  const handleAskOwnQuestion = () => {
+    if (locked) {
+      setPaywallOpen(true);
+      return;
+    }
+    navigate("/chat?mode=help");
   };
+
+  const fullSummary = topic.intro.slice(0, 2).join(" ");
+  const summaryText = trimToSentenceEnd(fullSummary);
+  const causesList = topic.bullets.slice(0, 3);
+  const causesExtra = topic.bullets.length - causesList.length;
 
   return (
     <div className="min-h-dvh bg-background flex flex-col">
@@ -68,168 +88,67 @@ export default function SosTopicPage() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8">
-        {topic.requiresPremium && (
-          <div className={cn(
-            "rounded-2xl border p-4 mb-6",
-            "bg-primary/[0.06] border-primary/20"
-          )}>
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Sparkles className="w-4 h-4 text-primary shrink-0" />
-              <span>
-                {hasAccess ? "Персональные рекомендации" : "Premium: персональные рекомендации"}
-              </span>
-            </div>
-            {topic.premiumValue && topic.premiumValue.length > 0 && (
-              <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                {topic.premiumValue.map((v, i) => (
+      <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-6 pb-10">
+        <article className="space-y-8">
+          {/* A) Короткое резюме (до конца предложения, 4–5 строк) */}
+          <p className="text-sm text-foreground leading-relaxed">
+            {summaryText}
+          </p>
+
+          {/* B) Возможные причины — 3 пункта, мягкий маркер, «и ещё X» */}
+          {causesList.length > 0 && (
+            <section>
+              <h2 className="text-sm font-semibold text-foreground mb-2">Возможные причины</h2>
+              <ul className="text-sm text-muted-foreground space-y-1.5 leading-[1.5]">
+                {causesList.map((b, i) => (
                   <li key={i} className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span>{v}</span>
+                    <Circle className="w-1.5 h-1.5 shrink-0 mt-2 fill-primary/70 text-primary/70" aria-hidden />
+                    <span>{b}</span>
                   </li>
                 ))}
-              </ul>
-            )}
-            {!hasAccess && (
-              <Button
-                variant="default"
-                size="sm"
-                className="mt-3 rounded-xl"
-                onClick={handleUpgrade}
-              >
-                Оформить Premium
-              </Button>
-            )}
-          </div>
-        )}
-
-        {locked && (
-          <div className="mb-6 rounded-2xl border border-border bg-muted/30 p-4">
-            <p className="text-sm text-muted-foreground leading-[1.65]">
-              Откройте персональные рекомендации и план действий по этой теме.
-            </p>
-            <Button
-              variant="default"
-              size="sm"
-              className="mt-3 rounded-xl"
-              onClick={handleUpgrade}
-            >
-              Оформить Premium
-            </Button>
-          </div>
-        )}
-
-        {showFullContent && (
-          <article className="space-y-6" style={{ lineHeight: 1.65 }}>
-            {/* Короткий лид (1–2 строки) */}
-            <p className="text-sm text-foreground leading-[1.65]">
-              {(locked ? topic.intro.slice(0, 1) : topic.intro).slice(0, 2).join(" ")}
-            </p>
-
-            {/* Что это может быть */}
-            <section>
-              <h2 className="text-sm font-semibold text-foreground mb-2">Что это может быть</h2>
-              {topic.intro.length > 2 && !locked ? (
-                <div className="text-sm text-muted-foreground space-y-2 leading-[1.65]">
-                  {topic.intro.slice(2).map((p, i) => (
-                    <p key={i}>{p}</p>
-                  ))}
-                </div>
-              ) : topic.bullets.length > 0 ? (
-                <ul className="text-sm text-muted-foreground space-y-1.5 leading-[1.65] list-disc list-inside">
-                  {topic.bullets.map((b, i) => (
-                    <li key={i}>{b}</li>
-                  ))}
-                </ul>
-              ) : null}
-            </section>
-
-            {/* Что делать сейчас */}
-            <section>
-              <h2 className="text-sm font-semibold text-foreground mb-2">Что делать сейчас</h2>
-              <ul className="text-sm text-muted-foreground space-y-2 leading-[1.65]">
-                {(locked ? topic.checklistNow.slice(0, 2) : topic.checklistNow).map((item, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" aria-hidden />
-                    <span>{item}</span>
+                {causesExtra > 0 && (
+                  <li className="text-muted-foreground/80 text-[12px] pl-3.5">
+                    и ещё {causesExtra}{" "}
+                    {causesExtra === 1 ? "причина" : causesExtra >= 2 && causesExtra <= 4 ? "причины" : "причин"}
                   </li>
+                )}
+              </ul>
+            </section>
+          )}
+
+          {/* C) Когда к врачу — HelpWarningCard */}
+          {topic.redFlags.length > 0 && (
+            <HelpWarningCard title="Когда к врачу">
+              <ul className="space-y-1 text-sm">
+                {topic.redFlags.map((f, i) => (
+                  <li key={i}>{f}</li>
                 ))}
               </ul>
-            </section>
+            </HelpWarningCard>
+          )}
 
-            {/* Когда обращаться к врачу — блок с olive 5%, иконка ⚠️ */}
-            <section>
-              <h2 className="text-sm font-semibold text-foreground mb-2">Когда обращаться к врачу</h2>
-              <div className="rounded-2xl bg-primary/[0.05] border border-primary/20 p-4 sm:p-5 flex gap-3">
-                <span className="text-lg shrink-0 leading-none" aria-hidden>⚠️</span>
-                <ul className="text-sm text-muted-foreground space-y-1.5 leading-[1.65] min-w-0">
-                  {topic.redFlags.map((f, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <span className="shrink-0">•</span>
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-
-            {!locked && topic.faq.length > 0 && (
-              <section>
-                <HelpAccordion
-                  title="Частые вопросы"
-                  items={topic.faq}
-                  openIndex={openFaqIndex}
-                  onToggle={(i) => setOpenFaqIndex(openFaqIndex === i ? null : i)}
-                />
-              </section>
-            )}
-
-            {/* Спросить помощника */}
-            <section>
-              <h2 className="text-sm font-semibold text-foreground mb-1.5">Спросить помощника</h2>
-              <p className="text-[12px] text-muted-foreground mb-3 leading-[1.65]">
-                Задайте свой вопрос — откроется чат с помощником.
-              </p>
-              <HelpChipRow
-                items={topic.askChips.map((c) => ({ label: c.label, value: c.prefill }))}
-                onSelect={(value) => handleAskAssistant(value)}
-              />
-              <HelpPrimaryCTA className="mt-3" onClick={() => handleAskAssistant()}>
-                Спросить у помощника
-              </HelpPrimaryCTA>
-            </section>
-
-            {/* Один дисклеймер */}
-            <p className="text-[12px] text-muted-foreground mt-8 leading-[1.65]">
-              Это справочная информация. Не заменяет консультацию врача.
-            </p>
-          </article>
-        )}
-
-        {!topic.requiresPremium && topic.premiumValue && topic.premiumValue.length > 0 && (
-          <div className="mt-6 rounded-2xl border border-primary/10 bg-muted/20 p-4">
-            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Sparkles className="w-4 h-4 text-primary shrink-0" />
-              <span>Premium: персональный план</span>
-            </div>
-            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-              {topic.premiumValue.slice(0, 2).map((v, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span>{v}</span>
-                </li>
-              ))}
-            </ul>
+          {/* D) CTA: primary + secondary */}
+          <section className="flex flex-col gap-3 pt-2">
+            <HelpPrimaryCTA onClick={handlePersonalAnalysis}>
+              {memberName
+                ? `Получить персональный разбор для ${memberName}`
+                : "Получить персональный разбор"}
+            </HelpPrimaryCTA>
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="mt-3 rounded-xl"
-              onClick={handleUpgrade}
+              className="w-full h-10 text-sm font-medium text-muted-foreground hover:text-foreground border border-border rounded-2xl"
+              onClick={handleAskOwnQuestion}
             >
-              Подробнее про Premium
+              Задать свой вопрос
             </Button>
-          </div>
-        )}
+          </section>
+
+          {/* Дисклеймер — минимальный, без плашки */}
+          <p className="text-[11px] text-muted-foreground/80 pt-4">
+            Справочная информация.
+          </p>
+        </article>
       </main>
 
       <Paywall
