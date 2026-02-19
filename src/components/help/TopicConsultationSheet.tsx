@@ -57,6 +57,7 @@ export function TopicConsultationSheet({
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastAssistantMessageRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const loadSession = useCallback(() => {
@@ -69,7 +70,7 @@ export function TopicConsultationSheet({
     if (isOpen) {
       loadSession();
       setInput("");
-      setTimeout(() => inputRef.current?.focus(), 200);
+      // Не фокусируем input при открытии — клавиатура не выезжает, чипсы видны
     }
   }, [isOpen, loadSession]);
 
@@ -77,9 +78,16 @@ export function TopicConsultationSheet({
     if (isOpen && memberId && topicKey) loadSession();
   }, [memberId, topicKey, isOpen, loadSession]);
 
+  // После появления нового ответа ассистента — скролл к началу этого сообщения (не в самый низ)
+  const lastMessage = messages[messages.length - 1];
+  const lastIsAssistantWithContent =
+    lastMessage?.role === "assistant" && lastMessage.content.length > 0;
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (lastIsAssistantWithContent && !isSending) {
+      lastAssistantMessageRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  }, [lastIsAssistantWithContent, isSending]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -277,22 +285,28 @@ export function TopicConsultationSheet({
               {/* Messages */}
               <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 min-h-0">
                 <div className="space-y-3 pb-4">
-                  {messages.map((m) => (
-                    <div
-                      key={m.id}
-                      className={cn(
-                        "flex",
-                        m.role === "user" ? "justify-end" : "justify-start"
-                      )}
-                    >
+                  {messages.map((m, index) => {
+                    const isLastAssistant =
+                      m.role === "assistant" &&
+                      index === messages.length - 1 &&
+                      m.content.length > 0;
+                    return (
                       <div
+                        key={m.id}
+                        ref={isLastAssistant ? lastAssistantMessageRef : undefined}
                         className={cn(
-                          "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-[1.6]",
-                          m.role === "user"
-                            ? "bg-primary text-primary-foreground rounded-br-md"
-                            : "bg-muted/50 text-foreground rounded-bl-md"
+                          "flex",
+                          m.role === "user" ? "justify-end" : "justify-start"
                         )}
                       >
+                        <div
+                          className={cn(
+                            "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-[1.6]",
+                            m.role === "user"
+                              ? "bg-primary text-primary-foreground rounded-br-md"
+                              : "bg-muted/50 text-foreground rounded-bl-md"
+                          )}
+                        >
                         {m.role === "user" ? (
                           <p className="break-words whitespace-pre-wrap">{m.content}</p>
                         ) : (
@@ -302,9 +316,10 @@ export function TopicConsultationSheet({
                             </ReactMarkdown>
                           </div>
                         )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   {isSending && (
                     <div className="flex justify-start">
                       <div className="rounded-2xl rounded-bl-md px-4 py-2.5 bg-muted/50 flex items-center gap-2 text-muted-foreground">
@@ -317,7 +332,7 @@ export function TopicConsultationSheet({
                 </div>
               </div>
 
-              {/* Composer — Send 48–52px, radius 16–18 */}
+              {/* Composer Help: input на всю ширину, до 2 строк; компактная кнопка Send */}
               <form
                 onSubmit={handleSubmit}
                 className="shrink-0 p-4 pt-2 border-t border-border bg-background"
@@ -328,8 +343,8 @@ export function TopicConsultationSheet({
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Напишите вопрос…"
-                    rows={1}
-                    className="min-h-[48px] max-h-[120px] resize-none rounded-xl"
+                    rows={2}
+                    className="flex-1 min-w-0 min-h-[48px] max-h-[4.5rem] resize-none rounded-xl"
                     disabled={isSending}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -341,7 +356,7 @@ export function TopicConsultationSheet({
                   <Button
                     type="submit"
                     size="icon"
-                    className="h-[52px] w-12 shrink-0 rounded-[18px] bg-primary text-primary-foreground"
+                    className="h-11 w-11 shrink-0 rounded-xl bg-primary text-primary-foreground"
                     disabled={!input.trim() || isSending}
                   >
                     {isSending ? (
