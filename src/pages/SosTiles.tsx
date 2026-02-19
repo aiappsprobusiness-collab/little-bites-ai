@@ -1,24 +1,33 @@
 import { useEffect, useLayoutEffect, useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SosHero } from "@/components/sos/SosHero";
-import { ChevronDown } from "lucide-react";
 import { SosTopicGrid } from "@/components/sos/SosTopicGrid";
-import { SosPaywallModal } from "@/components/sos/SosPaywallModal";
 import { Paywall } from "@/components/subscription/Paywall";
+import { TopicConsultationSheet } from "@/components/help/TopicConsultationSheet";
 import {
   getQuickHelpTopics,
   getRegimeTopics,
   getTopicCategory,
+  getSosTopicConfig,
   HELP_CATEGORY_LABELS,
   type SosTopicConfig,
   type HelpTopicCategory,
 } from "@/data/sosTopics";
 import { getTopicById } from "@/constants/sos";
 import { cn } from "@/lib/utils";
+
+/** 4–6 чипсов на тему: chipExamples + askChips (label), без дубликатов. */
+function getQuickChipsForTopic(topic: SosTopicConfig): string[] {
+  const labels = new Set<string>(topic.chipExamples);
+  for (const c of topic.askChips) {
+    if (labels.size >= 6) break;
+    labels.add(c.label);
+  }
+  return Array.from(labels).slice(0, 6);
+}
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -27,10 +36,15 @@ export default function SosTiles() {
   const { hasAccess } = useSubscription();
 
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [sosPaywallOpen, setSosPaywallOpen] = useState(false);
   const [topicFilter, setTopicFilter] = useState<HelpTopicCategory>("all");
-
-  const memberName = selectedMember?.name ?? members[0]?.name ?? null;
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetTopic, setSheetTopic] = useState<{
+    key: string;
+    title: string;
+    quickChips: string[];
+    isLocked: boolean;
+    lockedDescription?: string;
+  } | null>(null);
 
   const allTopics = useMemo(
     () => [...getQuickHelpTopics(), ...getRegimeTopics()],
@@ -42,41 +56,68 @@ export default function SosTiles() {
     return allTopics.filter((t) => getTopicCategory(t.id) === topicFilter);
   }, [allTopics, topicFilter]);
 
-  // Deep-link: /sos?scenario=key → /sos/topic/key
+  // Блокировка скролла фона при открытом sheet (мобильная)
+  useEffect(() => {
+    if (sheetOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [sheetOpen]);
+
+  // Deep-link: /sos?scenario=key → открыть sheet по теме и убрать param
   useEffect(() => {
     const key = searchParams.get("scenario");
     if (!key) return;
-    const topic = getTopicById(key);
-    if (topic) {
-      navigate(`/sos/topic/${key}`, { replace: true });
+    const topicConfig = getSosTopicConfig(key);
+    const topicMeta = getTopicById(key);
+    if (topicConfig) {
+      setSheetTopic({
+        key: topicConfig.id,
+        title: topicConfig.title,
+        quickChips: getQuickChipsForTopic(topicConfig),
+        isLocked: topicConfig.requiredTier === "paid" && !hasAccess,
+        lockedDescription: topicConfig.intro?.[0] ?? topicConfig.shortSubtitle,
+      });
+      setSheetOpen(true);
+      navigate("/sos", { replace: true });
+    } else if (topicMeta) {
+      setSheetTopic({
+        key: topicMeta.id,
+        title: topicMeta.label,
+        quickChips: [],
+        isLocked: false,
+      });
+      setSheetOpen(true);
+      navigate("/sos", { replace: true });
     }
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, hasAccess]);
 
   useLayoutEffect(() => {
     const main = document.querySelector("main.main-scroll-contain");
     main?.scrollTo(0, 0);
   }, []);
 
-  const openPaywall = () => {
-    setSosPaywallOpen(true);
-  };
-
-  const handleAskQuestion = () => {
-    navigate("/chat?mode=help");
-  };
-
-  const handleSecondaryQuestion = () => {
-    if (!memberName) return;
-    const text = `Как сегодня себя чувствует ${memberName}?`;
-    navigate(`/chat?mode=help&prefill=${encodeURIComponent(text)}`);
-  };
-
   const handleTopicSelect = (topic: SosTopicConfig) => {
-    navigate(`/sos/topic/${topic.id}`);
+    const locked = topic.requiredTier === "paid" && !hasAccess;
+    setSheetTopic({
+      key: topic.id,
+      title: topic.title,
+      quickChips: getQuickChipsForTopic(topic),
+      isLocked: locked,
+      lockedDescription: locked ? (topic.intro?.[0] ?? topic.shortSubtitle) : undefined,
+    });
+    setSheetOpen(true);
   };
 
   const handleLockedTopic = () => {
     setPaywallOpen(true);
+  };
+
+  const handleCloseSheet = () => {
+    setSheetOpen(false);
   };
 
   return (
@@ -84,31 +125,10 @@ export default function SosTiles() {
       <div className="px-4 pb-6 pt-2 bg-background min-h-full">
         {members.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-3 mb-2">
-            Добавьте ребёнка в профиле, чтобы получать персональные рекомендации.
+            Добавьте ребёнка в профиле, чтобы получать рекомендации по темам.
           </p>
         )}
-        <SosHero
-          memberName={memberName}
-          onAskQuestion={handleAskQuestion}
-          onSecondaryQuestion={memberName ? handleSecondaryQuestion : undefined}
-          profileSelector={
-            members.length > 0 ? (
-              <MemberSelectorButton
-                className="!min-h-7 h-7 !py-1 !px-2.5 !rounded-full text-[12px] font-medium !max-w-[120px] border border-primary-border bg-primary/[0.06] text-foreground hover:bg-primary/[0.1]"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => navigate("/profile")}
-                className="flex items-center gap-1.5 h-7 min-h-7 py-1 px-2.5 rounded-full text-[12px] font-medium border border-primary-border bg-primary/[0.06] text-foreground hover:bg-primary/[0.1] transition-colors"
-                aria-label="Выбрать профиль"
-              >
-                <span>Выбрать</span>
-                <ChevronDown className="w-3 h-3 shrink-0 opacity-80" aria-hidden />
-              </button>
-            )
-          }
-        />
+        <SosHero />
 
         <div className="mt-8">
           <section className="space-y-3">
@@ -144,11 +164,19 @@ export default function SosTiles() {
         </div>
       </div>
 
-      <SosPaywallModal
-        open={sosPaywallOpen}
-        onOpenChange={setSosPaywallOpen}
-        onTryPremium={() => setPaywallOpen(true)}
-      />
+      {sheetTopic && (
+        <TopicConsultationSheet
+          isOpen={sheetOpen}
+          onClose={handleCloseSheet}
+          topicKey={sheetTopic.key}
+          topicTitle={sheetTopic.title}
+          quickChips={sheetTopic.quickChips}
+          isLocked={sheetTopic.isLocked}
+          lockedDescription={sheetTopic.lockedDescription}
+          onOpenPremium={sheetTopic.isLocked ? handleLockedTopic : undefined}
+        />
+      )}
+
       <Paywall
         isOpen={paywallOpen}
         onClose={() => setPaywallOpen(false)}

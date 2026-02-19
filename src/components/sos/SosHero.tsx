@@ -1,25 +1,6 @@
-import { ReactNode } from "react";
-import { LifeBuoy, MessageCircle } from "lucide-react";
-import { HelpHeader, HelpPrimaryCTA } from "@/components/help-ui";
+import { LifeBuoy } from "lucide-react";
 
-export interface SosHeroProps {
-  /** Имя ребёнка/члена семьи (для ссылки «Как сегодня себя чувствует …?») */
-  memberName?: string | null;
-  onAskQuestion: () => void;
-  onSecondaryQuestion?: () => void;
-  /** Pill-кнопка выбора профиля (рядом с заголовком). Один селектор на экране. */
-  profileSelector?: ReactNode;
-}
-
-export function SosHero({
-  memberName,
-  onAskQuestion,
-  onSecondaryQuestion,
-  profileSelector,
-}: SosHeroProps) {
-  const handleAsk = () => onAskQuestion();
-  const handleSecondary = () => onSecondaryQuestion?.();
-
+export function SosHero() {
   return (
     <div className="rounded-2xl bg-primary/[0.03] px-5 py-5">
       <div className="flex items-start gap-4">
@@ -29,25 +10,13 @@ export function SosHero({
         >
           <LifeBuoy className="w-5 h-5" />
         </div>
-        <div className="min-w-0 flex-1 space-y-4">
-          <HelpHeader
-            title="Помощник рядом"
-            subtitle="Отвечу про питание, реакции, режим и самочувствие ребёнка."
-            rightSlot={profileSelector}
-          />
-          <div className="flex flex-col gap-3">
-            <HelpPrimaryCTA onClick={handleAsk}>Задать вопрос</HelpPrimaryCTA>
-            {memberName && (
-              <button
-                type="button"
-                onClick={handleSecondary}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground text-left w-fit py-2 px-0 rounded-md border-0 bg-transparent hover:bg-primary/[0.06] transition-colors no-underline"
-              >
-                <MessageCircle className="w-4 h-4 shrink-0 opacity-70" aria-hidden />
-                Как сегодня себя чувствует {memberName}?
-              </button>
-            )}
-          </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[18px] font-semibold text-foreground tracking-tight">
+            Помощник рядом
+          </h2>
+          <p className="text-[13px] text-muted-foreground mt-1 leading-snug">
+            Выберите ситуацию и получите рекомендации
+          </p>
         </div>
       </div>
     </div>
