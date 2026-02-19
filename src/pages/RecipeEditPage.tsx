@@ -73,7 +73,7 @@ export default function RecipeEditPage() {
       setMinAge(existingRecipe.min_age_months?.toString() || "");
       setMaxAge(existingRecipe.max_age_months?.toString() || "");
       setImageUrl(existingRecipe.image_url || "");
-      setMemberId(existingRecipe.child_id || "none");
+      setMemberId(existingRecipe.member_id || existingRecipe.child_id || "none");
 
       const existingIngredients = (existingRecipe as any).ingredients || [];
       setIngredients(
@@ -149,7 +149,7 @@ export default function RecipeEditPage() {
         min_age_months: parseOptionalInt(minAge),
         max_age_months: parseOptionalInt(maxAge),
         image_url: imageUrl.trim() || null,
-        child_id: rawMemberId,
+        member_id: rawMemberId,
       };
 
       const ingredientsData = ingredients

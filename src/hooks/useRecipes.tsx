@@ -334,6 +334,7 @@ export function useRecipes(childId?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['favorites', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['recipe_previews'] });
     },
   });
 
