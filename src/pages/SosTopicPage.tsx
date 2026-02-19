@@ -1,5 +1,5 @@
-import { useParams, useNavigate, useLayoutEffect } from "react-router-dom";
-import { getSosTopicConfig } from "@/data/sosTopics";
+import { useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 
 /**
  * Прямые ссылки /sos/topic/:topicId перенаправляют на /sos?scenario=topicId,
@@ -8,9 +8,8 @@ import { getSosTopicConfig } from "@/data/sosTopics";
 export default function SosTopicPage() {
   const { topicId } = useParams<{ topicId: string }>();
   const navigate = useNavigate();
-  const topic = topicId ? getSosTopicConfig(topicId) : null;
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!topicId) {
       navigate("/sos", { replace: true });
       return;
