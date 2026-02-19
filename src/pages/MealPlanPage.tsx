@@ -22,6 +22,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
+import { normalizeTitleKey } from "@/utils/recipePool";
 import { Check, Trash2, MoreVertical, Info } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -269,6 +270,9 @@ export default function MealPlanPage() {
   const [clearSheetOpen, setClearSheetOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [clearConfirm, setClearConfirm] = useState<"day" | "week" | null>(null);
+  /** Session-level excludes per day for replace_slot: после каждой замены добавляем recipe_id и titleKey, чтобы не крутить одни и те же рецепты. */
+  const [sessionExcludeRecipeIds, setSessionExcludeRecipeIds] = useState<Record<string, string[]>>({});
+  const [sessionExcludeTitleKeys, setSessionExcludeTitleKeys] = useState<Record<string, string[]>>({});
   /** Локальная коррекция week-индикаторов до завершения refetch после очистки дня/недели. dayKey -> true = считать день пустым. */
   const [pendingClears, setPendingClears] = useState<Record<string, true>>({});
   /** Один раз за сессию: glow у CTA "Подобрать рецепты" при первом заходе на вкладку */
@@ -443,7 +447,7 @@ export default function MealPlanPage() {
     [dayKeys, hasMealsByDayIndex]
   );
 
-  /** Мемоизированные exclude для replace_slot, чтобы не пересчитывать на каждый рендер. */
+  /** Мемоизированные exclude для replace_slot (неделя + последние дни). Нормализованные titleKey для консистентности с Edge. */
   const replaceExcludeRecipeIds = useMemo(() => {
     const t0 = isPerf() ? performance.now() : 0;
     const out = [...new Set(weekPlans.map((p) => p.recipe_id).filter(Boolean))] as string[];
@@ -454,8 +458,17 @@ export default function MealPlanPage() {
     return out;
   }, [weekPlans]);
   const replaceExcludeTitleKeys = useMemo(
-    () => [...new Set(weekPlans.map((p) => p.recipe?.title).filter(Boolean))] as string[],
+    () => [...new Set(weekPlans.map((p) => normalizeTitleKey((p.recipe?.title ?? "") || "")).filter(Boolean))],
     [weekPlans]
+  );
+  /** Итоговые exclude для replace_slot: неделя + session по выбранному дню. */
+  const replaceExcludeRecipeIdsMerged = useMemo(
+    () => [...new Set([...replaceExcludeRecipeIds, ...(sessionExcludeRecipeIds[selectedDayKey] ?? [])])],
+    [replaceExcludeRecipeIds, sessionExcludeRecipeIds, selectedDayKey]
+  );
+  const replaceExcludeTitleKeysMerged = useMemo(
+    () => [...new Set([...replaceExcludeTitleKeys, ...(sessionExcludeTitleKeys[selectedDayKey] ?? [])])],
+    [replaceExcludeTitleKeys, sessionExcludeTitleKeys, selectedDayKey]
   );
 
   const hasDbWeekPlan = weekPlans.some((p) => !p.isStarter);
@@ -929,8 +942,8 @@ export default function MealPlanPage() {
                           const result = await replaceMealSlotAuto({
                             dayKey: selectedDayKey,
                             mealType: slot.id,
-                            excludeRecipeIds: replaceExcludeRecipeIds,
-                            excludeTitleKeys: replaceExcludeTitleKeys,
+                            excludeRecipeIds: replaceExcludeRecipeIdsMerged,
+                            excludeTitleKeys: replaceExcludeTitleKeysMerged,
                             memberData: memberDataForPlan
                               ? {
                                 allergies: memberDataForPlan.allergies,
@@ -945,6 +958,14 @@ export default function MealPlanPage() {
                               toast({ description: "Нет других вариантов" });
                               return;
                             }
+                            setSessionExcludeRecipeIds((prev) => ({
+                              ...prev,
+                              [selectedDayKey]: [...(prev[selectedDayKey] ?? []), result.newRecipeId],
+                            }));
+                            setSessionExcludeTitleKeys((prev) => ({
+                              ...prev,
+                              [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(result.title)],
+                            }));
                             applyReplaceSlotToPlanCache(queryClient, { mealPlansKeyWeek, mealPlansKeyDay }, {
                               dayKey: selectedDayKey,
                               mealType: slot.id,
@@ -1037,8 +1058,8 @@ export default function MealPlanPage() {
                               const result = await replaceMealSlotAuto({
                                 dayKey: selectedDayKey,
                                 mealType: slot.id,
-                                excludeRecipeIds: replaceExcludeRecipeIds,
-                                excludeTitleKeys: replaceExcludeTitleKeys,
+                                excludeRecipeIds: replaceExcludeRecipeIdsMerged,
+                                excludeTitleKeys: replaceExcludeTitleKeysMerged,
                                 memberData: memberDataForPlan
                                   ? {
                                     allergies: memberDataForPlan.allergies,
@@ -1049,6 +1070,14 @@ export default function MealPlanPage() {
                                 isFree,
                               });
                               if (result.ok) {
+                                setSessionExcludeRecipeIds((prev) => ({
+                                  ...prev,
+                                  [selectedDayKey]: [...(prev[selectedDayKey] ?? []), result.newRecipeId],
+                                }));
+                                setSessionExcludeTitleKeys((prev) => ({
+                                  ...prev,
+                                  [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(result.title)],
+                                }));
                                 applyReplaceSlotToPlanCache(queryClient, { mealPlansKeyWeek, mealPlansKeyDay }, {
                                   dayKey: selectedDayKey,
                                   mealType: slot.id,

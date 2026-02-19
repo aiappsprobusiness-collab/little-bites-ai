@@ -265,6 +265,34 @@ async function fetchRecipeAndTitleKeysFromPlans(
   return { recipeIds, titleKeys };
 }
 
+/** Загружает titleKeys по mealType из meal_plans_v2 (для quality gate: не повторять блюдо по тому же приёму за последние N дней). */
+async function fetchTitleKeysByMealTypeFromPlans(
+  supabase: SupabaseClient,
+  userId: string,
+  memberId: string | null,
+  dateKeys: string[]
+): Promise<Record<string, Set<string>>> {
+  const out: Record<string, Set<string>> = {};
+  for (const k of MEAL_KEYS) out[k] = new Set<string>();
+  if (dateKeys.length === 0) return out;
+  let q = supabase
+    .from("meal_plans_v2")
+    .select("meals")
+    .eq("user_id", userId)
+    .in("planned_date", dateKeys);
+  if (memberId == null) q = q.is("member_id", null);
+  else q = q.eq("member_id", memberId);
+  const { data: rows } = await q;
+  for (const row of rows ?? []) {
+    const meals = (row as { meals?: Record<string, { title?: string }> }).meals ?? {};
+    for (const k of MEAL_KEYS) {
+      const title = meals[k]?.title;
+      if (title) out[k].add(normalizeTitleKey(title));
+    }
+  }
+  return out;
+}
+
 /** Ключевые ингредиенты для разнообразия в рамках дня (один ключ на рецепт). Приоритет: первый совпавший токен. */
 const MAIN_INGREDIENT_TOKENS: { token: string; key: string }[] = [
   { token: "тыкв", key: "тыква" },
@@ -635,8 +663,10 @@ async function pickFromPool(
     weekProgress?: { filled: number; total: number };
     debugSlotStats?: Record<string, unknown>;
     weekStats?: { candidatesSeen: number };
+    /** Для replace_slot: вернуть candidatesAfterAllFilters и topTitleKeys для решения об AI fallback. */
+    returnExtra?: boolean;
   }
-): Promise<{ id: string; title: string } | null> {
+): Promise<{ id: string; title: string; candidatesAfterAllFilters?: number; topTitleKeys?: string[] } | null> {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
   const excludeProteinSet = new Set(options?.excludeProteinKeys ?? []);
@@ -1051,7 +1081,12 @@ async function pickFromPool(
     mealTypeRecoveredFromTitle,
     recoveredCount,
   });
-  return { id: picked.id, title: picked.title };
+  const base = { id: picked.id, title: picked.title };
+  if (options?.returnExtra) {
+    const topTitleKeys = filtered.slice(0, 5).map((r) => normalizeTitleKey(r.title));
+    return { ...base, candidatesAfterAllFilters: afterFiltersCount, topTitleKeys };
+  }
+  return base;
 }
 
 /** [3] Validate AI-generated meal: allergy + slot sanity. Returns null if OK, else reason. */
@@ -1229,7 +1264,12 @@ serve(async (req) => {
         if (pk && pk !== "veg") excludeProteinKeys.push(pk);
       }
 
-      const picked = await pickFromPool(
+      const REPLACE_POOL_MIN_CANDIDATES = 3;
+      const { data: profileRowReplace } = await supabase.from("profiles_v2").select("status, premium_until, trial_until").eq("user_id", userId).maybeSingle();
+      const profReplace = profileRowReplace as { status?: string; premium_until?: string | null; trial_until?: string | null } | null;
+      const isPremiumOrTrialReplace = !!(profReplace?.premium_until && new Date(profReplace.premium_until) > new Date()) || !!(profReplace?.trial_until && new Date(profReplace.trial_until) > new Date()) || profReplace?.status === "premium" || profReplace?.status === "trial";
+
+      const pickedRaw = await pickFromPool(
         supabase,
         userId,
         memberId,
@@ -1238,8 +1278,26 @@ serve(async (req) => {
         excludeRecipeIds,
         excludeTitleKeys,
         60,
-        { logPrefix: "[REPLACE_SLOT]", hadRecipeId, excludeProteinKeys, debugPool, excludedMainIngredients: excludedMainIngredientsReplace }
+        { logPrefix: "[REPLACE_SLOT]", hadRecipeId, excludeProteinKeys, debugPool, excludedMainIngredients: excludedMainIngredientsReplace, returnExtra: true }
       );
+      const sessionExcludeRecipeCount = Array.isArray(body.exclude_recipe_ids) ? body.exclude_recipe_ids.length : 0;
+      const sessionExcludeTitleCount = Array.isArray(body.exclude_title_keys) ? body.exclude_title_keys.length : 0;
+      const candidatesAfterAll = pickedRaw?.candidatesAfterAllFilters ?? 0;
+      const topTitles = pickedRaw?.topTitleKeys ?? [];
+      const qualityGateTriggered = !!pickedRaw && (candidatesAfterAll <= REPLACE_POOL_MIN_CANDIDATES) && isPremiumOrTrialReplace;
+      const picked = qualityGateTriggered ? null : (pickedRaw ? { id: pickedRaw.id, title: pickedRaw.title } : null);
+      if (debugPlan) {
+        safeLog("[REPLACE_SLOT] pool_result", {
+          requestId,
+          poolCandidatesAfterAllFilters: candidatesAfterAll,
+          topTitles: topTitles.slice(0, 5),
+          sessionExcludeCounts: { recipeIds: sessionExcludeRecipeCount, titleKeys: sessionExcludeTitleCount },
+          qualityGateTriggered,
+          qualityGateReason: qualityGateTriggered ? "pool_candidates_low" : undefined,
+          aiFallbackTriggered: !picked && (pickedRaw == null || qualityGateTriggered),
+          aiFallbackReason: !picked ? (pickedRaw == null ? "pool_empty" : "pool_candidates_low") : undefined,
+        });
+      }
 
       if (picked) {
         if (debugPlan) safeLog("[REPLACE_SLOT] pool_search", { requestId, pickedSource: "pool", newRecipeId: picked.id });
@@ -1258,19 +1316,10 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (debugPlan) safeLog("[REPLACE_SLOT] pool_search", { requestId, pickedSource: null, reason: "pool_empty" });
+      if (debugPlan) safeLog("[REPLACE_SLOT] pool_search", { requestId, pickedSource: null, reason: qualityGateTriggered ? "quality_gate" : "pool_empty" });
 
       // Replace with AI: only Premium/Trial. Free must not trigger AI from replace_slot.
-      const { data: profileRow } = await supabase
-        .from("profiles_v2")
-        .select("status, premium_until, trial_until")
-        .eq("user_id", userId)
-        .maybeSingle();
-      const prof = profileRow as { status?: string; premium_until?: string | null; trial_until?: string | null } | null;
-      const hasPremium = prof?.premium_until && new Date(prof.premium_until) > new Date();
-      const hasTrial = prof?.trial_until && new Date(prof.trial_until) > new Date();
-      const isPremiumOrTrial = prof?.status === "premium" || prof?.status === "trial" || hasPremium || hasTrial;
-      if (!isPremiumOrTrial) {
+      if (!isPremiumOrTrialReplace) {
         if (debugPlan) safeLog("[REPLACE_SLOT] AI blocked", { requestId, reason: "free_no_ai" });
         return new Response(
           JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "premium_required", requestId, reason: "premium_required" }),
@@ -1834,6 +1883,8 @@ serve(async (req) => {
 
     let usedRecipeIds: string[] = [];
     let usedTitleKeys: string[] = [];
+    let usedTitleKeysByMealType: Record<string, Set<string>> = {};
+    for (const k of MEAL_KEYS) usedTitleKeysByMealType[k] = new Set<string>();
     const proteinKeyCounts: Record<string, number> = {};
     const rejectsByReason: Record<string, number> = {};
     let totalDbCount = 0;
@@ -1871,6 +1922,15 @@ serve(async (req) => {
       const { recipeIds: prev4RecipeIds, titleKeys: prev4TitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, memberId, last4Keys);
       usedRecipeIds = [...usedRecipeIds, ...prev4RecipeIds];
       usedTitleKeys = [...usedTitleKeys, ...prev4TitleKeys];
+      const last4TitleKeysByMealType = await fetchTitleKeysByMealTypeFromPlans(supabase, userId, memberId, last4Keys);
+      for (const k of MEAL_KEYS) usedTitleKeysByMealType[k] = new Set(last4TitleKeysByMealType[k] ?? []);
+      (weekRows ?? []).forEach((row: { planned_date?: string; meals?: Record<string, { recipe_id?: string; title?: string }> }) => {
+        const meals = row.meals ?? {};
+        MEAL_KEYS.forEach((k) => {
+          const title = meals[k]?.title;
+          if (title) usedTitleKeysByMealType[k].add(normalizeTitleKey(title));
+        });
+      });
     }
 
     const allergyTokens = getAllergyTokens(memberDataPool);
@@ -1934,7 +1994,7 @@ serve(async (req) => {
       let dayExcludedMainIngredients: string[] = [];
       for (const mealKey of MEAL_KEYS) {
         const slotStats: Record<string, unknown> = {};
-        const picked = await pickFromPool(
+        const pickedRaw = await pickFromPool(
           supabase,
           userId,
           memberId,
@@ -1954,19 +2014,33 @@ serve(async (req) => {
             weekStats: debugPool ? weekStats : undefined,
           }
         );
+        let picked = pickedRaw ?? null;
+        const qualityGateTriggered =
+          picked &&
+          isPremiumOrTrial &&
+          (usedTitleKeysByMealType[mealKey]?.has(normalizeTitleKey(picked!.title)) ||
+            (excludeProteinKeys.length > 0 && (() => {
+              const pk = inferProteinKey(picked!.title, null);
+              return !!pk && pk !== "veg" && excludeProteinKeys.includes(pk);
+            })()));
+        if (qualityGateTriggered) {
+          if (runDebug) safeLog("[JOB] quality_gate", { dayKey, mealKey, reason: usedTitleKeysByMealType[mealKey]?.has(normalizeTitleKey(picked!.title)) ? "title_repeat" : "protein_streak", qualityGateTriggered: true, aiFallbackTriggered: true });
+          picked = null;
+        }
         poolPicks[mealKey] = picked ?? null;
         if (debugPool && Object.keys(slotStats).length > 0) {
-          slotDiagnostics.push({ ...slotStats, wasRecoveredFromTitle: slotStats.mealTypeRecoveredFromTitle });
+          slotDiagnostics.push({ ...slotStats, wasRecoveredFromTitle: slotStats.mealTypeRecoveredFromTitle, qualityGateTriggered: qualityGateTriggered || undefined });
         }
         if (picked) {
           usedRecipeIds.push(picked.id);
           usedTitleKeys.push(normalizeTitleKey(picked.title));
+          usedTitleKeysByMealType[mealKey].add(normalizeTitleKey(picked.title));
           const pk = inferProteinKey(picked.title, null);
           if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
           const mainKey = inferMainIngredientKey(picked.title, null, null);
           if (mainKey) dayExcludedMainIngredients = [...dayExcludedMainIngredients, mainKey];
         } else if (runDebug) {
-          safeLog("[JOB] pool_exhausted_free_or_premium_fallback", { dayKey, mealKey, isPremiumOrTrial, reason: "pool_exhausted_free" });
+          safeLog("[JOB] pool_exhausted_free_or_premium_fallback", { dayKey, mealKey, isPremiumOrTrial, reason: qualityGateTriggered ? "quality_gate" : "pool_exhausted_free" });
         }
       }
       totalSlotsProcessed += MEAL_KEYS.length;
@@ -2000,6 +2074,7 @@ serve(async (req) => {
         const excludeStr = usedTitleKeys.length > 0 ? ` Не повторяй блюда: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
         const mainIngredientExcludeStr =
           dayExcludedMainIngredients.length > 0 ? ` В этот день уже есть блюда с: ${[...new Set(dayExcludedMainIngredients)].join(", ")} — не используй их.` : "";
+        const proteinExcludeStr = excludeProteinKeys.length > 0 ? ` Вчера уже был этот приём с: ${excludeProteinKeys.join(", ")} — предложи другой белок.` : "";
         const slotForbidden: Record<string, string> = {
           breakfast: "супы, рагу, плов. Только завтраки: каши, омлеты, сырники, тосты.",
           lunch: "сырники, оладьи, кашу. Только обеды: супы, вторые блюда.",
@@ -2017,7 +2092,7 @@ serve(async (req) => {
               stream: false,
               memberData: memberData ?? undefined,
               mealType: mealKey,
-              messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr} ${slotForbidden[mealKey] ?? ""}.${allergyHint} Верни только JSON.` }],
+              messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${proteinExcludeStr} ${slotForbidden[mealKey] ?? ""}.${allergyHint} Верни только JSON.` }],
             }),
           },
           { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
@@ -2101,6 +2176,7 @@ serve(async (req) => {
         totalAiCount++;
         usedRecipeIds.push(recipeId);
         usedTitleKeys.push(normalizeTitleKey(title));
+        usedTitleKeysByMealType[mealKey].add(normalizeTitleKey(title));
         const pk = inferProteinKey(title, null);
         if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
         weekContext.push(title);
