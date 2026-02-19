@@ -32,7 +32,7 @@ export interface TopicConsultationSheetProps {
   onClose: () => void;
   topicKey: string;
   topicTitle: string;
-  /** Чипсы с label (показ) и prompt (вставка в input по клику). */
+  /** Чипсы: label на экране, text вставляется в input по клику (без автоотправки). */
   chips: HelpChipItem[];
   isLocked?: boolean;
   lockedDescription?: string;
@@ -161,10 +161,10 @@ export function TopicConsultationSheet({
     setMessages([]);
   };
 
-  /** Чипс вставляет prompt в input, не отправляет */
+  /** Чипс вставляет text в input, не отправляет */
   const handleChipClick = (chip: HelpChipItem) => {
     if (isLocked) return;
-    setInput(chip.prompt);
+    setInput(chip.text);
     inputRef.current?.focus();
   };
 
