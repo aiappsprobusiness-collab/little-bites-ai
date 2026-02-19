@@ -122,7 +122,7 @@ export default function SosTiles() {
         <SosHero />
 
         <div className="mt-8">
-          <section className="space-y-3">
+          <section className="space-y-4">
             <div>
               <h2 className="text-sm font-semibold text-foreground">Темы</h2>
               <p className="text-[12px] text-muted-foreground mt-0.5">Выберите ситуацию</p>
@@ -134,10 +134,10 @@ export default function SosTiles() {
                   type="button"
                   onClick={() => setTopicFilter(cat)}
                   className={cn(
-                    "text-[13px] font-medium px-3 py-1.5 rounded-full border transition-colors",
+                    "text-[13px] font-medium px-3 py-2 rounded-full border transition-colors duration-200",
                     topicFilter === cat
-                      ? "bg-primary/10 border-primary/30 text-foreground"
-                      : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-primary/20"
+                      ? "bg-primary/[0.08] border-primary/20 text-foreground"
+                      : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-primary/15"
                   )}
                 >
                   {HELP_CATEGORY_LABELS[cat]}

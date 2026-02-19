@@ -58,7 +58,10 @@ export function TopicConsultationSheet({
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastAssistantMessageRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  /** При отправке сообщения считаем, что пользователь у низа; скроллим к ответу только тогда */
+  const wasUserAtBottomRef = useRef(false);
 
   const loadSession = useCallback(() => {
     if (!memberId || !topicKey) return;
@@ -78,15 +81,16 @@ export function TopicConsultationSheet({
     if (isOpen && memberId && topicKey) loadSession();
   }, [memberId, topicKey, isOpen, loadSession]);
 
-  // После появления нового ответа ассистента — скролл к началу этого сообщения (не в самый низ)
+  // После появления нового ответа ассистента — скролл к началу сообщения только если пользователь сам отправил (был у низа)
   const lastMessage = messages[messages.length - 1];
   const lastIsAssistantWithContent =
     lastMessage?.role === "assistant" && lastMessage.content.length > 0;
 
   useEffect(() => {
-    if (lastIsAssistantWithContent && !isSending) {
-      lastAssistantMessageRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-    }
+    if (!lastIsAssistantWithContent || isSending) return;
+    if (!wasUserAtBottomRef.current) return;
+    wasUserAtBottomRef.current = false;
+    lastAssistantMessageRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [lastIsAssistantWithContent, isSending]);
 
   const sendMessage = useCallback(
@@ -107,6 +111,8 @@ export function TopicConsultationSheet({
         content: "",
         timestamp: new Date().toISOString(),
       };
+
+      wasUserAtBottomRef.current = true;
 
       setMessages((prev) => {
         const next = [...prev, userMsg, assistantPlaceholder].slice(-MAX_MESSAGES);
@@ -258,7 +264,12 @@ export function TopicConsultationSheet({
                 </DropdownMenu>
               </div>
 
-              {/* Чип-ряд: одна строка, горизонтальный скролл, по клику — prompt в input */}
+              {/* Подсказка над чипсами */}
+              <p className="shrink-0 px-4 text-[12px] text-muted-foreground pb-1.5">
+                Выберите быстрый вопрос или опишите своими словами
+              </p>
+
+              {/* Чип-ряд: мягкие pill, тонкая рамка, короткое active */}
               <div className="shrink-0 px-4 pb-2">
                 <div className="flex gap-2 overflow-x-auto pb-1 flex-nowrap overflow-y-hidden">
                   {chips.map((chip) => (
@@ -267,7 +278,7 @@ export function TopicConsultationSheet({
                       type="button"
                       onClick={() => handleChipClick(chip)}
                       disabled={isSending}
-                      className="shrink-0 px-3 py-1.5 rounded-full text-[13px] font-medium border border-border bg-background text-foreground hover:bg-muted/50 transition-colors whitespace-nowrap"
+                      className="shrink-0 px-3 py-2 rounded-full text-[13px] font-medium border border-border/80 bg-background text-foreground hover:bg-muted/30 active:bg-primary/5 active:border-primary/20 transition-colors duration-200 whitespace-nowrap"
                     >
                       {chip.label}
                     </button>
@@ -275,15 +286,11 @@ export function TopicConsultationSheet({
                 </div>
               </div>
 
-              {/* Empty state hint */}
-              {messages.length === 0 && (
-                <p className="shrink-0 px-4 text-[13px] text-muted-foreground pb-2">
-                  Выберите подсказку или напишите свой вопрос и нажмите Отправить.
-                </p>
-              )}
-
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 min-h-0">
+              <div
+                ref={messagesScrollRef}
+                className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 min-h-0"
+              >
                 <div className="space-y-3 pb-4">
                   {messages.map((m, index) => {
                     const isLastAssistant =
@@ -342,9 +349,9 @@ export function TopicConsultationSheet({
                     ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Напишите вопрос…"
+                    placeholder="Напишите, что происходит…"
                     rows={2}
-                    className="flex-1 min-w-0 min-h-[48px] max-h-[4.5rem] resize-none rounded-xl"
+                    className="flex-1 min-w-0 min-h-[48px] max-h-[4.5rem] resize-none rounded-xl border-border focus-visible:border-primary/40 border-primary/20"
                     disabled={isSending}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
