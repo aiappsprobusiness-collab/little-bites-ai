@@ -27,14 +27,18 @@ function mealTypeFromTag(tag: string): MealType | null {
 }
 
 /**
- * Приоритет: (a) mealType валидный → (b) из tags (*_breakfast/lunch/snack/dinner) → (c) contextMealType → (d) "snack".
+ * Приоритет для Plan-AI (sourceTag plan/week_ai): contextMealType всегда.
+ * Иначе: (a) mealType валидный → (b) из tags → (c) contextMealType → (d) "snack".
  */
 export function resolveMealType(options: {
   mealType?: string | null;
   tags?: string[] | null;
   contextMealType?: string | null;
+  sourceTag?: SourceTag | string | null;
 }): MealType {
-  const { mealType, tags, contextMealType } = options;
+  const { mealType, tags, contextMealType, sourceTag } = options;
+  const fromPlan = sourceTag === "plan" || sourceTag === "week_ai";
+  if (fromPlan && contextMealType != null && contextMealType !== "" && isMealType(contextMealType)) return contextMealType;
   if (mealType != null && mealType !== "" && isMealType(mealType)) return mealType;
   const tagsList = Array.isArray(tags) ? tags : [];
   for (const t of tagsList) {
@@ -103,9 +107,9 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     sourceTag: explicitSourceTag,
   } = input;
 
-  const meal_type = resolveMealType({ mealType, tags: rawTags, contextMealType });
   const safeSource = ensurePoolSource(source);
   const sourceTag: SourceTag = explicitSourceTag ?? (safeSource === "week_ai" ? "week_ai" : "chat");
+  const meal_type = resolveMealType({ mealType, tags: rawTags, contextMealType, sourceTag });
   const tags = buildCanonicalTags({ sourceTag, meal_type, existingTags: rawTags });
 
   const steps = Array.isArray(rawSteps) ? rawSteps : [];
