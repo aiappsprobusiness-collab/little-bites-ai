@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { safeError } from "@/utils/safeLogger";
 import { useAuth } from './useAuth';
 import type { RecipeSuggestion } from '@/services/deepseek';
 
-/** Рецепт в БД: в recipe_data JSONB сохраняются child_id/child_name (контекст при добавлении из чата). member_id приходит из таблицы recipes для аудитории карточек. */
+/** Рецепт в БД: в recipe_data JSONB сохраняются child_id/child_name. member_id в SavedFavorite — из favorites_v2 (для кого избранное). */
 export type StoredRecipe = RecipeSuggestion & {
   child_id?: string;
   child_name?: string;
@@ -13,40 +14,66 @@ export type StoredRecipe = RecipeSuggestion & {
   ingredientTotalCount?: number;
 };
 
+export type FavoritesFilter = 'all' | 'family' | string;
+
 export interface SavedFavorite {
   id: string;
   recipe: StoredRecipe;
+  /** Для кого запись: null = Семья, иначе member_id из favorites_v2. */
+  member_id: string | null;
   memberIds: string[];
   createdAt: string;
 }
 
-export function useFavorites() {
+export interface FavoritePreview {
+  title?: string;
+  description?: string | null;
+  cookTimeMinutes?: number | null;
+  ingredientNames?: string[];
+  chefAdvice?: string | null;
+  advice?: string | null;
+}
+
+/** Query key для кэша: фильтр по профилю. */
+export function favoritesKey(params: { userId: string | undefined; filter: FavoritesFilter }): unknown[] {
+  return ['favorites', params.userId, params.filter];
+}
+
+export function useFavorites(filter: FavoritesFilter = 'all') {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // 1. favorites_v2 → recipe_ids; 2. get_recipe_previews(recipe_ids) → previews. Без полных recipes/recipe_ingredients.
   const { data: favorites = [], isLoading } = useQuery({
-    queryKey: ['favorites', user?.id],
+    queryKey: favoritesKey({ userId: user?.id, filter }),
     queryFn: async () => {
       if (!user) return [];
 
-      const { data: rows, error } = await supabase
+      let query = supabase
         .from('favorites_v2')
-        .select('id, recipe_id, created_at, recipe_data')
+        .select('id, recipe_id, member_id, created_at, recipe_data')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+
+      if (filter === 'family') {
+        query = query.is('member_id', null);
+      } else if (filter !== 'all' && typeof filter === 'string') {
+        query = query.eq('member_id', filter);
+      }
+
+      const { data: rows, error } = await query;
 
       if (error) {
         safeError('DB Error in useFavorites (query):', error.message, 'Details:', error.details);
         throw error;
       }
 
-      const list = (rows ?? []) as { id: string; recipe_id: string; created_at?: string; recipe_data?: Record<string, unknown> | null }[];
-      const recipeIds = list.map((r) => r.recipe_id).filter(Boolean);
+      const list = (rows ?? []) as { id: string; recipe_id: string; member_id: string | null; created_at?: string; recipe_data?: Record<string, unknown> | null }[];
+      const recipeIds = [...new Set(list.map((r) => r.recipe_id).filter(Boolean))];
       if (recipeIds.length === 0) {
         return list.map((f) => ({
           id: f.id,
           recipe: { id: f.recipe_id } as StoredRecipe,
+          member_id: f.member_id ?? null,
           memberIds: [] as string[],
           createdAt: f.created_at ?? f.id,
           _recipeId: f.recipe_id,
@@ -117,13 +144,11 @@ export function useFavorites() {
         } else if (typeof (f.recipe_data as { advice?: string })?.advice === 'string' && (f.recipe_data as { advice: string }).advice.trim()) {
           (recipe as StoredRecipe & { advice?: string }).advice = (f.recipe_data as { advice: string }).advice.trim();
         }
-        if (import.meta.env.DEV && (chefFromDb || adviceFromDb)) {
-          console.log('[DEBUG] favorites render hasChefAdvice=%s hasAdvice=%s title=%s', !!chefFromDb, !!adviceFromDb, recipe?.title ?? '');
-        }
         return {
           id: f.id,
           recipe,
-          memberIds: [] as string[],
+          member_id: f.member_id ?? null,
+          memberIds: f.member_id ? [f.member_id] : [],
           createdAt: f.created_at ?? f.id,
           _recipeId: f.recipe_id,
         };
@@ -133,75 +158,147 @@ export function useFavorites() {
   });
 
   const addFavorite = useMutation({
-    mutationFn: async ({
-      recipe,
-      memberIds = [],
-      memberId,
-      memberName,
-    }: {
-      recipe: RecipeSuggestion;
-      memberIds?: string[];
-      memberId?: string;
-      memberName?: string;
+    mutationFn: async (params: {
+      recipeId: string;
+      memberId: string | null;
+      recipeData?: FavoritePreview | Record<string, unknown>;
     }) => {
       if (!user) throw new Error('User not authenticated');
-
-      const recipePayload = {
-        ...recipe,
-        ...(memberId != null && { child_id: memberId }),
-        ...(memberName != null && memberName !== '' && { child_name: memberName }),
-      };
-
+      const recipe_data = params.recipeData && typeof params.recipeData === 'object' && !Array.isArray(params.recipeData)
+        ? (params.recipeData as Record<string, unknown>)
+        : { id: params.recipeId };
       const { data, error } = await supabase
         .from('favorites_v2')
         .insert({
           user_id: user.id,
-          recipe_data: recipePayload as Record<string, unknown>,
+          recipe_id: params.recipeId,
+          member_id: params.memberId,
+          recipe_data,
         })
         .select()
         .single();
-
-      if (error) {
-        safeError('DB Error in useFavorites addFavorite:', error.message, 'Details:', error.details);
-        throw error;
-      }
+      if (error) throw error;
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['favorites', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['recipe_previews'] });
     },
   });
 
-  // Удалить из избранного
-  const removeFavorite = useMutation({
-    mutationFn: async (id: string) => {
+  const removeFavoriteByRowId = useMutation({
+    mutationFn: async (favoriteId: string) => {
       if (!user) throw new Error('User not authenticated');
-      const { error } = await supabase.from('favorites_v2').delete().eq('id', id);
+      const { error } = await supabase.from('favorites_v2').delete().eq('id', favoriteId).eq('user_id', user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['favorites', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['recipe_previews'] });
+    },
+  });
 
-      if (error) {
-        safeError('DB Error in useFavorites removeFavorite:', error.message, 'Details:', error.details);
-        throw error;
+  const removeFavoriteByRecipeAndMember = useMutation({
+    mutationFn: async (params: { recipeId: string; memberId: string | null }) => {
+      if (!user) throw new Error('User not authenticated');
+      let q = supabase.from('favorites_v2').delete().eq('user_id', user.id).eq('recipe_id', params.recipeId);
+      if (params.memberId == null) {
+        q = q.is('member_id', null);
+      } else {
+        q = q.eq('member_id', params.memberId);
+      }
+      const { error } = await q;
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['favorites', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['recipe_previews'] });
+    },
+  });
+
+  const toggleFavorite = useMutation({
+    mutationFn: async (params: {
+      recipeId: string;
+      memberId: string | null;
+      isFavorite: boolean;
+      recipeData?: FavoritePreview;
+    }) => {
+      if (!user) throw new Error('User not authenticated');
+      const { recipeId, memberId, isFavorite, recipeData } = params;
+      if (isFavorite) {
+        const recipe_data = recipeData
+          ? {
+              id: recipeId,
+              title: recipeData.title ?? '',
+              description: recipeData.description ?? null,
+              cookingTime: recipeData.cookTimeMinutes ?? null,
+              ingredients: (recipeData.ingredientNames ?? []).map((n) => ({ name: n })),
+              ...(recipeData.chefAdvice != null && recipeData.chefAdvice !== '' && { chefAdvice: recipeData.chefAdvice }),
+              ...(recipeData.advice != null && recipeData.advice !== '' && { advice: recipeData.advice }),
+            }
+          : { id: recipeId };
+        const { error } = await supabase.from('favorites_v2').insert({
+          user_id: user.id,
+          recipe_id: recipeId,
+          member_id: memberId,
+          recipe_data,
+        });
+        if (error) throw error;
+      } else {
+        let q = supabase.from('favorites_v2').delete().eq('user_id', user.id).eq('recipe_id', recipeId);
+        if (memberId == null) q = q.is('member_id', null);
+        else q = q.eq('member_id', memberId);
+        const { error } = await q;
+        if (error) throw error;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['favorites', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['recipe_previews'] });
     },
   });
 
-  const favoriteRecipeIds = new Set(
-    favorites.flatMap((f) => {
-      const id = (f as { _recipeId?: string })._recipeId ?? (f.recipe as { id?: string })?.id;
-      return typeof id === 'string' && id.length > 0 ? [id] : [];
-    })
+  const isFavorite = useMemo(() => {
+    const set = new Set(favorites.map((f) => `${(f as { _recipeId?: string })._recipeId ?? f.recipe?.id}:${(f as SavedFavorite).member_id ?? 'family'}`));
+    return (recipeId: string, memberId: string | null) => set.has(`${recipeId}:${memberId ?? 'family'}`);
+  }, [favorites]);
+
+  const isFamilyFavorite = useMemo(() => {
+    const familySet = new Set(
+      favorites.filter((f) => (f as SavedFavorite).member_id == null).map((f) => (f as { _recipeId?: string })._recipeId ?? (f.recipe as { id?: string })?.id)
+    );
+    return (recipeId: string) => familySet.has(recipeId);
+  }, [favorites]);
+
+  const favoriteRecipeIds = useMemo(
+    () =>
+      new Set(
+        favorites.flatMap((f) => {
+          const id = (f as { _recipeId?: string })._recipeId ?? (f.recipe as { id?: string })?.id;
+          return typeof id === 'string' && id.length > 0 ? [id] : [];
+        })
+      ),
+    [favorites]
   );
+
+  const getFavoriteId = useMemo(() => {
+    const map = new Map(favorites.map((f) => [`${(f as { _recipeId?: string })._recipeId ?? f.recipe?.id}:${(f as SavedFavorite).member_id ?? 'family'}`, f.id]));
+    return (recipeId: string, memberId: string | null) => map.get(`${recipeId}:${memberId ?? 'family'}`) ?? null;
+  }, [favorites]);
 
   return {
     favorites,
-    favoriteRecipeIds,
     isLoading,
+    isFavorite,
+    isFamilyFavorite,
+    favoriteRecipeIds,
+    getFavoriteId,
     addFavorite: addFavorite.mutateAsync,
-    removeFavorite: removeFavorite.mutateAsync,
+    removeFavorite: removeFavoriteByRowId.mutateAsync,
+    removeFavoriteByRecipeAndMember: removeFavoriteByRecipeAndMember.mutateAsync,
+    toggleFavorite: toggleFavorite.mutateAsync,
     isAdding: addFavorite.isPending,
-    isRemoving: removeFavorite.isPending,
+    isRemoving: removeFavoriteByRowId.isPending,
+    isToggling: toggleFavorite.isPending,
   };
 }

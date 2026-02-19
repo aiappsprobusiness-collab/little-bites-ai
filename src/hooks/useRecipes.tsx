@@ -10,7 +10,7 @@ import {
 } from '@/lib/supabase-constants';
 import { getCachedRecipe, setCachedRecipe, invalidateRecipeCache } from '@/utils/recipeCache';
 import { ensureStringArray } from '@/utils/typeUtils';
-import { normalizeRecipeMeta } from '@/utils/recipeMeta';
+import { canonicalizeRecipePayload } from '@/utils/recipeCanonical';
 import mockRecipes from '@/mocks/mockRecipes.json';
 
 type Recipe = Tables<'recipes'>;
@@ -229,34 +229,32 @@ export function useRecipes(childId?: string) {
           ? ingredients
           : [...ingredients, ...Array.from({ length: MIN_INGREDIENTS - ingredients.length }, (_, i) => ({ name: `Ингредиент ${ingredients.length + i + 1}`, order_index: ingredients.length + i }))];
 
-      const rpcPayload: Record<string, unknown> = {
-        ...normalized,
+      const rpcPayload = canonicalizeRecipePayload({
+        user_id: user.id,
+        member_id: (normalized as Record<string, unknown>).member_id ?? null,
+        child_id: (normalized as Record<string, unknown>).child_id ?? null,
         source,
-        ...(normalized.chef_advice != null && normalized.chef_advice !== '' && { chef_advice: normalized.chef_advice }),
-        ...(normalized.advice != null && normalized.advice !== '' && { advice: normalized.advice }),
-        steps: stepsPadded.map((s, i) => ({ instruction: s.instruction, step_number: s.step_number ?? i + 1 })),
+        mealType: (normalized as Record<string, unknown>).meal_type ?? null,
+        tags: (normalized as Record<string, unknown>).tags ?? null,
+        title: (normalized.title as string) ?? 'Рецепт',
+        description: (normalized.description as string) ?? null,
+        cooking_time_minutes: (normalized as Record<string, unknown>).cooking_time_minutes ?? null,
+        chef_advice: (normalized as Record<string, unknown>).chef_advice ?? null,
+        advice: (normalized as Record<string, unknown>).advice ?? null,
+        steps: stepsPadded.map((s, i) => ({ instruction: s.instruction ?? '', step_number: s.step_number ?? i + 1 })),
         ingredients: ingredientsPadded.map((ing, i) => ({
           name: ing.name,
           amount: ing.amount ?? null,
-          unit: ing.unit ?? null,
-          substitute: (ing as Record<string, unknown>).substitute ?? null,
+          unit: (ing as Record<string, unknown>).unit ?? null,
           display_text: (ing as Record<string, unknown>).display_text ?? null,
+          substitute: (ing as Record<string, unknown>).substitute ?? null,
           canonical_amount: (ing as Record<string, unknown>).canonical_amount ?? null,
           canonical_unit: (ing as Record<string, unknown>).canonical_unit ?? null,
           order_index: ing.order_index ?? i,
           category: (ing as Record<string, unknown>).category ?? 'other',
         })),
-      };
-
-      if (source === 'chat_ai' || source === 'week_ai') {
-        const meta = normalizeRecipeMeta({
-          source,
-          mealType: (normalized as Record<string, unknown>).meal_type ?? null,
-          tags: (normalized as Record<string, unknown>).tags ?? null,
-        });
-        rpcPayload.meal_type = meta.meal_type;
-        rpcPayload.tags = meta.tags;
-      }
+        sourceTag: source === 'week_ai' ? 'week_ai' : 'chat',
+      });
 
       const { data: recipeId, error: rpcError } = await supabase.rpc('create_recipe_with_steps', { payload: rpcPayload });
       if (rpcError) throw rpcError;

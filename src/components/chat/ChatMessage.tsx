@@ -1,6 +1,6 @@
 import { useState, useRef, forwardRef, useMemo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock, RotateCcw, AlertCircle } from "lucide-react";
+import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock, RotateCcw, AlertCircle, CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -18,6 +18,7 @@ import { ingredientDisplayLabel, type IngredientItem } from "@/types/recipe";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
+import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { HelpSectionCard, HelpWarningCard } from "@/components/help-ui";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
@@ -150,11 +151,13 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
   ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false, isConsultationMode = false }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
+    const [addToPlanOpen, setAddToPlanOpen] = useState(false);
     const { user } = useAuth();
-    const { isPremium, isTrial, favoritesLimit } = useSubscription();
+    const { isPremium, isTrial, favoritesLimit, hasAccess } = useSubscription();
     const showChefTip = isPremium || isTrial;
-    const { favorites, favoriteRecipeIds, removeFavorite, isAdding, isRemoving } = useFavorites();
-    const { createRecipe, toggleFavorite } = useRecipes();
+    const { favorites, isFavorite: isFavoriteFn, toggleFavorite, isToggling } = useFavorites("all");
+    const { createRecipe } = useRecipes();
+    const chatMemberId = memberId ?? null;
     const setShowPaywall = useAppStore((s) => s.setShowPaywall);
     const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
     const { toast } = useToast();
@@ -184,8 +187,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       role === "assistant" && onOpenArticle ? injectArticleLinks(displayContent) : displayContent;
 
     const recipeId = recipeIdProp ?? localRecipeId;
-    const isFavorite =
-      !!(recipeId && isValidRecipeId(recipeId) && favoriteRecipeIds.has(recipeId));
+    const isFavorite = !!(recipeId && isValidRecipeId(recipeId) && isFavoriteFn(recipeId, chatMemberId));
 
     if (import.meta.env.DEV && effectiveRecipe) {
       const hasChefAdvice = !!(effectiveRecipe.chefAdvice && effectiveRecipe.chefAdvice.trim());
@@ -207,7 +209,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       if (isFavorite) {
         try {
           if (recipeId && isValidRecipeId(recipeId)) {
-            await toggleFavorite({ id: recipeId, isFavorite: false });
+            await toggleFavorite({ recipeId, memberId: chatMemberId, isFavorite: false });
           }
           toast({ title: "Удалено из избранного" });
         } catch (e: unknown) {
@@ -291,7 +293,21 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           chefAdvice: effectiveRecipe.chefAdvice ?? null,
           advice: effectiveRecipe.advice ?? null,
         };
-        await toggleFavorite({ id: idToFavorite!, isFavorite: true, preview });
+        await toggleFavorite({
+          recipeId: idToFavorite!,
+          memberId: chatMemberId,
+          isFavorite: true,
+          recipeData: {
+            title: effectiveRecipe.title,
+            description: effectiveRecipe.description ?? null,
+            cookTimeMinutes: effectiveRecipe.cookingTime ?? null,
+            ingredientNames: (effectiveRecipe.ingredients || []).map((ing) =>
+              typeof ing === "string" ? ing : (ing as { name?: string }).name ?? ""
+            ),
+            chefAdvice: effectiveRecipe.chefAdvice ?? null,
+            advice: effectiveRecipe.advice ?? null,
+          },
+        });
         toast({ title: "Добавлено в избранное" });
       } catch (e: unknown) {
         safeError("ChatMessage toggleFavorite:", (e as Error).message);
@@ -595,7 +611,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       e.stopPropagation();
                       handleToggleFavorite();
                     }}
-                    disabled={isAdding || isRemoving}
+                    disabled={isToggling}
                     className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 border ${isFavorite
                       ? "text-amber-600/90 bg-amber-50/70 fill-amber-600/90 border-amber-200/40"
                       : "text-slate-400 bg-slate-50/50 border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500"
@@ -617,6 +633,35 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   >
                     <Share2 className="h-3.5 w-3.5" />
                   </button>
+                  {hasAccess ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (recipeId && isValidRecipeId(recipeId)) setAddToPlanOpen(true);
+                      }}
+                      disabled={!recipeId || !isValidRecipeId(recipeId)}
+                      className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 disabled:opacity-50 transition-all active:scale-95"
+                      title="В план"
+                    >
+                      <CalendarPlus className="h-3.5 w-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setPaywallCustomMessage("Добавление в план доступно в Premium.");
+                        setShowPaywall(true);
+                      }}
+                      className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 transition-all active:scale-95"
+                      title="В план (Premium)"
+                    >
+                      <CalendarPlus className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -683,6 +728,18 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             </>
           )}
         </AnimatePresence>
+
+        {addToPlanOpen && recipeId && isValidRecipeId(recipeId) && effectiveRecipe && (
+          <AddToPlanSheet
+            open={addToPlanOpen}
+            onOpenChange={setAddToPlanOpen}
+            recipeId={recipeId}
+            recipeTitle={effectiveRecipe.title ?? "Рецепт"}
+            mealType={(effectiveRecipe as { mealType?: string }).mealType ?? null}
+            defaultMemberId={chatMemberId}
+            onSuccess={() => toast({ title: "Добавлено в план" })}
+          />
+        )}
       </div>
     );
   }

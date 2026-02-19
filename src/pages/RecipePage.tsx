@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, RotateCcw, Heart, Share2 } from "lucide-react";
+import { Loader2, ArrowLeft, RotateCcw, Heart, Share2, CalendarPlus } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
+import { useFavorites } from "@/hooks/useFavorites";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { ingredientDisplayLabel } from "@/types/recipe";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
+import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { useFamily } from "@/contexts/FamilyContext";
 import { getBenefitLabel } from "@/utils/ageCategory";
 
@@ -49,20 +52,28 @@ export default function RecipePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { selectedMember } = useFamily();
-  const { getRecipeById, favoriteRecipes = [], toggleFavorite } = useRecipes();
+  const { selectedMember, selectedMemberId } = useFamily();
+  const { hasAccess } = useSubscription();
+  const { getRecipeById } = useRecipes();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
-  const fromMealPlan = (location.state as { fromMealPlan?: boolean; mealTypeLabel?: string } | null)?.fromMealPlan;
-  const mealTypeLabel = (location.state as { mealTypeLabel?: string } | null)?.mealTypeLabel;
+  const state = location.state as { fromMealPlan?: boolean; mealTypeLabel?: string; memberId?: string } | null;
+  const fromMealPlan = state?.fromMealPlan;
+  const mealTypeLabel = state?.mealTypeLabel;
+  const stateMemberId = state?.memberId ?? null;
+  const favoriteMemberId = stateMemberId ?? (selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : null);
 
-  const isFavorite = !!id && favoriteRecipes.some((r) => r.id === id);
+  const { isFavorite: isFavoriteFn, toggleFavorite } = useFavorites("all");
+  const isFavorite = !!id && isFavoriteFn(id, favoriteMemberId);
+  const [addToPlanOpen, setAddToPlanOpen] = useState(false);
+
   const handleToggleFavorite = async () => {
     if (!id || !recipe) return;
     try {
       await toggleFavorite({
-        id,
+        recipeId: id,
+        memberId: favoriteMemberId,
         isFavorite: !isFavorite,
-        preview: {
+        recipeData: {
           title: (recipe as { title?: string }).title,
           description: (recipe as { description?: string }).description,
           cookTimeMinutes: (recipe as { cooking_time_minutes?: number }).cooking_time_minutes,
@@ -162,28 +173,6 @@ export default function RecipePage() {
           <ArrowLeft className="w-5 h-5" />
         </Button>
       }
-      headerRight={
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="min-w-[44px] min-h-[44px] rounded-full"
-            onClick={handleToggleFavorite}
-            aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
-          >
-            <Heart className={`h-5 w-5 ${isFavorite ? "fill-amber-500 text-amber-600" : "text-muted-foreground"}`} />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="min-w-[44px] min-h-[44px] rounded-full"
-            onClick={handleShare}
-            aria-label="Поделиться"
-          >
-            <Share2 className="h-5 w-5 text-muted-foreground" />
-          </Button>
-        </div>
-      }
     >
       <div className="px-4 pb-6 max-w-[100%] mx-auto">
         {/* Карточка рецепта — те же стили, что и в чате */}
@@ -199,6 +188,42 @@ export default function RecipePage() {
               {recipe.title}
             </h1>
           </section>
+
+          {/* Действия: Добавить в план, Лайк, Поделиться — внутри карточки, единый стиль с чатом */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {hasAccess && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 rounded-full border-primary-border text-primary hover:bg-primary/10 hover:border-primary/50"
+                onClick={() => setAddToPlanOpen(true)}
+                aria-label="Добавить в план"
+              >
+                <CalendarPlus className="h-4 w-4 shrink-0" />
+                <span className="text-typo-caption sm:text-typo-muted">Добавить в план</span>
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={handleToggleFavorite}
+              aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
+              className={`h-8 w-8 sm:h-9 sm:w-9 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 border ${
+                isFavorite
+                  ? "text-primary bg-primary/10 border-primary/40 fill-primary"
+                  : "text-muted-foreground bg-slate-50/50 border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500"
+              }`}
+            >
+              <Heart className={`h-4 w-4 sm:h-4.5 sm:w-4.5 ${isFavorite ? "fill-current" : ""}`} />
+            </button>
+            <button
+              type="button"
+              onClick={handleShare}
+              aria-label="Поделиться"
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 transition-all active:scale-95"
+            >
+              <Share2 className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+            </button>
+          </div>
 
           {description && description.trim() !== "" && (
             <section className="mb-3 sm:mb-4">
@@ -295,6 +320,18 @@ export default function RecipePage() {
           )}
         </div>
       </div>
+
+      {id && recipe && (
+        <AddToPlanSheet
+          open={addToPlanOpen}
+          onOpenChange={setAddToPlanOpen}
+          recipeId={id}
+          recipeTitle={(recipe as { title?: string }).title ?? "Рецепт"}
+          mealType={(recipe as { meal_type?: string }).meal_type ?? null}
+          defaultMemberId={favoriteMemberId}
+          onSuccess={() => toast({ title: "Добавлено в план" })}
+        />
+      )}
     </MobileLayout>
   );
 }

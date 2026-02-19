@@ -16,6 +16,7 @@ import {
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
+import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
 import { validateRecipeJson, type RecipeJson } from "./recipeSchema.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -889,23 +890,15 @@ serve(async (req) => {
       const validatedRecipe = responseRecipes[0] as RecipeJson;
       try {
         const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
-        const mealTypeResolved =
-          validatedRecipe.mealType && ["breakfast", "lunch", "snack", "dinner"].includes(validatedRecipe.mealType)
-            ? validatedRecipe.mealType
-            : (() => {
-                const t = ["chat_breakfast", "chat_lunch", "chat_snack", "chat_dinner"].find((tag) =>
-                  (validatedRecipe as { tags?: string[] }).tags?.includes(tag)
-                );
-                return t ? t.replace("chat_", "") : "snack";
-              })();
-        const tags = [...new Set(["chat", `chat_${mealTypeResolved}`])];
         const rawSteps = Array.isArray(validatedRecipe.steps) ? validatedRecipe.steps : [];
-        const stepsPayload = rawSteps.length >= 3
-          ? rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 }))
-          : [
-              ...rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 })),
-              ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг по инструкции.", step_number: rawSteps.length + i + 1 })),
-            ];
+        const stepsPayload = rawSteps.length >= 1
+          ? (rawSteps.length >= 3
+            ? rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 }))
+            : [
+                ...rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 })),
+                ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг по инструкции.", step_number: rawSteps.length + i + 1 })),
+              ])
+          : [{ instruction: "Шаг 1", step_number: 1 }, { instruction: "Шаг 2", step_number: 2 }, { instruction: "Шаг 3", step_number: 3 }];
         const rawIngredients = Array.isArray(validatedRecipe.ingredients) ? validatedRecipe.ingredients : [];
         const ingredientsPayload = rawIngredients.length >= 3
           ? rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
@@ -923,21 +916,22 @@ serve(async (req) => {
               }),
               ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({ name: `Ингредиент ${rawIngredients.length + i + 1}`, display_text: null, canonical_amount: null, canonical_unit: null })),
             ];
-        const payload = {
+        const payload = canonicalizeRecipePayload({
           user_id: userId,
-          source: "chat_ai",
-          title: validatedRecipe.title,
-          description: validatedRecipe.description ?? null,
-          cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
           member_id: memberIdForRecipe,
           child_id: memberIdForRecipe,
-          tags,
-          meal_type: mealTypeResolved,
+          source: "chat_ai",
+          mealType: validatedRecipe.mealType ?? null,
+          tags: (validatedRecipe as { tags?: string[] }).tags ?? null,
+          title: validatedRecipe.title ?? "Рецепт",
+          description: validatedRecipe.description ?? null,
+          cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
           chef_advice: validatedRecipe.chefAdvice ?? null,
           advice: validatedRecipe.advice ?? null,
           steps: stepsPayload,
           ingredients: ingredientsPayload,
-        };
+          sourceTag: "chat",
+        });
         const { data: recipeId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
         if (rpcErr) throw rpcErr;
         savedRecipeId = recipeId ?? null;

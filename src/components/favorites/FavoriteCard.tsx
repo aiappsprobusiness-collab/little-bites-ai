@@ -1,10 +1,9 @@
 import { motion } from "framer-motion";
-import { Heart } from "lucide-react";
+import { Heart, CalendarPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toFavoriteCardViewModel } from "./favoriteCardViewModel";
 import type { SavedFavorite } from "@/hooks/useFavorites";
-import { getRecipeAudience } from "@/utils/recipeAudience";
 
 interface FavoriteCardProps {
   favorite: SavedFavorite;
@@ -13,15 +12,19 @@ interface FavoriteCardProps {
   index?: number;
   /** Premium/trial: subtle highlight, star. */
   isPremium?: boolean;
-  /** Family members for resolving recipe audience from recipe.member_id. */
-  members: Array<{ id: string; age_months?: number | null }>;
+  /** Family members for resolving recipe audience and "Для {name}" pill. */
+  members: Array<{ id: string; name?: string; age_months?: number | null }>;
+  /** Premium: show "В план" button. */
+  onAddToPlan?: () => void;
 }
 
 const MAX_INGREDIENT_CHIPS = 3;
 
-export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isPremium = false, members }: FavoriteCardProps) {
+export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isPremium = false, members, onAddToPlan }: FavoriteCardProps) {
   const vm = toFavoriteCardViewModel(favorite.recipe);
-  const audience = getRecipeAudience(favorite.recipe, members);
+  const audienceLabel = favorite.member_id == null
+    ? "Для семьи"
+    : (members.find((m) => m.id === favorite.member_id) as { name?: string } | undefined)?.name ?? "Для профиля";
   const chips = vm.ingredientNames.slice(0, MAX_INGREDIENT_CHIPS);
   const extraCount = Math.max(0, vm.ingredientTotalCount - MAX_INGREDIENT_CHIPS);
 
@@ -60,16 +63,29 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
             <p className="text-typo-muted text-muted-foreground line-clamp-2 mb-3">{vm.subtitle}</p>
           )}
 
-          {/* Meta row: time + audience pill only */}
+          {/* Meta row: time + "Для кого" pill + Add to plan */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-typo-caption text-muted-foreground mb-3">
             <span className="flex items-center gap-1">
               <span>🕒</span>
               <span>{vm.cookTimeLabel}</span>
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-typo-caption font-medium text-foreground/80 px-2.5 py-1">
-              {audience.showChildEmoji && <span>👶</span>}
-              <span>{audience.label}</span>
+              {audienceLabel}
             </span>
+            {onAddToPlan && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full h-8 text-xs gap-1.5 ml-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddToPlan();
+                }}
+              >
+                <CalendarPlus className="w-3.5 h-3.5" />
+                В план
+              </Button>
+            )}
           </div>
 
           {/* Ingredients: max 2–3 chips + "+N" (informational only) */}

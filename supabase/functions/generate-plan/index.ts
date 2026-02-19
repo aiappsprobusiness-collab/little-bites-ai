@@ -7,6 +7,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { safeError, safeLog, safeWarn } from "../_shared/safeLogger.ts";
+import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -147,11 +148,174 @@ function getDayName(dateStr: string): string {
   return dayNames[date.getDay()];
 }
 
+type MealSlot = { recipe_id?: string; title?: string; plan_source?: "pool" | "ai"; replaced_from_recipe_id?: string };
+
+/** Нормализация meals: только слоты с валидным recipe_id, без null/undefined. */
+function normalizeMealsForWrite(
+  meals: Record<string, MealSlot | null | undefined>
+): Record<string, MealSlot> {
+  const out: Record<string, MealSlot> = {};
+  for (const [key, slot] of Object.entries(meals)) {
+    if (slot == null || typeof slot !== "object") continue;
+    if (!slot.recipe_id) continue;
+    out[key] = { recipe_id: slot.recipe_id, title: slot.title ?? "Рецепт", plan_source: slot.plan_source, ...(slot.replaced_from_recipe_id && { replaced_from_recipe_id: slot.replaced_from_recipe_id }) };
+  }
+  return out;
+}
+
+/** Upsert meal_plans_v2: одна строка на (user_id, member_id, planned_date). Slot-wise merge, нормализация, контрольный SELECT. */
+async function upsertMealPlanRow(
+  supabase: SupabaseClient,
+  userId: string,
+  memberId: string | null,
+  dayKey: string,
+  meals: Record<string, MealSlot | null | undefined>
+): Promise<{ error?: string; id?: string; mergedEmpty?: boolean; keys?: string[] }> {
+  const normalizedNew = normalizeMealsForWrite(meals);
+  let q = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
+  if (memberId == null) q = q.is("member_id", null);
+  else q = q.eq("member_id", memberId);
+  const { data: existing } = await q.maybeSingle();
+  const currentMeals = (existing as { meals?: Record<string, unknown> } | null)?.meals ?? {};
+  const mergedMeals: Record<string, unknown> = { ...currentMeals };
+  for (const [k, v] of Object.entries(normalizedNew)) mergedMeals[k] = v;
+  const payload: { meals: Record<string, unknown> } = { meals: mergedMeals };
+
+  if (existing?.id) {
+    const { error: updateErr } = await supabase.from("meal_plans_v2").update(payload).eq("id", (existing as { id: string }).id);
+    if (updateErr) return { error: updateErr.message };
+  } else {
+    const { data: inserted, error: insertErr } = await supabase
+      .from("meal_plans_v2")
+      .insert({ user_id: userId, member_id: memberId, planned_date: dayKey, meals: mergedMeals })
+      .select("id")
+      .single();
+    if (insertErr) {
+      if (insertErr.code === "23505" || String(insertErr.message || "").includes("23505")) {
+        let retryQ = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
+        if (memberId == null) retryQ = retryQ.is("member_id", null);
+        else retryQ = retryQ.eq("member_id", memberId);
+        const { data: retry } = await retryQ.maybeSingle();
+        if (retry?.id) {
+          const { error: updateErr } = await supabase.from("meal_plans_v2").update(payload).eq("id", (retry as { id: string }).id);
+          if (updateErr) return { error: updateErr.message };
+        }
+      } else return { error: insertErr.message };
+    }
+  }
+
+  let controlQ = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
+  if (memberId == null) controlQ = controlQ.is("member_id", null);
+  else controlQ = controlQ.eq("member_id", memberId);
+  const { data: controlRow } = await controlQ.maybeSingle();
+  const storedMeals = (controlRow as { meals?: Record<string, unknown> } | null)?.meals ?? {};
+  const keys = Object.keys(storedMeals);
+  const mergedEmpty = keys.length === 0;
+  safeLog("[PLAN upsert]", { dayKey, memberId: memberId ?? "null", keys });
+  return { id: (controlRow as { id: string } | null)?.id, keys, mergedEmpty };
+}
+
 function getPrevDayKey(dayKey: string): string {
   const [y, m, d] = dayKey.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   date.setDate(date.getDate() - 1);
   return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+}
+
+/** Возвращает массив ключей дат за N дней до firstDayKey (не включая firstDayKey). */
+function getLastNDaysKeys(firstDayKey: string, n: number): string[] {
+  const [y, m, d] = firstDayKey.split("-").map(Number);
+  const out: string[] = [];
+  for (let i = 1; i <= n; i++) {
+    const date = new Date(y, m - 1, d);
+    date.setDate(date.getDate() - i);
+    out.push(
+      date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0")
+    );
+  }
+  return out;
+}
+
+/** Загружает recipe_id и titleKeys из meal_plans_v2 за указанные даты (для контекста разнообразия). */
+async function fetchRecipeAndTitleKeysFromPlans(
+  supabase: SupabaseClient,
+  userId: string,
+  memberId: string | null,
+  dateKeys: string[]
+): Promise<{ recipeIds: string[]; titleKeys: string[] }> {
+  if (dateKeys.length === 0) return { recipeIds: [], titleKeys: [] };
+  let q = supabase
+    .from("meal_plans_v2")
+    .select("meals")
+    .eq("user_id", userId)
+    .in("planned_date", dateKeys);
+  if (memberId == null) q = q.is("member_id", null);
+  else q = q.eq("member_id", memberId);
+  const { data: rows } = await q;
+  const recipeIds: string[] = [];
+  const titleKeys: string[] = [];
+  for (const row of rows ?? []) {
+    const meals = (row as { meals?: Record<string, { recipe_id?: string; title?: string }> }).meals ?? {};
+    for (const k of MEAL_KEYS) {
+      const slot = meals[k];
+      if (slot?.recipe_id) recipeIds.push(slot.recipe_id);
+      if (slot?.title) titleKeys.push(normalizeTitleKey(slot.title));
+    }
+  }
+  return { recipeIds, titleKeys };
+}
+
+/** Ключевые ингредиенты для разнообразия в рамках дня (один ключ на рецепт). Приоритет: первый совпавший токен. */
+const MAIN_INGREDIENT_TOKENS: { token: string; key: string }[] = [
+  { token: "тыкв", key: "тыква" },
+  { token: "кабачок", key: "кабачок" },
+  { token: "кабачк", key: "кабачок" },
+  { token: "баклажан", key: "баклажан" },
+  { token: "куриц", key: "курица" },
+  { token: "индейк", key: "индейка" },
+  { token: "рыб", key: "рыба" },
+  { token: "лосос", key: "лосось" },
+  { token: "треск", key: "треска" },
+  { token: "говядин", key: "говядина" },
+  { token: "свинин", key: "свинина" },
+  { token: "фарш", key: "фарш" },
+  { token: "творог", key: "творог" },
+  { token: "сырник", key: "творог" },
+  { token: "нут", key: "нут" },
+  { token: "чечевиц", key: "чечевица" },
+  { token: "фасол", key: "фасоль" },
+  { token: "рис", key: "рис" },
+  { token: "гречк", key: "гречка" },
+  { token: "овсян", key: "овсянка" },
+  { token: "картофел", key: "картофель" },
+  { token: "пюре", key: "картофель" },
+  { token: "морков", key: "морковь" },
+  { token: "свекл", key: "свекла" },
+  { token: "капуст", key: "капуста" },
+  { token: "яйц", key: "яйца" },
+  { token: "омлет", key: "яйца" },
+  { token: "молок", key: "молоко" },
+  { token: "йогурт", key: "йогурт" },
+  { token: "сметан", key: "сметана" },
+  { token: "макарон", key: "макароны" },
+  { token: "паста", key: "макароны" },
+  { token: "суп", key: "суп" },
+  { token: "борщ", key: "борщ" },
+  { token: "рагу", key: "рагу" },
+  { token: "плов", key: "плов" },
+];
+
+function inferMainIngredientKey(
+  title: string | null | undefined,
+  description?: string | null,
+  ingredientsText?: string | null
+): string | null {
+  const text = [title ?? "", description ?? "", ingredientsText ?? ""].join(" ").toLowerCase();
+  if (!text.trim()) return null;
+  for (const { token, key } of MAIN_INGREDIENT_TOKENS) {
+    if (text.includes(token)) return key;
+  }
+  return null;
 }
 
 const FETCH_TIMEOUT_MS = 28_000;
@@ -216,6 +380,33 @@ function extractChefAdvice(obj: Record<string, unknown>): string | undefined {
 function extractAdvice(obj: Record<string, unknown>): string | undefined {
   const val = obj.advice;
   return typeof val === "string" && val.trim() ? val.trim() : undefined;
+}
+
+/** Описание для recipes.description: из description/intro, иначе из chef_advice или первых шагов (макс 200 символов). */
+function getDescriptionWithFallback(options: {
+  description?: string | null;
+  intro?: string | null;
+  steps?: string[];
+  chef_advice?: string | null;
+}): string {
+  const { description, intro, steps, chef_advice } = options;
+  const primary =
+    typeof description === "string" && description.trim()
+      ? description.trim()
+      : typeof intro === "string" && intro.trim()
+        ? intro.trim()
+        : "";
+  if (primary.length > 0) return primary.slice(0, 200);
+  if (typeof chef_advice === "string" && chef_advice.trim()) return chef_advice.trim().slice(0, 200);
+  if (Array.isArray(steps) && steps.length > 0) {
+    const first = steps
+      .slice(0, 2)
+      .map((s) => (typeof s === "string" ? s : ""))
+      .filter(Boolean)
+      .join(" ");
+    if (first.trim()) return first.trim().slice(0, 200);
+  }
+  return "";
 }
 
 // ——— Pool-first: same logic as client recipePool ———
@@ -438,6 +629,8 @@ async function pickFromPool(
     debugPool?: boolean;
     excludeProteinKeys?: string[];
     proteinKeyCounts?: Record<string, number>;
+    /** Ключи главных ингредиентов уже выбранных в этот день — не повторять (тыква дважды в день). */
+    excludedMainIngredients?: string[];
     adaptiveParams?: AdaptiveParams;
     weekProgress?: { filled: number; total: number };
     debugSlotStats?: Record<string, unknown>;
@@ -447,6 +640,7 @@ async function pickFromPool(
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
   const excludeProteinSet = new Set(options?.excludeProteinKeys ?? []);
+  const excludedMainIngredientSet = new Set((options?.excludedMainIngredients ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean));
   const proteinKeyCounts = options?.proteinKeyCounts ?? {};
   const adaptiveParams = options?.adaptiveParams;
   const weekProgress = options?.weekProgress;
@@ -485,9 +679,13 @@ async function pickFromPool(
   }
   const candidatesStrict = (rowsStrict ?? []).length;
 
+  // Для «Семья» (member_id null) пул = все рецепты пользователя, иначе рецепты ребёнка + семейные (member_id null).
   let qLoose = baseQ();
-  if (memberId == null) qLoose = qLoose.is("member_id", null);
-  else qLoose = qLoose.or(`member_id.eq.${memberId},member_id.is.null`);
+  if (memberId == null) {
+    // Не фильтруем по member_id — в семейный план попадают все рецепты пользователя (в т.ч. chat_ai с member_id ребёнка).
+  } else {
+    qLoose = qLoose.or(`member_id.eq.${memberId},member_id.is.null`);
+  }
   if (excludeRecipeIds.length > 0 && excludeRecipeIds.length < 50) {
     qLoose = qLoose.not("id", "in", `(${excludeRecipeIds.join(",")})`);
   }
@@ -513,7 +711,21 @@ async function pickFromPool(
   const afterExcludeTitleKeys = filtered.length;
   const titleKeyRejectedCount = startCount - afterExcludeTitleKeys;
 
-  const beforeMealType = afterExcludeTitleKeys;
+  let afterMainIngredient = afterExcludeTitleKeys;
+  if (excludedMainIngredientSet.size > 0) {
+    const beforeMainIngredient = filtered.length;
+    filtered = filtered.filter((r) => {
+      const ingText = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
+      const mainKey = inferMainIngredientKey(r.title, r.description, ingText);
+      return mainKey == null || !excludedMainIngredientSet.has(mainKey);
+    });
+    afterMainIngredient = filtered.length;
+    if (debugPool && beforeMainIngredient !== afterMainIngredient) {
+      safeLog("[POOL DEBUG] afterMainIngredient", { mealType, beforeMainIngredient, afterMainIngredient, excludedMainIngredients: [...excludedMainIngredientSet] });
+    }
+  }
+
+  const beforeMealType = afterMainIngredient;
   const preMealTypeFiltered = [...filtered];
   const resolvedCache = new Map<string, { resolved: NormalizedMealType | null; wasInferred: boolean }>();
   for (const r of preMealTypeFiltered) {
@@ -578,6 +790,7 @@ async function pickFromPool(
   else if (afterMealType === 0) rejectReason = "meal_type_mismatch";
   else if (normalizedSlot === "breakfast" && afterNoSoup === 0) rejectReason = "all_soup_for_breakfast";
   else if (afterSanity === 0 && blockedBySanityRules.length > 0) rejectReason = "sanity_rules";
+  else if (excludedMainIngredientSet.size > 0 && afterMainIngredient === 0 && afterExcludeTitleKeys > 0) rejectReason = "main_ingredient_repeat";
 
   const beforeProfile = filtered.length;
   const candidatesBeforeProfile = [...filtered];
@@ -665,11 +878,17 @@ async function pickFromPool(
       Object.assign(debugSlotStatsNull, {
         slotType: mealType,
         pickedSource: "ai",
+        candidatesFromDb,
+        afterExcludeIds,
+        afterTitleKeys: afterExcludeTitleKeys,
+        afterMainIngredient,
+        afterProfile,
         pickedRecipeId: null,
         pickedTitle: null,
         pickedMealTypeNorm: null,
         proteinKey: null,
         score: null,
+        rejectReason: rejectReason ?? "all_filtered_out",
         sanityRejectedCount: sanityRej,
         allergyRejectedCount: allergyRej,
         proteinRejectedCount: 0,
@@ -684,14 +903,11 @@ async function pickFromPool(
       hadRecipeId: hadRecipeId ?? undefined,
       replaced: false,
       candidatesFromDb,
-      candidatesStrict,
-      candidatesLoose,
-      afterExclude,
+      afterExcludeIds: afterExclude,
+      afterTitleKeys: afterExcludeTitleKeys,
+      afterMainIngredient,
       beforeMealType,
-      candidatesAfterMealType,
-      afterMealType,
-      blockedBySanityRules,
-      mealTypeSamples,
+      candidatesAfterMealType: afterMealType,
       afterProfile,
       afterFiltersCount: 0,
       pickedRecipeId: null,
@@ -779,15 +995,18 @@ async function pickFromPool(
     Object.assign(debugSlotStats, {
       slotType: mealType,
       pickedSource: "pool",
+      candidatesFromDb,
+      afterExcludeIds,
+      afterTitleKeys: afterExcludeTitleKeys,
+      afterMainIngredient,
+      afterProfile,
       pickedRecipeId: picked.id,
       pickedTitle: picked.title,
       pickedMealTypeNorm: candidateType,
       proteinKey: pickedProteinKey,
       pickedProteinKey,
-      pickedBaseScore,
-      pickedPenalty,
-      pickedFinalScore,
       score: pickedFinalScore,
+      rejectReason: undefined,
       sanityRejectedCount,
       allergyRejectedCount,
       proteinRejectedCount,
@@ -816,13 +1035,9 @@ async function pickFromPool(
     hadRecipeId: hadRecipeId ?? undefined,
     replaced: true,
     candidatesFromDb,
-    candidatesStrict,
-    candidatesLoose,
-    afterExclude,
-    beforeMealType,
-    candidatesAfterMealType,
-    afterMealType,
-    blockedBySanityRules,
+    afterExcludeIds: afterExclude,
+    afterTitleKeys: afterExcludeTitleKeys,
+    afterMainIngredient,
     afterProfile,
     afterFiltersCount,
     pickedRecipeId: picked.id,
@@ -831,12 +1046,8 @@ async function pickFromPool(
     pickedMealTypeRaw: picked.meal_type,
     pickedMealTypeNorm: candidateType,
     pickedProteinKey,
-    pickedBaseScore,
-    pickedPenalty,
-    pickedFinalScore,
     slotTypeNorm: normalizedSlot,
     usedTitleKeysCount: excludeTitleKeys.length,
-    excludedTitleKeysHit,
     mealTypeRecoveredFromTitle,
     recoveredCount,
   });
@@ -982,8 +1193,25 @@ serve(async (req) => {
       const memberDataPool: MemberDataPool | null = memberData
         ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], age_months: memberData.age_months }
         : null;
-      const excludeRecipeIds = Array.isArray(body.exclude_recipe_ids) ? body.exclude_recipe_ids : [];
-      const excludeTitleKeys = Array.isArray(body.exclude_title_keys) ? body.exclude_title_keys : [];
+
+      const existingRow = await supabase
+        .from("meal_plans_v2")
+        .select("id, meals")
+        .eq("user_id", userId)
+        .eq("planned_date", dayKey)
+        .is("member_id", memberId)
+        .maybeSingle();
+
+      const currentMeals = (existingRow.data as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
+      const hadRecipeId = currentMeals[mealType]?.recipe_id ?? null;
+
+      const dateKeysReplace = [dayKey, ...getLastNDaysKeys(dayKey, 6)];
+      const { recipeIds: replaceRecipeIds, titleKeys: replaceTitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, memberId, dateKeysReplace);
+      const excludeRecipeIds = [...(Array.isArray(body.exclude_recipe_ids) ? body.exclude_recipe_ids : []), ...replaceRecipeIds];
+      const excludeTitleKeys = [...new Set([...(Array.isArray(body.exclude_title_keys) ? body.exclude_title_keys : []), ...replaceTitleKeys])];
+      const excludedMainIngredientsReplace = MEAL_KEYS.filter((k) => k !== mealType)
+        .map((k) => inferMainIngredientKey(currentMeals[k]?.title ?? "", null, null))
+        .filter(Boolean) as string[];
 
       let excludeProteinKeys: string[] = [];
       const prevDayKey = getPrevDayKey(dayKey);
@@ -1001,17 +1229,6 @@ serve(async (req) => {
         if (pk && pk !== "veg") excludeProteinKeys.push(pk);
       }
 
-      const existingRow = await supabase
-        .from("meal_plans_v2")
-        .select("id, meals")
-        .eq("user_id", userId)
-        .eq("planned_date", dayKey)
-        .is("member_id", memberId)
-        .maybeSingle();
-
-      const currentMeals = (existingRow.data as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
-      const hadRecipeId = currentMeals[mealType]?.recipe_id ?? null;
-
       const picked = await pickFromPool(
         supabase,
         userId,
@@ -1021,35 +1238,19 @@ serve(async (req) => {
         excludeRecipeIds,
         excludeTitleKeys,
         60,
-        { logPrefix: "[REPLACE_SLOT]", hadRecipeId, excludeProteinKeys, debugPool }
+        { logPrefix: "[REPLACE_SLOT]", hadRecipeId, excludeProteinKeys, debugPool, excludedMainIngredients: excludedMainIngredientsReplace }
       );
 
       if (picked) {
         if (debugPlan) safeLog("[REPLACE_SLOT] pool_search", { requestId, pickedSource: "pool", newRecipeId: picked.id });
         const newMeals = { ...currentMeals, [mealType]: { recipe_id: picked.id, title: picked.title, plan_source: "pool" as const } };
-        if (existingRow.data?.id) {
-          const { error: updateErr } = await supabase.from("meal_plans_v2").update({ meals: newMeals }).eq("id", (existingRow.data as { id: string }).id);
-          if (updateErr) {
-            safeWarn("[REPLACE_SLOT] attach_failed (update)", requestId, updateErr.message);
-            return new Response(
-              JSON.stringify({ error: "replace_failed", pickedSource: "pool", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        } else {
-          const { error: insertErr } = await supabase.from("meal_plans_v2").insert({
-            user_id: userId,
-            member_id: memberId,
-            planned_date: dayKey,
-            meals: newMeals,
-          });
-          if (insertErr) {
-            safeWarn("[REPLACE_SLOT] attach_failed (insert)", requestId, insertErr.message);
-            return new Response(
-              JSON.stringify({ error: "replace_failed", pickedSource: "pool", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+        const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+        if (upsertErr.error) {
+          safeWarn("[REPLACE_SLOT] attach_failed (upsert)", requestId, upsertErr.error);
+          return new Response(
+            JSON.stringify({ error: "replace_failed", pickedSource: "pool", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
         if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId: picked.id, reason: "pool" });
         return new Response(
@@ -1080,7 +1281,9 @@ serve(async (req) => {
       const deepseekUrl = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/deepseek-chat";
       const mealLabel =
         mealType === "breakfast" ? "завтрак" : mealType === "lunch" ? "обед" : mealType === "snack" ? "полдник" : "ужин";
-      const excludeStr = excludeTitleKeys.length > 0 ? ` Не повторяй: ${excludeTitleKeys.slice(0, 12).join(", ")}.` : "";
+      const excludeStr = excludeTitleKeys.length > 0 ? ` Не повторяй блюда: ${excludeTitleKeys.slice(0, 16).join(", ")}.` : "";
+      const mainIngredientExcludeStr =
+        excludedMainIngredientsReplace.length > 0 ? ` В этот день уже есть: ${excludedMainIngredientsReplace.join(", ")} — не используй.` : "";
       const slotForbiddenByType: Record<string, string> = {
         breakfast: "супы, рагу, плов, рыбу, карри, нут, тушёное",
         lunch: "сырники, оладьи, запеканку, кашу, гранолу, тосты",
@@ -1111,7 +1314,7 @@ serve(async (req) => {
               messages: [
                 {
                   role: "user",
-                  content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${slotConstraint}${extraHint} Верни только JSON.`,
+                  content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${slotConstraint}${extraHint} Верни только JSON.`,
                 },
               ],
             }),
@@ -1160,14 +1363,21 @@ serve(async (req) => {
             : (rawRecipeId as { id?: string })?.id ?? String(rawRecipeId);
       let title = aiData.recipes?.[0]?.title ?? (typeof aiData.message === "string" ? aiData.message.slice(0, 100) : "Рецепт");
 
+      type ParsedAiRecipe = {
+        title?: string;
+        description?: string;
+        intro?: string;
+        ingredients?: Array<{ name?: string; amount?: string }>;
+        steps?: string[];
+      };
       const parseAndValidateAi = (
         msg: string
-      ): { parsed: { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }; failReason: string | null } => {
+      ): { parsed: ParsedAiRecipe; failReason: string | null } => {
         const jsonStr = extractFirstJsonObject(msg);
         if (!jsonStr) return { parsed: {}, failReason: "no_json" };
-        let parsed: { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] };
+        let parsed: ParsedAiRecipe;
         try {
-          parsed = JSON.parse(jsonStr) as { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] };
+          parsed = JSON.parse(jsonStr) as ParsedAiRecipe;
         } catch {
           return { parsed: {}, failReason: "no_json" };
         }
@@ -1244,15 +1454,20 @@ serve(async (req) => {
         while (ingredients.length < 3) ingredients.push({ name: `Ингредиент ${ingredients.length + 1}`, amount: "" });
         const chefAdvice = extractChefAdvice(parsed as Record<string, unknown>);
         const adviceVal = extractAdvice(parsed as Record<string, unknown>);
-        const payload = {
+        const description = getDescriptionWithFallback({
+          description: parsed.description,
+          intro: parsed.intro,
+          steps: parsed.steps ?? steps,
+          chef_advice: chefAdvice ?? null,
+        });
+        const payload = canonicalizeRecipePayload({
           user_id: userId,
           member_id: memberId,
           child_id: memberId,
           source: "chat_ai",
-          meal_type: mealType,
-          tags: ["chat", `chat_${mealType}`],
+          contextMealType: mealType,
           title: parsed.title ?? "Рецепт",
-          description: "",
+          description,
           cooking_time_minutes: null,
           chef_advice: chefAdvice ?? null,
           advice: adviceVal ?? null,
@@ -1265,7 +1480,8 @@ serve(async (req) => {
             order_index: idx,
             category: "other",
           })),
-        };
+          sourceTag: "plan",
+        });
         const { data: createdId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
         if (rpcErr || !createdId) {
           safeWarn("[REPLACE_SLOT] create_recipe failed", rpcErr?.message);
@@ -1275,36 +1491,20 @@ serve(async (req) => {
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        if (debugPlan) safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: true, recipeId: createdId });
+        if (debugPlan) safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: true, recipeId: createdId, hasDescription: description.length > 0 });
         recipeId = typeof createdId === "string" ? createdId : (createdId as { id?: string })?.id ?? String(createdId);
         title = parsed.title ?? title;
       }
 
       if (recipeId) {
         const newMeals = { ...currentMeals, [mealType]: { recipe_id: recipeId, title, plan_source: "ai" as const } };
-        if (existingRow.data?.id) {
-          const { error: updateErr } = await supabase.from("meal_plans_v2").update({ meals: newMeals }).eq("id", (existingRow.data as { id: string }).id);
-          if (updateErr) {
-            safeWarn("[REPLACE_SLOT] attach_failed (update)", requestId, updateErr.message);
-            return new Response(
-              JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        } else {
-          const { error: insertErr } = await supabase.from("meal_plans_v2").insert({
-            user_id: userId,
-            member_id: memberId,
-            planned_date: dayKey,
-            meals: newMeals,
-          });
-          if (insertErr) {
-            safeWarn("[REPLACE_SLOT] attach_failed (insert)", requestId, insertErr.message);
-            return new Response(
-              JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+        const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+        if (upsertErr.error) {
+          safeWarn("[REPLACE_SLOT] attach_failed (upsert)", requestId, upsertErr.error);
+          return new Response(
+            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
         if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId, reason: "ai" });
         return new Response(
@@ -1313,7 +1513,15 @@ serve(async (req) => {
         );
       }
 
-      const recipesFromResponse = aiData.recipes as Array<{ title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }> | undefined;
+      const recipesFromResponse = aiData.recipes as Array<{
+        title?: string;
+        description?: string;
+        intro?: string;
+        ingredients?: Array<{ name?: string; amount?: string }>;
+        steps?: string[];
+        chefAdvice?: string;
+        chef_advice?: string;
+      }> | undefined;
       const firstRecipe = Array.isArray(recipesFromResponse) && recipesFromResponse.length > 0 ? recipesFromResponse[0] : null;
       if (firstRecipe?.title) {
         const ingList = (firstRecipe.ingredients ?? []).map((ing) =>
@@ -1324,17 +1532,23 @@ serve(async (req) => {
         if (!failReason) {
           while (stepList.length < 3) stepList.push(`Шаг ${stepList.length + 1}`);
           while (ingList.length < 3) ingList.push({ name: `Ингредиент ${ingList.length + 1}`, amount: "" });
-          const payload = {
+          const chefAdviceFirst = firstRecipe.chefAdvice ?? firstRecipe.chef_advice;
+          const descriptionFirst = getDescriptionWithFallback({
+            description: firstRecipe.description,
+            intro: firstRecipe.intro,
+            steps: firstRecipe.steps ?? stepList,
+            chef_advice: chefAdviceFirst ?? null,
+          });
+          const payload = canonicalizeRecipePayload({
             user_id: userId,
             member_id: memberId,
             child_id: memberId,
             source: "chat_ai",
-            meal_type: mealType,
-            tags: ["chat", `chat_${mealType}`],
+            contextMealType: mealType,
             title: firstRecipe.title,
-            description: "",
+            description: descriptionFirst,
             cooking_time_minutes: null,
-            chef_advice: null,
+            chef_advice: typeof chefAdviceFirst === "string" && chefAdviceFirst.trim() ? chefAdviceFirst.trim() : null,
             advice: null,
             steps: stepList.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
             ingredients: ingList.slice(0, 20).map((ing, idx) => ({
@@ -1345,34 +1559,20 @@ serve(async (req) => {
               order_index: idx,
               category: "other",
             })),
-          };
+            sourceTag: "plan",
+          });
           const { data: createdId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
           if (!rpcErr && createdId) {
             const idStr = typeof createdId === "string" ? createdId : (createdId as { id?: string })?.id ?? String(createdId);
+            if (debugPlan) safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: true, recipeId: idStr, hasDescription: descriptionFirst.length > 0 });
             const newMeals = { ...currentMeals, [mealType]: { recipe_id: idStr, title: firstRecipe.title, plan_source: "ai" as const } };
-            if (existingRow.data?.id) {
-              const { error: updateErr } = await supabase.from("meal_plans_v2").update({ meals: newMeals }).eq("id", (existingRow.data as { id: string }).id);
-              if (updateErr) {
-                safeWarn("[REPLACE_SLOT] attach_failed (update)", requestId, updateErr.message);
-                return new Response(
-                  JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
-                  { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-                );
-              }
-            } else {
-              const { error: insertErr } = await supabase.from("meal_plans_v2").insert({
-                user_id: userId,
-                member_id: memberId,
-                planned_date: dayKey,
-                meals: newMeals,
-              });
-              if (insertErr) {
-                safeWarn("[REPLACE_SLOT] attach_failed (insert)", requestId, insertErr.message);
-                return new Response(
-                  JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
-                  { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-                );
-              }
+            const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+            if (upsertErr.error) {
+              safeWarn("[REPLACE_SLOT] attach_failed (upsert)", requestId, upsertErr.error);
+              return new Response(
+                JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
+                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
             }
             if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId: idStr, reason: "ai_recipes_array" });
             return new Response(
@@ -1440,6 +1640,10 @@ serve(async (req) => {
           if (slot?.title) usedTitleKeys.push(normalizeTitleKey(slot.title));
         });
       });
+      const last4KeysUpgrade = getLastNDaysKeys(dayKeys[0], 4);
+      const { recipeIds: prev4RecipeIdsUpgrade, titleKeys: prev4TitleKeysUpgrade } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, memberId, last4KeysUpgrade);
+      usedRecipeIds.push(...prev4RecipeIdsUpgrade);
+      usedTitleKeys.push(...prev4TitleKeysUpgrade);
 
       for (let di = 0; di < dayKeys.length; di++) {
         const dayKey = dayKeys[di];
@@ -1464,6 +1668,7 @@ serve(async (req) => {
         const currentMeals = (existingRow.data as { meals?: MealsRow } | null)?.meals ?? {};
         const newMeals = { ...currentMeals } as MealsRow;
 
+        let dayExcludedMainIngredientsUpgrade: string[] = [];
         const poolPicks: Record<string, { id: string; title: string } | null> = {};
         for (const mealKey of MEAL_KEYS) {
           const slot = currentMeals[mealKey];
@@ -1483,6 +1688,7 @@ serve(async (req) => {
               excludeProteinKeys,
               proteinKeyCounts,
               debugPool,
+              excludedMainIngredients: dayExcludedMainIngredientsUpgrade,
             }
           );
           poolPicks[mealKey] = picked ?? null;
@@ -1497,6 +1703,8 @@ serve(async (req) => {
             usedTitleKeys.push(normalizeTitleKey(picked.title));
             const pk = inferProteinKey(picked.title, null);
             if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
+            const mik = inferMainIngredientKey(picked.title, null, null);
+            if (mik) dayExcludedMainIngredientsUpgrade.push(mik);
             replacedCount++;
             weekContext.push(picked.title);
           } else {
@@ -1506,6 +1714,8 @@ serve(async (req) => {
               usedTitleKeys.push(normalizeTitleKey(slot.title));
               const pk = inferProteinKey(slot.title, null);
               if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
+              const mik = inferMainIngredientKey(slot.title, null, null);
+              if (mik) dayExcludedMainIngredientsUpgrade.push(mik);
               weekContext.push(slot.title);
             }
           }
@@ -1516,15 +1726,14 @@ serve(async (req) => {
           safeLog("[POOL UPGRADE] slots left empty (pool only, no AI)", { dayKey, emptySlots: MEAL_KEYS.filter((k) => !poolPicks[k] && !currentMeals[k]?.recipe_id) });
         }
 
-        if (existingRow.data?.id) {
-          await supabase.from("meal_plans_v2").update({ meals: newMeals, updated_at: new Date().toISOString() }).eq("id", (existingRow.data as { id: string }).id);
-        } else {
-          await supabase.from("meal_plans_v2").insert({
-            user_id: userId,
-            member_id: memberId,
-            planned_date: dayKey,
-            meals: newMeals,
-          });
+        const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+        if (upsertResult.error) {
+          safeWarn("[POOL UPGRADE] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
+        }
+        if (upsertResult.mergedEmpty) {
+          const picksThisDay = MEAL_KEYS.filter((k) => poolPicks[k]).length;
+          safeWarn("[POOL UPGRADE] merged_empty_meals", { dayKey, memberId: memberId ?? "null", picksThisDay });
+          replacedCount = Math.max(0, replacedCount - picksThisDay);
         }
       }
 
@@ -1613,6 +1822,16 @@ serve(async (req) => {
       ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], age_months: memberData.age_months }
       : null;
 
+    const { data: profileRow } = await supabase
+      .from("profiles_v2")
+      .select("status, premium_until, trial_until")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const prof = profileRow as { status?: string; premium_until?: string | null; trial_until?: string | null } | null;
+    const hasPremium = prof?.premium_until && new Date(prof.premium_until) > new Date();
+    const hasTrial = prof?.trial_until && new Date(prof.trial_until) > new Date();
+    const isPremiumOrTrial = prof?.status === "premium" || prof?.status === "trial" || hasPremium || hasTrial;
+
     let usedRecipeIds: string[] = [];
     let usedTitleKeys: string[] = [];
     const proteinKeyCounts: Record<string, number> = {};
@@ -1648,6 +1867,10 @@ serve(async (req) => {
           }
         });
       });
+      const last4Keys = getLastNDaysKeys(dayKeys[0], 4);
+      const { recipeIds: prev4RecipeIds, titleKeys: prev4TitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, memberId, last4Keys);
+      usedRecipeIds = [...usedRecipeIds, ...prev4RecipeIds];
+      usedTitleKeys = [...usedTitleKeys, ...prev4TitleKeys];
     }
 
     const allergyTokens = getAllergyTokens(memberDataPool);
@@ -1708,6 +1931,7 @@ serve(async (req) => {
         if (poolRate < 0.3) adaptiveParams.softenProtein = true;
       }
       if ((rejectsByReason.allergy ?? 0) > 0) adaptiveParams.allergyPenalty = -200;
+      let dayExcludedMainIngredients: string[] = [];
       for (const mealKey of MEAL_KEYS) {
         const slotStats: Record<string, unknown> = {};
         const picked = await pickFromPool(
@@ -1722,6 +1946,7 @@ serve(async (req) => {
           {
             excludeProteinKeys,
             proteinKeyCounts,
+            excludedMainIngredients: dayExcludedMainIngredients,
             debugPool,
             adaptiveParams,
             weekProgress: { filled: filledSlotsSoFar, total: totalSlotsForWeek },
@@ -1738,173 +1963,13 @@ serve(async (req) => {
           usedTitleKeys.push(normalizeTitleKey(picked.title));
           const pk = inferProteinKey(picked.title, null);
           if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
+          const mainKey = inferMainIngredientKey(picked.title, null, null);
+          if (mainKey) dayExcludedMainIngredients = [...dayExcludedMainIngredients, mainKey];
+        } else if (runDebug) {
+          safeLog("[JOB] pool_exhausted_free_or_premium_fallback", { dayKey, mealKey, isPremiumOrTrial, reason: "pool_exhausted_free" });
         }
       }
       totalSlotsProcessed += MEAL_KEYS.length;
-
-      const doDayRequest = (extraHint: string) =>
-        fetchWithRetry(
-          deepseekUrl,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: authHeader },
-            body: JSON.stringify({
-              type: "single_day",
-              stream: false,
-              dayName,
-              memberData,
-              weekContext: weekContext.length ? weekContext.join(", ") : "Пока ничего не запланировано.",
-              messages: [
-                {
-                  role: "user",
-                  content: `Составь план питания на ${dayName}. Укажи завтрак, обед, полдник и ужин в формате JSON.${extraHint}`,
-                },
-              ],
-            }),
-          },
-          { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
-        );
-
-      let res: Response;
-      try {
-        res = await doDayRequest(allergyWeekHint);
-      } catch (fetchErr) {
-        const errMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
-        const isAbort = errMsg.includes("abort") || errMsg.includes("AbortError");
-        const errorType = isAbort ? "timeout" : "fetch_error";
-        if (runDebug) safeLog("[JOB] day fail", { dayKey, tookMs: Date.now() - dayStartAt, errorType });
-        safeWarn("generate-plan deepseek", errorType, errMsg.slice(0, 100));
-        await supabase
-          .from("plan_generation_jobs")
-          .update({
-            status: "error",
-            error_text: `deepseek_${errorType}`.slice(0, 500),
-            progress_done: i + 1,
-            last_day_key: dayKey,
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", jobId);
-        return new Response(
-          JSON.stringify({ job_id: jobId, status: "error", error: `deepseek_${errorType}` }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (!res.ok) {
-        const errText = await res.text();
-        if (runDebug) safeLog("[JOB] day fail", { dayKey, tookMs: Date.now() - dayStartAt, errorType: "http_error" });
-        safeWarn("generate-plan deepseek error", res.status, errText.slice(0, 100));
-        await supabase
-          .from("plan_generation_jobs")
-          .update({
-            status: "error",
-            error_text: errText.slice(0, 500),
-            progress_done: i + 1,
-            last_day_key: dayKey,
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", jobId);
-        return new Response(
-          JSON.stringify({ job_id: jobId, status: "error", error: errText.slice(0, 200) }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const data = await res.json();
-      const raw = data?.message ?? "";
-      const jsonStr = extractFirstJsonObject(raw);
-      if (!jsonStr) {
-        await supabase
-          .from("plan_generation_jobs")
-          .update({ status: "error", error_text: "parse_failed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-          .eq("id", jobId);
-        return new Response(
-          JSON.stringify({ job_id: jobId, status: "error" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const slotForbiddenWeek: Record<string, string> = {
-        breakfast: "супы, рагу, плов, рыбу. Только завтраки: каши, омлеты, сырники, тосты.",
-        lunch: "сырники, оладьи, запеканку, кашу. Только обеды: супы, вторые блюда.",
-        snack: "супы, рагу, каши, гречку, рис. Только перекусы: фрукты, печенье, смузи, йогурт с добавками.",
-        dinner: "йогурт, творог, дольки, печенье, пюре как единственное. Только ужины: вторые блюда.",
-      };
-      let parsed = JSON.parse(jsonStr) as SingleDayResponse;
-      let hasAllergyFail = false;
-      let hasSanityFail = false;
-      for (const mealKey of MEAL_KEYS) {
-        const meal = parsed[mealKey];
-        if (!meal?.name || !Array.isArray(meal.ingredients)) continue;
-        const ingredients = meal.ingredients.map((ing) =>
-          typeof ing === "string" ? { name: ing.trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
-        );
-        const steps = (meal.steps ?? []).filter(Boolean).map((s) => String(s));
-        const fail = validateAiMeal(meal.name, ingredients, steps, mealKey, memberDataPool);
-        if (fail) {
-          rejectsByReason[fail] = (rejectsByReason[fail] ?? 0) + 1;
-          if (fail === "allergy") hasAllergyFail = true;
-          else hasSanityFail = true;
-        }
-      }
-      if (hasAllergyFail && allergyTokens.length > 0) {
-        try {
-          res = await doDayRequest(
-            " СТРОГО БЕЗ МОЛОЧНЫХ: молоко, творог, йогурт, сыр, кефир, сливки, сметана, масло, ряженка, мороженое, сгущенка. "
-          );
-          if (res.ok) {
-            const retryData = await res.json();
-            const retryRaw = retryData?.message ?? "";
-            const retryJson = extractFirstJsonObject(retryRaw);
-            if (retryJson) parsed = JSON.parse(retryJson) as SingleDayResponse;
-          }
-        } catch (retryErr) {
-          const errMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-          if (runDebug) safeLog("[JOB] day fail", { dayKey, tookMs: Date.now() - dayStartAt, errorType: "retry_timeout" });
-          await supabase
-            .from("plan_generation_jobs")
-            .update({
-              status: "error",
-              error_text: "deepseek_retry_timeout",
-              progress_done: i + 1,
-              last_day_key: dayKey,
-              completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", jobId);
-          return new Response(
-            JSON.stringify({ job_id: jobId, status: "error", error: "deepseek_retry_timeout" }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      } else if (hasSanityFail) {
-        try {
-          const sanityHint = " Правила по слотам: " + Object.entries(slotForbiddenWeek).map(([k, v]) => `${k}: ${v}`).join(" | ");
-          res = await doDayRequest(sanityHint);
-          if (res.ok) {
-            const retryData = await res.json();
-            const retryRaw = retryData?.message ?? "";
-            const retryJson = extractFirstJsonObject(retryRaw);
-            if (retryJson) parsed = JSON.parse(retryJson) as SingleDayResponse;
-          }
-        } catch {
-          if (runDebug) safeLog("[JOB] day fail", { dayKey, tookMs: Date.now() - dayStartAt, errorType: "retry_timeout" });
-          await supabase
-            .from("plan_generation_jobs")
-            .update({
-              status: "error",
-              error_text: "deepseek_retry_timeout",
-              progress_done: i + 1,
-              last_day_key: dayKey,
-              completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", jobId);
-          return new Response(
-            JSON.stringify({ job_id: jobId, status: "error", error: "deepseek_retry_timeout" }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
 
       let dayDbCount = 0;
       let dayAiCount = 0;
@@ -1927,34 +1992,94 @@ serve(async (req) => {
           weekContext.push(fromPool.title);
           continue;
         }
-        const meal = parsed[mealKey];
-        if (!meal?.name || !Array.isArray(meal.ingredients)) continue;
-        const ingredients = meal.ingredients.map((ing) =>
-          typeof ing === "string" ? { name: ing.trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
+        if (!isPremiumOrTrial) {
+          if (runDebug) safeLog("[JOB] pool_exhausted_free", { dayKey, mealKey, reason: "pool_exhausted_free" });
+          continue;
+        }
+        const mealLabel = mealKey === "breakfast" ? "завтрак" : mealKey === "lunch" ? "обед" : mealKey === "snack" ? "полдник" : "ужин";
+        const excludeStr = usedTitleKeys.length > 0 ? ` Не повторяй блюда: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
+        const mainIngredientExcludeStr =
+          dayExcludedMainIngredients.length > 0 ? ` В этот день уже есть блюда с: ${[...new Set(dayExcludedMainIngredients)].join(", ")} — не используй их.` : "";
+        const slotForbidden: Record<string, string> = {
+          breakfast: "супы, рагу, плов. Только завтраки: каши, омлеты, сырники, тосты.",
+          lunch: "сырники, оладьи, кашу. Только обеды: супы, вторые блюда.",
+          snack: "супы, рагу, каши. Только перекусы: фрукты, печенье, смузи.",
+          dinner: "йогурт, творог, дольки, печенье как единственное. Только ужины: вторые блюда.",
+        };
+        const allergyHint = allergyTokens.length > 0 ? " СТРОГО без молочных: молоко, творог, йогурт, сыр, кефир, сливки, сметана. " : "";
+        const aiRes = await fetchWithRetry(
+          deepseekUrl,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: authHeader },
+            body: JSON.stringify({
+              type: "recipe",
+              stream: false,
+              memberData: memberData ?? undefined,
+              mealType: mealKey,
+              messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr} ${slotForbidden[mealKey] ?? ""}.${allergyHint} Верни только JSON.` }],
+            }),
+          },
+          { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
         );
-        const steps = (meal.steps ?? []).filter(Boolean).map((s) => String(s));
-        const failReason = validateAiMeal(meal.name, ingredients, steps, mealKey, memberDataPool);
+        if (!aiRes.ok) {
+          safeWarn("[JOB] AI fallback failed for slot", dayKey, mealKey, aiRes.status);
+          continue;
+        }
+        const aiData = (await aiRes.json()) as { message?: string; recipes?: Array<{ title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }> };
+        const firstRecipe = Array.isArray(aiData.recipes) && aiData.recipes.length > 0 ? aiData.recipes[0] : null;
+        let title = firstRecipe?.title ?? (typeof aiData.message === "string" ? aiData.message.slice(0, 100) : "Рецепт");
+        let ingredients: Array<{ name: string; amount: string }> = [];
+        let steps: string[] = [];
+        if (typeof aiData.message === "string") {
+          const jsonStr = extractFirstJsonObject(aiData.message);
+          if (jsonStr) {
+            try {
+              const parsed = JSON.parse(jsonStr) as { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] };
+              title = parsed.title ?? title;
+              ingredients = (parsed.ingredients ?? []).map((ing) =>
+                typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
+              );
+              steps = (parsed.steps ?? []).filter(Boolean).map((s) => String(s));
+            } catch {
+              if (firstRecipe) {
+                ingredients = (firstRecipe.ingredients ?? []).map((ing) =>
+                  typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
+                );
+                steps = (firstRecipe.steps ?? []).filter(Boolean).map((s) => String(s));
+              }
+            }
+          } else if (firstRecipe) {
+            ingredients = (firstRecipe.ingredients ?? []).map((ing) =>
+              typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
+            );
+            steps = (firstRecipe.steps ?? []).filter(Boolean).map((s) => String(s));
+          }
+        } else if (firstRecipe) {
+          ingredients = (firstRecipe.ingredients ?? []).map((ing) =>
+            typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
+          );
+          steps = (firstRecipe.steps ?? []).filter(Boolean).map((s) => String(s));
+        }
+        const failReason = validateAiMeal(title, ingredients, steps, mealKey, memberDataPool);
         if (failReason) {
           rejectsByReason[failReason] = (rejectsByReason[failReason] ?? 0) + 1;
-          safeLog("[POOL DEBUG] AI meal rejected", { dayKey, mealKey, title: meal.name, failReason });
           continue;
         }
         while (steps.length < 3) steps.push(`Шаг ${steps.length + 1}`);
         while (ingredients.length < 3) ingredients.push({ name: `Ингредиент ${ingredients.length + 1}`, amount: "" });
-        const chefAdvice = extractChefAdvice(meal as Record<string, unknown>);
-        const adviceVal = extractAdvice(meal as Record<string, unknown>);
-        const payload = {
+        const description = getDescriptionWithFallback({ description: (firstRecipe as { description?: string })?.description, intro: (firstRecipe as { intro?: string })?.intro, steps });
+        const payload = canonicalizeRecipePayload({
           user_id: userId,
           member_id: memberId,
           child_id: memberId,
           source: "week_ai",
-          meal_type: mealKey,
-          tags: ["week_ai", `week_${mealKey}`],
-          title: meal.name,
-          description: "",
-          cooking_time_minutes: meal.cooking_time ?? null,
-          chef_advice: chefAdvice ?? null,
-          advice: adviceVal ?? null,
+          contextMealType: mealKey,
+          title,
+          description: description || null,
+          cooking_time_minutes: null,
+          chef_advice: null,
+          advice: null,
           steps: steps.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
           ingredients: ingredients.slice(0, 20).map((ing, idx) => ({
             name: ing.name,
@@ -1964,27 +2089,21 @@ serve(async (req) => {
             order_index: idx,
             category: "other",
           })),
-        };
+          sourceTag: "week_ai",
+        });
         const { data: recipeId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
-        if (rpcErr) {
-          safeError("generate-plan create_recipe", rpcErr.message);
-          await supabase
-            .from("plan_generation_jobs")
-            .update({ status: "error", error_text: rpcErr.message.slice(0, 500), completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-            .eq("id", jobId);
-          return new Response(
-            JSON.stringify({ job_id: jobId, status: "error" }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        if (rpcErr || !recipeId) {
+          safeWarn("[JOB] AI fallback create_recipe failed", dayKey, mealKey, rpcErr?.message);
+          continue;
         }
-        newMeals[mealKey] = { recipe_id: recipeId, title: meal.name, plan_source: "ai" };
+        newMeals[mealKey] = { recipe_id: recipeId, title, plan_source: "ai" };
         dayAiCount++;
         totalAiCount++;
         usedRecipeIds.push(recipeId);
-        usedTitleKeys.push(normalizeTitleKey(meal.name));
-        const pk = inferProteinKey(meal.name, null);
+        usedTitleKeys.push(normalizeTitleKey(title));
+        const pk = inferProteinKey(title, null);
         if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
-        weekContext.push(meal.name);
+        weekContext.push(title);
       }
 
       safeLog("[POOL DEBUG] day summary", { dayKey, dbCount: dayDbCount, aiCount: dayAiCount });
@@ -2012,15 +2131,12 @@ serve(async (req) => {
         safeLog("[PLAN QUALITY] slotSummary (last day)", { dayKey, slotSummary });
       }
 
-      if (existingRow.data?.id) {
-        await supabase.from("meal_plans_v2").update({ meals: newMeals, updated_at: new Date().toISOString() }).eq("id", existingRow.data.id);
-      } else {
-        await supabase.from("meal_plans_v2").insert({
-          user_id: userId,
-          member_id: memberId,
-          planned_date: dayKey,
-          meals: newMeals,
-        });
+      const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+      if (upsertResult.error) {
+        safeWarn("[JOB] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
+      }
+      if (upsertResult.mergedEmpty) {
+        safeWarn("[JOB] merged_empty_meals", { dayKey, memberId: memberId ?? "null" });
       }
     }
 
