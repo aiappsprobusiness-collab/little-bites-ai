@@ -44,7 +44,10 @@ export function SosTopicGrid({
             <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/[0.06] shrink-0 self-start">
               <Icon className="w-5 h-5 text-primary/80" />
             </span>
-            <span className="text-[15px] font-semibold text-foreground leading-snug line-clamp-2 pr-8">
+            <span
+              className="text-[15px] font-semibold text-foreground leading-snug line-clamp-2 pr-8 break-words hyphens-auto"
+              style={{ wordBreak: "break-word" }}
+            >
               {topic.title}
             </span>
             <span className="text-[13px] text-muted-foreground leading-snug line-clamp-2 mt-auto">
