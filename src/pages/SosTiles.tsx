@@ -16,18 +16,9 @@ import {
   type SosTopicConfig,
   type HelpTopicCategory,
 } from "@/data/sosTopics";
+import { getChipsForTopic } from "@/data/helpTopicChips";
 import { getTopicById } from "@/constants/sos";
 import { cn } from "@/lib/utils";
-
-/** 4–6 чипсов на тему: chipExamples + askChips (label), без дубликатов. */
-function getQuickChipsForTopic(topic: SosTopicConfig): string[] {
-  const labels = new Set<string>(topic.chipExamples);
-  for (const c of topic.askChips) {
-    if (labels.size >= 6) break;
-    labels.add(c.label);
-  }
-  return Array.from(labels).slice(0, 6);
-}
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -41,7 +32,7 @@ export default function SosTiles() {
   const [sheetTopic, setSheetTopic] = useState<{
     key: string;
     title: string;
-    quickChips: string[];
+    chips: ReturnType<typeof getChipsForTopic>;
     isLocked: boolean;
     lockedDescription?: string;
   } | null>(null);
@@ -77,7 +68,7 @@ export default function SosTiles() {
       setSheetTopic({
         key: topicConfig.id,
         title: topicConfig.title,
-        quickChips: getQuickChipsForTopic(topicConfig),
+        chips: getChipsForTopic(topicConfig.id),
         isLocked: topicConfig.requiredTier === "paid" && !hasAccess,
         lockedDescription: topicConfig.intro?.[0] ?? topicConfig.shortSubtitle,
       });
@@ -87,7 +78,7 @@ export default function SosTiles() {
       setSheetTopic({
         key: topicMeta.id,
         title: topicMeta.label,
-        quickChips: [],
+        chips: getChipsForTopic(topicMeta.id),
         isLocked: false,
       });
       setSheetOpen(true);
@@ -105,7 +96,7 @@ export default function SosTiles() {
     setSheetTopic({
       key: topic.id,
       title: topic.title,
-      quickChips: getQuickChipsForTopic(topic),
+      chips: getChipsForTopic(topic.id),
       isLocked: locked,
       lockedDescription: locked ? (topic.intro?.[0] ?? topic.shortSubtitle) : undefined,
     });
@@ -170,7 +161,7 @@ export default function SosTiles() {
           onClose={handleCloseSheet}
           topicKey={sheetTopic.key}
           topicTitle={sheetTopic.title}
-          quickChips={sheetTopic.quickChips}
+          chips={sheetTopic.chips}
           isLocked={sheetTopic.isLocked}
           lockedDescription={sheetTopic.lockedDescription}
           onOpenPremium={sheetTopic.isLocked ? handleLockedTopic : undefined}

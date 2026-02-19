@@ -22,6 +22,7 @@ import {
   clearSession,
   type TopicSessionMessage,
 } from "@/stores/helpTopicSessions";
+import type { HelpChipItem } from "@/data/helpTopicChips";
 import { cn } from "@/lib/utils";
 
 const MAX_MESSAGES = 12;
@@ -31,7 +32,8 @@ export interface TopicConsultationSheetProps {
   onClose: () => void;
   topicKey: string;
   topicTitle: string;
-  quickChips: string[];
+  /** Чипсы с label (показ) и prompt (вставка в input по клику). */
+  chips: HelpChipItem[];
   isLocked?: boolean;
   lockedDescription?: string;
   onOpenPremium?: () => void;
@@ -42,7 +44,7 @@ export function TopicConsultationSheet({
   onClose,
   topicKey,
   topicTitle,
-  quickChips,
+  chips,
   isLocked = false,
   lockedDescription,
   onOpenPremium,
@@ -159,14 +161,12 @@ export function TopicConsultationSheet({
     setMessages([]);
   };
 
-  /** Чипс вставляет текст в input, не отправляет */
-  const handleChipClick = (label: string) => {
+  /** Чипс вставляет prompt в input, не отправляет */
+  const handleChipClick = (chip: HelpChipItem) => {
     if (isLocked) return;
-    setInput((prev) => (prev ? `${prev} ${label}` : label));
+    setInput(chip.prompt);
     inputRef.current?.focus();
   };
-
-  const chipsToShow = quickChips.slice(0, 6);
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -206,13 +206,13 @@ export function TopicConsultationSheet({
                   {lockedDescription}
                 </p>
               )}
-              <div className="flex flex-wrap gap-2">
-                {chipsToShow.map((label) => (
+              <div className="flex gap-2 overflow-x-auto pb-1 flex-nowrap">
+                {chips.map((chip) => (
                   <span
-                    key={label}
-                    className="shrink-0 px-3 py-1.5 rounded-full text-[13px] font-medium border border-border bg-muted/30 text-muted-foreground cursor-not-allowed"
+                    key={chip.label}
+                    className="shrink-0 px-3 py-1.5 rounded-full text-[13px] font-medium border border-border bg-muted/30 text-muted-foreground cursor-not-allowed whitespace-nowrap"
                   >
-                    {label}
+                    {chip.label}
                   </span>
                 ))}
               </div>
@@ -250,18 +250,18 @@ export function TopicConsultationSheet({
                 </DropdownMenu>
               </div>
 
-              {/* Quick chips — вставляют в input */}
+              {/* Чип-ряд: одна строка, горизонтальный скролл, по клику — prompt в input */}
               <div className="shrink-0 px-4 pb-2">
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {chipsToShow.map((label) => (
+                <div className="flex gap-2 overflow-x-auto pb-1 flex-nowrap overflow-y-hidden">
+                  {chips.map((chip) => (
                     <button
-                      key={label}
+                      key={chip.label}
                       type="button"
-                      onClick={() => handleChipClick(label)}
+                      onClick={() => handleChipClick(chip)}
                       disabled={isSending}
-                      className="shrink-0 px-3 py-1.5 rounded-full text-[13px] font-medium border border-border bg-background text-foreground hover:bg-muted/50 transition-colors"
+                      className="shrink-0 px-3 py-1.5 rounded-full text-[13px] font-medium border border-border bg-background text-foreground hover:bg-muted/50 transition-colors whitespace-nowrap"
                     >
-                      {label}
+                      {chip.label}
                     </button>
                   ))}
                 </div>
