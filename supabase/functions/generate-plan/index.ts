@@ -1704,6 +1704,16 @@ serve(async (req) => {
           const slot = currentMeals[mealKey];
           const hadRecipeId = slot?.recipe_id ?? null;
           const useRerankUp = isPremiumOrTrialUpgrade;
+          const effectiveExcludeTitleKeys = new Set<string>([...usedTitleKeys, ...(usedTitleKeysByMealTypeUpgrade[mealKey] ?? [])]);
+          if (debugPlanUpgrade) {
+            safeLog("[POOL EXCLUDE EFFECTIVE]", {
+              dayKey,
+              mealKey,
+              excludeTitleKeysCount: effectiveExcludeTitleKeys.size,
+              baseExcludeTitleKeysCount: usedTitleKeys.length,
+              byMealTypeSize: usedTitleKeysByMealTypeUpgrade[mealKey]?.size ?? 0,
+            });
+          }
           const excludeProteinKeysForSlot =
             mealKey === "breakfast"
               ? []
@@ -1716,7 +1726,7 @@ serve(async (req) => {
             mealKey,
             memberDataPool,
             usedRecipeIds,
-            usedTitleKeys,
+            Array.from(effectiveExcludeTitleKeys),
             60,
             {
               logPrefix: "[POOL UPGRADE]",
@@ -1731,21 +1741,34 @@ serve(async (req) => {
             }
           );
           let picked: { id: string; title: string; categoryKey?: string } | null = null;
+          let qualitySkipReason: string | undefined;
           const hadCandidates = pickedRawUp != null && ("topCandidates" in pickedRawUp ? (pickedRawUp.topCandidates?.length ?? 0) > 0 : "id" in pickedRawUp);
+          const finalCandidatesCount = pickedRawUp && "topCandidates" in pickedRawUp ? (pickedRawUp.topCandidates?.length ?? 0) : pickedRawUp && "id" in pickedRawUp ? 1 : 0;
           if (pickedRawUp && "topCandidates" in pickedRawUp) {
             for (const c of pickedRawUp.topCandidates) {
-              if (usedTitleKeysByMealTypeUpgrade[mealKey]?.has(c.titleKey)) continue;
-              if (excludeProteinKeysForSlot.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeysForSlot.includes(c.proteinKey)) continue;
-              if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCountUpgrade >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) continue;
-              if (lastCategoryByMealTypeUpgrade[mealKey] === c.categoryKey) continue;
+              if (excludeProteinKeysForSlot.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeysForSlot.includes(c.proteinKey)) {
+                qualitySkipReason = "protein_streak";
+                continue;
+              }
+              if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCountUpgrade >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) {
+                qualitySkipReason = "porridge_cap";
+                continue;
+              }
+              if (lastCategoryByMealTypeUpgrade[mealKey] === c.categoryKey) {
+                qualitySkipReason = "category_streak";
+                continue;
+              }
               picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
               break;
             }
           } else if (pickedRawUp && "id" in pickedRawUp) {
             picked = { id: pickedRawUp.id, title: pickedRawUp.title };
           }
+          if (!picked && hadCandidates && qualitySkipReason && debugPlanUpgrade) {
+            safeWarn("[POOL QUALITY SKIP]", { dayKey, mealKey, reason: qualitySkipReason, finalCandidatesCount });
+          }
           if (!picked && hadCandidates && (excludeProteinKeysForSlot.length > 0 || excludedMainForSlot.length > 0)) {
-            pickedRawUp = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, usedTitleKeys, 60, {
+            pickedRawUp = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, Array.from(effectiveExcludeTitleKeys), 60, {
               logPrefix: "[POOL UPGRADE fallback]",
               hadRecipeId: hadRecipeId ?? undefined,
               excludeProteinKeys: [],
@@ -1757,7 +1780,6 @@ serve(async (req) => {
             });
             if (pickedRawUp && "topCandidates" in pickedRawUp) {
               for (const c of pickedRawUp.topCandidates) {
-                if (usedTitleKeysByMealTypeUpgrade[mealKey]?.has(c.titleKey)) continue;
                 if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCountUpgrade >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) continue;
                 if (lastCategoryByMealTypeUpgrade[mealKey] === c.categoryKey) continue;
                 picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
@@ -2152,6 +2174,7 @@ serve(async (req) => {
     const jobStartedAt = Date.now();
     const BUDGET_MS_RUN = 25000;
     const runDebug = body.debug_pool ?? (typeof Deno !== "undefined" && Deno.env?.get?.("GENERATE_PLAN_DEBUG") === "1");
+    const runDebugPlan = body.debug_plan === true || body.debug_plan === "1" || (typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_PLAN") === "1");
     let filledSlotsCountRun = 0;
 
     for (let i = 0; i < dayKeys.length; i++) {
@@ -2230,6 +2253,16 @@ serve(async (req) => {
       for (const mealKey of MEAL_KEYS) {
         const slotStats: Record<string, unknown> = {};
         const useRerank = isPremiumOrTrial;
+        const effectiveExcludeTitleKeysRun = new Set<string>([...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ?? [])]);
+        if (runDebugPlan) {
+          safeLog("[POOL EXCLUDE EFFECTIVE]", {
+            dayKey,
+            mealKey,
+            excludeTitleKeysCount: effectiveExcludeTitleKeysRun.size,
+            baseExcludeTitleKeysCount: usedTitleKeys.length,
+            byMealTypeSize: usedTitleKeysByMealType[mealKey]?.size ?? 0,
+          });
+        }
         const excludeProteinKeysForSlotRun =
           mealKey === "breakfast"
             ? []
@@ -2242,7 +2275,7 @@ serve(async (req) => {
           mealKey,
           memberDataPool,
           usedRecipeIds,
-          usedTitleKeys,
+          Array.from(effectiveExcludeTitleKeysRun),
           60,
           {
             excludeProteinKeys: excludeProteinKeysForSlotRun,
@@ -2260,13 +2293,10 @@ serve(async (req) => {
         let picked: { id: string; title: string; categoryKey?: string } | null = null;
         let qualityGateReason: string | undefined;
         const hadCandidatesRun = pickedRaw != null && ("topCandidates" in pickedRaw ? (pickedRaw.topCandidates?.length ?? 0) > 0 : "id" in pickedRaw);
+        const finalCandidatesCountRun = pickedRaw && "topCandidates" in pickedRaw ? (pickedRaw.topCandidates?.length ?? 0) : pickedRaw && "id" in pickedRaw ? 1 : 0;
         if (pickedRaw && "topCandidates" in pickedRaw) {
           const { topCandidates } = pickedRaw;
           for (const c of topCandidates) {
-            if (usedTitleKeysByMealType[mealKey]?.has(c.titleKey)) {
-              qualityGateReason = "title_repeat";
-              continue;
-            }
             if (excludeProteinKeysForSlotRun.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeysForSlotRun.includes(c.proteinKey)) {
               qualityGateReason = "protein_streak";
               continue;
@@ -2286,7 +2316,7 @@ serve(async (req) => {
           picked = { id: pickedRaw.id, title: pickedRaw.title };
         }
         if (!picked && hadCandidatesRun && (excludeProteinKeysForSlotRun.length > 0 || excludedMainForSlotRun.length > 0)) {
-          pickedRaw = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, usedTitleKeys, 60, {
+          pickedRaw = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, Array.from(effectiveExcludeTitleKeysRun), 60, {
             excludeProteinKeys: [],
             proteinKeyCounts,
             excludedMainIngredients: [],
@@ -2300,7 +2330,6 @@ serve(async (req) => {
           });
           if (pickedRaw && "topCandidates" in pickedRaw) {
             for (const c of pickedRaw.topCandidates) {
-              if (usedTitleKeysByMealType[mealKey]?.has(c.titleKey)) continue;
               if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCount >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) continue;
               if (lastCategoryByMealType[mealKey] === c.categoryKey) continue;
               picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
@@ -2309,6 +2338,9 @@ serve(async (req) => {
           } else if (pickedRaw && "id" in pickedRaw) {
             picked = { id: pickedRaw.id, title: pickedRaw.title };
           }
+        }
+        if (!picked && hadCandidatesRun && qualityGateReason && runDebugPlan) {
+          safeWarn("[POOL QUALITY SKIP]", { dayKey, mealKey, reason: qualityGateReason, finalCandidatesCount: finalCandidatesCountRun });
         }
         const qualityGateTriggered = !!pickedRaw && "topCandidates" in pickedRaw && !picked && (pickedRaw.topCandidates?.length ?? 0) > 0;
         poolPicks[mealKey] = picked ? { id: picked.id, title: picked.title } : null;
