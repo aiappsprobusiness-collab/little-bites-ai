@@ -170,13 +170,14 @@ function normalizeMealsForWrite(
   return out;
 }
 
-/** Upsert meal_plans_v2: РѕРґРЅР° СЃС‚СЂРѕРєР° РЅР° (user_id, member_id, planned_date). Slot-wise merge, РЅРѕСЂРјР°Р»РёР·Р°С†РёСЏ, РєРѕРЅС‚СЂРѕР»СЊРЅС‹Р№ SELECT. */
+/** Upsert meal_plans_v2: РѕРґРЅР° СЃС‚СЂРѕРєР° РЅР° (user_id, member_id, planned_date). Slot-wise merge, РЅРѕСЂРјР°Р»РёР·Р°С†РёСЏ. РљРѕРЅС‚СЂРѕР»СЊРЅС‹Р№ SELECT вЂ” С‚РѕР»СЊРєРѕ РїСЂРё runControlSelect. */
 async function upsertMealPlanRow(
   supabase: SupabaseClient,
   userId: string,
   memberId: string | null,
   dayKey: string,
-  meals: Record<string, MealSlot | null | undefined>
+  meals: Record<string, MealSlot | null | undefined>,
+  opts?: { runControlSelect?: boolean }
 ): Promise<{ error?: string; id?: string; mergedEmpty?: boolean; keys?: string[] }> {
   const normalizedNew = normalizeMealsForWrite(meals);
   let q = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
@@ -211,15 +212,21 @@ async function upsertMealPlanRow(
     }
   }
 
-  let controlQ = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
-  if (memberId == null) controlQ = controlQ.is("member_id", null);
-  else controlQ = controlQ.eq("member_id", memberId);
-  const { data: controlRow } = await controlQ.maybeSingle();
-  const storedMeals = (controlRow as { meals?: Record<string, unknown> } | null)?.meals ?? {};
-  const keys = Object.keys(storedMeals);
-  const mergedEmpty = keys.length === 0;
-  safeLog("[PLAN upsert]", { dayKey, memberId: memberId ?? "null", keys });
-  return { id: (controlRow as { id: string } | null)?.id, keys, mergedEmpty };
+  const runControlSelect = opts?.runControlSelect === true;
+  if (runControlSelect) {
+    let controlQ = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
+    if (memberId == null) controlQ = controlQ.is("member_id", null);
+    else controlQ = controlQ.eq("member_id", memberId);
+    const { data: controlRow } = await controlQ.maybeSingle();
+    const storedMeals = (controlRow as { meals?: Record<string, unknown> } | null)?.meals ?? {};
+    const keys = Object.keys(storedMeals);
+    const mergedEmpty = keys.length === 0;
+    safeLog("[PLAN upsert]", { dayKey, memberId: memberId ?? "null", keys });
+    return { id: (controlRow as { id: string } | null)?.id, keys, mergedEmpty };
+  }
+  const keys = Object.keys(mergedMeals);
+  const mergedEmpty = !keys.some((k) => (mergedMeals[k] as { recipe_id?: string } | null)?.recipe_id);
+  return { id: (existing as { id?: string } | null)?.id, keys, mergedEmpty };
 }
 
 function getPrevDayKey(dayKey: string): string {
@@ -732,6 +739,32 @@ function scorePoolCandidate(
   return { finalScore, baseScore, diversityPenalty, proteinKey: pk, proteinCountBefore, categoryKey };
 }
 
+/** Load pool once for run/upgrade: same "loose" query, no per-slot SELECT. */
+async function fetchPoolCandidates(
+  supabase: SupabaseClient,
+  userId: string,
+  memberId: string | null,
+  limitCandidates: number
+): Promise<RecipeRowPool[]> {
+  const baseQ = () =>
+    supabase
+      .from("recipes")
+      .select("id, title, tags, description, meal_type, source, recipe_ingredients(name, display_text), recipe_steps(instruction)")
+      .eq("user_id", userId)
+      .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
+      .order("created_at", { ascending: false })
+      .limit(limitCandidates);
+  let q = baseQ();
+  if (memberId == null) q = q.is("member_id", null);
+  else q = q.or(`member_id.eq.${memberId},member_id.is.null`);
+  const { data: rows, error } = await q;
+  if (error) {
+    safeWarn("generate-plan fetchPoolCandidates error", error.message);
+    return [];
+  }
+  return (rows ?? []) as RecipeRowPool[];
+}
+
 async function pickFromPool(
   supabase: SupabaseClient,
   userId: string,
@@ -758,6 +791,10 @@ async function pickFromPool(
     returnExtra?: boolean;
     /** Р”Р»СЏ week/day run: РІРµСЂРЅСѓС‚СЊ top 10 РєР°РЅРґРёРґР°С‚РѕРІ СЃ categoryKey/proteinKey/titleKey РґР»СЏ rerank РїРѕ quality gate. */
     returnTopCandidates?: number;
+    /** РџСѓР» СѓР¶Рµ Р·Р°РіСЂСѓР¶РµРЅ (run/upgrade): РЅРµ РґРµР»Р°С‚СЊ SELECT, С„РёР»С‚СЂРѕРІР°С‚СЊ РІ РїР°РјСЏС‚Рё. */
+    preloadedCandidates?: RecipeRowPool[] | null;
+    /** Р"Р»СЏ [POOL DIAG]: Р»РѕР³РёСЂРѕРІР°С‚СЊ СЃС‚СѓРїРµРЅРё С„РёР»С‚СЂР° С‚РѕР»СЊРєРѕ РїСЂРё debug_plan. */
+    logDiag?: { requestId: string; dayKey: string; mealKey: string; usedTitleKeysByMealTypeSize?: number } | null;
   }
 ): Promise<
   | { id: string; title: string; candidatesAfterAllFilters?: number; topTitleKeys?: string[] }
@@ -766,8 +803,10 @@ async function pickFromPool(
 > {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
-  const excludeProteinSet = new Set(options?.excludeProteinKeys ?? []);
+  const excludeProteinKeysRaw = (options?.excludeProteinKeys ?? []).filter((pk) => pk !== "veg");
+  const excludeProteinSet = new Set(excludeProteinKeysRaw);
   const excludedMainIngredientSet = new Set((options?.excludedMainIngredients ?? []).map((k) => k.toLowerCase().trim()).filter(Boolean));
+  const excludedMainIngredientsList = options?.excludedMainIngredients ?? [];
   const proteinKeyCounts = options?.proteinKeyCounts ?? {};
   const adaptiveParams = options?.adaptiveParams;
   const weekProgress = options?.weekProgress;
@@ -786,43 +825,48 @@ async function pickFromPool(
   const normalizedSlot = normalizeMealType(mealType) ?? (mealType as NormalizedMealType);
   const allergyTokens = getAllergyTokens(memberData);
 
-  const baseQ = () =>
-    supabase
-      .from("recipes")
-      .select("id, title, tags, description, meal_type, source, recipe_ingredients(name, display_text), recipe_steps(instruction)")
-      .eq("user_id", userId)
-      .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
-      .order("created_at", { ascending: false })
-      .limit(limitCandidates);
-
-  let qStrict = baseQ();
-  if (memberId == null) qStrict = qStrict.is("member_id", null);
-  else qStrict = qStrict.eq("member_id", memberId);
-
-  const { data: rowsStrict, error: errStrict } = await qStrict;
-  if (errStrict) {
-    safeWarn("generate-plan pool query (strict) error", mealType, errStrict.message);
-    return null;
-  }
-  const candidatesStrict = (rowsStrict ?? []).length;
-
-  // Р”Р»СЏ В«РЎРµРјСЊСЏВ» (member_id null) РїСѓР» = РІСЃРµ СЂРµС†РµРїС‚С‹ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ, РёРЅР°С‡Рµ СЂРµС†РµРїС‚С‹ СЂРµР±С‘РЅРєР° + СЃРµРјРµР№РЅС‹Рµ (member_id null).
-  let qLoose = baseQ();
-  if (memberId == null) {
-    // РќРµ С„РёР»СЊС‚СЂСѓРµРј РїРѕ member_id вЂ” РІ СЃРµРјРµР№РЅС‹Р№ РїР»Р°РЅ РїРѕРїР°РґР°СЋС‚ РІСЃРµ СЂРµС†РµРїС‚С‹ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (РІ С‚.С‡. chat_ai СЃ member_id СЂРµР±С‘РЅРєР°).
+  let rawCandidates: RecipeRowPool[];
+  let candidatesStrict: number;
+  if (options?.preloadedCandidates != null && options.preloadedCandidates.length >= 0) {
+    rawCandidates = options.preloadedCandidates;
+    candidatesStrict = rawCandidates.length; // preloaded = loose list, no separate strict count
   } else {
-    qLoose = qLoose.or(`member_id.eq.${memberId},member_id.is.null`);
-  }
-  if (excludeRecipeIds.length > 0 && excludeRecipeIds.length < 50) {
-    qLoose = qLoose.not("id", "in", `(${excludeRecipeIds.join(",")})`);
-  }
+    const baseQ = () =>
+      supabase
+        .from("recipes")
+        .select("id, title, tags, description, meal_type, source, recipe_ingredients(name, display_text), recipe_steps(instruction)")
+        .eq("user_id", userId)
+        .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
+        .order("created_at", { ascending: false })
+        .limit(limitCandidates);
 
-  const { data: rowsLoose, error: errLoose } = await qLoose;
-  if (errLoose) {
-    safeWarn("generate-plan pool query (loose) error", mealType, errLoose.message);
-    return null;
+    let qStrict = baseQ();
+    if (memberId == null) qStrict = qStrict.is("member_id", null);
+    else qStrict = qStrict.eq("member_id", memberId);
+
+    const { data: rowsStrict, error: errStrict } = await qStrict;
+    if (errStrict) {
+      safeWarn("generate-plan pool query (strict) error", mealType, errStrict.message);
+      return null;
+    }
+    candidatesStrict = (rowsStrict ?? []).length;
+
+    let qLoose = baseQ();
+    if (memberId == null) {
+    } else {
+      qLoose = qLoose.or(`member_id.eq.${memberId},member_id.is.null`);
+    }
+    if (excludeRecipeIds.length > 0 && excludeRecipeIds.length < 50) {
+      qLoose = qLoose.not("id", "in", `(${excludeRecipeIds.join(",")})`);
+    }
+
+    const { data: rowsLoose, error: errLoose } = await qLoose;
+    if (errLoose) {
+      safeWarn("generate-plan pool query (loose) error", mealType, errLoose.message);
+      return null;
+    }
+    rawCandidates = (rowsLoose ?? []) as RecipeRowPool[];
   }
-  const rawCandidates = (rowsLoose ?? []) as RecipeRowPool[];
   const candidatesLoose = rawCandidates.length;
   const candidatesFromDb = rawCandidates.length;
   if (weekStats && typeof weekStats === "object") weekStats.candidatesSeen = (weekStats.candidatesSeen ?? 0) + candidatesFromDb;
@@ -994,6 +1038,41 @@ async function pickFromPool(
       invariant: rejectedTotal === topRejectReasonsSum,
       candidatesStrict,
       candidatesLoose,
+    });
+  }
+
+  const logDiag = options?.logDiag;
+  if (logDiag) {
+    safeLog("[POOL DIAG counts]", {
+      requestId: logDiag.requestId,
+      dayKey: logDiag.dayKey,
+      mealKey: logDiag.mealKey,
+      counts: {
+        fromDb: candidatesFromDb,
+        afterExcludeIds,
+        afterTitleKeys: afterExcludeTitleKeys,
+        afterMainIngredient,
+        afterMealType,
+        afterSanity,
+        afterAllergies: afterAllergy,
+        final: afterProfile,
+      },
+      rejectReason: rejectReason ?? (filtered.length === 0 ? "all_filtered_out" : undefined),
+    });
+    safeLog("[POOL DIAG debug]", {
+      requestId: logDiag.requestId,
+      dayKey: logDiag.dayKey,
+      mealKey: logDiag.mealKey,
+      debug: {
+        excludeRecipeIdsCount: excludeRecipeIds.length,
+        excludeTitleKeysCount: excludeTitleKeys.length,
+        usedTitleKeysByMealTypeSize: logDiag.usedTitleKeysByMealTypeSize,
+        memberId: memberId ?? "null",
+        excludeProteinKeysCount: excludeProteinKeysRaw.length,
+        excludeProteinKeysList: excludeProteinKeysRaw.slice(0, 5),
+        excludedMainIngredientsCount: excludedMainIngredientsList.length,
+        excludedMainIngredientsList: excludedMainIngredientsList.slice(0, 5),
+      },
     });
   }
 
@@ -1460,6 +1539,7 @@ serve(async (req) => {
     }
 
     if (mode === "upgrade") {
+      const debugPlanUpgrade = body.debug_plan === true || body.debug_plan === "1" || (typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_PLAN") === "1");
       if (debugPool) {
         safeLog("[POOL UPGRADE] range", { dayKeysCount: dayKeys.length, firstKey: dayKeys[0], lastKey: dayKeys[dayKeys.length - 1] });
       }
@@ -1479,6 +1559,9 @@ serve(async (req) => {
       let breakfastPorridgeCountUpgrade = 0;
       const proteinKeyCounts: Record<string, number> = {};
       let lastCategoryByMealTypeUpgrade: Record<string, string> = {};
+      let replacedCount = 0;
+      let unchangedCount = 0;
+      let aiFallbackCount = 0;
       const weekRows = await (async () => {
         let weekQ = supabase
           .from("meal_plans_v2")
@@ -1525,18 +1608,67 @@ serve(async (req) => {
 
       const deepseekUrlUpgrade = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/deepseek-chat";
 
+      const poolCandidates = await fetchPoolCandidates(supabase, userId, memberId, 120);
+      const startedAt = Date.now();
+      const BUDGET_MS = 25000;
+      let filledSlotsCountUpgrade = 0;
+      let filledDaysCountUpgrade = 0;
+      const requestId =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `upg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+      if (debugPlanUpgrade) {
+        safeLog("[POOL EXCLUDES]", {
+          requestId,
+          memberId: memberId ?? "null",
+          dayKeys,
+          excludeRecipeIdsCount: usedRecipeIds.length,
+          excludeTitleKeysCount: usedTitleKeys.length,
+          usedTitleKeysByMealTypeSizes: {
+            breakfast: usedTitleKeysByMealTypeUpgrade.breakfast?.size ?? 0,
+            lunch: usedTitleKeysByMealTypeUpgrade.lunch?.size ?? 0,
+            snack: usedTitleKeysByMealTypeUpgrade.snack?.size ?? 0,
+            dinner: usedTitleKeysByMealTypeUpgrade.dinner?.size ?? 0,
+          },
+        });
+      }
+
       for (let di = 0; di < dayKeys.length; di++) {
+        if (Date.now() - startedAt > BUDGET_MS) {
+          const totalSlotsUp = dayKeys.length * MEAL_KEYS.length;
+          const emptySlotsUp = totalSlotsUp - filledSlotsCountUpgrade;
+          const emptyDaysUp = dayKeys.length - filledDaysCountUpgrade;
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              partial: true,
+              reason: "time_budget",
+              totalSlots: totalSlotsUp,
+              filledSlotsCount: filledSlotsCountUpgrade,
+              emptySlotsCount: emptySlotsUp,
+              filledDaysCount: filledDaysCountUpgrade,
+              emptyDaysCount: emptyDaysUp,
+              replacedCount,
+              unchangedCount,
+              aiFallbackCount,
+              assignedCount: replacedCount,
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
         const dayKey = dayKeys[di];
         const prevDayKey = di > 0 ? dayKeys[di - 1] : null;
-        let excludeProteinKeys: string[] = [];
+        let excludeProteinKeysFromPrevDay: string[] = [];
         if (prevDayKey) {
           const prevRow = weekRows.find((r) => r.planned_date === prevDayKey);
           const prevMeals = prevRow?.meals ?? {};
           for (const k of MEAL_KEYS) {
             const pk = inferProteinKey(prevMeals[k]?.title, null);
-            if (pk && pk !== "veg") excludeProteinKeys.push(pk);
+            if (pk && pk !== "veg") excludeProteinKeysFromPrevDay.push(pk);
           }
         }
+        const dayUsedProteinKeys = new Set<string>();
         const existingRow = await supabase
           .from("meal_plans_v2")
           .select("id, meals")
@@ -1555,7 +1687,12 @@ serve(async (req) => {
           const slot = currentMeals[mealKey];
           const hadRecipeId = slot?.recipe_id ?? null;
           const useRerankUp = isPremiumOrTrialUpgrade;
-          const pickedRawUp = await pickFromPool(
+          const excludeProteinKeysForSlot =
+            mealKey === "breakfast"
+              ? []
+              : [...excludeProteinKeysFromPrevDay, ...dayUsedProteinKeys].filter((pk) => pk !== "veg");
+          const excludedMainForSlot = dayExcludedMainIngredientsUpgrade;
+          let pickedRawUp = await pickFromPool(
             supabase,
             userId,
             memberId,
@@ -1567,18 +1704,21 @@ serve(async (req) => {
             {
               logPrefix: "[POOL UPGRADE]",
               hadRecipeId: hadRecipeId ?? undefined,
-              excludeProteinKeys,
+              excludeProteinKeys: excludeProteinKeysForSlot,
               proteinKeyCounts,
               debugPool,
-              excludedMainIngredients: dayExcludedMainIngredientsUpgrade,
+              excludedMainIngredients: excludedMainForSlot,
               returnTopCandidates: useRerankUp ? 10 : undefined,
+              preloadedCandidates: poolCandidates,
+              logDiag: debugPlanUpgrade ? { requestId, dayKey, mealKey, usedTitleKeysByMealTypeSize: usedTitleKeysByMealTypeUpgrade[mealKey]?.size ?? 0 } : undefined,
             }
           );
           let picked: { id: string; title: string; categoryKey?: string } | null = null;
+          const hadCandidates = pickedRawUp != null && ("topCandidates" in pickedRawUp ? (pickedRawUp.topCandidates?.length ?? 0) > 0 : "id" in pickedRawUp);
           if (pickedRawUp && "topCandidates" in pickedRawUp) {
             for (const c of pickedRawUp.topCandidates) {
               if (usedTitleKeysByMealTypeUpgrade[mealKey]?.has(c.titleKey)) continue;
-              if (excludeProteinKeys.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeys.includes(c.proteinKey)) continue;
+              if (excludeProteinKeysForSlot.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeysForSlot.includes(c.proteinKey)) continue;
               if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCountUpgrade >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) continue;
               if (lastCategoryByMealTypeUpgrade[mealKey] === c.categoryKey) continue;
               picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
@@ -1586,6 +1726,29 @@ serve(async (req) => {
             }
           } else if (pickedRawUp && "id" in pickedRawUp) {
             picked = { id: pickedRawUp.id, title: pickedRawUp.title };
+          }
+          if (!picked && hadCandidates && (excludeProteinKeysForSlot.length > 0 || excludedMainForSlot.length > 0)) {
+            pickedRawUp = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, usedTitleKeys, 60, {
+              logPrefix: "[POOL UPGRADE fallback]",
+              hadRecipeId: hadRecipeId ?? undefined,
+              excludeProteinKeys: [],
+              proteinKeyCounts,
+              debugPool,
+              excludedMainIngredients: [],
+              returnTopCandidates: useRerankUp ? 10 : undefined,
+              preloadedCandidates: poolCandidates,
+            });
+            if (pickedRawUp && "topCandidates" in pickedRawUp) {
+              for (const c of pickedRawUp.topCandidates) {
+                if (usedTitleKeysByMealTypeUpgrade[mealKey]?.has(c.titleKey)) continue;
+                if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCountUpgrade >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) continue;
+                if (lastCategoryByMealTypeUpgrade[mealKey] === c.categoryKey) continue;
+                picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
+                break;
+              }
+            } else if (pickedRawUp && "id" in pickedRawUp) {
+              picked = { id: pickedRawUp.id, title: pickedRawUp.title };
+            }
           }
           const needAiFallback = !picked && isPremiumOrTrialUpgrade && (pickedRawUp == null || ("topCandidates" in pickedRawUp && (pickedRawUp.topCandidates?.length ?? 0) > 0));
 
@@ -1605,16 +1768,27 @@ serve(async (req) => {
             dayCategoriesUpgrade[mealKey] = cat;
             if (mealKey === "breakfast" && cat === "porridge") breakfastPorridgeCountUpgrade++;
             const pk = inferProteinKey(picked.title, null);
-            if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
+            if (pk) {
+              proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
+              if (pk !== "veg") dayUsedProteinKeys.add(pk);
+            }
             const mik = inferMainIngredientKey(picked.title, null, null);
             if (mik) dayExcludedMainIngredientsUpgrade.push(mik);
             replacedCount++;
             weekContext.push(picked.title);
-          } else if (needAiFallback) {
+          } else {
+            if (debugPool && pickedRawUp && "topCandidates" in pickedRawUp && (pickedRawUp.topCandidates?.length ?? 0) > 0) {
+              const allSkippedProtein = pickedRawUp.topCandidates.every(
+                (c) => c.proteinKey && c.proteinKey !== "veg" && (dayUsedProteinKeys.has(c.proteinKey) || excludeProteinKeysFromPrevDay.includes(c.proteinKey))
+              );
+              if (allSkippedProtein) safeLog("[POOL UPGRADE] slot empty", { dayKey, mealKey, reason: "protein_repeat_day" });
+            }
+          }
+          if (needAiFallback && !picked) {
             const mealLabel = mealKey === "breakfast" ? "Р·Р°РІС‚СЂР°Рє" : mealKey === "lunch" ? "РѕР±РµРґ" : mealKey === "snack" ? "РїРѕР»РґРЅРёРє" : "СѓР¶РёРЅ";
             const excludeStr = usedTitleKeys.length > 0 ? ` РќРµ РїРѕРІС‚РѕСЂСЏР№ Р±Р»СЋРґР°: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
             const mainIngStr = dayExcludedMainIngredientsUpgrade.length > 0 ? ` Р’ СЌС‚РѕС‚ РґРµРЅСЊ СѓР¶Рµ РµСЃС‚СЊ: ${[...new Set(dayExcludedMainIngredientsUpgrade)].join(", ")} вЂ” РЅРµ РёСЃРїРѕР»СЊР·СѓР№.` : "";
-            const proteinStr = excludeProteinKeys.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeys.join(", ")} вЂ” РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
+            const proteinStr = excludeProteinKeysForSlot.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeysForSlot.join(", ")} вЂ” РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
             const lunchHint = mealKey === "lunch" ? " Р”Р»СЏ РѕР±РµРґР° РїСЂРµРґРїРѕС‡С‚РёС‚РµР»СЊРЅРѕ РїРµСЂРІРѕРµ Р±Р»СЋРґРѕ (СЃСѓРї/Р±СѓР»СЊРѕРЅ/РєСЂРµРј-СЃСѓРї)." : "";
             const slotForbidden: Record<string, string> = {
               breakfast: "СЃСѓРїС‹, СЂР°РіСѓ, РїР»РѕРІ. РўРѕР»СЊРєРѕ Р·Р°РІС‚СЂР°РєРё: РєР°С€Рё, РѕРјР»РµС‚С‹, СЃС‹СЂРЅРёРєРё, С‚РѕСЃС‚С‹.",
@@ -1727,7 +1901,7 @@ serve(async (req) => {
                 weekContext.push(slot.title);
               }
             }
-          } else {
+          } else if (!picked) {
             unchangedCount++;
             if (slot?.recipe_id) usedRecipeIds.push(slot.recipe_id);
             if (slot?.title) {
@@ -1746,23 +1920,49 @@ serve(async (req) => {
           safeLog("[POOL UPGRADE] slots left empty or filled by AI", { dayKey, emptySlots: MEAL_KEYS.filter((k) => !newMeals[k]?.recipe_id) });
         }
 
-        const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+        const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals, { runControlSelect: debugPlanUpgrade });
         if (upsertResult.error) {
           safeWarn("[POOL UPGRADE] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
         }
-        if (upsertResult.mergedEmpty) {
+        if (debugPlanUpgrade && upsertResult.mergedEmpty) {
           const picksThisDay = MEAL_KEYS.filter((k) => poolPicks[k]).length;
           safeWarn("[POOL UPGRADE] merged_empty_meals", { dayKey, memberId: memberId ?? "null", picksThisDay });
-          replacedCount = Math.max(0, replacedCount - picksThisDay);
+        }
+        const filledThisDay = MEAL_KEYS.filter((k) => newMeals[k]?.recipe_id).length;
+        filledSlotsCountUpgrade += filledThisDay;
+        if (filledThisDay > 0) filledDaysCountUpgrade++;
+        if (debugPlanUpgrade) {
+          const filledKeys = MEAL_KEYS.filter((k) => newMeals[k]?.recipe_id);
+          const dayProteinKeys = filledKeys.map((k) => inferProteinKey(newMeals[k]?.title, null)).filter(Boolean);
+          safeLog("[POOL UPGRADE] day", { dayKey, filledKeys, dayProteinKeys });
         }
       }
 
       const totalSlots = dayKeys.length * MEAL_KEYS.length;
+      const assignedCount = replacedCount;
+      const emptySlotsCountUpgrade = totalSlots - filledSlotsCountUpgrade;
+      const emptyDaysCountUpgrade = dayKeys.length - filledDaysCountUpgrade;
+      const partialUpgrade = emptySlotsCountUpgrade > 0;
+      if (debugPlanUpgrade) {
+        safeLog("[WEEK DONE]", { requestId, ms: Date.now() - startedAt, filledDaysCount: filledDaysCountUpgrade, filledSlotsCount: filledSlotsCountUpgrade });
+      }
       if (debugPool) {
-        safeLog("[POOL UPGRADE] totals", { totalSlots, replacedCount, unchangedCount, aiFallbackCount });
+        safeLog("[POOL UPGRADE] totals", { totalSlots, replacedCount: assignedCount, unchangedCount, aiFallbackCount, filledSlotsCountUpgrade, filledDaysCountUpgrade });
       }
       return new Response(
-        JSON.stringify({ replacedCount, unchangedCount, aiFallbackCount, totalSlots }),
+        JSON.stringify({
+          ok: true,
+          replacedCount: assignedCount,
+          unchangedCount,
+          aiFallbackCount,
+          totalSlots,
+          assignedCount,
+          filledSlotsCount: filledSlotsCountUpgrade,
+          emptySlotsCount: emptySlotsCountUpgrade,
+          filledDaysCount: filledDaysCountUpgrade,
+          emptyDaysCount: emptyDaysCountUpgrade,
+          partial: partialUpgrade,
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -1931,19 +2131,43 @@ serve(async (req) => {
         ? " РЎРўР РћР“Рћ Р‘Р•Р— РњРћР›РћР§РќР«РҐ РџР РћР”РЈРљРўРћР’: РјРѕР»РѕРєРѕ, С‚РІРѕСЂРѕРі, Р№РѕРіСѓСЂС‚, СЃС‹СЂ, РєРµС„РёСЂ, СЃР»РёРІРєРё, СЃРјРµС‚Р°РЅР°, РјР°СЃР»Рѕ, СЂСЏР¶РµРЅРєР°, РјРѕСЂРѕР¶РµРЅРѕРµ, СЃРіСѓС‰РµРЅРєР°. "
         : "";
 
+    const poolCandidatesRun = await fetchPoolCandidates(supabase, userId, memberId, 120);
     const jobStartedAt = Date.now();
-    const stallLimitMs = type === "week" ? JOB_STALL_MS_WEEK : JOB_STALL_MS_DAY;
+    const BUDGET_MS_RUN = 25000;
     const runDebug = body.debug_pool ?? (typeof Deno !== "undefined" && Deno.env?.get?.("GENERATE_PLAN_DEBUG") === "1");
+    let filledSlotsCountRun = 0;
 
     for (let i = 0; i < dayKeys.length; i++) {
-      if (Date.now() - jobStartedAt > stallLimitMs) {
+      if (Date.now() - jobStartedAt > BUDGET_MS_RUN) {
+        const totalSlotsRun = dayKeys.length * MEAL_KEYS.length;
+        const emptySlotsRun = totalSlotsRun - filledSlotsCountRun;
+        const filledDaysRun = Math.floor(filledSlotsCountRun / MEAL_KEYS.length);
+        const emptyDaysRun = dayKeys.length - filledDaysRun;
         await supabase
           .from("plan_generation_jobs")
-          .update({ status: "error", error_text: "timeout_stalled", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .update({
+            status: "done",
+            error_text: "partial:time_budget",
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            progress_done: filledDaysRun,
+            progress_total: dayKeys.length,
+          })
           .eq("id", jobId);
-        if (runDebug) safeLog("[JOB] stalled", { elapsedMs: Date.now() - jobStartedAt, stallLimitMs });
+        if (runDebug) safeLog("[JOB] time_budget partial", { filledSlotsCountRun, totalSlotsRun, filledDaysRun });
         return new Response(
-          JSON.stringify({ job_id: jobId, status: "error", error: "timeout_stalled" }),
+          JSON.stringify({
+            ok: true,
+            partial: true,
+            reason: "time_budget",
+            job_id: jobId,
+            status: "done",
+            totalSlots: totalSlotsRun,
+            filledSlotsCount: filledSlotsCountRun,
+            emptySlotsCount: emptySlotsRun,
+            filledDaysCount: filledDaysRun,
+            emptyDaysCount: emptyDaysRun,
+          }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -1953,7 +2177,7 @@ serve(async (req) => {
       const prevDayKey = i > 0 ? dayKeys[i - 1] : null;
       const dayStartAt = Date.now();
       if (runDebug) safeLog("[JOB] day start", { dayKey, index: i + 1, total: dayKeys.length });
-      let excludeProteinKeys: string[] = [];
+      let excludeProteinKeysFromPrevDay: string[] = [];
       if (prevDayKey) {
         const prevDateRow = await supabase
           .from("meal_plans_v2")
@@ -1965,9 +2189,10 @@ serve(async (req) => {
         const prevMeals = (prevDateRow.data as { meals?: Record<string, { title?: string }> } | null)?.meals ?? {};
         for (const k of MEAL_KEYS) {
           const pk = inferProteinKey(prevMeals[k]?.title, null);
-          if (pk && pk !== "veg") excludeProteinKeys.push(pk);
+          if (pk && pk !== "veg") excludeProteinKeysFromPrevDay.push(pk);
         }
       }
+      const dayUsedProteinKeys = new Set<string>();
 
       await supabase
         .from("plan_generation_jobs")
@@ -1988,7 +2213,12 @@ serve(async (req) => {
       for (const mealKey of MEAL_KEYS) {
         const slotStats: Record<string, unknown> = {};
         const useRerank = isPremiumOrTrial;
-        const pickedRaw = await pickFromPool(
+        const excludeProteinKeysForSlotRun =
+          mealKey === "breakfast"
+            ? []
+            : [...excludeProteinKeysFromPrevDay, ...dayUsedProteinKeys].filter((pk) => pk !== "veg");
+        const excludedMainForSlotRun = dayExcludedMainIngredients;
+        let pickedRaw = await pickFromPool(
           supabase,
           userId,
           memberId,
@@ -1998,19 +2228,21 @@ serve(async (req) => {
           usedTitleKeys,
           60,
           {
-            excludeProteinKeys,
+            excludeProteinKeys: excludeProteinKeysForSlotRun,
             proteinKeyCounts,
-            excludedMainIngredients: dayExcludedMainIngredients,
+            excludedMainIngredients: excludedMainForSlotRun,
             debugPool,
             adaptiveParams,
             weekProgress: { filled: filledSlotsSoFar, total: totalSlotsForWeek },
             debugSlotStats: debugPool ? slotStats : undefined,
             weekStats: debugPool ? weekStats : undefined,
             returnTopCandidates: useRerank ? 10 : undefined,
+            preloadedCandidates: poolCandidatesRun,
           }
         );
         let picked: { id: string; title: string; categoryKey?: string } | null = null;
         let qualityGateReason: string | undefined;
+        const hadCandidatesRun = pickedRaw != null && ("topCandidates" in pickedRaw ? (pickedRaw.topCandidates?.length ?? 0) > 0 : "id" in pickedRaw);
         if (pickedRaw && "topCandidates" in pickedRaw) {
           const { topCandidates } = pickedRaw;
           for (const c of topCandidates) {
@@ -2018,7 +2250,7 @@ serve(async (req) => {
               qualityGateReason = "title_repeat";
               continue;
             }
-            if (excludeProteinKeys.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeys.includes(c.proteinKey)) {
+            if (excludeProteinKeysForSlotRun.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeysForSlotRun.includes(c.proteinKey)) {
               qualityGateReason = "protein_streak";
               continue;
             }
@@ -2035,6 +2267,31 @@ serve(async (req) => {
           }
         } else if (pickedRaw && "id" in pickedRaw) {
           picked = { id: pickedRaw.id, title: pickedRaw.title };
+        }
+        if (!picked && hadCandidatesRun && (excludeProteinKeysForSlotRun.length > 0 || excludedMainForSlotRun.length > 0)) {
+          pickedRaw = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, usedTitleKeys, 60, {
+            excludeProteinKeys: [],
+            proteinKeyCounts,
+            excludedMainIngredients: [],
+            debugPool,
+            adaptiveParams,
+            weekProgress: { filled: filledSlotsSoFar, total: totalSlotsForWeek },
+            debugSlotStats: debugPool ? slotStats : undefined,
+            weekStats: debugPool ? weekStats : undefined,
+            returnTopCandidates: useRerank ? 10 : undefined,
+            preloadedCandidates: poolCandidatesRun,
+          });
+          if (pickedRaw && "topCandidates" in pickedRaw) {
+            for (const c of pickedRaw.topCandidates) {
+              if (usedTitleKeysByMealType[mealKey]?.has(c.titleKey)) continue;
+              if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCount >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) continue;
+              if (lastCategoryByMealType[mealKey] === c.categoryKey) continue;
+              picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
+              break;
+            }
+          } else if (pickedRaw && "id" in pickedRaw) {
+            picked = { id: pickedRaw.id, title: pickedRaw.title };
+          }
         }
         const qualityGateTriggered = !!pickedRaw && "topCandidates" in pickedRaw && !picked && (pickedRaw.topCandidates?.length ?? 0) > 0;
         poolPicks[mealKey] = picked ? { id: picked.id, title: picked.title } : null;
@@ -2057,18 +2314,29 @@ serve(async (req) => {
           dayCategories[mealKey] = cat;
           if (mealKey === "breakfast" && cat === "porridge") breakfastPorridgeCount++;
           const pk = inferProteinKey(picked.title, null);
-          if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
+          if (pk) {
+            proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
+            if (pk !== "veg") dayUsedProteinKeys.add(pk);
+          }
           const mainKey = inferMainIngredientKey(picked.title, null, null);
           if (mainKey) dayExcludedMainIngredients = [...dayExcludedMainIngredients, mainKey];
-        } else if (runDebug) {
-          safeLog("[JOB] pool_exhausted_free_or_premium_fallback", {
-            dayKey,
-            mealKey,
-            isPremiumOrTrial,
-            reason: qualityGateTriggered ? "quality_gate" : "pool_exhausted_free",
-            qualityGateReason: qualityGateReason ?? undefined,
-            aiFallbackTriggered: qualityGateTriggered && isPremiumOrTrial,
-          });
+        } else {
+          if (runDebug && pickedRaw && "topCandidates" in pickedRaw && (pickedRaw.topCandidates?.length ?? 0) > 0) {
+            const allSkippedProtein = pickedRaw.topCandidates.every(
+              (c) => c.proteinKey && c.proteinKey !== "veg" && (dayUsedProteinKeys.has(c.proteinKey) || excludeProteinKeysFromPrevDay.includes(c.proteinKey))
+            );
+            if (allSkippedProtein) safeLog("[JOB] slot empty", { dayKey, mealKey, reason: "protein_repeat_day" });
+          }
+          if (runDebug) {
+            safeLog("[JOB] pool_exhausted_free_or_premium_fallback", {
+              dayKey,
+              mealKey,
+              isPremiumOrTrial,
+              reason: qualityGateTriggered ? "quality_gate" : "pool_exhausted_free",
+              qualityGateReason: qualityGateReason ?? undefined,
+              aiFallbackTriggered: qualityGateTriggered && isPremiumOrTrial,
+            });
+          }
         }
       }
       lastCategoryByMealType = { ...dayCategories };
@@ -2103,7 +2371,7 @@ serve(async (req) => {
         const excludeStr = usedTitleKeys.length > 0 ? ` РќРµ РїРѕРІС‚РѕСЂСЏР№ Р±Р»СЋРґР°: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
         const mainIngredientExcludeStr =
           dayExcludedMainIngredients.length > 0 ? ` Р’ СЌС‚РѕС‚ РґРµРЅСЊ СѓР¶Рµ РµСЃС‚СЊ Р±Р»СЋРґР° СЃ: ${[...new Set(dayExcludedMainIngredients)].join(", ")} вЂ” РЅРµ РёСЃРїРѕР»СЊР·СѓР№ РёС….` : "";
-        const proteinExcludeStr = excludeProteinKeys.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeys.join(", ")} вЂ” РїСЂРµРґР»РѕР¶Рё РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
+        const proteinExcludeStr = excludeProteinKeysForSlotRun.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeysForSlotRun.join(", ")} вЂ” РїСЂРµРґР»РѕР¶Рё РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
         const slotForbidden: Record<string, string> = {
           breakfast: "СЃСѓРїС‹, СЂР°РіСѓ, РїР»РѕРІ. РўРѕР»СЊРєРѕ Р·Р°РІС‚СЂР°РєРё: РєР°С€Рё, РѕРјР»РµС‚С‹, СЃС‹СЂРЅРёРєРё, С‚РѕСЃС‚С‹.",
           lunch: "СЃС‹СЂРЅРёРєРё, РѕР»Р°РґСЊРё, РєР°С€Сѓ. РўРѕР»СЊРєРѕ РѕР±РµРґС‹: СЃСѓРїС‹, РІС‚РѕСЂС‹Рµ Р±Р»СЋРґР°.",
@@ -2245,15 +2513,23 @@ serve(async (req) => {
       if (upsertResult.error) {
         safeWarn("[JOB] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
       }
-      if (upsertResult.mergedEmpty) {
+      if (runDebug && upsertResult.mergedEmpty) {
         safeWarn("[JOB] merged_empty_meals", { dayKey, memberId: memberId ?? "null" });
       }
+      const filledThisDayRun = MEAL_KEYS.filter((k) => newMeals[k]?.recipe_id).length;
+      filledSlotsCountRun += filledThisDayRun;
     }
+
+    const totalSlotsRun = dayKeys.length * MEAL_KEYS.length;
+    const filledSlotsFinal = totalDbCount + totalAiCount;
+    const emptySlotsCountRun = totalSlotsRun - filledSlotsFinal;
+    const partialRun = emptySlotsCountRun > 0;
 
     await supabase
       .from("plan_generation_jobs")
       .update({
         status: "done",
+        error_text: partialRun ? "partial:pool_exhausted" : null,
         progress_done: dayKeys.length,
         last_day_key: lastDayKey,
         completed_at: new Date().toISOString(),
@@ -2300,7 +2576,17 @@ serve(async (req) => {
     if (runDebug) safeLog("[JOB] completed", { totalMs: Date.now() - jobStartedAt });
 
     return new Response(
-      JSON.stringify({ job_id: jobId, status: "done" }),
+      JSON.stringify({
+        ok: true,
+        job_id: jobId,
+        status: "done",
+        totalSlots: totalSlotsRun,
+        filledSlotsCount: filledSlotsFinal,
+        emptySlotsCount: emptySlotsCountRun,
+        filledDaysCount: dayKeys.length,
+        emptyDaysCount: 0,
+        partial: partialRun,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
