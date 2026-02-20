@@ -17,7 +17,7 @@ import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
-import { validateRecipeJson, type RecipeJson } from "./recipeSchema.ts";
+import { validateRecipeJson, ingredientsNeedAmountRetry, type RecipeJson } from "./recipeSchema.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -305,7 +305,7 @@ interface ChatRequest {
   allMembers?: MemberData[];
   /** Structured prompt block from GenerationContext (single/family with age, allergies, preferences, difficulty) */
   generationContextBlock?: string;
-  /** Optional suffix appended to system prompt (e.g. anti-duplicate hint) */
+  /** Optional suffix appended to system prompt */
   extraSystemSuffix?: string;
   dayName?: string;
   /** string = legacy "Уже запланировано: ..."; object = накопленный контекст для VARIETY_RULES */
@@ -459,6 +459,7 @@ serve(async (req) => {
       extraSystemSuffix: reqExtraSystemSuffix,
       mealType: reqMealType,
       maxCookingTime: reqMaxCookingTime,
+      from_plan_replace: fromPlanReplace = false,
     } = body;
 
     const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
@@ -794,9 +795,44 @@ serve(async (req) => {
       if (isRecipeJsonRequest) {
         let validated = validateRecipeJson(assistantMessage);
         if (validated) {
-          assistantMessage = JSON.stringify(validated);
-          responseRecipes = [validated as Record<string, unknown>];
-        } else {
+          if (isPremiumUser && ingredientsNeedAmountRetry(validated.ingredients)) {
+            safeLog("Recipe ingredients missing amount/unit, retrying with hint (Premium/Trial)", requestId);
+            const retryRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: "deepseek-chat",
+                messages: [
+                  { role: "system", content: currentSystemPrompt + "\n\nКРИТИЧНО: Верни ингредиенты с количеством и единицей для каждого (например «Молоко — 200 мл», «Яйцо — 2 шт.»). Запрещено указывать только название без количества." },
+                  { role: "user", content: userMessage },
+                ],
+                stream: false,
+                max_tokens: 1500,
+                temperature: 0.4,
+                response_format: { type: "json_object" },
+              }),
+            });
+            if (retryRes.ok) {
+              const retryData = (await retryRes.json()) as { choices?: Array<{ message?: { content?: string } }> };
+              const retryContent = (retryData.choices?.[0]?.message?.content ?? "").trim();
+              if (retryContent) {
+                const retryValidated = validateRecipeJson(retryContent);
+                if (retryValidated && !ingredientsNeedAmountRetry(retryValidated.ingredients)) {
+                  validated = retryValidated;
+                  safeLog("Recipe ingredients retry succeeded", requestId);
+                }
+              }
+            }
+          }
+          if (validated) {
+            assistantMessage = JSON.stringify(validated);
+            responseRecipes = [validated as Record<string, unknown>];
+          }
+        }
+        if (!validated) {
           safeLog("Recipe JSON parse/validate failed, attempting repair", requestId);
           const repairRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
             method: "POST",
@@ -868,7 +904,8 @@ serve(async (req) => {
       const outputTokens = usageObj.completion_tokens ?? usageObj.output_tokens ?? 0;
       const totalTokens = usageObj.total_tokens ?? inputTokens + outputTokens;
       const actionType =
-        type === "single_day" ? "weekly_plan"
+        fromPlanReplace ? "plan_replace"
+        : type === "single_day" ? "weekly_plan"
         : type === "sos_consultant" ? "sos_consultant"
         : type === "balance_check" ? "balance_check"
         : type === "diet_plan" ? "diet_plan"
@@ -886,7 +923,7 @@ serve(async (req) => {
     }
 
     let savedRecipeId: string | null = null;
-    if (responseRecipes.length > 0 && userId && supabase) {
+    if (responseRecipes.length > 0 && userId && supabase && !fromPlanReplace) {
       const validatedRecipe = responseRecipes[0] as RecipeJson;
       try {
         const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;

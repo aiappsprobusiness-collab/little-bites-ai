@@ -50,12 +50,26 @@ const IngredientSchema = z.object({
   substitute: z.string().optional(),
 });
 
+/** Returns true if we should ask AI to retry with amounts (ingredients missing quantity/unit). */
+export function ingredientsNeedAmountRetry(ingredients: Array<{ name?: string; amount?: string; displayText?: string }>): boolean {
+  if (!Array.isArray(ingredients) || ingredients.length < 3) return true;
+  for (const ing of ingredients) {
+    const amount = (ing.amount ?? "").trim();
+    const displayText = (ing.displayText ?? "").trim();
+    const hasAmountUnit = amount.length > 0 && (QUANTITY_UNIT_PATTERN.test(amount) || DISPLAY_TEXT_QUANTITY_REGEX.test(amount));
+    const displayHasQuantity = displayText.length > 0 && (QUANTITY_UNIT_PATTERN.test(displayText) || (DISPLAY_TEXT_QUANTITY_REGEX.test(displayText) && /г|мл|шт|ст\.|ч\.|кг|л/i.test(displayText)));
+    const qualitative = /по вкусу|для подачи/i.test(displayText) || /по вкусу|для подачи/i.test(amount);
+    if (!hasAmountUnit && !displayHasQuantity && !qualitative) return true;
+  }
+  return false;
+}
+
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(200),
   cookingTime: z.number().int().min(1).max(240).optional(),
   cookingTimeMinutes: z.number().int().min(1).max(240).optional(),
-  ingredients: z.array(IngredientSchema).min(1),
+  ingredients: z.array(IngredientSchema).min(3, "at least 3 ingredients required"),
   steps: z.array(z.string().min(1)).min(1).max(7),
   advice: z.string().nullable().optional(),
   chefAdvice: z.string().max(300).nullable().optional(),

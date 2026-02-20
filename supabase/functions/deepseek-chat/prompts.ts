@@ -68,13 +68,16 @@ Return ONLY valid JSON. No markdown, no text before or after, no explanation, no
   "title": string,
   "description": string (max 200 chars),
   "ingredients": [
-    { "name": string, "amount": string (e.g. "150 g", "1 tbsp") }
+    { "name": string, "amount": string (MUST include quantity and unit, e.g. "150 g", "1 ст.л.", "2 шт.") }
   ],
   "steps": string[] (max 7 short steps),
   "cookingTime": number,
   "mealType": "breakfast" | "lunch" | "dinner" | "snack",
   "chefAdvice": string (max 300 chars, no age breakdown unless multiple members explicitly provided)
 }
+
+INGREDIENTS RULE: Every ingredient MUST include amount and unit. No bare names.
+Use: "г" or "мл" for grams/ml; "шт." for pieces; "ч.л." / "ст.л." for spoons. Example: "Молоко — 200 мл", "Яйцо — 2 шт."
 `;
 
 /** Output rules for recipe: one member → no other family; no reasoning; no markdown; no extra text. */
@@ -139,7 +142,7 @@ ${RECIPE_STRICT_JSON_CONTRACT}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
-ИНГРЕДИЕНТЫ: amount — строка с количеством (e.g. "150 g", "1 tbsp"). ШАГИ: максимум 5 коротких шагов.
+ИНГРЕДИЕНТЫ: каждый ингредиент ОБЯЗАТЕЛЬНО с количеством и единицей. Формат: { "name": "Название", "amount": "150 г" } или "2 шт.", "1 ст.л.". Запрещено указывать только название без количества. Для штук — "шт.", для ложек — "ч.л." / "ст.л.", для граммов/мл — "г" / "мл". ШАГИ: максимум 5 коротких шагов.
 Обязательно заполни поле advice (мини-совет, 1–2 предложения): короткий практический совет по приготовлению или подаче для мамы.
 `;
 
@@ -177,7 +180,7 @@ ${RECIPE_STRICT_JSON_CONTRACT}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
-ИНГРЕДИЕНТЫ: amount — строка с количеством (e.g. "150 g", "1 tbsp"). ШАГИ: максимум 7 коротких шагов. chefAdvice: макс. 200 символов; без разбивки по возрастам, если передан один член семьи.
+ИНГРЕДИЕНТЫ: каждый ингредиент ОБЯЗАТЕЛЬНО с количеством и единицей. Формат: { "name": "Название", "amount": "150 г" } или "2 шт.", "1 ст.л.". Запрещено указывать только название без количества. Для штук — "шт.", для ложек — "ч.л." / "ст.л.", для граммов/мл — "г" / "мл". ШАГИ: максимум 7 коротких шагов. chefAdvice: макс. 200 символов; без разбивки по возрастам, если передан один член семьи.
 `;
 
 /**
@@ -208,7 +211,7 @@ ${VARIETY_AND_MEALS_RULES}
 [ФОРМАТ ИНГРЕДИЕНТОВ — ОБЯЗАТЕЛЬНО]
 Для каждого блюда (breakfast, lunch, snack, dinner) поле ingredients — массив объектов строго вида { "name": "...", "amount": "..." }.
 - name: название ингредиента.
-- amount: строка с количеством. Примеры: "100 g", "2 шт.", "1 ст. л.", "по вкусу", "для подачи", "по необходимости". ЗАПРЕЩЕНО передавать ингредиенты строками или без amount. Если количество неизвестно — укажи "по вкусу" или "для подачи".
+- amount: строка с количеством и единицей. ОБЯЗАТЕЛЬНО: каждый ингредиент MUST include amount; no bare names. Примеры: "100 г", "2 шт.", "1 ст.л.", "1 ч.л.", "200 мл". Для штук — "шт.", для ложек — "ч.л." / "ст.л.", для граммов/мл — "г" / "мл". Если по вкусу — "по вкусу"; для подачи — "для подачи". ЗАПРЕЩЕНО передавать ингредиенты строками или только названием без amount.
 
 ОТВЕЧАЙ СТРОГО JSON. Без markdown, без текста вне JSON.
 Для каждого блюда можно добавить chefAdvice (совет шефа, Premium, макс. 200 символов) и advice (мини-совет, Free, макс. 100 символов).
