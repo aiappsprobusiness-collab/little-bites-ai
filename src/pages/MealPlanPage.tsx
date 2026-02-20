@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
+import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
@@ -62,36 +63,7 @@ function isPerf(): boolean {
  * 4) Edge replace_slot: при Free и пустом пуле возвращает premium_required (без вызова AI).
  */
 
-/** Обновить кэш планов после replace_slot (optimistic update). Поддерживает замену существующего слота и добавление в пустой. */
-function applyReplaceSlotToPlanCache(
-  queryClient: ReturnType<typeof useQueryClient>,
-  keys: { mealPlansKeyWeek: unknown[]; mealPlansKeyDay: unknown[] },
-  payload: { dayKey: string; mealType: string; newRecipeId: string; title: string; plan_source: "pool" | "ai" },
-  memberId?: string | null
-) {
-  const newItem = {
-    id: `filled_${payload.dayKey}_${payload.mealType}`,
-    planned_date: payload.dayKey,
-    meal_type: payload.mealType,
-    recipe_id: payload.newRecipeId,
-    recipe: { id: payload.newRecipeId, title: payload.title },
-    child_id: memberId ?? null,
-    member_id: memberId ?? null,
-    plan_source: payload.plan_source,
-  };
-  const updater = (old: Array<{ planned_date: string; meal_type: string; recipe_id: string | null; recipe: { id: string; title: string } | null; plan_source?: string }> | undefined) => {
-    if (!old) return old;
-    const idx = old.findIndex((item) => item.planned_date === payload.dayKey && item.meal_type === payload.mealType);
-    if (idx >= 0) {
-      return old.map((item, i) =>
-        i === idx ? { ...item, recipe_id: payload.newRecipeId, recipe: { id: payload.newRecipeId, title: payload.title }, plan_source: payload.plan_source } : item
-      );
-    }
-    return [...old, newItem];
-  };
-  queryClient.setQueryData(keys.mealPlansKeyWeek, updater);
-  queryClient.setQueryData(keys.mealPlansKeyDay, updater);
-}
+import { applyReplaceSlotToPlanCache } from "@/utils/planCache";
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -267,6 +239,7 @@ export default function MealPlanPage() {
   const initialPlanRanRef = useRef(false);
 
   const [replacingSlotKey, setReplacingSlotKey] = useState<string | null>(null);
+  const [poolExhaustedContext, setPoolExhaustedContext] = useState<{ dayKey: string; mealType: string } | null>(null);
   const [clearSheetOpen, setClearSheetOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [clearConfirm, setClearConfirm] = useState<"day" | "week" | null>(null);
@@ -981,22 +954,27 @@ export default function MealPlanPage() {
                               console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: true, reason: result.reason });
                             }
                           } else {
-                            const err = "error" in result ? result.error : "";
-                            if (err === "limit") {
-                              toast({
-                                variant: "destructive",
-                                title: "Лимит",
-                                description: "1 замена в день (Free). В Premium — без ограничений.",
-                              });
-                            } else if (err === "premium_required") {
-                              setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
-                              setShowPaywall(true);
+                            const code = (result as { code?: string }).code;
+                            if (code === "pool_exhausted") {
+                              setPoolExhaustedContext({ dayKey: selectedDayKey, mealType: slot.id });
                             } else {
-                              toast({
-                                variant: "destructive",
-                                title: "Не удалось заменить",
-                                description: err === "unauthorized" ? "Нужна авторизация" : err,
-                              });
+                              const err = "error" in result ? result.error : "";
+                              if (err === "limit") {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Лимит",
+                                  description: "1 замена в день (Free). В Premium — без ограничений.",
+                                });
+                              } else if (err === "premium_required") {
+                                setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
+                                setShowPaywall(true);
+                              } else {
+                                toast({
+                                  variant: "destructive",
+                                  title: "Не удалось заменить",
+                                  description: err === "unauthorized" ? "Нужна авторизация" : err,
+                                });
+                              }
                             }
                             if (isPlanDebug()) {
                               console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: false, reason: result.reason, error: "error" in result ? result.error : undefined });
@@ -1093,22 +1071,27 @@ export default function MealPlanPage() {
                                   console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: true, reason: result.reason });
                                 }
                               } else {
-                                const err = "error" in result ? result.error : "";
-                                if (err === "limit") {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Лимит",
-                                    description: "1 замена в день (Free). В Premium — без ограничений.",
-                                  });
-                                } else if (err === "premium_required") {
-                                  setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
-                                  setShowPaywall(true);
+                                const code = (result as { code?: string }).code;
+                                if (code === "pool_exhausted") {
+                                  setPoolExhaustedContext({ dayKey: selectedDayKey, mealType: slot.id });
                                 } else {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Не удалось подобрать",
-                                    description: err === "unauthorized" ? "Нужна авторизация" : err,
-                                  });
+                                  const err = "error" in result ? result.error : "";
+                                  if (err === "limit") {
+                                    toast({
+                                      variant: "destructive",
+                                      title: "Лимит",
+                                      description: "1 замена в день (Free). В Premium — без ограничений.",
+                                    });
+                                  } else if (err === "premium_required") {
+                                    setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
+                                    setShowPaywall(true);
+                                  } else {
+                                    toast({
+                                      variant: "destructive",
+                                      title: "Не удалось подобрать",
+                                      description: err === "unauthorized" ? "Нужна авторизация" : err,
+                                    });
+                                  }
                                 }
                                 if (isPlanDebug()) {
                                   console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: false, reason: result.reason, error: "error" in result ? result.error : undefined });
@@ -1175,6 +1158,20 @@ export default function MealPlanPage() {
             )}
         </div>
       </div>
+
+      <PoolExhaustedSheet
+        open={!!poolExhaustedContext}
+        onOpenChange={(open) => !open && setPoolExhaustedContext(null)}
+        selectedDayKey={poolExhaustedContext?.dayKey ?? ""}
+        mealType={poolExhaustedContext?.mealType ?? ""}
+        memberId={mealPlanMemberId ?? null}
+        memberName={memberDataForPlan?.name}
+        allergies={memberDataForPlan?.allergies}
+        preferences={memberDataForPlan?.preferences}
+        mealPlansKeyWeek={mealPlansKeyWeek}
+        mealPlansKeyDay={mealPlansKeyDay}
+        queryClient={queryClient}
+      />
 
       <Sheet open={clearSheetOpen} onOpenChange={setClearSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl">

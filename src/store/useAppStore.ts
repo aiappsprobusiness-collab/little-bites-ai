@@ -10,6 +10,8 @@ interface AppState {
   /** При открытии paywall из онбординга (Free + 2-й профиль) — показать это сообщение */
   paywallCustomMessage: string | null;
   setPaywallCustomMessage: (v: string | null) => void;
+  showFavoritesLimitSheet: boolean;
+  setShowFavoritesLimitSheet: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -21,6 +23,8 @@ export const useAppStore = create<AppState>()(
         set((s) => ({ ...s, showPaywall: v, ...(v ? {} : { paywallCustomMessage: null }) })),
       paywallCustomMessage: null,
       setPaywallCustomMessage: (v) => set({ paywallCustomMessage: v }),
+      showFavoritesLimitSheet: false,
+      setShowFavoritesLimitSheet: (v) => set((s) => ({ ...s, showFavoritesLimitSheet: v })),
     }),
     { name: STORAGE_KEY, partialize: (s) => ({ _version: s._version }) }
   )

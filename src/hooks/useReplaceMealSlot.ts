@@ -299,7 +299,7 @@ export function useReplaceMealSlot(
       isFree: boolean;
     }): Promise<
       | { ok: true; pickedSource: "pool" | "ai"; newRecipeId: string; title: string; plan_source: "pool" | "ai"; requestId?: string; reason?: string }
-      | { ok: false; error: string; requestId?: string; reason?: string }
+      | { ok: false; error: string; code?: string; requestId?: string; reason?: string }
     > => {
       if (!hasAccess) {
         return { ok: false, error: "premium_required" };
@@ -336,6 +336,7 @@ export function useReplaceMealSlot(
         title?: string;
         plan_source?: "pool" | "ai";
         error?: string;
+        code?: string;
         reasonIfAi?: string;
         requestId?: string;
         reason?: string;
@@ -349,9 +350,11 @@ export function useReplaceMealSlot(
       }
       if (data.error === "replace_failed") {
         const failReason = data.reasonIfAi ?? data.reason ?? "ai_failed";
+        const code = data.code;
         return {
           ok: false,
-          error: failReason === "no_recipe_in_response" ? "Не удалось подобрать рецепт" : "Не удалось заменить",
+          error: code === "pool_exhausted" ? "Нет подходящих рецептов в пуле" : failReason === "no_recipe_in_response" ? "Не удалось подобрать рецепт" : "Не удалось заменить",
+          code,
           requestId,
           reason: failReason,
         };
@@ -369,7 +372,7 @@ export function useReplaceMealSlot(
           reason: reason ?? "ok",
         };
       }
-      return { ok: false, error: "unknown_response", requestId, reason: "unknown_response" };
+      return { ok: false, error: "unknown_response", code: data.code, requestId, reason: "unknown_response" };
     },
     [user?.id, memberId, hasAccess, getFreeSwapUsedForDay, setFreeSwapUsedForDay]
   );

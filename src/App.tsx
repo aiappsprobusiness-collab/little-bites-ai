@@ -32,6 +32,7 @@ import { PaymentSuccess, PaymentFail } from "./pages/PaymentResult";
 import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
+import { FavoritesLimitSheet } from "./components/plan/FavoritesLimitSheet";
 import { useAppStore } from "./store/useAppStore";
 import { useSubscription } from "./hooks/useSubscription";
 
@@ -104,6 +105,7 @@ const App = () => (
             <PWAInstall />
             <PWAUpdateToast />
             <GlobalPaywall />
+            <FavoritesLimitSheet />
             <TrialSoftBanner />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />

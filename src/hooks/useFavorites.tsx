@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { safeError } from "@/utils/safeLogger";
 import { useAuth } from './useAuth';
+import { useAppStore } from '@/store/useAppStore';
 import type { RecipeSuggestion } from '@/services/deepseek';
 
 /** Рецепт в БД: в recipe_data JSONB сохраняются child_id/child_name. member_id в SavedFavorite — из favorites_v2 (для кого избранное). */
@@ -225,36 +226,41 @@ export function useFavorites(filter: FavoritesFilter = 'all') {
     }) => {
       if (!user) throw new Error('User not authenticated');
       const { recipeId, memberId, isFavorite, recipeData } = params;
-      if (isFavorite) {
-        const recipe_data = recipeData
-          ? {
-              id: recipeId,
-              title: recipeData.title ?? '',
-              description: recipeData.description ?? null,
-              cookingTime: recipeData.cookTimeMinutes ?? null,
-              ingredients: (recipeData.ingredientNames ?? []).map((n) => ({ name: n })),
-              ...(recipeData.chefAdvice != null && recipeData.chefAdvice !== '' && { chefAdvice: recipeData.chefAdvice }),
-              ...(recipeData.advice != null && recipeData.advice !== '' && { advice: recipeData.advice }),
-            }
-          : { id: recipeId };
-        const { error } = await supabase.from('favorites_v2').insert({
-          user_id: user.id,
-          recipe_id: recipeId,
-          member_id: memberId,
-          recipe_data,
-        });
-        if (error) throw error;
-      } else {
-        let q = supabase.from('favorites_v2').delete().eq('user_id', user.id).eq('recipe_id', recipeId);
-        if (memberId == null) q = q.is('member_id', null);
-        else q = q.eq('member_id', memberId);
-        const { error } = await q;
-        if (error) throw error;
+      const recipe_data = isFavorite && recipeData
+        ? {
+            id: recipeId,
+            title: recipeData.title ?? '',
+            description: recipeData.description ?? null,
+            cookingTime: recipeData.cookTimeMinutes ?? null,
+            ingredients: (recipeData.ingredientNames ?? []).map((n) => ({ name: n })),
+            ...(recipeData.chefAdvice != null && recipeData.chefAdvice !== '' && { chefAdvice: recipeData.chefAdvice }),
+            ...(recipeData.advice != null && recipeData.advice !== '' && { advice: recipeData.advice }),
+          }
+        : isFavorite
+          ? { id: recipeId }
+          : null;
+      const { data, error } = await supabase.rpc('toggle_favorite_v2', {
+        p_recipe_id: recipeId,
+        p_member_id: memberId,
+        p_recipe_data: recipe_data,
+      });
+      if (error) throw error;
+      const result = data as { ok: boolean; code?: string; limit?: number };
+      if (!result.ok && result.code === 'favorites_limit_reached') {
+        const err = new Error('В Free можно сохранить до 15 рецептов. Откройте Premium, чтобы сохранять без лимита.') as Error & { code?: string; limit?: number };
+        err.code = 'favorites_limit_reached';
+        err.limit = result.limit ?? 15;
+        throw err;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['favorites', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['recipe_previews'] });
+    },
+    onError: (err: Error & { code?: string }) => {
+      if (err.code === 'favorites_limit_reached') {
+        useAppStore.getState().setShowFavoritesLimitSheet(true);
+      }
     },
   });
 

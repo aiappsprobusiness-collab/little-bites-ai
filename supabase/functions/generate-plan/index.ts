@@ -8,6 +8,13 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { safeError, safeLog, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
+import {
+  ingredientHasQuantity,
+  ingredientsHaveAmounts,
+  normalizeIngredientsFallbackOnlySpices,
+  buildIngredientPayloadItem,
+  type IngredientForValidation,
+} from "../_shared/planValidation.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -24,11 +31,11 @@ const MEAL_TYPE_ALIASES: Record<string, NormalizedMealType> = {
   lunch: "lunch",
   snack: "snack",
   dinner: "dinner",
-  завтрак: "breakfast",
-  обед: "lunch",
-  полдник: "snack",
-  перекус: "snack",
-  ужин: "dinner",
+  "завтрак": "breakfast",
+  "обед": "lunch",
+  "полдник": "snack",
+  "перекус": "snack",
+  "ужин": "dinner",
   supper: "dinner",
   afternoon_snack: "snack",
 };
@@ -97,10 +104,10 @@ function getSanityBlockedReasons(title: string | null | undefined, normalizedSlo
 }
 
 /** [C] Infer meal_type from title+description+ingredients (recovery when DB meal_type is NULL). */
-const SOUP_TOKENS = ["суп", "борщ", "щи", "солянк", "soup"];
-const BREAKFAST_TOKENS = ["каша", "овсян", "омлет", "блин", "олад", "сырник", "запеканк", "тост", "гранола", "мюсли"];
-const SNACK_TOKENS = ["фрукт", "яблок", "груш", "банан", "ягоды", "орех", "перекус", "печенье", "батончик", "пюре", "смузи"];
-const LUNCH_DINNER_TOKENS = ["суп", "борщ", "щи", "солянк", "рагу", "тушен", "котлет", "плов", "паста", "фарш", "запеч", "рыба", "мясо"];
+const SOUP_TOKENS = ["СЃСѓРї", "Р±РѕСЂС‰", "С‰Рё", "СЃРѕР»СЏРЅРє", "soup"];
+const BREAKFAST_TOKENS = ["РєР°С€Р°", "РѕРІСЃСЏРЅ", "РѕРјР»РµС‚", "Р±Р»РёРЅ", "РѕР»Р°Рґ", "СЃС‹СЂРЅРёРє", "Р·Р°РїРµРєР°РЅРє", "С‚РѕСЃС‚", "РіСЂР°РЅРѕР»Р°", "РјСЋСЃР»Рё"];
+const SNACK_TOKENS = ["С„СЂСѓРєС‚", "СЏР±Р»РѕРє", "РіСЂСѓС€", "Р±Р°РЅР°РЅ", "СЏРіРѕРґС‹", "РѕСЂРµС…", "РїРµСЂРµРєСѓСЃ", "РїРµС‡РµРЅСЊРµ", "Р±Р°С‚РѕРЅС‡РёРє", "РїСЋСЂРµ", "СЃРјСѓР·Рё"];
+const LUNCH_DINNER_TOKENS = ["СЃСѓРї", "Р±РѕСЂС‰", "С‰Рё", "СЃРѕР»СЏРЅРє", "СЂР°РіСѓ", "С‚СѓС€РµРЅ", "РєРѕС‚Р»РµС‚", "РїР»РѕРІ", "РїР°СЃС‚Р°", "С„Р°СЂС€", "Р·Р°РїРµС‡", "СЂС‹Р±Р°", "РјСЏСЃРѕ"];
 function inferMealTypeFromTitle(
   title: string | null | undefined,
   description: string | null | undefined,
@@ -144,13 +151,13 @@ function getRolling7Dates(startKey: string): string[] {
 function getDayName(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
-  const dayNames = ["Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"];
+  const dayNames = ["Р’РѕСЃРєСЂРµСЃРµРЅСЊРµ", "РџРѕРЅРµРґРµР»СЊРЅРёРє", "Р’С‚РѕСЂРЅРёРє", "РЎСЂРµРґР°", "Р§РµС‚РІРµСЂРі", "РџСЏС‚РЅРёС†Р°", "РЎСѓР±Р±РѕС‚Р°"];
   return dayNames[date.getDay()];
 }
 
 type MealSlot = { recipe_id?: string; title?: string; plan_source?: "pool" | "ai"; replaced_from_recipe_id?: string };
 
-/** Нормализация meals: только слоты с валидным recipe_id, без null/undefined. */
+/** РќРѕСЂРјР°Р»РёР·Р°С†РёСЏ meals: С‚РѕР»СЊРєРѕ СЃР»РѕС‚С‹ СЃ РІР°Р»РёРґРЅС‹Рј recipe_id, Р±РµР· null/undefined. */
 function normalizeMealsForWrite(
   meals: Record<string, MealSlot | null | undefined>
 ): Record<string, MealSlot> {
@@ -158,12 +165,12 @@ function normalizeMealsForWrite(
   for (const [key, slot] of Object.entries(meals)) {
     if (slot == null || typeof slot !== "object") continue;
     if (!slot.recipe_id) continue;
-    out[key] = { recipe_id: slot.recipe_id, title: slot.title ?? "Рецепт", plan_source: slot.plan_source, ...(slot.replaced_from_recipe_id && { replaced_from_recipe_id: slot.replaced_from_recipe_id }) };
+    out[key] = { recipe_id: slot.recipe_id, title: slot.title ?? "Р РµС†РµРїС‚", plan_source: slot.plan_source, ...(slot.replaced_from_recipe_id && { replaced_from_recipe_id: slot.replaced_from_recipe_id }) };
   }
   return out;
 }
 
-/** Upsert meal_plans_v2: одна строка на (user_id, member_id, planned_date). Slot-wise merge, нормализация, контрольный SELECT. */
+/** Upsert meal_plans_v2: РѕРґРЅР° СЃС‚СЂРѕРєР° РЅР° (user_id, member_id, planned_date). Slot-wise merge, РЅРѕСЂРјР°Р»РёР·Р°С†РёСЏ, РєРѕРЅС‚СЂРѕР»СЊРЅС‹Р№ SELECT. */
 async function upsertMealPlanRow(
   supabase: SupabaseClient,
   userId: string,
@@ -222,7 +229,7 @@ function getPrevDayKey(dayKey: string): string {
   return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
 }
 
-/** Возвращает массив ключей дат за N дней до firstDayKey (не включая firstDayKey). */
+/** Р’РѕР·РІСЂР°С‰Р°РµС‚ РјР°СЃСЃРёРІ РєР»СЋС‡РµР№ РґР°С‚ Р·Р° N РґРЅРµР№ РґРѕ firstDayKey (РЅРµ РІРєР»СЋС‡Р°СЏ firstDayKey). */
 function getLastNDaysKeys(firstDayKey: string, n: number): string[] {
   const [y, m, d] = firstDayKey.split("-").map(Number);
   const out: string[] = [];
@@ -236,7 +243,7 @@ function getLastNDaysKeys(firstDayKey: string, n: number): string[] {
   return out;
 }
 
-/** Загружает recipe_id и titleKeys из meal_plans_v2 за указанные даты (для контекста разнообразия). */
+/** Р—Р°РіСЂСѓР¶Р°РµС‚ recipe_id Рё titleKeys РёР· meal_plans_v2 Р·Р° СѓРєР°Р·Р°РЅРЅС‹Рµ РґР°С‚С‹ (РґР»СЏ РєРѕРЅС‚РµРєСЃС‚Р° СЂР°Р·РЅРѕРѕР±СЂР°Р·РёСЏ). */
 async function fetchRecipeAndTitleKeysFromPlans(
   supabase: SupabaseClient,
   userId: string,
@@ -265,7 +272,7 @@ async function fetchRecipeAndTitleKeysFromPlans(
   return { recipeIds, titleKeys };
 }
 
-/** Загружает titleKeys по mealType из meal_plans_v2 (для quality gate: не повторять блюдо по тому же приёму за последние N дней). */
+/** Р—Р°РіСЂСѓР¶Р°РµС‚ titleKeys РїРѕ mealType РёР· meal_plans_v2 (РґР»СЏ quality gate: РЅРµ РїРѕРІС‚РѕСЂСЏС‚СЊ Р±Р»СЋРґРѕ РїРѕ С‚РѕРјСѓ Р¶Рµ РїСЂРёС‘РјСѓ Р·Р° РїРѕСЃР»РµРґРЅРёРµ N РґРЅРµР№). */
 async function fetchTitleKeysByMealTypeFromPlans(
   supabase: SupabaseClient,
   userId: string,
@@ -293,7 +300,7 @@ async function fetchTitleKeysByMealTypeFromPlans(
   return out;
 }
 
-/** Загружает categoryKey по mealType из meal_plans_v2 (по title; для porridge cap и category_streak). */
+/** Р—Р°РіСЂСѓР¶Р°РµС‚ categoryKey РїРѕ mealType РёР· meal_plans_v2 (РїРѕ title; РґР»СЏ porridge cap Рё category_streak). */
 async function fetchCategoriesByMealTypeFromPlans(
   supabase: SupabaseClient,
   userId: string,
@@ -321,44 +328,44 @@ async function fetchCategoriesByMealTypeFromPlans(
   return out;
 }
 
-/** Ключевые ингредиенты для разнообразия в рамках дня (один ключ на рецепт). Приоритет: первый совпавший токен. */
+/** РљР»СЋС‡РµРІС‹Рµ РёРЅРіСЂРµРґРёРµРЅС‚С‹ РґР»СЏ СЂР°Р·РЅРѕРѕР±СЂР°Р·РёСЏ РІ СЂР°РјРєР°С… РґРЅСЏ (РѕРґРёРЅ РєР»СЋС‡ РЅР° СЂРµС†РµРїС‚). РџСЂРёРѕСЂРёС‚РµС‚: РїРµСЂРІС‹Р№ СЃРѕРІРїР°РІС€РёР№ С‚РѕРєРµРЅ. */
 const MAIN_INGREDIENT_TOKENS: { token: string; key: string }[] = [
-  { token: "тыкв", key: "тыква" },
-  { token: "кабачок", key: "кабачок" },
-  { token: "кабачк", key: "кабачок" },
-  { token: "баклажан", key: "баклажан" },
-  { token: "куриц", key: "курица" },
-  { token: "индейк", key: "индейка" },
-  { token: "рыб", key: "рыба" },
-  { token: "лосос", key: "лосось" },
-  { token: "треск", key: "треска" },
-  { token: "говядин", key: "говядина" },
-  { token: "свинин", key: "свинина" },
-  { token: "фарш", key: "фарш" },
-  { token: "творог", key: "творог" },
-  { token: "сырник", key: "творог" },
-  { token: "нут", key: "нут" },
-  { token: "чечевиц", key: "чечевица" },
-  { token: "фасол", key: "фасоль" },
-  { token: "рис", key: "рис" },
-  { token: "гречк", key: "гречка" },
-  { token: "овсян", key: "овсянка" },
-  { token: "картофел", key: "картофель" },
-  { token: "пюре", key: "картофель" },
-  { token: "морков", key: "морковь" },
-  { token: "свекл", key: "свекла" },
-  { token: "капуст", key: "капуста" },
-  { token: "яйц", key: "яйца" },
-  { token: "омлет", key: "яйца" },
-  { token: "молок", key: "молоко" },
-  { token: "йогурт", key: "йогурт" },
-  { token: "сметан", key: "сметана" },
-  { token: "макарон", key: "макароны" },
-  { token: "паста", key: "макароны" },
-  { token: "суп", key: "суп" },
-  { token: "борщ", key: "борщ" },
-  { token: "рагу", key: "рагу" },
-  { token: "плов", key: "плов" },
+  { token: "С‚С‹РєРІ", key: "С‚С‹РєРІР°" },
+  { token: "РєР°Р±Р°С‡РѕРє", key: "РєР°Р±Р°С‡РѕРє" },
+  { token: "РєР°Р±Р°С‡Рє", key: "РєР°Р±Р°С‡РѕРє" },
+  { token: "Р±Р°РєР»Р°Р¶Р°РЅ", key: "Р±Р°РєР»Р°Р¶Р°РЅ" },
+  { token: "РєСѓСЂРёС†", key: "РєСѓСЂРёС†Р°" },
+  { token: "РёРЅРґРµР№Рє", key: "РёРЅРґРµР№РєР°" },
+  { token: "СЂС‹Р±", key: "СЂС‹Р±Р°" },
+  { token: "Р»РѕСЃРѕСЃ", key: "Р»РѕСЃРѕСЃСЊ" },
+  { token: "С‚СЂРµСЃРє", key: "С‚СЂРµСЃРєР°" },
+  { token: "РіРѕРІСЏРґРёРЅ", key: "РіРѕРІСЏРґРёРЅР°" },
+  { token: "СЃРІРёРЅРёРЅ", key: "СЃРІРёРЅРёРЅР°" },
+  { token: "С„Р°СЂС€", key: "С„Р°СЂС€" },
+  { token: "С‚РІРѕСЂРѕРі", key: "С‚РІРѕСЂРѕРі" },
+  { token: "СЃС‹СЂРЅРёРє", key: "С‚РІРѕСЂРѕРі" },
+  { token: "РЅСѓС‚", key: "РЅСѓС‚" },
+  { token: "С‡РµС‡РµРІРёС†", key: "С‡РµС‡РµРІРёС†Р°" },
+  { token: "С„Р°СЃРѕР»", key: "С„Р°СЃРѕР»СЊ" },
+  { token: "СЂРёСЃ", key: "СЂРёСЃ" },
+  { token: "РіСЂРµС‡Рє", key: "РіСЂРµС‡РєР°" },
+  { token: "РѕРІСЃСЏРЅ", key: "РѕРІСЃСЏРЅРєР°" },
+  { token: "РєР°СЂС‚РѕС„РµР»", key: "РєР°СЂС‚РѕС„РµР»СЊ" },
+  { token: "РїСЋСЂРµ", key: "РєР°СЂС‚РѕС„РµР»СЊ" },
+  { token: "РјРѕСЂРєРѕРІ", key: "РјРѕСЂРєРѕРІСЊ" },
+  { token: "СЃРІРµРєР»", key: "СЃРІРµРєР»Р°" },
+  { token: "РєР°РїСѓСЃС‚", key: "РєР°РїСѓСЃС‚Р°" },
+  { token: "СЏР№С†", key: "СЏР№С†Р°" },
+  { token: "РѕРјР»РµС‚", key: "СЏР№С†Р°" },
+  { token: "РјРѕР»РѕРє", key: "РјРѕР»РѕРєРѕ" },
+  { token: "Р№РѕРіСѓСЂС‚", key: "Р№РѕРіСѓСЂС‚" },
+  { token: "СЃРјРµС‚Р°РЅ", key: "СЃРјРµС‚Р°РЅР°" },
+  { token: "РјР°РєР°СЂРѕРЅ", key: "РјР°РєР°СЂРѕРЅС‹" },
+  { token: "РїР°СЃС‚Р°", key: "РјР°РєР°СЂРѕРЅС‹" },
+  { token: "СЃСѓРї", key: "СЃСѓРї" },
+  { token: "Р±РѕСЂС‰", key: "Р±РѕСЂС‰" },
+  { token: "СЂР°РіСѓ", key: "СЂР°РіСѓ" },
+  { token: "РїР»РѕРІ", key: "РїР»РѕРІ" },
 ];
 
 function inferMainIngredientKey(
@@ -374,40 +381,40 @@ function inferMainIngredientKey(
   return null;
 }
 
-/** Категория блюда для разнообразия недели (porridge cap, category_streak). Одна на рецепт по первому совпадению. */
+/** РљР°С‚РµРіРѕСЂРёСЏ Р±Р»СЋРґР° РґР»СЏ СЂР°Р·РЅРѕРѕР±СЂР°Р·РёСЏ РЅРµРґРµР»Рё (porridge cap, category_streak). РћРґРЅР° РЅР° СЂРµС†РµРїС‚ РїРѕ РїРµСЂРІРѕРјСѓ СЃРѕРІРїР°РґРµРЅРёСЋ. */
 const DISH_CATEGORY_TOKENS: { token: string; key: string }[] = [
-  { token: "каша", key: "porridge" },
-  { token: "овсян", key: "porridge" },
-  { token: "гречн", key: "porridge" },
-  { token: "рисов", key: "porridge" },
-  { token: "манн", key: "porridge" },
-  { token: "пшён", key: "porridge" },
-  { token: "омлет", key: "eggs" },
-  { token: "яйц", key: "eggs" },
-  { token: "скрэмбл", key: "eggs" },
-  { token: "оладьи", key: "pancakes" },
-  { token: "блины", key: "pancakes" },
-  { token: "панкейки", key: "pancakes" },
-  { token: "творог", key: "cottage_cheese" },
-  { token: "сырники", key: "cottage_cheese" },
-  { token: "суп", key: "soup" },
-  { token: "бульон", key: "soup" },
-  { token: "щи", key: "soup" },
-  { token: "борщ", key: "soup" },
-  { token: "рассольник", key: "soup" },
-  { token: "паста", key: "pasta" },
-  { token: "макарон", key: "pasta" },
-  { token: "плов", key: "rice" },
-  { token: "рис ", key: "rice" },
-  { token: "рагу", key: "stew" },
-  { token: "тушен", key: "stew" },
-  { token: "салат", key: "salad" },
-  { token: "бутер", key: "sandwich" },
-  { token: "тост", key: "sandwich" },
-  { token: "сэндвич", key: "sandwich" },
-  { token: "йогурт", key: "yogurt_bowl" },
-  { token: "гранола", key: "yogurt_bowl" },
-  { token: "боул", key: "yogurt_bowl" },
+  { token: "РєР°С€Р°", key: "porridge" },
+  { token: "РѕРІСЃСЏРЅ", key: "porridge" },
+  { token: "РіСЂРµС‡РЅ", key: "porridge" },
+  { token: "СЂРёСЃРѕРІ", key: "porridge" },
+  { token: "РјР°РЅРЅ", key: "porridge" },
+  { token: "РїС€С‘РЅ", key: "porridge" },
+  { token: "РѕРјР»РµС‚", key: "eggs" },
+  { token: "СЏР№С†", key: "eggs" },
+  { token: "СЃРєСЂСЌРјР±Р»", key: "eggs" },
+  { token: "РѕР»Р°РґСЊРё", key: "pancakes" },
+  { token: "Р±Р»РёРЅС‹", key: "pancakes" },
+  { token: "РїР°РЅРєРµР№РєРё", key: "pancakes" },
+  { token: "С‚РІРѕСЂРѕРі", key: "cottage_cheese" },
+  { token: "СЃС‹СЂРЅРёРєРё", key: "cottage_cheese" },
+  { token: "СЃСѓРї", key: "soup" },
+  { token: "Р±СѓР»СЊРѕРЅ", key: "soup" },
+  { token: "С‰Рё", key: "soup" },
+  { token: "Р±РѕСЂС‰", key: "soup" },
+  { token: "СЂР°СЃСЃРѕР»СЊРЅРёРє", key: "soup" },
+  { token: "РїР°СЃС‚Р°", key: "pasta" },
+  { token: "РјР°РєР°СЂРѕРЅ", key: "pasta" },
+  { token: "РїР»РѕРІ", key: "rice" },
+  { token: "СЂРёСЃ ", key: "rice" },
+  { token: "СЂР°РіСѓ", key: "stew" },
+  { token: "С‚СѓС€РµРЅ", key: "stew" },
+  { token: "СЃР°Р»Р°С‚", key: "salad" },
+  { token: "Р±СѓС‚РµСЂ", key: "sandwich" },
+  { token: "С‚РѕСЃС‚", key: "sandwich" },
+  { token: "СЃСЌРЅРґРІРёС‡", key: "sandwich" },
+  { token: "Р№РѕРіСѓСЂС‚", key: "yogurt_bowl" },
+  { token: "РіСЂР°РЅРѕР»Р°", key: "yogurt_bowl" },
+  { token: "Р±РѕСѓР»", key: "yogurt_bowl" },
 ];
 
 function inferDishCategoryKey(
@@ -489,7 +496,7 @@ function extractAdvice(obj: Record<string, unknown>): string | undefined {
   return typeof val === "string" && val.trim() ? val.trim() : undefined;
 }
 
-/** Описание для recipes.description: из description/intro, иначе из chef_advice или первых шагов (макс 200 символов). */
+/** РћРїРёСЃР°РЅРёРµ РґР»СЏ recipes.description: РёР· description/intro, РёРЅР°С‡Рµ РёР· chef_advice РёР»Рё РїРµСЂРІС‹С… С€Р°РіРѕРІ (РјР°РєСЃ 200 СЃРёРјРІРѕР»РѕРІ). */
 function getDescriptionWithFallback(options: {
   description?: string | null;
   intro?: string | null;
@@ -516,7 +523,7 @@ function getDescriptionWithFallback(options: {
   return "";
 }
 
-// ——— Pool-first: same logic as client recipePool ———
+// вЂ”вЂ”вЂ” Pool-first: same logic as client recipePool вЂ”вЂ”вЂ”
 function normalizeTitleKey(title: string): string {
   return (title ?? "")
     .trim()
@@ -543,10 +550,10 @@ function containsAnyToken(haystack: string, tokens: string[]): boolean {
 }
 type MemberDataPool = { allergies?: string[]; preferences?: string[]; age_months?: number };
 
-/** [3] Расширенные токены для аллергии на молоко/лактозу (RU + EN). Не включать "масло" — банит растительное масло. */
+/** [3] Р Р°СЃС€РёСЂРµРЅРЅС‹Рµ С‚РѕРєРµРЅС‹ РґР»СЏ Р°Р»Р»РµСЂРіРёРё РЅР° РјРѕР»РѕРєРѕ/Р»Р°РєС‚РѕР·Сѓ (RU + EN). РќРµ РІРєР»СЋС‡Р°С‚СЊ "РјР°СЃР»Рѕ" вЂ” Р±Р°РЅРёС‚ СЂР°СЃС‚РёС‚РµР»СЊРЅРѕРµ РјР°СЃР»Рѕ. */
 const DAIRY_ALLERGY_TOKENS = [
-  "молоко", "молочный", "сливки", "сметана", "творог", "сыр", "йогурт", "кефир", "ряженка", "мороженое", "сгущенка", "лактоза", "казеин",
-  "сливочн", "сливочное масло",
+  "РјРѕР»РѕРєРѕ", "РјРѕР»РѕС‡РЅС‹Р№", "СЃР»РёРІРєРё", "СЃРјРµС‚Р°РЅР°", "С‚РІРѕСЂРѕРі", "СЃС‹СЂ", "Р№РѕРіСѓСЂС‚", "РєРµС„РёСЂ", "СЂСЏР¶РµРЅРєР°", "РјРѕСЂРѕР¶РµРЅРѕРµ", "СЃРіСѓС‰РµРЅРєР°", "Р»Р°РєС‚РѕР·Р°", "РєР°Р·РµРёРЅ",
+  "СЃР»РёРІРѕС‡РЅ", "СЃР»РёРІРѕС‡РЅРѕРµ РјР°СЃР»Рѕ",
   "milk", "dairy", "cream", "sour cream", "curd", "cheese", "yogurt", "kefir", "butter", "ghee", "lactose", "casein",
 ];
 
@@ -554,7 +561,7 @@ function getAllergyTokens(memberData: MemberDataPool | null | undefined): string
   if (!memberData?.allergies?.length) return [];
   const tokens = new Set<string>();
   const rawLower = memberData.allergies.map((a) => String(a).toLowerCase()).join(" ");
-  const isMilkAllergy = /молок|milk|лактоз|lactose|dairy|казеин|casein/.test(rawLower);
+  const isMilkAllergy = /РјРѕР»РѕРє|milk|Р»Р°РєС‚РѕР·|lactose|dairy|РєР°Р·РµРёРЅ|casein/.test(rawLower);
   for (const a of memberData.allergies) {
     for (const t of tokenize(String(a))) {
       if (t.length >= 2) tokens.add(t);
@@ -570,8 +577,8 @@ function getPreferenceExcludeTokens(memberData: MemberDataPool | null | undefine
   if (!prefs?.length) return [];
   const str = prefs.join(" ");
   const tokens = new Set<string>();
-  const re1 = /не\s+любит\s+([^\.,;!?]+)/gi;
-  const re2 = /без\s+([^\.,;!?]+)/gi;
+  const re1 = /РЅРµ\s+Р»СЋР±РёС‚\s+([^\.,;!?]+)/gi;
+  const re2 = /Р±РµР·\s+([^\.,;!?]+)/gi;
   let m: RegExpExecArray | null;
   while ((m = re1.exec(str))) {
     for (const t of tokenize(m[1])) tokens.add(t);
@@ -581,7 +588,7 @@ function getPreferenceExcludeTokens(memberData: MemberDataPool | null | undefine
   }
   return [...tokens];
 }
-const AGE_RESTRICTED_TOKENS = ["остр", "кофе", "гриб"];
+const AGE_RESTRICTED_TOKENS = ["РѕСЃС‚СЂ", "РєРѕС„Рµ", "РіСЂРёР±"];
 type RecipeRowPool = {
   id: string; title: string; tags: string[] | null; description: string | null; meal_type?: string | null;
   source?: string | null;
@@ -597,13 +604,13 @@ function inferProteinKey(
   ingredientsText?: string | null
 ): ProteinKey {
   const text = [title ?? "", description ?? "", ingredientsText ?? ""].join(" ").toLowerCase();
-  if (/(минтай|треск|хек|судак|лосос|семг|сёмг|форел|тунец|сардин|скумбри|рыб|fish|salmon|cod|tuna|mackerel)/.test(text)) return "fish";
-  if (/(куриц|курин|индейк|филе бедра|грудк|птиц|turkey|chicken)/.test(text)) return "chicken";
-  if (/(говядин|телят|свинин|бекон|ветчин|мясн|beef|pork|veal|bacon|ham)/.test(text)) return "beef_pork";
-  if (/(фарш|minced)/.test(text) && !/рыб/.test(text)) return "beef_pork";
-  if (/(чечевиц|нут|фасол|горох|боб|chickpea|lentil|beans|peas)/.test(text)) return "legumes";
-  if (/(творог|йогурт|кефир|молок|сыр|сметан|ряженк|dairy|curd|yogurt|cheese|milk|cottage|cream)/.test(text)) return "dairy";
-  if (/(яйц|омлет|egg|omelet)/.test(text)) return "egg";
+  if (/(РјРёРЅС‚Р°Р№|С‚СЂРµСЃРє|С…РµРє|СЃСѓРґР°Рє|Р»РѕСЃРѕСЃ|СЃРµРјРі|СЃС‘РјРі|С„РѕСЂРµР»|С‚СѓРЅРµС†|СЃР°СЂРґРёРЅ|СЃРєСѓРјР±СЂРё|СЂС‹Р±|fish|salmon|cod|tuna|mackerel)/.test(text)) return "fish";
+  if (/(РєСѓСЂРёС†|РєСѓСЂРёРЅ|РёРЅРґРµР№Рє|С„РёР»Рµ Р±РµРґСЂР°|РіСЂСѓРґРє|РїС‚РёС†|turkey|chicken)/.test(text)) return "chicken";
+  if (/(РіРѕРІСЏРґРёРЅ|С‚РµР»СЏС‚|СЃРІРёРЅРёРЅ|Р±РµРєРѕРЅ|РІРµС‚С‡РёРЅ|РјСЏСЃРЅ|beef|pork|veal|bacon|ham)/.test(text)) return "beef_pork";
+  if (/(С„Р°СЂС€|minced)/.test(text) && !/СЂС‹Р±/.test(text)) return "beef_pork";
+  if (/(С‡РµС‡РµРІРёС†|РЅСѓС‚|С„Р°СЃРѕР»|РіРѕСЂРѕС…|Р±РѕР±|chickpea|lentil|beans|peas)/.test(text)) return "legumes";
+  if (/(С‚РІРѕСЂРѕРі|Р№РѕРіСѓСЂС‚|РєРµС„РёСЂ|РјРѕР»РѕРє|СЃС‹СЂ|СЃРјРµС‚Р°РЅ|СЂСЏР¶РµРЅРє|dairy|curd|yogurt|cheese|milk|cottage|cream)/.test(text)) return "dairy";
+  if (/(СЏР№С†|РѕРјР»РµС‚|egg|omelet)/.test(text)) return "egg";
   return "veg";
 }
 
@@ -676,11 +683,11 @@ function scorePoolCandidate(
   const stepsCount = recipe.recipe_steps?.length ?? 0;
   if (stepsCount >= 3) baseScore += 1;
   const t = (recipe.title ?? "").toLowerCase();
-  const snackyTokens = ["пюре", "дольки", "батончик", "печенье"];
+  const snackyTokens = ["РїСЋСЂРµ", "РґРѕР»СЊРєРё", "Р±Р°С‚РѕРЅС‡РёРє", "РїРµС‡РµРЅСЊРµ"];
   if (normalizedSlot !== "snack" && snackyTokens.some((tok) => t.includes(tok))) baseScore -= 3;
-  const snackLike = ["йогурт", "творог", "дольки", "печенье", "батончик", "пюре", "смузи"];
+  const snackLike = ["Р№РѕРіСѓСЂС‚", "С‚РІРѕСЂРѕРі", "РґРѕР»СЊРєРё", "РїРµС‡РµРЅСЊРµ", "Р±Р°С‚РѕРЅС‡РёРє", "РїСЋСЂРµ", "СЃРјСѓР·Рё"];
   if (normalizedSlot === "dinner" && snackLike.some((tok) => t.includes(tok))) baseScore -= 5;
-  const breakfastLike = ["оладь", "сырник", "запеканк", "каша", "гранола", "тост"];
+  const breakfastLike = ["РѕР»Р°РґСЊ", "СЃС‹СЂРЅРёРє", "Р·Р°РїРµРєР°РЅРє", "РєР°С€Р°", "РіСЂР°РЅРѕР»Р°", "С‚РѕСЃС‚"];
   if ((normalizedSlot === "lunch" || normalizedSlot === "dinner") && breakfastLike.some((tok) => t.includes(tok))) baseScore -= 5;
   const categoryKey = inferDishCategoryKey(recipe.title, recipe.description, ingredientsText);
   if (normalizedSlot === "lunch") {
@@ -688,9 +695,9 @@ function scorePoolCandidate(
     else baseScore -= 2;
   }
   if (normalizedSlot === "snack") {
-    const snackAllow = ["фрукт", "ягод", "орех", "смузи", "печенье", "батончик", "хлебец", "пюре", "fruit", "berry", "nut"];
+    const snackAllow = ["С„СЂСѓРєС‚", "СЏРіРѕРґ", "РѕСЂРµС…", "СЃРјСѓР·Рё", "РїРµС‡РµРЅСЊРµ", "Р±Р°С‚РѕРЅС‡РёРє", "С…Р»РµР±РµС†", "РїСЋСЂРµ", "fruit", "berry", "nut"];
     if (snackAllow.some((tok) => t.includes(tok))) baseScore += 2;
-    const snackReject = ["каша", "гречк", "рис", "рагу", "тушен", "rice", "oat"];
+    const snackReject = ["РєР°С€Р°", "РіСЂРµС‡Рє", "СЂРёСЃ", "СЂР°РіСѓ", "С‚СѓС€РµРЅ", "rice", "oat"];
     if (snackReject.some((tok) => t.includes(tok))) baseScore -= 5;
   }
   const titleK = normalizeTitleKey(recipe.title);
@@ -741,15 +748,15 @@ async function pickFromPool(
     debugPool?: boolean;
     excludeProteinKeys?: string[];
     proteinKeyCounts?: Record<string, number>;
-    /** Ключи главных ингредиентов уже выбранных в этот день — не повторять (тыква дважды в день). */
+    /** РљР»СЋС‡Рё РіР»Р°РІРЅС‹С… РёРЅРіСЂРµРґРёРµРЅС‚РѕРІ СѓР¶Рµ РІС‹Р±СЂР°РЅРЅС‹С… РІ СЌС‚РѕС‚ РґРµРЅСЊ вЂ” РЅРµ РїРѕРІС‚РѕСЂСЏС‚СЊ (С‚С‹РєРІР° РґРІР°Р¶РґС‹ РІ РґРµРЅСЊ). */
     excludedMainIngredients?: string[];
     adaptiveParams?: AdaptiveParams;
     weekProgress?: { filled: number; total: number };
     debugSlotStats?: Record<string, unknown>;
     weekStats?: { candidatesSeen: number };
-    /** Для replace_slot: вернуть candidatesAfterAllFilters и topTitleKeys для решения об AI fallback. */
+    /** Р”Р»СЏ replace_slot: РІРµСЂРЅСѓС‚СЊ candidatesAfterAllFilters Рё topTitleKeys РґР»СЏ СЂРµС€РµРЅРёСЏ РѕР± AI fallback. */
     returnExtra?: boolean;
-    /** Для week/day run: вернуть top 10 кандидатов с categoryKey/proteinKey/titleKey для rerank по quality gate. */
+    /** Р”Р»СЏ week/day run: РІРµСЂРЅСѓС‚СЊ top 10 РєР°РЅРґРёРґР°С‚РѕРІ СЃ categoryKey/proteinKey/titleKey РґР»СЏ rerank РїРѕ quality gate. */
     returnTopCandidates?: number;
   }
 ): Promise<
@@ -799,10 +806,10 @@ async function pickFromPool(
   }
   const candidatesStrict = (rowsStrict ?? []).length;
 
-  // Для «Семья» (member_id null) пул = все рецепты пользователя, иначе рецепты ребёнка + семейные (member_id null).
+  // Р”Р»СЏ В«РЎРµРјСЊСЏВ» (member_id null) РїСѓР» = РІСЃРµ СЂРµС†РµРїС‚С‹ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ, РёРЅР°С‡Рµ СЂРµС†РµРїС‚С‹ СЂРµР±С‘РЅРєР° + СЃРµРјРµР№РЅС‹Рµ (member_id null).
   let qLoose = baseQ();
   if (memberId == null) {
-    // Не фильтруем по member_id — в семейный план попадают все рецепты пользователя (в т.ч. chat_ai с member_id ребёнка).
+    // РќРµ С„РёР»СЊС‚СЂСѓРµРј РїРѕ member_id вЂ” РІ СЃРµРјРµР№РЅС‹Р№ РїР»Р°РЅ РїРѕРїР°РґР°СЋС‚ РІСЃРµ СЂРµС†РµРїС‚С‹ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (РІ С‚.С‡. chat_ai СЃ member_id СЂРµР±С‘РЅРєР°).
   } else {
     qLoose = qLoose.or(`member_id.eq.${memberId},member_id.is.null`);
   }
@@ -926,7 +933,7 @@ async function pickFromPool(
   const profileRejectedCount = beforeProfile - afterProfile;
   if (beforeProfile > 0 && afterProfile === 0 && firstFailReason.current) rejectReason = firstFailReason.current;
 
-  const hasMilkAllergy = memberData?.allergies?.length && memberData?.allergies?.some((a) => /молок|milk|лактоз|lactose|dairy|казеин|casein/i.test(String(a)));
+  const hasMilkAllergy = memberData?.allergies?.length && memberData?.allergies?.some((a) => /РјРѕР»РѕРє|milk|Р»Р°РєС‚РѕР·|lactose|dairy|РєР°Р·РµРёРЅ|casein/i.test(String(a)));
   if (debugPool && hasMilkAllergy && allergyTokens.length === 0) {
     safeLog("[ALLERGY DEBUG] warning", { allergiesRaw: memberData?.allergies ?? [] });
   }
@@ -1076,8 +1083,8 @@ async function pickFromPool(
         const { ok: sanityOk } = slotSanityCheck(normalizedSlot, fullText);
         const allergyDetail = checkAllergyWithDetail(r, memberData);
         const t = (r.title ?? "").toLowerCase();
-        const snackLike = ["йогурт", "творог", "дольки", "печенье", "батончик", "пюре", "смузи"];
-        const breakfastLike = ["оладь", "сырник", "запеканк", "каша", "гранола", "тост"];
+        const snackLike = ["Р№РѕРіСѓСЂС‚", "С‚РІРѕСЂРѕРі", "РґРѕР»СЊРєРё", "РїРµС‡РµРЅСЊРµ", "Р±Р°С‚РѕРЅС‡РёРє", "РїСЋСЂРµ", "СЃРјСѓР·Рё"];
+        const breakfastLike = ["РѕР»Р°РґСЊ", "СЃС‹СЂРЅРёРє", "Р·Р°РїРµРєР°РЅРє", "РєР°С€Р°", "РіСЂР°РЅРѕР»Р°", "С‚РѕСЃС‚"];
         const resolved = resolvedCache.get(r.id) ?? getResolvedMealType(r);
         return {
           id: r.id,
@@ -1196,40 +1203,6 @@ async function pickFromPool(
   return base;
 }
 
-/** Number + unit in one string (e.g. "150 г", "2 ст.л", "100 мл"). Units: г|гр|g|кг|ml|мл|л|шт|pcs|ч.л|ст.л|tsp|tbsp */
-const INGREDIENT_NUMBER_UNIT_REGEX = /\d+(?:[.,]\d+)?\s*(?:г|гр|g|кг|ml|мл|л|шт|pcs|ч\.?\s*л\.?|ст\.?\s*л\.?|tsp|tbsp)/i;
-/** Qualitative amounts: do not fail the whole recipe (e.g. salt). */
-const INGREDIENT_QUALITATIVE_REGEX = /по вкусу|для подачи|щепотка/i;
-
-export type IngredientForValidation = {
-  name?: string;
-  amount?: string | number;
-  unit?: string;
-  display_text?: string;
-};
-
-function ingredientHasQuantity(ing: IngredientForValidation): boolean {
-  const amount = ing.amount;
-  const unit = (ing.unit ?? "").trim();
-  const amountStr = typeof amount === "number" ? String(amount) : (amount ?? "").trim();
-  const displayText = (ing.display_text ?? "").trim();
-  const textToCheck = displayText || amountStr;
-
-  if (typeof amount === "number" && unit.length > 0) return true;
-  if (INGREDIENT_QUALITATIVE_REGEX.test(amountStr) || INGREDIENT_QUALITATIVE_REGEX.test(displayText)) return true;
-  if (INGREDIENT_NUMBER_UNIT_REGEX.test(amountStr) || INGREDIENT_NUMBER_UNIT_REGEX.test(displayText)) return true;
-  if (textToCheck.length > 0 && INGREDIENT_NUMBER_UNIT_REGEX.test(textToCheck)) return true;
-  return false;
-}
-
-function ingredientsHaveAmounts(ingredients: Array<IngredientForValidation>): boolean {
-  if (!Array.isArray(ingredients) || ingredients.length < 3) return false;
-  for (const ing of ingredients) {
-    if (!ingredientHasQuantity(ing)) return false;
-  }
-  return true;
-}
-
 /** [3] Validate AI-generated meal: allergy + slot sanity + ingredients with amount. Returns null if OK, else reason. */
 function validateAiMeal(
   title: string,
@@ -1246,21 +1219,18 @@ function validateAiMeal(
     const amountStr = typeof amountRaw === "number" ? String(amountRaw) : (amountRaw ?? "").trim();
     const display_text =
       (i as { display_text?: string }).display_text ??
-      (amountStr || unit ? `${name} — ${amountStr}${unit ? " " + unit : ""}`.trim() : name);
+      (amountStr || unit ? `${name} вЂ” ${amountStr}${unit ? " " + unit : ""}`.trim() : name);
     return { name, amount: amountRaw, unit, display_text };
   });
-  if (!ingredientsHaveAmounts(ingList)) return "ingredients_no_amount";
-  const normSlot = normalizeMealType(mealKey) ?? (mealKey as NormalizedMealType);
+  const allergyTokens = getAllergyTokens(memberData);
   const ingText = ingList.map((i) => i.name).join(" ");
   const combinedText = [title, ingText, steps.join(" ")].join(" ");
+  if (allergyTokens.length > 0 && containsAnyToken(combinedText, allergyTokens)) return "allergy";
+  if (!ingredientsHaveAmounts(ingList)) return "ingredients_no_amount";
+  const normSlot = normalizeMealType(mealKey) ?? (mealKey as NormalizedMealType);
   const sanityText = normSlot === "breakfast" ? title : combinedText;
   const sanity = slotSanityReject(normSlot, sanityText);
   if (sanity) return sanity;
-  const allergyTokens = getAllergyTokens(memberData);
-  if (allergyTokens.length > 0) {
-    const text = [title, ingText, steps.join(" ")].join(" ");
-    if (containsAnyToken(text, allergyTokens)) return "allergy";
-  }
   return null;
 }
 
@@ -1468,452 +1438,9 @@ serve(async (req) => {
         );
       }
       if (debugPlan) safeLog("[REPLACE_SLOT] pool_search", { requestId, pickedSource: null, reason: qualityGateTriggered ? "quality_gate" : "pool_empty" });
-
-      // Replace with AI: only Premium/Trial. Free must not trigger AI from replace_slot.
-      if (!isPremiumOrTrialReplace) {
-        if (debugPlan) safeLog("[REPLACE_SLOT] AI blocked", { requestId, reason: "free_no_ai" });
-        return new Response(
-          JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "premium_required", requestId, reason: "premium_required" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const deepseekUrl = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/deepseek-chat";
-      const mealLabel =
-        mealType === "breakfast" ? "завтрак" : mealType === "lunch" ? "обед" : mealType === "snack" ? "полдник" : "ужин";
-      const excludeStr = excludeTitleKeys.length > 0 ? ` Не повторяй блюда: ${excludeTitleKeys.slice(0, 16).join(", ")}.` : "";
-      const mainIngredientExcludeStr =
-        excludedMainIngredientsReplace.length > 0 ? ` В этот день уже есть: ${excludedMainIngredientsReplace.join(", ")} — не используй.` : "";
-      const slotForbiddenByType: Record<string, string> = {
-        breakfast: "супы, рагу, плов, рыбу, карри, нут, тушёное",
-        lunch: "сырники, оладьи, запеканку, кашу, гранолу, тосты",
-        snack: "супы, рагу, плов, каши, гречку, рис, фарш, котлеты, пасту",
-        dinner: "йогурт, творог, дольки, печенье, батончик, пюре, смузи",
-      };
-      const slotConstraint =
-        mealType === "breakfast"
-          ? " Не предлагай супы, рагу, плов — только блюда для завтрака."
-          : ` Для ${mealLabel} НЕЛЬЗЯ: ${slotForbiddenByType[mealType] ?? ""}.`;
-      const allergyTokens = getAllergyTokens(memberDataPool);
-      const allergyHint =
-        allergyTokens.length > 0
-          ? ` СТРОГО без: ${["молоко", "творог", "йогурт", "сыр", "кефир", "сливки", "сметана", "ряженка", "масло", "мороженое", "сгущенка", "лактоза", "казеин"].filter((x) => allergyTokens.some((t) => t.includes(x) || x.includes(t))).join(", ")}.`
-          : "";
-
-      const ingredientsAmountRule =
-        " Формат рецепта: ingredients — массив объектов { \"name\": \"...\", \"amount\": \"150 г\" или \"2 шт.\" }. Каждый ингредиент ОБЯЗАТЕЛЬНО с количеством и единицей (г, мл, шт., ст.л., ч.л.). Запрещено указывать только название без количества.";
-      const doAiRequest = (extraHint: string) =>
-        fetchWithRetry(
-          deepseekUrl,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: authHeader },
-            body: JSON.stringify({
-              type: "recipe",
-              stream: false,
-              memberData: memberData ?? undefined,
-              mealType,
-              messages: [
-                {
-                  role: "user",
-                  content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${slotConstraint}${ingredientsAmountRule}${extraHint} Верни только JSON.`,
-                },
-              ],
-            }),
-          },
-          { timeoutMs: FETCH_TIMEOUT_MS, retries: 2 }
-        );
-
-      let aiRes: Response;
-      try {
-        aiRes = await doAiRequest(allergyHint);
-        if (aiRes && !aiRes.ok && aiRes.status >= 500) {
-          if (debugPool) safeLog("[REPLACE_SLOT] AI 5xx, retrying once", aiRes.status);
-          aiRes = await doAiRequest(allergyHint);
-        }
-      } catch (e) {
-        safeWarn("[REPLACE_SLOT] AI timeout/fetch error", e instanceof Error ? e.message : String(e).slice(0, 80));
-        try {
-          aiRes = await doAiRequest(allergyHint);
-        } catch (e2) {
-          if (debugPlan) safeLog("[REPLACE_SLOT] ai_call", { requestId, status: "timeout" });
-          return new Response(
-            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "ai_timeout", requestId, reason: "ai_timeout" }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
-
-      if (!aiRes.ok) {
-        const errText = await aiRes.text();
-        safeWarn("[REPLACE_SLOT] AI request failed", aiRes.status, errText);
-        if (debugPlan) safeLog("[REPLACE_SLOT] ai_call", { requestId, status: aiRes.status });
-        return new Response(
-          JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "ai_request_failed", requestId, reason: "ai_request_failed" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (debugPlan) safeLog("[REPLACE_SLOT] ai_call", { requestId, status: "ok" });
-
-      const aiData = (await aiRes.json()) as { message?: string; recipe_id?: string | null; recipes?: Array<{ title?: string }> };
-      const rawRecipeId = aiData.recipe_id;
-      let recipeId: string | null =
-        rawRecipeId == null
-          ? null
-          : typeof rawRecipeId === "string"
-            ? rawRecipeId
-            : (rawRecipeId as { id?: string })?.id ?? String(rawRecipeId);
-      let title = aiData.recipes?.[0]?.title ?? (typeof aiData.message === "string" ? aiData.message.slice(0, 100) : "Рецепт");
-
-      type ParsedAiRecipe = {
-        title?: string;
-        description?: string;
-        intro?: string;
-        ingredients?: Array<{ name?: string; amount?: string; unit?: string; display_text?: string }>;
-        steps?: string[];
-      };
-      const parseAndValidateAi = (
-        msg: string
-      ): { parsed: ParsedAiRecipe; failReason: string | null } => {
-        const jsonStr = extractFirstJsonObject(msg);
-        if (!jsonStr) return { parsed: {}, failReason: "no_json" };
-        let parsed: ParsedAiRecipe;
-        try {
-          parsed = JSON.parse(jsonStr) as ParsedAiRecipe;
-        } catch {
-          return { parsed: {}, failReason: "no_json" };
-        }
-        const ingredients: IngredientForValidation[] = (parsed.ingredients ?? []).map((ing) => {
-          if (typeof ing === "string") return { name: String(ing).trim(), amount: "", display_text: String(ing).trim() };
-          const name = (ing.name ?? "").trim();
-          const amount = (ing.amount ?? "").trim();
-          const unit = (ing.unit ?? "").trim();
-          const display_text = (ing.display_text ?? (amount ? `${name} — ${amount}` : name)).trim();
-          return { name, amount, unit, display_text };
-        });
-        const steps = (parsed.steps ?? []).filter(Boolean).map((s) => String(s));
-        const failReason = validateAiMeal(
-          parsed.title ?? "",
-          ingredients,
-          steps,
-          mealType,
-          memberDataPool
-        );
-        return { parsed: { ...parsed, ingredients, steps }, failReason };
-      };
-
-      let parsedResult: { parsed: ParsedAiRecipe; failReason: string | null } | null = null;
-      let retriesCount = 0;
-      let finalFailReason: string | null = null;
-
-      if (typeof aiData.message === "string") {
-        parsedResult = parseAndValidateAi(aiData.message);
-        const isAllergyFail = parsedResult.failReason === "allergy";
-        const isSanityFail = parsedResult.failReason && parsedResult.failReason !== "ingredients_no_amount" && !isAllergyFail;
-        if (isAllergyFail && allergyTokens.length > 0) {
-          try {
-            aiRes = await doAiRequest(` СТРОГО БЕЗ МОЛОЧНЫХ ПРОДУКТОВ: молоко, творог, йогурт, сыр, кефир, сливки, сметана, масло, ряженка, мороженое, сгущенка. `);
-            if (aiRes.ok) {
-              const retryData = (await aiRes.json()) as { message?: string };
-              parsedResult = parseAndValidateAi(retryData.message ?? "");
-            }
-          } catch {
-            /* keep original */
-          }
-        } else if (isSanityFail) {
-          try {
-            const sanityHint =
-              mealType === "breakfast"
-                ? " Строго только блюдо для завтрака: каша, омлет, сырники, оладьи, запеканка, тост, яичница, гранола. Никаких супов, борща, рагу, плова, рыбы, карри, нута, тушёного. Верни один рецепт именно для завтрака."
-                : ` Для ${mealLabel} нельзя: ${slotForbiddenByType[mealType] ?? ""}. Предложи подходящее блюдо.`;
-            aiRes = await doAiRequest(sanityHint);
-            if (aiRes.ok) {
-              const retryData = (await aiRes.json()) as { message?: string };
-              parsedResult = parseAndValidateAi(retryData.message ?? "");
-            }
-          } catch {
-            /* keep original */
-          }
-        } else if (parsedResult.failReason === "ingredients_no_amount" && isPremiumOrTrialReplace) {
-          safeLog("[REPLACE_SLOT] ai_retry_start", {
-            requestId,
-            mealType,
-            title: parsedResult.parsed?.title ?? "",
-          });
-          retriesCount = 1;
-          try {
-            const amountHint =
-              " Каждый ингредиент ОБЯЗАТЕЛЬНО с количеством и единицей (г, мл, шт., ст.л., ч.л.). Верни ингредиенты с количеством, не только название.";
-            aiRes = await doAiRequest(amountHint);
-            if (aiRes.ok) {
-              const retryData = (await aiRes.json()) as { message?: string };
-              parsedResult = parseAndValidateAi(retryData.message ?? "");
-            }
-          } catch {
-            /* keep original parsedResult */
-          }
-          if (parsedResult.failReason === "ingredients_no_amount") {
-            safeLog("[REPLACE_SLOT] ai_retry_failed", { requestId, mealType });
-            retriesCount = 2;
-            const titleForRepair = parsedResult.parsed?.title ?? "Рецепт";
-            const namesOnly = (parsedResult.parsed?.ingredients ?? []).map((i) => (typeof i === "string" ? i : i.name ?? "")).filter(Boolean).join(", ");
-            const repairPrompt = `Вот рецепт: «${titleForRepair}». Ингредиенты (только названия): ${namesOnly}.
-Верни JSON: { "ingredients": [ { "name": "...", "amount": "...", "unit": "...", "display_text": "название — количество единица" } ] }.
-Каждый ингредиент с количеством и единицей (г, мл, шт., ст.л., ч.л.). Только JSON, без markdown.`;
-            try {
-              const repairRes = await fetchWithRetry(
-                deepseekUrl,
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", Authorization: authHeader },
-                  body: JSON.stringify({
-                    type: "recipe",
-                    stream: false,
-                    memberData: memberData ?? undefined,
-                    mealType,
-                    messages: [{ role: "user", content: repairPrompt }],
-                  }),
-                },
-                { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
-              );
-              if (repairRes.ok) {
-                const repairData = (await repairRes.json()) as { message?: string };
-                const repairJson = extractFirstJsonObject(repairData.message ?? "");
-                if (repairJson) {
-                  try {
-                    const repairParsed = JSON.parse(repairJson) as { ingredients?: Array<{ name?: string; amount?: string; unit?: string; display_text?: string }> };
-                    const repaired = (repairParsed.ingredients ?? []).map((ing) => ({
-                      name: (ing.name ?? "").trim(),
-                      amount: (ing.amount ?? "").trim(),
-                      unit: (ing.unit ?? "").trim(),
-                      display_text: (ing.display_text ?? "").trim() || (ing.amount ? `${ing.name ?? ""} — ${ing.amount}` : ing.name ?? ""),
-                    }));
-                    if (repaired.length >= 3) {
-                      const mergedParsed: ParsedAiRecipe = {
-                        ...parsedResult.parsed,
-                        ingredients: repaired,
-                      };
-                      const stepsForValidate = parsedResult.parsed?.steps ?? [];
-                      const repairFailReason = validateAiMeal(
-                        titleForRepair,
-                        repaired,
-                        stepsForValidate,
-                        mealType,
-                        memberDataPool
-                      );
-                      if (!repairFailReason) {
-                        parsedResult = { parsed: { ...mergedParsed, steps: stepsForValidate }, failReason: null };
-                      } else {
-                        finalFailReason = repairFailReason;
-                      }
-                    } else {
-                      finalFailReason = "ingredients_no_amount";
-                    }
-                  } catch {
-                    finalFailReason = "ingredients_no_amount";
-                  }
-                } else {
-                  finalFailReason = "ingredients_no_amount";
-                }
-              } else {
-                finalFailReason = "ingredients_no_amount";
-              }
-            } catch {
-              finalFailReason = "ingredients_no_amount";
-            }
-          } else if (parsedResult.failReason) {
-            finalFailReason = parsedResult.failReason;
-          }
-        }
-
-        if (parsedResult.failReason) {
-          finalFailReason = finalFailReason ?? parsedResult.failReason;
-          const titleForLog = parsedResult.parsed?.title ?? "";
-          const ingText = (parsedResult.parsed?.ingredients ?? []).map((i) => (typeof i === "string" ? i : (i as { name?: string }).name ?? "")).join(" ");
-          const combinedForSanity = [titleForLog, ingText].join(" ");
-          const { hitTokens: sanityHitTokens } = slotSanityCheck(mealType as NormalizedMealType, combinedForSanity);
-          safeLog("[REPLACE_SLOT] AI meal validation failed", {
-            mealType,
-            failReason: parsedResult.failReason,
-            title: titleForLog.slice(0, 80),
-            hitTokens: parsedResult.failReason === "sanity_hit" ? sanityHitTokens : undefined,
-            retriesCount,
-            finalFailReason,
-          });
-          if (debugPlan) {
-            safeLog("[REPLACE_SLOT] debug_plan", {
-              requestId,
-              aiFallbackTriggered: true,
-              retriesCount,
-              finalFailReason,
-            });
-          }
-          const isInvalidIngredients = finalFailReason === "ingredients_no_amount";
-          return new Response(
-            JSON.stringify({
-              ok: false,
-              error: "replace_failed",
-              code: isInvalidIngredients ? "ai_invalid_ingredients" : undefined,
-              pickedSource: "ai",
-              reasonIfAi: "validation_failed",
-              requestId,
-              reason: "validation_failed",
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
-
-      if (!recipeId && typeof aiData.message === "string" && parsedResult?.parsed) {
-        const { parsed } = parsedResult;
-        const ingredientsRaw = (parsed.ingredients ?? []).map((ing) => {
-          if (typeof ing === "string") return { name: String(ing).trim(), amount: "", display_text: String(ing).trim() };
-          const name = (ing.name ?? "").trim();
-          const amount = (ing.amount ?? "").trim();
-          const unit = (ing.unit ?? "").trim();
-          const display_text = (ing.display_text ?? (amount ? `${name} — ${amount}` : name)).trim();
-          return { name, amount, unit, display_text };
-        });
-        const steps = (parsed.steps ?? []).filter(Boolean).map((s) => String(s));
-        while (steps.length < 3) steps.push(`Шаг ${steps.length + 1}`);
-        while (ingredientsRaw.length < 3) ingredientsRaw.push({ name: `Ингредиент ${ingredientsRaw.length + 1}`, amount: "", display_text: "" });
-        const chefAdvice = extractChefAdvice(parsed as Record<string, unknown>);
-        const adviceVal = extractAdvice(parsed as Record<string, unknown>);
-        const description = getDescriptionWithFallback({
-          description: parsed.description,
-          intro: parsed.intro,
-          steps: parsed.steps ?? steps,
-          chef_advice: chefAdvice ?? null,
-        });
-        const payload = canonicalizeRecipePayload({
-          user_id: userId,
-          member_id: memberId,
-          child_id: memberId,
-          source: "chat_ai",
-          contextMealType: mealType,
-          title: parsed.title ?? "Рецепт",
-          description,
-          cooking_time_minutes: null,
-          chef_advice: chefAdvice ?? null,
-          advice: adviceVal ?? null,
-          steps: steps.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
-          ingredients: ingredientsRaw.slice(0, 20).map((ing, idx) => ({
-            name: ing.name,
-            display_text: ing.display_text || (ing.amount ? `${ing.name} — ${ing.amount}` : ing.name),
-            amount: null,
-            unit: null,
-            order_index: idx,
-            category: "other",
-          })),
-          sourceTag: "plan",
-        });
-        const { data: createdId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
-        if (rpcErr || !createdId) {
-          safeWarn("[REPLACE_SLOT] create_recipe failed", rpcErr?.message);
-          if (debugPlan) safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: false });
-          return new Response(
-            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "create_recipe_failed", requestId, reason: "create_recipe_failed" }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        if (debugPlan) {
-          safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: true, recipeId: createdId, hasDescription: description.length > 0 });
-          safeLog("[REPLACE_SLOT] debug_plan", { requestId, aiFallbackTriggered: true, retriesCount, finalFailReason: null });
-        }
-        recipeId = typeof createdId === "string" ? createdId : (createdId as { id?: string })?.id ?? String(createdId);
-        title = parsed.title ?? title;
-      }
-
-      if (recipeId) {
-        const newMeals = { ...currentMeals, [mealType]: { recipe_id: recipeId, title, plan_source: "ai" as const } };
-        const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
-        if (upsertErr.error) {
-          safeWarn("[REPLACE_SLOT] attach_failed (upsert)", requestId, upsertErr.error);
-          return new Response(
-            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId, reason: "ai" });
-        return new Response(
-          JSON.stringify({ pickedSource: "ai", newRecipeId: recipeId, title, plan_source: "ai", requestId, reason: "ai" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const recipesFromResponse = aiData.recipes as Array<{
-        title?: string;
-        description?: string;
-        intro?: string;
-        ingredients?: Array<{ name?: string; amount?: string }>;
-        steps?: string[];
-        chefAdvice?: string;
-        chef_advice?: string;
-      }> | undefined;
-      const firstRecipe = Array.isArray(recipesFromResponse) && recipesFromResponse.length > 0 ? recipesFromResponse[0] : null;
-      if (firstRecipe?.title) {
-        const ingList = (firstRecipe.ingredients ?? []).map((ing) =>
-          typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
-        );
-        const stepList = (firstRecipe.steps ?? []).filter(Boolean).map((s) => String(s));
-        const failReason = validateAiMeal(firstRecipe.title, ingList, stepList, mealType, memberDataPool);
-        if (!failReason) {
-          while (stepList.length < 3) stepList.push(`Шаг ${stepList.length + 1}`);
-          while (ingList.length < 3) ingList.push({ name: `Ингредиент ${ingList.length + 1}`, amount: "" });
-          const chefAdviceFirst = firstRecipe.chefAdvice ?? firstRecipe.chef_advice;
-          const descriptionFirst = getDescriptionWithFallback({
-            description: firstRecipe.description,
-            intro: firstRecipe.intro,
-            steps: firstRecipe.steps ?? stepList,
-            chef_advice: chefAdviceFirst ?? null,
-          });
-          const payload = canonicalizeRecipePayload({
-            user_id: userId,
-            member_id: memberId,
-            child_id: memberId,
-            source: "chat_ai",
-            contextMealType: mealType,
-            title: firstRecipe.title,
-            description: descriptionFirst,
-            cooking_time_minutes: null,
-            chef_advice: typeof chefAdviceFirst === "string" && chefAdviceFirst.trim() ? chefAdviceFirst.trim() : null,
-            advice: null,
-            steps: stepList.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
-            ingredients: ingList.slice(0, 20).map((ing, idx) => ({
-              name: ing.name,
-              display_text: ing.amount ? `${ing.name} — ${ing.amount}` : ing.name,
-              amount: null,
-              unit: null,
-              order_index: idx,
-              category: "other",
-            })),
-            sourceTag: "plan",
-          });
-          const { data: createdId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
-          if (!rpcErr && createdId) {
-            const idStr = typeof createdId === "string" ? createdId : (createdId as { id?: string })?.id ?? String(createdId);
-            if (debugPlan) safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: true, recipeId: idStr, hasDescription: descriptionFirst.length > 0 });
-            const newMeals = { ...currentMeals, [mealType]: { recipe_id: idStr, title: firstRecipe.title, plan_source: "ai" as const } };
-            const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
-            if (upsertErr.error) {
-              safeWarn("[REPLACE_SLOT] attach_failed (upsert)", requestId, upsertErr.error);
-              return new Response(
-                JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
-                { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-              );
-            }
-            if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId: idStr, reason: "ai_recipes_array" });
-            return new Response(
-              JSON.stringify({ pickedSource: "ai", newRecipeId: idStr, title: firstRecipe.title, plan_source: "ai", requestId, reason: "ai_recipes_array" }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        }
-      }
-
-      if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: false, reason: "no_recipe_in_response" });
+      // Plan = only pool. No AI from replace_slot. When no candidates, return pool_exhausted.
       return new Response(
-        JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "no_recipe_in_response", requestId, reason: "no_recipe_in_response" }),
+        JSON.stringify({ ok: false, error: "replace_failed", code: "pool_exhausted", requestId, reason: "pool_exhausted" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -1945,28 +1472,19 @@ serve(async (req) => {
       const isPremiumOrTrialUpgrade = !!(profUpgrade?.premium_until && new Date(profUpgrade.premium_until) > new Date()) || !!(profUpgrade?.trial_until && new Date(profUpgrade.trial_until) > new Date()) || profUpgrade?.status === "premium" || profUpgrade?.status === "trial";
 
       let weekContext: string[] = [];
-      let usedRecipeIds: string[] = [];
-      let usedTitleKeys: string[] = [];
-      let usedTitleKeysByMealTypeUpgrade: Record<string, Set<string>> = {};
-      let usedCategoriesByMealTypeUpgrade: Record<string, Set<string>> = {};
+      const usedRecipeIds: string[] = [];
+      const usedTitleKeys: string[] = [];
+      const usedTitleKeysByMealTypeUpgrade: Record<string, Set<string>> = { breakfast: new Set(), lunch: new Set(), snack: new Set(), dinner: new Set() };
+      const usedCategoriesByMealTypeUpgrade: Record<string, Set<string>> = { breakfast: new Set(), lunch: new Set(), snack: new Set(), dinner: new Set() };
       let breakfastPorridgeCountUpgrade = 0;
-      let lastCategoryByMealTypeUpgrade: Record<string, string> = {};
-      for (const k of MEAL_KEYS) {
-        usedTitleKeysByMealTypeUpgrade[k] = new Set<string>();
-        usedCategoriesByMealTypeUpgrade[k] = new Set<string>();
-      }
       const proteinKeyCounts: Record<string, number> = {};
-      let replacedCount = 0;
-      let unchangedCount = 0;
-      let aiFallbackCount = 0;
-
+      let lastCategoryByMealTypeUpgrade: Record<string, string> = {};
       const weekRows = await (async () => {
         let weekQ = supabase
           .from("meal_plans_v2")
           .select("planned_date, meals")
           .eq("user_id", userId)
-          .gte("planned_date", dayKeys[0])
-          .lte("planned_date", dayKeys[dayKeys.length - 1]);
+          .in("planned_date", dayKeys);
         if (memberId == null) weekQ = weekQ.is("member_id", null);
         else weekQ = weekQ.eq("member_id", memberId);
         const { data } = await weekQ;
@@ -2093,18 +1611,18 @@ serve(async (req) => {
             replacedCount++;
             weekContext.push(picked.title);
           } else if (needAiFallback) {
-            const mealLabel = mealKey === "breakfast" ? "завтрак" : mealKey === "lunch" ? "обед" : mealKey === "snack" ? "полдник" : "ужин";
-            const excludeStr = usedTitleKeys.length > 0 ? ` Не повторяй блюда: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
-            const mainIngStr = dayExcludedMainIngredientsUpgrade.length > 0 ? ` В этот день уже есть: ${[...new Set(dayExcludedMainIngredientsUpgrade)].join(", ")} — не используй.` : "";
-            const proteinStr = excludeProteinKeys.length > 0 ? ` Вчера уже был этот приём с: ${excludeProteinKeys.join(", ")} — другой белок.` : "";
-            const lunchHint = mealKey === "lunch" ? " Для обеда предпочтительно первое блюдо (суп/бульон/крем-суп)." : "";
+            const mealLabel = mealKey === "breakfast" ? "Р·Р°РІС‚СЂР°Рє" : mealKey === "lunch" ? "РѕР±РµРґ" : mealKey === "snack" ? "РїРѕР»РґРЅРёРє" : "СѓР¶РёРЅ";
+            const excludeStr = usedTitleKeys.length > 0 ? ` РќРµ РїРѕРІС‚РѕСЂСЏР№ Р±Р»СЋРґР°: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
+            const mainIngStr = dayExcludedMainIngredientsUpgrade.length > 0 ? ` Р’ СЌС‚РѕС‚ РґРµРЅСЊ СѓР¶Рµ РµСЃС‚СЊ: ${[...new Set(dayExcludedMainIngredientsUpgrade)].join(", ")} вЂ” РЅРµ РёСЃРїРѕР»СЊР·СѓР№.` : "";
+            const proteinStr = excludeProteinKeys.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeys.join(", ")} вЂ” РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
+            const lunchHint = mealKey === "lunch" ? " Р”Р»СЏ РѕР±РµРґР° РїСЂРµРґРїРѕС‡С‚РёС‚РµР»СЊРЅРѕ РїРµСЂРІРѕРµ Р±Р»СЋРґРѕ (СЃСѓРї/Р±СѓР»СЊРѕРЅ/РєСЂРµРј-СЃСѓРї)." : "";
             const slotForbidden: Record<string, string> = {
-              breakfast: "супы, рагу, плов. Только завтраки: каши, омлеты, сырники, тосты.",
-              lunch: "сырники, оладьи, кашу. Только обеды: супы, вторые блюда.",
-              snack: "супы, рагу, каши. Только перекусы: фрукты, печенье, смузи.",
-              dinner: "йогурт, творог, дольки, печенье как единственное. Только ужины: вторые блюда.",
+              breakfast: "СЃСѓРїС‹, СЂР°РіСѓ, РїР»РѕРІ. РўРѕР»СЊРєРѕ Р·Р°РІС‚СЂР°РєРё: РєР°С€Рё, РѕРјР»РµС‚С‹, СЃС‹СЂРЅРёРєРё, С‚РѕСЃС‚С‹.",
+              lunch: "СЃС‹СЂРЅРёРєРё, РѕР»Р°РґСЊРё, РєР°С€Сѓ. РўРѕР»СЊРєРѕ РѕР±РµРґС‹: СЃСѓРїС‹, РІС‚РѕСЂС‹Рµ Р±Р»СЋРґР°.",
+              snack: "СЃСѓРїС‹, СЂР°РіСѓ, РєР°С€Рё. РўРѕР»СЊРєРѕ РїРµСЂРµРєСѓСЃС‹: С„СЂСѓРєС‚С‹, РїРµС‡РµРЅСЊРµ, СЃРјСѓР·Рё.",
+              dinner: "Р№РѕРіСѓСЂС‚, С‚РІРѕСЂРѕРі, РґРѕР»СЊРєРё, РїРµС‡РµРЅСЊРµ РєР°Рє РµРґРёРЅСЃС‚РІРµРЅРЅРѕРµ. РўРѕР»СЊРєРѕ СѓР¶РёРЅС‹: РІС‚РѕСЂС‹Рµ Р±Р»СЋРґР°.",
             };
-            const allergyHintUp = allergyTokens.length > 0 ? " СТРОГО без молочных: молоко, творог, йогурт, сыр, кефир, сливки, сметана. " : "";
+            const allergyHintUp = allergyTokens.length > 0 ? " РЎРўР РћР“Рћ Р±РµР· РјРѕР»РѕС‡РЅС‹С…: РјРѕР»РѕРєРѕ, С‚РІРѕСЂРѕРі, Р№РѕРіСѓСЂС‚, СЃС‹СЂ, РєРµС„РёСЂ, СЃР»РёРІРєРё, СЃРјРµС‚Р°РЅР°. " : "";
             const aiResUp = await fetchWithRetry(
               deepseekUrlUpgrade,
               {
@@ -2113,9 +1631,10 @@ serve(async (req) => {
                 body: JSON.stringify({
                   type: "recipe",
                   stream: false,
+                  from_plan_replace: true,
                   memberData: memberData ?? undefined,
                   mealType: mealKey,
-                  messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngStr}${proteinStr} ${slotForbidden[mealKey] ?? ""}.${lunchHint}${allergyHintUp} Ингредиенты: каждый с количеством и единицей (г, мл, шт., ст.л., ч.л.). Верни только JSON.` }],
+                  messages: [{ role: "user", content: `РЎРіРµРЅРµСЂРёСЂСѓР№ РѕРґРёРЅ СЂРµС†РµРїС‚ РґР»СЏ ${mealLabel}.${excludeStr}${mainIngStr}${proteinStr} ${slotForbidden[mealKey] ?? ""}.${lunchHint}${allergyHintUp} РРЅРіСЂРµРґРёРµРЅС‚С‹: РєР°Р¶РґС‹Р№ СЃ РєРѕР»РёС‡РµСЃС‚РІРѕРј Рё РµРґРёРЅРёС†РµР№ (Рі, РјР», С€С‚., СЃС‚.Р»., С‡.Р».). Р’РµСЂРЅРё С‚РѕР»СЊРєРѕ JSON.` }],
                 }),
               },
               { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
@@ -2123,7 +1642,7 @@ serve(async (req) => {
             if (aiResUp.ok) {
               const aiDataUp = (await aiResUp.json()) as { message?: string; recipes?: Array<{ title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }> };
               const firstUp = Array.isArray(aiDataUp.recipes) && aiDataUp.recipes.length > 0 ? aiDataUp.recipes[0] : null;
-              let titleUp = firstUp?.title ?? (typeof aiDataUp.message === "string" ? aiDataUp.message.slice(0, 100) : "Рецепт");
+              let titleUp = firstUp?.title ?? (typeof aiDataUp.message === "string" ? aiDataUp.message.slice(0, 100) : "Р РµС†РµРїС‚");
               let ingredientsUp: Array<{ name: string; amount: string }> = [];
               let stepsUp: string[] = [];
               if (typeof aiDataUp.message === "string") {
@@ -2152,8 +1671,8 @@ serve(async (req) => {
               }
               const failUp = validateAiMeal(titleUp, ingredientsUp, stepsUp, mealKey, memberDataPool);
               if (!failUp) {
-                while (stepsUp.length < 3) stepsUp.push(`Шаг ${stepsUp.length + 1}`);
-                while (ingredientsUp.length < 3) ingredientsUp.push({ name: `Ингредиент ${ingredientsUp.length + 1}`, amount: "" });
+                while (stepsUp.length < 3) stepsUp.push(`РЁР°Рі ${stepsUp.length + 1}`);
+                while (ingredientsUp.length < 3) ingredientsUp.push({ name: `РРЅРіСЂРµРґРёРµРЅС‚ ${ingredientsUp.length + 1}`, amount: "" });
                 const payloadUp = canonicalizeRecipePayload({
                   user_id: userId,
                   member_id: memberId,
@@ -2166,7 +1685,14 @@ serve(async (req) => {
                   chef_advice: null,
                   advice: null,
                   steps: stepsUp.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
-                  ingredients: ingredientsUp.slice(0, 20).map((ing, idx) => ({ name: ing.name, display_text: ing.amount ? `${ing.name} — ${ing.amount}` : ing.name, amount: null, unit: null, order_index: idx, category: "other" })),
+                  ingredients: ingredientsUp.slice(0, 20).map((ing, idx) => ({
+                    name: ing.name,
+                    display_text: ing.amount ? `${ing.name} вЂ” ${ing.amount}` : ing.name,
+                    amount: null,
+                    unit: null,
+                    order_index: idx,
+                    category: "other",
+                  })),
                   sourceTag: "plan",
                 });
                 const { data: recipeIdUp, error: rpcErrUp } = await supabase.rpc("create_recipe_with_steps", { payload: payloadUp });
@@ -2402,7 +1928,7 @@ serve(async (req) => {
     const allergyTokens = getAllergyTokens(memberDataPool);
     const allergyWeekHint =
       allergyTokens.length > 0
-        ? " СТРОГО БЕЗ МОЛОЧНЫХ ПРОДУКТОВ: молоко, творог, йогурт, сыр, кефир, сливки, сметана, масло, ряженка, мороженое, сгущенка. "
+        ? " РЎРўР РћР“Рћ Р‘Р•Р— РњРћР›РћР§РќР«РҐ РџР РћР”РЈРљРўРћР’: РјРѕР»РѕРєРѕ, С‚РІРѕСЂРѕРі, Р№РѕРіСѓСЂС‚, СЃС‹СЂ, РєРµС„РёСЂ, СЃР»РёРІРєРё, СЃРјРµС‚Р°РЅР°, РјР°СЃР»Рѕ, СЂСЏР¶РµРЅРєР°, РјРѕСЂРѕР¶РµРЅРѕРµ, СЃРіСѓС‰РµРЅРєР°. "
         : "";
 
     const jobStartedAt = Date.now();
@@ -2573,22 +2099,22 @@ serve(async (req) => {
           if (runDebug) safeLog("[JOB] pool_exhausted_free", { dayKey, mealKey, reason: "pool_exhausted_free" });
           continue;
         }
-        const mealLabel = mealKey === "breakfast" ? "завтрак" : mealKey === "lunch" ? "обед" : mealKey === "snack" ? "полдник" : "ужин";
-        const excludeStr = usedTitleKeys.length > 0 ? ` Не повторяй блюда: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
+        const mealLabel = mealKey === "breakfast" ? "Р·Р°РІС‚СЂР°Рє" : mealKey === "lunch" ? "РѕР±РµРґ" : mealKey === "snack" ? "РїРѕР»РґРЅРёРє" : "СѓР¶РёРЅ";
+        const excludeStr = usedTitleKeys.length > 0 ? ` РќРµ РїРѕРІС‚РѕСЂСЏР№ Р±Р»СЋРґР°: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
         const mainIngredientExcludeStr =
-          dayExcludedMainIngredients.length > 0 ? ` В этот день уже есть блюда с: ${[...new Set(dayExcludedMainIngredients)].join(", ")} — не используй их.` : "";
-        const proteinExcludeStr = excludeProteinKeys.length > 0 ? ` Вчера уже был этот приём с: ${excludeProteinKeys.join(", ")} — предложи другой белок.` : "";
+          dayExcludedMainIngredients.length > 0 ? ` Р’ СЌС‚РѕС‚ РґРµРЅСЊ СѓР¶Рµ РµСЃС‚СЊ Р±Р»СЋРґР° СЃ: ${[...new Set(dayExcludedMainIngredients)].join(", ")} вЂ” РЅРµ РёСЃРїРѕР»СЊР·СѓР№ РёС….` : "";
+        const proteinExcludeStr = excludeProteinKeys.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeys.join(", ")} вЂ” РїСЂРµРґР»РѕР¶Рё РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
         const slotForbidden: Record<string, string> = {
-          breakfast: "супы, рагу, плов. Только завтраки: каши, омлеты, сырники, тосты.",
-          lunch: "сырники, оладьи, кашу. Только обеды: супы, вторые блюда.",
-          snack: "супы, рагу, каши. Только перекусы: фрукты, печенье, смузи.",
-          dinner: "йогурт, творог, дольки, печенье как единственное. Только ужины: вторые блюда.",
+          breakfast: "СЃСѓРїС‹, СЂР°РіСѓ, РїР»РѕРІ. РўРѕР»СЊРєРѕ Р·Р°РІС‚СЂР°РєРё: РєР°С€Рё, РѕРјР»РµС‚С‹, СЃС‹СЂРЅРёРєРё, С‚РѕСЃС‚С‹.",
+          lunch: "СЃС‹СЂРЅРёРєРё, РѕР»Р°РґСЊРё, РєР°С€Сѓ. РўРѕР»СЊРєРѕ РѕР±РµРґС‹: СЃСѓРїС‹, РІС‚РѕСЂС‹Рµ Р±Р»СЋРґР°.",
+          snack: "СЃСѓРїС‹, СЂР°РіСѓ, РєР°С€Рё. РўРѕР»СЊРєРѕ РїРµСЂРµРєСѓСЃС‹: С„СЂСѓРєС‚С‹, РїРµС‡РµРЅСЊРµ, СЃРјСѓР·Рё.",
+          dinner: "Р№РѕРіСѓСЂС‚, С‚РІРѕСЂРѕРі, РґРѕР»СЊРєРё, РїРµС‡РµРЅСЊРµ РєР°Рє РµРґРёРЅСЃС‚РІРµРЅРЅРѕРµ. РўРѕР»СЊРєРѕ СѓР¶РёРЅС‹: РІС‚РѕСЂС‹Рµ Р±Р»СЋРґР°.",
         };
         const lunchSoupHint =
           mealKey === "lunch"
-            ? " Для обеда предпочтительно первое блюдо (суп/бульон/крем-суп), если не конфликтует с аллергиями/предпочтениями."
+            ? " Р”Р»СЏ РѕР±РµРґР° РїСЂРµРґРїРѕС‡С‚РёС‚РµР»СЊРЅРѕ РїРµСЂРІРѕРµ Р±Р»СЋРґРѕ (СЃСѓРї/Р±СѓР»СЊРѕРЅ/РєСЂРµРј-СЃСѓРї), РµСЃР»Рё РЅРµ РєРѕРЅС„Р»РёРєС‚СѓРµС‚ СЃ Р°Р»Р»РµСЂРіРёСЏРјРё/РїСЂРµРґРїРѕС‡С‚РµРЅРёСЏРјРё."
             : "";
-        const allergyHint = allergyTokens.length > 0 ? " СТРОГО без молочных: молоко, творог, йогурт, сыр, кефир, сливки, сметана. " : "";
+        const allergyHint = allergyTokens.length > 0 ? " РЎРўР РћР“Рћ Р±РµР· РјРѕР»РѕС‡РЅС‹С…: РјРѕР»РѕРєРѕ, С‚РІРѕСЂРѕРі, Р№РѕРіСѓСЂС‚, СЃС‹СЂ, РєРµС„РёСЂ, СЃР»РёРІРєРё, СЃРјРµС‚Р°РЅР°. " : "";
         const aiRes = await fetchWithRetry(
           deepseekUrl,
           {
@@ -2597,9 +2123,10 @@ serve(async (req) => {
             body: JSON.stringify({
               type: "recipe",
               stream: false,
+              from_plan_replace: true,
               memberData: memberData ?? undefined,
               mealType: mealKey,
-              messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${proteinExcludeStr} ${slotForbidden[mealKey] ?? ""}.${lunchSoupHint}${allergyHint} Ингредиенты: каждый с количеством и единицей (г, мл, шт., ст.л., ч.л.). Верни только JSON.` }],
+              messages: [{ role: "user", content: `РЎРіРµРЅРµСЂРёСЂСѓР№ РѕРґРёРЅ СЂРµС†РµРїС‚ РґР»СЏ ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${proteinExcludeStr} ${slotForbidden[mealKey] ?? ""}.${lunchSoupHint}${allergyHint} РРЅРіСЂРµРґРёРµРЅС‚С‹: РєР°Р¶РґС‹Р№ СЃ РєРѕР»РёС‡РµСЃС‚РІРѕРј Рё РµРґРёРЅРёС†РµР№ (Рі, РјР», С€С‚., СЃС‚.Р»., С‡.Р».). Р’РµСЂРЅРё С‚РѕР»СЊРєРѕ JSON.` }],
             }),
           },
           { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
@@ -2610,7 +2137,7 @@ serve(async (req) => {
         }
         const aiData = (await aiRes.json()) as { message?: string; recipes?: Array<{ title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }> };
         const firstRecipe = Array.isArray(aiData.recipes) && aiData.recipes.length > 0 ? aiData.recipes[0] : null;
-        let title = firstRecipe?.title ?? (typeof aiData.message === "string" ? aiData.message.slice(0, 100) : "Рецепт");
+        let title = firstRecipe?.title ?? (typeof aiData.message === "string" ? aiData.message.slice(0, 100) : "Р РµС†РµРїС‚");
         let ingredients: Array<{ name: string; amount: string }> = [];
         let steps: string[] = [];
         if (typeof aiData.message === "string") {
@@ -2648,8 +2175,8 @@ serve(async (req) => {
           rejectsByReason[failReason] = (rejectsByReason[failReason] ?? 0) + 1;
           continue;
         }
-        while (steps.length < 3) steps.push(`Шаг ${steps.length + 1}`);
-        while (ingredients.length < 3) ingredients.push({ name: `Ингредиент ${ingredients.length + 1}`, amount: "" });
+        while (steps.length < 3) steps.push(`РЁР°Рі ${steps.length + 1}`);
+        while (ingredients.length < 3) ingredients.push({ name: `РРЅРіСЂРµРґРёРµРЅС‚ ${ingredients.length + 1}`, amount: "" });
         const description = getDescriptionWithFallback({ description: (firstRecipe as { description?: string })?.description, intro: (firstRecipe as { intro?: string })?.intro, steps });
         const payload = canonicalizeRecipePayload({
           user_id: userId,
@@ -2665,7 +2192,7 @@ serve(async (req) => {
           steps: steps.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
           ingredients: ingredients.slice(0, 20).map((ing, idx) => ({
             name: ing.name,
-            display_text: ing.amount ? `${ing.name} — ${ing.amount}` : ing.name,
+            display_text: ing.amount ? `${ing.name} вЂ” ${ing.amount}` : ing.name,
             amount: null,
             unit: null,
             order_index: idx,

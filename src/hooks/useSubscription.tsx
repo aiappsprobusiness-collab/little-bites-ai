@@ -87,8 +87,8 @@ export function useSubscription() {
   /** Дни до окончания trial (то же значение для UI). */
   const trialDaysRemaining = trialRemainingDays;
 
-  /** Free: 10 избранных; trial/premium: без лимита (50 в БД). */
-  const favoritesLimit = effectiveStatus === "free" ? 10 : 50;
+  /** Free: 15 избранных; trial/premium: без лимита (50 в БД). */
+  const favoritesLimit = effectiveStatus === "free" ? 15 : 50;
 
   const isPremium = effectiveStatus === "premium";
   const isTrial = effectiveStatus === "trial";
