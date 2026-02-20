@@ -1704,14 +1704,17 @@ serve(async (req) => {
           const slot = currentMeals[mealKey];
           const hadRecipeId = slot?.recipe_id ?? null;
           const useRerankUp = isPremiumOrTrialUpgrade;
-          const effectiveExcludeTitleKeys = new Set<string>([...usedTitleKeys, ...(usedTitleKeysByMealTypeUpgrade[mealKey] ?? [])]);
+          const baseExcludeTitleKeys = usedTitleKeys;
+          const byMealTypeSet = usedTitleKeysByMealTypeUpgrade[mealKey];
+          const effectiveExcludeTitleKeysUpgrade = new Set<string>([...baseExcludeTitleKeys, ...(byMealTypeSet ?? [])]);
           if (debugPlanUpgrade) {
             safeLog("[POOL EXCLUDE EFFECTIVE]", {
+              requestId,
               dayKey,
               mealKey,
-              excludeTitleKeysCount: effectiveExcludeTitleKeys.size,
-              baseExcludeTitleKeysCount: usedTitleKeys.length,
-              byMealTypeSize: usedTitleKeysByMealTypeUpgrade[mealKey]?.size ?? 0,
+              excludeTitleKeysCount: effectiveExcludeTitleKeysUpgrade.size,
+              baseExcludeTitleKeysCount: baseExcludeTitleKeys.length,
+              byMealTypeSize: byMealTypeSet?.size ?? 0,
             });
           }
           const excludeProteinKeysForSlot =
@@ -1726,7 +1729,7 @@ serve(async (req) => {
             mealKey,
             memberDataPool,
             usedRecipeIds,
-            Array.from(effectiveExcludeTitleKeys),
+            Array.from(effectiveExcludeTitleKeysUpgrade),
             60,
             {
               logPrefix: "[POOL UPGRADE]",
@@ -1765,10 +1768,10 @@ serve(async (req) => {
             picked = { id: pickedRawUp.id, title: pickedRawUp.title };
           }
           if (!picked && hadCandidates && qualitySkipReason && debugPlanUpgrade) {
-            safeWarn("[POOL QUALITY SKIP]", { dayKey, mealKey, reason: qualitySkipReason, finalCandidatesCount });
+            safeWarn("[POOL QUALITY SKIP]", { requestId, dayKey, mealKey, reason: qualitySkipReason, finalCandidatesCount });
           }
           if (!picked && hadCandidates && (excludeProteinKeysForSlot.length > 0 || excludedMainForSlot.length > 0)) {
-            pickedRawUp = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, Array.from(effectiveExcludeTitleKeys), 60, {
+            pickedRawUp = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, Array.from(effectiveExcludeTitleKeysUpgrade), 60, {
               logPrefix: "[POOL UPGRADE fallback]",
               hadRecipeId: hadRecipeId ?? undefined,
               excludeProteinKeys: [],
