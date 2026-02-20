@@ -164,8 +164,10 @@ function normalizeMealsForWrite(
   const out: Record<string, MealSlot> = {};
   for (const [key, slot] of Object.entries(meals)) {
     if (slot == null || typeof slot !== "object") continue;
-    if (!slot.recipe_id) continue;
-    out[key] = { recipe_id: slot.recipe_id, title: slot.title ?? "Р РµС†РµРїС‚", plan_source: slot.plan_source, ...(slot.replaced_from_recipe_id && { replaced_from_recipe_id: slot.replaced_from_recipe_id }) };
+    const s = slot as MealSlot & { recipeId?: string; id?: string };
+    const rid = s.recipe_id ?? s.recipeId ?? s.id;
+    if (!rid || typeof rid !== "string") continue;
+    out[key] = { recipe_id: rid, title: slot.title ?? "Р РµС†РµРїС‚", plan_source: slot.plan_source, ...(slot.replaced_from_recipe_id && { replaced_from_recipe_id: slot.replaced_from_recipe_id }) };
   }
   return out;
 }
@@ -177,9 +179,24 @@ async function upsertMealPlanRow(
   memberId: string | null,
   dayKey: string,
   meals: Record<string, MealSlot | null | undefined>,
-  opts?: { runControlSelect?: boolean }
+  opts?: { runControlSelect?: boolean; debugPlan?: boolean }
 ): Promise<{ error?: string; id?: string; mergedEmpty?: boolean; keys?: string[] }> {
   const normalizedNew = normalizeMealsForWrite(meals);
+  if (opts?.debugPlan) {
+    const inputKeys = Object.keys(meals ?? {});
+    const inputHasRecipeId: Record<string, boolean> = {};
+    for (const k of inputKeys) {
+      const slot = (meals ?? {})[k] as { recipe_id?: string; recipeId?: string; id?: string } | null | undefined;
+      inputHasRecipeId[k] = !!(slot && (slot.recipe_id ?? slot.recipeId ?? slot.id));
+    }
+    safeLog("[MEALS WRITE]", {
+      dayKey,
+      memberId: memberId ?? "null",
+      inputKeys,
+      inputHasRecipeId,
+      outputKeys: Object.keys(normalizedNew),
+    });
+  }
   let q = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
   if (memberId == null) q = q.is("member_id", null);
   else q = q.eq("member_id", memberId);
@@ -1920,7 +1937,7 @@ serve(async (req) => {
           safeLog("[POOL UPGRADE] slots left empty or filled by AI", { dayKey, emptySlots: MEAL_KEYS.filter((k) => !newMeals[k]?.recipe_id) });
         }
 
-        const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals, { runControlSelect: debugPlanUpgrade });
+        const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals, { runControlSelect: debugPlanUpgrade, debugPlan: debugPlanUpgrade });
         if (upsertResult.error) {
           safeWarn("[POOL UPGRADE] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
         }
