@@ -1196,24 +1196,68 @@ async function pickFromPool(
   return base;
 }
 
-/** [3] Validate AI-generated meal: allergy + slot sanity. Returns null if OK, else reason. */
+/** Number + unit in one string (e.g. "150 г", "2 ст.л", "100 мл"). Units: г|гр|g|кг|ml|мл|л|шт|pcs|ч.л|ст.л|tsp|tbsp */
+const INGREDIENT_NUMBER_UNIT_REGEX = /\d+(?:[.,]\d+)?\s*(?:г|гр|g|кг|ml|мл|л|шт|pcs|ч\.?\s*л\.?|ст\.?\s*л\.?|tsp|tbsp)/i;
+/** Qualitative amounts: do not fail the whole recipe (e.g. salt). */
+const INGREDIENT_QUALITATIVE_REGEX = /по вкусу|для подачи|щепотка/i;
+
+export type IngredientForValidation = {
+  name?: string;
+  amount?: string | number;
+  unit?: string;
+  display_text?: string;
+};
+
+function ingredientHasQuantity(ing: IngredientForValidation): boolean {
+  const amount = ing.amount;
+  const unit = (ing.unit ?? "").trim();
+  const amountStr = typeof amount === "number" ? String(amount) : (amount ?? "").trim();
+  const displayText = (ing.display_text ?? "").trim();
+  const textToCheck = displayText || amountStr;
+
+  if (typeof amount === "number" && unit.length > 0) return true;
+  if (INGREDIENT_QUALITATIVE_REGEX.test(amountStr) || INGREDIENT_QUALITATIVE_REGEX.test(displayText)) return true;
+  if (INGREDIENT_NUMBER_UNIT_REGEX.test(amountStr) || INGREDIENT_NUMBER_UNIT_REGEX.test(displayText)) return true;
+  if (textToCheck.length > 0 && INGREDIENT_NUMBER_UNIT_REGEX.test(textToCheck)) return true;
+  return false;
+}
+
+function ingredientsHaveAmounts(ingredients: Array<IngredientForValidation>): boolean {
+  if (!Array.isArray(ingredients) || ingredients.length < 3) return false;
+  for (const ing of ingredients) {
+    if (!ingredientHasQuantity(ing)) return false;
+  }
+  return true;
+}
+
+/** [3] Validate AI-generated meal: allergy + slot sanity + ingredients with amount. Returns null if OK, else reason. */
 function validateAiMeal(
   title: string,
-  ingredients: Array<{ name?: string } | string>,
+  ingredients: Array<IngredientForValidation | { name?: string; amount?: string } | string>,
   steps: string[],
   mealKey: string,
   memberData: MemberDataPool | null | undefined
 ): string | null {
+  const ingList: IngredientForValidation[] = ingredients.map((i) => {
+    if (typeof i === "string") return { name: i, amount: "", display_text: i };
+    const name = (i as { name?: string }).name ?? "";
+    const amountRaw = (i as { amount?: string | number }).amount;
+    const unit = (i as { unit?: string }).unit ?? "";
+    const amountStr = typeof amountRaw === "number" ? String(amountRaw) : (amountRaw ?? "").trim();
+    const display_text =
+      (i as { display_text?: string }).display_text ??
+      (amountStr || unit ? `${name} — ${amountStr}${unit ? " " + unit : ""}`.trim() : name);
+    return { name, amount: amountRaw, unit, display_text };
+  });
+  if (!ingredientsHaveAmounts(ingList)) return "ingredients_no_amount";
   const normSlot = normalizeMealType(mealKey) ?? (mealKey as NormalizedMealType);
-  const ingText = ingredients.map((i) => (typeof i === "string" ? i : i.name ?? "")).join(" ");
+  const ingText = ingList.map((i) => i.name).join(" ");
   const combinedText = [title, ingText, steps.join(" ")].join(" ");
-  // Для завтрака проверяем только название: типичный завтрак (оладьи, каша) не должен отклоняться из-за слова в ингредиентах (напр. "нутовая мука").
   const sanityText = normSlot === "breakfast" ? title : combinedText;
   const sanity = slotSanityReject(normSlot, sanityText);
   if (sanity) return sanity;
   const allergyTokens = getAllergyTokens(memberData);
   if (allergyTokens.length > 0) {
-    const ingText = ingredients.map((i) => (typeof i === "string" ? i : i.name ?? "")).join(" ");
     const text = [title, ingText, steps.join(" ")].join(" ");
     if (containsAnyToken(text, allergyTokens)) return "allergy";
   }
@@ -1456,6 +1500,8 @@ serve(async (req) => {
           ? ` СТРОГО без: ${["молоко", "творог", "йогурт", "сыр", "кефир", "сливки", "сметана", "ряженка", "масло", "мороженое", "сгущенка", "лактоза", "казеин"].filter((x) => allergyTokens.some((t) => t.includes(x) || x.includes(t))).join(", ")}.`
           : "";
 
+      const ingredientsAmountRule =
+        " Формат рецепта: ingredients — массив объектов { \"name\": \"...\", \"amount\": \"150 г\" или \"2 шт.\" }. Каждый ингредиент ОБЯЗАТЕЛЬНО с количеством и единицей (г, мл, шт., ст.л., ч.л.). Запрещено указывать только название без количества.";
       const doAiRequest = (extraHint: string) =>
         fetchWithRetry(
           deepseekUrl,
@@ -1470,7 +1516,7 @@ serve(async (req) => {
               messages: [
                 {
                   role: "user",
-                  content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${slotConstraint}${extraHint} Верни только JSON.`,
+                  content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${slotConstraint}${ingredientsAmountRule}${extraHint} Верни только JSON.`,
                 },
               ],
             }),
@@ -1523,7 +1569,7 @@ serve(async (req) => {
         title?: string;
         description?: string;
         intro?: string;
-        ingredients?: Array<{ name?: string; amount?: string }>;
+        ingredients?: Array<{ name?: string; amount?: string; unit?: string; display_text?: string }>;
         steps?: string[];
       };
       const parseAndValidateAi = (
@@ -1537,9 +1583,14 @@ serve(async (req) => {
         } catch {
           return { parsed: {}, failReason: "no_json" };
         }
-        const ingredients = (parsed.ingredients ?? []).map((ing) =>
-          typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
-        );
+        const ingredients: IngredientForValidation[] = (parsed.ingredients ?? []).map((ing) => {
+          if (typeof ing === "string") return { name: String(ing).trim(), amount: "", display_text: String(ing).trim() };
+          const name = (ing.name ?? "").trim();
+          const amount = (ing.amount ?? "").trim();
+          const unit = (ing.unit ?? "").trim();
+          const display_text = (ing.display_text ?? (amount ? `${name} — ${amount}` : name)).trim();
+          return { name, amount, unit, display_text };
+        });
         const steps = (parsed.steps ?? []).filter(Boolean).map((s) => String(s));
         const failReason = validateAiMeal(
           parsed.title ?? "",
@@ -1551,12 +1602,14 @@ serve(async (req) => {
         return { parsed: { ...parsed, ingredients, steps }, failReason };
       };
 
-      let parsedResult: { parsed: { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }; failReason: string | null } | null =
-        null;
+      let parsedResult: { parsed: ParsedAiRecipe; failReason: string | null } | null = null;
+      let retriesCount = 0;
+      let finalFailReason: string | null = null;
+
       if (typeof aiData.message === "string") {
         parsedResult = parseAndValidateAi(aiData.message);
         const isAllergyFail = parsedResult.failReason === "allergy";
-        const isSanityFail = parsedResult.failReason && !isAllergyFail;
+        const isSanityFail = parsedResult.failReason && parsedResult.failReason !== "ingredients_no_amount" && !isAllergyFail;
         if (isAllergyFail && allergyTokens.length > 0) {
           try {
             aiRes = await doAiRequest(` СТРОГО БЕЗ МОЛОЧНЫХ ПРОДУКТОВ: молоко, творог, йогурт, сыр, кефир, сливки, сметана, масло, ряженка, мороженое, сгущенка. `);
@@ -1565,7 +1618,7 @@ serve(async (req) => {
               parsedResult = parseAndValidateAi(retryData.message ?? "");
             }
           } catch {
-            /* keep original parsedResult with failReason */
+            /* keep original */
           }
         } else if (isSanityFail) {
           try {
@@ -1579,12 +1632,104 @@ serve(async (req) => {
               parsedResult = parseAndValidateAi(retryData.message ?? "");
             }
           } catch {
-            /* keep original parsedResult with failReason */
+            /* keep original */
+          }
+        } else if (parsedResult.failReason === "ingredients_no_amount" && isPremiumOrTrialReplace) {
+          safeLog("[REPLACE_SLOT] ai_retry_start", {
+            requestId,
+            mealType,
+            title: parsedResult.parsed?.title ?? "",
+          });
+          retriesCount = 1;
+          try {
+            const amountHint =
+              " Каждый ингредиент ОБЯЗАТЕЛЬНО с количеством и единицей (г, мл, шт., ст.л., ч.л.). Верни ингредиенты с количеством, не только название.";
+            aiRes = await doAiRequest(amountHint);
+            if (aiRes.ok) {
+              const retryData = (await aiRes.json()) as { message?: string };
+              parsedResult = parseAndValidateAi(retryData.message ?? "");
+            }
+          } catch {
+            /* keep original parsedResult */
+          }
+          if (parsedResult.failReason === "ingredients_no_amount") {
+            safeLog("[REPLACE_SLOT] ai_retry_failed", { requestId, mealType });
+            retriesCount = 2;
+            const titleForRepair = parsedResult.parsed?.title ?? "Рецепт";
+            const namesOnly = (parsedResult.parsed?.ingredients ?? []).map((i) => (typeof i === "string" ? i : i.name ?? "")).filter(Boolean).join(", ");
+            const repairPrompt = `Вот рецепт: «${titleForRepair}». Ингредиенты (только названия): ${namesOnly}.
+Верни JSON: { "ingredients": [ { "name": "...", "amount": "...", "unit": "...", "display_text": "название — количество единица" } ] }.
+Каждый ингредиент с количеством и единицей (г, мл, шт., ст.л., ч.л.). Только JSON, без markdown.`;
+            try {
+              const repairRes = await fetchWithRetry(
+                deepseekUrl,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: authHeader },
+                  body: JSON.stringify({
+                    type: "recipe",
+                    stream: false,
+                    memberData: memberData ?? undefined,
+                    mealType,
+                    messages: [{ role: "user", content: repairPrompt }],
+                  }),
+                },
+                { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
+              );
+              if (repairRes.ok) {
+                const repairData = (await repairRes.json()) as { message?: string };
+                const repairJson = extractFirstJsonObject(repairData.message ?? "");
+                if (repairJson) {
+                  try {
+                    const repairParsed = JSON.parse(repairJson) as { ingredients?: Array<{ name?: string; amount?: string; unit?: string; display_text?: string }> };
+                    const repaired = (repairParsed.ingredients ?? []).map((ing) => ({
+                      name: (ing.name ?? "").trim(),
+                      amount: (ing.amount ?? "").trim(),
+                      unit: (ing.unit ?? "").trim(),
+                      display_text: (ing.display_text ?? "").trim() || (ing.amount ? `${ing.name ?? ""} — ${ing.amount}` : ing.name ?? ""),
+                    }));
+                    if (repaired.length >= 3) {
+                      const mergedParsed: ParsedAiRecipe = {
+                        ...parsedResult.parsed,
+                        ingredients: repaired,
+                      };
+                      const stepsForValidate = parsedResult.parsed?.steps ?? [];
+                      const repairFailReason = validateAiMeal(
+                        titleForRepair,
+                        repaired,
+                        stepsForValidate,
+                        mealType,
+                        memberDataPool
+                      );
+                      if (!repairFailReason) {
+                        parsedResult = { parsed: { ...mergedParsed, steps: stepsForValidate }, failReason: null };
+                      } else {
+                        finalFailReason = repairFailReason;
+                      }
+                    } else {
+                      finalFailReason = "ingredients_no_amount";
+                    }
+                  } catch {
+                    finalFailReason = "ingredients_no_amount";
+                  }
+                } else {
+                  finalFailReason = "ingredients_no_amount";
+                }
+              } else {
+                finalFailReason = "ingredients_no_amount";
+              }
+            } catch {
+              finalFailReason = "ingredients_no_amount";
+            }
+          } else if (parsedResult.failReason) {
+            finalFailReason = parsedResult.failReason;
           }
         }
+
         if (parsedResult.failReason) {
+          finalFailReason = finalFailReason ?? parsedResult.failReason;
           const titleForLog = parsedResult.parsed?.title ?? "";
-          const ingText = (parsedResult.parsed?.ingredients ?? []).map((i) => (typeof i === "string" ? i : i.name ?? "")).join(" ");
+          const ingText = (parsedResult.parsed?.ingredients ?? []).map((i) => (typeof i === "string" ? i : (i as { name?: string }).name ?? "")).join(" ");
           const combinedForSanity = [titleForLog, ingText].join(" ");
           const { hitTokens: sanityHitTokens } = slotSanityCheck(mealType as NormalizedMealType, combinedForSanity);
           safeLog("[REPLACE_SLOT] AI meal validation failed", {
@@ -1592,9 +1737,28 @@ serve(async (req) => {
             failReason: parsedResult.failReason,
             title: titleForLog.slice(0, 80),
             hitTokens: parsedResult.failReason === "sanity_hit" ? sanityHitTokens : undefined,
+            retriesCount,
+            finalFailReason,
           });
+          if (debugPlan) {
+            safeLog("[REPLACE_SLOT] debug_plan", {
+              requestId,
+              aiFallbackTriggered: true,
+              retriesCount,
+              finalFailReason,
+            });
+          }
+          const isInvalidIngredients = finalFailReason === "ingredients_no_amount";
           return new Response(
-            JSON.stringify({ error: "replace_failed", pickedSource: "ai", reasonIfAi: "validation_failed", requestId, reason: "validation_failed" }),
+            JSON.stringify({
+              ok: false,
+              error: "replace_failed",
+              code: isInvalidIngredients ? "ai_invalid_ingredients" : undefined,
+              pickedSource: "ai",
+              reasonIfAi: "validation_failed",
+              requestId,
+              reason: "validation_failed",
+            }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
@@ -1602,12 +1766,17 @@ serve(async (req) => {
 
       if (!recipeId && typeof aiData.message === "string" && parsedResult?.parsed) {
         const { parsed } = parsedResult;
-        const ingredients = (parsed.ingredients ?? []).map((ing) =>
-          typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
-        );
+        const ingredientsRaw = (parsed.ingredients ?? []).map((ing) => {
+          if (typeof ing === "string") return { name: String(ing).trim(), amount: "", display_text: String(ing).trim() };
+          const name = (ing.name ?? "").trim();
+          const amount = (ing.amount ?? "").trim();
+          const unit = (ing.unit ?? "").trim();
+          const display_text = (ing.display_text ?? (amount ? `${name} — ${amount}` : name)).trim();
+          return { name, amount, unit, display_text };
+        });
         const steps = (parsed.steps ?? []).filter(Boolean).map((s) => String(s));
         while (steps.length < 3) steps.push(`Шаг ${steps.length + 1}`);
-        while (ingredients.length < 3) ingredients.push({ name: `Ингредиент ${ingredients.length + 1}`, amount: "" });
+        while (ingredientsRaw.length < 3) ingredientsRaw.push({ name: `Ингредиент ${ingredientsRaw.length + 1}`, amount: "", display_text: "" });
         const chefAdvice = extractChefAdvice(parsed as Record<string, unknown>);
         const adviceVal = extractAdvice(parsed as Record<string, unknown>);
         const description = getDescriptionWithFallback({
@@ -1628,9 +1797,9 @@ serve(async (req) => {
           chef_advice: chefAdvice ?? null,
           advice: adviceVal ?? null,
           steps: steps.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
-          ingredients: ingredients.slice(0, 20).map((ing, idx) => ({
+          ingredients: ingredientsRaw.slice(0, 20).map((ing, idx) => ({
             name: ing.name,
-            display_text: ing.amount ? `${ing.name} — ${ing.amount}` : ing.name,
+            display_text: ing.display_text || (ing.amount ? `${ing.name} — ${ing.amount}` : ing.name),
             amount: null,
             unit: null,
             order_index: idx,
@@ -1647,7 +1816,10 @@ serve(async (req) => {
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        if (debugPlan) safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: true, recipeId: createdId, hasDescription: description.length > 0 });
+        if (debugPlan) {
+          safeLog("[REPLACE_SLOT] create_recipe", { requestId, ok: true, recipeId: createdId, hasDescription: description.length > 0 });
+          safeLog("[REPLACE_SLOT] debug_plan", { requestId, aiFallbackTriggered: true, retriesCount, finalFailReason: null });
+        }
         recipeId = typeof createdId === "string" ? createdId : (createdId as { id?: string })?.id ?? String(createdId);
         title = parsed.title ?? title;
       }
@@ -1943,7 +2115,7 @@ serve(async (req) => {
                   stream: false,
                   memberData: memberData ?? undefined,
                   mealType: mealKey,
-                  messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngStr}${proteinStr} ${slotForbidden[mealKey] ?? ""}.${lunchHint}${allergyHintUp} Верни только JSON.` }],
+                  messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngStr}${proteinStr} ${slotForbidden[mealKey] ?? ""}.${lunchHint}${allergyHintUp} Ингредиенты: каждый с количеством и единицей (г, мл, шт., ст.л., ч.л.). Верни только JSON.` }],
                 }),
               },
               { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
@@ -2427,7 +2599,7 @@ serve(async (req) => {
               stream: false,
               memberData: memberData ?? undefined,
               mealType: mealKey,
-              messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${proteinExcludeStr} ${slotForbidden[mealKey] ?? ""}.${lunchSoupHint}${allergyHint} Верни только JSON.` }],
+              messages: [{ role: "user", content: `Сгенерируй один рецепт для ${mealLabel}.${excludeStr}${mainIngredientExcludeStr}${proteinExcludeStr} ${slotForbidden[mealKey] ?? ""}.${lunchSoupHint}${allergyHint} Ингредиенты: каждый с количеством и единицей (г, мл, шт., ст.л., ч.л.). Верни только JSON.` }],
             }),
           },
           { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
