@@ -30,8 +30,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getDebugPlanFromStorage, setDebugPlanInStorage } from "@/utils/debugPlan";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -251,6 +253,7 @@ export default function MealPlanPage() {
   /** Один раз за сессию: glow у CTA "Подобрать рецепты" при первом заходе на вкладку */
   const ctaGlowShownRef = useRef(false);
   const [ctaGlow, setCtaGlow] = useState(false);
+  const [debugPlanEnabled, setDebugPlanEnabled] = useState(() => getDebugPlanFromStorage());
 
   const planJobNotifiedRef = useRef<string | null>(null);
   const planJobWasRunningRef = useRef<string | null>(null);
@@ -286,7 +289,13 @@ export default function MealPlanPage() {
     const wasRunning = planJobWasRunningRef.current === planJob.id;
     planJobNotifiedRef.current = planJob.id;
     if (planJob.status === "done" && wasRunning) {
-      toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов" });
+      if (planJob.error_text?.startsWith("partial:")) {
+        const filled = (planJob.progress_done ?? 0) * 4;
+        const total = (planJob.progress_total ?? (planGenType === "week" ? 7 : 1)) * 4;
+        toast({ description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+      } else {
+        toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов" });
+      }
     } else if (planJob.status === "error" && wasRunning) {
       const errDesc =
         planErrorText === "timeout_stalled"
@@ -665,6 +674,18 @@ export default function MealPlanPage() {
                       <Trash2 className="w-4 h-4 mr-2 shrink-0" />
                       Очистить
                     </DropdownMenuItem>
+                    {import.meta.env.DEV && (
+                      <DropdownMenuCheckboxItem
+                        checked={debugPlanEnabled}
+                        onCheckedChange={(checked) => {
+                          const on = checked === true;
+                          setDebugPlanInStorage(on);
+                          setDebugPlanEnabled(on);
+                        }}
+                      >
+                        Debug план
+                      </DropdownMenuCheckboxItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -686,10 +707,20 @@ export default function MealPlanPage() {
                       day_key: selectedDayKey,
                     });
                     await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                    const desc = `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
-                    toast({ title: "Заполнить день", description: desc });
+                    const filled = result.filledSlotsCount ?? result.replacedCount;
+                    const total = result.totalSlots ?? 4;
+                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                      toast({ title: "Заполнить день", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                    } else {
+                      toast({ title: "Заполнить день", description: `Подобрано: ${filled} из ${total}` });
+                    }
                   } catch (e: unknown) {
-                    toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить день" });
+                    const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
+                    if (msg.includes("слишком много времени")) {
+                      toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                    } else {
+                      toast({ variant: "destructive", title: "Ошибка", description: msg });
+                    }
                   } finally {
                     setPoolUpgradeLoading(false);
                   }
@@ -740,10 +771,20 @@ export default function MealPlanPage() {
                     });
                     setMutedWeekKeyAndStorage(null);
                     await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                    const desc = `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 28}`;
-                    toast({ title: "Заполнить всю неделю", description: desc });
+                    const filled = result.filledSlotsCount ?? result.replacedCount;
+                    const total = result.totalSlots ?? 28;
+                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                      toast({ title: "Заполнить всю неделю", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                    } else {
+                      toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
+                    }
                   } catch (e: unknown) {
-                    toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить неделю" });
+                    const msg = e instanceof Error ? e.message : "Не удалось заполнить неделю";
+                    if (msg.includes("слишком много времени")) {
+                      toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                    } else {
+                      toast({ variant: "destructive", title: "Ошибка", description: msg });
+                    }
                   } finally {
                     setPoolUpgradeLoading(false);
                   }
@@ -834,10 +875,20 @@ export default function MealPlanPage() {
                     try {
                       const result = await runPoolUpgrade({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: selectedDayKey });
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                      const desc = `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
-                      toast({ title: "Заполнить день", description: desc });
+                      const filled = result.filledSlotsCount ?? result.replacedCount;
+                      const total = result.totalSlots ?? 4;
+                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                        toast({ title: "Заполнить день", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                      } else {
+                        toast({ title: "Заполнить день", description: `Подобрано: ${filled} из ${total}` });
+                      }
                     } catch (e: unknown) {
-                      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось заполнить день" });
+                      const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
+                      if (msg.includes("слишком много времени")) {
+                        toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                      } else {
+                        toast({ variant: "destructive", title: "Ошибка", description: msg });
+                      }
                     } finally {
                       setPoolUpgradeLoading(false);
                     }
@@ -1140,13 +1191,24 @@ export default function MealPlanPage() {
                         day_key: formatLocalDate(rollingDates[6]),
                       });
                       queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                      const aiFallback = result.aiFallbackCount ?? 0;
-                      const desc = aiFallback > 0
-                        ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
-                        : `Подобрано: ${result.replacedCount} из ${result.totalSlots ?? 4}`;
-                      toast({ title: "Подобрать рецепты", description: desc });
+                      const filled = result.filledSlotsCount ?? result.replacedCount;
+                      const total = result.totalSlots ?? 4;
+                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                        toast({ title: "Подобрать рецепты", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                      } else {
+                        const aiFallback = result.aiFallbackCount ?? 0;
+                        const desc = aiFallback > 0
+                          ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                          : `Подобрано: ${filled} из ${total}`;
+                        toast({ title: "Подобрать рецепты", description: desc });
+                      }
                     } catch (e: unknown) {
-                      toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось подобрать рецепты" });
+                      const msg = e instanceof Error ? e.message : "Не удалось подобрать рецепты";
+                      if (msg.includes("слишком много времени")) {
+                        toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                      } else {
+                        toast({ variant: "destructive", title: "Ошибка", description: msg });
+                      }
                     } finally {
                       setPoolUpgradeLoading(false);
                     }

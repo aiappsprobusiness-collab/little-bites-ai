@@ -4,6 +4,7 @@ import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { getRollingStartKey, getRollingDayKeys } from "@/utils/dateRange";
 import { formatLocalDate } from "@/utils/dateUtils";
+import { isDebugPlanEnabled } from "@/utils/debugPlan";
 
 export type PlanGenerationType = "day" | "week";
 
@@ -86,13 +87,23 @@ export interface StartPlanGenerationParams {
   day_keys?: string[];
   /** Включить debug-логи в Edge (для pool upgrade / run). */
   debug_pool?: boolean;
+  /** Включить debug_plan (POOL DIAG / EXCLUDES). Если не задано, подставляется по isDebugPlanEnabled(). */
+  debug_plan?: boolean;
 }
 
 export interface PoolUpgradeResult {
+  ok?: boolean;
   replacedCount: number;
   unchangedCount: number;
   aiFallbackCount?: number;
   totalSlots: number;
+  /** Частичное заполнение (таймаут или пул исчерпан). */
+  partial?: boolean;
+  filledSlotsCount?: number;
+  emptySlotsCount?: number;
+  filledDaysCount?: number;
+  emptyDaysCount?: number;
+  reason?: string;
 }
 
 export function usePlanGenerationJob(
@@ -149,6 +160,7 @@ export function usePlanGenerationJob(
           ...(Array.isArray(params.day_keys) && params.day_keys.length > 0 && { day_keys: params.day_keys }),
         }),
         ...(params.debug_pool && { debug_pool: true }),
+        ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
       };
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), POOL_UPGRADE_TIMEOUT_MS);
@@ -186,6 +198,7 @@ export function usePlanGenerationJob(
         member_data: params.member_data,
         ...(params.type === "day" && params.day_key && { day_key: params.day_key }),
         ...(params.type === "week" && { start_key: params.start_key ?? getRollingStartKey() }),
+        ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
       };
       const startRes = await fetch(url, { method: "POST", headers, body: JSON.stringify(startBody) });
       if (!startRes.ok) {
@@ -209,6 +222,7 @@ export function usePlanGenerationJob(
         ...(params.type === "day" && params.day_key && { day_key: params.day_key }),
         ...(params.type === "week" && { start_key: params.start_key ?? getRollingStartKey() }),
         ...(params.debug_pool && { debug_pool: true }),
+        ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
       };
       fetch(url, { method: "POST", headers, body: JSON.stringify(runBody) }).catch(() => {});
     },

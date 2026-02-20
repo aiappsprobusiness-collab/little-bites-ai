@@ -8,6 +8,7 @@ import { formatLocalDate } from "@/utils/dateUtils";
 import { resolveUnit } from "@/utils/productUtils";
 import { extractSingleJsonObject } from "@/utils/parseChatRecipes";
 import { normalizeMealType, isSoupLikeTitle, passesProfileFilter, getSanityBlockedReasons, type MemberDataForPool } from "@/utils/recipePool";
+import { isDebugPlanEnabled } from "@/utils/debugPlan";
 
 const MEAL_SWAP_FREE_KEY = "mealSwap_free_dayKey";
 
@@ -313,20 +314,22 @@ export function useReplaceMealSlot(
       if (!token) return { ok: false, error: "unauthorized" };
 
       const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
+      const replaceBody: Record<string, unknown> = {
+        action: "replace_slot",
+        member_id: memberId ?? null,
+        day_key: params.dayKey,
+        meal_type: params.mealType,
+        member_data: params.memberData
+          ? { allergies: params.memberData.allergies, preferences: params.memberData.preferences, age_months: params.memberData.age_months }
+          : null,
+        exclude_recipe_ids: params.excludeRecipeIds,
+        exclude_title_keys: params.excludeTitleKeys,
+      };
+      if (isDebugPlanEnabled()) replaceBody.debug_plan = true;
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          action: "replace_slot",
-          member_id: memberId ?? null,
-          day_key: params.dayKey,
-          meal_type: params.mealType,
-          member_data: params.memberData
-            ? { allergies: params.memberData.allergies, preferences: params.memberData.preferences, age_months: params.memberData.age_months }
-            : null,
-          exclude_recipe_ids: params.excludeRecipeIds,
-          exclude_title_keys: params.excludeTitleKeys,
-        }),
+        body: JSON.stringify(replaceBody),
       });
 
       const data = await res.json().catch(() => ({})) as {
