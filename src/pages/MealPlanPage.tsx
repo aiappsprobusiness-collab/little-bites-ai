@@ -12,7 +12,7 @@ import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
-import { usePlanGenerationJob, getStoredJobId, setStoredJobId } from "@/hooks/usePlanGenerationJob";
+import { usePlanGenerationJob, getStoredJobId, setStoredJobId, type PoolUpgradeResult } from "@/hooks/usePlanGenerationJob";
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -259,6 +259,8 @@ export default function MealPlanPage() {
   const planJobWasRunningRef = useRef<string | null>(null);
   const lastProgressRef = useRef<number>(-1);
   const longRunToastRef = useRef(false);
+  /** Last week pool upgrade result (for dev "Показать debug"). */
+  const lastWeekUpgradeResultRef = useRef<PoolUpgradeResult | null>(null);
 
   useEffect(() => {
     if (!planJob) return;
@@ -686,6 +688,24 @@ export default function MealPlanPage() {
                         Debug план
                       </DropdownMenuCheckboxItem>
                     )}
+                    {import.meta.env.DEV && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const last = lastWeekUpgradeResultRef.current;
+                          if (last?.diagnostics != null) {
+                            console.log("[PLAN upgrade] diagnostics", last.diagnostics);
+                            const str = JSON.stringify(last.diagnostics);
+                            console.log("[PLAN upgrade] diagnostics (string, max 8k)", str.slice(0, 8000));
+                            toast({ description: "Диагностика в консоли (F12 → Console)" });
+                          } else {
+                            toast({ description: "Нет данных. Заполните неделю с включённым «Debug план»." });
+                          }
+                        }}
+                        className="text-muted-foreground"
+                      >
+                        Показать debug
+                      </DropdownMenuItem>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -769,12 +789,26 @@ export default function MealPlanPage() {
                       start_key: getRollingStartKey(),
                       day_keys: getRollingDayKeys(),
                     });
+                    lastWeekUpgradeResultRef.current = result;
+                    if (result.diagnostics != null) {
+                      console.log("WEEK TOTALS", result.totals);
+                      console.log("WEEK DAY SUMMARY", result.daySummary);
+                      const firstEmpty = result.diagnostics.find((d: { result?: string }) => d.result !== "filled");
+                      console.log("FIRST EMPTY SLOT DIAG", firstEmpty);
+                    }
                     setMutedWeekKeyAndStorage(null);
                     await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                     const filled = result.filledSlotsCount ?? result.replacedCount;
                     const total = result.totalSlots ?? 28;
-                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                      toast({ title: "Заполнить всю неделю", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                    const emptySlots = result.emptySlotsCount ?? result.totals?.emptySlots ?? 0;
+                    const emptyDays = result.emptyDaysCount ?? result.totals?.emptyDays ?? 0;
+                    if (result.partial || (result.ok !== false && emptySlots > 0)) {
+                      toast({
+                        title: "Заполнить всю неделю",
+                        description: emptyDays > 0
+                          ? `Заполнено ${filled}/${total}. Пустых слотов: ${emptySlots}.`
+                          : `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.`,
+                      });
                     } else {
                       toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
                     }

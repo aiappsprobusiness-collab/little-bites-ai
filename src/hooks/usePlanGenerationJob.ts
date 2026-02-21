@@ -93,9 +93,9 @@ export interface StartPlanGenerationParams {
 
 export interface PoolUpgradeResult {
   ok?: boolean;
+  requestId?: string;
   replacedCount: number;
   unchangedCount: number;
-  aiFallbackCount?: number;
   totalSlots: number;
   /** Частичное заполнение (таймаут или пул исчерпан). */
   partial?: boolean;
@@ -104,6 +104,12 @@ export interface PoolUpgradeResult {
   filledDaysCount?: number;
   emptyDaysCount?: number;
   reason?: string;
+  totals?: { filledSlots: number; emptySlots: number; filledDays: number; emptyDays: number };
+  daySummary?: Array<{ dayKey: string; filledKeys: string[]; emptyKeys: string[]; reason?: string }>;
+  /** Только при debug_plan=true в запросе. */
+  diagnostics?: unknown[];
+  /** @deprecated Plan pool-only, no AI fallback. */
+  aiFallbackCount?: number;
 }
 
 export function usePlanGenerationJob(
