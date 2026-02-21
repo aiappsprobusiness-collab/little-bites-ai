@@ -2,8 +2,7 @@ name: Deploy to GitHub Pages (Vite)
 
 on:
   push:
-    branches:
-      - feature/new-model-test
+    branches: [ "main" ]
   workflow_dispatch:
 
 permissions:
