@@ -4,7 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
-// base: "/" — для Netlify/SPA: иначе на /chat запросы идут в /chat/assets/... и падают с 404
+// base MUST be "/" for GitHub Pages custom domain (not "./" or "/little-bites-ai/") — avoids black screen and manifest.json returning HTML
 export default defineConfig(({ mode }) => ({
   base: "/",
   server: {
