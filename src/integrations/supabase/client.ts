@@ -6,6 +6,13 @@ import { SUPABASE_DEBOUNCE_MS } from '@/lib/supabase-constants';
 export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 export const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+if (import.meta.env.DEV) {
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+    console.error("Missing VITE_SUPABASE_* env", { url: !!SUPABASE_URL, key: !!SUPABASE_PUBLISHABLE_KEY });
+    throw new Error("Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Check .env.");
+  }
+}
+
 /** Rate-limit: debounce 200ms между запросами к Supabase. Auth-запросы не троттлятся. */
 let lastSupabaseFetch = 0;
 const throttledFetch = (url: string, options?: RequestInit): Promise<Response> => {
