@@ -103,10 +103,14 @@ export function PoolExhaustedSheet({
       onOpenChange(false);
       return;
     }
-    const mealLabel = mealType === "breakfast" ? "завтрака" : mealType === "lunch" ? "обеда" : mealType === "snack" ? "полдника" : "ужина";
-    const profilePart = memberName ? ` для ${memberName}` : "";
-    const allergyPart = allergies.length > 0 ? ` Аллергии: ${allergies.slice(0, 5).join(", ")}.` : "";
-    const prefillMessage = `Придумай рецепт на ${mealLabel}${profilePart}.${allergyPart}${preferences.length > 0 ? ` Учтём: ${preferences.slice(0, 3).join(", ")}.` : ""}`;
+    const prefillMessage =
+      mealType === "breakfast"
+        ? "Подбери завтрак."
+        : mealType === "lunch"
+          ? "Подбери обед."
+          : mealType === "dinner"
+            ? "Подбери ужин."
+            : "Подбери перекус.";
     onOpenChange(false);
     navigate("/chat", { state: { prefillMessage, prefillOnly: false } });
   };
