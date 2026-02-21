@@ -157,6 +157,60 @@ function getDayName(dateStr: string): string {
 
 type MealSlot = { recipe_id?: string; title?: string; plan_source?: "pool" | "ai"; replaced_from_recipe_id?: string };
 
+/** Diagnostics per slot for mode=upgrade (only when debug_plan=true). */
+type SlotDiag = {
+  dayKey: string;
+  mealKey: "breakfast" | "lunch" | "snack" | "dinner";
+  poolCounts?: {
+    fromDb: number;
+    afterExcludeIds: number;
+    afterTitleKeys: number;
+    afterMainIngredient: number;
+    afterMealType: number;
+    afterSanity: number;
+    afterAllergies: number;
+    final: number;
+  };
+  effectiveExclude?: {
+    baseExcludeTitleKeysCount: number;
+    byMealTypeSize: number;
+    excludeTitleKeysCount: number;
+    excludeRecipeIdsCount: number;
+    excludeProteinKeysCount?: number;
+    excludedMainIngredientsCount?: number;
+  };
+  picked?: { recipe_id?: string; title?: string; titleKey?: string };
+  write?: {
+    normalizedKeys?: string[];
+    wroteKeys?: string[];
+    upsertOk?: boolean;
+    upsertError?: string | null;
+    dayKeyWritten?: string;
+    normalizeDebug?: { removedKeys: string[]; reasons: Record<string, string> };
+  };
+  writeDebug?: {
+    hadCurrentValid: boolean;
+    newHadValid: boolean;
+    mergedKeysBeforeNorm: string[];
+    mergedKeysAfterNorm: string[];
+    newMealsKeys?: string[];
+    newMealsSample?: Record<string, string>;
+    currentMealsKeys?: string[];
+    mergedMealsSample?: Record<string, string>;
+    normalizedKeys?: string[];
+  };
+  result: "filled" | "empty_no_candidates" | "empty_quality_gate" | "empty_write_filtered" | "error";
+  reason?: string;
+};
+
+/** Slot has a non-empty string recipe_id (or recipeId/id) — treat as filled. */
+function hasValidRecipeId(slot: unknown): boolean {
+  if (slot == null || typeof slot !== "object") return false;
+  const s = slot as { recipe_id?: string; recipeId?: string; id?: string };
+  const rid = s.recipe_id ?? s.recipeId ?? s.id;
+  return typeof rid === "string" && rid.length > 0;
+}
+
 /** РќРѕСЂРјР°Р»РёР·Р°С†РёСЏ meals: С‚РѕР»СЊРєРѕ СЃР»РѕС‚С‹ СЃ РІР°Р»РёРґРЅС‹Рј recipe_id, Р±РµР· null/undefined. */
 function normalizeMealsForWrite(
   meals: Record<string, MealSlot | null | undefined>
@@ -172,6 +226,31 @@ function normalizeMealsForWrite(
   return out;
 }
 
+/** When debug: return why slots were dropped (normalized, removedKeys, reasons). */
+function normalizeMealsWithDebug(
+  meals: Record<string, MealSlot | null | undefined>
+): { normalized: Record<string, MealSlot>; removedKeys: string[]; reasons: Record<string, string> } {
+  const normalized: Record<string, MealSlot> = {};
+  const removedKeys: string[] = [];
+  const reasons: Record<string, string> = {};
+  for (const [key, slot] of Object.entries(meals)) {
+    if (slot == null || typeof slot !== "object") {
+      removedKeys.push(key);
+      reasons[key] = "slot_null_or_not_object";
+      continue;
+    }
+    const s = slot as MealSlot & { recipeId?: string; id?: string };
+    const rid = s.recipe_id ?? s.recipeId ?? s.id;
+    if (!rid || typeof rid !== "string") {
+      removedKeys.push(key);
+      reasons[key] = rid == null || rid === "" ? "recipe_id_empty" : "recipe_id_not_string";
+      continue;
+    }
+    normalized[key] = { recipe_id: rid, title: slot.title ?? "Recipe", plan_source: slot.plan_source, ...(slot.replaced_from_recipe_id && { replaced_from_recipe_id: slot.replaced_from_recipe_id }) };
+  }
+  return { normalized, removedKeys, reasons };
+}
+
 /** Upsert meal_plans_v2: РѕРґРЅР° СЃС‚СЂРѕРєР° РЅР° (user_id, member_id, planned_date). Slot-wise merge, РЅРѕСЂРјР°Р»РёР·Р°С†РёСЏ. РљРѕРЅС‚СЂРѕР»СЊРЅС‹Р№ SELECT вЂ” С‚РѕР»СЊРєРѕ РїСЂРё runControlSelect. */
 async function upsertMealPlanRow(
   supabase: SupabaseClient,
@@ -180,8 +259,8 @@ async function upsertMealPlanRow(
   dayKey: string,
   meals: Record<string, MealSlot | null | undefined>,
   opts?: { runControlSelect?: boolean; debugPlan?: boolean }
-): Promise<{ error?: string; id?: string; mergedEmpty?: boolean; keys?: string[] }> {
-  const normalizedNew = normalizeMealsForWrite(meals);
+): Promise<{ ok: boolean; error?: string; mergedKeys: string[]; normalizeDebug?: { removedKeys: string[]; reasons: Record<string, string> } }> {
+  const newNorm = normalizeMealsForWrite(meals ?? {});
   if (opts?.debugPlan) {
     const inputKeys = Object.keys(meals ?? {});
     const inputHasRecipeId: Record<string, boolean> = {};
@@ -194,25 +273,39 @@ async function upsertMealPlanRow(
       memberId: memberId ?? "null",
       inputKeys,
       inputHasRecipeId,
-      outputKeys: Object.keys(normalizedNew),
+      outputKeys: Object.keys(newNorm),
     });
   }
   let q = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
   if (memberId == null) q = q.is("member_id", null);
   else q = q.eq("member_id", memberId);
   const { data: existing } = await q.maybeSingle();
-  const currentMeals = (existing as { meals?: Record<string, unknown> } | null)?.meals ?? {};
-  const mergedMeals: Record<string, unknown> = { ...currentMeals };
-  for (const [k, v] of Object.entries(normalizedNew)) mergedMeals[k] = v;
-  const payload: { meals: Record<string, unknown> } = { meals: mergedMeals };
+  const currentMealsRaw = (existing as { meals?: Record<string, unknown> } | null)?.meals ?? {};
+  const currentNorm = normalizeMealsForWrite(currentMealsRaw as Record<string, MealSlot | null | undefined>);
+  const merged = { ...currentNorm, ...newNorm };
+  const mergedNorm = normalizeMealsForWrite(merged);
+  const mergedKeys = Object.keys(mergedNorm);
+  if (mergedKeys.length === 0) {
+    const normalizeDebug = opts?.debugPlan ? normalizeMealsWithDebug(merged) : undefined;
+    if (opts?.debugPlan && normalizeDebug) {
+      safeLog("[MEALS WRITE] normalized_meals_empty", {
+        dayKey,
+        mergedInputKeys: Object.keys(merged),
+        removedKeys: normalizeDebug.removedKeys,
+        reasons: normalizeDebug.reasons,
+      });
+    }
+    return { ok: false, error: "normalized_meals_empty", mergedKeys: [], normalizeDebug: normalizeDebug ? { removedKeys: normalizeDebug.removedKeys, reasons: normalizeDebug.reasons } : undefined };
+  }
+  const payload: { meals: Record<string, unknown> } = { meals: mergedNorm };
 
   if (existing?.id) {
     const { error: updateErr } = await supabase.from("meal_plans_v2").update(payload).eq("id", (existing as { id: string }).id);
-    if (updateErr) return { error: updateErr.message };
+    if (updateErr) return { ok: false, error: updateErr.message, mergedKeys };
   } else {
     const { data: inserted, error: insertErr } = await supabase
       .from("meal_plans_v2")
-      .insert({ user_id: userId, member_id: memberId, planned_date: dayKey, meals: mergedMeals })
+      .insert({ user_id: userId, member_id: memberId, planned_date: dayKey, meals: mergedNorm })
       .select("id")
       .single();
     if (insertErr) {
@@ -223,9 +316,9 @@ async function upsertMealPlanRow(
         const { data: retry } = await retryQ.maybeSingle();
         if (retry?.id) {
           const { error: updateErr } = await supabase.from("meal_plans_v2").update(payload).eq("id", (retry as { id: string }).id);
-          if (updateErr) return { error: updateErr.message };
+          if (updateErr) return { ok: false, error: updateErr.message, mergedKeys };
         }
-      } else return { error: insertErr.message };
+      } else return { ok: false, error: insertErr.message, mergedKeys };
     }
   }
 
@@ -237,13 +330,10 @@ async function upsertMealPlanRow(
     const { data: controlRow } = await controlQ.maybeSingle();
     const storedMeals = (controlRow as { meals?: Record<string, unknown> } | null)?.meals ?? {};
     const keys = Object.keys(storedMeals);
-    const mergedEmpty = keys.length === 0;
     safeLog("[PLAN upsert]", { dayKey, memberId: memberId ?? "null", keys });
-    return { id: (controlRow as { id: string } | null)?.id, keys, mergedEmpty };
+    return { ok: true, mergedKeys: keys };
   }
-  const keys = Object.keys(mergedMeals);
-  const mergedEmpty = !keys.some((k) => (mergedMeals[k] as { recipe_id?: string } | null)?.recipe_id);
-  return { id: (existing as { id?: string } | null)?.id, keys, mergedEmpty };
+  return { ok: true, mergedKeys };
 }
 
 function getPrevDayKey(dayKey: string): string {
@@ -812,6 +902,10 @@ async function pickFromPool(
     preloadedCandidates?: RecipeRowPool[] | null;
     /** Р"Р»СЏ [POOL DIAG]: Р»РѕР³РёСЂРѕРІР°С‚СЊ СЃС‚СѓРїРµРЅРё С„РёР»С‚СЂР° С‚РѕР»СЊРєРѕ РїСЂРё debug_plan. */
     logDiag?: { requestId: string; dayKey: string; mealKey: string; usedTitleKeysByMealTypeSize?: number } | null;
+    /** Callback with poolCounts for diagnostics (mode=upgrade). */
+    onPoolDiag?: (data: {
+      poolCounts: { fromDb: number; afterExcludeIds: number; afterTitleKeys: number; afterMainIngredient: number; afterMealType: number; afterSanity: number; afterAllergies: number; final: number };
+    }) => void;
   }
 ): Promise<
   | { id: string; title: string; candidatesAfterAllFilters?: number; topTitleKeys?: string[] }
@@ -1089,6 +1183,21 @@ async function pickFromPool(
         excludeProteinKeysList: excludeProteinKeysRaw.slice(0, 5),
         excludedMainIngredientsCount: excludedMainIngredientsList.length,
         excludedMainIngredientsList: excludedMainIngredientsList.slice(0, 5),
+      },
+    });
+  }
+  const onPoolDiag = options?.onPoolDiag;
+  if (onPoolDiag) {
+    onPoolDiag({
+      poolCounts: {
+        fromDb: candidatesFromDb,
+        afterExcludeIds,
+        afterTitleKeys: afterExcludeTitleKeys,
+        afterMainIngredient,
+        afterMealType,
+        afterSanity,
+        afterAllergies: afterProfile,
+        final: afterProfile,
       },
     });
   }
@@ -1454,15 +1563,16 @@ serve(async (req) => {
         .is("member_id", memberId)
         .maybeSingle();
 
-      const currentMeals = (existingRow.data as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
-      const hadRecipeId = currentMeals[mealType]?.recipe_id ?? null;
+      const currentMealsRaw = (existingRow.data as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
+      const currentMealsNormReplace = normalizeMealsForWrite(currentMealsRaw as Record<string, MealSlot | null | undefined>);
+      const hadRecipeId = hasValidRecipeId(currentMealsNormReplace[mealType]) ? (currentMealsNormReplace[mealType] as MealSlot).recipe_id ?? null : null;
 
       const dateKeysReplace = [dayKey, ...getLastNDaysKeys(dayKey, 6)];
       const { recipeIds: replaceRecipeIds, titleKeys: replaceTitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, memberId, dateKeysReplace);
       const excludeRecipeIds = [...(Array.isArray(body.exclude_recipe_ids) ? body.exclude_recipe_ids : []), ...replaceRecipeIds];
       const excludeTitleKeys = [...new Set([...(Array.isArray(body.exclude_title_keys) ? body.exclude_title_keys : []), ...replaceTitleKeys])];
       const excludedMainIngredientsReplace = MEAL_KEYS.filter((k) => k !== mealType)
-        .map((k) => inferMainIngredientKey(currentMeals[k]?.title ?? "", null, null))
+        .map((k) => inferMainIngredientKey(currentMealsNormReplace[k]?.title ?? "", null, null))
         .filter(Boolean) as string[];
 
       let excludeProteinKeys: string[] = [];
@@ -1474,7 +1584,7 @@ serve(async (req) => {
         .eq("planned_date", prevDayKey)
         .is("member_id", memberId)
         .maybeSingle();
-      const prevMeals = (prevDayRow.data as { meals?: Record<string, { title?: string }> } | null)?.meals ?? {};
+      const prevMeals = normalizeMealsForWrite(((prevDayRow.data as { meals?: Record<string, unknown> } | null)?.meals ?? {}) as Record<string, MealSlot | null | undefined>);
       for (const k of MEAL_KEYS) {
         const t = prevMeals[k]?.title;
         const pk = inferProteinKey(t, null);
@@ -1518,9 +1628,9 @@ serve(async (req) => {
 
       if (picked) {
         if (debugPlan) safeLog("[REPLACE_SLOT] pool_search", { requestId, pickedSource: "pool", newRecipeId: picked.id });
-        const newMeals = { ...currentMeals, [mealType]: { recipe_id: picked.id, title: picked.title, plan_source: "pool" as const } };
+        const newMeals = { ...currentMealsNormReplace, [mealType]: { recipe_id: picked.id, title: picked.title, plan_source: "pool" as const } };
         const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
-        if (upsertErr.error) {
+        if (!upsertErr.ok || upsertErr.error) {
           safeWarn("[REPLACE_SLOT] attach_failed (upsert)", requestId, upsertErr.error);
           return new Response(
             JSON.stringify({ error: "replace_failed", pickedSource: "pool", reasonIfAi: "attach_failed", requestId, reason: "attach_failed" }),
@@ -1591,9 +1701,9 @@ serve(async (req) => {
         return (data ?? []) as { planned_date?: string; meals?: Record<string, { recipe_id?: string; title?: string }> }[];
       })();
       weekRows.forEach((row) => {
-        const meals = row.meals ?? {};
+        const mealsNorm = normalizeMealsForWrite((row.meals ?? {}) as Record<string, MealSlot | null | undefined>);
         MEAL_KEYS.forEach((k) => {
-          const slot = meals[k];
+          const slot = mealsNorm[k];
           if (slot?.recipe_id) usedRecipeIds.push(slot.recipe_id);
           if (slot?.title) {
             usedTitleKeys.push(normalizeTitleKey(slot.title));
@@ -1634,6 +1744,19 @@ serve(async (req) => {
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
           : `upg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+      const diagnosticsUpgrade: SlotDiag[] = [];
+      const daySummaryUpgrade: Array<{ dayKey: string; filledKeys: string[]; emptyKeys: string[]; reason?: string }> = [];
+      const dayDebugUpgrade: Array<{
+        dayIndex: number;
+        dayKeyPlanned: string;
+        dayKeyRead: string | null;
+        rowFound: boolean;
+        dayKeyWrite: string;
+        shouldFillDay: boolean;
+        skipReason: string;
+        normalizedSlotKeysBefore: string[];
+        newMealsKeysAfter: string[];
+      }> = [];
 
       if (debugPlanUpgrade) {
         safeLog("[POOL EXCLUDES]", {
@@ -1652,57 +1775,64 @@ serve(async (req) => {
       }
 
       for (let di = 0; di < dayKeys.length; di++) {
+        const dayKeyPlanned = dayKeys[di];
+        if (debugPlanUpgrade) {
+          safeLog("[POOL UPGRADE] start_day", { event: "start_day", dayIndex: di, dayKeyPlanned, totalDays: dayKeys.length });
+        }
         if (Date.now() - startedAt > BUDGET_MS) {
           const totalSlotsUp = dayKeys.length * MEAL_KEYS.length;
           const emptySlotsUp = totalSlotsUp - filledSlotsCountUpgrade;
           const emptyDaysUp = dayKeys.length - filledDaysCountUpgrade;
-          return new Response(
-            JSON.stringify({
-              ok: true,
-              partial: true,
-              reason: "time_budget",
-              totalSlots: totalSlotsUp,
-              filledSlotsCount: filledSlotsCountUpgrade,
-              emptySlotsCount: emptySlotsUp,
-              filledDaysCount: filledDaysCountUpgrade,
-              emptyDaysCount: emptyDaysUp,
-              replacedCount,
-              unchangedCount,
-              aiFallbackCount,
-              assignedCount: replacedCount,
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          const payload: Record<string, unknown> = {
+            ok: true,
+            requestId,
+            partial: true,
+            reason: "time_budget",
+            totals: { filledSlots: filledSlotsCountUpgrade, emptySlots: emptySlotsUp, filledDays: filledDaysCountUpgrade, emptyDays: emptyDaysUp },
+            daySummary: daySummaryUpgrade,
+            replacedCount,
+            unchangedCount,
+            totalSlots: totalSlotsUp,
+            filledSlotsCount: filledSlotsCountUpgrade,
+            emptySlotsCount: emptySlotsUp,
+            filledDaysCount: filledDaysCountUpgrade,
+            emptyDaysCount: emptyDaysUp,
+            assignedCount: replacedCount,
+          };
+          if (debugPlanUpgrade) payload.diagnostics = diagnosticsUpgrade;
+          return new Response(JSON.stringify(payload), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
-        const dayKey = dayKeys[di];
+        const dayKey = dayKeyPlanned;
         const prevDayKey = di > 0 ? dayKeys[di - 1] : null;
         let excludeProteinKeysFromPrevDay: string[] = [];
         if (prevDayKey) {
           const prevRow = weekRows.find((r) => r.planned_date === prevDayKey);
-          const prevMeals = prevRow?.meals ?? {};
+          const prevMeals = normalizeMealsForWrite((prevRow?.meals ?? {}) as Record<string, MealSlot | null | undefined>);
           for (const k of MEAL_KEYS) {
             const pk = inferProteinKey(prevMeals[k]?.title, null);
             if (pk && pk !== "veg") excludeProteinKeysFromPrevDay.push(pk);
           }
         }
         const dayUsedProteinKeys = new Set<string>();
-        const existingRow = await supabase
-          .from("meal_plans_v2")
-          .select("id, meals")
-          .eq("user_id", userId)
-          .eq("planned_date", dayKey)
-          .is("member_id", memberId)
-          .maybeSingle();
+        let existingRowQ = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
+        if (memberId == null) existingRowQ = existingRowQ.is("member_id", null);
+        else existingRowQ = existingRowQ.eq("member_id", memberId);
+        const existingRow = await existingRowQ.maybeSingle();
+        const rowFound = (existingRow?.data != null);
+        if (debugPlanUpgrade) {
+          safeLog("[POOL UPGRADE] day_read", { dayIndex: di, dayKeyPlanned, dayKeyRead: dayKey, rowFound });
+        }
         type MealsRow = Record<string, { recipe_id?: string; title?: string; plan_source?: "pool" | "ai"; replaced_from_recipe_id?: string }>;
-        const currentMeals = (existingRow.data as { meals?: MealsRow } | null)?.meals ?? {};
-        const newMeals = { ...currentMeals } as MealsRow;
+        const currentMealsRaw = (existingRow.data as { meals?: MealsRow } | null)?.meals ?? {};
+        const currentMealsNorm = normalizeMealsForWrite(currentMealsRaw as Record<string, MealSlot | null | undefined>);
+        const newMeals = { ...currentMealsNorm } as MealsRow;
 
         const dayCategoriesUpgrade: Record<string, string> = {};
         let dayExcludedMainIngredientsUpgrade: string[] = [];
         const poolPicks: Record<string, { id: string; title: string } | null> = {};
         for (const mealKey of MEAL_KEYS) {
-          const slot = currentMeals[mealKey];
-          const hadRecipeId = slot?.recipe_id ?? null;
+          const slot = currentMealsNorm[mealKey];
+          const hadRecipeId = hasValidRecipeId(slot) ? ((slot as MealSlot).recipe_id ?? null) : null;
           const useRerankUp = isPremiumOrTrialUpgrade;
           const baseExcludeTitleKeys = usedTitleKeys;
           const byMealTypeSet = usedTitleKeysByMealTypeUpgrade[mealKey];
@@ -1722,6 +1852,7 @@ serve(async (req) => {
               ? []
               : [...excludeProteinKeysFromPrevDay, ...dayUsedProteinKeys].filter((pk) => pk !== "veg");
           const excludedMainForSlot = dayExcludedMainIngredientsUpgrade;
+          let slotPoolCounts: SlotDiag["poolCounts"] | undefined;
           let pickedRawUp = await pickFromPool(
             supabase,
             userId,
@@ -1741,6 +1872,7 @@ serve(async (req) => {
               returnTopCandidates: useRerankUp ? 10 : undefined,
               preloadedCandidates: poolCandidates,
               logDiag: debugPlanUpgrade ? { requestId, dayKey, mealKey, usedTitleKeysByMealTypeSize: usedTitleKeysByMealTypeUpgrade[mealKey]?.size ?? 0 } : undefined,
+              onPoolDiag: debugPlanUpgrade ? (data) => { slotPoolCounts = data.poolCounts; } : undefined,
             }
           );
           let picked: { id: string; title: string; categoryKey?: string } | null = null;
@@ -1769,6 +1901,13 @@ serve(async (req) => {
           }
           if (!picked && hadCandidates && qualitySkipReason && debugPlanUpgrade) {
             safeWarn("[POOL QUALITY SKIP]", { requestId, dayKey, mealKey, reason: qualitySkipReason, finalCandidatesCount });
+          }
+          if (!picked && hadCandidates && (qualitySkipReason === "category_streak" || qualitySkipReason === "porridge_cap")) {
+            const firstCandidate = pickedRawUp && "topCandidates" in pickedRawUp ? pickedRawUp.topCandidates[0] : pickedRawUp && "id" in pickedRawUp ? { id: pickedRawUp.id, title: pickedRawUp.title, categoryKey: undefined as string | undefined } : null;
+            if (firstCandidate) {
+              picked = { id: firstCandidate.id, title: firstCandidate.title, categoryKey: firstCandidate.categoryKey };
+              if (debugPlanUpgrade) safeLog("[POOL UPGRADE] quality_fallback", { dayKey, mealKey, reason: qualitySkipReason, pickedTitle: picked.title });
+            }
           }
           if (!picked && hadCandidates && (excludeProteinKeysForSlot.length > 0 || excludedMainForSlot.length > 0)) {
             pickedRawUp = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, Array.from(effectiveExcludeTitleKeysUpgrade), 60, {
@@ -1826,122 +1965,37 @@ serve(async (req) => {
               if (allSkippedProtein) safeLog("[POOL UPGRADE] slot empty", { dayKey, mealKey, reason: "protein_repeat_day" });
             }
           }
-          if (needAiFallback && !picked) {
-            const mealLabel = mealKey === "breakfast" ? "Р·Р°РІС‚СЂР°Рє" : mealKey === "lunch" ? "РѕР±РµРґ" : mealKey === "snack" ? "РїРѕР»РґРЅРёРє" : "СѓР¶РёРЅ";
-            const excludeStr = usedTitleKeys.length > 0 ? ` РќРµ РїРѕРІС‚РѕСЂСЏР№ Р±Р»СЋРґР°: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
-            const mainIngStr = dayExcludedMainIngredientsUpgrade.length > 0 ? ` Р’ СЌС‚РѕС‚ РґРµРЅСЊ СѓР¶Рµ РµСЃС‚СЊ: ${[...new Set(dayExcludedMainIngredientsUpgrade)].join(", ")} вЂ” РЅРµ РёСЃРїРѕР»СЊР·СѓР№.` : "";
-            const proteinStr = excludeProteinKeysForSlot.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeysForSlot.join(", ")} вЂ” РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
-            const lunchHint = mealKey === "lunch" ? " Р”Р»СЏ РѕР±РµРґР° РїСЂРµРґРїРѕС‡С‚РёС‚РµР»СЊРЅРѕ РїРµСЂРІРѕРµ Р±Р»СЋРґРѕ (СЃСѓРї/Р±СѓР»СЊРѕРЅ/РєСЂРµРј-СЃСѓРї)." : "";
-            const slotForbidden: Record<string, string> = {
-              breakfast: "СЃСѓРїС‹, СЂР°РіСѓ, РїР»РѕРІ. РўРѕР»СЊРєРѕ Р·Р°РІС‚СЂР°РєРё: РєР°С€Рё, РѕРјР»РµС‚С‹, СЃС‹СЂРЅРёРєРё, С‚РѕСЃС‚С‹.",
-              lunch: "СЃС‹СЂРЅРёРєРё, РѕР»Р°РґСЊРё, РєР°С€Сѓ. РўРѕР»СЊРєРѕ РѕР±РµРґС‹: СЃСѓРїС‹, РІС‚РѕСЂС‹Рµ Р±Р»СЋРґР°.",
-              snack: "СЃСѓРїС‹, СЂР°РіСѓ, РєР°С€Рё. РўРѕР»СЊРєРѕ РїРµСЂРµРєСѓСЃС‹: С„СЂСѓРєС‚С‹, РїРµС‡РµРЅСЊРµ, СЃРјСѓР·Рё.",
-              dinner: "Р№РѕРіСѓСЂС‚, С‚РІРѕСЂРѕРі, РґРѕР»СЊРєРё, РїРµС‡РµРЅСЊРµ РєР°Рє РµРґРёРЅСЃС‚РІРµРЅРЅРѕРµ. РўРѕР»СЊРєРѕ СѓР¶РёРЅС‹: РІС‚РѕСЂС‹Рµ Р±Р»СЋРґР°.",
+          if (debugPlanUpgrade) {
+            const slotResult: SlotDiag["result"] = picked ? "filled" : hadCandidates && qualitySkipReason ? "empty_quality_gate" : "empty_no_candidates";
+            const slotReason = picked ? undefined : (qualitySkipReason ?? (slotPoolCounts?.final === 0 ? "no_candidates" : undefined));
+            const effectiveExclude: SlotDiag["effectiveExclude"] = {
+              baseExcludeTitleKeysCount: baseExcludeTitleKeys.length,
+              byMealTypeSize: byMealTypeSet?.size ?? 0,
+              excludeTitleKeysCount: effectiveExcludeTitleKeysUpgrade.size,
+              excludeRecipeIdsCount: usedRecipeIds.length,
+              excludeProteinKeysCount: excludeProteinKeysForSlot.length,
+              excludedMainIngredientsCount: excludedMainForSlot.length,
             };
-            const allergyHintUp = allergyTokens.length > 0 ? " РЎРўР РћР“Рћ Р±РµР· РјРѕР»РѕС‡РЅС‹С…: РјРѕР»РѕРєРѕ, С‚РІРѕСЂРѕРі, Р№РѕРіСѓСЂС‚, СЃС‹СЂ, РєРµС„РёСЂ, СЃР»РёРІРєРё, СЃРјРµС‚Р°РЅР°. " : "";
-            const aiResUp = await fetchWithRetry(
-              deepseekUrlUpgrade,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: authHeader },
-                body: JSON.stringify({
-                  type: "recipe",
-                  stream: false,
-                  from_plan_replace: true,
-                  memberData: memberData ?? undefined,
-                  mealType: mealKey,
-                  messages: [{ role: "user", content: `РЎРіРµРЅРµСЂРёСЂСѓР№ РѕРґРёРЅ СЂРµС†РµРїС‚ РґР»СЏ ${mealLabel}.${excludeStr}${mainIngStr}${proteinStr} ${slotForbidden[mealKey] ?? ""}.${lunchHint}${allergyHintUp} РРЅРіСЂРµРґРёРµРЅС‚С‹: РєР°Р¶РґС‹Р№ СЃ РєРѕР»РёС‡РµСЃС‚РІРѕРј Рё РµРґРёРЅРёС†РµР№ (Рі, РјР», С€С‚., СЃС‚.Р»., С‡.Р».). Р’РµСЂРЅРё С‚РѕР»СЊРєРѕ JSON.` }],
-                }),
-              },
-              { timeoutMs: FETCH_TIMEOUT_MS, retries: 1 }
-            );
-            if (aiResUp.ok) {
-              const aiDataUp = (await aiResUp.json()) as { message?: string; recipes?: Array<{ title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] }> };
-              const firstUp = Array.isArray(aiDataUp.recipes) && aiDataUp.recipes.length > 0 ? aiDataUp.recipes[0] : null;
-              let titleUp = firstUp?.title ?? (typeof aiDataUp.message === "string" ? aiDataUp.message.slice(0, 100) : "Р РµС†РµРїС‚");
-              let ingredientsUp: Array<{ name: string; amount: string }> = [];
-              let stepsUp: string[] = [];
-              if (typeof aiDataUp.message === "string") {
-                const jsonStrUp = extractFirstJsonObject(aiDataUp.message);
-                if (jsonStrUp) {
-                  try {
-                    const parsedUp = JSON.parse(jsonStrUp) as { title?: string; ingredients?: Array<{ name?: string; amount?: string }>; steps?: string[] };
-                    titleUp = parsedUp.title ?? titleUp;
-                    ingredientsUp = (parsedUp.ingredients ?? []).map((ing) =>
-                      typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }
-                    );
-                    stepsUp = (parsedUp.steps ?? []).filter(Boolean).map((s) => String(s));
-                  } catch {
-                    if (firstUp) {
-                      ingredientsUp = (firstUp.ingredients ?? []).map((ing) => (typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }));
-                      stepsUp = (firstUp.steps ?? []).filter(Boolean).map((s) => String(s));
-                    }
-                  }
-                } else if (firstUp) {
-                  ingredientsUp = (firstUp.ingredients ?? []).map((ing) => (typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }));
-                  stepsUp = (firstUp.steps ?? []).filter(Boolean).map((s) => String(s));
-                }
-              } else if (firstUp) {
-                ingredientsUp = (firstUp.ingredients ?? []).map((ing) => (typeof ing === "string" ? { name: String(ing).trim(), amount: "" } : { name: (ing.name ?? "").trim(), amount: (ing.amount ?? "").trim() }));
-                stepsUp = (firstUp.steps ?? []).filter(Boolean).map((s) => String(s));
-              }
-              const failUp = validateAiMeal(titleUp, ingredientsUp, stepsUp, mealKey, memberDataPool);
-              if (!failUp) {
-                while (stepsUp.length < 3) stepsUp.push(`РЁР°Рі ${stepsUp.length + 1}`);
-                while (ingredientsUp.length < 3) ingredientsUp.push({ name: `РРЅРіСЂРµРґРёРµРЅС‚ ${ingredientsUp.length + 1}`, amount: "" });
-                const payloadUp = canonicalizeRecipePayload({
-                  user_id: userId,
-                  member_id: memberId,
-                  child_id: memberId,
-                  source: "week_ai",
-                  contextMealType: mealKey,
-                  title: titleUp,
-                  description: "",
-                  cooking_time_minutes: null,
-                  chef_advice: null,
-                  advice: null,
-                  steps: stepsUp.slice(0, 7).map((instruction, idx) => ({ instruction, step_number: idx + 1 })),
-                  ingredients: ingredientsUp.slice(0, 20).map((ing, idx) => ({
-                    name: ing.name,
-                    display_text: ing.amount ? `${ing.name} вЂ” ${ing.amount}` : ing.name,
-                    amount: null,
-                    unit: null,
-                    order_index: idx,
-                    category: "other",
-                  })),
-                  sourceTag: "plan",
-                });
-                const { data: recipeIdUp, error: rpcErrUp } = await supabase.rpc("create_recipe_with_steps", { payload: payloadUp });
-                if (!rpcErrUp && recipeIdUp) {
-                  newMeals[mealKey] = { recipe_id: recipeIdUp, title: titleUp, plan_source: "ai" };
-                  usedRecipeIds.push(recipeIdUp);
-                  usedTitleKeys.push(normalizeTitleKey(titleUp));
-                  usedTitleKeysByMealTypeUpgrade[mealKey].add(normalizeTitleKey(titleUp));
-                  const catUp = inferDishCategoryKey(titleUp, null, null);
-                  usedCategoriesByMealTypeUpgrade[mealKey].add(catUp);
-                  dayCategoriesUpgrade[mealKey] = catUp;
-                  if (mealKey === "breakfast" && catUp === "porridge") breakfastPorridgeCountUpgrade++;
-                  const pkUp = inferProteinKey(titleUp, null);
-                  if (pkUp) proteinKeyCounts[pkUp] = (proteinKeyCounts[pkUp] ?? 0) + 1;
-                  const mikUp = inferMainIngredientKey(titleUp, null, null);
-                  if (mikUp) dayExcludedMainIngredientsUpgrade.push(mikUp);
-                  aiFallbackCount++;
-                  replacedCount++;
-                  weekContext.push(titleUp);
-                }
-              }
-            }
-            if (!poolPicks[mealKey] && !newMeals[mealKey]?.recipe_id) {
-              unchangedCount++;
-              if (slot?.recipe_id) usedRecipeIds.push(slot.recipe_id);
-              if (slot?.title) {
-                usedTitleKeys.push(normalizeTitleKey(slot.title));
-                const pk = inferProteinKey(slot.title, null);
-                if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
-                const mik = inferMainIngredientKey(slot.title, null, null);
-                if (mik) dayExcludedMainIngredientsUpgrade.push(mik);
-                weekContext.push(slot.title);
-              }
+            diagnosticsUpgrade.push({
+              dayKey,
+              mealKey: mealKey as SlotDiag["mealKey"],
+              poolCounts: slotPoolCounts,
+              effectiveExclude,
+              picked: picked ? { recipe_id: picked.id, title: picked.title, titleKey: normalizeTitleKey(picked.title) } : undefined,
+              result: slotResult,
+              reason: slotReason,
+            });
+          }
+          if (!poolPicks[mealKey] && !newMeals[mealKey]?.recipe_id) {
+            unchangedCount++;
+            if (slot?.recipe_id) usedRecipeIds.push(slot.recipe_id);
+            if (slot?.title) {
+              usedTitleKeys.push(normalizeTitleKey(slot.title));
+              const pk = inferProteinKey(slot.title, null);
+              if (pk) proteinKeyCounts[pk] = (proteinKeyCounts[pk] ?? 0) + 1;
+              const mik = inferMainIngredientKey(slot.title, null, null);
+              if (mik) dayExcludedMainIngredientsUpgrade.push(mik);
+              weekContext.push(slot.title);
             }
           } else if (!picked) {
             unchangedCount++;
@@ -1958,26 +2012,113 @@ serve(async (req) => {
         }
         lastCategoryByMealTypeUpgrade = { ...dayCategoriesUpgrade };
 
-        if (debugPool && MEAL_KEYS.some((k) => !poolPicks[k] && !currentMeals[k]?.recipe_id)) {
-          safeLog("[POOL UPGRADE] slots left empty or filled by AI", { dayKey, emptySlots: MEAL_KEYS.filter((k) => !newMeals[k]?.recipe_id) });
+        if (debugPool && MEAL_KEYS.some((k) => !poolPicks[k] && !hasValidRecipeId(currentMealsNorm[k]))) {
+          safeLog("[POOL UPGRADE] slots left empty", { dayKey, emptySlots: MEAL_KEYS.filter((k) => !hasValidRecipeId(newMeals[k])) });
         }
 
-        const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals, { runControlSelect: debugPlanUpgrade, debugPlan: debugPlanUpgrade });
-        if (upsertResult.error) {
-          safeWarn("[POOL UPGRADE] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
+        const normalizedForWrite = normalizeMealsForWrite(newMeals);
+        const normalizedKeys = Object.keys(normalizedForWrite);
+        const mergedBeforeNorm = { ...currentMealsNorm, ...newMeals };
+        const mergedKeysBeforeNorm = Object.keys(mergedBeforeNorm);
+        const newMealsSample: Record<string, string> = {};
+        const mergedMealsSample: Record<string, string> = {};
+        for (const k of MEAL_KEYS) {
+          const rid = (newMeals[k] as { recipe_id?: string; recipeId?: string; id?: string } | undefined)?.recipe_id ?? (newMeals[k] as { recipeId?: string } | undefined)?.recipeId ?? (newMeals[k] as { id?: string } | undefined)?.id;
+          if (rid) newMealsSample[k] = rid;
+          const mrid = (mergedBeforeNorm[k] as { recipe_id?: string; recipeId?: string; id?: string } | undefined)?.recipe_id ?? (mergedBeforeNorm[k] as { recipeId?: string } | undefined)?.recipeId ?? (mergedBeforeNorm[k] as { id?: string } | undefined)?.id;
+          if (mrid) mergedMealsSample[k] = mrid;
         }
-        if (debugPlanUpgrade && upsertResult.mergedEmpty) {
-          const picksThisDay = MEAL_KEYS.filter((k) => poolPicks[k]).length;
-          safeWarn("[POOL UPGRADE] merged_empty_meals", { dayKey, memberId: memberId ?? "null", picksThisDay });
+        if (normalizedKeys.length === 0) {
+          if (debugPlanUpgrade) {
+            const hadCurrentValid = MEAL_KEYS.some((k) => hasValidRecipeId(currentMealsNorm[k]));
+            const newHadValid = MEAL_KEYS.some((k) => hasValidRecipeId(newMeals[k]));
+            const mergedKeysAfterNorm = Object.keys(normalizeMealsForWrite(mergedBeforeNorm));
+            const writeDebug = {
+              hadCurrentValid,
+              newHadValid,
+              mergedKeysBeforeNorm,
+              mergedKeysAfterNorm,
+              newMealsKeys: Object.keys(newMeals),
+              newMealsSample,
+              currentMealsKeys: Object.keys(currentMealsNorm),
+              mergedMealsSample,
+              normalizedKeys: [],
+            };
+            for (let j = diagnosticsUpgrade.length - MEAL_KEYS.length; j < diagnosticsUpgrade.length; j++) {
+              if (diagnosticsUpgrade[j]) {
+                diagnosticsUpgrade[j].result = "empty_write_filtered";
+                diagnosticsUpgrade[j].reason = "normalized_meals_empty";
+                diagnosticsUpgrade[j].write = { normalizedKeys: [], wroteKeys: [], upsertOk: false, upsertError: "normalized_meals_empty", dayKeyWritten: dayKey };
+                diagnosticsUpgrade[j].writeDebug = writeDebug;
+              }
+            }
+          }
+          daySummaryUpgrade.push({ dayKey, filledKeys: [], emptyKeys: [...MEAL_KEYS], reason: "normalized_meals_empty" });
+        } else {
+          const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals, { runControlSelect: debugPlanUpgrade, debugPlan: debugPlanUpgrade });
+          if (debugPlanUpgrade) {
+            const from = diagnosticsUpgrade.length - MEAL_KEYS.length;
+            const writeDebugFilled = {
+              hadCurrentValid: MEAL_KEYS.some((k) => hasValidRecipeId(currentMealsNorm[k])),
+              newHadValid: MEAL_KEYS.some((k) => hasValidRecipeId(newMeals[k])),
+              mergedKeysBeforeNorm,
+              mergedKeysAfterNorm: Object.keys(normalizeMealsForWrite(mergedBeforeNorm)),
+              newMealsKeys: Object.keys(newMeals),
+              newMealsSample,
+              currentMealsKeys: Object.keys(currentMealsNorm),
+              mergedMealsSample,
+              normalizedKeys,
+            };
+            for (let j = from; j < diagnosticsUpgrade.length; j++) {
+              if (diagnosticsUpgrade[j]) {
+                diagnosticsUpgrade[j].write = {
+                  normalizedKeys,
+                  wroteKeys: upsertResult.mergedKeys,
+                  upsertOk: upsertResult.ok,
+                  upsertError: upsertResult.error ?? null,
+                  dayKeyWritten: dayKey,
+                  ...(upsertResult.normalizeDebug && { normalizeDebug: upsertResult.normalizeDebug }),
+                };
+                diagnosticsUpgrade[j].writeDebug = writeDebugFilled;
+                if (!upsertResult.ok) {
+                  diagnosticsUpgrade[j].result = "error";
+                  diagnosticsUpgrade[j].reason = upsertResult.error ?? "upsert_failed";
+                }
+              }
+            }
+          }
+          if (!upsertResult.ok) {
+            safeWarn("[POOL UPGRADE] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
+          }
+          if (debugPlanUpgrade && upsertResult.mergedKeys.length === 0) {
+            const picksThisDay = MEAL_KEYS.filter((k) => poolPicks[k]).length;
+            safeWarn("[POOL UPGRADE] merged_empty_meals", { dayKey, memberId: memberId ?? "null", picksThisDay });
+          }
+          const filledKeysDay = MEAL_KEYS.filter((k) => hasValidRecipeId(newMeals[k]));
+          const emptyKeysDay = MEAL_KEYS.filter((k) => !hasValidRecipeId(newMeals[k]));
+          daySummaryUpgrade.push({ dayKey, filledKeys: filledKeysDay, emptyKeys: emptyKeysDay });
         }
-        const filledThisDay = MEAL_KEYS.filter((k) => newMeals[k]?.recipe_id).length;
+
+        const filledThisDay = MEAL_KEYS.filter((k) => hasValidRecipeId(newMeals[k])).length;
         filledSlotsCountUpgrade += filledThisDay;
         if (filledThisDay > 0) filledDaysCountUpgrade++;
         if (debugPlanUpgrade) {
-          const filledKeys = MEAL_KEYS.filter((k) => newMeals[k]?.recipe_id);
+          const filledKeys = MEAL_KEYS.filter((k) => hasValidRecipeId(newMeals[k]));
           const dayProteinKeys = filledKeys.map((k) => inferProteinKey(newMeals[k]?.title, null)).filter(Boolean);
           safeLog("[POOL UPGRADE] day", { dayKey, filledKeys, dayProteinKeys });
+          safeLog("[POOL UPGRADE] end_day", { event: "end_day", dayIndex: di, dayKeyPlanned, newMealsKeysAfter: Object.keys(newMeals) });
         }
+        dayDebugUpgrade.push({
+          dayIndex: di,
+          dayKeyPlanned,
+          dayKeyRead: dayKey,
+          rowFound,
+          dayKeyWrite: dayKey,
+          shouldFillDay: true,
+          skipReason: "",
+          normalizedSlotKeysBefore: [...MEAL_KEYS],
+          newMealsKeysAfter: Object.keys(newMeals),
+        });
       }
 
       const totalSlots = dayKeys.length * MEAL_KEYS.length;
@@ -1989,24 +2130,36 @@ serve(async (req) => {
         safeLog("[WEEK DONE]", { requestId, ms: Date.now() - startedAt, filledDaysCount: filledDaysCountUpgrade, filledSlotsCount: filledSlotsCountUpgrade });
       }
       if (debugPool) {
-        safeLog("[POOL UPGRADE] totals", { totalSlots, replacedCount: assignedCount, unchangedCount, aiFallbackCount, filledSlotsCountUpgrade, filledDaysCountUpgrade });
+        safeLog("[POOL UPGRADE] totals", { totalSlots, replacedCount: assignedCount, unchangedCount, filledSlotsCountUpgrade, filledDaysCountUpgrade });
       }
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          replacedCount: assignedCount,
-          unchangedCount,
-          aiFallbackCount,
-          totalSlots,
-          assignedCount,
-          filledSlotsCount: filledSlotsCountUpgrade,
-          emptySlotsCount: emptySlotsCountUpgrade,
-          filledDaysCount: filledDaysCountUpgrade,
-          emptyDaysCount: emptyDaysCountUpgrade,
-          partial: partialUpgrade,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      const responsePayload: Record<string, unknown> = {
+        ok: true,
+        requestId,
+        partial: partialUpgrade,
+        totals: { filledSlots: filledSlotsCountUpgrade, emptySlots: emptySlotsCountUpgrade, filledDays: filledDaysCountUpgrade, emptyDays: emptyDaysCountUpgrade },
+        daySummary: daySummaryUpgrade,
+        replacedCount: assignedCount,
+        unchangedCount,
+        totalSlots,
+        assignedCount,
+        filledSlotsCount: filledSlotsCountUpgrade,
+        emptySlotsCount: emptySlotsCountUpgrade,
+        filledDaysCount: filledDaysCountUpgrade,
+        emptyDaysCount: emptyDaysCountUpgrade,
+      };
+      if (debugPlanUpgrade) {
+        responsePayload.diagnostics = diagnosticsUpgrade;
+        responsePayload.dayDebug = dayDebugUpgrade;
+        const firstEmptyIdx = daySummaryUpgrade.findIndex((d) => d.reason === "normalized_meals_empty");
+        if (firstEmptyIdx >= 0) {
+          const from = firstEmptyIdx * MEAL_KEYS.length;
+          const to = from + MEAL_KEYS.length;
+          responsePayload.firstEmptyDayDiagnostics = diagnosticsUpgrade.slice(from, to);
+          responsePayload.firstEmptyDayKey = daySummaryUpgrade[firstEmptyIdx].dayKey;
+          responsePayload.firstEmptyDayDebug = dayDebugUpgrade[firstEmptyIdx] ?? null;
+        }
+      }
+      return new Response(JSON.stringify(responsePayload), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (action === "start") {
@@ -2124,9 +2277,9 @@ serve(async (req) => {
       else weekQ = weekQ.eq("member_id", memberId);
       const { data: weekRows } = await weekQ;
       (weekRows ?? []).forEach((row: { planned_date?: string; meals?: Record<string, { recipe_id?: string; title?: string }> }) => {
-        const meals = row.meals ?? {};
+        const mealsNorm = normalizeMealsForWrite((row.meals ?? {}) as Record<string, MealSlot | null | undefined>);
         MEAL_KEYS.forEach((k) => {
-          const slot = meals[k];
+          const slot = mealsNorm[k];
           if (slot?.recipe_id) usedRecipeIds.push(slot.recipe_id);
           if (slot?.title) {
             usedTitleKeys.push(normalizeTitleKey(slot.title));
@@ -2142,9 +2295,9 @@ serve(async (req) => {
       const last4TitleKeysByMealType = await fetchTitleKeysByMealTypeFromPlans(supabase, userId, memberId, last4Keys);
       for (const k of MEAL_KEYS) usedTitleKeysByMealType[k] = new Set([...(usedTitleKeysByMealType[k] ?? []), ...(last4TitleKeysByMealType[k] ?? [])]);
       (weekRows ?? []).forEach((row: { planned_date?: string; meals?: Record<string, { recipe_id?: string; title?: string }> }) => {
-        const meals = row.meals ?? {};
+        const mealsNorm = normalizeMealsForWrite((row.meals ?? {}) as Record<string, MealSlot | null | undefined>);
         MEAL_KEYS.forEach((k) => {
-          const title = meals[k]?.title;
+          const title = mealsNorm[k]?.title;
           if (title) {
             usedTitleKeysByMealType[k].add(normalizeTitleKey(title));
             const cat = inferDishCategoryKey(title, null, null);
@@ -2229,9 +2382,9 @@ serve(async (req) => {
           .eq("planned_date", prevDayKey)
           .is("member_id", memberId)
           .maybeSingle();
-        const prevMeals = (prevDateRow.data as { meals?: Record<string, { title?: string }> } | null)?.meals ?? {};
+        const prevMealsRun = normalizeMealsForWrite(((prevDateRow.data as { meals?: Record<string, unknown> } | null)?.meals ?? {}) as Record<string, MealSlot | null | undefined>);
         for (const k of MEAL_KEYS) {
-          const pk = inferProteinKey(prevMeals[k]?.title, null);
+          const pk = inferProteinKey(prevMealsRun[k]?.title, null);
           if (pk && pk !== "veg") excludeProteinKeysFromPrevDay.push(pk);
         }
       }
@@ -2403,8 +2556,9 @@ serve(async (req) => {
         .eq("planned_date", dayKey)
         .is("member_id", memberId)
         .maybeSingle();
-      const currentMeals = (existingRow.data as { meals?: Record<string, { recipe_id?: string; title?: string; plan_source?: "pool" | "ai" }> } | null)?.meals ?? {};
-      const newMeals = { ...currentMeals };
+      const currentMealsRawRun = (existingRow.data as { meals?: Record<string, { recipe_id?: string; title?: string; plan_source?: "pool" | "ai" }> } | null)?.meals ?? {};
+      const currentMealsNormRun = normalizeMealsForWrite(currentMealsRawRun as Record<string, MealSlot | null | undefined>);
+      const newMeals = { ...currentMealsNormRun };
 
       for (const mealKey of MEAL_KEYS) {
         const fromPool = poolPicks[mealKey];
@@ -2562,10 +2716,10 @@ serve(async (req) => {
       }
 
       const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
-      if (upsertResult.error) {
+      if (!upsertResult.ok || upsertResult.error) {
         safeWarn("[JOB] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
       }
-      if (runDebug && upsertResult.mergedEmpty) {
+      if (runDebug && upsertResult.mergedKeys.length === 0) {
         safeWarn("[JOB] merged_empty_meals", { dayKey, memberId: memberId ?? "null" });
       }
       const filledThisDayRun = MEAL_KEYS.filter((k) => newMeals[k]?.recipe_id).length;
