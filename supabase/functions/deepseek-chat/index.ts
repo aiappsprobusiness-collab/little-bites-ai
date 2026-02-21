@@ -26,7 +26,117 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Лимит AI в день для free (синхрон с subscriptionRules в приложении). Paid/trial → null = без лимита. */
+/** Fail-safe: strip personal references from description/chef_advice/advice so recipe is reusable in pool. */
+function sanitizeRecipeText(text: string | null | undefined): string {
+  if (text == null || typeof text !== "string") return text ?? "";
+  const forbiddenPatterns = [
+    /your child/gi,
+    /your baby/gi,
+    /your toddler/gi,
+    /for your child/gi,
+    /for your baby/gi,
+    /for this child/gi,
+    /\d+\s*(month|months|year|years)\s*(old)?/gi,
+    /toddler/gi,
+    /baby/gi,
+    /\bchild\b/gi,
+    /for children/gi,
+    /для ребёнка/gi,
+    /для ребенка/gi,
+    /для малыша/gi,
+    /для детей/gi,
+    /\d+\s*(мес|месяц|месяцев|год|года|лет)\s*(\.|,|$)/gi,
+    /с аллергией\s+на/gi,
+    /аллергией на/gi,
+  ];
+  let result = text;
+  for (const pattern of forbiddenPatterns) {
+    result = result.replace(pattern, " ");
+  }
+  return result.replace(/\s+/g, " ").trim();
+}
+
+/** Fail-safe: strip meal/time mentions so description/chef_advice/advice are reusable for any meal tag. */
+function sanitizeMealMentions(text: string | null | undefined): string {
+  if (text == null || typeof text !== "string") return text ?? "";
+  const patterns = [
+    /breakfast/gi,
+    /lunch/gi,
+    /dinner/gi,
+    /snack/gi,
+    /morning/gi,
+    /evening/gi,
+    /на завтрак/gi,
+    /на обед/gi,
+    /на ужин/gi,
+    /на перекус/gi,
+    /для завтрака/gi,
+    /для перекуса/gi,
+    /для обеда/gi,
+    /для ужина/gi,
+  ];
+  let result = text;
+  for (const pattern of patterns) {
+    result = result.replace(pattern, " ");
+  }
+  return result.replace(/\s+/g, " ").trim();
+}
+
+/** Нормализация title для сравнения (anti-duplicate). Та же логика, что в pool/diag. */
+function normalizeTitleKey(title: string): string {
+  return (title ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Последние N titleKey из chat_history по (user_id + memberId или family) за 14 дней для anti-duplicate. */
+async function fetchRecentTitleKeys(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  memberId: string | null,
+  targetIsFamily: boolean
+): Promise<string[]> {
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 14);
+    const sinceIso = since.toISOString();
+    let q = supabase
+      .from("chat_history")
+      .select("recipe_id")
+      .eq("user_id", userId)
+      .not("recipe_id", "is", null)
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (targetIsFamily) {
+      q = q.is("child_id", null);
+    } else if (memberId) {
+      q = q.eq("child_id", memberId);
+    }
+    const { data: rows } = await q;
+    const recipeIds = (rows ?? []).map((r: { recipe_id?: string }) => r?.recipe_id).filter(Boolean) as string[];
+    if (recipeIds.length === 0) return [];
+    const { data: recipes } = await supabase.from("recipes").select("id, title").in("id", recipeIds);
+    const seen = new Set<string>();
+    const titleKeys: string[] = [];
+    for (const r of recipes ?? []) {
+      const t = (r as { title?: string }).title;
+      if (t && typeof t === "string") {
+        const key = normalizeTitleKey(t);
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          titleKeys.push(key);
+        }
+      }
+    }
+    return titleKeys.slice(0, 20);
+  } catch {
+    return [];
+  }
+}
 const FREE_AI_DAILY_LIMIT = 2;
 
 function getAiDailyLimitForStatus(isPremiumOrTrial: boolean): number | null {
@@ -133,7 +243,7 @@ function applyPromptTemplate(
   memberData: MemberData | null | undefined,
   targetIsFamily: boolean,
   allMembers: MemberData[] = [],
-  options?: { weekContext?: string; varietyRules?: string; userMessage?: string; generationContextBlock?: string; mealType?: string; maxCookingTime?: number }
+  options?: { weekContext?: string; varietyRules?: string; userMessage?: string; generationContextBlock?: string; mealType?: string; maxCookingTime?: number; servings?: number; recentTitleKeysLine?: string }
 ): string {
   // Семья: для ageMonths используем самого младшего члена; иначе — выбранный Member
   const youngestMember = targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : null;
@@ -174,6 +284,8 @@ function applyPromptTemplate(
   const generationContextBlock = options?.generationContextBlock?.trim() || "";
   const mealType = options?.mealType?.trim() || "";
   const maxCookingTime = options?.maxCookingTime != null && Number.isFinite(options.maxCookingTime) ? String(options.maxCookingTime) : "";
+  const servings = options?.servings != null && options.servings >= 1 ? String(options.servings) : "5";
+  const recentTitleKeysLine = options?.recentTitleKeysLine?.trim() || "";
 
   const ADULT_AGE_MONTHS = 336; // 28+ лет — взрослое меню
   let familyContext = `Профиль: ${name}`;
@@ -212,7 +324,9 @@ function applyPromptTemplate(
     .split("{{familyContext}}").join(familyContext)
     .split("{{userMessage}}").join(userMessage)
     .split("{{mealType}}").join(mealType)
-    .split("{{maxCookingTime}}").join(maxCookingTime);
+    .split("{{maxCookingTime}}").join(maxCookingTime)
+    .split("{{servings}}").join(servings)
+    .split("{{recentTitleKeysLine}}").join(recentTitleKeysLine);
 
   if (out.includes("{{")) {
     const replacers: [RegExp, string][] = [
@@ -232,6 +346,8 @@ function applyPromptTemplate(
       [/\{\{\s*userMessage\s*\}\}/g, userMessage],
       [/\{\{\s*mealType\s*\}\}/g, mealType],
       [/\{\{\s*maxCookingTime\s*\}\}/g, maxCookingTime],
+      [/\{\{\s*servings\s*\}\}/g, servings],
+      [/\{\{\s*recentTitleKeysLine\s*\}\}/g, recentTitleKeysLine],
     ];
     for (const [re, val] of replacers) out = out.replace(re, val);
     out = out.replace(/\{\{[^}]*\}\}/g, "не указано");
@@ -262,13 +378,17 @@ function getSystemPromptForType(
   generationContextBlock?: string,
   mealType?: string,
   maxCookingTime?: number,
-  varietyRules?: string
+  varietyRules?: string,
+  servings?: number,
+  recentTitleKeysLine?: string
 ): string {
   const genBlockOpt = generationContextBlock?.trim() ? { generationContextBlock: generationContextBlock.trim() } : undefined;
   const recipeOpts = {
     ...genBlockOpt,
     ...(mealType && { mealType: String(mealType).trim() }),
     ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime: Number(maxCookingTime) }),
+    servings: servings != null && servings >= 1 ? servings : 5,
+    recentTitleKeysLine: recentTitleKeysLine?.trim() ?? "",
   };
   if (type === "chat") {
     return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers, recipeOpts);
@@ -459,8 +579,10 @@ serve(async (req) => {
       extraSystemSuffix: reqExtraSystemSuffix,
       mealType: reqMealType,
       maxCookingTime: reqMaxCookingTime,
+      servings: reqServings,
       from_plan_replace: fromPlanReplace = false,
     } = body;
+    const servings = typeof reqServings === "number" && reqServings >= 1 && reqServings <= 20 ? reqServings : 5;
 
     const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
     const isRecipeRequestByType = recipeTypes.includes(type as (typeof recipeTypes)[number]);
@@ -634,10 +756,19 @@ serve(async (req) => {
       );
     }
 
+    let recentTitleKeys: string[] = [];
+    let recentTitleKeysLine = "";
+    if (isRecipeRequest && userId && supabase) {
+      recentTitleKeys = await fetchRecentTitleKeys(supabase, userId, memberId ?? null, targetIsFamily);
+      if (recentTitleKeys.length > 0) {
+        recentTitleKeysLine = "Не повторять блюда или близкие варианты: " + recentTitleKeys.slice(0, 20).join(", ") + ".";
+      }
+    }
+
     const promptUserMessage = (type === "sos_consultant" || type === "balance_check") ? userMessage : undefined;
     const cached = getCachedSystemPrompt(type, memberDataForPrompt, isPremiumUser);
     let systemPrompt =
-      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContextForPrompt, promptUserMessage, reqGenerationContextBlock, reqMealType, reqMaxCookingTime, varietyRulesForPrompt);
+      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContextForPrompt, promptUserMessage, reqGenerationContextBlock, reqMealType, reqMaxCookingTime, varietyRulesForPrompt, servings, recentTitleKeysLine);
 
     // Только если рецепт не запрашиваем — даём краткий ответ без рецепта (для soft теперь рецепт генерируем)
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft" && !isRecipeRequest) {
@@ -922,9 +1053,55 @@ serve(async (req) => {
       });
     }
 
+    if (responseRecipes.length > 0) {
+      const recipe = responseRecipes[0] as RecipeJson;
+      (recipe as Record<string, unknown>).description = sanitizeMealMentions(sanitizeRecipeText(recipe.description ?? ""));
+      (recipe as Record<string, unknown>).chefAdvice = sanitizeMealMentions(sanitizeRecipeText(recipe.chefAdvice ?? ""));
+      (recipe as Record<string, unknown>).advice = sanitizeMealMentions(sanitizeRecipeText(recipe.advice ?? ""));
+      safeLog(JSON.stringify({
+        tag: "RECIPE_SANITIZED",
+        requestId,
+        descriptionLength: (recipe.description as string)?.length,
+      }));
+      safeLog(JSON.stringify({ tag: "MEAL_MENTION_SANITIZED", requestId }));
+    }
+
+    if (responseRecipes.length > 0 && isRecipeRequest) {
+      const recipeForLog = responseRecipes[0] as RecipeJson;
+      const newTitleKey = normalizeTitleKey(recipeForLog.title ?? "");
+      const wasDuplicate = newTitleKey && recentTitleKeys.length > 0 && recentTitleKeys.includes(newTitleKey);
+      safeLog(JSON.stringify({
+        tag: "ANTI_DUPLICATE",
+        requestId,
+        scope: targetIsFamily ? "family" : "member",
+        recentTitleKeysCount: recentTitleKeys.length,
+        newTitleKey: newTitleKey || undefined,
+        wasDuplicate,
+        retried: false,
+      }));
+    }
+
     let savedRecipeId: string | null = null;
     if (responseRecipes.length > 0 && userId && supabase && !fromPlanReplace) {
       const validatedRecipe = responseRecipes[0] as RecipeJson;
+      const status = subscriptionStatus as string;
+      let chefAdviceToSave: string | null = validatedRecipe.chefAdvice ?? null;
+      let adviceToSave: string | null = validatedRecipe.advice ?? null;
+      if (status === "free") {
+        chefAdviceToSave = null;
+      } else if (status === "trial" || status === "premium") {
+        adviceToSave = null;
+      } else {
+        chefAdviceToSave = null;
+        adviceToSave = null;
+      }
+      safeLog(JSON.stringify({
+        tag: "ADVICE_GATE",
+        requestId,
+        subStatus: status,
+        savedAdvice: adviceToSave != null && adviceToSave.length > 0,
+        savedChefAdvice: chefAdviceToSave != null && chefAdviceToSave.length > 0,
+      }));
       try {
         const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
         const rawSteps = Array.isArray(validatedRecipe.steps) ? validatedRecipe.steps : [];
@@ -963,11 +1140,12 @@ serve(async (req) => {
           title: validatedRecipe.title ?? "Рецепт",
           description: validatedRecipe.description ?? null,
           cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
-          chef_advice: validatedRecipe.chefAdvice ?? null,
-          advice: validatedRecipe.advice ?? null,
+          chef_advice: chefAdviceToSave,
+          advice: adviceToSave,
           steps: stepsPayload,
           ingredients: ingredientsPayload,
           sourceTag: "chat",
+          servings: (validatedRecipe as { servings?: number }).servings ?? 5,
         });
         const { data: recipeId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
         if (rpcErr) throw rpcErr;

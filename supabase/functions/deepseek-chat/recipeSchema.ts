@@ -74,6 +74,7 @@ export const RecipeJsonSchema = z.object({
   advice: z.string().nullable().optional(),
   chefAdvice: z.string().max(300).nullable().optional(),
   mealType: z.enum(["breakfast", "lunch", "snack", "dinner"]).optional(),
+  servings: z.number().int().min(1).max(20).optional(),
 });
 
 export type RecipeJson = z.infer<typeof RecipeJsonSchema>;

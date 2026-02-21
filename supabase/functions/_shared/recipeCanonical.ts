@@ -83,6 +83,8 @@ export interface CanonicalizeRecipePayloadInput {
   steps: Array<{ instruction?: string; step_number?: number }>;
   ingredients: Array<Record<string, unknown> & { name?: string; amount?: string; display_text?: string }>;
   sourceTag?: SourceTag;
+  /** Portions (family-sized default 5). */
+  servings?: number | null;
 }
 
 /**
@@ -105,6 +107,7 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     steps: rawSteps,
     ingredients: rawIngredients,
     sourceTag: explicitSourceTag,
+    servings,
   } = input;
 
   const safeSource = ensurePoolSource(source);
@@ -163,5 +166,6 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     advice: advice ?? null,
     steps: stepsPayload,
     ingredients: ingredientsPayload,
+    servings: (servings != null && servings >= 1 && servings <= 99) ? servings : 5,
   };
 }

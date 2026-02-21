@@ -73,11 +73,74 @@ Return ONLY valid JSON. No markdown, no text before or after, no explanation, no
   "steps": string[] (max 7 short steps),
   "cookingTime": number,
   "mealType": "breakfast" | "lunch" | "dinner" | "snack",
+  "servings": number (always 5 for family-sized),
   "chefAdvice": string (max 300 chars, no age breakdown unless multiple members explicitly provided)
 }
 
+SERVINGS RULE: All ingredient quantities MUST be for SERVINGS=5 (family-sized). Avoid single-portion amounts for soups/stews: water 1.5–2.0 L typical, meat 400–600 g, etc. Return "servings": 5 in JSON.
+
 INGREDIENTS RULE: Every ingredient MUST include amount and unit. No bare names.
 Use: "г" or "мл" for grams/ml; "шт." for pieces; "ч.л." / "ст.л." for spoons. Example: "Молоко — 200 мл", "Яйцо — 2 шт."
+`;
+
+/** CRITICAL: description, chef_advice, advice must be generic — recipes go to shared pool and are shown to other users. */
+export const RECIPE_GENERIC_FIELDS_RULE = `
+CRITICAL RULE: description, chef_advice, and advice MUST be completely generic.
+
+DO NOT mention:
+- child / baby / toddler / children
+- age (months, years)
+- allergies
+- user / member name
+- preferences
+- "your child" / "your baby" / "for this child"
+- "для ребёнка" / "для малыша" / "для детей"
+
+These fields must describe ONLY the dish itself, not who it is for.
+
+BAD examples:
+❌ "This is great for a 2 year old"
+❌ "Perfect for children with milk allergy"
+❌ "Ideal for your child"
+❌ "Отлично подходит для ребёнка 2 лет"
+❌ "Для детей с аллергией на молоко используйте..."
+
+GOOD examples:
+✅ "Rich in iron and protein" / "Богато железом и белком"
+✅ "Easy to digest and gentle on the stomach" / "Легко усваивается"
+✅ "Helps support healthy growth" / "Поддерживает здоровый рост"
+✅ "Используйте свежие ингредиенты для лучшего вкуса"
+
+description, chef_advice, advice must be reusable for ANY user.
+`;
+
+/** CRITICAL: description, chef_advice, advice must NOT mention meal type — recipes can have multiple meal tags in pool. */
+export const RECIPE_MEAL_AGNOSTIC_RULE = `
+CRITICAL RULE: description, chef_advice, and advice MUST NOT mention any specific meal or time of day.
+
+DO NOT mention:
+- breakfast / lunch / dinner / snack
+- morning / evening
+- "perfect for breakfast" / "ideal for snack" / "great dinner option"
+- "на завтрак" / "на обед" / "на ужин" / "на перекус" / "для завтрака" / "для перекуса"
+
+These fields must describe ONLY:
+- nutrition
+- taste
+- texture
+- preparation tips
+
+They must be reusable for ANY meal type.
+
+BAD:
+❌ "Perfect for breakfast"
+❌ "Great snack option"
+❌ "Идеально на завтрак"
+
+GOOD:
+✅ "Provides steady energy" / "Даёт стабильную энергию"
+✅ "Easy to digest" / "Легко усваивается"
+✅ "Naturally sweet and gentle" / "Натурально сладкий, нежный вкус"
 `;
 
 /** Output rules for recipe: one member → no other family; no reasoning; no markdown; no extra text. */
@@ -133,12 +196,16 @@ ${SAFETY_RULES}
 Предпочтения: {{preferences}}
 Тип приёма пищи: {{mealType}}
 Макс. время готовки (мин): {{maxCookingTime}}
+Порций (servings): {{servings}}
+{{recentTitleKeysLine}}
 
 [ЗАПРЕЩЕНО В ТЕКСТЕ]
 Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
 
 [RECIPE TASK]
 ${RECIPE_STRICT_JSON_CONTRACT}
+${RECIPE_GENERIC_FIELDS_RULE}
+${RECIPE_MEAL_AGNOSTIC_RULE}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
@@ -171,12 +238,16 @@ ${SAFETY_RULES}
 Предпочтения: {{preferences}}
 Тип приёма пищи: {{mealType}}
 Макс. время готовки (мин): {{maxCookingTime}}
+Порций (servings): {{servings}}
+{{recentTitleKeysLine}}
 
 [ЗАПРЕЩЕНО В ТЕКСТЕ]
 Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
 
 [RECIPE TASK]
 ${RECIPE_STRICT_JSON_CONTRACT}
+${RECIPE_GENERIC_FIELDS_RULE}
+${RECIPE_MEAL_AGNOSTIC_RULE}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
