@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { getRollingStartKey, getRollingDayKeys } from "@/utils/dateRange";
 import { formatLocalDate } from "@/utils/dateUtils";
-import { isDebugPlanEnabled } from "@/utils/debugPlan";
+import { isDebugPlanEnabled, isGeneratePlanDebugEnabled } from "@/utils/debugPlan";
+import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
 
 export type PlanGenerationType = "day" | "week";
 
@@ -31,6 +32,8 @@ const POLL_SLOW_AFTER_MS = 60_000;
 const LONG_RUN_WARN_DAY_MS = 3 * 60 * 1000;
 const LONG_RUN_WARN_WEEK_MS = 6 * 60 * 1000;
 const JOB_STORAGE_PREFIX = "plan_job:";
+const MAX_CONTINUE_ATTEMPTS = 5;
+const CONTINUE_BACKOFF_MS = 400;
 
 function getPollInterval(elapsedMs: number, type: "day" | "week"): number {
   if (elapsedMs < POLL_FAST_UNTIL_MS) return POLL_FAST_MS;
@@ -114,6 +117,9 @@ export function usePlanGenerationJob(
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const enabled = options?.enabled !== false && !!user?.id;
+  const continueAttemptsRef = useRef(0);
+  const lastStartParamsRef = useRef<StartPlanGenerationParams | null>(null);
+  const lastPartialKeyRef = useRef<string>("");
 
   const {
     data: job,
@@ -146,10 +152,11 @@ export function usePlanGenerationJob(
   const runPoolUpgrade = useCallback(
     async (params: StartPlanGenerationParams): Promise<PoolUpgradeResult> => {
       if (!user?.id) throw new Error("Необходима авторизация");
+      if (isGeneratePlanDebugEnabled() && params.member_id == null) {
+        console.log("[generate-plan] member_id=null (профиль «Семья»)", { type: params.type });
+      }
       const token = await getValidAccessToken();
-      const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
-      const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
-      const body = {
+      const body: Record<string, unknown> = {
         mode: "upgrade",
         type: params.type,
         member_id: params.member_id,
@@ -165,7 +172,14 @@ export function usePlanGenerationJob(
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), POOL_UPGRADE_TIMEOUT_MS);
       try {
-        const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: controller.signal });
+        const res = await invokeGeneratePlan(SUPABASE_URL, token, body, {
+          label: "runPoolUpgrade",
+          signal: controller.signal,
+          clientDebug: {
+            selectedMemberId: params.member_id,
+            weekStartDayKey: params.type === "week" ? (params.start_key ?? getRollingStartKey()) : undefined,
+          },
+        });
         clearTimeout(timeoutId);
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -184,14 +198,74 @@ export function usePlanGenerationJob(
     [user?.id, getValidAccessToken]
   );
 
-  const startGeneration = useCallback(
-    async (params: StartPlanGenerationParams) => {
-      if (!user?.id) return;
+  const continueGeneration = useCallback(
+    async (jobRow: PlanGenerationJobRow) => {
+      if (!user?.id || jobRow.type !== "week") return;
+      const params = lastStartParamsRef.current;
+      if (!params) return;
+      const attempt = continueAttemptsRef.current;
       const token = await getValidAccessToken();
-      const url = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/generate-plan`;
-      const headers = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+      const runBody: Record<string, unknown> = {
+        action: "run",
+        job_id: jobRow.id,
+        type: "week" as const,
+        member_id: params.member_id,
+        member_data: params.member_data,
+        start_key: params.start_key ?? getRollingStartKey(),
+        continueFromDayIndex: jobRow.progress_done ?? 0,
+        ...(params.debug_pool && { debug_pool: true }),
+        ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
+      };
+      const res = await invokeGeneratePlan(SUPABASE_URL, token, runBody, {
+        label: `continue (attempt ${attempt})`,
+        clientDebug: {
+          selectedMemberId: params.member_id,
+          jobId: jobRow.id,
+          continueFromDayIndex: jobRow.progress_done ?? 0,
+          attempt,
+        },
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { filledSlotsCount?: number; emptySlotsCount?: number; partial?: boolean; reason?: string };
+        if (isGeneratePlanDebugEnabled()) {
+          console.log(
+            `[generate-plan] autodrive attempt ${attempt}: filledSlotsCount=${json.filledSlotsCount ?? "?"} emptySlotsCount=${json.emptySlotsCount ?? "?"} partial=${json.partial ?? "?"} reason=${json.reason ?? "-"}`
+          );
+        }
+        refetchJob();
+      }
+    },
+    [user?.id, getValidAccessToken, refetchJob]
+  );
 
-      const startBody = {
+  useEffect(() => {
+    const j = job;
+    if (!j || j.status !== "done" || j.type !== "week") return;
+    if (j.error_text !== "partial:time_budget") return;
+    if (continueAttemptsRef.current >= MAX_CONTINUE_ATTEMPTS) return;
+    const partialKey = `${j.id}-${j.progress_done ?? 0}`;
+    if (lastPartialKeyRef.current === partialKey) return;
+    lastPartialKeyRef.current = partialKey;
+    continueAttemptsRef.current += 1;
+    const t = setTimeout(() => {
+      continueGeneration(j).catch(() => {});
+    }, CONTINUE_BACKOFF_MS);
+    return () => clearTimeout(t);
+  }, [job?.id, job?.status, job?.error_text, job?.progress_done, job?.type, continueGeneration]);
+
+  const startGeneration = useCallback(
+    async (params: StartPlanGenerationParams): Promise<void | { blocked: true; reason: string }> => {
+      if (!user?.id) return;
+      if (isGeneratePlanDebugEnabled() && params.member_id == null) {
+        console.log("[generate-plan] member_id=null (профиль «Семья»)", { type: params.type });
+      }
+      continueAttemptsRef.current = 0;
+      lastPartialKeyRef.current = "";
+      lastStartParamsRef.current = params;
+      const token = await getValidAccessToken();
+      const weekStartDayKey = params.type === "week" ? (params.start_key ?? getRollingStartKey()) : undefined;
+
+      const startBody: Record<string, unknown> = {
         action: "start",
         type: params.type,
         member_id: params.member_id,
@@ -200,7 +274,10 @@ export function usePlanGenerationJob(
         ...(params.type === "week" && { start_key: params.start_key ?? getRollingStartKey() }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
       };
-      const startRes = await fetch(url, { method: "POST", headers, body: JSON.stringify(startBody) });
+      const startRes = await invokeGeneratePlan(SUPABASE_URL, token, startBody, {
+        label: "start",
+        clientDebug: { selectedMemberId: params.member_id, type: params.type, weekStartDayKey },
+      });
       if (!startRes.ok) {
         const err = await startRes.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error ?? `Ошибка: ${startRes.status}`);
@@ -213,7 +290,7 @@ export function usePlanGenerationJob(
 
       const startKey = params.type === "week" ? (params.start_key ?? getRollingStartKey()) : params.day_key ?? "";
       if (user?.id && startKey) setStoredJobId(user.id, params.member_id, startKey, jobId);
-      const runBody = {
+      const runBody: Record<string, unknown> = {
         action: "run",
         job_id: jobId,
         type: params.type,
@@ -224,7 +301,10 @@ export function usePlanGenerationJob(
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
       };
-      fetch(url, { method: "POST", headers, body: JSON.stringify(runBody) }).catch(() => {});
+      invokeGeneratePlan(SUPABASE_URL, token, runBody, {
+        label: "run",
+        clientDebug: { selectedMemberId: params.member_id, jobId, weekStartDayKey },
+      }).catch(() => {});
     },
     [user?.id, getValidAccessToken, refetchJob]
   );
@@ -253,6 +333,7 @@ export function usePlanGenerationJob(
   const progressDone = job?.progress_done ?? 0;
   const progressTotal = job?.progress_total ?? 0;
   const errorText = job?.status === "error" ? (job.error_text ?? "Ошибка генерации") : null;
+  const isPartialTimeBudget = job?.status === "done" && job?.error_text === "partial:time_budget";
 
   return {
     job,
@@ -261,6 +342,7 @@ export function usePlanGenerationJob(
     progressDone,
     progressTotal,
     errorText,
+    isPartialTimeBudget,
     startGeneration,
     runPoolUpgrade,
     cancelJob,

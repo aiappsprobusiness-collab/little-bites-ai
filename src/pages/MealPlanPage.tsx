@@ -219,6 +219,7 @@ export default function MealPlanPage() {
     progressDone: planProgressDone,
     progressTotal: planProgressTotal,
     errorText: planErrorText,
+    isPartialTimeBudget: isPlanPartialTimeBudget,
     startGeneration: startPlanGeneration,
     runPoolUpgrade,
     cancelJob: cancelPlanJob,
@@ -226,7 +227,7 @@ export default function MealPlanPage() {
   } = usePlanGenerationJob(memberIdForPlan, planGenType);
 
   const [poolUpgradeLoading, setPoolUpgradeLoading] = useState(false);
-  const isAnyGenerating = isPlanGenerating || poolUpgradeLoading;
+  const isAnyGenerating = isPlanGenerating || poolUpgradeLoading || isPlanPartialTimeBudget;
 
   useEffect(() => {
     setPoolUpgradeLoading(false);
@@ -287,9 +288,15 @@ export default function MealPlanPage() {
     queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
     if (planJobNotifiedRef.current === planJob.id) return;
     const wasRunning = planJobWasRunningRef.current === planJob.id;
-    planJobNotifiedRef.current = planJob.id;
+    if (planJob.status === "done" && planJob.error_text === "partial:time_budget") {
+      /* Не помечаем как показанный — после автопродолжения покажем тост "План готов". */
+    } else {
+      planJobNotifiedRef.current = planJob.id;
+    }
     if (planJob.status === "done" && wasRunning) {
-      if (planJob.error_text?.startsWith("partial:")) {
+      if (planJob.error_text === "partial:time_budget") {
+        /* Автопродолжение по nextCursor — тост не показываем, в UI уже "Догенерируем план…". */
+      } else if (planJob.error_text?.startsWith("partial:")) {
         const filled = (planJob.progress_done ?? 0) * 4;
         const total = (planJob.progress_total ?? (planGenType === "week" ? 7 : 1)) * 4;
         toast({ description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
@@ -683,7 +690,7 @@ export default function MealPlanPage() {
                           setDebugPlanEnabled(on);
                         }}
                       >
-                        Debug план
+                        Debug план (консоль: payload/response generate-plan)
                       </DropdownMenuCheckboxItem>
                     )}
                   </DropdownMenuContent>
@@ -716,7 +723,9 @@ export default function MealPlanPage() {
                     }
                   } catch (e: unknown) {
                     const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
-                    if (msg.includes("слишком много времени")) {
+                    if (msg === "member_id_required") {
+                      toast({ description: "Выберите профиль ребёнка вверху" });
+                    } else if (msg.includes("слишком много времени")) {
                       toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
                     } else {
                       toast({ variant: "destructive", title: "Ошибка", description: msg });
@@ -780,7 +789,9 @@ export default function MealPlanPage() {
                     }
                   } catch (e: unknown) {
                     const msg = e instanceof Error ? e.message : "Не удалось заполнить неделю";
-                    if (msg.includes("слишком много времени")) {
+                    if (msg === "member_id_required") {
+                      toast({ description: "Выберите профиль ребёнка вверху" });
+                    } else if (msg.includes("слишком много времени")) {
                       toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
                     } else {
                       toast({ variant: "destructive", title: "Ошибка", description: msg });
@@ -830,9 +841,13 @@ export default function MealPlanPage() {
               <p className="text-typo-caption text-amber-700 font-medium">
                 {poolUpgradeLoading
                   ? "Подбираем из базы…"
-                  : planProgressTotal > 0
-                    ? `Генерируем… ${planProgressDone}/${planProgressTotal}`
-                    : "Генерируем…"}
+                  : isPlanPartialTimeBudget
+                    ? planProgressTotal > 0
+                      ? `Догенерируем план… ${planProgressDone}/${planProgressTotal}`
+                      : "Догенерируем план…"
+                    : planProgressTotal > 0
+                      ? `Генерируем… ${planProgressDone}/${planProgressTotal}`
+                      : "Генерируем…"}
               </p>
               {isPlanGenerating && (
                 <button
@@ -1202,19 +1217,21 @@ export default function MealPlanPage() {
                           : `Подобрано: ${filled} из ${total}`;
                         toast({ title: "Подобрать рецепты", description: desc });
                       }
-                    } catch (e: unknown) {
-                      const msg = e instanceof Error ? e.message : "Не удалось подобрать рецепты";
-                      if (msg.includes("слишком много времени")) {
-                        toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
-                      } else {
-                        toast({ variant: "destructive", title: "Ошибка", description: msg });
-                      }
-                    } finally {
-                      setPoolUpgradeLoading(false);
+                  } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : "Не удалось подобрать рецепты";
+                    if (msg === "member_id_required") {
+                      toast({ description: "Выберите профиль ребёнка вверху" });
+                    } else if (msg.includes("слишком много времени")) {
+                      toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                    } else {
+                      toast({ variant: "destructive", title: "Ошибка", description: msg });
                     }
-                  }}
-                >
-                  Заполнить день
+                  } finally {
+                    setPoolUpgradeLoading(false);
+                  }
+                }}
+              >
+                Заполнить день
                 </Button>
               </div>
             )}

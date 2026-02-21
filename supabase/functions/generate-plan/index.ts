@@ -455,6 +455,12 @@ function inferDishCategoryKey(
 }
 
 const MAX_PORRIDGE_PER_WEEK_BREAKFAST = 3;
+/** Минимальный размер пула для применения category_streak; при меньшем пуле гард не включаем. */
+const MIN_FOR_STREAK = 8;
+/** То же для логирования: quality gate (category_streak) только при candidates >= это значение. */
+const MIN_QUALITY_CANDIDATES = 8;
+/** Бюджет времени на один run (мс); при превышении возвращаем partial + nextCursor. */
+const RUN_BUDGET_MS = 23000;
 
 const FETCH_TIMEOUT_MS = 28_000;
 const FETCH_RETRY_BACKOFF_MS = 400;
@@ -1745,30 +1751,46 @@ serve(async (req) => {
           );
           let picked: { id: string; title: string; categoryKey?: string } | null = null;
           let qualitySkipReason: string | undefined;
-          const hadCandidates = pickedRawUp != null && ("topCandidates" in pickedRawUp ? (pickedRawUp.topCandidates?.length ?? 0) > 0 : "id" in pickedRawUp);
-          const finalCandidatesCount = pickedRawUp && "topCandidates" in pickedRawUp ? (pickedRawUp.topCandidates?.length ?? 0) : pickedRawUp && "id" in pickedRawUp ? 1 : 0;
+          const beforeQualityGuardCountUp =
+            pickedRawUp && "topCandidates" in pickedRawUp
+              ? pickedRawUp.topCandidates.length
+              : pickedRawUp && "id" in pickedRawUp
+                ? 1
+                : 0;
+          const hadCandidates = pickedRawUp != null && beforeQualityGuardCountUp > 0;
           if (pickedRawUp && "topCandidates" in pickedRawUp) {
-            for (const c of pickedRawUp.topCandidates) {
+            const passProteinPorridgeUp = pickedRawUp.topCandidates.filter((c) => {
               if (excludeProteinKeysForSlot.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeysForSlot.includes(c.proteinKey)) {
                 qualitySkipReason = "protein_streak";
-                continue;
+                return false;
               }
               if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCountUpgrade >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) {
                 qualitySkipReason = "porridge_cap";
-                continue;
+                return false;
               }
-              if (lastCategoryByMealTypeUpgrade[mealKey] === c.categoryKey) {
-                qualitySkipReason = "category_streak";
-                continue;
-              }
-              picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
-              break;
+              return true;
+            });
+            const useStreakGuardUp = passProteinPorridgeUp.length >= MIN_QUALITY_CANDIDATES;
+            const afterStreakUp = useStreakGuardUp
+              ? passProteinPorridgeUp.filter((c) => {
+                  if (lastCategoryByMealTypeUpgrade[mealKey] === c.categoryKey) {
+                    qualitySkipReason = "category_streak";
+                    return false;
+                  }
+                  return true;
+                })
+              : passProteinPorridgeUp;
+            if (afterStreakUp.length > 0) {
+              const chosen = afterStreakUp[0];
+              picked = { id: chosen.id, title: chosen.title, categoryKey: chosen.categoryKey };
+            } else if (passProteinPorridgeUp.length > 0) {
+              const fallbackChoice = passProteinPorridgeUp[0];
+              picked = { id: fallbackChoice.id, title: fallbackChoice.title, categoryKey: fallbackChoice.categoryKey };
+              safeWarn("[POOL QUALITY] streaky variant selected (upgrade fallback)", { requestId, dayKey, mealKey, categoryKey: fallbackChoice.categoryKey });
+              if (debugPlanUpgrade) safeLog("[POOL QUALITY] fallback from category_streak (upgrade)", { requestId, dayKey, mealKey });
             }
           } else if (pickedRawUp && "id" in pickedRawUp) {
             picked = { id: pickedRawUp.id, title: pickedRawUp.title };
-          }
-          if (!picked && hadCandidates && qualitySkipReason && debugPlanUpgrade) {
-            safeWarn("[POOL QUALITY SKIP]", { requestId, dayKey, mealKey, reason: qualitySkipReason, finalCandidatesCount });
           }
           if (!picked && hadCandidates && (excludeProteinKeysForSlot.length > 0 || excludedMainForSlot.length > 0)) {
             pickedRawUp = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, Array.from(effectiveExcludeTitleKeysUpgrade), 60, {
@@ -1782,11 +1804,20 @@ serve(async (req) => {
               preloadedCandidates: poolCandidates,
             });
             if (pickedRawUp && "topCandidates" in pickedRawUp) {
-              for (const c of pickedRawUp.topCandidates) {
-                if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCountUpgrade >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) continue;
-                if (lastCategoryByMealTypeUpgrade[mealKey] === c.categoryKey) continue;
-                picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
-                break;
+              const passProteinPorridgeFallbackUp = pickedRawUp.topCandidates.filter((c) => {
+                if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCountUpgrade >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) return false;
+                return true;
+              });
+              const useStreakFallbackUp = passProteinPorridgeFallbackUp.length >= MIN_QUALITY_CANDIDATES;
+              const afterStreakFallbackUp = useStreakFallbackUp
+                ? passProteinPorridgeFallbackUp.filter((c) => lastCategoryByMealTypeUpgrade[mealKey] !== c.categoryKey)
+                : passProteinPorridgeFallbackUp;
+              if (afterStreakFallbackUp.length > 0) {
+                const chosen = afterStreakFallbackUp[0];
+                picked = { id: chosen.id, title: chosen.title, categoryKey: chosen.categoryKey };
+              } else if (passProteinPorridgeFallbackUp.length > 0) {
+                const fallbackChoice = passProteinPorridgeFallbackUp[0];
+                picked = { id: fallbackChoice.id, title: fallbackChoice.title, categoryKey: fallbackChoice.categoryKey };
               }
             } else if (pickedRawUp && "id" in pickedRawUp) {
               picked = { id: pickedRawUp.id, title: pickedRawUp.title };
@@ -2059,7 +2090,7 @@ serve(async (req) => {
     }
     const { data: runJob, error: runJobErr } = await supabase
       .from("plan_generation_jobs")
-      .select("id, user_id, status")
+      .select("id, user_id, status, error_text")
       .eq("id", runJobId)
       .single();
     if (runJobErr || !runJob || runJob.user_id !== userId) {
@@ -2068,11 +2099,19 @@ serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (runJob.status !== "running") {
+    const isContinueCursor = typeof body.continueFromDayIndex === "number" || (body.continueCursor && typeof (body.continueCursor as { dayIndex?: number }).dayIndex === "number");
+    const isPartialResumable = runJob.status === "done" && (runJob as { error_text?: string }).error_text === "partial:time_budget";
+    if (runJob.status !== "running" && !(isPartialResumable && isContinueCursor)) {
       return new Response(
         JSON.stringify({ job_id: runJobId, status: runJob.status }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+    if (isPartialResumable && isContinueCursor) {
+      await supabase
+        .from("plan_generation_jobs")
+        .update({ status: "running", error_text: null, updated_at: new Date().toISOString() })
+        .eq("id", jobId);
     }
 
     const jobId = runJobId;
@@ -2175,13 +2214,18 @@ serve(async (req) => {
 
     const poolCandidatesRun = await fetchPoolCandidates(supabase, userId, memberId, 120);
     const jobStartedAt = Date.now();
-    const BUDGET_MS_RUN = 25000;
     const runDebug = body.debug_pool ?? (typeof Deno !== "undefined" && Deno.env?.get?.("GENERATE_PLAN_DEBUG") === "1");
     const runDebugPlan = body.debug_plan === true || body.debug_plan === "1" || (typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_PLAN") === "1");
     let filledSlotsCountRun = 0;
+    const continueCursor = body.continueCursor as { dayIndex?: number; mealIndex?: number } | undefined;
+    const startDayIndex = Math.max(0, Math.min(
+      typeof body.continueFromDayIndex === "number" ? body.continueFromDayIndex : continueCursor?.dayIndex ?? 0,
+      dayKeys.length
+    ));
 
-    for (let i = 0; i < dayKeys.length; i++) {
-      if (Date.now() - jobStartedAt > BUDGET_MS_RUN) {
+    for (let i = startDayIndex; i < dayKeys.length; i++) {
+      const remainingBudgetMs = RUN_BUDGET_MS - (Date.now() - jobStartedAt);
+      if (remainingBudgetMs < 2000) {
         const totalSlotsRun = dayKeys.length * MEAL_KEYS.length;
         const emptySlotsRun = totalSlotsRun - filledSlotsCountRun;
         const filledDaysRun = Math.floor(filledSlotsCountRun / MEAL_KEYS.length);
@@ -2197,7 +2241,7 @@ serve(async (req) => {
             progress_total: dayKeys.length,
           })
           .eq("id", jobId);
-        if (runDebug) safeLog("[JOB] time_budget partial", { filledSlotsCountRun, totalSlotsRun, filledDaysRun });
+        if (runDebug) safeLog("[JOB] time_budget partial", { filledSlotsCountRun, totalSlotsRun, filledDaysRun, nextDayIndex: i });
         return new Response(
           JSON.stringify({
             ok: true,
@@ -2210,6 +2254,9 @@ serve(async (req) => {
             emptySlotsCount: emptySlotsRun,
             filledDaysCount: filledDaysRun,
             emptyDaysCount: emptyDaysRun,
+            nextCursor: { dayIndex: i, mealIndex: 0 },
+            nextDayIndex: i,
+            nextMealIndex: 0,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -2291,33 +2338,63 @@ serve(async (req) => {
             weekStats: debugPool ? weekStats : undefined,
             returnTopCandidates: useRerank ? 10 : undefined,
             preloadedCandidates: poolCandidatesRun,
+            logDiag: runDebugPlan ? { requestId: jobId ?? "run", dayKey, mealKey, usedTitleKeysByMealTypeSize: usedTitleKeysByMealType[mealKey]?.size ?? 0 } : undefined,
           }
         );
         let picked: { id: string; title: string; categoryKey?: string } | null = null;
         let qualityGateReason: string | undefined;
-        const hadCandidatesRun = pickedRaw != null && ("topCandidates" in pickedRaw ? (pickedRaw.topCandidates?.length ?? 0) > 0 : "id" in pickedRaw);
-        const finalCandidatesCountRun = pickedRaw && "topCandidates" in pickedRaw ? (pickedRaw.topCandidates?.length ?? 0) : pickedRaw && "id" in pickedRaw ? 1 : 0;
+        let usedStreakGuard = false;
+        let fellBackFromStreak = false;
+        let afterStreakCountDiag = 0;
+        const beforeQualityGuardCount =
+          pickedRaw && "topCandidates" in pickedRaw
+            ? pickedRaw.topCandidates.length
+            : pickedRaw && "id" in pickedRaw
+              ? 1
+              : 0;
+        const hadCandidatesRun = pickedRaw != null && beforeQualityGuardCount > 0;
+
         if (pickedRaw && "topCandidates" in pickedRaw) {
           const { topCandidates } = pickedRaw;
-          for (const c of topCandidates) {
+          const candidatesBeforeQualityGuard = topCandidates;
+          const passProteinPorridge = candidatesBeforeQualityGuard.filter((c) => {
             if (excludeProteinKeysForSlotRun.length > 0 && c.proteinKey && c.proteinKey !== "veg" && excludeProteinKeysForSlotRun.includes(c.proteinKey)) {
               qualityGateReason = "protein_streak";
-              continue;
+              return false;
             }
             if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCount >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) {
               qualityGateReason = "porridge_cap";
-              continue;
+              return false;
             }
-            if (lastCategoryByMealType[mealKey] === c.categoryKey) {
-              qualityGateReason = "category_streak";
-              continue;
-            }
-            picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
-            break;
+            return true;
+          });
+          const useStreakGuard = passProteinPorridge.length >= MIN_QUALITY_CANDIDATES;
+          usedStreakGuard = useStreakGuard;
+          const afterStreak = useStreakGuard
+            ? passProteinPorridge.filter((c) => {
+                if (lastCategoryByMealType[mealKey] === c.categoryKey) {
+                  qualityGateReason = "category_streak";
+                  return false;
+                }
+                return true;
+              })
+            : passProteinPorridge;
+          afterStreakCountDiag = afterStreak.length;
+
+          if (afterStreakCountDiag > 0) {
+            const chosen = afterStreak[0];
+            picked = { id: chosen.id, title: chosen.title, categoryKey: chosen.categoryKey };
+          } else if (passProteinPorridge.length > 0) {
+            fellBackFromStreak = useStreakGuard;
+            const fallbackChoice = passProteinPorridge[0];
+            picked = { id: fallbackChoice.id, title: fallbackChoice.title, categoryKey: fallbackChoice.categoryKey };
+            safeWarn("[POOL QUALITY] streaky variant selected (fallback)", { dayKey, mealKey, categoryKey: fallbackChoice.categoryKey });
+            if (runDebugPlan) safeLog("[POOL QUALITY] fallback from category_streak", { dayKey, mealKey, beforeQualityGuardCount, afterStreakCount: 0 });
           }
         } else if (pickedRaw && "id" in pickedRaw) {
           picked = { id: pickedRaw.id, title: pickedRaw.title };
         }
+
         if (!picked && hadCandidatesRun && (excludeProteinKeysForSlotRun.length > 0 || excludedMainForSlotRun.length > 0)) {
           pickedRaw = await pickFromPool(supabase, userId, memberId, mealKey, memberDataPool, usedRecipeIds, Array.from(effectiveExcludeTitleKeysRun), 60, {
             excludeProteinKeys: [],
@@ -2330,31 +2407,95 @@ serve(async (req) => {
             weekStats: debugPool ? weekStats : undefined,
             returnTopCandidates: useRerank ? 10 : undefined,
             preloadedCandidates: poolCandidatesRun,
+            logDiag: runDebugPlan ? { requestId: jobId ?? "run", dayKey, mealKey, usedTitleKeysByMealTypeSize: usedTitleKeysByMealType[mealKey]?.size ?? 0 } : undefined,
           });
           if (pickedRaw && "topCandidates" in pickedRaw) {
-            for (const c of pickedRaw.topCandidates) {
-              if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCount >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) continue;
-              if (lastCategoryByMealType[mealKey] === c.categoryKey) continue;
-              picked = { id: c.id, title: c.title, categoryKey: c.categoryKey };
-              break;
+            const passProteinPorridgeFallback = pickedRaw.topCandidates.filter((c) => {
+              if (mealKey === "breakfast" && c.categoryKey === "porridge" && breakfastPorridgeCount >= MAX_PORRIDGE_PER_WEEK_BREAKFAST) return false;
+              return true;
+            });
+            const useStreakFallback = passProteinPorridgeFallback.length >= MIN_QUALITY_CANDIDATES;
+            const afterStreakFallback = useStreakFallback
+              ? passProteinPorridgeFallback.filter((c) => lastCategoryByMealType[mealKey] !== c.categoryKey)
+              : passProteinPorridgeFallback;
+            if (afterStreakFallback.length > 0) {
+              const chosen = afterStreakFallback[0];
+              picked = { id: chosen.id, title: chosen.title, categoryKey: chosen.categoryKey };
+            } else if (passProteinPorridgeFallback.length > 0) {
+              const fallbackChoice = passProteinPorridgeFallback[0];
+              picked = { id: fallbackChoice.id, title: fallbackChoice.title, categoryKey: fallbackChoice.categoryKey };
+              fellBackFromStreak = true;
             }
           } else if (pickedRaw && "id" in pickedRaw) {
             picked = { id: pickedRaw.id, title: pickedRaw.title };
           }
         }
-        if (!picked && hadCandidatesRun && qualityGateReason && runDebugPlan) {
-          safeWarn("[POOL QUALITY SKIP]", { dayKey, mealKey, reason: qualityGateReason, finalCandidatesCount: finalCandidatesCountRun });
+
+        let pickedFromRelaxed = false;
+        if (!picked && (pickedRaw != null || poolCandidatesRun.length > 0)) {
+          const relaxedTitleKeys =
+            (effectiveExcludeTitleKeysRun.size >= 3 ? Array.from(effectiveExcludeTitleKeysRun) : []) as string[];
+          const pickedRawRelaxed = await pickFromPool(
+            supabase,
+            userId,
+            memberId,
+            mealKey,
+            memberDataPool,
+            usedRecipeIds,
+            relaxedTitleKeys,
+            60,
+            {
+              excludeProteinKeys: [],
+              proteinKeyCounts,
+              excludedMainIngredients: [],
+              debugPool,
+              adaptiveParams,
+              weekProgress: { filled: filledSlotsSoFar, total: totalSlotsForWeek },
+              returnTopCandidates: useRerank ? 10 : 1,
+              preloadedCandidates: poolCandidatesRun,
+            }
+          );
+          if (pickedRawRelaxed && "topCandidates" in pickedRawRelaxed && pickedRawRelaxed.topCandidates.length > 0) {
+            const first = pickedRawRelaxed.topCandidates[0];
+            picked = { id: first.id, title: first.title, categoryKey: first.categoryKey };
+            pickedFromRelaxed = true;
+            if (runDebug) safeLog("[POOL_PICK_RELAXED]", { dayKey, mealKey, reason: "strict_no_pick", candidateCount: pickedRawRelaxed.topCandidates.length });
+          } else if (pickedRawRelaxed && "id" in pickedRawRelaxed) {
+            picked = { id: pickedRawRelaxed.id, title: pickedRawRelaxed.title };
+            pickedFromRelaxed = true;
+            if (runDebug) safeLog("[POOL_PICK_RELAXED]", { dayKey, mealKey, reason: "strict_no_pick_single" });
+          }
         }
-        const qualityGateTriggered = !!pickedRaw && "topCandidates" in pickedRaw && !picked && (pickedRaw.topCandidates?.length ?? 0) > 0;
+
+        if (picked && runDebug && !pickedFromRelaxed) {
+          safeLog("[POOL_PICK_STRICT]", { dayKey, mealKey });
+        }
+        const qualityGateTriggered = !!pickedRaw && "topCandidates" in pickedRaw && !picked && beforeQualityGuardCount > 0;
         poolPicks[mealKey] = picked ? { id: picked.id, title: picked.title } : null;
-        if (debugPool && Object.keys(slotStats).length > 0) {
+        const emptyRejectReason =
+          !picked && hadCandidatesRun
+            ? qualityGateReason ?? "quality_gate"
+            : !picked && pickedRaw == null
+              ? "no_candidates"
+              : !picked
+                ? "pool_exhausted"
+                : undefined;
+        if (!picked && runDebug) {
+          safeLog("[JOB] slot empty after strict and relaxed", { dayKey, mealKey, rejectReason: emptyRejectReason ?? "no_candidates", hadCandidatesRun });
+        }
+        if (debugPool) {
           slotDiagnostics.push({
             ...slotStats,
             wasRecoveredFromTitle: slotStats.mealTypeRecoveredFromTitle,
+            beforeQualityGuardCount,
+            afterStreakCount: afterStreakCountDiag,
+            usedStreakGuard,
+            fellBackFromStreak,
             qualityGateTriggered: qualityGateTriggered || undefined,
             qualityGateReason: qualityGateReason ?? undefined,
             breakfastPorridgeCount,
             usedCategoriesByMealType: Object.fromEntries(Object.entries(usedCategoriesByMealType).map(([k, s]) => [k, s.size])),
+            ...(emptyRejectReason ? { result: "empty" as const, rejectReason: emptyRejectReason } : {}),
           });
         }
         if (picked) {
@@ -2561,7 +2702,7 @@ serve(async (req) => {
         safeLog("[PLAN QUALITY] slotSummary (last day)", { dayKey, slotSummary });
       }
 
-      const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+      const upsertResult = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals, { debugPlan: runDebug });
       if (upsertResult.error) {
         safeWarn("[JOB] meal_plans_v2 upsert failed", dayKey, upsertResult.error);
       }
