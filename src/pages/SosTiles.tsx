@@ -112,8 +112,8 @@ export default function SosTiles() {
   };
 
   return (
-    <MobileLayout showNav>
-      <div className="px-4 pb-6 pt-2 bg-background min-h-full">
+    <MobileLayout showNav title="Помощь маме">
+      <div className="px-4 pb-6 pt-4 bg-background min-h-full">
         {members.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-3 mb-2">
             Добавьте ребёнка в профиле, чтобы получать рекомендации по темам.
@@ -121,23 +121,23 @@ export default function SosTiles() {
         )}
         <SosHero />
 
-        <div className="mt-8">
+        <div className="mt-6">
           <section className="space-y-4">
             <div>
-              <h2 className="text-sm font-semibold text-foreground">Темы</h2>
-              <p className="text-[12px] text-muted-foreground mt-0.5">Выберите ситуацию</p>
+              <h2 className="text-base font-semibold text-foreground">Темы</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">Выберите ситуацию</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
               {(["all", "feeding", "routine", "allergy"] as HelpTopicCategory[]).map((cat) => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setTopicFilter(cat)}
                   className={cn(
-                    "text-[13px] font-medium px-3 py-2 rounded-full border transition-colors duration-200",
+                    "shrink-0 h-9 px-4 rounded-full text-sm font-semibold border transition-colors duration-200",
                     topicFilter === cat
-                      ? "bg-primary/[0.08] border-primary/20 text-foreground"
-                      : "bg-transparent border-border text-muted-foreground hover:text-foreground hover:border-primary/15"
+                      ? "bg-primary/10 border-primary/20 text-foreground"
+                      : "bg-transparent border border-border text-muted-foreground hover:text-foreground hover:border-border"
                   )}
                 >
                   {HELP_CATEGORY_LABELS[cat]}

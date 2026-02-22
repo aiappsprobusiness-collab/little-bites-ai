@@ -373,33 +373,33 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             const isConsultationBubble = role === "assistant" && forcePlainText;
             const Wrapper = isConsultationBubble ? HelpSectionCard : "div";
             const wrapperClassName = isConsultationBubble
-              ? "rounded-bl-sm"
+              ? "rounded-2xl rounded-bl-sm border border-border bg-card shadow-soft p-4"
               : role === "user"
-                ? "relative px-4 py-2.5 text-typo-muted bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
+                ? "relative px-4 py-3 text-sm bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
                 : role === "assistant" && effectiveRecipe
-                  ? "relative rounded-bl-sm overflow-hidden px-3 pb-3 sm:px-4 bg-[#F7F8F3]"
-                  : "relative px-4 py-4 sm:px-5 bg-[#F7F8F3] rounded-2xl rounded-bl-sm shadow-[0_1px_3px_rgba(0,0,0,0.04)]";
+                  ? "relative rounded-2xl overflow-hidden p-4 bg-card border border-border shadow-soft"
+                  : "relative p-4 rounded-2xl bg-card border border-border shadow-soft";
             return (
               <Wrapper className={wrapperClassName}>
             {role === "assistant" && showParseError ? (
-              <p className="text-typo-muted text-muted-foreground">Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
+              <p className="text-sm text-muted-foreground">Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
             ) : role === "assistant" && effectiveRecipe ? (
               /* Карточка рецепта в чате: child_only, порядок: mealType → title → benefit → ingredients → chef tip (premium/trial) → steps */
-              <div className="bg-white rounded-2xl sm:rounded-[28px] px-3 py-3 sm:px-6 sm:py-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] max-w-[100%] w-full">
+              <div className="rounded-2xl p-4 bg-card max-w-[100%] w-full">
                 {effectiveRecipe.mealType && MEAL_LABELS[effectiveRecipe.mealType] && (
-                  <span className="inline-block text-typo-caption sm:text-typo-muted font-medium text-primary bg-primary-light rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 mb-2 sm:mb-3 border-0">
+                  <span className="inline-block text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-1 mb-2">
                     {MEAL_LABELS[effectiveRecipe.mealType]}
                   </span>
                 )}
-                <h3 className="text-typo-body sm:text-typo-title font-semibold leading-snug text-[#2D3436] mb-1 sm:mb-1.5 line-clamp-2">{effectiveRecipe.title}</h3>
+                <h3 className="text-base font-semibold leading-snug text-foreground mb-1 line-clamp-2">{effectiveRecipe.title}</h3>
                 {effectiveRecipe.description && (
-                  <div className="mb-3 sm:mb-4">
-                    <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-0.5 sm:mb-1">{getBenefitLabel(ageMonths)}</p>
-                    <p className="text-typo-caption sm:text-typo-muted text-muted-foreground leading-relaxed whitespace-normal break-words">{effectiveRecipe.description}</p>
+                  <div className="mb-3">
+                    <p className="text-xs font-medium text-muted-foreground mb-0.5">{getBenefitLabel(ageMonths)}</p>
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-normal break-words">{effectiveRecipe.description}</p>
                   </div>
                 )}
-                <div className="mb-3 sm:mb-4">
-                  <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-1.5 sm:mb-2">Ингредиенты</p>
+                <div className="mb-3">
+                  <p className="text-sm font-medium text-muted-foreground mb-1.5">Ингредиенты</p>
                   {effectiveRecipe.ingredients?.length ? (
                     <div className="flex flex-wrap gap-2">
                       {effectiveRecipe.ingredients.map((ing, idx) => {
@@ -411,13 +411,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                           <div
                             key={idx}
                             className={
-                              "max-w-full " +
-                              (showChefTip
-                                ? "flex items-center gap-1.5 sm:gap-2 bg-primary-light rounded-full px-2 py-1 sm:px-2.5 sm:py-1.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
-                                : "flex items-center gap-1 sm:gap-1.5 bg-primary-light rounded-full px-1.5 py-0.5 sm:px-2 sm:py-1 border border-primary-border/40")
+                              "max-w-full flex items-center gap-1.5 bg-primary/10 rounded-full px-2 py-1"
                             }
                           >
-                            <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">
+                            <span className="text-foreground font-medium text-sm min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">
                               {displayText}
                             </span>
                             {showChefTip ? (
@@ -439,7 +436,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       })}
                     </div>
                   ) : (
-                    <p className="text-typo-muted text-muted-foreground">ИИ уточняет состав…</p>
+                    <p className="text-sm text-muted-foreground">ИИ уточняет состав…</p>
                   )}
                 </div>
 
@@ -456,7 +453,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   }}
                 />
                 {effectiveRecipe.cookingTime != null && effectiveRecipe.cookingTime > 0 && (
-                  <p className="text-typo-caption text-muted-foreground mb-3 sm:mb-4">⏱️ {effectiveRecipe.cookingTime} мин</p>
+                  <p className="text-sm text-muted-foreground mb-3">⏱️ {effectiveRecipe.cookingTime} мин</p>
                 )}
                 {(() => {
                   const chefTip = effectiveRecipe.chefAdvice?.trim();
@@ -464,22 +461,22 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   const tipForFree = miniTip || chefTip;
                   if (showChefTip && chefTip) {
                     return (
-                      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 pl-4 sm:pl-5 bg-[#F5F6F0] border-l-[3px] border-l-primary flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
-                        <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
+                      <div className="rounded-2xl p-3 pl-4 bg-muted/50 flex gap-2 items-start mb-3">
+                        <span className="text-base shrink-0" aria-hidden>👨‍🍳</span>
                         <div className="min-w-0">
-                          <p className="text-typo-caption font-medium text-primary mb-0.5">Совет от шефа</p>
-                          <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{chefTip}</p>
+                          <p className="text-xs font-medium text-primary mb-0.5">Совет от шефа</p>
+                          <p className="text-sm text-foreground leading-snug">{chefTip}</p>
                         </div>
                       </div>
                     );
                   }
                   if (tipForFree) {
                     return (
-                      <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-[#F7F8F3] flex gap-2 sm:gap-3 items-start mb-3 sm:mb-4">
-                        <span className="text-typo-title shrink-0" aria-hidden>💡</span>
+                      <div className="rounded-2xl p-3 bg-muted/30 flex gap-2 items-start mb-3">
+                        <span className="text-base shrink-0" aria-hidden>💡</span>
                         <div className="min-w-0">
-                          <p className="text-typo-caption font-medium text-slate-600 mb-0.5">Мини-совет</p>
-                          <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{tipForFree}</p>
+                          <p className="text-xs font-medium text-muted-foreground mb-0.5">Мини-совет</p>
+                          <p className="text-sm text-foreground leading-snug">{tipForFree}</p>
                         </div>
                       </div>
                     );
@@ -488,12 +485,12 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 })()}
                 {effectiveRecipe.steps && effectiveRecipe.steps.length > 0 && (
                   <div>
-                    <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-1.5 sm:mb-2">Шаги приготовления</p>
-                    <div className="space-y-1.5 sm:space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground mb-1.5">Шаги приготовления</p>
+                    <div className="space-y-1.5">
                       {(effectiveRecipe.steps?.map((step, idx) => (
-                        <div key={idx} className="flex gap-2 sm:gap-3 items-start">
-                          <span className="text-typo-caption font-bold text-primary shrink-0">{idx + 1}.</span>
-                          <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-relaxed flex-1 min-w-0 break-words">{step}</p>
+                        <div key={idx} className="flex gap-2 items-start">
+                          <span className="text-sm font-semibold text-primary shrink-0">{idx + 1}.</span>
+                          <p className="text-sm text-foreground leading-relaxed flex-1 min-w-0 break-words">{step}</p>
                         </div>
                       )) ?? null)}
                     </div>
@@ -501,7 +498,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 )}
               </div>
             ) : role === "assistant" ? (
-              <div className={`chat-message-content text-typo-caption sm:text-typo-muted select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-typo-muted prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-typo-muted prose-strong:text-typo-muted [&>*]:text-typo-muted ${forcePlainText ? "consultationCard-inner" : "px-4 py-3 sm:px-5 sm:py-4"}`}>
+              <div className={`chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-foreground prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-foreground prose-strong:text-foreground [&>*]:text-foreground ${forcePlainText ? "consultationCard-inner" : ""}`}>
                 {forcePlainText ? (() => {
                   const { main, doctorPart } = splitHelpContent(displayWithArticleLinks);
                   const markdownProps = {
@@ -589,7 +586,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               <p className="text-typo-muted whitespace-pre-wrap select-none leading-snug break-words">{displayContent}</p>
             )}
             {!forcePlainText && (
-            <p className="text-[10px] opacity-60 mt-1">
+            <p className="text-xs text-muted-foreground mt-1.5">
               {timestamp.toLocaleTimeString("ru-RU", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -598,7 +595,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             )}
             {role === "assistant" && !isStreaming && !isConsultationMode && (
               <div
-                className="flex flex-row items-center justify-between gap-2 mt-2 pt-2 min-h-[36px] border-t border-slate-200/30 shrink-0"
+                className="flex flex-row items-center justify-between gap-2 mt-3 pt-3 border-t border-border/50 shrink-0"
                 style={{ touchAction: "manipulation" }}
                 onClick={(e) => e.stopPropagation()}
                 onPointerDown={(e) => e.stopPropagation()}
@@ -613,13 +610,13 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       handleToggleFavorite();
                     }}
                     disabled={isToggling}
-                    className={`h-8 w-8 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 border ${isFavorite
-                      ? "text-amber-600/90 bg-amber-50/70 fill-amber-600/90 border-amber-200/40"
-                      : "text-slate-400 bg-slate-50/50 border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500"
+                    className={`h-9 w-9 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 ${isFavorite
+                      ? "text-primary bg-primary/10 border border-primary/20 fill-primary"
+                      : "text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground"
                       }`}
                     title="В избранное"
                   >
-                    <Heart className={`h-3.5 w-3.5 ${isFavorite ? "fill-current" : ""}`} />
+                    <Heart className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
                   </button>
                   <button
                     type="button"
@@ -629,10 +626,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       handleShare();
                     }}
                     disabled={!shareText}
-                    className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 disabled:opacity-50 transition-all active:scale-95"
+                    className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground disabled:opacity-50 transition-all active:scale-95"
                     title="Поделиться"
                   >
-                    <Share2 className="h-3.5 w-3.5" />
+                    <Share2 className="h-4 w-4" />
                   </button>
                   {hasAccess ? (
                     <button
@@ -643,10 +640,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                         if (recipeId && isValidRecipeId(recipeId)) setAddToPlanOpen(true);
                       }}
                       disabled={!recipeId || !isValidRecipeId(recipeId)}
-                      className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 disabled:opacity-50 transition-all active:scale-95"
+                      className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground disabled:opacity-50 transition-all active:scale-95"
                       title="В план"
                     >
-                      <CalendarPlus className="h-3.5 w-3.5" />
+                      <CalendarPlus className="h-4 w-4" />
                     </button>
                   ) : (
                     <button
@@ -657,10 +654,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                         setPaywallCustomMessage("Добавление в план доступно в Premium.");
                         setShowPaywall(true);
                       }}
-                      className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 transition-all active:scale-95"
+                      className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all active:scale-95"
                       title="В план (Premium)"
                     >
-                      <CalendarPlus className="h-3.5 w-3.5" />
+                      <CalendarPlus className="h-4 w-4" />
                     </button>
                   )}
                 </div>
@@ -671,10 +668,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     e.stopPropagation();
                     setShowDelete(true);
                   }}
-                  className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 transition-all active:scale-95"
+                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all active:scale-95"
                   title="Удалить"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             )}

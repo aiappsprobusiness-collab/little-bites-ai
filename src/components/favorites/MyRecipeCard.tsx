@@ -1,7 +1,5 @@
 import { motion } from "framer-motion";
 import { CalendarPlus, Pencil } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import type { MyRecipePreview } from "@/hooks/useMyRecipes";
 import { cn } from "@/lib/utils";
 
@@ -24,87 +22,85 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.04, duration: 0.25 }}
     >
-      <Card
-        className="overflow-hidden rounded-2xl border border-border/50 bg-card shadow-[var(--shadow-soft)] transition-shadow hover:shadow-card active:scale-[0.995]"
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Открыть рецепт: ${recipe.title ?? "Рецепт"}`}
         onClick={onTap}
+        onKeyDown={(e) => e.key === "Enter" && onTap()}
+        className={cn(
+          "w-full text-left rounded-2xl border border-border bg-card shadow-soft p-4",
+          "min-h-[44px] flex flex-col gap-1.5",
+          "active:opacity-95 transition-opacity touch-manipulation cursor-pointer"
+        )}
       >
-        <CardContent className="p-5">
-          <div className="flex items-start justify-between gap-2 mb-2">
-            <h3 className="text-typo-body font-semibold text-foreground leading-snug line-clamp-2 flex-1 min-w-0">
-              {recipe.title || "Рецепт"}
-            </h3>
-            <div className="flex items-center gap-1 shrink-0">
-              {onEdit && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={(e) => { e.stopPropagation(); onEdit(e); }}
-                  aria-label="Редактировать"
-                >
-                  <Pencil className="w-4 h-4" />
-                </Button>
-              )}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-base font-semibold text-foreground leading-tight line-clamp-2">
+                {recipe.title || "Рецепт"}
+              </h3>
               <span
                 className={cn(
-                  "text-[11px] font-medium rounded-full px-2.5 py-1",
-                  "bg-[#6b7c3d]/15 text-[#6b7c3d] border border-[#6b7c3d]/30"
+                  "text-xs font-medium rounded-md px-2 py-0.5 shrink-0",
+                  "bg-muted text-muted-foreground"
                 )}
               >
                 Мой рецепт
               </span>
             </div>
+            <div className="text-sm text-muted-foreground mt-1">
+              ⏱️ {cookTimeLabel}
+            </div>
+            {(chips.length > 0 || extraCount > 0) && (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {chips.map((name, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center max-w-[120px] px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs h-6 box-border truncate"
+                  >
+                    {name}
+                  </span>
+                ))}
+                {extraCount > 0 && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs h-6 shrink-0">
+                    +{extraCount}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
-
-          {recipe.description && (
-            <p className="text-typo-muted text-muted-foreground line-clamp-2 mb-3">{recipe.description}</p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-typo-caption text-muted-foreground mb-3">
-            <span className="flex items-center gap-1">
-              <span>🕒</span>
-              <span>{cookTimeLabel}</span>
-            </span>
+          <div className="flex shrink-0 items-start gap-1" onClick={(e) => e.stopPropagation()}>
+            {onEdit && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onEdit(e); }}
+                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 active:scale-95 transition-all shrink-0"
+                aria-label="Редактировать"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
             {onAddToPlan && isPremium && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-full h-8 text-xs gap-1.5 ml-auto border-[#6b7c3d]/40 text-[#6b7c3d] hover:bg-[#6b7c3d]/10"
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onAddToPlan();
                 }}
+                className="h-8 rounded-full px-2.5 flex items-center justify-center gap-1 text-sm text-muted-foreground border border-border hover:bg-muted/50 active:scale-95 transition-all shrink-0"
               >
-                <CalendarPlus className="w-3.5 h-3.5" />
+                <CalendarPlus className="h-3.5 w-3.5" />
                 В план
-              </Button>
+              </button>
             )}
           </div>
-
-          {(chips.length > 0 || extraCount > 0) && (
-            <div className="flex flex-wrap gap-1.5">
-              {chips.map((name, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center rounded-full bg-muted/80 text-typo-caption font-medium text-muted-foreground px-2 py-1"
-                >
-                  {name}
-                </span>
-              ))}
-              {extraCount > 0 && (
-                <span className="inline-flex items-center rounded-full bg-muted/80 text-typo-caption font-medium text-muted-foreground px-2 py-1">
-                  +{extraCount}
-                </span>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </motion.div>
   );
 }

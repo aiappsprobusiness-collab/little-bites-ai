@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import { BottomNavigation } from "./BottomNavigation";
+import { TopBar } from "./TopBar";
 import { motion } from "framer-motion";
 
 /**
@@ -59,30 +60,26 @@ export function MobileLayout({
     <div className="h-dvh min-h-dvh bg-background flex flex-col overflow-hidden">
       {showHeader ? (
         <header className={headerClassName ? `${baseHeaderClass} ${headerClassName}` : baseHeaderClass}>
-          <div className="layout-header-inner relative flex items-center">
-            {/* Левый слот: absolute left (назад и т.д.) */}
-            {leftContent != null && leftContent !== false && (
-              <div className="absolute left-0 top-0 bottom-0 flex items-center pl-4 z-10">
-                {leftContent}
-              </div>
-            )}
-            {/* Заголовок строго по центру; не сдвигается слотами */}
-            {headerCenter != null ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-12">
-                {headerCenter}
-              </div>
-            ) : title != null && title !== "" ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-12">
-                <h1 className="text-typo-title font-semibold text-foreground truncate w-full">{title}</h1>
-                {headerMeta != null && (
-                  <div className="text-typo-caption text-muted-foreground mt-1 truncate w-full">{headerMeta}</div>
-                )}
-              </div>
-            ) : null}
-            {/* Правый слот (селектор профиля): всегда top-right */}
-            <div className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-4 z-10">
-              {headerRight}
-            </div>
+          <div className="layout-header-inner">
+            <TopBar
+              left={leftContent != null && leftContent !== false ? leftContent : undefined}
+              center={
+                headerCenter ??
+                (title != null && title !== "" ? (
+                  <>
+                    <h1 className="text-xl font-semibold text-foreground truncate w-full leading-tight">
+                      {title}
+                    </h1>
+                    {headerMeta != null && (
+                      <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
+                        {headerMeta}
+                      </p>
+                    )}
+                  </>
+                ) : undefined)
+              }
+              right={headerRight ?? undefined}
+            />
           </div>
         </header>
       ) : null}

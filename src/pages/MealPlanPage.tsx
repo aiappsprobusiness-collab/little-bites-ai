@@ -590,13 +590,7 @@ export default function MealPlanPage() {
 
   if (isMembersLoading) {
     return (
-      <MobileLayout
-        headerCenter={
-          <span className="text-typo-title font-semibold text-foreground tracking-tight">
-            Mom Recipes <span className="text-primary" aria-hidden>🌿</span>
-          </span>
-        }
-      >
+      <MobileLayout title="План">
         <div className="flex items-center justify-center min-h-[50vh]">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
@@ -606,13 +600,7 @@ export default function MealPlanPage() {
 
   if (showNoProfile || showEmptyFamily) {
     return (
-      <MobileLayout
-        headerCenter={
-          <span className="text-typo-title font-semibold text-foreground tracking-tight">
-            Mom Recipes <span className="text-primary" aria-hidden>🌿</span>
-          </span>
-        }
-      >
+      <MobileLayout title="План">
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card variant="default" className="p-8 text-center">
             <CardContent className="p-0">
@@ -634,13 +622,7 @@ export default function MealPlanPage() {
   }
 
   return (
-    <MobileLayout
-      headerCenter={
-        <span className="text-typo-title font-semibold text-foreground tracking-tight">
-          Mom Recipes <span className="text-primary" aria-hidden>🌿</span>
-        </span>
-      }
-    >
+    <MobileLayout title="План">
       <div className="flex flex-col min-h-0 flex-1 px-4 relative">
         {/* Content wrapper: один скролл + subtle pattern */}
         <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto">

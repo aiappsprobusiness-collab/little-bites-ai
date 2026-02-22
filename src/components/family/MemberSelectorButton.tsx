@@ -19,6 +19,8 @@ export interface MemberSelectorButtonProps {
   onProfileChange?: (memberId: string | "family") => void;
   /** Класс для контейнера. */
   className?: string;
+  /** light = компактная пилюля без тяжёлой заливки (Chat). */
+  variant?: "default" | "light";
 }
 
 /**
@@ -31,6 +33,7 @@ export function MemberSelectorButton({
   onGuardClick,
   onProfileChange,
   className = "",
+  variant = "default",
 }: MemberSelectorButtonProps) {
   const { members, selectedMemberId, setSelectedMemberId, isFreeLocked } = useFamily();
   const { hasAccess } = useSubscription();
@@ -44,6 +47,11 @@ export function MemberSelectorButton({
     if (selectedMemberId === "family" || !selectedMemberId) return "Семья";
     return members.find((c) => c.id === selectedMemberId)?.name ?? "Семья";
   }, [selectedMemberId, members]);
+
+  const isLight = variant === "light";
+  const pillClasses = isLight
+    ? "flex items-center gap-1.5 rounded-full min-h-[36px] h-9 px-3 py-2 text-sm font-medium text-foreground bg-muted/60 border border-border hover:bg-muted max-w-[120px] truncate"
+    : "flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-primary bg-primary-pill whitespace-nowrap truncate max-w-[140px]";
 
   const handleClick = useCallback(() => {
     if (disabled) {
@@ -80,16 +88,13 @@ export function MemberSelectorButton({
 
   if (members.length === 0) return null;
 
-  const baseClasses =
-    "flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-primary bg-primary-pill whitespace-nowrap truncate max-w-[140px]";
-
   return (
     <>
       {isFreeLocked ? (
         <button
           type="button"
           onClick={handleClick}
-          className={`${baseClasses} ${disabled ? "opacity-70 cursor-not-allowed pointer-events-none" : "hover:opacity-90 active:opacity-95 cursor-pointer"} ${className}`}
+          className={`${pillClasses} ${disabled ? "opacity-70 cursor-not-allowed pointer-events-none" : "hover:opacity-90 active:opacity-95 cursor-pointer"} ${className}`}
           aria-label="Профиль ребёнка"
         >
           <span className="truncate">{displayName}</span>
@@ -100,11 +105,11 @@ export function MemberSelectorButton({
           disabled={disabled}
           aria-disabled={disabled}
           onClick={handleClick}
-          className={`${baseClasses} hover:opacity-90 active:opacity-95 border-0 shadow-none transition-colors ${disabled ? "opacity-70 cursor-not-allowed pointer-events-none" : ""} ${className}`}
+          className={`${pillClasses} hover:opacity-90 active:opacity-95 shadow-none transition-colors ${!isLight ? "border-0" : ""} ${disabled ? "opacity-70 cursor-not-allowed pointer-events-none" : ""} ${className}`}
           aria-label="Выбрать профиль"
         >
-          <span className="truncate max-w-[120px]">{displayName}</span>
-          <ChevronDown className="w-4 h-4 shrink-0 text-primary opacity-80" aria-hidden />
+          <span className="truncate max-w-[100px]">{displayName}</span>
+          <ChevronDown className={`shrink-0 text-muted-foreground ${isLight ? "w-3.5 h-3.5" : "w-4 h-4 text-primary opacity-80"}`} aria-hidden />
         </button>
       )}
 

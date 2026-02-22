@@ -30,25 +30,18 @@ export function SosTopicGrid({
               whileTap={{ scale: 0.99 }}
               onClick={() => (locked ? onLockedSelect() : onSelect(topic))}
               className={cn(
-                "w-full flex items-center gap-4 p-5 rounded-[20px] border border-border/80 bg-card text-left",
-                "hover:bg-muted/10 active:bg-primary/[0.02] active:border-primary/15",
-                "transition-colors duration-200"
+                "w-full flex items-center gap-4 p-4 rounded-2xl border border-border bg-card shadow-soft text-left",
+                "hover:bg-muted/30 active:bg-muted/50 transition-colors duration-200"
               )}
             >
-              <span className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/[0.06] shrink-0">
-                <Icon className="w-5 h-5 text-primary/80" />
+              <span className="flex items-center justify-center w-9 h-9 rounded-full bg-muted shrink-0">
+                <Icon className="w-5 h-5 text-primary" />
               </span>
               <div className="flex-1 min-w-0 py-0.5">
-                <p
-                  className="text-[16px] font-semibold text-foreground leading-snug line-clamp-2 break-words hyphens-auto"
-                  style={{ wordBreak: "break-word" }}
-                >
+                <p className="text-base font-semibold text-foreground leading-snug line-clamp-2 break-words">
                   {topic.title}
                 </p>
-                <p
-                  className="text-[13px] text-muted-foreground leading-snug line-clamp-2 mt-1 break-words hyphens-auto"
-                  style={{ wordBreak: "break-word" }}
-                >
+                <p className="text-sm text-muted-foreground leading-snug line-clamp-2 mt-1 break-words">
                   {topic.shortSubtitle}
                 </p>
               </div>
@@ -57,7 +50,7 @@ export function SosTopicGrid({
                   Premium
                 </span>
               )}
-              <ChevronRight className="w-5 h-5 text-muted-foreground/50 shrink-0" aria-hidden />
+              <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden />
             </motion.button>
           </li>
         );

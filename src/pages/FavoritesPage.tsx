@@ -3,7 +3,6 @@ import { motion } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Heart, MessageCircle, Plus } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFavorites, type FavoritesFilter } from "@/hooks/useFavorites";
 import { useMyRecipes } from "@/hooks/useMyRecipes";
@@ -121,24 +120,23 @@ export default function FavoritesPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
+                className="flex flex-col items-center justify-center text-center py-12 px-4"
               >
-                <Card className="rounded-2xl border border-border/60 bg-card overflow-hidden shadow-sm">
-                  <CardContent className="p-8 text-center">
-                    <h3 className="text-typo-title font-semibold text-foreground mb-2">
-                      Пока нет своих рецептов
-                    </h3>
-                    <p className="text-typo-muted text-muted-foreground mb-6 leading-relaxed max-w-[260px] mx-auto">
-                      Создайте рецепт — он будет храниться только у вас и его можно добавлять в план.
-                    </p>
-                    <Button
-                      onClick={openCreateForm}
-                      className="gap-2 bg-[#6b7c3d] hover:bg-[#6b7c3d]/90"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Создать свой рецепт
-                    </Button>
-                  </CardContent>
-                </Card>
+                <div className="rounded-2xl border border-border bg-card shadow-soft p-8 w-full max-w-sm">
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    Пока нет своих рецептов
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                    Создайте рецепт — он будет храниться только у вас и его можно добавлять в план.
+                  </p>
+                  <Button
+                    onClick={openCreateForm}
+                    className="gap-2 bg-primary hover:opacity-90 text-primary-foreground rounded-xl"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Создать свой рецепт
+                  </Button>
+                </div>
               </motion.div>
             ) : (
               <>
@@ -151,7 +149,7 @@ export default function FavoritesPage() {
                     Создать свой рецепт
                   </Button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {myRecipes.map((recipe, index) => (
                     <MyRecipeCard
                       key={recipe.id}
@@ -213,30 +211,29 @@ export default function FavoritesPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
+                className="flex flex-col items-center justify-center text-center py-12 px-4"
               >
-                <Card className="rounded-2xl border border-border/60 bg-card overflow-hidden shadow-sm">
-                  <CardContent className="p-8 text-center">
-                    <div className="flex justify-center mb-4">
-                      <Heart className="w-12 h-12 text-primary/40 stroke-[1.5]" />
-                    </div>
-                    <h3 className="text-typo-title font-semibold text-foreground mb-2">
-                      Пока нет избранных рецептов
-                    </h3>
-                    <p className="text-typo-muted text-muted-foreground mb-6 leading-relaxed max-w-[260px] mx-auto">
-                      Добавляйте понравившиеся рецепты сердечком — они появятся здесь.
-                    </p>
-                    <Button
-                      onClick={() => navigate("/chat")}
-                      className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      Перейти в чат
-                    </Button>
-                  </CardContent>
-                </Card>
+                <div className="rounded-2xl border border-border bg-card shadow-soft p-8 w-full max-w-sm">
+                  <div className="flex justify-center mb-4">
+                    <Heart className="w-10 h-10 text-primary/40 stroke-[1.5]" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    Пока нет избранных рецептов
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+                    Добавляйте понравившиеся рецепты сердечком — они появятся здесь.
+                  </p>
+                  <Button
+                    onClick={() => navigate("/chat")}
+                    className="gap-2 bg-primary hover:opacity-90 text-primary-foreground rounded-xl"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Перейти в чат
+                  </Button>
+                </div>
               </motion.div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {favorites.map((favorite, index) => (
                   <FavoriteCard
                     key={favorite.id}

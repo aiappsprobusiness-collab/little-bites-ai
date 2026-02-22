@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Send, Loader2, HelpCircle, MoreVertical, Trash2 } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { TopBarIconButton } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
 import { ChatMessage } from "@/components/chat/ChatMessage";
@@ -874,112 +875,83 @@ export default function ChatPage() {
     return `Аллергии: ${first}${rest}`;
   }, [mode, selectedMemberId, selectedMember, members]);
 
-  const helpHeaderCenter = isConsultationMode ? (
-    <h1 className="text-typo-title font-semibold text-foreground truncate w-full text-center px-2">
-      Помощник рядом
-    </h1>
-  ) : null;
+  const chatTitle = mode === "help" ? "Помощник рядом" : "Помощник по питанию";
+  const chatHeaderRight = mode === "help" ? (
+    members.length > 0 ? <MemberSelectorButton onProfileChange={() => setMessages([])} /> : undefined
+  ) : (
+    members.length > 0 ? (
+      <div className="flex items-center gap-2">
+        <MemberSelectorButton onProfileChange={() => setMessages([])} variant="light" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <TopBarIconButton aria-label="Меню чата">
+              <MoreVertical className="w-5 h-5" />
+            </TopBarIconButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={4}>
+            <DropdownMenuItem
+              className="text-foreground"
+              onSelect={(e) => {
+                e.preventDefault();
+                setShowClearConfirm(true);
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Очистить чат
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    ) : undefined
+  );
 
   return (
     <MobileLayout
       showNav
-      title={mode === "help" ? "" : undefined}
-      headerCenter={mode === "help" ? helpHeaderCenter : undefined}
+      title={chatTitle}
       headerNoBlur
-      headerClassName={mode === "help" ? undefined : undefined}
-      headerRight={mode === "help" && members.length > 0 ? (
-        <MemberSelectorButton onProfileChange={() => setMessages([])} />
-      ) : undefined}
-      headerMeta={undefined}
+      headerRight={chatHeaderRight}
     >
-      <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-3 sm:px-4 chat-page-bg overflow-hidden">
-        {/* Sticky hero (recipes): первый блок, непрозрачный фон */}
+      <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg overflow-hidden">
+        {/* Hero под TopBar: статус, время, meta, CTA (только recipes) */}
         {mode === "recipes" && members.length > 0 && (
-          <div
-            ref={chatHeroRef}
-            className="sticky top-0 z-30 shrink-0 isolate px-0.5"
-            style={{
-              background: "#FCFCFA",
-              borderBottom: "1px solid rgba(220, 227, 199, 0.3)",
-              boxShadow: "0 1px 0 0 rgba(220, 227, 199, 0.3)",
-            }}
-          >
-              <div className="pb-2 pt-1 px-0.5">
-                {/* Строка: заголовок слева, pill + ⋯ справа */}
-                <div className="flex items-center justify-between gap-2 min-h-[40px]">
-                  <h1 className="text-[18px] font-semibold text-foreground leading-tight truncate min-w-0">
-                    Помощник по питанию
-                  </h1>
-                  <div className="flex items-center gap-0.5 shrink-0 pointer-events-auto">
-                    <MemberSelectorButton onProfileChange={() => setMessages([])} />
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                          aria-label="Меню чата"
-                        >
-                          <MoreVertical className="w-5 h-5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" sideOffset={4}>
-                        <DropdownMenuItem
-                          className="text-foreground"
-                          onSelect={(e) => {
-                            e.preventDefault();
-                            setShowClearConfirm(true);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Очистить чат
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-                {/* Hero всегда expanded: статус, время суток, meta, CTA */}
-                <div className="pt-1">
-                  {chatHeroStatusLine && (
-                    <p className="text-[13px] text-muted-foreground leading-snug">
-                      {chatHeroStatusLine}
-                    </p>
-                  )}
-                  <p className="text-[13px] text-muted-foreground/70 mt-0.5 leading-snug">
-                    {chatTimeOfDayLine}
-                  </p>
-                  {chatHeaderMeta != null && <div className="mt-2">{chatHeaderMeta}</div>}
-                  <button
-                    type="button"
-                    onClick={() => textareaRef.current?.focus()}
-                    className="mt-3 h-10 px-4 rounded-[16px] text-white font-medium text-sm shadow-[0_2px_12px_rgba(110,127,59,0.15)] transition-opacity hover:opacity-95 active:opacity-90"
-                    style={{ backgroundColor: "#6E7F3B" }}
-                  >
-                    Задать вопрос
-                  </button>
-                  {messages.length === 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowHintsModal(true)}
-                      className="block text-left mt-3 text-[14px] text-primary font-normal no-underline cursor-pointer bg-transparent border-0 p-0 hover:opacity-85 active:opacity-70 active:scale-[0.98] transition-opacity duration-150"
-                    >
-                      Показать подсказки
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          <div ref={chatHeroRef} className="shrink-0 border-b border-border/50 bg-background px-4 py-4">
+            {chatHeroStatusLine && (
+              <p className="text-xs text-muted-foreground leading-snug">{chatHeroStatusLine}</p>
+            )}
+            <p className="text-xs text-muted-foreground/80 mt-0.5 leading-snug">
+              {chatTimeOfDayLine}
+            </p>
+            {chatHeaderMeta != null && <div className="mt-2">{chatHeaderMeta}</div>}
+            <button
+              type="button"
+              onClick={() => textareaRef.current?.focus()}
+              className="mt-4 h-12 px-5 rounded-2xl font-semibold text-primary-foreground bg-primary hover:opacity-90 active:opacity-95 transition-opacity"
+            >
+              Задать вопрос
+            </button>
+            {messages.length === 0 && (
+              <button
+                type="button"
+                onClick={() => setShowHintsModal(true)}
+                className="block text-left mt-3 text-sm text-primary font-medium no-underline cursor-pointer bg-transparent border-0 p-0 hover:opacity-85 active:opacity-70 transition-opacity"
+              >
+                Показать подсказки
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Messages: отдельный скролл-контейнер под hero, padding-bottom только под инпут (12px) */}
         <div
           ref={messagesContainerRef}
           onScroll={handleMessagesScroll}
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-3 space-y-5 pb-3"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-4 space-y-4 pb-4"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {/* Статус при смене профиля: 1.5 сек, плавное появление/исчезновение (резерв 20px без сдвига) */}
           {mode === "recipes" && (
-            <div className="min-h-[20px] flex items-center px-0.5 pt-1">
+            <div className="min-h-[20px] flex items-center pt-1">
               <AnimatePresence mode="wait">
                 {profileChangeStatus && (
                   <motion.span
@@ -1033,8 +1005,8 @@ export default function ChatPage() {
               transition={{ duration: 0.28, ease: "easeOut" }}
               className="flex justify-start"
             >
-              <div className="rounded-2xl rounded-bl-sm px-5 py-4 bg-[#F7F8F3] max-w-[85%] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                <p className="text-typo-body text-foreground/90 leading-relaxed whitespace-pre-wrap">
+              <div className="rounded-2xl p-4 bg-card border border-border shadow-soft max-w-[85%]">
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                   Задайте вопрос про питание, стул, аллергию, режим или самочувствие ребёнка. Отвечу по шагам и подскажу, когда к врачу.
                 </p>
               </div>
@@ -1084,8 +1056,8 @@ export default function ChatPage() {
                 transition={{ duration: 0.2 }}
                 className="flex justify-start"
               >
-                <div className="rounded-2xl rounded-bl-sm px-5 py-4 bg-[#F7F8F3] shadow-[0_1px_3px_rgba(0,0,0,0.04)] max-w-[85%]">
-                  <p className="text-typo-body text-foreground/90 leading-relaxed">
+                <div className="rounded-2xl p-4 bg-card border border-border shadow-soft max-w-[85%]">
+                  <p className="text-sm text-foreground leading-relaxed">
                     {mode === "help" ? "Думаю…" : "Готовлю рецепт…"}
                   </p>
                   <div className="flex items-center gap-1.5 mt-2" aria-hidden>
@@ -1101,8 +1073,8 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input: ниже MessagesScroll, непрозрачный фон; safe-area снизу для PWA/notch */}
-        <div className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200/30 bg-[#FCFCFA] pt-3 safe-bottom max-w-full overflow-x-hidden">
+        {/* Input: единый стиль, 16px padding, divider */}
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-4 pb-4 safe-bottom max-w-full overflow-x-hidden">
           <div className="flex w-full items-center gap-2 min-w-0">
             <Textarea
               ref={textareaRef}
@@ -1114,10 +1086,10 @@ export default function ChatPage() {
                   ? "Например: Сыпь после творога — что делать?"
                   : "Что приготовить?"
               }
-              className="min-h-[44px] max-h-[120px] flex-1 min-w-0 resize-none rounded-2xl bg-white py-3 px-4 text-typo-body placeholder:text-muted-foreground placeholder:font-normal placeholder:text-[14px] focus-visible:ring-primary/30 shadow-[0_1px_4px_rgba(0,0,0,0.06)] border border-slate-200/40"
+              className="min-h-[44px] max-h-[120px] flex-1 min-w-0 resize-none rounded-2xl bg-card border border-border py-3 px-4 text-sm placeholder:text-muted-foreground focus-visible:ring-primary/30"
               rows={1}
             />
-            <div className="flex items-center gap-1.5 shrink-0 relative">
+            <div className="flex items-center gap-2 shrink-0 relative">
               {mode === "recipes" && (
                 <div className="relative">
                   <button
@@ -1125,7 +1097,7 @@ export default function ChatPage() {
                     type="button"
                     onClick={() => setShowHintsModal(true)}
                     title="Подсказки"
-                    className={`h-9 w-9 rounded-full bg-primary-light border border-primary-border/40 text-primary flex items-center justify-center hover:bg-primary-light/90 active:scale-[0.98] transition-transform duration-[120ms] ${showHintPulseAccent ? "chat-hint-btn-pulse" : ""}`}
+                    className={`h-10 w-10 rounded-full bg-muted border border-border text-muted-foreground flex items-center justify-center hover:bg-muted/80 hover:text-foreground active:scale-95 transition-all ${showHintPulseAccent ? "chat-hint-btn-pulse" : ""}`}
                   >
                     <HelpCircle className="w-4 h-4" />
                   </button>
@@ -1155,7 +1127,7 @@ export default function ChatPage() {
                 type="button"
                 disabled={!input.trim() || isChatting}
                 onClick={() => handleSend()}
-                className="w-11 h-11 shrink-0 rounded-full flex items-center justify-center text-white disabled:opacity-50 transition-opacity hover:opacity-95 active:scale-95 bg-primary shadow-[0_2px_8px_rgba(110,127,59,0.2)]"
+                className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-primary-foreground bg-primary hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
               >
                 {isChatting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
