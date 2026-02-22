@@ -73,6 +73,15 @@ function getDayLabel(date: Date): string {
   return weekDays[(date.getDay() + 6) % 7];
 }
 
+/** Фразы статуса генерации плана (цикл по порядку, без рандома). */
+const GENERATION_STATUS_PHRASES = [
+  "Подбираем лучшие варианты…",
+  "Учитываем профиль семьи…",
+  "Проверяем ингредиенты…",
+  "Формируем сбалансированное меню…",
+  "Почти готово…",
+];
+
 type DayTabStatus = "idle" | "loading" | "done";
 
 /** Компактная кнопка дня: активный = заливка, остальные = тонкая рамка; индикатор «день заполнен». */
@@ -228,6 +237,16 @@ export default function MealPlanPage() {
 
   const [poolUpgradeLoading, setPoolUpgradeLoading] = useState(false);
   const isAnyGenerating = isPlanGenerating || poolUpgradeLoading || isPlanPartialTimeBudget;
+
+  const [statusPhraseIndex, setStatusPhraseIndex] = useState(0);
+  useEffect(() => {
+    if (!isAnyGenerating) return;
+    setStatusPhraseIndex(0);
+    const id = setInterval(() => {
+      setStatusPhraseIndex((i) => (i + 1) % GENERATION_STATUS_PHRASES.length);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [isAnyGenerating]);
 
   useEffect(() => {
     setPoolUpgradeLoading(false);
@@ -838,22 +857,28 @@ export default function MealPlanPage() {
 
           {isAnyGenerating && (
             <div className="flex items-center justify-between gap-3 mt-1 -mx-4 px-4">
-              <p className="text-typo-caption text-amber-700 font-medium">
-                {poolUpgradeLoading
-                  ? "Подбираем из базы…"
-                  : isPlanPartialTimeBudget
-                    ? planProgressTotal > 0
-                      ? `Догенерируем план… ${planProgressDone}/${planProgressTotal}`
-                      : "Догенерируем план…"
-                    : planProgressTotal > 0
-                      ? `Генерируем… ${planProgressDone}/${planProgressTotal}`
-                      : "Генерируем…"}
-              </p>
+              <div
+                className="inline-flex items-center rounded-full py-2 px-3.5 text-typo-caption font-medium transition-colors"
+                style={{
+                  backgroundColor: "hsl(var(--primary) / 0.08)",
+                  color: "hsl(var(--primary))",
+                }}
+                aria-live="polite"
+              >
+                <motion.span
+                  key={statusPhraseIndex}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {GENERATION_STATUS_PHRASES[statusPhraseIndex]}
+                </motion.span>
+              </div>
               {isPlanGenerating && (
                 <button
                   type="button"
                   onClick={() => cancelPlanJob()}
-                  className="text-typo-caption text-amber-800 hover:text-amber-900 underline"
+                  className="text-typo-caption text-primary hover:text-primary/80 underline"
                 >
                   Отменить
                 </button>
