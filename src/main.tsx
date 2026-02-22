@@ -31,7 +31,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-// ——— PWA: Service Worker registration & update detection ———
+// ——— PWA: Service Worker registration & auto-update + reload ———
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
@@ -39,9 +39,11 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
       .then((reg) => {
         window.__swRegistration = reg;
 
-        const notifyUpdate = () => {
+        const tryActivateUpdate = () => {
           if (reg.waiting && navigator.serviceWorker.controller) {
-            window.dispatchEvent(new CustomEvent("sw-update-available"));
+            // SW (sw.js) already calls skipWaiting() in install; tell waiting worker to activate so we get controllerchange → reload
+            reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            window.__skipWaitingTriggered = true;
           }
         };
 
@@ -49,22 +51,21 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
           const newWorker = reg.installing;
           if (!newWorker) return;
           newWorker.onstatechange = () => {
-            if (newWorker.state === "installed") notifyUpdate();
+            if (newWorker.state === "installed") tryActivateUpdate();
           };
         };
 
-        // Already waiting (e.g. tab was closed and reopened)
         if (reg.waiting && navigator.serviceWorker.controller) {
-          notifyUpdate();
+          tryActivateUpdate();
         }
 
-        // Optional: check for updates on interval
         setInterval(() => reg.update(), 60 * 60 * 1000);
       })
       .catch(() => {});
 
+    // After new SW activates, reload to get fresh index.html and assets
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (window.__skipWaitingTriggered) window.location.reload();
+      window.location.reload();
     });
   });
 }

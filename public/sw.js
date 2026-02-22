@@ -2,14 +2,13 @@
  * Custom Service Worker — PWA (no vite-plugin-pwa).
  * Precache core assets, runtime stale-while-revalidate, offline fallback.
  */
-const CACHE_VERSION = "mom-recipes-v4";
+const CACHE_VERSION = "mom-recipes-v5";
 const PRECACHE_NAME = CACHE_VERSION + "-precache";
 const RUNTIME_NAME = CACHE_VERSION + "-runtime";
 const OFFLINE_URL = "/offline.html";
 
+// Не кэшируем "/" и index.html в precache — навигация всегда network-first, чтобы OG-теги и HTML были свежими после деплоя
 const PRECACHE_ASSETS = [
-  "/",
-  "/index.html",
   "/manifest.json",
   "/offline.html",
   "/icon-192.png",
