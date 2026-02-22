@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, RotateCcw, Heart, Share2, CalendarPlus } from "lucide-react";
+import { Loader2, ArrowLeft, RotateCcw, Heart, Share2, CalendarPlus, Pencil, Trash2 } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useMyRecipes } from "@/hooks/useMyRecipes";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -12,8 +13,19 @@ import { ingredientDisplayLabel } from "@/types/recipe";
 import { buildRecipeShareText } from "@/utils/shareRecipeText";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
+import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
 import { getBenefitLabel } from "@/utils/ageCategory";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 function formatAge(ageMonths: number | null | undefined): string {
   if (ageMonths == null) return "";
@@ -55,9 +67,17 @@ export default function RecipePage() {
   const { toast } = useToast();
   const { selectedMember, selectedMemberId } = useFamily();
   const { hasAccess } = useSubscription();
+  const [searchParams] = useSearchParams();
   const { getRecipeById } = useRecipes();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
   const state = location.state as { fromMealPlan?: boolean; mealTypeLabel?: string; memberId?: string } | null;
+
+  useEffect(() => {
+    if (import.meta.env.DEV && searchParams.get("debugIngredients") === "1" && id && recipe) {
+      const raw = (recipe as { ingredients?: unknown[] }).ingredients;
+      console.debug("[debugIngredients] recipe_id=", id, "recipe_title=", (recipe as { title?: string }).title, "recipe_ingredients (raw)=", raw);
+    }
+  }, [import.meta.env.DEV, searchParams, id, recipe]);
   const fromMealPlan = state?.fromMealPlan;
   const mealTypeLabel = state?.mealTypeLabel;
   const stateMemberId = state?.memberId ?? null;
@@ -65,7 +85,10 @@ export default function RecipePage() {
 
   const { isFavorite: isFavoriteFn, toggleFavorite } = useFavorites("all");
   const isFavorite = !!id && isFavoriteFn(id, favoriteMemberId);
+  const { deleteUserRecipe, isDeleting } = useMyRecipes();
   const [addToPlanOpen, setAddToPlanOpen] = useState(false);
+  const [editSheetOpen, setEditSheetOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const handleToggleFavorite = async () => {
     if (!id || !recipe) return;
@@ -96,6 +119,10 @@ export default function RecipePage() {
       title?: string;
       description?: string;
       cooking_time_minutes?: number | null;
+      steps?: { instruction?: string; step_number?: number }[];
+      chefAdvice?: string | null;
+      chef_advice?: string | null;
+      meal_type?: string | null;
     };
     const displayIngredients = getDisplayIngredients(recipeDisplay);
     const shareText = buildRecipeShareText({
@@ -104,6 +131,10 @@ export default function RecipePage() {
       cooking_time_minutes: recipeDisplay.cooking_time_minutes ?? null,
       recipeId: id,
       ingredients: displayIngredients,
+      steps: recipeDisplay.steps ?? null,
+      chefAdvice: recipeDisplay.chefAdvice ?? recipeDisplay.chef_advice ?? null,
+      mealTypeLabel: mealTypeLabel ?? null,
+      meal_type: recipeDisplay.meal_type ?? null,
     });
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
@@ -114,7 +145,7 @@ export default function RecipePage() {
         toast({ title: "Рецепт отправлен" });
       } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareText);
-        toast({ title: "Скопировано" });
+        toast({ title: "Рецепт скопирован" });
       } else {
         toast({ variant: "destructive", title: "Поделиться недоступно" });
       }
@@ -163,7 +194,9 @@ export default function RecipePage() {
     advice?: string | null;
     cooking_time_minutes?: number | null;
     min_age_months?: number | null;
+    source?: string | null;
   };
+  const isUserCustom = recipeDisplay.source === "user_custom";
   const displayIngredients = getDisplayIngredients(recipeDisplay);
   const steps = recipeDisplay.steps ?? [];
   const chefAdvice = recipeDisplay.chefAdvice ?? (recipeDisplay as { chef_advice?: string | null }).chef_advice;
@@ -171,6 +204,18 @@ export default function RecipePage() {
   const cookingTime = recipeDisplay.cooking_time_minutes;
   const minAgeMonths = recipeDisplay.min_age_months;
   const description = recipeDisplay.description;
+
+  const handleDeleteRecipe = async () => {
+    if (!id) return;
+    try {
+      await deleteUserRecipe(id);
+      toast({ title: "Рецепт удалён" });
+      setDeleteConfirmOpen(false);
+      navigate("/favorites", { state: { tab: "my_recipes" } });
+    } catch (e: unknown) {
+      toast({ variant: "destructive", title: "Ошибка", description: (e as Error)?.message ?? "Не удалось удалить" });
+    }
+  };
 
   const ageStr = formatAge(minAgeMonths ?? null);
   const mealStr = mealTypeLabel ?? "";
@@ -239,6 +284,31 @@ export default function RecipePage() {
             >
               <Share2 className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
             </button>
+            {isUserCustom && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 rounded-full border-[#6b7c3d]/40 text-[#6b7c3d] hover:bg-[#6b7c3d]/10"
+                  onClick={() => setEditSheetOpen(true)}
+                  aria-label="Редактировать"
+                >
+                  <Pencil className="h-4 w-4 shrink-0" />
+                  <span className="text-typo-caption sm:text-typo-muted">Редактировать</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 rounded-full border-destructive/40 text-destructive hover:bg-destructive/10"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={isDeleting}
+                  aria-label="Удалить рецепт"
+                >
+                  <Trash2 className="h-4 w-4 shrink-0" />
+                  <span className="text-typo-caption sm:text-typo-muted">Удалить</span>
+                </Button>
+              </>
+            )}
           </div>
 
           {description && description.trim() !== "" && (
@@ -255,14 +325,13 @@ export default function RecipePage() {
               <div className="flex flex-wrap gap-2">
                 {displayIngredients.map((ing, index) => {
                   const baseLabel = ingredientDisplayLabel(ing);
-                  const label = overrides[index] ?? baseLabel;
-                  if (!label) return null;
+                  const label = (overrides[index] ?? baseLabel) || "Ингредиент";
                   return (
                     <span
                       key={index}
-                      className="inline-flex items-center gap-1.5 sm:gap-2 bg-primary-light/80 border border-primary-border rounded-full px-2 py-1 sm:px-3 sm:py-1.5"
+                      className="inline-flex items-center gap-1.5 sm:gap-2 bg-primary-light/80 border border-primary-border rounded-full px-2 py-1 sm:px-3 sm:py-1.5 max-w-full"
                     >
-                      <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 truncate max-w-[200px]">{label}</span>
+                      <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">{label}</span>
                       <button
                         type="button"
                         onClick={() => setSubstituteSheet({ open: true, index, ing })}
@@ -348,6 +417,32 @@ export default function RecipePage() {
           onSuccess={() => toast({ title: "Добавлено в план" })}
         />
       )}
+
+      {id && isUserCustom && (
+        <MyRecipeFormSheet
+          open={editSheetOpen}
+          onOpenChange={setEditSheetOpen}
+          recipeId={id}
+          onSuccess={() => toast({ title: "Рецепт обновлён" })}
+        />
+      )}
+
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить рецепт?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Рецепт будет удалён без возможности восстановления.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteRecipe} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? "Удаляем…" : "Удалить"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MobileLayout>
   );
 }

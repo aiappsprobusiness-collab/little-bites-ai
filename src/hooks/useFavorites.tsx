@@ -40,12 +40,19 @@ export function favoritesKey(params: { userId: string | undefined; filter: Favor
   return ['favorites', params.userId, params.filter];
 }
 
-export function useFavorites(filter: FavoritesFilter = 'all') {
+export interface UseFavoritesOptions {
+  /** When false, favorites query is not run (e.g. when another tab is active). Default true. */
+  queryEnabled?: boolean;
+}
+
+export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavoritesOptions) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const queryEnabled = options?.queryEnabled !== false;
 
   const { data: favorites = [], isLoading } = useQuery({
     queryKey: favoritesKey({ userId: user?.id, filter }),
+    enabled: !!user && queryEnabled,
     queryFn: async () => {
       if (!user) return [];
 
@@ -155,7 +162,6 @@ export function useFavorites(filter: FavoritesFilter = 'all') {
         };
       }) as (SavedFavorite & { _recipeId?: string })[];
     },
-    enabled: !!user,
   });
 
   const addFavorite = useMutation({

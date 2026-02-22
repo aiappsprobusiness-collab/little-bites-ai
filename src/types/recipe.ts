@@ -32,20 +32,27 @@ export interface RecipeDisplayIngredients {
   ingredients_items?: IngredientItem[];
 }
 
-/** Текст ингредиента для UI: name + display_text (количество), либо name + amount/unit/note. */
+/**
+ * Текст ингредиента для UI (чип): безопасный fallback при кривых данных.
+ * Приоритет: display_text → name + amount + unit → name → "Ингредиент".
+ */
 export function ingredientDisplayLabel(ing: IngredientItem | { name?: string; display_text?: string | null; amount?: number | null; unit?: string | null; note?: string }): string {
-  const name = ing.name ?? "";
+  const name = (ing.name ?? "").trim();
   const dt = (ing as { display_text?: string | null }).display_text;
-  if (typeof dt === "string" && dt.trim()) {
-    // Если display_text уже содержит name (legacy) — не дублировать
-    if (name && dt.toLowerCase().includes(name.toLowerCase().trim())) return dt.trim();
-    return name ? `${name} — ${dt.trim()}` : dt.trim();
+  if (typeof dt === "string" && dt.trim().length >= 1) {
+    const trimmed = dt.trim();
+    if (trimmed.length < 3) {
+      /* fallback to name + amount + unit if display_text too short */
+    } else {
+      if (name && trimmed.toLowerCase().includes(name.toLowerCase())) return trimmed;
+      return name ? `${name} — ${trimmed}` : trimmed;
+    }
   }
   const note = (ing as { note?: string }).note;
-  if (note) return name ? `${name} — ${note}` : note;
+  if (typeof note === "string" && note.trim()) return name ? `${name} — ${note.trim()}` : note.trim();
   const amt = (ing as { amount?: number | null }).amount;
   const unit = (ing as { unit?: string | null }).unit;
-  if (amt != null && unit) return `${name} — ${amt} ${unit}`.trim();
-  if (amt != null) return `${name} — ${amt}`.trim();
-  return name;
+  const part = [name, amt != null ? String(amt) : "", unit ?? ""].join(" ").trim();
+  if (part) return part;
+  return name || "Ингредиент";
 }

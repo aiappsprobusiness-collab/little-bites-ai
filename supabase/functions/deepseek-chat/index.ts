@@ -802,6 +802,9 @@ serve(async (req) => {
     if (extraSuffix) {
       systemPrompt += "\n\n" + extraSuffix;
     }
+    if (isRecipeRequest && (type === "chat" || type === "recipe" || type === "diet_plan")) {
+      systemPrompt += "\n\nРазнообразь стиль описаний. Не используй одни и те же формулировки в нескольких подряд ответах.";
+    }
 
     const isRecipeJsonRequest = (type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest;
 

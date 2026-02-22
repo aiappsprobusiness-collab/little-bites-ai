@@ -403,20 +403,20 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     <div className="flex flex-wrap gap-2">
                       {effectiveRecipe.ingredients.map((ing, idx) => {
                         const baseDisplay = typeof ing === "string" ? ing : ingredientDisplayLabel(ing as unknown as IngredientItem);
-                        const displayText = ingredientOverrides[idx] ?? baseDisplay;
-                        if (!displayText || displayText.length < 2) return null;
+                        const displayText = (ingredientOverrides[idx] ?? baseDisplay) || "Ингредиент";
                         const ingName = typeof ing === "string" ? ing : (ing as IngredientWithSubstitute).name ?? "";
                         const substituteFromDb = isIngredientObject(ing) ? (ing as IngredientWithSubstitute).substitute : undefined;
                         return (
                           <div
                             key={idx}
                             className={
-                              showChefTip
+                              "max-w-full " +
+                              (showChefTip
                                 ? "flex items-center gap-1.5 sm:gap-2 bg-primary-light rounded-full px-2 py-1 sm:px-2.5 sm:py-1.5 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
-                                : "flex items-center gap-1 sm:gap-1.5 bg-primary-light rounded-full px-1.5 py-0.5 sm:px-2 sm:py-1 border border-primary-border/40"
+                                : "flex items-center gap-1 sm:gap-1.5 bg-primary-light rounded-full px-1.5 py-0.5 sm:px-2 sm:py-1 border border-primary-border/40")
                             }
                           >
-                            <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted">
+                            <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">
                               {displayText}
                             </span>
                             {showChefTip ? (

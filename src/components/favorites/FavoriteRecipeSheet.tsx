@@ -120,12 +120,11 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
                 <h3 className="text-typo-h2 font-bold text-foreground mb-2">Ингредиенты</h3>
                 <ul className="space-y-1.5">
                   {ingredients.map((ing, i) => {
-                    const text = typeof ing === "string" ? ing : ingredientDisplayLabel(ing);
-                    if (!text) return null;
+                    const text = (typeof ing === "string" ? ing : ingredientDisplayLabel(ing)) || "Ингредиент";
                     return (
-                      <li key={i} className="flex items-center gap-2 text-typo-muted text-foreground">
-                        <span className="text-muted-foreground">•</span>
-                        <span>{text}</span>
+                      <li key={i} className="flex items-center gap-2 text-typo-muted text-foreground min-w-0">
+                        <span className="text-muted-foreground shrink-0">•</span>
+                        <span className="min-w-0 max-w-full truncate">{text}</span>
                       </li>
                     );
                   })}

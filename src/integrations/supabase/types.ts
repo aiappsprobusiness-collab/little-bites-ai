@@ -556,6 +556,34 @@ export type Database = {
     Functions: {
       check_usage_limit: { Args: { _user_id: string }; Returns: Json }
       create_recipe_with_steps: { Args: { payload: Json }; Returns: string }
+      create_user_recipe: {
+        Args: {
+          p_title: string
+          p_description: string | null
+          p_meal_type: string | null
+          p_tags: string[] | null
+          p_chef_advice: string
+          p_steps: Json
+          p_ingredients: Json
+        }
+        Returns: string
+      }
+      update_user_recipe: {
+        Args: {
+          p_recipe_id: string
+          p_title: string
+          p_description: string | null
+          p_meal_type: string | null
+          p_tags: string[] | null
+          p_chef_advice: string
+          p_steps: Json
+          p_ingredients: Json
+        }
+        Returns: undefined
+      }
+      delete_user_recipe: { Args: { p_recipe_id: string }; Returns: undefined }
+      get_recipe_full: { Args: { p_recipe_id: string }; Returns: unknown }
+      get_recipe_previews: { Args: { recipe_ids: string[] }; Returns: unknown }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

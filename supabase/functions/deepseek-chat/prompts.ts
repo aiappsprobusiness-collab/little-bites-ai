@@ -143,6 +143,28 @@ GOOD:
 ✅ "Naturally sweet and gentle" / "Натурально сладкий, нежный вкус"
 `;
 
+/** Description variety: avoid template openings (e.g. "Нежное блюдо…"); vary beginnings; cap overuse of same adjective. */
+export const RECIPE_DESCRIPTION_VARIETY_RULE = `
+DESCRIPTION RULES (field "description", 1–2 sentences, max 200 chars):
+- Do NOT use template or fixed openings. Do NOT start description with the same adjective in more than 20% of recipes.
+- AVOID overusing: "нежный", "нежное", "нежные", "мягкий", "вкусный", "полезный" at the start of description.
+- Vary your openings. Do NOT repeat the same adjectives in several recipes in a row.
+
+Good ways to start description (use different ones):
+- "Лёгкое блюдо, которое…"
+- "Сбалансированное сочетание…"
+- "Простой и быстрый вариант…"
+- "Ароматное блюдо с…"
+- "Домашний вариант…"
+- "Идеально подходит для…"
+- "Сытное, но при этом…"
+- "Отличный выбор для…"
+- "Богато…" / "Содержит…"
+- "Готовится из…"
+
+Do NOT start many descriptions with "Нежное" or "Нежный/Нежная/Нежные". Vary the style.
+`;
+
 /** Output rules for recipe: one member → no other family; no reasoning; no markdown; no extra text. */
 export const RECIPE_OUTPUT_RULES = `
 - If only one member provided → DO NOT mention other family members.
@@ -206,6 +228,7 @@ ${SAFETY_RULES}
 ${RECIPE_STRICT_JSON_CONTRACT}
 ${RECIPE_GENERIC_FIELDS_RULE}
 ${RECIPE_MEAL_AGNOSTIC_RULE}
+${RECIPE_DESCRIPTION_VARIETY_RULE}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
@@ -248,6 +271,7 @@ ${SAFETY_RULES}
 ${RECIPE_STRICT_JSON_CONTRACT}
 ${RECIPE_GENERIC_FIELDS_RULE}
 ${RECIPE_MEAL_AGNOSTIC_RULE}
+${RECIPE_DESCRIPTION_VARIETY_RULE}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
