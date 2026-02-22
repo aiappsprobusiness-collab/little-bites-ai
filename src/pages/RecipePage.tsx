@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { ingredientDisplayLabel } from "@/types/recipe";
+import { buildRecipeShareText } from "@/utils/shareRecipeText";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { useFamily } from "@/contexts/FamilyContext";
@@ -90,15 +91,30 @@ export default function RecipePage() {
     }
   };
   const handleShare = async () => {
-    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/recipe/${id}`;
-    const title = (recipe as { title?: string })?.title ?? "Рецепт";
+    if (!id || !recipe) return;
+    const recipeDisplay = recipe as RecipeDisplayIngredients & {
+      title?: string;
+      description?: string;
+      cooking_time_minutes?: number | null;
+    };
+    const displayIngredients = getDisplayIngredients(recipeDisplay);
+    const shareText = buildRecipeShareText({
+      title: recipeDisplay.title ?? "Рецепт",
+      description: recipeDisplay.description ?? null,
+      cooking_time_minutes: recipeDisplay.cooking_time_minutes ?? null,
+      recipeId: id,
+      ingredients: displayIngredients,
+    });
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title, url });
+        await navigator.share({
+          title: recipeDisplay.title ?? "Рецепт",
+          text: shareText,
+        });
         toast({ title: "Рецепт отправлен" });
       } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-        toast({ title: "Ссылка скопирована" });
+        await navigator.clipboard.writeText(shareText);
+        toast({ title: "Скопировано" });
       } else {
         toast({ variant: "destructive", title: "Поделиться недоступно" });
       }
