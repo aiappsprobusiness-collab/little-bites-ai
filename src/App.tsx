@@ -39,6 +39,23 @@ import { useSubscription } from "./hooks/useSubscription";
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
 
+/** Обновляет --app-height для мобилки/PWA (адресная строка, клавиатура, ориентация). */
+function AppHeightSync() {
+  useEffect(() => {
+    const setHeight = () => {
+      document.documentElement.style.setProperty("--app-height", `${window.innerHeight}px`);
+    };
+    setHeight();
+    window.addEventListener("resize", setHeight);
+    window.addEventListener("orientationchange", setHeight);
+    return () => {
+      window.removeEventListener("resize", setHeight);
+      window.removeEventListener("orientationchange", setHeight);
+    };
+  }, []);
+  return null;
+}
+
 function LegacyCacheClear() {
   useEffect(() => {
     V1_STORAGE_KEYS.forEach((key) => {
@@ -98,6 +115,7 @@ const App = () => (
         }}
       >
         <AuthProvider>
+          <AppHeightSync />
           <LegacyCacheClear />
           <FamilyProvider>
             <Toaster />

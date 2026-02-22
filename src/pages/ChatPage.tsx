@@ -40,6 +40,8 @@ import { Progress } from "@/components/ui/progress";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
 const CHAT_HELP_TOOLTIP_SEEN_KEY = "chat_help_tooltip_seen";
+/** Порог (px) от низа скролла: если пользователь в пределах — автоскролл вниз при новых сообщениях. */
+const NEAR_BOTTOM_THRESHOLD = 120;
 
 const HELP_CHAT_STORAGE_KEY = "help_chat_messages_v1";
 
@@ -111,8 +113,10 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  /** Пользователь близко к низу (<= 150px) — автоскролл. Обновляется в onScroll. */
+  /** Пользователь близко к низу (<= NEAR_BOTTOM_THRESHOLD) — автоскролл. Обновляется в onScroll. */
   const userNearBottomRef = useRef(true);
+  /** Один раз после входа на вкладку: прокрутить ленту к низу после загрузки сообщений. */
+  const chatScrollRestoredRef = useRef(false);
 
   const { article: openArticle, isLoading: isArticleLoading } = useArticle(openArticleId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -236,6 +240,34 @@ export default function ChatPage() {
     messagesContainerRef.current?.scrollTo(0, 0);
   }, [mode]);
 
+  // При входе на вкладку Чат (recipes): сбросить scroll страницы, чтобы хедер был виден
+  useLayoutEffect(() => {
+    if (mode !== "recipes") return;
+    window.scrollTo(0, 0);
+    const main = document.querySelector("main.main-scroll-contain");
+    main?.scrollTo(0, 0);
+  }, [mode]);
+
+  // После загрузки истории: один раз прокрутить ленту к низу (после layout, без рывка)
+  useLayoutEffect(() => {
+    if (mode !== "recipes" || messages.length === 0 || chatScrollRestoredRef.current) return;
+    chatScrollRestoredRef.current = true;
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    let cancelled = false;
+    const id2 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled || !el) return;
+        el.scrollTop = el.scrollHeight - el.clientHeight;
+        userNearBottomRef.current = true;
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id2);
+    };
+  }, [mode, messages.length]);
+
   // Fade-in бейджа «Помощник рядом» при входе в help mode
   useEffect(() => {
     if (mode !== "help") {
@@ -356,7 +388,7 @@ export default function ChatPage() {
     const el = messagesContainerRef.current;
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
-    userNearBottomRef.current = scrollHeight - scrollTop - clientHeight <= 150;
+    userNearBottomRef.current = scrollHeight - scrollTop - clientHeight <= NEAR_BOTTOM_THRESHOLD;
   }, []);
 
   useEffect(() => {
@@ -1069,8 +1101,8 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input: ниже MessagesScroll, непрозрачный фон, без лишнего отступа под nav */}
-        <div className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200/30 bg-[#FCFCFA] py-3 max-w-full overflow-x-hidden">
+        {/* Input: ниже MessagesScroll, непрозрачный фон; safe-area снизу для PWA/notch */}
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-slate-200/30 bg-[#FCFCFA] pt-3 safe-bottom max-w-full overflow-x-hidden">
           <div className="flex w-full items-center gap-2 min-w-0">
             <Textarea
               ref={textareaRef}

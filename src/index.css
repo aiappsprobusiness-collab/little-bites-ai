@@ -5,6 +5,8 @@
 
 @layer base {
   :root {
+    /* Динамическая высота viewport для мобилки/PWA (обновляется в JS при resize/orientationchange). */
+    --app-height: 100vh;
     /* Единая оливковая палитра */
     --color-primary: #6E7F3B;
     --color-primary-light: #F3F6EC;
@@ -143,7 +145,7 @@
     @apply bg-background text-foreground antialiased leading-relaxed;
     font-feature-settings: "rlig" 1, "calt" 1;
     min-height: 100dvh;
-    min-height: 100vh;
+    min-height: var(--app-height);
   }
 }
 
