@@ -22,6 +22,7 @@ import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { HelpSectionCard, HelpWarningCard } from "@/components/help-ui";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
+import { SHARE_APP_URL } from "@/utils/shareRecipeText";
 
 const UUID_REGEX = /\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
 
@@ -317,8 +318,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const shareText = useMemo(() => {
       const base = effectiveRecipe ? formatRecipe(effectiveRecipe) : typeof content === "string" ? content : "";
-      const appMention = "\n\n— Рецепт из приложения Mom Recipes";
-      return `${base}${appMention}`;
+      const footer = "\n\n— Рецепт из приложения Mom Recipes\n" + SHARE_APP_URL;
+      return `${base}${footer}`;
     }, [effectiveRecipe, content]);
 
     const handleShare = async () => {

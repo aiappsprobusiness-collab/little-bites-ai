@@ -109,7 +109,6 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
   } = params;
 
   const lines: string[] = [];
-  const recipeUrl = `${BASE_URL}/recipe/${recipeId}`;
 
   // 1) Заголовок + тип приёма
   lines.push(`🍽️ ${title.trim() || "Рецепт"}`);
@@ -156,11 +155,7 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
     lines.push(String(chefAdvice).trim());
   }
 
-  // 7) Полная версия рецепта (отдельная ссылка на рецепт)
-  lines.push("");
-  lines.push(`Полная версия рецепта: ${recipeUrl}`);
-
-  // 8) Хвост: подпись + ссылка на сайт (чистый URL, отдельная строка, без markdown)
+  // 7) Хвост: подпись + ссылка на сайт (чистый URL, отдельная строка, без markdown)
   const body = lines.join("\n");
   const footer = `${SHARE_SIGNATURE_LINE}\n${BASE_URL}`;
   return `${body}\n\n${footer}`;
