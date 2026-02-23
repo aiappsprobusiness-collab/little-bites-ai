@@ -66,6 +66,7 @@ function isPerf(): boolean {
  */
 
 import { applyReplaceSlotToPlanCache } from "@/utils/planCache";
+import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -623,9 +624,9 @@ export default function MealPlanPage() {
 
   return (
     <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
-      <div className="flex flex-col min-h-0 flex-1 px-4 relative">
-        {/* Content wrapper: один скролл + subtle pattern */}
-        <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto">
+      <div className="flex flex-col min-h-0 flex-1 px-4 relative overflow-x-hidden touch-pan-y overscroll-x-none max-w-full">
+        {/* Content wrapper: один скролл + subtle pattern; горизонтальный скролл/overscroll отключены */}
+        <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-x-none">
           {/* 1) Hero: компактный, один primary CTA, второстепенные в меню/ниже */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
@@ -807,8 +808,8 @@ export default function MealPlanPage() {
             </div>
           )}
 
-          {/* 2) Чипсы дней — лёгкие, без перегруза */}
-          <div className="flex gap-1 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
+          {/* 2) Чипсы дней — горизонтальный скролл только внутри этого блока, страница по X не двигается */}
+          <div className="flex gap-1 overflow-x-auto overflow-y-hidden pb-2 -mx-4 px-4 scrollbar-none min-w-0 max-w-full" style={{ scrollbarWidth: "none" }}>
             {rollingDates.map((date, index) => {
               const dayKey = formatLocalDate(date);
               const isDayLockedForFree = isFree && dayKey !== todayKey;
@@ -1028,7 +1029,12 @@ export default function MealPlanPage() {
                             }
                           } else {
                             const code = (result as { code?: string }).code;
-                            if (code === "pool_exhausted") {
+                            if (code === "LIMIT_REACHED") {
+                              setPaywallCustomMessage(
+                                `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_refresh")}`
+                              );
+                              setShowPaywall(true);
+                            } else if (code === "pool_exhausted") {
                               setPoolExhaustedContext({ dayKey: selectedDayKey, mealType: slot.id });
                             } else {
                               const err = "error" in result ? result.error : "";
@@ -1145,7 +1151,12 @@ export default function MealPlanPage() {
                                 }
                               } else {
                                 const code = (result as { code?: string }).code;
-                                if (code === "pool_exhausted") {
+                                if (code === "LIMIT_REACHED") {
+                                  setPaywallCustomMessage(
+                                    `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_refresh")}`
+                                  );
+                                  setShowPaywall(true);
+                                } else if (code === "pool_exhausted") {
                                   setPoolExhaustedContext({ dayKey: selectedDayKey, mealType: slot.id });
                                 } else {
                                   const err = "error" in result ? result.error : "";

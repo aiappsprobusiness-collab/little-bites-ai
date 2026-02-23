@@ -225,6 +225,11 @@
     overscroll-behavior-y: contain;
   }
 
+  /** Запрет горизонтального overscroll/scroll-chaining (страница План: нет плавания по X при свайпе). */
+  .overscroll-x-none {
+    overscroll-behavior-x: none;
+  }
+
   /** Страницы без хедера: только safe-area сверху, чтобы контент не заходил под вырез */
   .main-safe-top {
     padding-top: env(safe-area-inset-top, 0px);
