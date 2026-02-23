@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Heart, MessageCircle, Plus } from "lucide-react";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { useFavorites, type FavoritesFilter } from "@/hooks/useFavorites";
 import { useMyRecipes } from "@/hooks/useMyRecipes";
@@ -71,8 +71,8 @@ export default function FavoritesPage() {
 
   return (
     <MobileLayout
-      title="Избранное"
-      headerMeta={tab === "favorites" ? "Любимые рецепты для вашей семьи" : "Мои рецепты"}
+      title={APP_HEADER_TITLE}
+      headerTitleIcon={APP_HEADER_ICON}
       headerRight={
         tab === "favorites" && favorites.length > 0
           ? (
@@ -89,8 +89,8 @@ export default function FavoritesPage() {
             : undefined
       }
     >
-      <div className="px-4 pb-6">
-        <div className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-background/95 backdrop-blur flex gap-2 mb-3 border-b border-border/50 pb-2">
+      <div className="px-4 pb-4">
+        <div className="sticky top-0 z-10 -mx-4 px-4 py-0.5 bg-background/95 backdrop-blur flex gap-2 mb-0.5 border-b border-border/50 pb-0.5">
           <button
             type="button"
             onClick={() => setTab("favorites")}
@@ -140,7 +140,7 @@ export default function FavoritesPage() {
               </motion.div>
             ) : (
               <>
-                <div className="flex justify-end mb-3">
+                <div className="flex justify-end mb-2">
                   <Button
                     onClick={openCreateForm}
                     className="rounded-full gap-2 bg-[#6b7c3d] hover:bg-[#6b7c3d]/90"
@@ -149,8 +149,8 @@ export default function FavoritesPage() {
                     Создать свой рецепт
                   </Button>
                 </div>
-                <div className="space-y-4">
-                  {myRecipes.map((recipe, index) => (
+<div className="space-y-3">
+                {myRecipes.map((recipe, index) => (
                     <MyRecipeCard
                       key={recipe.id}
                       recipe={recipe}
@@ -170,7 +170,7 @@ export default function FavoritesPage() {
         {tab === "favorites" && (
           <>
             {favorites.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
+              <div className="flex flex-wrap gap-2 mb-2">
                 <button
                   type="button"
                   onClick={() => setFilter("all")}
@@ -214,7 +214,7 @@ export default function FavoritesPage() {
                 className="flex flex-col items-center justify-center text-center py-12 px-4"
               >
                 <div className="rounded-2xl border border-border bg-card shadow-soft p-8 w-full max-w-sm">
-                  <div className="flex justify-center mb-4">
+                  <div className="flex justify-center mb-2">
                     <Heart className="w-10 h-10 text-primary/40 stroke-[1.5]" />
                   </div>
                   <h3 className="text-xl font-semibold text-foreground mb-2">
@@ -233,7 +233,7 @@ export default function FavoritesPage() {
                 </div>
               </motion.div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {favorites.map((favorite, index) => (
                   <FavoriteCard
                     key={favorite.id}

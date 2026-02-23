@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import {
   Plus,
@@ -133,7 +133,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <MobileLayout title="Профиль">
+      <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
         <div className="flex items-center justify-center min-h-[50vh]">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
@@ -144,10 +144,10 @@ export default function ProfilePage() {
   const cardClass = "rounded-2xl border border-border bg-card shadow-soft p-4";
 
   return (
-    <MobileLayout title="Профиль">
-      <div className="px-4 py-6 space-y-4 max-w-md mx-auto">
+    <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
+      <div className="px-4 pt-0 pb-2 space-y-3 max-w-md mx-auto">
         {/* Аккаунт — вверху */}
-        <section className="space-y-4">
+        <section className="space-y-2">
           <h2 className="text-xl font-semibold text-foreground">Аккаунт</h2>
           <div className={cardClass}>
             <div className="flex items-start gap-4">
@@ -179,16 +179,12 @@ export default function ProfilePage() {
           </div>
         </section>
 
-        {/* Моя семья */}
-        <section className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">Моя семья</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Профили, для которых вы готовите
-            </p>
-          </div>
-          <div className="space-y-4">
-            {members.map((member, index) => {
+        {/* Моя семья — карточки того же размера, что и Аккаунт */}
+        <section className="space-y-2">
+          <h2 className="text-xl font-semibold text-foreground">Моя семья</h2>
+          <p className="text-sm text-muted-foreground -mt-1">Профили, для которых вы готовите</p>
+          <div className="space-y-2">
+          {members.map((member, index) => {
               const isPrimary = member.id === primaryMemberId;
               const isLockedForFree = isFreeLocked && !isPrimary;
               return (
@@ -204,7 +200,7 @@ export default function ProfilePage() {
                   }`}
                 >
                   <div className="flex items-start gap-4">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0 relative ${
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-semibold text-foreground shrink-0 relative ${
                       isLockedForFree ? "bg-slate-200" : "bg-muted"
                     }`}>
                       {memberAvatar(member, index)}
@@ -215,32 +211,21 @@ export default function ProfilePage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-base font-semibold ${isLockedForFree ? "text-slate-500" : "text-foreground"}`}>
-                        {member.name}
-                      </p>
-                      <p className={`text-sm mt-0.5 ${isLockedForFree ? "text-slate-400" : "text-muted-foreground"}`}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-base font-semibold truncate ${isLockedForFree ? "text-slate-500" : "text-foreground"}`}>
+                          {member.name}
+                        </span>
+                      </div>
+                      <p className={`text-sm mt-0.5 truncate ${isLockedForFree ? "text-slate-400" : "text-muted-foreground"}`}>
                         {[
-                          MEMBER_TYPE_LABEL[(member as MembersRow).type] ??
-                            (member as MembersRow).type,
+                          MEMBER_TYPE_LABEL[(member as MembersRow).type] ?? (member as MembersRow).type,
                           formatAge(member.age_months ?? null),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                      <p className={`text-sm mt-1 line-clamp-2 ${isLockedForFree ? "text-slate-400" : "text-muted-foreground"}`}>
-                        {[
-                          member.allergies?.length &&
-                            `Аллергии: ${(member.allergies as string[]).join(", ")}`,
-                          member.preferences?.length &&
-                            `Предпочтения: ${(member.preferences as string[]).join(", ")}`,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ") || "Нет ограничений"}
+                        ].filter(Boolean).join(" · ")}
                       </p>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className={`mt-2 -ml-2 h-8 ${isLockedForFree ? "text-slate-400 hover:text-slate-600" : "text-primary hover:text-primary/90"}`}
+                        className={`mt-1.5 -ml-2 h-7 text-xs ${isLockedForFree ? "text-slate-400 hover:text-slate-600" : "text-primary hover:text-primary/90"}`}
                         onClick={() => {
                           if (isLockedForFree) {
                             setPaywallCustomMessage("Переключение между профилями детей доступно в Premium");
@@ -280,7 +265,7 @@ export default function ProfilePage() {
         </section>
 
         {/* Подписка */}
-        <section className={cardClass + " space-y-4"}>
+        <section className={cardClass + " space-y-3"}>
           <h2 className="text-xl font-semibold text-foreground">
             Подписка
           </h2>
@@ -324,11 +309,11 @@ export default function ProfilePage() {
         </section>
 
         {/* Внизу: уведомления, обратная связь, выход и юридические ссылки */}
-        <section className="space-y-4">
+        <section className="space-y-3">
           <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
             <button
               type="button"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
             >
               <Bell className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-foreground">Уведомления</span>
@@ -336,7 +321,7 @@ export default function ProfilePage() {
             </button>
             <a
               href="mailto:momrecipesai@gmail.com"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
             >
               <HelpCircle className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-foreground">Обратная связь</span>
@@ -345,7 +330,7 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={handleLogout}
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/50 transition-colors text-muted-foreground hover:text-destructive text-sm"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors text-muted-foreground hover:text-destructive text-sm"
             >
               <LogOut className="h-4 w-4 shrink-0" />
               <span>Выйти из аккаунта</span>
@@ -354,7 +339,7 @@ export default function ProfilePage() {
           <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
             <Link
               to="/terms"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
             >
               <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-foreground">Пользовательское соглашение</span>
@@ -362,7 +347,7 @@ export default function ProfilePage() {
             </Link>
             <Link
               to="/privacy"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
             >
               <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-foreground">Политика конфиденциальности</span>
@@ -370,7 +355,7 @@ export default function ProfilePage() {
             </Link>
             <Link
               to="/subscription"
-              className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-muted/50 transition-colors text-sm"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors text-sm"
             >
               <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-foreground">Условия подписки</span>
@@ -386,7 +371,7 @@ export default function ProfilePage() {
           <DialogHeader>
             <DialogTitle>Изменить имя</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 py-2">
+          <div className="space-y-2 py-1">
             <Label htmlFor="edit-name">Имя</Label>
             <Input
               id="edit-name"

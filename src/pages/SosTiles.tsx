@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SosHero } from "@/components/sos/SosHero";
@@ -112,17 +112,17 @@ export default function SosTiles() {
   };
 
   return (
-    <MobileLayout showNav title="Помощь маме">
-      <div className="px-4 pb-6 pt-4 bg-background min-h-full">
+    <MobileLayout showNav title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
+      <div className="px-4 pb-4 pt-0 bg-background min-h-full">
         {members.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-3 mb-2">
+          <p className="text-sm text-muted-foreground text-center py-2 mb-1">
             Добавьте ребёнка в профиле, чтобы получать рекомендации по темам.
           </p>
         )}
         <SosHero />
 
-        <div className="mt-6">
-          <section className="space-y-4">
+        <div className="mt-3">
+          <section className="space-y-3">
             <div>
               <h2 className="text-base font-semibold text-foreground">Темы</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Выберите ситуацию</p>
@@ -146,7 +146,7 @@ export default function SosTiles() {
             </div>
           </section>
           <SosTopicGrid
-            className="mt-4"
+            className="mt-2"
             topics={filteredTopics}
             hasAccess={hasAccess}
             onSelect={handleTopicSelect}

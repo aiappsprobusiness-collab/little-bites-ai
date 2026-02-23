@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Loader2, Sparkles, Plus } from "lucide-react";
@@ -590,7 +590,7 @@ export default function MealPlanPage() {
 
   if (isMembersLoading) {
     return (
-      <MobileLayout title="План">
+      <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
         <div className="flex items-center justify-center min-h-[50vh]">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
@@ -600,7 +600,7 @@ export default function MealPlanPage() {
 
   if (showNoProfile || showEmptyFamily) {
     return (
-      <MobileLayout title="План">
+      <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card variant="default" className="p-8 text-center">
             <CardContent className="p-0">
@@ -622,7 +622,7 @@ export default function MealPlanPage() {
   }
 
   return (
-    <MobileLayout title="План">
+    <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
       <div className="flex flex-col min-h-0 flex-1 px-4 relative">
         {/* Content wrapper: один скролл + subtle pattern */}
         <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto">
@@ -631,7 +631,7 @@ export default function MealPlanPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="rounded-2xl bg-primary-light/50 border border-primary-border/80 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.04)] p-4 sm:p-5 mb-3"
+            className="rounded-2xl bg-primary-light/50 border border-primary-border/80 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.04)] p-3 sm:p-4 mb-1.5"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -698,7 +698,7 @@ export default function MealPlanPage() {
                 </DropdownMenu>
               </div>
             </div>
-            <div className="mt-4">
+            <div className="mt-2">
               <Button
                 size="sm"
                 className={`w-full sm:w-auto rounded-xl bg-primary hover:opacity-90 text-white border-0 transition-shadow duration-300 ${ctaGlow ? "shadow-[0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-sm"}`}
@@ -758,7 +758,7 @@ export default function MealPlanPage() {
 
           {/* Заполнить неделю — вторично, под hero */}
           {!isFree && (
-            <div className="mb-3">
+            <div className="mb-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -870,7 +870,7 @@ export default function MealPlanPage() {
 
           {/* 3) Приёмы пищи: loader при загрузке/refetch, иначе empty state или слоты (единый источник: dayMealPlans) */}
           {isLoading || isFetching ? (
-            <div className="mt-5 space-y-6 pb-6">
+            <div className="mt-3 space-y-4 pb-4">
               {mealTypes.map((slot) => (
                 <div key={slot.id}>
                   <p className="text-sm font-medium text-foreground mb-2">{slot.label}</p>
@@ -879,10 +879,10 @@ export default function MealPlanPage() {
               ))}
             </div>
           ) : isEmptyDay ? (
-            <div className="mt-4 rounded-2xl border border-primary-border/60 bg-primary-light/30 p-6 text-center">
-              <p className="text-4xl mb-2" aria-hidden>✨</p>
+            <div className="mt-2 rounded-2xl border border-primary-border/60 bg-primary-light/30 p-4 text-center">
+              <p className="text-4xl mb-1.5" aria-hidden>✨</p>
               <h3 className="text-plan-hero-title font-semibold text-foreground mb-1">План на день пока пуст</h3>
-              <p className="text-plan-secondary text-muted-foreground text-sm mb-5">
+              <p className="text-plan-secondary text-muted-foreground text-sm mb-3">
                 Нажми «Заполнить день» или подбери рецепт для нужного приёма пищи.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
@@ -931,7 +931,7 @@ export default function MealPlanPage() {
               </div>
             </div>
           ) : (
-          <div className="mt-5 space-y-6 pb-6">
+          <div className="mt-3 space-y-4 pb-4">
             {mealTypes.map((slot) => {
               const plannedMeal = mealsByType[slot.id];
               const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;

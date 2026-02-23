@@ -1,7 +1,14 @@
 import { ReactNode } from "react";
+import { Leaf } from "lucide-react";
 import { BottomNavigation } from "./BottomNavigation";
 import { TopBar } from "./TopBar";
 import { motion } from "framer-motion";
+
+/** Единый заголовок приложения для вкладок: текст + иконка листа (зелёная). */
+export const APP_HEADER_TITLE = "Mom Recipes";
+export const APP_HEADER_ICON = (
+  <Leaf className="w-5 h-5 shrink-0 text-primary" aria-hidden />
+);
 
 /**
  * LAYOUT CONTRACT (safe-area / отступы)
@@ -23,6 +30,8 @@ interface MobileLayoutProps {
   headerRight?: ReactNode;
   /** Optional meta line below title (e.g. recipe page: age · meal type · cook time) */
   headerMeta?: ReactNode;
+  /** Иконка справа от заголовка (например лист для Mom Recipes) */
+  headerTitleIcon?: ReactNode;
   /** Left block: по умолчанию пусто; false = не показывать, ReactNode = кастом (headerLeft тоже можно передать) */
   headerBrand?: ReactNode | false;
   /** Кастомный контент по центру вместо title (например логотип) */
@@ -40,6 +49,7 @@ export function MobileLayout({
   headerLeft,
   headerRight,
   headerMeta,
+  headerTitleIcon,
   headerBrand = undefined,
   headerCenter,
   headerNoBlur = false,
@@ -67,9 +77,12 @@ export function MobileLayout({
                 headerCenter ??
                 (title != null && title !== "" ? (
                   <>
-                    <h1 className="text-xl font-semibold text-foreground truncate w-full leading-tight">
-                      {title}
-                    </h1>
+                    <div className="flex items-center justify-center gap-1.5 min-w-0 w-full">
+                      <h1 className="text-xl font-semibold text-foreground truncate leading-tight">
+                        {title}
+                      </h1>
+                      {headerTitleIcon}
+                    </div>
                     {headerMeta != null && (
                       <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
                         {headerMeta}

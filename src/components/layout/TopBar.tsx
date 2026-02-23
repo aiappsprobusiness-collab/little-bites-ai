@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-/** Единая кнопка-иконка в TopBar: 36–40px, круг, прозрачный фон, hover/active — лёгкая заливка. */
+/** Единая кнопка-иконка в TopBar: 32px, круг, прозрачный фон, hover/active — лёгкая заливка. */
 export function TopBarIconButton({
   children,
   className,
@@ -11,7 +11,7 @@ export function TopBarIconButton({
     <button
       type="button"
       className={cn(
-        "h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors shrink-0",
+        "h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors shrink-0",
         className
       )}
       {...props}
@@ -46,7 +46,7 @@ export function TopBar({ left, title, subtitle, center, right, className }: TopB
   return (
     <div
       className={cn(
-        "layout-topbar-inner relative flex items-center w-full min-h-[56px] h-14 px-4",
+        "layout-topbar-inner relative flex items-center w-full min-h-[32px] h-8 px-4",
         className
       )}
     >

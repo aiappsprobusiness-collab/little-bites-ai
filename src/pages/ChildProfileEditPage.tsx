@@ -15,14 +15,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, Calendar, Loader2, Lock, Plus, Trash2 } from "lucide-react";
 import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import type { MembersRow, AllergyItemRow } from "@/integrations/supabase/types-v2";
-import { Lock } from "lucide-react";
 
 function ageMonthsToBirthDate(ageMonths: number | null): string {
   if (ageMonths == null || ageMonths < 0) return "";
@@ -219,178 +218,199 @@ export default function ChildProfileEditPage() {
         </Button>
       }
     >
-      <div className="px-4 py-6 max-w-lg mx-auto">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="child-name">Имя</Label>
-              <Input
-                id="child-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Имя ребёнка"
-                className="h-11 rounded-xl"
-              />
+      <div className="plan-page-bg min-h-0 flex-1 overflow-y-auto">
+        <div className="px-4 py-4 max-w-lg mx-auto">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="child-birth">Дата рождения</Label>
-              <Input
-                id="child-birth"
-                type="date"
-                value={birthDate}
-                onChange={(e) => setBirthDate(e.target.value)}
-                className="h-11 rounded-xl"
-              />
-              <p className="text-typo-caption text-muted-foreground">
-                Возраст считается автоматически
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-typo-muted font-medium">Аллергии</Label>
-              <p className="text-typo-caption text-muted-foreground">
-                Нажмите на чип для редактирования, крестик — удалить. {!hasAccess && "Активна одна аллергия — остальные в Premium."}
-              </p>
-              <div className="flex flex-wrap gap-2 mb-2">
-                {allergyItems.map((item, i) => {
-                  const isLocked = !hasAccess && !item.is_active;
-                  return (
-                    <div key={i} className="relative">
-                      {isLocked ? (
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => {
-                            setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
-                            setShowPaywall(true);
-                          }}
-                          onKeyDown={(e) => e.key === "Enter" && (setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium."), setShowPaywall(true))}
-                          className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50/80 px-2 py-1 text-sm text-amber-800 cursor-pointer hover:bg-amber-100/80"
-                        >
-                          {item.value}
-                          <Lock className="w-3.5 h-3.5 shrink-0" />
-                        </div>
-                      ) : (
-                        <div className="inline-flex items-center gap-1 rounded-md border bg-secondary px-2 py-1 text-sm pr-1">
-                          <span
-                            className="cursor-pointer"
-                            onClick={() => allergiesHandlers.edit(item.value, i)}
-                          >
-                            {item.value}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); allergiesHandlers.remove(i); }}
-                            className="rounded-full p-0.5 hover:bg-muted"
-                            aria-label="Удалить"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  value={allergyInput}
-                  onChange={(e) => setAllergyInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === ",") {
-                      e.preventDefault();
-                      allergiesHandlers.add(allergyInput);
-                    }
-                  }}
-                  placeholder="Добавить аллергию (запятая или Enter)"
-                  className="h-11 rounded-xl"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-11 w-11 shrink-0 rounded-xl"
-                  onClick={() => allergiesHandlers.add(allergyInput)}
-                  aria-label="Добавить"
-                >
-                  +
-                </Button>
-              </div>
-            </div>
-
-            <div className={limits.preferencesEnabled ? "" : "relative"}>
-              {!limits.preferencesEnabled && (
-                <div
-                  className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/80 backdrop-blur-[1px]"
-                  onClick={() => {
-                    setPaywallCustomMessage("Предпочтения (любит / не любит) и сложность блюд — в Premium.");
-                    setShowPaywall(true);
-                  }}
-                >
-                  <Button type="button" variant="secondary" size="sm" className="pointer-events-none">
-                    Доступно в Premium
-                  </Button>
+          ) : (
+            <>
+              {/* Один мягкий контейнер в стиле Plan */}
+              <div className="rounded-[20px] bg-primary-light/50 border border-primary-border/80 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.04)] p-5 flex flex-col gap-5">
+                {/* Основное: Имя, Дата рождения */}
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="child-name" className="text-sm font-semibold text-foreground">
+                    Имя
+                  </Label>
+                  <Input
+                    id="child-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Имя ребёнка"
+                    className="h-[52px] rounded-[16px] px-3 text-base border border-primary-border/60 bg-white shadow-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0 focus-visible:border-primary/40"
+                  />
                 </div>
-              )}
-              <div className={limits.preferencesEnabled ? "" : "pointer-events-none select-none opacity-70"}>
-                <TagListEditor
-                  label="Предпочтения в питании"
-                  items={preferences}
-                  inputValue={preferenceInput}
-                  onInputChange={setPreferenceInput}
-                  onAdd={preferencesHandlers.add}
-                  onEdit={preferencesHandlers.edit}
-                  onRemove={preferencesHandlers.remove}
-                  placeholder="Например: вегетарианское (запятая или Enter)"
-                />
-                <div className="space-y-2 mt-4">
-                  <Label>Сложность блюд</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { value: "easy", label: "Простые" },
-                      { value: "medium", label: "Средние" },
-                      { value: "any", label: "Любые" },
-                    ].map((opt) => (
-                      <Button
-                        key={opt.value}
-                        type="button"
-                        variant={difficulty === opt.value ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setDifficulty(opt.value)}
-                      >
-                        {opt.label}
-                      </Button>
-                    ))}
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="child-birth" className="text-sm font-semibold text-foreground">
+                    Дата рождения
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="child-birth"
+                      type="date"
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      className="h-[52px] rounded-[16px] pl-3 pr-12 text-base border border-primary-border/60 bg-white shadow-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0 focus-visible:border-primary/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById("child-birth")?.focus()}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:bg-primary-light/80 hover:text-foreground"
+                      aria-label="Выбрать дату"
+                    >
+                      <Calendar className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                    Возраст считается автоматически
+                  </p>
+                </div>
+
+                {/* Аллергии */}
+                <div className="flex flex-col gap-2">
+                  <Label className="text-sm font-semibold text-foreground">Аллергии</Label>
+                  {allergyItems.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {allergyItems.map((item, i) => {
+                        const isLocked = !hasAccess && !item.is_active;
+                        return (
+                          <div key={i} className="relative">
+                            {isLocked ? (
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => {
+                                  setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+                                  setShowPaywall(true);
+                                }}
+                                onKeyDown={(e) => e.key === "Enter" && (setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium."), setShowPaywall(true))}
+                                className="inline-flex items-center gap-1.5 h-8 rounded-full px-3 text-[13px] bg-amber-50 text-amber-800 cursor-pointer hover:bg-amber-100 border-0"
+                              >
+                                <span className="truncate max-w-[120px]">{item.value}</span>
+                                <Lock className="w-3.5 h-3.5 shrink-0" />
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-1.5 h-8 rounded-full px-3 text-[13px] bg-primary-light/80 text-foreground border-0">
+                                <span
+                                  className="cursor-pointer truncate max-w-[120px]"
+                                  onClick={() => allergiesHandlers.edit(item.value, i)}
+                                >
+                                  {item.value}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); allergiesHandlers.remove(i); }}
+                                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-primary-light shrink-0 -mr-0.5"
+                                  aria-label="Удалить"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <label htmlFor="child-allergy-add" className="flex h-12 items-center gap-3 px-4 rounded-2xl border border-primary-border/60 bg-white hover:bg-muted/30 transition-colors cursor-text w-full">
+                    <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0 pointer-events-none" aria-hidden>
+                      <Plus className="w-5 h-5 text-primary-foreground" />
+                    </div>
+                    <input
+                      id="child-allergy-add"
+                      value={allergyInput}
+                      onChange={(e) => setAllergyInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") {
+                          e.preventDefault();
+                          allergiesHandlers.add(allergyInput);
+                        }
+                      }}
+                      placeholder="Добавить аллергию"
+                      className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
+                    />
+                  </label>
+                  <p className="text-[10px] text-muted-foreground/60 truncate">
+                    {!hasAccess ? "Одна аллергия — остальные в Premium." : "Запятая или Enter."}
+                  </p>
+                </div>
+
+                {/* Предпочтения + Сложность (Premium) */}
+                <div className={limits.preferencesEnabled ? "flex flex-col gap-5" : "relative"}>
+                  {!limits.preferencesEnabled && (
+                    <div
+                      className="absolute inset-0 z-10 flex items-center justify-center rounded-[20px] bg-primary-light/30 backdrop-blur-[2px] min-h-[180px]"
+                      onClick={() => {
+                        setPaywallCustomMessage("Предпочтения (любит / не любит) и сложность блюд — в Premium.");
+                        setShowPaywall(true);
+                      }}
+                    >
+                      <span className="text-sm text-muted-foreground px-4 py-2 rounded-xl bg-background/90">
+                        Доступно в Premium
+                      </span>
+                    </div>
+                  )}
+                  <div className={!limits.preferencesEnabled ? "pointer-events-none select-none opacity-60" : ""}>
+                    <TagListEditor
+                      label="Предпочтения в питании"
+                      items={preferences}
+                      inputValue={preferenceInput}
+                      onInputChange={setPreferenceInput}
+                      onAdd={preferencesHandlers.add}
+                      onEdit={preferencesHandlers.edit}
+                      onRemove={preferencesHandlers.remove}
+                      placeholder="Добавить предпочтение"
+                      unified
+                      helperText="Запятая или Enter."
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label className="text-sm font-semibold text-foreground">Сложность блюд</Label>
+                    <div className="flex rounded-2xl bg-primary-light/40 p-1 gap-0 border-0">
+                      {[
+                        { value: "easy", label: "Простые" },
+                        { value: "medium", label: "Средние" },
+                        { value: "any", label: "Любые" },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setDifficulty(opt.value)}
+                          className={`flex-1 h-9 rounded-[14px] text-sm font-medium transition-colors border-0 ${
+                            difficulty === opt.value
+                              ? "bg-primary text-primary-foreground shadow-sm"
+                              : "bg-transparent text-foreground hover:bg-primary-light/60"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-3 pt-4">
+              {/* Кнопка Сохранить — как «Обновить план» */}
               <Button
-                className="w-full h-12 rounded-xl font-medium"
+                className="w-full h-12 rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-sm font-semibold text-base mt-6"
                 onClick={handleSave}
                 disabled={isCreating || isUpdating}
               >
                 {(isCreating || isUpdating) ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Сохранить
+                    Сохраняем…
                   </>
                 ) : (
-                  "Сохранить"
+                  "Сохранить изменения"
                 )}
               </Button>
 
               {!isNew && member && (
                 <Button
                   variant="ghost"
-                  className="w-full h-11 text-destructive hover:bg-destructive/10"
+                  className="w-full h-11 rounded-2xl text-muted-foreground hover:text-destructive hover:bg-destructive/5 text-sm font-medium mt-1"
                   onClick={() => setShowDeleteConfirm(true)}
                   disabled={isDeleting}
                 >
@@ -398,9 +418,9 @@ export default function ChildProfileEditPage() {
                   Удалить профиль
                 </Button>
               )}
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>

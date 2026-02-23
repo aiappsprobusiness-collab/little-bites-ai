@@ -49,8 +49,8 @@
     --radius: 1rem;
 
     /* Layout: единый источник истины для safe-area и отступов (см. контракт в MobileLayout.tsx)
-     * TopBar: контентная высота 56px; header-offset = safe-area + 56px. */
-    --header-content-height: 3.5rem; /* 56px */
+     * TopBar: контентная высота 32px; header-offset = safe-area + 32px. */
+    --header-content-height: 2rem; /* 32px */
     --header-row-py: 0px;
     --layout-header-gap: 0px;
     --layout-header-offset: calc(env(safe-area-inset-top, 0px) + var(--header-content-height) + var(--header-row-py) * 2 + var(--layout-header-gap));

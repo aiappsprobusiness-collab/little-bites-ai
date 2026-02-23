@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } fr
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Send, Loader2, HelpCircle, MoreVertical, Trash2 } from "lucide-react";
-import { MobileLayout } from "@/components/layout/MobileLayout";
+import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
 import { TopBarIconButton } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -875,66 +875,67 @@ export default function ChatPage() {
     return `Аллергии: ${first}${rest}`;
   }, [mode, selectedMemberId, selectedMember, members]);
 
-  const chatTitle = mode === "help" ? "Помощник рядом" : "Помощник по питанию";
+  const chatTitle = APP_HEADER_TITLE;
   const chatHeaderRight = mode === "help" ? (
     members.length > 0 ? <MemberSelectorButton onProfileChange={() => setMessages([])} /> : undefined
   ) : (
     members.length > 0 ? (
-      <div className="flex items-center gap-2">
-        <MemberSelectorButton onProfileChange={() => setMessages([])} variant="light" />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <TopBarIconButton aria-label="Меню чата">
-              <MoreVertical className="w-5 h-5" />
-            </TopBarIconButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={4}>
-            <DropdownMenuItem
-              className="text-foreground"
-              onSelect={(e) => {
-                e.preventDefault();
-                setShowClearConfirm(true);
-              }}
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Очистить чат
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <TopBarIconButton aria-label="Меню чата">
+            <MoreVertical className="w-5 h-5" />
+          </TopBarIconButton>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={4}>
+          <DropdownMenuItem
+            className="text-foreground"
+            onSelect={(e) => {
+              e.preventDefault();
+              setShowClearConfirm(true);
+            }}
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Очистить чат
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     ) : undefined
   );
 
   return (
     <MobileLayout
       showNav
-      title={chatTitle}
+      title={chatTitle} headerTitleIcon={APP_HEADER_ICON}
       headerNoBlur
       headerRight={chatHeaderRight}
     >
       <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg overflow-hidden">
         {/* Hero под TopBar: статус, время, meta, CTA (только recipes) */}
         {mode === "recipes" && members.length > 0 && (
-          <div ref={chatHeroRef} className="shrink-0 border-b border-border/50 bg-background px-4 py-4">
+          <div ref={chatHeroRef} className="shrink-0 border-b border-border/50 bg-background px-4 py-1">
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <button
+                type="button"
+                onClick={() => textareaRef.current?.focus()}
+                className="shrink-0 h-11 px-4 rounded-xl font-semibold bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-2"
+              >
+                <span>Задать вопрос</span>
+                <Send className="w-4 h-4 shrink-0" />
+              </button>
+              <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
+            </div>
             {chatHeroStatusLine && (
               <p className="text-xs text-muted-foreground leading-snug">{chatHeroStatusLine}</p>
             )}
             <p className="text-xs text-muted-foreground/80 mt-0.5 leading-snug">
               {chatTimeOfDayLine}
             </p>
-            {chatHeaderMeta != null && <div className="mt-2">{chatHeaderMeta}</div>}
-            <button
-              type="button"
-              onClick={() => textareaRef.current?.focus()}
-              className="mt-4 h-12 px-5 rounded-2xl font-semibold text-primary-foreground bg-primary hover:opacity-90 active:opacity-95 transition-opacity"
-            >
-              Задать вопрос
-            </button>
+            {chatHeaderMeta != null && <div className="mt-0.5">{chatHeaderMeta}</div>}
             {messages.length === 0 && (
               <button
                 type="button"
                 onClick={() => setShowHintsModal(true)}
-                className="block text-left mt-3 text-sm text-primary font-medium no-underline cursor-pointer bg-transparent border-0 p-0 hover:opacity-85 active:opacity-70 transition-opacity"
+                className="block text-left mt-1 text-sm text-primary font-medium no-underline cursor-pointer bg-transparent border-0 p-0 hover:opacity-85 active:opacity-70 transition-opacity"
               >
                 Показать подсказки
               </button>
@@ -946,12 +947,12 @@ export default function ChatPage() {
         <div
           ref={messagesContainerRef}
           onScroll={handleMessagesScroll}
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-4 space-y-4 pb-4"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-0.5 space-y-3 pb-3"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {/* Статус при смене профиля: 1.5 сек, плавное появление/исчезновение (резерв 20px без сдвига) */}
           {mode === "recipes" && (
-            <div className="min-h-[20px] flex items-center pt-1">
+            <div className="min-h-[16px] flex items-center pt-0.5">
               <AnimatePresence mode="wait">
                 {profileChangeStatus && (
                   <motion.span
@@ -1074,7 +1075,7 @@ export default function ChatPage() {
         </div>
 
         {/* Input: единый стиль, 16px padding, divider */}
-        <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-4 pb-4 safe-bottom max-w-full overflow-x-hidden">
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-3 safe-bottom max-w-full overflow-x-hidden">
           <div className="flex w-full items-center gap-2 min-w-0">
             <Textarea
               ref={textareaRef}
@@ -1124,17 +1125,17 @@ export default function ChatPage() {
                 </div>
               )}
               <button
-                type="button"
-                disabled={!input.trim() || isChatting}
-                onClick={() => handleSend()}
-                className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-primary-foreground bg-primary hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
-              >
-                {isChatting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </button>
+              type="button"
+              disabled={!input.trim() || isChatting}
+              onClick={() => handleSend()}
+              className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-primary-foreground bg-primary hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
+            >
+              {isChatting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+            </button>
             </div>
           </div>
         </div>
