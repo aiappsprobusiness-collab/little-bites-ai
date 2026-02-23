@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
@@ -67,7 +68,13 @@ function PlanBadge({ status }: { status: string }) {
         ? "secondary"
         : "outline";
   return (
-    <Badge variant={variant} className="text-typo-caption font-medium shrink-0">
+    <Badge
+      variant={variant}
+      className={cn(
+        "text-typo-caption font-medium shrink-0",
+        status === "free" && "border-transparent bg-muted text-muted-foreground"
+      )}
+    >
       {STATUS_LABEL[status] ?? "Free"}
     </Badge>
   );
@@ -191,30 +198,24 @@ export default function ProfilePage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.05 }}
-                  className={`${cardClass} ${
-                    isLockedForFree
-                      ? "border-slate-200 bg-slate-50/80"
-                      : ""
-                  }`}
+                  className={cardClass}
                 >
                   <div className="flex items-start gap-4">
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-semibold text-foreground shrink-0 relative ${
-                      isLockedForFree ? "bg-slate-200" : "bg-muted"
-                    }`}>
+                    <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center text-xl font-semibold text-foreground shrink-0 relative">
                       {memberAvatar(member, index)}
                       {isLockedForFree && (
-                        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-slate-500/40">
+                        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40">
                           <Lock className="w-5 h-5 text-white" strokeWidth={2.5} />
                         </div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-base font-semibold truncate ${isLockedForFree ? "text-slate-500" : "text-foreground"}`}>
+                        <span className="text-base font-semibold text-foreground truncate">
                           {member.name}
                         </span>
                       </div>
-                      <p className={`text-sm mt-0.5 truncate ${isLockedForFree ? "text-slate-400" : "text-muted-foreground"}`}>
+                      <p className="text-sm text-muted-foreground mt-0.5 truncate">
                         {[
                           MEMBER_TYPE_LABEL[(member as MembersRow).type] ?? (member as MembersRow).type,
                           formatAge(member.age_months ?? null),
@@ -223,7 +224,7 @@ export default function ProfilePage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className={`mt-1.5 -ml-2 h-7 text-xs ${isLockedForFree ? "text-slate-400 hover:text-slate-600" : "text-primary hover:text-primary/90"}`}
+                        className="mt-1.5 -ml-2 h-7 text-xs text-primary hover:text-primary/90"
                         onClick={() => {
                           if (isLockedForFree) {
                             setPaywallCustomMessage("Переключение между профилями детей доступно в Premium");

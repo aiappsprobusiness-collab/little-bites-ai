@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useA2HSInstall } from "@/hooks/useA2HSInstall";
+import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2, Download } from "lucide-react";
 
 const loginSchema = z.object({
@@ -220,15 +221,16 @@ export default function AuthPage() {
                                 <Input
                                   type={showPassword ? "text" : "password"}
                                   placeholder="Введите пароль"
-                                  className={AUTH_INPUT_CLASS}
+                                  className={cn(AUTH_INPUT_CLASS, "pr-12")}
                                   {...field}
                                 />
                                 <button
                                   type="button"
+                                  aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
                                   onClick={() => setShowPassword(!showPassword)}
-                                  className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors touch-manipulation"
                                 >
-                                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  {showPassword ? <EyeOff className="w-4 h-4 shrink-0" /> : <Eye className="w-4 h-4 shrink-0" />}
                                 </button>
                               </div>
                             </FormControl>
@@ -288,15 +290,16 @@ export default function AuthPage() {
                                 <Input
                                   type={showPassword ? "text" : "password"}
                                   placeholder="Придумайте пароль (от 6 символов)"
-                                  className={AUTH_INPUT_CLASS}
+                                  className={cn(AUTH_INPUT_CLASS, "pr-12")}
                                   {...field}
                                 />
                                 <button
                                   type="button"
+                                  aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
                                   onClick={() => setShowPassword(!showPassword)}
-                                  className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors touch-manipulation"
                                 >
-                                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                  {showPassword ? <EyeOff className="w-4 h-4 shrink-0" /> : <Eye className="w-4 h-4 shrink-0" />}
                                 </button>
                               </div>
                             </FormControl>
