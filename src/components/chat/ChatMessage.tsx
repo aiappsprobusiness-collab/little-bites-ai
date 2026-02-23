@@ -367,7 +367,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.28, ease: "easeOut" }}
           exit={{ opacity: 0 }}
-          className={`relative ${role === "user" ? "max-w-[75%]" : "max-w-[85%]"}`}
+          className={`relative ${role === "user" ? "max-w-[80%]" : "max-w-[96%]"}`}
         >
           {(() => {
             const isConsultationBubble = role === "assistant" && forcePlainText;
@@ -375,31 +375,31 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             const wrapperClassName = isConsultationBubble
               ? "rounded-2xl rounded-bl-sm border border-border bg-card shadow-soft p-4"
               : role === "user"
-                ? "relative px-4 py-3 text-sm bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
+                ? "relative px-3.5 py-2.5 text-xs bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
                 : role === "assistant" && effectiveRecipe
-                  ? "relative rounded-2xl overflow-hidden p-4 bg-card border border-border shadow-soft"
-                  : "relative p-4 rounded-2xl bg-card border border-border shadow-soft";
+                  ? "relative rounded-2xl overflow-hidden p-3 bg-card border border-border shadow-soft"
+                  : "relative p-3 rounded-2xl bg-card border border-border shadow-soft";
             return (
               <Wrapper className={wrapperClassName}>
             {role === "assistant" && showParseError ? (
-              <p className="text-sm text-muted-foreground">Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
+              <p className="text-xs text-muted-foreground">Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
             ) : role === "assistant" && effectiveRecipe ? (
               /* Карточка рецепта в чате: child_only, порядок: mealType → title → benefit → ingredients → chef tip (premium/trial) → steps */
-              <div className="rounded-2xl p-4 bg-card max-w-[100%] w-full">
+              <div className="rounded-2xl p-3 bg-card max-w-[100%] w-full">
                 {effectiveRecipe.mealType && MEAL_LABELS[effectiveRecipe.mealType] && (
-                  <span className="inline-block text-xs font-medium text-primary bg-primary/10 rounded-full px-2 py-1 mb-2">
+                  <span className="inline-block text-[11px] font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5 mb-1.5">
                     {MEAL_LABELS[effectiveRecipe.mealType]}
                   </span>
                 )}
-                <h3 className="text-base font-semibold leading-snug text-foreground mb-1 line-clamp-2">{effectiveRecipe.title}</h3>
+                <h3 className="text-sm font-semibold leading-snug text-foreground mb-1 line-clamp-2">{effectiveRecipe.title}</h3>
                 {effectiveRecipe.description && (
                   <div className="mb-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-0.5">{getBenefitLabel(ageMonths)}</p>
-                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-normal break-words">{effectiveRecipe.description}</p>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">{getBenefitLabel(ageMonths)}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-normal break-words">{effectiveRecipe.description}</p>
                   </div>
                 )}
                 <div className="mb-3">
-                  <p className="text-sm font-medium text-muted-foreground mb-1.5">Ингредиенты</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Ингредиенты</p>
                   {effectiveRecipe.ingredients?.length ? (
                     <div className="flex flex-wrap gap-2">
                       {effectiveRecipe.ingredients.map((ing, idx) => {
@@ -414,7 +414,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                               "max-w-full flex items-center gap-1.5 bg-primary/10 rounded-full px-2 py-1"
                             }
                           >
-                            <span className="text-foreground font-medium text-sm min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">
+                            <span className="text-foreground font-medium text-xs min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">
                               {displayText}
                             </span>
                             {showChefTip ? (
@@ -436,7 +436,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       })}
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">ИИ уточняет состав…</p>
+                    <p className="text-xs text-muted-foreground">ИИ уточняет состав…</p>
                   )}
                 </div>
 
@@ -453,7 +453,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   }}
                 />
                 {effectiveRecipe.cookingTime != null && effectiveRecipe.cookingTime > 0 && (
-                  <p className="text-sm text-muted-foreground mb-3">⏱️ {effectiveRecipe.cookingTime} мин</p>
+                  <p className="text-xs text-muted-foreground mb-2">⏱️ {effectiveRecipe.cookingTime} мин</p>
                 )}
                 {(() => {
                   const chefTip = effectiveRecipe.chefAdvice?.trim();
@@ -462,10 +462,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   if (showChefTip && chefTip) {
                     return (
                       <div className="rounded-2xl p-3 pl-4 bg-muted/50 flex gap-2 items-start mb-3">
-                        <span className="text-base shrink-0" aria-hidden>👨‍🍳</span>
+                        <span className="text-sm shrink-0" aria-hidden>👨‍🍳</span>
                         <div className="min-w-0">
-                          <p className="text-xs font-medium text-primary mb-0.5">Совет от шефа</p>
-                          <p className="text-sm text-foreground leading-snug">{chefTip}</p>
+                          <p className="text-[11px] font-medium text-primary mb-0.5">Совет от шефа</p>
+                          <p className="text-xs text-foreground leading-snug">{chefTip}</p>
                         </div>
                       </div>
                     );
@@ -473,10 +473,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   if (tipForFree) {
                     return (
                       <div className="rounded-2xl p-3 bg-muted/30 flex gap-2 items-start mb-3">
-                        <span className="text-base shrink-0" aria-hidden>💡</span>
+                        <span className="text-sm shrink-0" aria-hidden>💡</span>
                         <div className="min-w-0">
-                          <p className="text-xs font-medium text-muted-foreground mb-0.5">Мини-совет</p>
-                          <p className="text-sm text-foreground leading-snug">{tipForFree}</p>
+                          <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Мини-совет</p>
+                          <p className="text-xs text-foreground leading-snug">{tipForFree}</p>
                         </div>
                       </div>
                     );
@@ -485,12 +485,12 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 })()}
                 {effectiveRecipe.steps && effectiveRecipe.steps.length > 0 && (
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-1.5">Шаги приготовления</p>
-                    <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground mb-1">Шаги приготовления</p>
+                    <div className="space-y-1">
                       {(effectiveRecipe.steps?.map((step, idx) => (
                         <div key={idx} className="flex gap-2 items-start">
-                          <span className="text-sm font-semibold text-primary shrink-0">{idx + 1}.</span>
-                          <p className="text-sm text-foreground leading-relaxed flex-1 min-w-0 break-words">{step}</p>
+                          <span className="text-xs font-semibold text-primary shrink-0">{idx + 1}.</span>
+                          <p className="text-xs text-foreground leading-relaxed flex-1 min-w-0 break-words">{step}</p>
                         </div>
                       )) ?? null)}
                     </div>
@@ -498,7 +498,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 )}
               </div>
             ) : role === "assistant" ? (
-              <div className={`chat-message-content text-sm select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-foreground prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-foreground prose-strong:text-foreground [&>*]:text-foreground ${forcePlainText ? "consultationCard-inner" : ""}`}>
+              <div className={`chat-message-content text-xs select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-foreground prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-foreground prose-strong:text-foreground [&>*]:text-foreground ${forcePlainText ? "consultationCard-inner" : ""}`}>
                 {forcePlainText ? (() => {
                   const { main, doctorPart } = splitHelpContent(displayWithArticleLinks);
                   const markdownProps = {

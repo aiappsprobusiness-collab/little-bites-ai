@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
+import { MobileLayout } from "@/components/layout/MobileLayout";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SosHero } from "@/components/sos/SosHero";
@@ -114,7 +114,7 @@ export default function SosTiles() {
   };
 
   return (
-    <MobileLayout showNav title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
+    <MobileLayout showNav>
       <div className="px-4 pb-4 pt-0 bg-background min-h-full">
         {members.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-2 mb-1">

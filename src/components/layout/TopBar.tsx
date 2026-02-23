@@ -1,14 +1,14 @@
-import { type ReactNode } from "react";
+import { forwardRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 /** Единая кнопка-иконка в TopBar: 32px, круг, прозрачный фон, hover/active — лёгкая заливка. */
-export function TopBarIconButton({
-  children,
-  className,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode; className?: string }) {
+export const TopBarIconButton = forwardRef<
+  HTMLButtonElement,
+  React.ButtonHTMLAttributes<HTMLButtonElement> & { children: ReactNode; className?: string }
+>(function TopBarIconButton({ children, className, ...props }, ref) {
   return (
     <button
+      ref={ref}
       type="button"
       className={cn(
         "h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors shrink-0",
@@ -19,7 +19,7 @@ export function TopBarIconButton({
       {children}
     </button>
   );
-}
+});
 
 export interface TopBarProps {
   /** Левый слот (назад, аватар). Если пусто — сохраняется min-width для центрирования заголовка. */

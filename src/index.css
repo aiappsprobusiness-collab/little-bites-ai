@@ -55,7 +55,7 @@
     --layout-header-gap: 0px;
     --layout-header-offset: calc(env(safe-area-inset-top, 0px) + var(--header-content-height) + var(--header-row-py) * 2 + var(--layout-header-gap));
     --layout-nav-height: 4rem;
-    --layout-main-bottom: calc(var(--layout-nav-height) + env(safe-area-inset-bottom, 0px));
+    --layout-main-bottom: calc(var(--layout-nav-height) + env(safe-area-inset-bottom, 0px) + 0.5rem);
 
     /* Совместимость: mint → primary-light (оливковая система) */
     --mint: 75 37% 92%;
@@ -214,9 +214,9 @@
     box-sizing: border-box;
   }
 
-  /** Отступ main под хедер (уменьшен на 12px для единообразия вкладок). */
+  /** Отступ main под хедер (уменьшен на 12px для единообразия + чуть сверху чтобы не заползало). */
   .main-below-header {
-    padding-top: calc(var(--layout-header-offset) - 12px);
+    padding-top: calc(var(--layout-header-offset) - 12px + 0.25rem);
   }
 
   /** Убрать overscroll (резинку): контент не оттягивается вниз, белая полоса не показывается. */
@@ -230,9 +230,9 @@
     overscroll-behavior-x: none;
   }
 
-  /** Страницы без хедера: только safe-area сверху, чтобы контент не заходил под вырез */
+  /** Страницы без хедера: safe-area + небольшой отступ, чтобы контент не заползал за край */
   .main-safe-top {
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
   }
 
   /** Отступ main над таббаром (один источник: navHeight + safe-area). Не дублировать pb-* на страницах. */
@@ -323,20 +323,22 @@
   animation: chat-hint-pulse 1s ease-in-out 2 forwards;
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar: узкий и у правого края, меньше занимает места */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(var(--muted));
-  border-radius: 3px;
+  background: transparent;
+  margin: 4px 0;
+  border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary) / 0.5);
-  border-radius: 3px;
+  background: hsl(var(--primary) / 0.4);
+  border-radius: 2px;
+  margin-right: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {

@@ -2,7 +2,7 @@ import { LifeBuoy } from "lucide-react";
 
 export function SosHero() {
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-soft p-4">
+    <div className="sticky top-0 z-10 shrink-0 rounded-2xl border border-border bg-card shadow-soft p-4">
       <div className="flex items-start gap-4">
         <div
           className="flex items-center justify-center shrink-0 w-9 h-9 rounded-full bg-muted text-primary"

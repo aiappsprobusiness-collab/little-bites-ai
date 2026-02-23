@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } fr
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Send, Loader2, HelpCircle, MoreVertical, Trash2 } from "lucide-react";
-import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
+import { MobileLayout } from "@/components/layout/MobileLayout";
 import { TopBarIconButton } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
@@ -28,6 +28,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -888,59 +898,37 @@ export default function ChatPage() {
     return `Аллергии: ${first}${rest}`;
   }, [mode, selectedMemberId, selectedMember, members]);
 
-  const chatTitle = APP_HEADER_TITLE;
-  const chatHeaderRight = mode === "help" ? (
-    members.length > 0 ? <MemberSelectorButton onProfileChange={() => setMessages([])} /> : undefined
-  ) : (
-    members.length > 0 ? (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <TopBarIconButton aria-label="Меню чата">
-            <MoreVertical className="w-5 h-5" />
-          </TopBarIconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={4}>
-          <DropdownMenuItem
-            className="text-foreground"
-            onSelect={(e) => {
-              e.preventDefault();
-              setShowClearConfirm(true);
-            }}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Очистить чат
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ) : undefined
-  );
-
   return (
-    <MobileLayout
-      showNav
-      title={chatTitle} headerTitleIcon={APP_HEADER_ICON}
-      headerNoBlur
-      headerRight={chatHeaderRight}
-    >
+    <MobileLayout showNav>
       <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg overflow-hidden">
-        {/* Hero под TopBar: статус, время, meta, CTA (только recipes) */}
+        {/* Sticky hero: только пилюля профиля + надпись по времени суток (как в мессенджере), без полоски */}
         {mode === "recipes" && members.length > 0 && (
-          <div ref={chatHeroRef} className="shrink-0 border-b border-border/50 bg-background px-4 py-1">
-            <div className="flex items-center gap-2 flex-wrap mb-2">
-              <button
-                type="button"
-                onClick={() => textareaRef.current?.focus()}
-                className="shrink-0 h-11 px-4 rounded-xl font-semibold bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-2"
-              >
-                <span>Задать вопрос</span>
-                <Send className="w-4 h-4 shrink-0" />
-              </button>
+          <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-2 pb-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
+              {mode === "recipes" && members.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <TopBarIconButton aria-label="Меню чата">
+                      <MoreVertical className="w-5 h-5" />
+                    </TopBarIconButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" sideOffset={4}>
+                    <DropdownMenuItem
+                      className="text-foreground"
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setShowClearConfirm(true);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Очистить чат
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
-            {chatHeroStatusLine && (
-              <p className="text-xs text-muted-foreground leading-snug">{chatHeroStatusLine}</p>
-            )}
-            <p className="text-xs text-muted-foreground/80 mt-0.5 leading-snug">
+            <p className="text-xs text-muted-foreground/80 mt-1.5 leading-snug">
               {chatTimeOfDayLine}
             </p>
             {chatHeaderMeta != null && <div className="mt-0.5">{chatHeaderMeta}</div>}
@@ -1088,7 +1076,7 @@ export default function ChatPage() {
         </div>
 
         {/* Input: единый стиль, 16px padding, divider */}
-        <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-3 safe-bottom max-w-full overflow-x-hidden">
+        <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-6 safe-bottom max-w-full overflow-x-hidden">
           <div className="flex w-full items-center gap-2 min-w-0">
             <Textarea
               ref={textareaRef}
@@ -1194,32 +1182,27 @@ export default function ChatPage() {
           </div>
         </SheetContent>
       </Sheet>
-      <Sheet open={showClearConfirm} onOpenChange={setShowClearConfirm}>
-        <SheetContent
-          side="bottom"
-          className="rounded-t-2xl flex flex-col gap-4 pb-safe"
-        >
-          <SheetHeader className="text-left">
-            <SheetTitle>Очистить чат?</SheetTitle>
-          </SheetHeader>
-          <p className="text-sm text-muted-foreground">Мы скроем сообщения. Данные не удаляются.</p>
-          <div className="flex gap-2 mt-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setShowClearConfirm(false)}
-            >
-              Отмена
-            </Button>
-            <Button
-              className="flex-1"
+      <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Очистить чат?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Все сообщения будут скрыты. Данные не удаляются.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
+            <AlertDialogAction
               onClick={handleClearChatConfirm}
+              className="w-full rounded-full bg-primary text-primary-foreground hover:opacity-90"
             >
               Очистить
-            </Button>
-          </div>
-        </SheetContent>
-      </Sheet>
+            </AlertDialogAction>
+            <AlertDialogCancel className="w-full rounded-full border-primary text-primary">
+              Отмена
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MobileLayout>
   );
 }

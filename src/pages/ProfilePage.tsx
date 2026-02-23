@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
+import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import {
   Plus,
@@ -133,7 +133,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
+      <MobileLayout>
         <div className="flex items-center justify-center min-h-[50vh]">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
         </div>
@@ -144,11 +144,9 @@ export default function ProfilePage() {
   const cardClass = "rounded-2xl border border-border bg-card shadow-soft p-4";
 
   return (
-    <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
+    <MobileLayout>
       <div className="px-4 pt-0 pb-2 space-y-3 max-w-md mx-auto">
-        {/* Аккаунт — вверху */}
         <section className="space-y-2">
-          <h2 className="text-xl font-semibold text-foreground">Аккаунт</h2>
           <div className={cardClass}>
             <div className="flex items-start gap-4">
               <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center text-xl font-semibold text-foreground shrink-0">

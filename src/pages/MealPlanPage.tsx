@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { APP_HEADER_ICON, APP_HEADER_TITLE, MobileLayout } from "@/components/layout/MobileLayout";
+import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Loader2, Sparkles, Plus } from "lucide-react";
@@ -511,6 +511,7 @@ export default function MealPlanPage() {
       member_id: memberIdForPlan,
       member_data: memberDataForPlan,
       day_key: todayKey,
+      day_keys: getRollingDayKeys(),
     })
       .then(() => {
         setPlanInitialized();
@@ -591,7 +592,7 @@ export default function MealPlanPage() {
 
   if (isMembersLoading) {
     return (
-      <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
+      <MobileLayout>
         <div className="flex items-center justify-center min-h-[50vh]">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
@@ -601,7 +602,7 @@ export default function MealPlanPage() {
 
   if (showNoProfile || showEmptyFamily) {
     return (
-      <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
+      <MobileLayout>
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <Card variant="default" className="p-8 text-center">
             <CardContent className="p-0">
@@ -623,7 +624,7 @@ export default function MealPlanPage() {
   }
 
   return (
-    <MobileLayout title={APP_HEADER_TITLE} headerTitleIcon={APP_HEADER_ICON}>
+    <MobileLayout>
       <div className="flex flex-col min-h-0 flex-1 px-4 relative overflow-x-hidden touch-pan-y overscroll-x-none max-w-full">
         {/* Content wrapper: один скролл + subtle pattern; горизонтальный скролл/overscroll отключены */}
         <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-x-none">
@@ -714,6 +715,7 @@ export default function MealPlanPage() {
                       member_id: memberIdForPlan,
                       member_data: memberDataForPlan,
                       day_key: selectedDayKey,
+                      day_keys: dayKeys,
                     });
                     await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                     const filled = result.filledSlotsCount ?? result.replacedCount;
@@ -738,7 +740,7 @@ export default function MealPlanPage() {
                 }}
               >
                 <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                {isAnyGenerating ? "Подбираем…" : isEmptyDay ? "Заполнить день" : "Обновить план"}
+                {isAnyGenerating ? "Подбираем…" : isEmptyDay ? "Заполнить день" : "Обновить меню на день"}
               </Button>
               <p className="text-xs text-muted-foreground mt-1.5" aria-live="polite">
                 {heroStatusText}
@@ -757,56 +759,59 @@ export default function MealPlanPage() {
             </div>
           </motion.div>
 
-          {/* Заполнить неделю — вторично, под hero */}
-          {!isFree && (
-            <div className="mb-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="rounded-xl border-primary-border/70 text-muted-foreground hover:text-foreground h-8 text-xs"
-                disabled={isAnyGenerating}
-                onClick={async () => {
-                  if (isAnyGenerating) {
-                    toast({ description: "Идёт подбор рецептов, подождите…" });
-                    return;
+          {/* Заполнить неделю: Free — кнопка с подписью (доступно с Premium), по клику пейвол; Premium/Триал — без (Premium), по клику генерация */}
+          <div className="mb-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl border-primary-border/70 text-muted-foreground hover:text-foreground h-8 text-xs"
+              disabled={isFree ? false : isAnyGenerating}
+              onClick={async () => {
+                if (isFree) {
+                  setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
+                  setShowPaywall(true);
+                  return;
+                }
+                if (isAnyGenerating) {
+                  toast({ description: "Идёт подбор рецептов, подождите…" });
+                  return;
+                }
+                if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
+                setPoolUpgradeLoading(true);
+                try {
+                  const result = await runPoolUpgrade({
+                    type: "week",
+                    member_id: memberIdForPlan,
+                    member_data: memberDataForPlan,
+                    start_key: getRollingStartKey(),
+                    day_keys: getRollingDayKeys(),
+                  });
+                  setMutedWeekKeyAndStorage(null);
+                  await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                  const filled = result.filledSlotsCount ?? result.replacedCount;
+                  const total = result.totalSlots ?? 28;
+                  if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                    toast({ title: "Заполнить всю неделю", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                  } else {
+                    toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
                   }
-                  if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
-                  setPoolUpgradeLoading(true);
-                  try {
-                    const result = await runPoolUpgrade({
-                      type: "week",
-                      member_id: memberIdForPlan,
-                      member_data: memberDataForPlan,
-                      start_key: getRollingStartKey(),
-                      day_keys: getRollingDayKeys(),
-                    });
-                    setMutedWeekKeyAndStorage(null);
-                    await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                    const filled = result.filledSlotsCount ?? result.replacedCount;
-                    const total = result.totalSlots ?? 28;
-                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                      toast({ title: "Заполнить всю неделю", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
-                    } else {
-                      toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
-                    }
-                  } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : "Не удалось заполнить неделю";
-                    if (msg === "member_id_required") {
-                      toast({ description: "Выберите профиль ребёнка вверху" });
-                    } else if (msg.includes("слишком много времени")) {
-                      toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
-                    } else {
-                      toast({ variant: "destructive", title: "Ошибка", description: msg });
-                    }
-                  } finally {
-                    setPoolUpgradeLoading(false);
+                } catch (e: unknown) {
+                  const msg = e instanceof Error ? e.message : "Не удалось заполнить неделю";
+                  if (msg === "member_id_required") {
+                    toast({ description: "Выберите профиль ребёнка вверху" });
+                  } else if (msg.includes("слишком много времени")) {
+                    toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                  } else {
+                    toast({ variant: "destructive", title: "Ошибка", description: msg });
                   }
-                }}
-              >
-                Заполнить неделю (Premium)
-              </Button>
-            </div>
-          )}
+                } finally {
+                  setPoolUpgradeLoading(false);
+                }
+              }}
+            >
+              {isFree ? "Заполнить неделю (доступно с Premium)" : "Заполнить неделю"}
+            </Button>
+          </div>
 
           {/* 2) Чипсы дней — горизонтальный скролл только внутри этого блока, страница по X не двигается */}
           <div className="flex gap-1 overflow-x-auto overflow-y-hidden pb-2 -mx-4 px-4 scrollbar-none min-w-0 max-w-full" style={{ scrollbarWidth: "none" }}>
@@ -896,7 +901,7 @@ export default function MealPlanPage() {
                     if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
                     setPoolUpgradeLoading(true);
                     try {
-                      const result = await runPoolUpgrade({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: selectedDayKey });
+                      const result = await runPoolUpgrade({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: selectedDayKey, day_keys: dayKeys });
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                       const filled = result.filledSlotsCount ?? result.replacedCount;
                       const total = result.totalSlots ?? 4;
@@ -971,6 +976,7 @@ export default function MealPlanPage() {
                         })()
                       }
                       isReplaceLoading={replacingSlotKey === `${selectedDayKey}_${slot.id}`}
+                      replaceShowsLock={isFree}
                       onReplace={async () => {
                         if (isAnyGenerating) {
                           toast({ description: "Идёт генерация плана…" });
@@ -1222,6 +1228,7 @@ export default function MealPlanPage() {
                         member_id: memberIdForPlan,
                         member_data: memberDataForPlan,
                         day_key: formatLocalDate(rollingDates[6]),
+                        day_keys: dayKeys,
                       });
                       queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                       const filled = result.filledSlotsCount ?? result.replacedCount;

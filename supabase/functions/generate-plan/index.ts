@@ -1562,10 +1562,18 @@ serve(async (req) => {
       );
     }
 
+    /** Для type=day: исключать рецепты всей недели (day_keys от клиента), иначе подставляются те же рецепты, что в другой день. */
+    const weekKeysForExclude =
+      type === "day" && Array.isArray(body.day_keys) && body.day_keys.length > 0
+        ? body.day_keys
+        : type === "day" && body.day_key
+          ? [body.day_key, ...getLastNDaysKeys(body.day_key, 6)]
+          : dayKeys;
+
     if (mode === "upgrade") {
       const debugPlanUpgrade = body.debug_plan === true || body.debug_plan === "1" || (typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_PLAN") === "1");
       if (debugPool) {
-        safeLog("[POOL UPGRADE] range", { dayKeysCount: dayKeys.length, firstKey: dayKeys[0], lastKey: dayKeys[dayKeys.length - 1] });
+        safeLog("[POOL UPGRADE] range", { dayKeysCount: dayKeys.length, firstKey: dayKeys[0], lastKey: dayKeys[dayKeys.length - 1], weekKeysForExcludeCount: weekKeysForExclude.length });
       }
       const memberDataPool: MemberDataPool | null = memberData
         ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], age_months: memberData.age_months }
@@ -1608,7 +1616,7 @@ serve(async (req) => {
           .from("meal_plans_v2")
           .select("planned_date, meals")
           .eq("user_id", userId)
-          .in("planned_date", dayKeys);
+          .in("planned_date", weekKeysForExclude);
         if (memberId == null) weekQ = weekQ.is("member_id", null);
         else weekQ = weekQ.eq("member_id", memberId);
         const { data } = await weekQ;

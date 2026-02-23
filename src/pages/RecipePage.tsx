@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, RotateCcw, Heart, Share2, CalendarPlus, Pencil, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, RotateCcw, Heart, Share2, CalendarPlus, Pencil, Trash2, Lock } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMyRecipes } from "@/hooks/useMyRecipes";
@@ -15,6 +15,7 @@ import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstit
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
+import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import {
   AlertDialog,
@@ -67,6 +68,9 @@ export default function RecipePage() {
   const { toast } = useToast();
   const { selectedMember, selectedMemberId } = useFamily();
   const { hasAccess } = useSubscription();
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const isFree = !hasAccess;
   const [searchParams] = useSearchParams();
   const { getRecipeById } = useRecipes();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
@@ -334,11 +338,18 @@ export default function RecipePage() {
                       <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">{label}</span>
                       <button
                         type="button"
-                        onClick={() => setSubstituteSheet({ open: true, index, ing })}
+                        onClick={() => {
+                          if (isFree) {
+                            setPaywallCustomMessage("Замена ингредиентов доступна в Premium. Попробуйте Trial или оформите подписку.");
+                            setShowPaywall(true);
+                          } else {
+                            setSubstituteSheet({ open: true, index, ing });
+                          }
+                        }}
                         className="shrink-0 p-0.5 rounded-full hover:bg-primary/15 text-primary touch-manipulation"
-                        aria-label={`Заменить: ${ing.name}`}
+                        aria-label={isFree ? "Замена ингредиента доступна в Premium" : `Заменить: ${ing.name}`}
                       >
-                        <RotateCcw className="w-3.5 h-3.5" />
+                        {isFree ? <Lock className="w-3.5 h-3.5" /> : <RotateCcw className="w-3.5 h-3.5" />}
                       </button>
                     </span>
                   );
