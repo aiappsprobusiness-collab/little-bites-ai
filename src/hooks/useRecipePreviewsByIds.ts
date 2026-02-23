@@ -67,7 +67,7 @@ export function useRecipePreviewsByIds(recipeIds: string[]) {
       if (!user || ids.length === 0) return {};
       const [previewsResult, tipsResult] = await Promise.all([
         supabase.rpc("get_recipe_previews", { recipe_ids: ids }),
-        supabase.from("recipes").select("id, chef_advice, advice, source").in("id", ids).eq("user_id", user.id),
+        supabase.from("recipes").select("id, chef_advice, advice, source").in("id", ids),
       ]);
       const { data: previewRows, error } = previewsResult;
       if (error) throw error;

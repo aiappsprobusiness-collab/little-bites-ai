@@ -222,16 +222,9 @@ export async function pickRecipeFromPool(
   let q = supabase
     .from("recipes")
     .select("id, title, tags, description, cooking_time_minutes, source, meal_type")
-    .eq("user_id", userId)
     .in("source", ["seed", "manual", "week_ai", "chat_ai"])
     .order("created_at", { ascending: false })
     .limit(limitCandidates);
-
-  if (memberId == null) {
-    q = q.is("member_id", null);
-  } else {
-    q = q.or(`member_id.eq.${memberId},member_id.is.null`);
-  }
 
   if (excludeRecipeIds.length > 0 && excludeRecipeIds.length < 50) {
     const idsList = excludeRecipeIds.join(",");

@@ -773,13 +773,10 @@ async function fetchPoolCandidates(
     supabase
       .from("recipes")
       .select("id, title, tags, description, meal_type, source, recipe_ingredients(name, display_text), recipe_steps(instruction)")
-      .eq("user_id", userId)
       .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
       .order("created_at", { ascending: false })
       .limit(limitCandidates);
   let q = baseQ();
-  if (memberId == null) q = q.is("member_id", null);
-  else q = q.or(`member_id.eq.${memberId},member_id.is.null`);
   const { data: rows, error } = await q;
   if (error) {
     safeWarn("generate-plan fetchPoolCandidates error", error.message);
@@ -858,37 +855,21 @@ async function pickFromPool(
       supabase
         .from("recipes")
         .select("id, title, tags, description, meal_type, source, recipe_ingredients(name, display_text), recipe_steps(instruction)")
-        .eq("user_id", userId)
         .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
         .order("created_at", { ascending: false })
         .limit(limitCandidates);
 
-    let qStrict = baseQ();
-    if (memberId == null) qStrict = qStrict.is("member_id", null);
-    else qStrict = qStrict.eq("member_id", memberId);
-
-    const { data: rowsStrict, error: errStrict } = await qStrict;
-    if (errStrict) {
-      safeWarn("generate-plan pool query (strict) error", mealType, errStrict.message);
-      return null;
-    }
-    candidatesStrict = (rowsStrict ?? []).length;
-
-    let qLoose = baseQ();
-    if (memberId == null) {
-    } else {
-      qLoose = qLoose.or(`member_id.eq.${memberId},member_id.is.null`);
-    }
+    let q = baseQ();
     if (excludeRecipeIds.length > 0 && excludeRecipeIds.length < 50) {
-      qLoose = qLoose.not("id", "in", `(${excludeRecipeIds.join(",")})`);
+      q = q.not("id", "in", `(${excludeRecipeIds.join(",")})`);
     }
-
-    const { data: rowsLoose, error: errLoose } = await qLoose;
-    if (errLoose) {
-      safeWarn("generate-plan pool query (loose) error", mealType, errLoose.message);
+    const { data: rowsDb, error: errDb } = await q;
+    if (errDb) {
+      safeWarn("generate-plan pool query error", mealType, errDb.message);
       return null;
     }
-    rawCandidates = (rowsLoose ?? []) as RecipeRowPool[];
+    rawCandidates = (rowsDb ?? []) as RecipeRowPool[];
+    candidatesStrict = rawCandidates.length;
   }
   const candidatesLoose = rawCandidates.length;
   const candidatesFromDb = rawCandidates.length;

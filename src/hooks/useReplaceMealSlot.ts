@@ -72,21 +72,14 @@ export function useReplaceMealSlot(
       memberData?: MemberDataForPool | null;
     }): Promise<{ id: string; title: string; fromLegacy?: boolean } | null> => {
       if (!user) return null;
-      const memberIdFilter = memberId ?? null;
       const slotNorm = normalizeMealType(params.mealType) ?? (params.mealType as "breakfast" | "lunch" | "snack" | "dinner");
 
       let q = supabase
         .from("recipes")
         .select("id, title, tags, description, meal_type")
-        .eq("user_id", user.id)
         .in("source", ["seed", "manual", "week_ai", "chat_ai"])
         .order("created_at", { ascending: false })
         .limit(80);
-      if (memberIdFilter === null) {
-        q = q.is("member_id", null);
-      } else {
-        q = q.or(`member_id.eq.${memberIdFilter},member_id.is.null`);
-      }
       const { data: rows, error } = await q;
       if (error || !rows?.length) return null;
 
