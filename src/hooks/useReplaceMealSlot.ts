@@ -348,6 +348,9 @@ export function useReplaceMealSlot(
       const reason = data.reason;
 
       if (!res.ok) {
+        if (res.status === 429 && (data as { code?: string }).code === "LIMIT_REACHED") {
+          return { ok: false, error: "LIMIT_REACHED", code: "LIMIT_REACHED", requestId, reason: "limit_reached" };
+        }
         return { ok: false, error: (data as { error?: string }).error ?? `Ошибка ${res.status}`, requestId, reason: "http_error" };
       }
       if (data.error === "replace_failed") {

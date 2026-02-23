@@ -513,23 +513,9 @@ serve(async (req) => {
           }
         }
 
+        // Feature limits (chat_recipe / help) checked after body.type is known; no single requests_today gate here.
         if (profileV2) {
-          const premiumUntil = (profileV2 as { premium_until?: string | null }).premium_until;
-          const trialUntil = (profileV2 as { trial_until?: string | null }).trial_until;
-          const hasPremium = premiumUntil && new Date(premiumUntil) > new Date();
-          const hasTrial = trialUntil && new Date(trialUntil) > new Date();
-          const isPremiumOrTrial = hasPremium || hasTrial;
-          const effectiveLimit = getAiDailyLimitForStatus(isPremiumOrTrial);
-          if (effectiveLimit !== null && profileV2.requests_today >= effectiveLimit) {
-            return new Response(
-              JSON.stringify({
-                error: "usage_limit_exceeded",
-                message: "Дневной лимит исчерпан. Перейдите на Premium для безлимитного доступа.",
-                remaining: 0,
-              }),
-              { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+          // Keep trial expiry correction
         } else {
           // Нет строки в profiles_v2 — fallback на старую проверку (profiles + user_usage)
           const { data: usageData } = await supabase.rpc("check_usage_limit", { _user_id: userId });
@@ -563,6 +549,7 @@ serve(async (req) => {
     const isPremiumUser = subscriptionStatus === "premium" || subscriptionStatus === "trial";
 
     const requestId = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+    const startedAt = Date.now();
     const body = await req.json();
     // Поддержка и нового (memberData/allMembers), и старого (childData/allChildren) формата запроса
     const memberDataRaw = body.memberData ?? body.childData;
@@ -668,15 +655,36 @@ serve(async (req) => {
     const targetIsFamily =
       type === "chat" && (reqTargetIsFamily === true || memberId === "family");
 
-    // SOS-консультант — только Premium (проверка profiles_v2)
-    if (type === "sos_consultant") {
-      if (!isPremiumUser) {
+    // SOS-консультант (Помощь маме): Free — лимит 2/день по фиче help; Premium/Trial — без лимита
+    const FREE_FEATURE_LIMIT = 2;
+    if (type === "sos_consultant" && userId && supabase && !isPremiumUser) {
+      const { data: helpUsed } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "help" });
+      const used = typeof helpUsed === "number" ? helpUsed : 0;
+      if (used >= FREE_FEATURE_LIMIT) {
         return new Response(
           JSON.stringify({
-            error: "premium_required",
-            message: "Доступно в Premium. Оформите подписку для доступа к SOS-консультанту.",
+            error: "LIMIT_REACHED",
+            code: "LIMIT_REACHED",
+            message: "Лимит на сегодня исчерпан.",
+            payload: { feature: "help", limit: FREE_FEATURE_LIMIT, used },
           }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+    // Чат-рецепт: Free — лимит 2/день по фиче chat_recipe (план/help не тратят этот лимит)
+    if ((type === "chat" || type === "recipe") && !fromPlanReplace && userId && supabase && !isPremiumUser) {
+      const { data: chatRecipeUsed } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "chat_recipe" });
+      const used = typeof chatRecipeUsed === "number" ? chatRecipeUsed : 0;
+      if (used >= FREE_FEATURE_LIMIT) {
+        return new Response(
+          JSON.stringify({
+            error: "LIMIT_REACHED",
+            code: "LIMIT_REACHED",
+            message: "Лимит на сегодня исчерпан.",
+            payload: { feature: "chat_recipe", limit: FREE_FEATURE_LIMIT, used },
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
@@ -1017,8 +1025,14 @@ serve(async (req) => {
         }
       }
 
+    // Учёт по фичам для лимитов Free (Plan/Help не тратят chat_recipe)
     if (userId && supabase) {
-      await supabase.rpc("increment_usage", { target_user_id: userId });
+      if (type === "sos_consultant") {
+        await supabase.from("usage_events").insert({ user_id: userId, member_id: null, feature: "help" });
+      } else if ((type === "chat" || type === "recipe") && responseRecipes.length > 0 && !fromPlanReplace) {
+        const memberIdUuid = memberId && memberId !== "family" ? memberId : null;
+        await supabase.from("usage_events").insert({ user_id: userId, member_id: memberIdUuid, feature: "chat_recipe" });
+      }
     }
 
     if (type === "balance_check" && userId && supabase) {
@@ -1162,6 +1176,9 @@ serve(async (req) => {
       }
     }
 
+    if (type === "sos_consultant") {
+      safeLog("[help]", { requestId, durationMs: Date.now() - startedAt, status: "ok" });
+    }
     const responseBody: { message: string; recipes?: Array<Record<string, unknown>>; recipe_id?: string | null; usage?: unknown } = {
       message: assistantMessage,
       usage: data.usage,
@@ -1177,7 +1194,9 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    const errRequestId = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? "";
     safeError("Error in deepseek-chat:", error);
+    safeLog("[help]", { requestId: errRequestId, status: "error" });
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";
     return new Response(
       JSON.stringify({ error: "server_error", message }),

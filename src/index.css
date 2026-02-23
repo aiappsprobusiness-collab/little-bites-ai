@@ -214,9 +214,9 @@
     box-sizing: border-box;
   }
 
-  /** Отступ main под хедер (должен совпадать с высотой хедера). Не дублировать pt-* / safe-area сверху. */
+  /** Отступ main под хедер (уменьшен на 12px для единообразия вкладок). */
   .main-below-header {
-    padding-top: var(--layout-header-offset);
+    padding-top: calc(var(--layout-header-offset) - 12px);
   }
 
   /** Убрать overscroll (резинку): контент не оттягивается вниз, белая полоса не показывается. */

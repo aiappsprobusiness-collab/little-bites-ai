@@ -18,6 +18,8 @@ import {
 } from "@/data/sosTopics";
 import { getChipsForTopic } from "@/data/helpTopicChips";
 import { getTopicById } from "@/constants/sos";
+import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
+import { useAppStore } from "@/store/useAppStore";
 import { cn } from "@/lib/utils";
 
 export default function SosTiles() {
@@ -145,13 +147,15 @@ export default function SosTiles() {
               ))}
             </div>
           </section>
-          <SosTopicGrid
-            className="mt-2"
-            topics={filteredTopics}
-            hasAccess={hasAccess}
-            onSelect={handleTopicSelect}
-            onLockedSelect={handleLockedTopic}
-          />
+          <div className="pb-24">
+            <SosTopicGrid
+              className="mt-2"
+              topics={filteredTopics}
+              hasAccess={hasAccess}
+              onSelect={handleTopicSelect}
+              onLockedSelect={handleLockedTopic}
+            />
+          </div>
         </div>
       </div>
 
@@ -165,6 +169,12 @@ export default function SosTiles() {
           isLocked={sheetTopic.isLocked}
           lockedDescription={sheetTopic.lockedDescription}
           onOpenPremium={sheetTopic.isLocked ? handleLockedTopic : undefined}
+          onLimitReached={() => {
+            useAppStore.getState().setPaywallCustomMessage(
+              `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("help")}`
+            );
+            setPaywallOpen(true);
+          }}
         />
       )}
 

@@ -36,6 +36,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getSuggestionChips } from "@/utils/chatSuggestionChips";
 import { getTimeOfDayLine, formatAllergySummary } from "@/utils/chatHeroUtils";
+import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
+import type { LimitReachedFeature } from "@/utils/limitReachedMessages";
+import { useAppStore } from "@/store/useAppStore";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 
@@ -732,7 +735,17 @@ export default function ChatPage() {
         toast({ title: "Остановлено" });
         return;
       }
-      if (err?.message === "usage_limit_exceeded") {
+      const limitPayload = (err as { payload?: { feature: string } })?.payload;
+      if (err?.message === "LIMIT_REACHED" && limitPayload?.feature) {
+        useAppStore.getState().setPaywallCustomMessage(
+          `${getLimitReachedTitle()}\n\n${getLimitReachedMessage(limitPayload.feature as LimitReachedFeature)}`
+        );
+        setShowPaywall(true);
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+      } else if (err?.message === "usage_limit_exceeded") {
+        useAppStore.getState().setPaywallCustomMessage(
+          `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("chat_recipe")}`
+        );
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
       } else {
@@ -1141,7 +1154,13 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <Paywall isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
+      <Paywall
+        isOpen={showPaywall}
+        onClose={() => {
+          setShowPaywall(false);
+          useAppStore.getState().setPaywallCustomMessage(null);
+        }}
+      />
       <ArticleReaderModal
         article={openArticle}
         open={!!openArticleId}

@@ -6,6 +6,8 @@ import { getRollingStartKey, getRollingDayKeys } from "@/utils/dateRange";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { isDebugPlanEnabled, isGeneratePlanDebugEnabled } from "@/utils/debugPlan";
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
+import { useAppStore } from "@/store/useAppStore";
+import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 
 export type PlanGenerationType = "day" | "week";
 
@@ -182,8 +184,14 @@ export function usePlanGenerationJob(
         });
         clearTimeout(timeoutId);
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error((err as { error?: string }).error ?? `Ошибка: ${res.status}`);
+          const err = await res.json().catch(() => ({})) as { code?: string; error?: string };
+          if (res.status === 429 && err?.code === "LIMIT_REACHED") {
+            useAppStore.getState().setPaywallCustomMessage(
+              `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_fill_day")}`
+            );
+            useAppStore.getState().setShowPaywall(true);
+          }
+          throw new Error(err?.error ?? `Ошибка: ${res.status}`);
         }
         const data = (await res.json()) as PoolUpgradeResult;
         return data;
@@ -301,10 +309,19 @@ export function usePlanGenerationJob(
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
       };
-      invokeGeneratePlan(SUPABASE_URL, token, runBody, {
+      const runRes = await invokeGeneratePlan(SUPABASE_URL, token, runBody, {
         label: "run",
         clientDebug: { selectedMemberId: params.member_id, jobId, weekStartDayKey },
-      }).catch(() => {});
+      });
+      if (!runRes.ok && runRes.status === 429) {
+        const errData = (await runRes.json().catch(() => ({}))) as { code?: string };
+        if (errData?.code === "LIMIT_REACHED") {
+          useAppStore.getState().setPaywallCustomMessage(
+            `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_fill_day")}`
+          );
+          useAppStore.getState().setShowPaywall(true);
+        }
+      }
     },
     [user?.id, getValidAccessToken, refetchJob]
   );

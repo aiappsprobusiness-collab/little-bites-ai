@@ -216,14 +216,14 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                   {isStartingPayment ? "Перенаправление…" : `Продолжить с Premium — ${pricingOption === "month" ? `${pricing.monthRub} ₽/мес` : `${pricing.yearRub.toLocaleString("ru-RU")} ₽/год`}`}
                 </Button>
 
-                {/* CTA: Continue with Free */}
+                {/* CTA: Позже / Продолжить с Free (при лимите показываем «Позже») */}
                 <Button
                   variant="ghost"
                   size="lg"
                   className="w-full h-11 text-muted-foreground hover:text-foreground rounded-xl"
                   onClick={handleContinueFree}
                 >
-                  Продолжить с Free
+                  {paywallCustomMessage ? "Позже" : "Продолжить с Free"}
                 </Button>
               </>
             )}

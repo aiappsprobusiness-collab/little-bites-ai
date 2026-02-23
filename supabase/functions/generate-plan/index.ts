@@ -1492,6 +1492,23 @@ serve(async (req) => {
       const profReplace = profileRowReplace as { status?: string; premium_until?: string | null; trial_until?: string | null } | null;
       const isPremiumOrTrialReplace = !!(profReplace?.premium_until && new Date(profReplace.premium_until) > new Date()) || !!(profReplace?.trial_until && new Date(profReplace.trial_until) > new Date()) || profReplace?.status === "premium" || profReplace?.status === "trial";
 
+      const FREE_PLAN_FEATURE_LIMIT = 2;
+      if (!isPremiumOrTrialReplace) {
+        const { data: planRefreshUsed } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "plan_refresh" });
+        const used = typeof planRefreshUsed === "number" ? planRefreshUsed : 0;
+        if (used >= FREE_PLAN_FEATURE_LIMIT) {
+          return new Response(
+            JSON.stringify({
+              error: "LIMIT_REACHED",
+              code: "LIMIT_REACHED",
+              message: "Лимит на сегодня исчерпан.",
+              payload: { feature: "plan_refresh", limit: FREE_PLAN_FEATURE_LIMIT, used },
+            }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
       const pickedRaw = await pickFromPool(
         supabase,
         userId,
@@ -1534,6 +1551,9 @@ serve(async (req) => {
           );
         }
         if (debugPlan) safeLog("[REPLACE_SLOT] finish", { requestId, ok: true, recipeId: picked.id, reason: "pool" });
+        if (!isPremiumOrTrialReplace) {
+          await supabase.from("usage_events").insert({ user_id: userId, member_id: memberId, feature: "plan_refresh" });
+        }
         return new Response(
           JSON.stringify({ pickedSource: "pool", newRecipeId: picked.id, title: picked.title, plan_source: "pool", requestId, reason: "pool" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1573,6 +1593,23 @@ serve(async (req) => {
       const { data: profileUpgrade } = await supabase.from("profiles_v2").select("status, premium_until, trial_until").eq("user_id", userId).maybeSingle();
       const profUpgrade = profileUpgrade as { status?: string; premium_until?: string | null; trial_until?: string | null } | null;
       const isPremiumOrTrialUpgrade = !!(profUpgrade?.premium_until && new Date(profUpgrade.premium_until) > new Date()) || !!(profUpgrade?.trial_until && new Date(profUpgrade.trial_until) > new Date()) || profUpgrade?.status === "premium" || profUpgrade?.status === "trial";
+
+      const FREE_PLAN_FILL_LIMIT_UP = 2;
+      if (!isPremiumOrTrialUpgrade) {
+        const { data: planFillUsedUp } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "plan_fill_day" });
+        const usedUp = typeof planFillUsedUp === "number" ? planFillUsedUp : 0;
+        if (usedUp >= FREE_PLAN_FILL_LIMIT_UP) {
+          return new Response(
+            JSON.stringify({
+              error: "LIMIT_REACHED",
+              code: "LIMIT_REACHED",
+              message: "Лимит на сегодня исчерпан.",
+              payload: { feature: "plan_fill_day", limit: FREE_PLAN_FILL_LIMIT_UP, used: usedUp },
+            }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
 
       let weekContext: string[] = [];
       const usedRecipeIds: string[] = [];
@@ -2022,6 +2059,9 @@ serve(async (req) => {
       if (debugPool) {
         safeLog("[POOL UPGRADE] totals", { totalSlots, replacedCount: assignedCount, unchangedCount, aiFallbackCount, filledSlotsCountUpgrade, filledDaysCountUpgrade });
       }
+      if (!isPremiumOrTrialUpgrade) {
+        await supabase.from("usage_events").insert({ user_id: userId, member_id: memberId, feature: "plan_fill_day" });
+      }
       return new Response(
         JSON.stringify({
           ok: true,
@@ -2133,6 +2173,23 @@ serve(async (req) => {
     const hasTrial = prof?.trial_until && new Date(prof.trial_until) > new Date();
     const isPremiumOrTrial = prof?.status === "premium" || prof?.status === "trial" || hasPremium || hasTrial;
 
+    const FREE_PLAN_FILL_LIMIT = 2;
+    if (!isPremiumOrTrial) {
+      const { data: planFillUsed } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "plan_fill_day" });
+      const used = typeof planFillUsed === "number" ? planFillUsed : 0;
+      if (used >= FREE_PLAN_FILL_LIMIT) {
+        return new Response(
+          JSON.stringify({
+            error: "LIMIT_REACHED",
+            code: "LIMIT_REACHED",
+            message: "Лимит на сегодня исчерпан.",
+            payload: { feature: "plan_fill_day", limit: FREE_PLAN_FILL_LIMIT, used },
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     let usedRecipeIds: string[] = [];
     let usedTitleKeys: string[] = [];
     let usedTitleKeysByMealType: Record<string, Set<string>> = {};
@@ -2226,6 +2283,9 @@ serve(async (req) => {
     for (let i = startDayIndex; i < dayKeys.length; i++) {
       const remainingBudgetMs = RUN_BUDGET_MS - (Date.now() - jobStartedAt);
       if (remainingBudgetMs < 2000) {
+        if (!isPremiumOrTrial) {
+          await supabase.from("usage_events").insert({ user_id: userId, member_id: memberId, feature: "plan_fill_day" });
+        }
         const totalSlotsRun = dayKeys.length * MEAL_KEYS.length;
         const emptySlotsRun = totalSlotsRun - filledSlotsCountRun;
         const filledDaysRun = Math.floor(filledSlotsCountRun / MEAL_KEYS.length);
@@ -2768,6 +2828,9 @@ serve(async (req) => {
     safeLog("[PLAN QUALITY]", qualityPayload);
     if (runDebug) safeLog("[JOB] completed", { totalMs: Date.now() - jobStartedAt });
 
+    if (!isPremiumOrTrial) {
+      await supabase.from("usage_events").insert({ user_id: userId, member_id: memberId, feature: "plan_fill_day" });
+    }
     return new Response(
       JSON.stringify({
         ok: true,

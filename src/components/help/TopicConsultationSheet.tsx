@@ -37,6 +37,8 @@ export interface TopicConsultationSheetProps {
   isLocked?: boolean;
   lockedDescription?: string;
   onOpenPremium?: () => void;
+  /** При LIMIT_REACHED (help 2/день) — открыть paywall с сообщением о лимите */
+  onLimitReached?: () => void;
 }
 
 export function TopicConsultationSheet({
@@ -48,6 +50,7 @@ export function TopicConsultationSheet({
   isLocked = false,
   lockedDescription,
   onOpenPremium,
+  onLimitReached,
 }: TopicConsultationSheetProps) {
   const { selectedMemberId, members } = useFamily();
   const { chat } = useDeepSeekAPI();
@@ -150,19 +153,25 @@ export function TopicConsultationSheet({
           upsertMessage(memberId, topicKey, assistantMsg);
           return next;
         });
-      } catch {
+      } catch (err) {
+        const msg = (err as { message?: string })?.message;
+        if (msg === "LIMIT_REACHED" && onLimitReached) {
+          onLimitReached();
+        }
+        const fallbackText =
+          msg === "HELP_TIMEOUT"
+            ? "Ответ занимает больше времени. Попробуйте ещё раз."
+            : msg === "LIMIT_REACHED"
+              ? "Лимит на сегодня исчерпан. Попробуйте завтра или откройте Trial."
+              : "Ошибка отправки. Попробуйте ещё раз.";
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId
-              ? { ...m, content: "Ошибка отправки. Попробуйте ещё раз." }
-              : m
-          )
+          prev.map((m) => (m.id === assistantId ? { ...m, content: fallbackText } : m))
         );
       } finally {
         setIsSending(false);
       }
     },
-    [memberId, topicKey, messages, chat, isLocked]
+    [memberId, topicKey, messages, chat, isLocked, onLimitReached]
   );
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -317,11 +326,30 @@ export function TopicConsultationSheet({
                         {m.role === "user" ? (
                           <p className="break-words whitespace-pre-wrap">{m.content}</p>
                         ) : (
-                          <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-foreground text-sm leading-[1.6]">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {m.content}
-                            </ReactMarkdown>
-                          </div>
+                          <>
+                            <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-foreground text-sm leading-[1.6]">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {m.content}
+                              </ReactMarkdown>
+                            </div>
+                            {(m.content === "Ответ занимает больше времени. Попробуйте ещё раз." ||
+                              m.content === "Ошибка отправки. Попробуйте ещё раз.") &&
+                              index === messages.length - 1 &&
+                              messages.length >= 2 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="mt-2"
+                                  onClick={() => {
+                                    const lastUser = messages[messages.length - 2];
+                                    if (lastUser?.role === "user") sendMessage(lastUser.content);
+                                  }}
+                                >
+                                  Повторить
+                                </Button>
+                              )}
+                          </>
                         )}
                         </div>
                       </div>

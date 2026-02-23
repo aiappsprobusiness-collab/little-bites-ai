@@ -157,7 +157,11 @@ export function useDeepSeekAPI() {
         return { message: text };
       }
 
+      const HELP_REQUEST_TIMEOUT_MS = 30_000;
       chatAbortRef.current = new AbortController();
+      const timeoutId = isHelpMode
+        ? setTimeout(() => chatAbortRef.current?.abort(), HELP_REQUEST_TIMEOUT_MS)
+        : undefined;
       let response: Response;
       try {
         response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
@@ -183,8 +187,13 @@ export function useDeepSeekAPI() {
             ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime }),
           }),
         });
+        if (timeoutId) clearTimeout(timeoutId);
       } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
         const msg = (err as Error)?.message ?? '';
+        if (err instanceof Error && err.name === 'AbortError' && isHelpMode) {
+          throw new Error('HELP_TIMEOUT');
+        }
         if (msg.includes('HTTP2') || msg.includes('protocol') || msg === 'Failed to fetch') {
           throw new Error('Соединение прервано. Проверьте интернет и попробуйте ещё раз.');
         }
@@ -193,8 +202,16 @@ export function useDeepSeekAPI() {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        if (response.status === 429 && error.error === 'usage_limit_exceeded') {
-          throw new Error('usage_limit_exceeded');
+        if (response.status === 429) {
+          const code = error?.code ?? error?.error;
+          if (code === 'LIMIT_REACHED' && error?.payload?.feature) {
+            const e = new Error('LIMIT_REACHED') as Error & { payload?: { feature: string; limit: number; used: number } };
+            e.payload = error.payload;
+            throw e;
+          }
+          if (error?.error === 'usage_limit_exceeded') {
+            throw new Error('usage_limit_exceeded');
+          }
         }
         const msg = error?.message || error?.error || `HTTP ${response.status}`;
         safeError('deepseek-chat error:', response.status, error);
@@ -268,12 +285,18 @@ export function useDeepSeekAPI() {
           body: JSON.stringify({ imageBase64, mimeType }),
         });
       } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
+        const isAbort = err instanceof Error && err.name === 'AbortError';
+        if (isAbort && isHelpMode) {
+          throw new Error('HELP_TIMEOUT');
+        }
         const msg = (err as Error)?.message ?? '';
         if (msg.includes('HTTP2') || msg.includes('protocol') || msg === 'Failed to fetch') {
           throw new Error('Соединение прервано. Проверьте интернет и попробуйте ещё раз.');
         }
         throw err;
       }
+      if (timeoutId) clearTimeout(timeoutId);
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
