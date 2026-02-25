@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
@@ -27,6 +30,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Check migrations immutable
+        run: npm run check:migrations
 
       - name: Install
         run: npm ci
