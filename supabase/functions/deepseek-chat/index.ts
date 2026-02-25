@@ -284,7 +284,7 @@ function applyPromptTemplate(
   const generationContextBlock = options?.generationContextBlock?.trim() || "";
   const mealType = options?.mealType?.trim() || "";
   const maxCookingTime = options?.maxCookingTime != null && Number.isFinite(options.maxCookingTime) ? String(options.maxCookingTime) : "";
-  const servings = options?.servings != null && options.servings >= 1 ? String(options.servings) : "5";
+  const servings = options?.servings != null && options.servings >= 1 ? String(options.servings) : "1";
   const recentTitleKeysLine = options?.recentTitleKeysLine?.trim() || "";
 
   const ADULT_AGE_MONTHS = 336; // 28+ лет — взрослое меню
@@ -387,7 +387,7 @@ function getSystemPromptForType(
     ...genBlockOpt,
     ...(mealType && { mealType: String(mealType).trim() }),
     ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime: Number(maxCookingTime) }),
-    servings: servings != null && servings >= 1 ? servings : 5,
+    servings: servings != null && servings >= 1 ? servings : 1,
     recentTitleKeysLine: recentTitleKeysLine?.trim() ?? "",
   };
   if (type === "chat") {
@@ -569,7 +569,7 @@ serve(async (req) => {
       servings: reqServings,
       from_plan_replace: fromPlanReplace = false,
     } = body;
-    const servings = typeof reqServings === "number" && reqServings >= 1 && reqServings <= 20 ? reqServings : 5;
+    const servings = typeof reqServings === "number" && reqServings >= 1 && reqServings <= 20 ? reqServings : 1;
 
     const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
     const isRecipeRequestByType = recipeTypes.includes(type as (typeof recipeTypes)[number]);
@@ -1162,7 +1162,7 @@ serve(async (req) => {
           steps: stepsPayload,
           ingredients: ingredientsPayload,
           sourceTag: "chat",
-          servings: (validatedRecipe as { servings?: number }).servings ?? 5,
+          servings: (validatedRecipe as { servings?: number }).servings ?? 1,
         });
         const { data: recipeId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
         if (rpcErr) throw rpcErr;

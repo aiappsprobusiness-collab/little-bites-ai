@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Loader2, ArrowLeft, RotateCcw, Heart, Share2, CalendarPlus, Pencil, Trash2, Lock } from "lucide-react";
@@ -9,7 +9,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
-import { ingredientDisplayLabel } from "@/types/recipe";
+import { ingredientDisplayLabel, scaleIngredientDisplay } from "@/types/recipe";
 import { buildRecipeShareText } from "@/utils/shareRecipeText";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
@@ -17,6 +17,10 @@ import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
+import { RecipeHeader } from "@/components/recipe/RecipeHeader";
+import { IngredientChips } from "@/components/recipe/IngredientChips";
+import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
+import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -161,6 +165,7 @@ export default function RecipePage() {
   };
 
   const [overrides, setOverrides] = useState<Record<number, string>>({});
+  const [servingsSelected, setServingsSelected] = useState(1);
   const [substituteSheet, setSubstituteSheet] = useState<{
     open: boolean;
     index: number;
@@ -199,7 +204,13 @@ export default function RecipePage() {
     cooking_time_minutes?: number | null;
     min_age_months?: number | null;
     source?: string | null;
+    servings_base?: number | null;
+    servings_recommended?: number | null;
   };
+  useEffect(() => {
+    const rec = recipeDisplay?.servings_recommended;
+    if (rec != null && rec >= 1) setServingsSelected(rec);
+  }, [recipeDisplay?.servings_recommended]);
   const isUserCustom = recipeDisplay.source === "user_custom";
   const displayIngredients = getDisplayIngredients(recipeDisplay);
   const steps = recipeDisplay.steps ?? [];
@@ -208,6 +219,12 @@ export default function RecipePage() {
   const cookingTime = recipeDisplay.cooking_time_minutes;
   const minAgeMonths = recipeDisplay.min_age_months;
   const description = recipeDisplay.description;
+  const servingsBase = Math.max(1, recipeDisplay.servings_base ?? 1);
+  const multiplier = servingsSelected / servingsBase;
+  const scaledOverrides = useMemo(() => {
+    if (multiplier === 1) return {};
+    return Object.fromEntries(displayIngredients.map((ing, i) => [i, scaleIngredientDisplay(ing, multiplier)]));
+  }, [displayIngredients, multiplier]);
 
   const handleDeleteRecipe = async () => {
     if (!id) return;
@@ -239,22 +256,19 @@ export default function RecipePage() {
         </Button>
       }
     >
-      <div className="px-4 pb-6 max-w-[100%] mx-auto">
+      <div className="px-4 pb-6 max-w-[100%] mx-auto overflow-x-hidden">
         {/* Карточка рецепта — те же стили, что и в чате */}
-        <div className="bg-white rounded-2xl sm:rounded-[28px] px-3 py-3 sm:px-6 sm:py-6 shadow-[0_4px_24px_rgba(0,0,0,0.04)] border border-slate-100/80 space-y-4 sm:space-y-5">
-          {/* Тип приёма пищи + заголовок */}
-          <section className="space-y-1.5 sm:space-y-2">
-            {mealStr && (
-              <span className="inline-block text-typo-caption sm:text-typo-muted font-medium text-primary bg-primary-light border border-primary-border rounded-full px-2.5 py-0.5 sm:px-3 sm:py-1">
-                {mealStr}
-              </span>
-            )}
-            <h1 className="text-typo-body sm:text-typo-title font-semibold leading-snug text-[#2D3436]">
-              {recipe.title}
-            </h1>
-          </section>
-
-          {/* Действия: Добавить в план, Лайк, Поделиться — внутри карточки, единый стиль с чатом */}
+        <div className="rounded-2xl sm:rounded-[28px] overflow-hidden bg-card border border-border shadow-soft">
+          <RecipeHeader
+            variant="full"
+            mealLabel={mealStr || null}
+            cookingTimeMinutes={cookingTime ?? null}
+            title={recipe.title ?? "Рецепт"}
+            benefitLabel={description?.trim() ? getBenefitLabel(selectedMember?.age_months ?? undefined) : null}
+            description={description?.trim() ?? null}
+          />
+          <div className="px-3 py-3 sm:px-6 sm:py-4 space-y-4 sm:space-y-5">
+          {/* Действия: оливковый акцент */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {hasAccess && (
               <Button
@@ -275,7 +289,7 @@ export default function RecipePage() {
               className={`h-8 w-8 sm:h-9 sm:w-9 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 border ${
                 isFavorite
                   ? "text-primary bg-primary/10 border-primary/40 fill-primary"
-                  : "text-muted-foreground bg-slate-50/50 border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500"
+                  : "text-muted-foreground bg-primary-light/50 border-primary-border hover:border-primary/40 hover:text-foreground"
               }`}
             >
               <Heart className={`h-4 w-4 sm:h-4.5 sm:w-4.5 ${isFavorite ? "fill-current" : ""}`} />
@@ -284,7 +298,7 @@ export default function RecipePage() {
               type="button"
               onClick={handleShare}
               aria-label="Поделиться"
-              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 transition-all active:scale-95"
+              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-primary-light/50 border border-primary-border hover:border-primary/40 hover:text-foreground transition-all active:scale-95"
             >
               <Share2 className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
             </button>
@@ -315,66 +329,35 @@ export default function RecipePage() {
             )}
           </div>
 
-          {description && description.trim() !== "" && (
-            <section className="mb-3 sm:mb-4">
-              <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-0.5 sm:mb-1">{getBenefitLabel(selectedMember?.age_months ?? undefined)}</p>
-              <p className="text-typo-caption sm:text-typo-muted text-muted-foreground leading-relaxed">{description.trim()}</p>
-            </section>
-          )}
-
-          {/* Ингредиенты — пилюли как в чате (olive/mint) + кнопка замены */}
-          {displayIngredients.length > 0 && (
-            <section className="mb-3 sm:mb-4">
-              <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-1.5 sm:mb-2">Ингредиенты</p>
-              <div className="flex flex-wrap gap-2">
-                {displayIngredients.map((ing, index) => {
-                  const baseLabel = ingredientDisplayLabel(ing);
-                  const label = (overrides[index] ?? baseLabel) || "Ингредиент";
-                  return (
-                    <span
-                      key={index}
-                      className="inline-flex items-center gap-1.5 sm:gap-2 bg-primary-light/80 border border-primary-border rounded-full px-2 py-1 sm:px-3 sm:py-1.5 max-w-full"
-                    >
-                      <span className="text-[#2D3436] font-medium text-typo-caption sm:text-typo-muted min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">{label}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (isFree) {
-                            setPaywallCustomMessage("Замена ингредиентов доступна в Premium. Попробуйте Trial или оформите подписку.");
-                            setShowPaywall(true);
-                          } else {
-                            setSubstituteSheet({ open: true, index, ing });
-                          }
-                        }}
-                        className="shrink-0 p-0.5 rounded-full hover:bg-primary/15 text-primary touch-manipulation"
-                        aria-label={isFree ? "Замена ингредиента доступна в Premium" : `Заменить: ${ing.name}`}
-                      >
-                        {isFree ? <Lock className="w-3.5 h-3.5" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* Совет: только один блок — chefAdvice или advice (после Ингредиенты, перед Приготовлением) */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-muted-foreground">Порции:</span>
+            <select
+              value={servingsSelected}
+              onChange={(e) => setServingsSelected(Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)))}
+              className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+              aria-label="Количество порций"
+            >
+              {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+          <IngredientChips
+            ingredients={displayIngredients}
+            overrides={overrides}
+            scaledOverrides={scaledOverrides}
+            variant="full"
+            showSubstituteButton
+            onSubstituteClick={isFree ? undefined : (index, ing) => setSubstituteSheet({ open: true, index, ing: ing as IngredientItem })}
+            onLockClick={isFree ? () => {
+              setPaywallCustomMessage("Замена ингредиентов доступна в Premium. Попробуйте Trial или оформите подписку.");
+              setShowPaywall(true);
+            } : undefined}
+          />
           {chefAdvice?.trim() ? (
-            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-primary-light/80 border border-primary-border flex gap-2 sm:gap-3 items-start">
-              <span className="text-typo-title shrink-0" aria-hidden>👨‍🍳</span>
-              <div className="min-w-0">
-                <p className="text-typo-caption font-medium text-primary mb-0.5">Совет от шефа</p>
-                <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{chefAdvice.trim()}</p>
-              </div>
-            </div>
+            <ChefAdviceCard title="Совет от шефа" body={chefAdvice.trim()} isChefTip />
           ) : advice?.trim() ? (
-            <div className="rounded-xl sm:rounded-2xl p-3 sm:p-4 bg-slate-50/80 border border-slate-200/60 flex gap-2 sm:gap-3 items-start">
-              <span className="text-typo-title shrink-0" aria-hidden>💡</span>
-              <div className="min-w-0">
-                <p className="text-typo-caption font-medium text-slate-600 mb-0.5">Мини-совет</p>
-                <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-snug">{advice.trim()}</p>
-              </div>
-            </div>
+            <ChefAdviceCard title="Мини-совет" body={advice.trim()} isChefTip={false} />
           ) : null}
 
           <IngredientSubstituteSheet
@@ -390,30 +373,8 @@ export default function RecipePage() {
             }}
           />
 
-          {/* Время приготовления — как в чате */}
-          {timeStr && (
-            <p className="text-typo-caption text-muted-foreground mb-3 sm:mb-4">⏱️ {timeStr}</p>
-          )}
-
-          {/* Приготовление — нумерация и отступы как в чате */}
-          {steps.length > 0 && (
-            <section>
-              <p className="text-typo-caption sm:text-typo-muted font-medium text-muted-foreground mb-1.5 sm:mb-2">Приготовление</p>
-              <div className="space-y-1.5 sm:space-y-2">
-                {steps.map((step: { instruction?: string; step_number?: number }, index: number) => {
-                  const num = step.step_number ?? index + 1;
-                  return (
-                    <div key={index} className="flex gap-2 sm:gap-3 items-start">
-                      <span className="text-typo-caption font-bold text-primary shrink-0">{num}.</span>
-                      <p className="text-typo-caption sm:text-typo-muted text-[#2D3436] leading-relaxed flex-1 min-w-0">
-                        {step.instruction ?? ""}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
+          <RecipeSteps steps={steps} />
+          </div>
         </div>
       </div>
 

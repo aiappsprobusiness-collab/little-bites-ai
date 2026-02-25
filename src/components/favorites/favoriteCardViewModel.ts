@@ -33,6 +33,7 @@ export interface FavoriteCardViewModel {
   subtitle: string;
   childLabel: string;
   cookTimeLabel: string;
+  cookingTimeMinutes: number | null;
   mealTypeLabel: string | null;
   ingredientNames: string[];
   ingredientTotalCount: number;
@@ -80,6 +81,7 @@ export function toFavoriteCardViewModel(recipe: StoredRecipe): FavoriteCardViewM
     subtitle,
     childLabel,
     cookTimeLabel,
+    cookingTimeMinutes: Number.isFinite(numTime) && numTime != null ? numTime : null,
     mealTypeLabel,
     ingredientNames,
     ingredientTotalCount,

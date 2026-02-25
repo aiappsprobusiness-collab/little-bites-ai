@@ -1,0 +1,34 @@
+import { recipeChefAdviceCard, recipeMiniAdviceCard } from "@/theme/recipeTokens";
+import { cn } from "@/lib/utils";
+
+export interface ChefAdviceCardProps {
+  title: string;
+  body: string;
+  /** true = оливковый info-блок (Совет от шефа), false = нейтральный (Мини-совет) */
+  isChefTip?: boolean;
+  className?: string;
+}
+
+export function ChefAdviceCard({
+  title,
+  body,
+  isChefTip = true,
+  className,
+}: ChefAdviceCardProps) {
+  const cardClass = isChefTip ? recipeChefAdviceCard : recipeMiniAdviceCard;
+  const titleClass = isChefTip
+    ? "text-[11px] font-medium text-foreground mb-0.5"
+    : "text-[11px] font-medium text-muted-foreground mb-0.5";
+
+  return (
+    <div className={cn(cardClass, className)}>
+      <span className="text-base shrink-0 opacity-80" aria-hidden>
+        {isChefTip ? "👨‍🍳" : "💡"}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className={titleClass}>{title}</p>
+        <p className="text-xs text-foreground leading-snug">{body}</p>
+      </div>
+    </div>
+  );
+}

@@ -71,7 +71,7 @@ export default function FavoritesPage() {
 
   return (
     <MobileLayout>
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-4 overflow-x-hidden max-w-full">
         {/* Первая строка: чипсы Избранное/Мои рецепты + пилюля выбора профиля */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <button

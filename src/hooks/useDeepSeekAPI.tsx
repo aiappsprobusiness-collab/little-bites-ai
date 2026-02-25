@@ -158,10 +158,10 @@ export function useDeepSeekAPI() {
       }
 
       const HELP_REQUEST_TIMEOUT_MS = 30_000;
+      const RECIPE_REQUEST_TIMEOUT_MS = 90_000; // рецепт: не зависать бесконечно после деплоя/сетевых сбоев
       chatAbortRef.current = new AbortController();
-      const timeoutId = isHelpMode
-        ? setTimeout(() => chatAbortRef.current?.abort(), HELP_REQUEST_TIMEOUT_MS)
-        : undefined;
+      const timeoutMs = isHelpMode ? HELP_REQUEST_TIMEOUT_MS : RECIPE_REQUEST_TIMEOUT_MS;
+      const timeoutId = setTimeout(() => chatAbortRef.current?.abort(), timeoutMs);
       let response: Response;
       try {
         response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
@@ -187,12 +187,12 @@ export function useDeepSeekAPI() {
             ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime }),
           }),
         });
-        if (timeoutId) clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
       } catch (err) {
-        if (timeoutId) clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
         const msg = (err as Error)?.message ?? '';
-        if (err instanceof Error && err.name === 'AbortError' && isHelpMode) {
-          throw new Error('HELP_TIMEOUT');
+        if (err instanceof Error && err.name === 'AbortError') {
+          throw new Error(isHelpMode ? 'HELP_TIMEOUT' : 'Запрос занял слишком много времени. Попробуйте ещё раз.');
         }
         if (msg.includes('HTTP2') || msg.includes('protocol') || msg === 'Failed to fetch') {
           throw new Error('Соединение прервано. Проверьте интернет и попробуйте ещё раз.');

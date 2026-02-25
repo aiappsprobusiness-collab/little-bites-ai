@@ -148,6 +148,22 @@
   }
 }
 
+/* Карточки рецептов: единая оливковая палитра (чипсы = primary-light, без розового) */
+@layer components {
+  .ingredient-chip {
+    background-color: var(--color-primary-light);
+    border: 1px solid var(--color-primary-border);
+  }
+  .nutrition-block {
+    background-color: #E6F3F0;
+    color: #2C5F4A;
+  }
+  .tip-block {
+    background-color: #FFDAD6;
+    color: #5D3A2E;
+  }
+}
+
 @layer utilities {
   .gradient-primary {
     background: var(--gradient-primary);

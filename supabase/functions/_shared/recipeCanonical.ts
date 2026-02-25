@@ -83,7 +83,7 @@ export interface CanonicalizeRecipePayloadInput {
   steps: Array<{ instruction?: string; step_number?: number }>;
   ingredients: Array<Record<string, unknown> & { name?: string; amount?: string; display_text?: string }>;
   sourceTag?: SourceTag;
-  /** Portions (family-sized default 5). */
+  /** Base serving count (default 1). */
   servings?: number | null;
 }
 
@@ -152,6 +152,10 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     throw new Error("recipeCanonical: минимум 3 ингредиента требуются для create_recipe_with_steps");
   }
 
+  const servings_base = (servings != null && servings >= 1 && servings <= 99) ? servings : 1;
+  const servings_recommended =
+    meal_type === "lunch" ? 3 : meal_type === "dinner" ? 2 : 1;
+
   return {
     user_id,
     member_id: member_id ?? null,
@@ -166,6 +170,7 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     advice: advice ?? null,
     steps: stepsPayload,
     ingredients: ingredientsPayload,
-    servings: (servings != null && servings >= 1 && servings <= 99) ? servings : 5,
+    servings_base,
+    servings_recommended,
   };
 }

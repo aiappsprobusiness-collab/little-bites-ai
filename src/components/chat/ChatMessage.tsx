@@ -1,6 +1,6 @@
 import { useState, useRef, forwardRef, useMemo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ChefHat, Clock, Heart, Share2, BookOpen, Lock, RotateCcw, AlertCircle, CalendarPlus } from "lucide-react";
+import { Trash2, ChefHat, Heart, Share2, BookOpen, AlertCircle, CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -23,6 +23,7 @@ import { HelpSectionCard, HelpWarningCard } from "@/components/help-ui";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { SHARE_APP_URL } from "@/utils/shareRecipeText";
+import { ChatRecipeCard } from "@/components/chat/ChatRecipeCard";
 
 const UUID_REGEX = /\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
 
@@ -377,69 +378,21 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               : role === "user"
                 ? "relative px-3.5 py-2.5 text-xs bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
                 : role === "assistant" && effectiveRecipe
-                  ? "relative rounded-2xl overflow-hidden p-3 bg-card border border-border shadow-soft"
+                  ? "relative p-0 overflow-visible"
                   : "relative p-3 rounded-2xl bg-card border border-border shadow-soft";
             return (
               <Wrapper className={wrapperClassName}>
             {role === "assistant" && showParseError ? (
               <p className="text-xs text-muted-foreground">Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
             ) : role === "assistant" && effectiveRecipe ? (
-              /* Карточка рецепта в чате: child_only, порядок: mealType → title → benefit → ingredients → chef tip (premium/trial) → steps */
-              <div className="rounded-2xl p-3 bg-card max-w-[100%] w-full">
-                {effectiveRecipe.mealType && MEAL_LABELS[effectiveRecipe.mealType] && (
-                  <span className="inline-block text-[11px] font-medium text-primary bg-primary/10 rounded-full px-2 py-0.5 mb-1.5">
-                    {MEAL_LABELS[effectiveRecipe.mealType]}
-                  </span>
-                )}
-                <h3 className="text-sm font-semibold leading-snug text-foreground mb-1 line-clamp-2">{effectiveRecipe.title}</h3>
-                {effectiveRecipe.description && (
-                  <div className="mb-3">
-                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">{getBenefitLabel(ageMonths)}</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-normal break-words">{effectiveRecipe.description}</p>
-                  </div>
-                )}
-                <div className="mb-3">
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Ингредиенты</p>
-                  {effectiveRecipe.ingredients?.length ? (
-                    <div className="flex flex-wrap gap-2">
-                      {effectiveRecipe.ingredients.map((ing, idx) => {
-                        const baseDisplay = typeof ing === "string" ? ing : ingredientDisplayLabel(ing as unknown as IngredientItem);
-                        const displayText = (ingredientOverrides[idx] ?? baseDisplay) || "Ингредиент";
-                        const ingName = typeof ing === "string" ? ing : (ing as IngredientWithSubstitute).name ?? "";
-                        const substituteFromDb = isIngredientObject(ing) ? (ing as IngredientWithSubstitute).substitute : undefined;
-                        return (
-                          <div
-                            key={idx}
-                            className={
-                              "max-w-full flex items-center gap-1.5 bg-primary/10 rounded-full px-2 py-1"
-                            }
-                          >
-                            <span className="text-foreground font-medium text-xs min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis">
-                              {displayText}
-                            </span>
-                            {showChefTip ? (
-                              <button
-                                type="button"
-                                onClick={() => setSubstituteSheet({ open: true, idx, ing })}
-                                className="shrink-0 p-0.5 rounded-full hover:bg-primary/15 text-primary touch-manipulation"
-                                aria-label={`Заменить: ${ingName}`}
-                              >
-                                <RotateCcw className="w-3.5 h-3.5" />
-                              </button>
-                            ) : (
-                              <span className="text-muted-foreground shrink-0" title="Доступно в Premium">
-                                <Lock className="w-3 h-3" />
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">ИИ уточняет состав…</p>
-                  )}
-                </div>
-
+              <>
+                <ChatRecipeCard
+                  recipe={effectiveRecipe}
+                  ageMonths={ageMonths}
+                  showChefTip={showChefTip}
+                  ingredientOverrides={ingredientOverrides}
+                  onSubstituteClick={(idx, ing) => setSubstituteSheet({ open: true, idx, ing })}
+                />
                 <IngredientSubstituteSheet
                   open={!!substituteSheet?.open}
                   onOpenChange={(open) => setSubstituteSheet((s) => (s ? { ...s, open } : null))}
@@ -452,51 +405,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     }
                   }}
                 />
-                {effectiveRecipe.cookingTime != null && effectiveRecipe.cookingTime > 0 && (
-                  <p className="text-xs text-muted-foreground mb-2">⏱️ {effectiveRecipe.cookingTime} мин</p>
-                )}
-                {(() => {
-                  const chefTip = effectiveRecipe.chefAdvice?.trim();
-                  const miniTip = effectiveRecipe.advice?.trim();
-                  const tipForFree = miniTip || chefTip;
-                  if (showChefTip && chefTip) {
-                    return (
-                      <div className="rounded-2xl p-3 pl-4 bg-muted/50 flex gap-2 items-start mb-3">
-                        <span className="text-sm shrink-0" aria-hidden>👨‍🍳</span>
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-medium text-primary mb-0.5">Совет от шефа</p>
-                          <p className="text-xs text-foreground leading-snug">{chefTip}</p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (tipForFree) {
-                    return (
-                      <div className="rounded-2xl p-3 bg-muted/30 flex gap-2 items-start mb-3">
-                        <span className="text-sm shrink-0" aria-hidden>💡</span>
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Мини-совет</p>
-                          <p className="text-xs text-foreground leading-snug">{tipForFree}</p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-                {effectiveRecipe.steps && effectiveRecipe.steps.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Шаги приготовления</p>
-                    <div className="space-y-1">
-                      {(effectiveRecipe.steps?.map((step, idx) => (
-                        <div key={idx} className="flex gap-2 items-start">
-                          <span className="text-xs font-semibold text-primary shrink-0">{idx + 1}.</span>
-                          <p className="text-xs text-foreground leading-relaxed flex-1 min-w-0 break-words">{step}</p>
-                        </div>
-                      )) ?? null)}
-                    </div>
-                  </div>
-                )}
-              </div>
+              </>
             ) : role === "assistant" ? (
               <div className={`chat-message-content text-xs select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-foreground prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-foreground prose-strong:text-foreground [&>*]:text-foreground ${forcePlainText ? "consultationCard-inner" : ""}`}>
                 {forcePlainText ? (() => {

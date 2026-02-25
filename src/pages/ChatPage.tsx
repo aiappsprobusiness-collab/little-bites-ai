@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, startTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Send, Loader2, HelpCircle, MoreVertical, Trash2 } from "lucide-react";
@@ -56,6 +56,35 @@ const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
 const CHAT_HELP_TOOLTIP_SEEN_KEY = "chat_help_tooltip_seen";
 /** Порог (px) от низа скролла: если пользователь в пределах — автоскролл вниз при новых сообщениях. */
 const NEAR_BOTTOM_THRESHOLD = 120;
+
+/** Сменяющиеся надписи во время генерации рецепта (интервал 2.5 с), по аналогии с Планом. Нейтрально по возрасту (дети, подростки, взрослые). */
+const RECIPE_GENERATION_PHRASES = [
+  "Подбираю рецепт под запрос…",
+  "Учитываю аллергии и предпочтения…",
+  "Проверяю ингредиенты…",
+  "Пишу пошаговые шаги…",
+  "Добавляю мини-совет…",
+  "Проверяю баланс блюда…",
+  "Подбираю полезные варианты…",
+  "Формирую рецепт…",
+  "Почти готово…",
+  "Готовлю текст рецепта…",
+  "Учитываю предпочтения…",
+  "Составляю список ингредиентов…",
+  "Пишу шаги приготовления…",
+  "Добавляю советы по подаче…",
+  "Проверяю рецепт…",
+  "Подбираю подходящие продукты…",
+  "Думаю над сочетаниями…",
+  "Пишу понятные шаги…",
+  "Учитываю время приготовления…",
+  "Добавляю полезные советы…",
+  "Составляю рецепт…",
+  "Проверяю состав блюда…",
+  "Составляю сбалансированное меню…",
+  "Пишу рецепт…",
+  "Ещё чуть-чуть…",
+];
 
 const HELP_CHAT_STORAGE_KEY = "help_chat_messages_v1";
 
@@ -144,9 +173,24 @@ export default function ChatPage() {
   /** Скролл к рецепту выполняем один раз при появлении карточки; повторный скролл через несколько секунд даёт «уплывание». */
   const lastScrolledRecipeIdRef = useRef<string | null>(null);
   const chatHeroRef = useRef<HTMLDivElement | null>(null);
+  /** После установки финального сообщения с рецептом — игнорировать опоздавшие onChunk, чтобы не перезаписать карточку и не вызывать моргание. */
+  const streamDoneForMessageIdRef = useRef<string | null>(null);
+  /** Id последней пары user+assistant, чтобы при синхронизации с историей (после saveChat) не менять key и не вызывать моргание карточки. */
+  const lastSentMessageIdsRef = useRef<{ userMessageId: string; assistantMessageId: string; setAt: number } | null>(null);
   /** Статус-индикатор при смене профиля: текст на 1.5 сек. */
   const [profileChangeStatus, setProfileChangeStatus] = useState<string | null>(null);
   const profileChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Индекс фразы при генерации рецепта (смена каждые 1.5 с). */
+  const [recipeStatusPhraseIndex, setRecipeStatusPhraseIndex] = useState(0);
+  useEffect(() => {
+    if (!isChatting || mode !== "recipes") return;
+    setRecipeStatusPhraseIndex(0);
+    const id = setInterval(() => {
+      setRecipeStatusPhraseIndex((i) => (i + 1) % RECIPE_GENERATION_PHRASES.length);
+    }, 2500);
+    return () => clearInterval(id);
+  }, [isChatting, mode]);
 
   const [hintsSeen, setHintsSeen] = useState(() =>
     typeof localStorage !== "undefined" && !!localStorage.getItem(CHAT_HINTS_SEEN_KEY)
@@ -324,7 +368,7 @@ export default function ChatPage() {
       return;
     }
     const recipeIds = [...new Set(historyMessages.map((m: { recipe_id?: string | null }) => m.recipe_id).filter(Boolean))] as string[];
-    const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>) => {
+    const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>): Message[] => {
       const formatted: Message[] = [];
       historyMessages.forEach((msg: { id: string; message?: string; response?: string; created_at: string; recipe_id?: string | null }) => {
         formatted.push({
@@ -349,10 +393,24 @@ export default function ChatPage() {
           });
         }
       });
+      return formatted;
+    };
+    const applyFormatted = (formatted: Message[]) => {
+      const sent = lastSentMessageIdsRef.current;
+      if (sent && formatted.length >= 2 && Date.now() - sent.setAt < 20_000) {
+        const prev = formatted.length - 2;
+        lastSentMessageIdsRef.current = null;
+        setMessages([
+          ...formatted.slice(0, prev),
+          { ...formatted[prev], id: sent.userMessageId },
+          { ...formatted[prev + 1], id: sent.assistantMessageId },
+        ]);
+        return;
+      }
       setMessages(formatted);
     };
     if (recipeIds.length === 0) {
-      formatWithRecipeMap({});
+      applyFormatted(formatWithRecipeMap({}));
       return;
     }
     supabase
@@ -362,7 +420,7 @@ export default function ChatPage() {
       .then(({ data: rows, error }) => {
         const recipeMap: Record<string, ParsedRecipe> = {};
         if (error) {
-          formatWithRecipeMap({});
+          applyFormatted(formatWithRecipeMap({}));
           return;
         }
         (rows ?? []).forEach((r: {
@@ -394,7 +452,7 @@ export default function ChatPage() {
             advice: r.advice ?? undefined,
           };
         });
-        formatWithRecipeMap(recipeMap);
+        applyFormatted(formatWithRecipeMap(recipeMap));
       });
   }, [mode, historyMessages]);
 
@@ -499,6 +557,7 @@ export default function ChatPage() {
       timestamp: new Date(),
       isStreaming: true,
     };
+    streamDoneForMessageIdRef.current = null;
     setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
 
     try {
@@ -580,6 +639,7 @@ export default function ChatPage() {
           onChunk:
             attempts === 0
               ? (chunk) => {
+                if (streamDoneForMessageIdRef.current === assistantMessageId) return;
                 setMessages((prev) =>
                   prev.map((m) =>
                     m.id === assistantMessageId
@@ -634,6 +694,7 @@ export default function ChatPage() {
       }
 
       if (!finalRecipe) {
+        streamDoneForMessageIdRef.current = assistantMessageId;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
@@ -653,6 +714,48 @@ export default function ChatPage() {
           description: FAILED_MESSAGE,
         });
       } else {
+        // Один setMessages с рецептом и recipeId — без второго обновления после тоста «Рецепты сохранены», чтобы не было моргания
+        let recipeIdForHistory: string | null = response?.recipe_id ?? null;
+        let savedRecipesCount = 0;
+        if (recipeIdForHistory) lastSavedRecipeTitleRef.current = finalRecipe?.title ?? null;
+
+        if (finalValidation.ok && !recipeIdForHistory) {
+          const mealType = detectMealType(userMessage.content);
+          const SAVE_RECIPE_TIMEOUT_MS = 15_000;
+          try {
+            const { savedRecipes } = await Promise.race([
+              saveRecipesFromChat({
+                userMessage: userMessage.content,
+                aiResponse: rawMessage,
+                memberId: memberIdForSave,
+                mealType,
+                parsedResult: parsed,
+              }),
+              new Promise<{ savedRecipes?: Array<{ id: string; title?: string }> }>((_, reject) =>
+                setTimeout(() => reject(new Error("SAVE_TIMEOUT")), SAVE_RECIPE_TIMEOUT_MS)
+              ),
+            ]);
+            if (savedRecipes?.length > 0) {
+              lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
+              recipeIdForHistory = savedRecipes[0]?.id ?? null;
+              savedRecipesCount = savedRecipes.length;
+              if (import.meta.env.DEV) {
+                console.log("[DEBUG recipe id]", recipeIdForHistory, "(from saveRecipesFromChat)");
+              }
+            }
+          } catch (saveErr) {
+            if ((saveErr as Error)?.message === "SAVE_TIMEOUT") {
+              safeError("saveRecipesFromChat timeout, showing recipe without recipeId", saveErr);
+            } else {
+              safeError("saveRecipesFromChat failed, showing recipe without recipeId", saveErr);
+            }
+          }
+        } else if (import.meta.env.DEV) {
+          console.log("[DEBUG recipe id]", recipeIdForHistory);
+        }
+
+        streamDoneForMessageIdRef.current = assistantMessageId;
+        lastSentMessageIdsRef.current = { userMessageId: userMessage.id, assistantMessageId, setAt: Date.now() };
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
@@ -662,6 +765,7 @@ export default function ChatPage() {
                 rawContent: rawMessage,
                 isStreaming: false,
                 preParsedRecipe: showRecipe ? (parsed.recipes[0] ?? null) : null,
+                ...(recipeIdForHistory && { recipeId: recipeIdForHistory }),
               }
               : m
           )
@@ -675,60 +779,18 @@ export default function ChatPage() {
               description: "Не сохранён в список: не совпадает с аллергиями или предпочтениями.",
             });
           }
-          let recipeIdForHistory: string | null = response?.recipe_id ?? null;
-          if (import.meta.env.DEV) {
-            console.log("[DEBUG recipe id]", recipeIdForHistory);
-          }
-          if (finalValidation.ok) {
-            if (recipeIdForHistory) {
-              lastSavedRecipeTitleRef.current = finalRecipe?.title ?? null;
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMessageId ? { ...m, recipeId: recipeIdForHistory } : m
-                )
-              );
-            } else {
-              const mealType = detectMealType(userMessage.content);
-              const { savedRecipes } = await saveRecipesFromChat({
-                userMessage: userMessage.content,
-                aiResponse: rawMessage,
-                memberId: memberIdForSave,
-                mealType,
-                parsedResult: parsed,
-              });
-              if (savedRecipes?.length > 0) {
-                lastSavedRecipeTitleRef.current = savedRecipes[0]?.title ?? null;
-                recipeIdForHistory = savedRecipes[0]?.id ?? null;
-                if (import.meta.env.DEV) {
-                  console.log("[DEBUG recipe id]", recipeIdForHistory, "(from saveRecipesFromChat)");
-                }
-                if (recipeIdForHistory) {
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId ? { ...m, recipeId: recipeIdForHistory } : m
-                    )
-                  );
-                }
-                toast({
-                  title: "Рецепты сохранены",
-                  description: `${savedRecipes.length} рецепт(ов) добавлено в ваш список`,
-                });
-              }
-            }
-            await saveChat({
-              message: userMessage.content,
-              response: rawMessage,
-              recipeId: recipeIdForHistory,
-              childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
-            });
-          } else {
-            await saveChat({
-              message: userMessage.content,
-              response: rawMessage,
-              recipeId: recipeIdForHistory,
-              childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+          if (savedRecipesCount > 0) {
+            toast({
+              title: "Рецепты сохранены",
+              description: `${savedRecipesCount} рецепт(ов) добавлено в ваш список`,
             });
           }
+          await saveChat({
+            message: userMessage.content,
+            response: rawMessage,
+            recipeId: recipeIdForHistory,
+            childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+          });
         } catch (e) {
           safeError("Failed to save recipes from chat:", e);
           await saveChat({
@@ -1029,7 +1091,7 @@ export default function ChatPage() {
                 role={m.role}
                 content={
                   m.role === "assistant" && m.isStreaming && mode === "recipes" && m.content.trim().startsWith("{")
-                    ? "Готовлю рецепт…"
+                    ? RECIPE_GENERATION_PHRASES[recipeStatusPhraseIndex]
                     : m.content
                 }
                 timestamp={m.timestamp}
@@ -1060,7 +1122,7 @@ export default function ChatPage() {
               >
                 <div className="rounded-2xl p-4 bg-card border border-border shadow-soft max-w-[85%]">
                   <p className="text-sm text-foreground leading-relaxed">
-                    {mode === "help" ? "Думаю…" : "Готовлю рецепт…"}
+                    {mode === "help" ? "Думаю…" : RECIPE_GENERATION_PHRASES[recipeStatusPhraseIndex]}
                   </p>
                   <div className="flex items-center gap-1.5 mt-2" aria-hidden>
                     <span className="chat-thinking-dot" />

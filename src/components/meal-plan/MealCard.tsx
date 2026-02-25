@@ -4,6 +4,7 @@ import { Heart, Share2, RotateCw, Loader2, Trash2, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RecipeCard } from "@/components/recipe/RecipeCard";
 
 const MEAL_LABELS: Record<string, { label: string; emoji: string; time: string }> = {
   breakfast: { label: "Завтрак", emoji: "🍽", time: "8:30" },
@@ -126,87 +127,56 @@ export function MealCard({
   };
 
   if (compact) {
-    const showChips = chips.length > 0 || extraCount > 0 || showPlaceholderChips;
-    const showCookTime = cookTimeMinutes != null && cookTimeMinutes > 0;
+    const showActionsCompact = !isLoadingPreviews && (onReplace ?? onDelete) != null;
+    if (isLoadingPreviews && chips.length === 0 && extraCount === 0) {
+      return (
+        <div
+          className={cn(
+            "w-full rounded-2xl border border-border bg-card shadow-soft p-4 flex flex-col gap-2 min-h-[44px]",
+            className
+          )}
+        >
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-20" />
+          <div className="flex gap-2 mt-1">
+            <Skeleton className="h-6 w-16 rounded-full" />
+            <Skeleton className="h-6 w-20 rounded-full" />
+            <Skeleton className="h-6 w-14 rounded-full" />
+          </div>
+        </div>
+      );
+    }
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Открыть рецепт: ${recipeTitle}`}
+      <RecipeCard
+        variant="preview"
+        header={{
+          mealLabel: meta.label,
+          cookingTimeMinutes: cookTimeMinutes ?? null,
+          title: recipeTitle,
+        }}
+        ingredients={ingredientNames}
+        maxIngredientChips={INGREDIENT_CHIPS_MAX_COMPACT}
+        hint={hint ?? null}
         onClick={handleClick}
-        onKeyDown={(e) => e.key === "Enter" && handleClick()}
-        className={cn(
-          "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
-          "p-4 min-h-[44px] flex flex-col gap-1.5",
-          "active:opacity-95 transition-opacity",
-          "touch-manipulation cursor-pointer",
-          className
-        )}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-plan-recipe-title font-bold text-foreground leading-tight">
-                {recipeTitle}
-              </span>
+        actions={
+          showActionsCompact ? (
+            <>
               {debugSource && (
                 <span
                   className={cn(
-                    "text-[10px] font-semibold px-1.5 py-0.5 rounded",
+                    "text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0",
                     debugSource === "db" ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"
                   )}
                 >
                   {debugSource === "db" ? "DB" : "AI"}
                 </span>
               )}
-            </div>
-            {showCookTime && (
-              <div className="text-typo-caption text-muted-foreground">⏱️ {cookTimeMinutes} мин</div>
-            )}
-            {showChips && (
-              <div className="flex flex-wrap gap-1.5 mt-0.5">
-                {showPlaceholderChips
-                  ? Array.from({ length: CHIP_PLACEHOLDER_COUNT }).map((_, i) => (
-                    <Skeleton key={i} className="h-5 w-14 rounded-md shrink-0" />
-                  ))
-                  : (
-                    <>
-                      {chips.map((name, i) => (
-                        <span
-                          key={`${name}-${i}`}
-                          className="inline-flex items-center max-w-[120px] px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-typo-caption h-6 box-border truncate"
-                          title={name}
-                        >
-                          {name}
-                        </span>
-                      ))}
-                      {extraCount > 0 && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-typo-caption h-6 shrink-0">
-                          +{extraCount}
-                        </span>
-                      )}
-                    </>
-                  )}
-              </div>
-            )}
-            {hint && (
-              <p className="text-typo-caption text-muted-foreground mt-1 leading-snug line-clamp-2" title={hint}>
-                💡 {hint}
-              </p>
-            )}
-          </div>
-          {showActions && (
-            <div
-              className="flex shrink-0 gap-1"
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-            >
               {onReplace && (
                 <button
                   type="button"
                   onClick={handleReplaceClick}
                   disabled={isReplaceLoading}
-                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-primary bg-primary-pill border border-primary-border hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none"
+                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-primary bg-primary/10 border border-primary-border hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none"
                   title={replaceShowsLock ? "Доступно в Premium" : "Заменить"}
                   aria-label={replaceShowsLock ? "Замена блюда доступна в Premium" : "Заменить блюдо"}
                 >
@@ -231,44 +201,18 @@ export function MealCard({
                     e.stopPropagation();
                     onDelete();
                   }}
-                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-slate-200/60 hover:border-destructive/30 active:scale-95 transition-all"
+                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border hover:border-destructive/30 active:scale-95 transition-all"
                   title="Удалить из плана"
                   aria-label="Удалить блюдо из плана"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
               )}
-              {!compact && onToggleFavorite && (
-                <button
-                  type="button"
-                  onClick={handleFavoriteClick}
-                  className={cn(
-                    "h-8 w-8 rounded-full flex items-center justify-center transition-all active:scale-95 border shrink-0",
-                    isFavorite
-                      ? "text-amber-600/90 bg-amber-50/70 fill-amber-600/90 border-amber-200/40"
-                      : "text-slate-400 bg-slate-50/50 border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500"
-                  )}
-                  title="В избранное"
-                  aria-label={isFavorite ? "Удалить из избранного" : "Добавить в избранное"}
-                >
-                  <Heart className={cn("h-3.5 w-3.5", isFavorite && "fill-current")} />
-                </button>
-              )}
-              {!compact && onShare && (
-                <button
-                  type="button"
-                  onClick={handleShareClick}
-                  className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-slate-400 bg-slate-50/50 border border-slate-200/40 hover:border-slate-200/60 hover:text-slate-500 active:scale-95 transition-all"
-                  title="Поделиться"
-                  aria-label="Поделиться"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+            </>
+          ) : undefined
+        }
+        className={className}
+      />
     );
   }
 
@@ -278,7 +222,7 @@ export function MealCard({
       aria-label={`Открыть рецепт: ${recipeTitle}`}
       onClick={handleClick}
       className={cn(
-        "w-full text-left rounded-2xl border border-slate-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.06)]",
+        "w-full text-left rounded-2xl border border-border bg-card shadow-soft",
         "p-4 min-h-[44px] flex flex-col gap-1.5",
         "active:opacity-95 transition-opacity",
         "touch-manipulation",
@@ -299,13 +243,13 @@ export function MealCard({
           {chips.map((name, i) => (
             <span
               key={`${name}-${i}`}
-              className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-typo-caption"
+              className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-light border border-primary-border text-foreground text-typo-caption"
             >
               {name}
             </span>
           ))}
           {extraCount > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-typo-caption">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-light border border-primary-border text-foreground text-typo-caption">
               +{extraCount}
             </span>
           )}
@@ -325,7 +269,7 @@ export function MealCardSkeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "w-full rounded-2xl border border-slate-200 bg-white p-4 flex flex-col gap-2",
+        "w-full rounded-2xl border border-border bg-card shadow-soft p-4 flex flex-col gap-2",
         className
       )}
     >

@@ -56,3 +56,36 @@ export function ingredientDisplayLabel(ing: IngredientItem | { name?: string; di
   if (part) return part;
   return name || "Ингредиент";
 }
+
+/**
+ * Масштабирует отображение ингредиента по множителю порций.
+ * amountScaled = amount * multiplier, canonical_amountScaled = canonical_amount * multiplier.
+ * Не масштабирует качественные подписи (по вкусу, для подачи).
+ */
+export function scaleIngredientDisplay(
+  ing: IngredientItem | { name?: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; amount?: number | null; unit?: string | null },
+  multiplier: number
+): string {
+  if (multiplier <= 0 || !Number.isFinite(multiplier)) return ingredientDisplayLabel(ing as IngredientItem);
+  const dt = (ing as { display_text?: string | null }).display_text ?? "";
+  if (typeof dt === "string" && (/по вкусу|для подачи/i.test(dt.trim()))) return ingredientDisplayLabel(ing as IngredientItem);
+  const name = ((ing as { name?: string }).name ?? "").trim();
+  const canonical_amount = (ing as { canonical_amount?: number | null }).canonical_amount;
+  const canonical_unit = (ing as { canonical_unit?: string | null }).canonical_unit;
+  const amount = (ing as { amount?: number | null }).amount;
+  const unit = (ing as { unit?: string | null }).unit ?? "";
+  if (canonical_amount != null && canonical_unit) {
+    const scaled = canonical_amount * multiplier;
+    const rounded = Math.round(scaled * 10) / 10;
+    const suffix = `${rounded} ${canonical_unit}`;
+    return name ? `${name} — ${suffix}` : suffix;
+  }
+  if (amount != null && (unit || canonical_unit)) {
+    const scaled = amount * multiplier;
+    const u = unit || (canonical_unit ?? "");
+    const rounded = Math.round(scaled * 10) / 10;
+    const suffix = u ? `${rounded} ${u}` : String(rounded);
+    return name ? `${name} — ${suffix}` : suffix;
+  }
+  return ingredientDisplayLabel(ing as IngredientItem);
+}

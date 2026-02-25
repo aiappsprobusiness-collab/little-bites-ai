@@ -73,11 +73,11 @@ Return ONLY valid JSON. No markdown, no text before or after, no explanation, no
   "steps": string[] (max 7 short steps),
   "cookingTime": number,
   "mealType": "breakfast" | "lunch" | "dinner" | "snack",
-  "servings": number (always 5 for family-sized),
+  "servings": number (base serving count, usually 1),
   "chefAdvice": string (max 300 chars — professional culinary tip about the dish only: taste, texture, technique, or serving; 1–2 sentences)
 }
 
-SERVINGS RULE: All ingredient quantities MUST be for SERVINGS=5 (family-sized). Avoid single-portion amounts for soups/stews: water 1.5–2.0 L typical, meat 400–600 g, etc. Return "servings": 5 in JSON.
+SERVINGS RULE: All ingredient amounts must be calculated for the base serving count (servings). Return "servings" in JSON (typically 1).
 
 INGREDIENTS RULE: Every ingredient MUST include amount and unit. No bare names.
 Use: "г" or "мл" for grams/ml; "шт." for pieces; "ч.л." / "ст.л." for spoons. Example: "Молоко — 200 мл", "Яйцо — 2 шт."
