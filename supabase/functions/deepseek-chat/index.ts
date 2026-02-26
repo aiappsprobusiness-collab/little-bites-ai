@@ -17,7 +17,7 @@ import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
-import { buildAllergenSet, containsAnyToken } from "../_shared/allergens.ts";
+import { buildAllergenSet, containsAnyToken, getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
 import { validateRecipeJson, ingredientsNeedAmountRetry, type RecipeJson } from "./recipeSchema.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -81,6 +81,61 @@ function sanitizeMealMentions(text: string | null | undefined): string {
     result = result.replace(pattern, " ");
   }
   return result.replace(/\s+/g, " ").trim();
+}
+
+/** Токенизация для проверки «не любит»: lower, убрать пунктуацию, слова от 2 символов. */
+function tokenizeForDislikes(text: string): string[] {
+  if (!text || typeof text !== "string") return [];
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .split(/\s+/)
+    .filter((t) => t.length >= 2);
+}
+
+function getDislikeTokensForChat(dislikesList: string[]): string[] {
+  const tokens = new Set<string>();
+  for (const item of dislikesList) {
+    const s = String(item).trim().toLowerCase();
+    if (!s) continue;
+    for (const t of tokenizeForDislikes(s)) tokens.add(t);
+  }
+  return [...tokens];
+}
+
+/** Единый формат ответа «заблокировано» (аллергия или dislikes). Не вызываем модель, не пишем usage_events. */
+type BlockedBy = "allergy" | "dislike";
+const BLOCKED_ALTERNATIVES: Record<string, string[]> = {
+  куриц: ["индейка", "говядина", "рыба"],
+  курица: ["индейка", "говядина", "рыба"],
+  chicken: ["индейка", "говядина", "рыба"],
+  молок: ["овощной бульон", "вода", "кокосовое молоко"],
+  молоко: ["овощной бульон", "вода", "кокосовое молоко"],
+  орех: ["семечки", "кунжут", "подсолнечник"],
+  орехи: ["семечки", "кунжут", "подсолнечник"],
+  лук: ["чеснок", "зелень", "сладкий перец"],
+  лука: ["чеснок", "зелень", "сладкий перец"],
+  яйц: ["льняная мука", "банан", "йогурт"],
+  рыб: ["индейка", "курица", "тофу"],
+  глютен: ["рис", "гречка", "киноа"],
+  мясо: ["индейка", "рыба", "бобовые"],
+};
+function getAlternatives(matched: string[]): string[] {
+  const lower = matched.map((m) => String(m).trim().toLowerCase());
+  for (const m of lower) {
+    for (const [key, alts] of Object.entries(BLOCKED_ALTERNATIVES)) {
+      if (m.includes(key) || key.includes(m)) return alts.slice(0, 3);
+    }
+  }
+  return ["другие ингредиенты на ваш выбор"];
+}
+function buildBlockedMessageEdge(profileName: string, blockedBy: BlockedBy, matched: string[]): string {
+  const label = blockedBy === "allergy" ? "аллергия" : "не любит";
+  const items = matched.length > 0 ? matched.join(", ") : "это";
+  const line1 = `У профиля «${profileName}» указано: ${label} — ${items}. Поэтому рецепт с этим ингредиентом я не предложу.`;
+  const alts = getAlternatives(matched);
+  const line2 = `Попробуйте заменить на: ${alts.join(", ")}.`;
+  return `${line1}\n\n${line2}`;
 }
 
 /** Нормализация title для сравнения (anti-duplicate). Та же логика, что в pool/diag. */
@@ -191,6 +246,8 @@ interface MemberData {
   ageDescription?: string;
   allergies?: string[];
   preferences?: string[];
+  likes?: string[];
+  dislikes?: string[];
   difficulty?: string;
 }
 
@@ -268,10 +325,15 @@ function applyPromptTemplate(
   const allergiesExclude = allergiesSet.size > 0 ? `ИСКЛЮЧИТЬ (аллергия): ${allergies}.` : "";
 
   let preferencesSet = new Set<string>();
+  const addPrefs = (m: MemberData) => {
+    const likes = m.likes;
+    const prefs = Array.isArray(likes) && likes.length > 0 ? likes : m.preferences;
+    prefs?.forEach((p) => p?.trim() && preferencesSet.add(p.trim()));
+  };
   if (targetIsFamily && allMembers.length > 0) {
-    allMembers.forEach((m) => (m as MemberData).preferences?.forEach((p) => p?.trim() && preferencesSet.add(p.trim())));
-  } else if ((primaryMember as MemberData)?.preferences?.length) {
-    (primaryMember as MemberData).preferences!.forEach((p) => p?.trim() && preferencesSet.add(p.trim()));
+    allMembers.forEach((m) => addPrefs(m as MemberData));
+  } else if (primaryMember) {
+    addPrefs(primaryMember as MemberData);
   }
   const preferencesText = preferencesSet.size > 0 ? Array.from(preferencesSet).join(", ") : "не указано";
   const primaryDifficulty = (primaryMember as MemberData)?.difficulty?.trim();
@@ -698,15 +760,17 @@ serve(async (req) => {
       } else if (userId && supabase) {
         const { data: rows, error: membersError } = await supabase
           .from("members")
-          .select("name, age_months, allergies, preferences, difficulty")
+          .select("name, age_months, allergies, preferences, likes, dislikes, difficulty")
           .eq("user_id", userId);
 
         if (!membersError && rows) {
-          allMembers = rows.map((m: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; difficulty?: string }) => ({
+          allMembers = rows.map((m: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; difficulty?: string }) => ({
             name: m.name,
             age_months: m.age_months ?? 0,
             allergies: m.allergies ?? [],
             ...(m.preferences && { preferences: m.preferences }),
+            ...(m.likes && { likes: m.likes }),
+            ...(m.dislikes && { dislikes: m.dislikes }),
             ...(m.difficulty && { difficulty: m.difficulty }),
           })) as MemberData[];
         }
@@ -746,19 +810,50 @@ serve(async (req) => {
       }));
     }
 
-    // Страховка: запрос с аллергеном (курица, орехи и т.д.) — отказ без вызова модели
+    // Страховка: запрос с аллергеном или dislikes — отказ без вызова модели, без usage_events
     if ((type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest) {
+      const profileName = (memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля";
+
       const allergiesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
         ? [...new Set(allMembersForPrompt.flatMap((m) => m.allergies ?? []))]
         : (memberDataForPrompt?.allergies ?? []);
       const allergenSet = buildAllergenSet(allergiesList);
       if (allergenSet.blockedTokens.length > 0 && containsAnyToken(userMessage, allergenSet.blockedTokens)) {
-        const profileName = (memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля";
-        const text = `У профиля ${profileName} указана аллергия на: ${allergiesList.filter(Boolean).join(", ")}. Поэтому я не могу предложить рецепт с этим ингредиентом. Могу предложить ужин с индейкой, рыбой или овощами — напишите, что предпочитаете.`;
-        return new Response(JSON.stringify({ message: text, blockedByAllergy: true }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        const matched: string[] = [];
+        for (const a of allergiesList) {
+          if (!a?.trim()) continue;
+          const tokens = getBlockedTokensFromAllergies([a]);
+          if (tokens.length > 0 && containsAnyToken(userMessage, tokens)) matched.push(a.trim());
+        }
+        const matchedDisplay = matched.length > 0 ? matched : allergiesList.filter(Boolean).map((a) => a.trim());
+        const message = buildBlockedMessageEdge(profileName, "allergy", matchedDisplay);
+        return new Response(JSON.stringify({
+          blocked: true,
+          blocked_by: "allergy",
+          profile_name: profileName,
+          matched: matchedDisplay,
+          message,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const dislikesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
+        ? [...new Set(allMembersForPrompt.flatMap((m) => (m as MemberData).dislikes ?? []).filter(Boolean))]
+        : ((memberDataForPrompt as MemberData)?.dislikes ?? []);
+      if (dislikesList.length > 0) {
+        const dislikeTokens = getDislikeTokensForChat(dislikesList);
+        if (dislikeTokens.length > 0 && containsAnyToken(userMessage, dislikeTokens)) {
+          const userLower = userMessage.toLowerCase();
+          const matchedDislike = dislikesList.find((d) => tokenizeForDislikes(d).some((t) => userLower.includes(t)));
+          const matched = matchedDislike ? [matchedDislike] : [dislikesList[0]];
+          const message = buildBlockedMessageEdge(profileName, "dislike", matched);
+          return new Response(JSON.stringify({
+            blocked: true,
+            blocked_by: "dislike",
+            profile_name: profileName,
+            matched,
+            message,
+          }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
       }
     }
 

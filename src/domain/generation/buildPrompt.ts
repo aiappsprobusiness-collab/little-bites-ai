@@ -21,13 +21,15 @@ function formatDifficulty(d?: string): string {
 function profileBlock(p: Profile, lookup?: MemberWithAgeMonths[]): string {
   const ageMonths = getAgeMonths(p, lookup);
   const allergies = (p.allergies ?? []).filter((a) => a?.trim());
-  const preferences = (p.preferences ?? []).filter((a) => a?.trim());
+  const likes = (p.likes ?? []).filter((a) => a?.trim());
+  const dislikes = (p.dislikes ?? []).filter((a) => a?.trim());
   const difficulty = formatDifficulty(p.difficulty) || "any";
 
   const lines: string[] = [
     `- Age: ${ageMonths} months`,
     `- Allergies (STRICT): ${allergies.length ? allergies.join(", ") : "none"}`,
-    `- Preferences (STRICT): ${preferences.length ? preferences.join(", ") : "none"}`,
+    `- Likes (soft): ${likes.length ? likes.join(", ") : "none"}`,
+    `- Dislikes (STRICT): ${dislikes.length ? dislikes.join(", ") : "none"}`,
     `- Difficulty: ${difficulty}`,
   ];
   return lines.join("\n");
@@ -56,7 +58,7 @@ export function buildPrompt(
       ...childBlocks,
       "",
       "Generate ONE recipe that is safe and suitable for ALL children above.",
-      "You must respect ALL allergies and ALL preferences.",
+      "You must respect ALL allergies and ALL dislikes.",
     ];
     return parts.join("\n");
   }

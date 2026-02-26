@@ -85,8 +85,10 @@ export function ProfileEditSheet({
   const [ageMonths, setAgeMonths] = useState(0);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [allergyInput, setAllergyInput] = useState("");
-  const [preferences, setPreferences] = useState<string[]>([]);
-  const [preferenceInput, setPreferenceInput] = useState("");
+  const [likes, setLikes] = useState<string[]>([]);
+  const [likesInput, setLikesInput] = useState("");
+  const [dislikes, setDislikes] = useState<string[]>([]);
+  const [dislikesInput, setDislikesInput] = useState("");
   const [difficulty, setDifficulty] = useState<string>("easy");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const lastInitRef = useRef<{ isCreate: boolean; memberId: string | null } | null>(null);
@@ -111,8 +113,10 @@ export function ProfileEditSheet({
       setAgeMonths(0);
       setAllergies([]);
       setAllergyInput("");
-      setPreferences([]);
-      setPreferenceInput("");
+      setLikes([]);
+      setLikesInput("");
+      setDislikes([]);
+      setDislikesInput("");
       setDifficulty("easy");
       return;
     }
@@ -123,8 +127,10 @@ export function ProfileEditSheet({
     setAgeMonths(total % 12);
     setAllergies(member.allergies ?? []);
     setAllergyInput("");
-    setPreferences((member as MembersRow).preferences ?? []);
-    setPreferenceInput("");
+    setLikes((member as MembersRow).likes ?? []);
+    setLikesInput("");
+    setDislikes((member as MembersRow).dislikes ?? []);
+    setDislikesInput("");
     const d = (member as MembersRow).difficulty?.trim();
     setDifficulty(d === "medium" || d === "any" ? d : "easy");
   }, [open, isCreate, member]);
@@ -143,7 +149,36 @@ export function ProfileEditSheet({
       baseAllergiesHandlers.add(raw);
     },
   };
-  const preferencesHandlers = createTagListHandlers(setPreferences, setPreferenceInput);
+  const MAX_CHIPS = 20;
+  function normalizeAndDedup(list: string[], toAdd: string[], max: number): string[] {
+    const normalized = toAdd.map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const set = new Set([...list.map((s) => s.trim().toLowerCase()), ...normalized]);
+    return Array.from(set).slice(0, max);
+  }
+  const likesHandlers = {
+    add: (raw: string) => {
+      const toAdd = parseTags(raw);
+      if (toAdd.length) setLikes((prev) => normalizeAndDedup(prev, toAdd, MAX_CHIPS));
+      setLikesInput("");
+    },
+    remove: (index: number) => setLikes((prev) => prev.filter((_, i) => i !== index)),
+    edit: (value: string, index: number) => {
+      setLikesInput(value);
+      setLikes((prev) => prev.filter((_, i) => i !== index));
+    },
+  };
+  const dislikesHandlers = {
+    add: (raw: string) => {
+      const toAdd = parseTags(raw);
+      if (toAdd.length) setDislikes((prev) => normalizeAndDedup(prev, toAdd, MAX_CHIPS));
+      setDislikesInput("");
+    },
+    remove: (index: number) => setDislikes((prev) => prev.filter((_, i) => i !== index)),
+    edit: (value: string, index: number) => {
+      setDislikesInput(value);
+      setDislikes((prev) => prev.filter((_, i) => i !== index));
+    },
+  };
 
   const handleSave = async () => {
     if (isCreate) {
@@ -163,7 +198,7 @@ export function ProfileEditSheet({
           type: memberType,
           age_months: totalAgeMonths || null,
           allergies,
-          ...(isPremium && { preferences, difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy" }),
+          ...(isPremium && { likes, dislikes, difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy" }),
         });
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
         onOpenChange(false);
@@ -184,7 +219,7 @@ export function ProfileEditSheet({
         type: memberType,
         age_months: totalAgeMonths || null,
         allergies,
-        ...(isPremium && { preferences, difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy" }),
+        ...(isPremium && { likes, dislikes, difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy" }),
       });
       toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
       onOpenChange(false);
@@ -322,14 +357,24 @@ export function ProfileEditSheet({
           {isPremium && (
             <>
               <TagListEditor
-                label="Предпочтения в питании"
-                items={preferences}
-                inputValue={preferenceInput}
-                onInputChange={setPreferenceInput}
-                onAdd={preferencesHandlers.add}
-                onEdit={preferencesHandlers.edit}
-                onRemove={preferencesHandlers.remove}
-                placeholder="Например: вегетарианское, быстрые блюда (запятая или Enter)"
+                label="Любит"
+                items={likes}
+                inputValue={likesInput}
+                onInputChange={setLikesInput}
+                onAdd={likesHandlers.add}
+                onEdit={likesHandlers.edit}
+                onRemove={likesHandlers.remove}
+                placeholder="Например: ягоды, рыба (запятая или Enter)"
+              />
+              <TagListEditor
+                label="Не любит"
+                items={dislikes}
+                inputValue={dislikesInput}
+                onInputChange={setDislikesInput}
+                onAdd={dislikesHandlers.add}
+                onEdit={dislikesHandlers.edit}
+                onRemove={dislikesHandlers.remove}
+                placeholder="Например: лук, мясо (запятая или Enter)"
               />
               <div className="space-y-2">
                 <Label className="text-typo-muted font-medium">Сложность блюд</Label>

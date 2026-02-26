@@ -79,7 +79,12 @@ Deno.test("isBerryRecipe: berry in ingredients", () => {
   }
 });
 
-Deno.test("extractSoftPrefs: berriesLiked from preferences", () => {
+Deno.test("extractSoftPrefs: berriesLiked from likes", () => {
+  const prefs = extractSoftPrefs({ likes: ["ягоды"] });
+  if (!prefs.berriesLiked) throw new Error("Should set berriesLiked for ягоды in likes");
+});
+
+Deno.test("extractSoftPrefs: berriesLiked from preferences (fallback)", () => {
   const prefs = extractSoftPrefs({ preferences: ["любит ягоды"] });
   if (!prefs.berriesLiked) throw new Error("Should set berriesLiked for любит ягоды");
 });

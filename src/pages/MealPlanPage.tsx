@@ -181,23 +181,25 @@ export default function MealPlanPage() {
     if (isFamilyMode && members.length > 0) {
       const youngest = [...members].sort((a, b) => (a.age_months ?? 0) - (b.age_months ?? 0))[0];
       const allAllergies = Array.from(new Set(members.flatMap((c) => c.allergies ?? [])));
-      const rawPrefs = members.flatMap((c) => (c as { preferences?: string[] }).preferences ?? []);
-      const familyPreferences = Array.from(new Set(rawPrefs.map((p) => String(p).trim()).filter(Boolean)));
+      const allLikes = Array.from(new Set(members.flatMap((c) => (c as { likes?: string[] }).likes ?? []).map((p) => String(p).trim()).filter(Boolean)));
+      const allDislikes = Array.from(new Set(members.flatMap((c) => (c as { dislikes?: string[] }).dislikes ?? []).map((p) => String(p).trim()).filter(Boolean)));
       return {
         name: "Семья",
         age_months: youngest.age_months ?? 0,
         allergies: allAllergies,
-        preferences: familyPreferences,
+        likes: allLikes,
+        dislikes: allDislikes,
       };
     }
     const memberForPlan = selectedMember ?? (isFree && selectedMemberId === "family" && members.length > 0 ? members[0] : null);
     if (memberForPlan) {
-      const m = memberForPlan as { allergies?: string[]; preferences?: string[] };
+      const m = memberForPlan as { allergies?: string[]; likes?: string[]; dislikes?: string[] };
       return {
         name: memberForPlan.name,
         age_months: memberForPlan.age_months ?? 0,
         allergies: m.allergies ?? [],
-        preferences: m.preferences ?? [],
+        likes: m.likes ?? [],
+        dislikes: m.dislikes ?? [],
       };
     }
     return null;
@@ -217,7 +219,7 @@ export default function MealPlanPage() {
     else localStorage.removeItem(MUTED_WEEK_STORAGE_KEY);
   }, []);
 
-  const starterProfile = memberDataForPlan ? { allergies: memberDataForPlan.allergies, preferences: memberDataForPlan.preferences } : null;
+  const starterProfile = memberDataForPlan ? { allergies: memberDataForPlan.allergies, likes: memberDataForPlan.likes, dislikes: memberDataForPlan.dislikes } : null;
   const { getMealPlans, getMealPlansByDate, getMealPlanRowExists, clearWeekPlan, deleteMealPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
 
   const memberIdForPlan = mealPlanMemberId ?? null;
@@ -405,7 +407,8 @@ export default function MealPlanPage() {
     if (!p) return null;
     return [
       [...(p.allergies ?? [])].sort().join(","),
-      (p.preferences ?? []).map((s) => String(s).trim().toLowerCase()).join("|"),
+      (p.likes ?? []).map((s) => String(s).trim().toLowerCase()).join("|"),
+      (p.dislikes ?? []).map((s) => String(s).trim().toLowerCase()).join("|"),
     ].join(";");
   }, [memberDataForPlan]);
   const mealPlansKeyWeek = useMemo(
@@ -752,7 +755,7 @@ export default function MealPlanPage() {
                 {heroStatusText}
                 {isEmptyDay && selectedDayKey === todayKey && " · Экономит до 30 мин"}
               </p>
-              {(memberDataForPlan?.allergies?.length || memberDataForPlan?.preferences?.length) ? (
+              {(memberDataForPlan?.allergies?.length || memberDataForPlan?.likes?.length || memberDataForPlan?.dislikes?.length) ? (
                 <button
                   type="button"
                   onClick={() => setProfileSheetOpen(true)}
@@ -1010,7 +1013,8 @@ export default function MealPlanPage() {
                             memberData: memberDataForPlan
                               ? {
                                 allergies: memberDataForPlan.allergies,
-                                preferences: memberDataForPlan.preferences,
+                                likes: memberDataForPlan.likes,
+                                dislikes: memberDataForPlan.dislikes,
                                 age_months: memberDataForPlan.age_months,
                               }
                               : undefined,
@@ -1136,7 +1140,8 @@ export default function MealPlanPage() {
                                 memberData: memberDataForPlan
                                   ? {
                                     allergies: memberDataForPlan.allergies,
-                                    preferences: memberDataForPlan.preferences,
+                                    likes: memberDataForPlan.likes,
+                                    dislikes: memberDataForPlan.dislikes,
                                     age_months: memberDataForPlan.age_months,
                                   }
                                   : undefined,
@@ -1283,7 +1288,8 @@ export default function MealPlanPage() {
         memberId={mealPlanMemberId ?? null}
         memberName={memberDataForPlan?.name}
         allergies={memberDataForPlan?.allergies}
-        preferences={memberDataForPlan?.preferences}
+        likes={memberDataForPlan?.likes}
+        dislikes={memberDataForPlan?.dislikes}
         mealPlansKeyWeek={mealPlansKeyWeek}
         mealPlansKeyDay={mealPlansKeyDay}
         queryClient={queryClient}
@@ -1344,13 +1350,19 @@ export default function MealPlanPage() {
                 <p className="text-foreground">{memberDataForPlan.allergies.join(", ")}</p>
               </div>
             ) : null}
-            {memberDataForPlan?.preferences?.length ? (
+            {memberDataForPlan?.likes?.length ? (
               <div>
-                <p className="font-medium text-muted-foreground mb-1">Предпочтения</p>
-                <p className="text-foreground">{memberDataForPlan.preferences.join(", ")}</p>
+                <p className="font-medium text-muted-foreground mb-1">Любит</p>
+                <p className="text-foreground">{memberDataForPlan.likes.join(", ")}</p>
               </div>
             ) : null}
-            {(!memberDataForPlan?.allergies?.length && !memberDataForPlan?.preferences?.length) ? (
+            {memberDataForPlan?.dislikes?.length ? (
+              <div>
+                <p className="font-medium text-muted-foreground mb-1">Не любит</p>
+                <p className="text-foreground">{memberDataForPlan.dislikes.join(", ")}</p>
+              </div>
+            ) : null}
+            {(!memberDataForPlan?.allergies?.length && !memberDataForPlan?.likes?.length && !memberDataForPlan?.dislikes?.length) ? (
               <p className="text-muted-foreground">Нет указанных аллергий и предпочтений.</p>
             ) : null}
           </div>

@@ -35,12 +35,14 @@ export interface RecipeForBerryCheck {
 
 /**
  * Извлекает мягкие предпочтения из профиля/члена семьи.
- * preferences — массив строк (например ["любит ягоды", "без глютена"]).
+ * Читает member.likes (приоритет); при пустых likes — fallback на member.preferences.
  */
 export function extractSoftPrefs(member: {
+  likes?: string[] | null;
   preferences?: string[] | null;
 } | null | undefined): SoftPrefs {
-  const prefs = member?.preferences;
+  const likes = member?.likes;
+  const prefs = Array.isArray(likes) && likes.length > 0 ? likes : member?.preferences;
   if (!Array.isArray(prefs) || prefs.length === 0) {
     return { berriesLiked: false };
   }

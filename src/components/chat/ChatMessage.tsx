@@ -251,6 +251,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               ...((effectiveRecipe as { mealType?: string }).mealType && {
                 meal_type: (effectiveRecipe as { mealType: string }).mealType,
               }),
+              chef_advice: effectiveRecipe.chefAdvice?.trim() || null,
+              advice: effectiveRecipe.advice?.trim() || null,
             },
             ingredients: (effectiveRecipe.ingredients || []).map((ing, index) => {
               const o = typeof ing === "object" && ing && "name" in ing ? (ing as { name: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; substitute?: string }) : null;

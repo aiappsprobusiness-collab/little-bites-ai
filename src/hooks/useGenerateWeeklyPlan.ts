@@ -302,7 +302,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             userId: user.id,
             memberId: memberId ?? null,
             mealType: mealKey,
-            memberData: memberData ? { allergies: memberData.allergies, preferences: memberData.preferences as string | string[] | undefined, age_months: memberData.age_months ?? memberData.ageMonths } : undefined,
+            memberData: memberData ? { allergies: memberData.allergies, likes: memberData.likes as string | string[] | undefined, dislikes: memberData.dislikes as string | string[] | undefined, age_months: memberData.age_months ?? memberData.ageMonths } : undefined,
             excludeRecipeIds: acc.usedRecipeIds,
             excludeTitleKeys: acc.usedTitleKeys,
             limitCandidates: 60,

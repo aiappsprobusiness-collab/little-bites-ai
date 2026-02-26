@@ -36,6 +36,12 @@ export function validateRecipe(
       if (allergyList) errors.push(`Allergy violation: ${allergyList}`);
     }
 
+    for (const d of p.dislikes || []) {
+      const token = String(d).toLowerCase().trim();
+      if (token.length >= 2 && text.includes(token)) {
+        errors.push(`Dislike violation: ${d}`);
+      }
+    }
     for (const pref of p.preferences || []) {
       const lowered = String(pref).toLowerCase().trim();
       if (lowered.includes("вегетариан") || lowered.includes("vegetarian")) {

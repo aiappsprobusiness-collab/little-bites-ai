@@ -87,7 +87,10 @@ export function getSanityBlockedReasons(title: string | null | undefined, slot: 
 
 export interface MemberDataForPool {
   allergies?: string | string[];
+  /** Legacy. Prefer likes for soft, dislikes for hard. */
   preferences?: string | string[];
+  likes?: string | string[];
+  dislikes?: string | string[];
   age_months?: number;
   age_years?: number;
 }
@@ -118,20 +121,16 @@ function getAllergyTokens(memberData: MemberDataForPool | null | undefined): str
   return buildBlockedTokens(memberData?.allergies);
 }
 
-/** Извлечь токены предпочтений "не любит X", "без X" из preferences. */
-function getPreferenceExcludeTokens(memberData: MemberDataForPool | null | undefined): string[] {
-  const prefs = memberData?.preferences;
-  if (!prefs) return [];
-  const str = Array.isArray(prefs) ? prefs.join(" ") : String(prefs);
+/** Токены для жёсткого исключения: из dislikes (каждый пункт токенизируется). */
+function getDislikeTokens(memberData: MemberDataForPool | null | undefined): string[] {
+  const list = memberData?.dislikes;
+  if (!list) return [];
+  const arr = Array.isArray(list) ? list : [String(list)];
   const tokens = new Set<string>();
-  const re1 = /не\s+любит\s+([^\.,;!?]+)/gi;
-  const re2 = /без\s+([^\.,;!?]+)/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re1.exec(str))) {
-    for (const t of tokenize(m[1])) tokens.add(t);
-  }
-  while ((m = re2.exec(str))) {
-    for (const t of tokenize(m[1])) tokens.add(t);
+  for (const item of arr) {
+    const s = String(item).trim().toLowerCase();
+    if (!s) continue;
+    for (const t of tokenize(s)) tokens.add(t);
   }
   return [...tokens];
 }
@@ -153,11 +152,11 @@ export function passesProfileFilter(
     }
   }
 
-  const prefTokens = getPreferenceExcludeTokens(memberData);
-  if (prefTokens.length > 0) {
+  const dislikeTokens = getDislikeTokens(memberData);
+  if (dislikeTokens.length > 0) {
     const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" ")].join(" ");
-    if (containsAnyToken(text, prefTokens).hit) {
-      if (IS_DEV) console.log("[DEBUG] pool filter: preference hit", { title: recipe.title, tokens: prefTokens });
+    if (containsAnyToken(text, dislikeTokens).hit) {
+      if (IS_DEV) console.log("[DEBUG] pool filter: dislike hit", { title: recipe.title, tokens: dislikeTokens });
       return { pass: false, reason: "preference" };
     }
   }

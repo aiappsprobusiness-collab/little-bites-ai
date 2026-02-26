@@ -20,6 +20,8 @@ export interface TagListEditorProps {
   unified?: boolean;
   /** Подсказка под полем добавления (только при unified), например "запятая или Enter" */
   helperText?: string;
+  /** Только чтение: input disabled/readOnly (для Free — тап по секции обрабатывается обёрткой → paywall) */
+  readOnly?: boolean;
 }
 
 const chipBase =
@@ -38,6 +40,7 @@ export function TagListEditor({
   compact = false,
   unified = false,
   helperText,
+  readOnly = false,
 }: TagListEditorProps) {
   const inputId = id ?? `tag-list-${label.replace(/\s+/g, "-").toLowerCase()}`;
   const spaceClass = compact ? "space-y-1.5" : "space-y-2";
@@ -84,12 +87,16 @@ export function TagListEditor({
           <input
             id={inputId}
             value={inputValue}
+            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(e) => {
+              if (readOnly) return;
               const v = e.target.value;
               onInputChange(v);
               if (v.includes(",")) onAdd(v);
             }}
             onKeyDown={(e) => {
+              if (readOnly) return;
               if (e.key === "Enter" || e.key === ",") {
                 e.preventDefault();
                 onAdd(inputValue);
@@ -141,12 +148,16 @@ export function TagListEditor({
         <Input
           id={inputId}
           value={inputValue}
+          readOnly={readOnly}
+          disabled={readOnly}
           onChange={(e) => {
+            if (readOnly) return;
             const v = e.target.value;
             onInputChange(v);
             if (v.includes(",")) onAdd(v);
           }}
           onKeyDown={(e) => {
+            if (readOnly) return;
             if (e.key === "Enter" || e.key === ",") {
               e.preventDefault();
               onAdd(inputValue);
@@ -154,7 +165,6 @@ export function TagListEditor({
           }}
           placeholder={placeholder}
           className="h-11 border-2 flex-1"
-          readOnly={false}
         />
         <Button
           type="button"
@@ -162,7 +172,7 @@ export function TagListEditor({
           size="icon"
           className="h-11 w-11 shrink-0"
           onClick={() => onAdd(inputValue)}
-          disabled={!inputValue.trim()}
+          disabled={readOnly || !inputValue.trim()}
           aria-label="Добавить"
         >
           <Plus className="w-5 h-5" />

@@ -67,7 +67,7 @@ export function mealPlansKey(params: {
 /** memberId: конкретный id = планы этого члена; null = "Семья" (member_id is null); undefined = не фильтровать. */
 export function useMealPlans(
   memberId?: string | null,
-  _profile?: { allergies?: string[]; preferences?: string[] } | null,
+  _profile?: { allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[] } | null,
   options?: { mutedWeekKey?: string | null }
 ) {
   const { user } = useAuth();
@@ -76,7 +76,8 @@ export function useMealPlans(
   const profileKey: string | null = _profile
     ? [
         [...(_profile.allergies ?? [])].sort().join(","),
-        (_profile.preferences ?? []).map((p) => String(p).trim().toLowerCase()).join("|"),
+        (_profile.likes ?? []).map((p) => String(p).trim().toLowerCase()).join("|"),
+        (_profile.dislikes ?? []).map((p) => String(p).trim().toLowerCase()).join("|"),
       ].join(";")
     : null;
 

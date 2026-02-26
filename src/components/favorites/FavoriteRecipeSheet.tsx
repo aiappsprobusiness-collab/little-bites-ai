@@ -98,11 +98,7 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
               </span>
             </RecipeMetaRow>
             {tip && (
-              isChefTip ? (
-                <ChefAdviceCard title="Совет от шефа" body={tip} isChefTip />
-              ) : (
-                <ChefAdviceCard title="Мини-совет" body={tip} isChefTip={false} />
-              )
+              <ChefAdviceCard title="Совет от шефа" body={tip} isChefTip={isChefTip} />
             )}
             <RecipeSteps steps={steps} />
           </div>

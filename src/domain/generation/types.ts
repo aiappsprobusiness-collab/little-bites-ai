@@ -9,7 +9,10 @@ export interface Profile {
   name: string;
   age?: number;
   allergies: string[];
+  /** Legacy. Prefer likes for soft, dislikes for hard. */
   preferences: string[];
+  likes?: string[];
+  dislikes?: string[];
   difficulty?: "easy" | "medium" | "any";
 }
 

@@ -369,7 +369,7 @@ export default function RecipePage() {
           {chefAdvice?.trim() ? (
             <ChefAdviceCard title="Совет от шефа" body={chefAdvice.trim()} isChefTip />
           ) : advice?.trim() ? (
-            <ChefAdviceCard title="Мини-совет" body={advice.trim()} isChefTip={false} />
+            <ChefAdviceCard title="Совет от шефа" body={advice.trim()} isChefTip={false} />
           ) : null}
 
           <IngredientSubstituteSheet

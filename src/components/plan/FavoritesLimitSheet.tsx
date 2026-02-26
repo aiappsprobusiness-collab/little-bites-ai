@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 
-const FAVORITES_FREE_LIMIT = 15;
+const FAVORITES_FREE_LIMIT = 7;
 
 export function FavoritesLimitSheet() {
   const showFavoritesLimitSheet = useAppStore((s) => s.showFavoritesLimitSheet);
@@ -15,7 +15,7 @@ export function FavoritesLimitSheet() {
 
   const handleOpenPremium = () => {
     setShowFavoritesLimitSheet(false);
-    useAppStore.getState().setPaywallCustomMessage("В Free можно сохранить до 15 рецептов. В Premium — без лимита.");
+    useAppStore.getState().setPaywallCustomMessage("В Free можно сохранить до 7 рецептов. В Premium — без лимита.");
     useAppStore.getState().setShowPaywall(true);
   };
 

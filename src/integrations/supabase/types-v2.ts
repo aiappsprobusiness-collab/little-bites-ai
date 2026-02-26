@@ -80,8 +80,12 @@ export interface MembersRow {
   allergies: string[];
   /** Полный список с is_active (для UI и safe downgrade). Если пусто — берётся из allergies (все активны). */
   allergy_items?: AllergyItemRow[];
-  /** Food/cooking preferences. Default [] for existing rows. */
+  /** Food/cooking preferences (legacy). UI uses likes/dislikes. */
   preferences: string[];
+  /** What member likes (soft). Used for plan scoring. */
+  likes: string[];
+  /** What member dislikes / does not eat (hard). Excluded in auto-plan and chat. */
+  dislikes: string[];
   /** Recipe difficulty: easy | medium | any. Null for backward compat. */
   difficulty: string | null;
 }
@@ -94,6 +98,8 @@ export interface MembersInsert {
   allergies?: string[];
   allergy_items?: AllergyItemRow[];
   preferences?: string[];
+  likes?: string[];
+  dislikes?: string[];
   difficulty?: string | null;
 }
 export interface MembersUpdate {
@@ -105,6 +111,8 @@ export interface MembersUpdate {
   allergies?: string[];
   allergy_items?: AllergyItemRow[];
   preferences?: string[];
+  likes?: string[];
+  dislikes?: string[];
   difficulty?: string | null;
 }
 

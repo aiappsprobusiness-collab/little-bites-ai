@@ -526,9 +526,9 @@ export type Database = {
         Relationships: []
       }
       members: {
-        Row: { id: string; user_id: string; name: string; type: string; age_months: number | null; allergies: string[]; preferences: string[]; difficulty: string | null }
-        Insert: { id?: string; user_id: string; name: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; difficulty?: string | null }
-        Update: { id?: string; user_id?: string; name?: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; difficulty?: string | null }
+        Row: { id: string; user_id: string; name: string; type: string; age_months: number | null; allergies: string[]; preferences: string[]; likes: string[]; dislikes: string[]; difficulty: string | null }
+        Insert: { id?: string; user_id: string; name: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; difficulty?: string | null }
+        Update: { id?: string; user_id?: string; name?: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; difficulty?: string | null }
         Relationships: []
       }
       profiles_v2: {

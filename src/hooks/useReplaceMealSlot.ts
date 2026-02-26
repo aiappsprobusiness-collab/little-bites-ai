@@ -168,7 +168,7 @@ export function useReplaceMealSlot(
     async (params: {
       dayKey: string;
       mealType: string;
-      memberData: { allergies?: string[]; preferences?: string[]; age_months?: number } | null;
+      memberData: { allergies?: string[]; likes?: string[]; dislikes?: string[]; age_months?: number } | null;
       excludeTitles: string[];
     }): Promise<"ok" | "error"> => {
       if (!hasAccess) throw new Error("AI replacement is not allowed for free");
@@ -313,7 +313,7 @@ export function useReplaceMealSlot(
         day_key: params.dayKey,
         meal_type: params.mealType,
         member_data: params.memberData
-          ? { allergies: params.memberData.allergies, preferences: params.memberData.preferences, age_months: params.memberData.age_months }
+          ? { allergies: params.memberData.allergies, likes: params.memberData.likes, dislikes: params.memberData.dislikes, age_months: params.memberData.age_months }
           : null,
         exclude_recipe_ids: params.excludeRecipeIds,
         exclude_title_keys: params.excludeTitleKeys,

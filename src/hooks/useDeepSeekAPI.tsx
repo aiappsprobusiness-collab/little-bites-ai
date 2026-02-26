@@ -9,7 +9,7 @@ import { buildGenerationContext } from '@/domain/generation/buildGenerationConte
 import { buildPrompt } from '@/domain/generation/buildPrompt';
 import { derivePayloadFromContext } from '@/domain/generation/derivePayloadFromContext';
 import type { Family, Profile } from '@/domain/generation/types';
-import { checkChatAllergyBlock } from '@/utils/chatAllergyCheck';
+import { checkChatRequestAgainstProfile } from '@/utils/chatBlockedCheck';
 
 /** Повтор запроса при сетевой/протокольной ошибке (ERR_HTTP2_PROTOCOL_ERROR, Failed to fetch). */
 async function fetchWithRetry(
@@ -44,6 +44,8 @@ function toProfile(m: {
   allergies?: string[];
   type?: string;
   preferences?: string[];
+  likes?: string[];
+  dislikes?: string[];
   difficulty?: string | null;
 }): Profile {
   const role = (m.type === 'adult' || m.type === 'family') ? 'adult' : 'child';
@@ -55,6 +57,8 @@ function toProfile(m: {
     age: m.age_months != null ? m.age_months / 12 : undefined,
     allergies: m.allergies ?? [],
     preferences: m.preferences ?? [],
+    likes: m.likes ?? [],
+    dislikes: m.dislikes ?? [],
     ...(diff && (diff === 'easy' || diff === 'medium' || diff === 'any') && { difficulty: diff }),
   };
 }
@@ -137,6 +141,8 @@ export function useDeepSeekAPI() {
         age_months: c.age_months,
         allergies: c.allergies,
         preferences: c.preferences,
+        likes: c.likes,
+        dislikes: c.dislikes,
         difficulty: c.difficulty,
       })));
 
@@ -151,12 +157,12 @@ export function useDeepSeekAPI() {
       });
 
       const isHelpMode = type === 'sos_consultant';
-      const allergyCheck = !isHelpMode && checkChatAllergyBlock(lastUserMessage, memberData?.allergies);
-      if (allergyCheck?.blocked && allergyCheck?.found.length > 0) {
-        const profileName = memberData?.name?.trim() || 'выбранного профиля';
-        const allergens = allergyCheck.found.join(', ');
-        const text = `У профиля ${profileName} указана аллергия на: ${allergens}. Поэтому я не могу предложить рецепт с этим ингредиентом. Могу предложить ужин с индейкой, рыбой или овощами — напишите, что предпочитаете.`;
-        return { message: text, blockedByAllergy: true };
+      const blockedCheck = !isHelpMode && checkChatRequestAgainstProfile({
+        text: lastUserMessage,
+        member: memberData ? { name: memberData.name, allergies: memberData.allergies, dislikes: memberData.dislikes } : null,
+      });
+      if (blockedCheck) {
+        return blockedCheck;
       }
 
       const HELP_REQUEST_TIMEOUT_MS = 30_000;

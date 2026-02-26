@@ -578,6 +578,8 @@ export default function ChatPage() {
         name: m.name,
         allergies: m.allergies ?? [],
         preferences: m.preferences ?? [],
+        likes: (m as { likes?: string[] }).likes ?? [],
+        dislikes: (m as { dislikes?: string[] }).dislikes ?? [],
         difficulty:
           m.difficulty === "easy" || m.difficulty === "medium" || m.difficulty === "any"
             ? m.difficulty
@@ -608,7 +610,17 @@ export default function ChatPage() {
           : "";
 
       let attempts = 0;
-      let response: { message?: string; recipes?: unknown[]; recipe_id?: string | null; blockedByAllergy?: boolean } | null = null;
+      let response: {
+        message?: string;
+        recipes?: unknown[];
+        recipe_id?: string | null;
+        blocked?: boolean;
+        blocked_by?: "allergy" | "dislike";
+        profile_name?: string;
+        matched?: string[];
+        blockedByAllergy?: boolean;
+        blockedByDislike?: boolean;
+      } | null = null;
       let rawMessage = "";
       let parsed = parseRecipesFromChat(userMessage.content, "");
       let apiRecipes: unknown[] = [];
@@ -638,7 +650,8 @@ export default function ChatPage() {
               : undefined,
         });
         rawMessage = typeof response?.message === "string" ? response.message : "";
-        if (response?.blockedByAllergy && rawMessage) {
+        const isBlocked = response?.blocked === true || !!response?.blockedByAllergy || !!response?.blockedByDislike;
+        if (isBlocked && rawMessage) {
           break;
         }
         apiRecipes = Array.isArray(response?.recipes) ? response.recipes : [];
@@ -661,13 +674,13 @@ export default function ChatPage() {
         break;
       }
 
-      const blockedByAllergy = !!response?.blockedByAllergy && !!rawMessage;
-      const finalRecipe = blockedByAllergy ? null : parsed.recipes[0];
+      const isBlockedResponse = (response?.blocked === true || !!response?.blockedByAllergy || !!response?.blockedByDislike) && !!rawMessage;
+      const finalRecipe = isBlockedResponse ? null : parsed.recipes[0];
       const finalValidation = finalRecipe ? validateRecipe(finalRecipe, generationContext) : { ok: false };
       const hasRecipeFromApi = apiRecipes.length > 0;
       const showRecipe = !!finalRecipe && (finalValidation.ok || hasRecipeFromApi);
 
-      if (blockedByAllergy) {
+      if (isBlockedResponse) {
         streamDoneForMessageIdRef.current = assistantMessageId;
         setMessages((prev) =>
           prev.map((m) =>
@@ -684,7 +697,7 @@ export default function ChatPage() {
             childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
           });
         } catch (e) {
-          safeError("Failed to save allergy refusal to chat history:", e);
+          safeError("Failed to save blocked refusal to chat history:", e);
         }
       } else if (import.meta.env.DEV && finalRecipe) {
         const recipeFromApi = apiRecipes[0] as Record<string, unknown> | undefined;
@@ -702,7 +715,7 @@ export default function ChatPage() {
         });
       }
 
-      if (!blockedByAllergy && !finalRecipe) {
+      if (!isBlockedResponse && !finalRecipe) {
         streamDoneForMessageIdRef.current = assistantMessageId;
         setMessages((prev) =>
           prev.map((m) =>
@@ -722,7 +735,7 @@ export default function ChatPage() {
           title: "Не удалось подобрать рецепт",
           description: FAILED_MESSAGE,
         });
-      } else if (finalRecipe) {
+      } else if (finalRecipe && !isBlockedResponse) {
         // Один setMessages с рецептом и recipeId — без второго обновления после тоста «Рецепты сохранены», чтобы не было моргания
         let recipeIdForHistory: string | null = response?.recipe_id ?? null;
         let savedRecipesCount = 0;

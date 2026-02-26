@@ -85,7 +85,7 @@ async function fetchJob(
 export interface StartPlanGenerationParams {
   type: PlanGenerationType;
   member_id: string | null;
-  member_data: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[] } | null;
+  member_data: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[] } | null;
   day_key?: string;
   start_key?: string;
   /** Явный массив ключей дней для week upgrade (приоритет над start_key). */

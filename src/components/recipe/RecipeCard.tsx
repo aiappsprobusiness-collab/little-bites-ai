@@ -58,7 +58,7 @@ export function RecipeCard({
 
   const tipBody = (showChefTip && chefAdvice?.trim()) ? chefAdvice!.trim() : (advice?.trim() ?? chefAdvice?.trim());
   const isChefTip = !!(showChefTip && chefAdvice?.trim());
-  const tipTitle = isChefTip ? "Совет от шефа" : "Мини-совет";
+  const tipTitle = "Совет от шефа";
 
   const bodyPadding = isPreview ? "p-3 pt-2" : isFull ? "p-4 pt-3 sm:p-6 sm:pt-4" : "p-3 pt-2";
   const bodySpace = "space-y-3";

@@ -227,41 +227,74 @@ export default function ProfilePage() {
                   (member as MembersRow).type;
                 const ageStr = formatAge(member.age_months ?? null);
                 const subtitle = [typeLabel, ageStr].filter(Boolean).join(" · ");
+                const memberRow = member as MembersRow;
+                const likesArr = memberRow.likes ?? [];
+                const dislikesArr = memberRow.dislikes ?? [];
+                const hasPreferences = subscriptionStatus === "trial" || subscriptionStatus === "premium";
+                const isFree = subscriptionStatus === "free";
+                const handleTeaserClick = (e: React.MouseEvent) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setPaywallCustomMessage("Предпочтения (любит / не любит) — настройте в Premium.");
+                  setShowPaywall(true);
+                };
                 return (
-                  <motion.button
+                  <motion.div
                     key={member.id}
-                    type="button"
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.04 }}
-                    onClick={() => handleMemberCardClick(member as MembersRow)}
-                    className={cn(
-                      cardClass,
-                      "w-full text-left flex items-center gap-3 py-3 hover:bg-muted/30"
-                    )}
+                    className={cn(cardClass, "w-full text-left overflow-hidden")}
                   >
-                    <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center text-lg shrink-0 relative">
-                      {memberAvatar(member as MembersRow, index)}
-                      {isLockedForFree && (
-                        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
-                          <Lock className="w-4 h-4 text-white" strokeWidth={2} />
+                    <button
+                      type="button"
+                      onClick={() => handleMemberCardClick(memberRow)}
+                      className="w-full flex items-center gap-3 py-3 hover:bg-muted/30 rounded-2xl -m-1 p-1 transition-colors text-left"
+                    >
+                      <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center text-lg shrink-0 relative">
+                        {memberAvatar(memberRow, index)}
+                        {isLockedForFree && (
+                          <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                            <Lock className="w-4 h-4 text-white" strokeWidth={2} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[15px] font-medium text-foreground truncate">
+                          {member.name}
                         </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[15px] font-medium text-foreground truncate">
-                        {member.name}
+                        <div className="text-xs text-muted-foreground truncate">
+                          {subtitle}
+                        </div>
+                        {hasPreferences && (likesArr.length > 0 || dislikesArr.length > 0) && (
+                          <div className="text-[11px] text-muted-foreground mt-1 space-y-0.5 truncate">
+                            {likesArr.length > 0 && (
+                              <div className="truncate">Любит: {likesArr.slice(0, 5).join(", ")}{likesArr.length > 5 ? "…" : ""}</div>
+                            )}
+                            {dislikesArr.length > 0 && (
+                              <div className="truncate">Не любит: {dislikesArr.slice(0, 5).join(", ")}{dislikesArr.length > 5 ? "…" : ""}</div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {subtitle}
-                      </div>
-                    </div>
-                    <ChevronRight
-                      className="h-4 w-4 text-muted-foreground shrink-0"
-                      strokeWidth={2}
-                      aria-hidden
-                    />
-                  </motion.button>
+                      <ChevronRight
+                        className="h-4 w-4 text-muted-foreground shrink-0"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    </button>
+                    {isFree && (
+                      <button
+                        type="button"
+                        onClick={handleTeaserClick}
+                        className="w-full mt-1 pt-3 border-t border-border rounded-b-2xl flex flex-col gap-1.5 items-stretch text-left hover:bg-muted/20 transition-colors -mb-1 pb-1"
+                      >
+                        <span className="text-xs font-medium text-foreground">Любит / Не любит</span>
+                        <span className="text-[11px] text-muted-foreground">Настройте продукты и улучшите подбор блюд</span>
+                        <span className="text-xs font-medium text-primary">Открыть Premium</span>
+                      </button>
+                    )}
+                  </motion.div>
                 );
               })}
               <motion.button

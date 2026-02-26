@@ -585,26 +585,22 @@ function containsAnyToken(haystack: string, tokens: string[]): boolean {
   }
   return false;
 }
-type MemberDataPool = { allergies?: string[]; preferences?: string[]; age_months?: number };
+type MemberDataPool = { allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; age_months?: number };
 
 /** [3] Р Р°СЃС€РёСЂРµРЅРЅС‹Рµ С‚РѕРєРµРЅС‹ РґР»СЏ Р°Р»Р»РµСЂРіРёРё РЅР° РјРѕР»РѕРєРѕ/Р»Р°РєС‚РѕР·Сѓ (RU + EN). РќРµ РІРєР»СЋС‡Р°С‚СЊ "РјР°СЃР»Рѕ" вЂ” Р±Р°РЅРёС‚ СЂР°СЃС‚РёС‚РµР»СЊРЅРѕРµ РјР°СЃР»Рѕ. */
 /** Токены аллергенов из _shared/allergens (курица→кур/куриц, орехи→орех, молоко→dairy и т.д.). */
 function getAllergyTokens(memberData: MemberDataPool | null | undefined): string[] {
   return getBlockedTokensFromAllergies(memberData?.allergies);
 }
-function getPreferenceExcludeTokens(memberData: MemberDataPool | null | undefined): string[] {
-  const prefs = memberData?.preferences;
-  if (!prefs?.length) return [];
-  const str = prefs.join(" ");
+/** Токены для жёсткого исключения: из dislikes (каждый пункт токенизируется). */
+function getDislikeTokens(memberData: MemberDataPool | null | undefined): string[] {
+  const list = memberData?.dislikes;
+  if (!list?.length) return [];
   const tokens = new Set<string>();
-  const re1 = /РЅРµ\s+Р»СЋР±РёС‚\s+([^\.,;!?]+)/gi;
-  const re2 = /Р±РµР·\s+([^\.,;!?]+)/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re1.exec(str))) {
-    for (const t of tokenize(m[1])) tokens.add(t);
-  }
-  while ((m = re2.exec(str))) {
-    for (const t of tokenize(m[1])) tokens.add(t);
+  for (const item of list) {
+    const s = String(item).trim().toLowerCase();
+    if (!s) continue;
+    for (const t of tokenize(s)) tokens.add(t);
   }
   return [...tokens];
 }
@@ -677,10 +673,10 @@ function checkAllergyWithDetail(
 function passesProfileFilter(recipe: RecipeRowPool, memberData: MemberDataPool | null | undefined): { pass: boolean; reason?: "filtered_by_allergies" | "filtered_by_preferences" | "filtered_by_age" } {
   const { pass } = checkAllergyWithDetail(recipe, memberData);
   if (!pass) return { pass: false, reason: "filtered_by_allergies" };
-  const prefTokens = getPreferenceExcludeTokens(memberData);
-  if (prefTokens.length > 0) {
+  const dislikeTokens = getDislikeTokens(memberData);
+  if (dislikeTokens.length > 0) {
     const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" ")].join(" ");
-    if (containsAnyToken(text, prefTokens)) return { pass: false, reason: "filtered_by_preferences" };
+    if (containsAnyToken(text, dislikeTokens)) return { pass: false, reason: "filtered_by_preferences" };
   }
   const ageMonths = memberData?.age_months;
   if (ageMonths != null && ageMonths < 36) {
@@ -1401,7 +1397,7 @@ serve(async (req) => {
       job_id?: string;
       type?: "day" | "week";
       member_id?: string | null;
-      member_data?: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[] };
+      member_data?: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[] };
       day_key?: string;
       day_keys?: string[];
       start_key?: string;
@@ -1463,7 +1459,7 @@ serve(async (req) => {
       }
       if (debugPlan) safeLog("[REPLACE_SLOT] start", { requestId, dayKey, memberId, mealType });
       const memberDataPool: MemberDataPool | null = memberData
-        ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], age_months: memberData.age_months }
+        ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], likes: memberData.likes ?? [], dislikes: memberData.dislikes ?? [], age_months: memberData.age_months }
         : null;
 
       const existingRow = await supabase
@@ -1609,7 +1605,7 @@ serve(async (req) => {
         safeLog("[POOL UPGRADE] range", { dayKeysCount: dayKeys.length, firstKey: dayKeys[0], lastKey: dayKeys[dayKeys.length - 1], weekKeysForExcludeCount: weekKeysForExclude.length });
       }
       const memberDataPool: MemberDataPool | null = memberData
-        ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], age_months: memberData.age_months }
+        ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], likes: memberData.likes ?? [], dislikes: memberData.dislikes ?? [], age_months: memberData.age_months }
         : null;
       const allergyTokens = getAllergyTokens(memberDataPool);
       const { data: profileUpgrade } = await supabase.from("profiles_v2").select("status, premium_until, trial_until").eq("user_id", userId).maybeSingle();
@@ -2189,7 +2185,7 @@ serve(async (req) => {
     let lastDayKey: string | null = null;
 
     const memberDataPool: MemberDataPool | null = memberData
-      ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], age_months: memberData.age_months }
+      ? { allergies: memberData.allergies ?? [], preferences: memberData.preferences ?? [], likes: memberData.likes ?? [], dislikes: memberData.dislikes ?? [], age_months: memberData.age_months }
       : null;
 
     const { data: profileRow } = await supabase

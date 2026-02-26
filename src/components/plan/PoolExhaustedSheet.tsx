@@ -17,7 +17,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useQueryClient } from "@tanstack/react-query";
 import { applyReplaceSlotToPlanCache } from "@/utils/planCache";
 
-const FAVORITES_FREE_LIMIT = 15;
+const FAVORITES_FREE_LIMIT = 7;
 
 function getRecipeId(f: SavedFavorite): string | null {
   return (f as { _recipeId?: string })._recipeId ?? (f.recipe as { id?: string })?.id ?? f.recipe_id ?? null;
@@ -39,7 +39,8 @@ export interface PoolExhaustedSheetProps {
   memberId: string | null;
   memberName?: string;
   allergies?: string[];
-  preferences?: string[];
+  likes?: string[];
+  dislikes?: string[];
   mealPlansKeyWeek: unknown[];
   mealPlansKeyDay: unknown[];
   queryClient: ReturnType<typeof useQueryClient>;
@@ -53,7 +54,8 @@ export function PoolExhaustedSheet({
   memberId,
   memberName,
   allergies = [],
-  preferences = [],
+  likes = [],
+  dislikes = [],
   mealPlansKeyWeek,
   mealPlansKeyDay,
   queryClient,

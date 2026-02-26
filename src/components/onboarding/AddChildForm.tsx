@@ -54,8 +54,11 @@ export function AddChildForm({
   const [ageMonths, setAgeMonths] = useState(0);
   const [allergies, setAllergies] = useState<string[]>([]);
   const [allergyInput, setAllergyInput] = useState("");
-  const [preferences, setPreferences] = useState<string[]>([]);
-  const [preferenceInput, setPreferenceInput] = useState("");
+  const [likes, setLikes] = useState<string[]>([]);
+  const [likesInput, setLikesInput] = useState("");
+  const [dislikes, setDislikes] = useState<string[]>([]);
+  const [dislikesInput, setDislikesInput] = useState("");
+  const MAX_CHIPS = 20;
 
   const maxMembers = getMaxMembersByTariff(subscriptionStatus);
   const canAddMore = memberCount < maxMembers;
@@ -66,10 +69,11 @@ export function AddChildForm({
 
   const addToList = (
     setList: React.Dispatch<React.SetStateAction<string[]>>,
-    setInput: React.Dispatch<React.SetStateAction<string>>
+    setInput: React.Dispatch<React.SetStateAction<string>>,
+    max = 20
   ) => (raw: string) => {
-    const toAdd = parseTags(raw);
-    if (toAdd.length) setList((prev) => [...new Set([...prev, ...toAdd])]);
+    const toAdd = parseTags(raw).map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (toAdd.length) setList((prev) => Array.from(new Set([...prev.map((s) => s.trim().toLowerCase()), ...toAdd])).slice(0, max));
     setInput("");
   };
 
@@ -98,10 +102,15 @@ export function AddChildForm({
     edit: editInList(setAllergies, setAllergyInput),
   };
 
-  const preferencesHandlers = {
-    add: addToList(setPreferences, setPreferenceInput),
-    remove: removeFromList(setPreferences),
-    edit: editInList(setPreferences, setPreferenceInput),
+  const likesHandlers = {
+    add: addToList(setLikes, setLikesInput, MAX_CHIPS),
+    remove: removeFromList(setLikes),
+    edit: editInList(setLikes, setLikesInput),
+  };
+  const dislikesHandlers = {
+    add: addToList(setDislikes, setDislikesInput, MAX_CHIPS),
+    remove: removeFromList(setDislikes),
+    edit: editInList(setDislikes, setDislikesInput),
   };
 
   const resetForm = () => {
@@ -111,8 +120,10 @@ export function AddChildForm({
     setAgeMonths(0);
     setAllergies([]);
     setAllergyInput("");
-    setPreferences([]);
-    setPreferenceInput("");
+    setLikes([]);
+    setLikesInput("");
+    setDislikes([]);
+    setDislikesInput("");
   };
 
   const handleSave = async () => {
@@ -134,7 +145,7 @@ export function AddChildForm({
         type: memberType,
         age_months: totalAgeMonths || null,
         allergies,
-        ...(hasAccess && { preferences }),
+        ...(hasAccess && { likes, dislikes }),
       });
       toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
       onSaved(newMember.id);
@@ -252,16 +263,28 @@ export function AddChildForm({
       />
 
       {hasAccess && (
-        <TagListEditor
-          label="Предпочтения в еде"
-          items={preferences}
-          inputValue={preferenceInput}
-          onInputChange={setPreferenceInput}
-          onAdd={preferencesHandlers.add}
-          onEdit={preferencesHandlers.edit}
-          onRemove={preferencesHandlers.remove}
-          placeholder="Например: вегетарианское, быстрые блюда (запятая или Enter)"
-        />
+        <>
+          <TagListEditor
+            label="Любит"
+            items={likes}
+            inputValue={likesInput}
+            onInputChange={setLikesInput}
+            onAdd={likesHandlers.add}
+            onEdit={likesHandlers.edit}
+            onRemove={likesHandlers.remove}
+            placeholder="Например: ягоды, рыба (запятая или Enter)"
+          />
+          <TagListEditor
+            label="Не любит"
+            items={dislikes}
+            inputValue={dislikesInput}
+            onInputChange={setDislikesInput}
+            onAdd={dislikesHandlers.add}
+            onEdit={dislikesHandlers.edit}
+            onRemove={dislikesHandlers.remove}
+            placeholder="Например: лук, мясо (запятая или Enter)"
+          />
+        </>
       )}
 
       <div className="flex flex-col gap-2 pt-2">

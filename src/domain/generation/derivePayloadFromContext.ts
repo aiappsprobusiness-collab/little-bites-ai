@@ -1,6 +1,6 @@
 import type { GenerationContext, Profile } from "./types";
 
-/** Same shape as Edge Function expects for memberData (ageMonths, allergies, preferences, difficulty). */
+/** Same shape as Edge Function expects for memberData (ageMonths, allergies, likes, dislikes, difficulty). */
 export interface MemberDataPayload {
   name: string;
   birth_date?: string;
@@ -8,6 +8,8 @@ export interface MemberDataPayload {
   allergies?: string[];
   ageDescription?: string;
   preferences?: string[];
+  likes?: string[];
+  dislikes?: string[];
   difficulty?: string;
 }
 
@@ -16,6 +18,8 @@ export interface AllMemberPayload {
   age_months: number;
   allergies: string[];
   preferences?: string[];
+  likes?: string[];
+  dislikes?: string[];
   difficulty?: string;
 }
 
@@ -61,13 +65,15 @@ export function derivePayloadFromContext(
     const p = context.target;
     const ageMonths = getAgeMonths(p, membersWithAgeMonths);
     const allergies = (p.allergies ?? []).filter((a) => a?.trim());
-    const preferences = (p.preferences ?? []).filter((a) => a?.trim());
+    const likes = (p.likes ?? []).filter((a) => a?.trim());
+    const dislikes = (p.dislikes ?? []).filter((a) => a?.trim());
     return {
       memberData: {
         name: p.name,
         ageMonths,
         allergies: allergies.length ? allergies : undefined,
-        preferences: preferences.length ? preferences : undefined,
+        likes: likes.length ? likes : undefined,
+        dislikes: dislikes.length ? dislikes : undefined,
         difficulty: p.difficulty ?? undefined,
       },
       allMembers: [],
@@ -80,9 +86,11 @@ export function derivePayloadFromContext(
     const ages = targets.map((t) => getAgeMonths(t, membersWithAgeMonths));
     const ageMonths = Math.min(...ages);
     const allAllergies = new Set<string>();
-    const allPreferences = new Set<string>();
+    const allLikes = new Set<string>();
+    const allDislikes = new Set<string>();
     targets.forEach((t) => (t.allergies ?? []).forEach((a) => a?.trim() && allAllergies.add(a.trim())));
-    targets.forEach((t) => (t.preferences ?? []).forEach((a) => a?.trim() && allPreferences.add(a.trim())));
+    targets.forEach((t) => (t.likes ?? []).forEach((a) => a?.trim() && allLikes.add(a.trim())));
+    targets.forEach((t) => (t.dislikes ?? []).forEach((a) => a?.trim() && allDislikes.add(a.trim())));
     const names = targets.map((t) => t.name).join(", ");
     const ageParts = targets.map((t) => formatAgePart(getAgeMonths(t, membersWithAgeMonths)));
     const ageDescription = ageParts.join(", ");
@@ -90,7 +98,8 @@ export function derivePayloadFromContext(
       name: t.name,
       age_months: getAgeMonths(t, membersWithAgeMonths),
       allergies: t.allergies ?? [],
-      preferences: t.preferences?.length ? t.preferences : undefined,
+      likes: t.likes?.length ? t.likes : undefined,
+      dislikes: t.dislikes?.length ? t.dislikes : undefined,
       difficulty: t.difficulty ?? undefined,
     }));
     return {
@@ -99,7 +108,8 @@ export function derivePayloadFromContext(
         ageMonths,
         allergies: allAllergies.size ? Array.from(allAllergies) : undefined,
         ageDescription,
-        preferences: allPreferences.size ? Array.from(allPreferences) : undefined,
+        likes: allLikes.size ? Array.from(allLikes) : undefined,
+        dislikes: allDislikes.size ? Array.from(allDislikes) : undefined,
         difficulty: undefined,
       },
       allMembers,
