@@ -12,7 +12,7 @@ import {
   FileText,
   Lock,
   CreditCard,
-  ExternalLink,
+  Crown,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -21,7 +21,6 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import { useAppStore } from "@/store/useAppStore";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -54,29 +53,35 @@ const MEMBER_TYPE_LABEL: Record<string, string> = {
   family: "Семья",
 };
 
-const PLAN_BENEFITS: Record<string, string> = {
-  free: "1 профиль · 5 запросов в день",
-  trial: "До 10 профилей · Безлимит · Планы питания",
-  premium: "До 10 профилей · Безлимит · Планы питания",
-};
+const FREE_PLAN_DESCRIPTION = "1 профиль · 5 запросов в день";
 
+function formatSubscriptionEndDate(isoDate: string | null): string {
+  if (!isoDate) return "";
+  const d = new Date(isoDate);
+  return d.toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+/** Бейдж статуса: rounded-full, 12–14px. free — серый, trial — оливковый, premium — насыщенный оливковый + иконка короны. */
 function PlanBadge({ status }: { status: string }) {
-  const variant =
-    status === "premium"
-      ? "default"
-      : status === "trial"
-        ? "secondary"
-        : "outline";
+  const isPremium = status === "premium";
+  const isTrial = status === "trial";
+  const isFree = status === "free";
   return (
-    <Badge
-      variant={variant}
+    <span
       className={cn(
-        "text-typo-caption font-medium shrink-0",
-        status === "free" && "border-transparent bg-muted text-muted-foreground"
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+        isFree && "bg-muted text-muted-foreground",
+        isTrial && "bg-primary/15 text-primary border border-primary/30",
+        isPremium && "bg-primary text-primary-foreground"
       )}
     >
       {STATUS_LABEL[status] ?? "Free"}
-    </Badge>
+      {isPremium && <Crown className="h-3.5 w-3.5" aria-hidden />}
+    </span>
   );
 }
 
@@ -85,9 +90,17 @@ export default function ProfilePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { members, isLoading, formatAge, primaryMemberId, isFreeLocked } = useFamily();
-  const { subscriptionStatus, hasAccess, hasPremiumAccess, isTrial, trialDaysRemaining, cancelSubscription, isCancellingSubscription } = useSubscription();
+  const {
+    subscriptionStatus,
+    hasAccess,
+    trialUntil,
+    expiresAt,
+    cancelSubscription,
+    isCancellingSubscription,
+  } = useSubscription();
   const subscriptionLimits = getSubscriptionLimits(subscriptionStatus);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
   const [editName, setEditName] = useState("");
@@ -97,10 +110,10 @@ export default function ProfilePage() {
     (user?.user_metadata?.display_name as string)?.trim() ||
     user?.email?.split("@")[0] ||
     "Пользователь";
-  const email = user?.email ?? "";
-  const statusLabel = STATUS_LABEL[subscriptionStatus] ?? "Free";
 
-  const handleOpenNameModal = () => {
+  const handleOpenNameModal = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     setEditName(displayName);
     setShowNameModal(true);
   };
@@ -132,10 +145,30 @@ export default function ProfilePage() {
     navigate("/auth", { replace: true });
   };
 
-  const getSubscriptionCta = () => {
-    if (subscriptionStatus === "premium") return "Управлять подпиской";
-    if (subscriptionStatus === "trial") return "Перейти на Premium";
-    return "Открыть Premium";
+  const handleAddProfile = () => {
+    if (members.length >= subscriptionLimits.maxProfiles) {
+      setPaywallCustomMessage("Добавление профилей доступно в Premium.");
+      setShowPaywall(true);
+      return;
+    }
+    setShowMemberSheet(true);
+  };
+
+  const handleMemberCardClick = (member: MembersRow) => {
+    if (isFreeLocked && member.id !== primaryMemberId) {
+      setPaywallCustomMessage("Переключение между профилями детей доступно в Premium");
+      setShowPaywall(true);
+      return;
+    }
+    navigate(`/profile/child/${member.id}`);
+  };
+
+  const handleSubscriptionCta = () => {
+    if (subscriptionStatus === "free") {
+      setShowPaywall(true);
+      return;
+    }
+    navigate("/subscription/manage");
   };
 
   if (isLoading) {
@@ -148,223 +181,232 @@ export default function ProfilePage() {
     );
   }
 
-  const cardClass = "rounded-2xl border border-border bg-card shadow-soft p-4";
+  const cardClass =
+    "rounded-2xl border border-border bg-card p-4 transition-colors active:opacity-95";
 
   return (
     <MobileLayout>
-      <div className="px-4 pt-0 pb-2 space-y-3 max-w-md mx-auto">
-        <section className="space-y-2">
-          <div className={cardClass}>
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center text-xl font-semibold text-foreground shrink-0">
+      <div className="min-h-full bg-[var(--color-bg-main)]">
+        <div className="px-4 pt-4 pb-24 space-y-6 max-w-md mx-auto">
+          {/* Верхний блок пользователя: вся карточка кликабельна, без email, бейдж статуса */}
+          <section>
+            <button
+              type="button"
+              onClick={handleOpenNameModal}
+              className={cn(
+                cardClass,
+                "w-full text-left flex items-center gap-4 hover:bg-muted/30"
+              )}
+              aria-label="Редактировать профиль"
+            >
+              <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-lg font-semibold text-foreground shrink-0">
                 {displayName.charAt(0).toUpperCase()}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-base font-semibold text-foreground truncate">
-                    {displayName}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleOpenNameModal}
-                    className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                    aria-label="Изменить имя"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                </div>
-                <p className="text-sm text-muted-foreground mt-0.5 truncate">
-                  {email}
-                </p>
-                <div className="mt-2">
-                  <PlanBadge status={subscriptionStatus} />
-                </div>
+              <div className="min-w-0 flex-1 flex flex-col gap-1">
+                <span className="text-base font-semibold text-foreground truncate">
+                  {displayName}
+                </span>
+                <PlanBadge status={subscriptionStatus} />
               </div>
-            </div>
-          </div>
-        </section>
+              <Pencil className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
+            </button>
+          </section>
 
-        {/* Моя семья — карточки того же размера, что и Аккаунт */}
-        <section className="space-y-2">
-          <h2 className="text-xl font-semibold text-foreground">Моя семья</h2>
-          <p className="text-sm text-muted-foreground -mt-1">Профили, для которых вы готовите</p>
-          <div className="space-y-2">
-          {members.map((member, index) => {
-              const isPrimary = member.id === primaryMemberId;
-              const isLockedForFree = isFreeLocked && !isPrimary;
-              return (
-                <motion.div
-                  key={member.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={cardClass}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center text-xl font-semibold text-foreground shrink-0 relative">
-                      {memberAvatar(member, index)}
+          {/* Моя семья: компактные карточки, [avatar] Name / Age, стрелка, вся карточка кликабельна */}
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold text-foreground">Моя семья</h2>
+            <p className="text-sm text-muted-foreground -mt-2">
+              Профили, для которых вы готовите
+            </p>
+            <div className="space-y-2">
+              {members.map((member, index) => {
+                const isPrimary = member.id === primaryMemberId;
+                const isLockedForFree = isFreeLocked && !isPrimary;
+                const typeLabel =
+                  MEMBER_TYPE_LABEL[(member as MembersRow).type] ??
+                  (member as MembersRow).type;
+                const ageStr = formatAge(member.age_months ?? null);
+                const subtitle = [typeLabel, ageStr].filter(Boolean).join(" · ");
+                return (
+                  <motion.button
+                    key={member.id}
+                    type="button"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.04 }}
+                    onClick={() => handleMemberCardClick(member as MembersRow)}
+                    className={cn(
+                      cardClass,
+                      "w-full text-left flex items-center gap-3 py-3 hover:bg-muted/30"
+                    )}
+                  >
+                    <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center text-lg shrink-0 relative">
+                      {memberAvatar(member as MembersRow, index)}
                       {isLockedForFree && (
-                        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40">
-                          <Lock className="w-5 h-5 text-white" strokeWidth={2.5} />
+                        <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
+                          <Lock className="w-4 h-4 text-white" strokeWidth={2} />
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-base font-semibold text-foreground truncate">
-                          {member.name}
-                        </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-medium text-foreground truncate">
+                        {member.name}
                       </div>
-                      <p className="text-sm text-muted-foreground mt-0.5 truncate">
-                        {[
-                          MEMBER_TYPE_LABEL[(member as MembersRow).type] ?? (member as MembersRow).type,
-                          formatAge(member.age_months ?? null),
-                        ].filter(Boolean).join(" · ")}
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-1.5 -ml-2 h-7 text-xs text-primary hover:text-primary/90"
-                        onClick={() => {
-                          if (isLockedForFree) {
-                            setPaywallCustomMessage("Переключение между профилями детей доступно в Premium");
-                            useAppStore.getState().setShowPaywall(true);
-                            return;
-                          }
-                          navigate(`/profile/child/${member.id}`);
-                        }}
-                      >
-                        {isLockedForFree ? (
-                          <>Активно в Premium <Lock className="h-3.5 w-3.5 ml-1 inline" /></>
-                        ) : (
-                          <>Открыть профиль <ChevronRight className="h-4 w-4 ml-0.5" /></>
-                        )}
-                      </Button>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {subtitle}
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              );
-            })}
-            <motion.button
-              type="button"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: members.length * 0.05 }}
-              onClick={() => {
-                if (members.length >= subscriptionLimits.maxProfiles) return;
-                setShowMemberSheet(true);
-              }}
-              disabled={members.length >= subscriptionLimits.maxProfiles}
-              className="w-full rounded-xl border border-border bg-background hover:bg-muted/50 py-3.5 px-4 flex items-center justify-center gap-3 text-foreground font-medium transition-colors disabled:opacity-60 disabled:pointer-events-none"
-            >
-              <Plus className="h-5 w-5 text-muted-foreground" />
-              <span>Добавить ребёнка</span>
-            </motion.button>
-          </div>
-        </section>
+                    <ChevronRight
+                      className="h-4 w-4 text-muted-foreground shrink-0"
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                  </motion.button>
+                );
+              })}
+              <motion.button
+                type="button"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: members.length * 0.04 }}
+                onClick={handleAddProfile}
+                className={cn(
+                  "w-full rounded-2xl border-2 border-dashed py-3 px-4 flex items-center justify-center gap-2",
+                  "border-primary/50 text-primary hover:bg-primary/5 hover:border-primary/70",
+                  "transition-colors disabled:opacity-50 disabled:pointer-events-none"
+                )}
+                disabled={members.length >= subscriptionLimits.maxProfiles}
+              >
+                <Plus className="h-4 w-4" strokeWidth={2} />
+                <span className="text-sm font-medium">Добавить профиль</span>
+              </motion.button>
+            </div>
+          </section>
 
-        {/* Подписка */}
-        <section className={cardClass + " space-y-3"}>
-          <h2 className="text-xl font-semibold text-foreground">
-            Подписка
-          </h2>
-          <div className="flex items-center justify-between gap-2">
-            <PlanBadge status={subscriptionStatus} />
-            {isTrial && trialDaysRemaining !== null && (
-              <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                Осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
-              </span>
+          {/* Подписка: единый контейнер для free / trial / premium */}
+          <section className={cn(cardClass, "space-y-4")}>
+            <h2 className="text-lg font-semibold text-foreground">Подписка</h2>
+
+            {subscriptionStatus === "free" && (
+              <>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Free план</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {FREE_PLAN_DESCRIPTION}
+                  </p>
+                </div>
+                <Button
+                  className="w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 border-0"
+                  onClick={handleSubscriptionCta}
+                >
+                  Попробовать Premium
+                </Button>
+              </>
             )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {PLAN_BENEFITS[subscriptionStatus] ?? PLAN_BENEFITS.free}
-          </p>
-          <Button
-            variant="outline"
-            className="w-full rounded-xl"
-            onClick={() => useAppStore.getState().setShowPaywall(true)}
-          >
-            {getSubscriptionCta()}
-            <ExternalLink className="h-4 w-4 ml-2" />
-          </Button>
-          {hasAccess && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-muted-foreground hover:text-destructive"
-              onClick={async () => {
-                try {
-                  await cancelSubscription();
-                  toast({ title: "Подписка отменена", description: "Доступ сохранится до конца оплаченного периода." });
-                } catch {
-                  toast({ variant: "destructive", title: "Не удалось отменить подписку" });
-                }
-              }}
-              disabled={isCancellingSubscription}
-            >
-              {isCancellingSubscription ? "Отмена…" : "Отменить подписку"}
-            </Button>
-          )}
-        </section>
 
-        {/* Внизу: уведомления, обратная связь, выход и юридические ссылки */}
-        <section className="space-y-3">
-          <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
-            <button
-              type="button"
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
-            >
-              <Bell className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-foreground">Уведомления</span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0" />
-            </button>
-            <a
-              href="mailto:momrecipesai@gmail.com"
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
-            >
-              <HelpCircle className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-foreground">Обратная связь</span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0" />
-            </a>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors text-muted-foreground hover:text-destructive text-sm"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              <span>Выйти из аккаунта</span>
-            </button>
-          </div>
-          <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
-            <Link
-              to="/terms"
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
-            >
-              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-foreground">Пользовательское соглашение</span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0" />
-            </Link>
-            <Link
-              to="/privacy"
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
-            >
-              <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-foreground">Политика конфиденциальности</span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0" />
-            </Link>
-            <Link
-              to="/subscription"
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors text-sm"
-            >
-              <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
-              <span className="text-foreground">Условия подписки</span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground ml-auto shrink-0" />
-            </Link>
-          </div>
-        </section>
+            {(subscriptionStatus === "trial" || subscriptionStatus === "premium") && (
+              <>
+                {subscriptionStatus === "trial" && trialUntil && (
+                  <p className="text-sm text-muted-foreground">
+                    Trial до {formatSubscriptionEndDate(trialUntil)}
+                  </p>
+                )}
+                {subscriptionStatus === "premium" && expiresAt && (
+                  <p className="text-sm text-muted-foreground">
+                    Premium до {formatSubscriptionEndDate(expiresAt)}
+                  </p>
+                )}
+                <Button
+                  className="w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 border-0"
+                  onClick={handleSubscriptionCta}
+                >
+                  Управлять подпиской
+                </Button>
+                {hasAccess && (
+                  <button
+                    type="button"
+                    className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+                    onClick={async () => {
+                      try {
+                        await cancelSubscription();
+                        toast({
+                          title: "Подписка отменена",
+                          description: "Доступ сохранится до конца оплаченного периода.",
+                        });
+                      } catch {
+                        toast({
+                          variant: "destructive",
+                          title: "Не удалось отменить подписку",
+                        });
+                      }
+                    }}
+                    disabled={isCancellingSubscription}
+                  >
+                    {isCancellingSubscription ? "Отмена…" : "Отменить подписку"}
+                  </button>
+                )}
+              </>
+            )}
+          </section>
+
+          {/* Уведомления, обратная связь, выход */}
+          <section className="space-y-1">
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors text-sm border-b border-border"
+              >
+                <Bell className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={2} />
+                <span className="text-foreground">Уведомления</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" strokeWidth={2} />
+              </button>
+              <a
+                href="mailto:momrecipesai@gmail.com"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
+              >
+                <HelpCircle className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={2} />
+                <span className="text-foreground">Обратная связь</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" strokeWidth={2} />
+              </a>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors text-muted-foreground hover:text-destructive text-sm"
+              >
+                <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} />
+                <span>Выйти из аккаунта</span>
+              </button>
+            </div>
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+              <Link
+                to="/terms"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
+              >
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={2} />
+                <span className="text-foreground">Пользовательское соглашение</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" strokeWidth={2} />
+              </Link>
+              <Link
+                to="/privacy"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors border-b border-border text-sm"
+              >
+                <Lock className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={2} />
+                <span className="text-foreground">Политика конфиденциальности</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" strokeWidth={2} />
+              </Link>
+              <Link
+                to="/subscription/terms"
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors text-sm"
+              >
+                <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={2} />
+                <span className="text-foreground">Условия подписки</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" strokeWidth={2} />
+              </Link>
+            </div>
+          </section>
+        </div>
       </div>
 
-      {/* Name edit modal */}
       <Dialog open={showNameModal} onOpenChange={setShowNameModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -380,10 +422,7 @@ export default function ProfilePage() {
             />
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowNameModal(false)}
-            >
+            <Button variant="outline" onClick={() => setShowNameModal(false)}>
               Отмена
             </Button>
             <Button onClick={handleSaveName} disabled={isSavingName || !editName.trim()}>

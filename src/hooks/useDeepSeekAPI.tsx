@@ -153,8 +153,10 @@ export function useDeepSeekAPI() {
       const isHelpMode = type === 'sos_consultant';
       const allergyCheck = !isHelpMode && checkChatAllergyBlock(lastUserMessage, memberData?.allergies);
       if (allergyCheck?.blocked && allergyCheck?.found.length > 0) {
-        const text = `У нас аллергия на ${allergyCheck.found.join(', ')}, давайте приготовим что-то другое`;
-        return { message: text };
+        const profileName = memberData?.name?.trim() || 'выбранного профиля';
+        const allergens = allergyCheck.found.join(', ');
+        const text = `У профиля ${profileName} указана аллергия на: ${allergens}. Поэтому я не могу предложить рецепт с этим ингредиентом. Могу предложить ужин с индейкой, рыбой или овощами — напишите, что предпочитаете.`;
+        return { message: text, blockedByAllergy: true };
       }
 
       const HELP_REQUEST_TIMEOUT_MS = 30_000;

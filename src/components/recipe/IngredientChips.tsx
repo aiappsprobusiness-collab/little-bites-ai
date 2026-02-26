@@ -24,11 +24,14 @@ function getIngredientName(item: IngredientDisplayItem): string {
   return o?.name ?? "";
 }
 
+/** Пустые подстановки: всегда Record<number, string> (например {}), не массив. */
+export type IngredientOverrides = Record<number, string>;
+
 export interface IngredientChipsProps {
   ingredients: IngredientDisplayItem[];
-  overrides?: Record<number, string>;
-  /** Масштабированные подписи по индексу (порции); приоритет ниже, чем overrides */
-  scaledOverrides?: Record<number, string>;
+  overrides?: IngredientOverrides;
+  /** Масштабированные подписи по индексу (порции); приоритет ниже, чем overrides. Пусто = {} */
+  scaledOverrides?: IngredientOverrides;
   /** Для preview: показывать только первые N чипсов + "+M" */
   maxVisible?: number;
   variant?: IngredientChipsVariant;

@@ -495,7 +495,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               <p className="text-typo-muted whitespace-pre-wrap select-none leading-snug break-words">{displayContent}</p>
             )}
             {!forcePlainText && (
-            <p className="text-xs text-muted-foreground mt-1.5">
+            <p className={`text-xs mt-1.5 ${role === "user" ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
               {timestamp.toLocaleTimeString("ru-RU", {
                 hour: "2-digit",
                 minute: "2-digit",

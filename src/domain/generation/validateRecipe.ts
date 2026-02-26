@@ -1,4 +1,5 @@
 import type { GenerationContext } from "./types";
+import { buildBlockedTokens, containsAnyToken } from "@/utils/allergenTokens";
 
 /** Words that indicate vegetarian preference → ban meat/fish in recipe text. */
 const VEGETARIAN_BANNED = [
@@ -29,11 +30,10 @@ export function validateRecipe(
         : [];
 
   for (const p of profiles) {
-    for (const a of p.allergies || []) {
-      const term = String(a).toLowerCase().trim();
-      if (term && text.includes(term)) {
-        errors.push(`Allergy violation: ${a}`);
-      }
+    const blockedTokens = buildBlockedTokens(p.allergies ?? []);
+    if (blockedTokens.length > 0 && containsAnyToken(text, blockedTokens).hit) {
+      const allergyList = (p.allergies ?? []).filter(Boolean).join(", ");
+      if (allergyList) errors.push(`Allergy violation: ${allergyList}`);
     }
 
     for (const pref of p.preferences || []) {

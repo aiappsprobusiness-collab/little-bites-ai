@@ -175,8 +175,8 @@ export default function ChatPage() {
   const chatHeroRef = useRef<HTMLDivElement | null>(null);
   /** После установки финального сообщения с рецептом — игнорировать опоздавшие onChunk, чтобы не перезаписать карточку и не вызывать моргание. */
   const streamDoneForMessageIdRef = useRef<string | null>(null);
-  /** Id последней пары user+assistant, чтобы при синхронизации с историей (после saveChat) не менять key и не вызывать моргание карточки. */
-  const lastSentMessageIdsRef = useRef<{ userMessageId: string; assistantMessageId: string; setAt: number } | null>(null);
+  /** Сразу после показа рецепта не синхронизировать с историей 5 с, чтобы не перезаписывать messages и не вызывать моргание/перепрыгивание скролла. */
+  const skipHistorySyncUntilRef = useRef<number>(0);
   /** Статус-индикатор при смене профиля: текст на 1.5 сек. */
   const [profileChangeStatus, setProfileChangeStatus] = useState<string | null>(null);
   const profileChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -367,8 +367,9 @@ export default function ChatPage() {
       setMessages([]);
       return;
     }
+    if (Date.now() < skipHistorySyncUntilRef.current) return;
     const recipeIds = [...new Set(historyMessages.map((m: { recipe_id?: string | null }) => m.recipe_id).filter(Boolean))] as string[];
-    const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>): Message[] => {
+    const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>) => {
       const formatted: Message[] = [];
       historyMessages.forEach((msg: { id: string; message?: string; response?: string; created_at: string; recipe_id?: string | null }) => {
         formatted.push({
@@ -393,24 +394,10 @@ export default function ChatPage() {
           });
         }
       });
-      return formatted;
-    };
-    const applyFormatted = (formatted: Message[]) => {
-      const sent = lastSentMessageIdsRef.current;
-      if (sent && formatted.length >= 2 && Date.now() - sent.setAt < 20_000) {
-        const prev = formatted.length - 2;
-        lastSentMessageIdsRef.current = null;
-        setMessages([
-          ...formatted.slice(0, prev),
-          { ...formatted[prev], id: sent.userMessageId },
-          { ...formatted[prev + 1], id: sent.assistantMessageId },
-        ]);
-        return;
-      }
       setMessages(formatted);
     };
     if (recipeIds.length === 0) {
-      applyFormatted(formatWithRecipeMap({}));
+      formatWithRecipeMap({});
       return;
     }
     supabase
@@ -420,7 +407,7 @@ export default function ChatPage() {
       .then(({ data: rows, error }) => {
         const recipeMap: Record<string, ParsedRecipe> = {};
         if (error) {
-          applyFormatted(formatWithRecipeMap({}));
+          formatWithRecipeMap({});
           return;
         }
         (rows ?? []).forEach((r: {
@@ -452,7 +439,7 @@ export default function ChatPage() {
             advice: r.advice ?? undefined,
           };
         });
-        applyFormatted(formatWithRecipeMap(recipeMap));
+        formatWithRecipeMap(recipeMap);
       });
   }, [mode, historyMessages]);
 
@@ -621,7 +608,7 @@ export default function ChatPage() {
           : "";
 
       let attempts = 0;
-      let response: { message?: string; recipes?: unknown[]; recipe_id?: string | null } | null = null;
+      let response: { message?: string; recipes?: unknown[]; recipe_id?: string | null; blockedByAllergy?: boolean } | null = null;
       let rawMessage = "";
       let parsed = parseRecipesFromChat(userMessage.content, "");
       let apiRecipes: unknown[] = [];
@@ -651,6 +638,9 @@ export default function ChatPage() {
               : undefined,
         });
         rawMessage = typeof response?.message === "string" ? response.message : "";
+        if (response?.blockedByAllergy && rawMessage) {
+          break;
+        }
         apiRecipes = Array.isArray(response?.recipes) ? response.recipes : [];
         parsed = apiRecipes.length > 0
           ? parseRecipesFromApiResponse(apiRecipes as Array<Record<string, unknown>>, rawMessage || "Вот рецепт")
@@ -671,13 +661,32 @@ export default function ChatPage() {
         break;
       }
 
-      const finalRecipe = parsed.recipes[0];
+      const blockedByAllergy = !!response?.blockedByAllergy && !!rawMessage;
+      const finalRecipe = blockedByAllergy ? null : parsed.recipes[0];
       const finalValidation = finalRecipe ? validateRecipe(finalRecipe, generationContext) : { ok: false };
       const hasRecipeFromApi = apiRecipes.length > 0;
-      // Рецепт из API показываем всегда; при провале валидации только не сохраняем
       const showRecipe = !!finalRecipe && (finalValidation.ok || hasRecipeFromApi);
 
-      if (import.meta.env.DEV && finalRecipe) {
+      if (blockedByAllergy) {
+        streamDoneForMessageIdRef.current = assistantMessageId;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: rawMessage, rawContent: undefined, isStreaming: false, preParsedRecipe: null }
+              : m
+          )
+        );
+        try {
+          await saveChat({
+            message: userMessage.content,
+            response: rawMessage,
+            recipeId: null,
+            childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+          });
+        } catch (e) {
+          safeError("Failed to save allergy refusal to chat history:", e);
+        }
+      } else if (import.meta.env.DEV && finalRecipe) {
         const recipeFromApi = apiRecipes[0] as Record<string, unknown> | undefined;
         const chefAdvice = (finalRecipe as { chefAdvice?: string }).chefAdvice;
         console.log("[DEBUG recipe]", {
@@ -693,7 +702,7 @@ export default function ChatPage() {
         });
       }
 
-      if (!finalRecipe) {
+      if (!blockedByAllergy && !finalRecipe) {
         streamDoneForMessageIdRef.current = assistantMessageId;
         setMessages((prev) =>
           prev.map((m) =>
@@ -713,7 +722,7 @@ export default function ChatPage() {
           title: "Не удалось подобрать рецепт",
           description: FAILED_MESSAGE,
         });
-      } else {
+      } else if (finalRecipe) {
         // Один setMessages с рецептом и recipeId — без второго обновления после тоста «Рецепты сохранены», чтобы не было моргания
         let recipeIdForHistory: string | null = response?.recipe_id ?? null;
         let savedRecipesCount = 0;
@@ -755,7 +764,7 @@ export default function ChatPage() {
         }
 
         streamDoneForMessageIdRef.current = assistantMessageId;
-        lastSentMessageIdsRef.current = { userMessageId: userMessage.id, assistantMessageId, setAt: Date.now() };
+        skipHistorySyncUntilRef.current = Date.now() + 5_000;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId

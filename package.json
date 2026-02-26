@@ -20,8 +20,9 @@
     "build:android": "npm run build && npm run cap:sync",
     "prepare:android": "npm run build:android && npm run cap:open:android",
     "postinstall": "patch-package",
-    "supabase:deploy:chat": "npx supabase functions deploy deepseek-chat",
-    "supabase:deploy:chat:slow": "node scripts/deploy-function.mjs deepseek-chat",
+    "sync:allergens": "node scripts/sync-allergens-dict.mjs",
+    "supabase:deploy:chat": "npm run sync:allergens && npx supabase functions deploy deepseek-chat",
+    "supabase:deploy:chat:slow": "npm run sync:allergens && node scripts/deploy-function.mjs deepseek-chat",
     "scripts:create-test-users": "node scripts/create-test-users.mjs",
     "debug:plan": "node scripts/collect-plan-debug-logs.mjs --mode week --debug",
     "check:migrations": "node scripts/check-migrations-immutable.mjs"

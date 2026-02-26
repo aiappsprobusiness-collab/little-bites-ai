@@ -17,6 +17,7 @@ import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
+import { buildAllergenSet, containsAnyToken } from "../_shared/allergens.ts";
 import { validateRecipeJson, ingredientsNeedAmountRetry, type RecipeJson } from "./recipeSchema.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -743,6 +744,22 @@ serve(async (req) => {
         ...m,
         allergies: (m.allergies ?? []).slice(0, 1),
       }));
+    }
+
+    // Страховка: запрос с аллергеном (курица, орехи и т.д.) — отказ без вызова модели
+    if ((type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest) {
+      const allergiesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
+        ? [...new Set(allMembersForPrompt.flatMap((m) => m.allergies ?? []))]
+        : (memberDataForPrompt?.allergies ?? []);
+      const allergenSet = buildAllergenSet(allergiesList);
+      if (allergenSet.blockedTokens.length > 0 && containsAnyToken(userMessage, allergenSet.blockedTokens)) {
+        const profileName = (memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля";
+        const text = `У профиля ${profileName} указана аллергия на: ${allergiesList.filter(Boolean).join(", ")}. Поэтому я не могу предложить рецепт с этим ингредиентом. Могу предложить ужин с индейкой, рыбой или овощами — напишите, что предпочитаете.`;
+        return new Response(JSON.stringify({ message: text, blockedByAllergy: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     if (type === "chat" || type === "recipe" || type === "diet_plan") {

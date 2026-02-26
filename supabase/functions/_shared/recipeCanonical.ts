@@ -85,6 +85,8 @@ export interface CanonicalizeRecipePayloadInput {
   sourceTag?: SourceTag;
   /** Base serving count (default 1). */
   servings?: number | null;
+  /** Explicit soup flag for create_recipe_with_steps. For lunch slot we set true if not provided. */
+  is_soup?: boolean | null;
 }
 
 /**
@@ -108,6 +110,7 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     ingredients: rawIngredients,
     sourceTag: explicitSourceTag,
     servings,
+    is_soup: rawIsSoup,
   } = input;
 
   const safeSource = ensurePoolSource(source);
@@ -156,6 +159,9 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
   const servings_recommended =
     meal_type === "lunch" ? 3 : meal_type === "dinner" ? 2 : 1;
 
+  /** Lunch slot => only soups; set is_soup for RPC so new recipes get recipes.is_soup = true. Assign to plan does not change recipe. */
+  const is_soup = meal_type === "lunch" ? true : (rawIsSoup === true);
+
   return {
     user_id,
     member_id: member_id ?? null,
@@ -172,5 +178,6 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     ingredients: ingredientsPayload,
     servings_base,
     servings_recommended,
+    is_soup,
   };
 }

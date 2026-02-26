@@ -324,6 +324,10 @@ export default function MealPlanPage() {
         toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов" });
       }
     } else if (planJob.status === "error" && wasRunning) {
+      if (planErrorText === "LIMIT_REACHED") {
+        /* Paywall уже показан при 429 в usePlanGenerationJob, тост не показываем */
+        return;
+      }
       const errDesc =
         planErrorText === "timeout_stalled"
           ? "Генерация заняла слишком много времени. Попробуйте снова."
@@ -727,7 +731,9 @@ export default function MealPlanPage() {
                     }
                   } catch (e: unknown) {
                     const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
-                    if (msg === "member_id_required") {
+                    if (msg === "LIMIT_REACHED") {
+                      /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                    } else if (msg === "member_id_required") {
                       toast({ description: "Выберите профиль ребёнка вверху" });
                     } else if (msg.includes("слишком много времени")) {
                       toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
@@ -797,7 +803,9 @@ export default function MealPlanPage() {
                   }
                 } catch (e: unknown) {
                   const msg = e instanceof Error ? e.message : "Не удалось заполнить неделю";
-                  if (msg === "member_id_required") {
+                  if (msg === "LIMIT_REACHED") {
+                    /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                  } else if (msg === "member_id_required") {
                     toast({ description: "Выберите профиль ребёнка вверху" });
                   } else if (msg.includes("слишком много времени")) {
                     toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
@@ -912,7 +920,9 @@ export default function MealPlanPage() {
                       }
                     } catch (e: unknown) {
                       const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
-                      if (msg.includes("слишком много времени")) {
+                      if (msg === "LIMIT_REACHED") {
+                        /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                      } else if (msg.includes("слишком много времени")) {
                         toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
                       } else {
                         toast({ variant: "destructive", title: "Ошибка", description: msg });
@@ -1244,7 +1254,9 @@ export default function MealPlanPage() {
                       }
                   } catch (e: unknown) {
                     const msg = e instanceof Error ? e.message : "Не удалось подобрать рецепты";
-                    if (msg === "member_id_required") {
+                    if (msg === "LIMIT_REACHED") {
+                      /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                    } else if (msg === "member_id_required") {
                       toast({ description: "Выберите профиль ребёнка вверху" });
                     } else if (msg.includes("слишком много времени")) {
                       toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });

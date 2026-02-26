@@ -18,7 +18,7 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { RecipeHeader } from "@/components/recipe/RecipeHeader";
-import { IngredientChips } from "@/components/recipe/IngredientChips";
+import { IngredientChips, type IngredientOverrides } from "@/components/recipe/IngredientChips";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import {
@@ -164,13 +164,35 @@ export default function RecipePage() {
     }
   };
 
-  const [overrides, setOverrides] = useState<Record<number, string>>({});
+  const [overrides, setOverrides] = useState<IngredientOverrides>({});
   const [servingsSelected, setServingsSelected] = useState(1);
   const [substituteSheet, setSubstituteSheet] = useState<{
     open: boolean;
     index: number;
     ing: IngredientItem;
   } | null>(null);
+
+  // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
+  const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
+
+  // Синхронизируем порции при смене рецепта: family-sized (servings_base >= 4) → default = servings_base, иначе servings_recommended
+  useEffect(() => {
+    if (!recipe?.id) return;
+    const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
+    const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
+    const defaultServings = base >= 4 ? base : recommended;
+    setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
+  }, [recipe?.id]);
+
+  // Масштабирование ингредиентов по выбранным порциям; зависимости без всего recipe — не пересчёт при refetch
+  const scaledOverrides: IngredientOverrides = useMemo(() => {
+    if (!recipe) return {};
+    const displayIngredients = getDisplayIngredients(recipe as RecipeDisplayIngredients);
+    const servingsBase = Math.max(1, (recipe as { servings_base?: number | null }).servings_base ?? 1);
+    const multiplier = servingsSelected / servingsBase;
+    if (multiplier === 1) return {};
+    return Object.fromEntries(displayIngredients.map((ing, i) => [i, scaleIngredientDisplay(ing, multiplier)])) as IngredientOverrides;
+  }, [recipe?.id, servingsSelected, recipe?.servings_base ?? 1, recipe?.servings_recommended ?? 1, ingredientsSignature]);
 
   if (isLoading) {
     return (
@@ -207,10 +229,6 @@ export default function RecipePage() {
     servings_base?: number | null;
     servings_recommended?: number | null;
   };
-  useEffect(() => {
-    const rec = recipeDisplay?.servings_recommended;
-    if (rec != null && rec >= 1) setServingsSelected(rec);
-  }, [recipeDisplay?.servings_recommended]);
   const isUserCustom = recipeDisplay.source === "user_custom";
   const displayIngredients = getDisplayIngredients(recipeDisplay);
   const steps = recipeDisplay.steps ?? [];
@@ -219,12 +237,6 @@ export default function RecipePage() {
   const cookingTime = recipeDisplay.cooking_time_minutes;
   const minAgeMonths = recipeDisplay.min_age_months;
   const description = recipeDisplay.description;
-  const servingsBase = Math.max(1, recipeDisplay.servings_base ?? 1);
-  const multiplier = servingsSelected / servingsBase;
-  const scaledOverrides = useMemo(() => {
-    if (multiplier === 1) return {};
-    return Object.fromEntries(displayIngredients.map((ing, i) => [i, scaleIngredientDisplay(ing, multiplier)]));
-  }, [displayIngredients, multiplier]);
 
   const handleDeleteRecipe = async () => {
     if (!id) return;

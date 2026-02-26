@@ -19,9 +19,14 @@ export function PaymentSuccess() {
         {orderId && (
           <p className="text-typo-caption text-muted-foreground mb-4 font-mono">Заказ: {orderId}</p>
         )}
-        <Button asChild>
-          <Link to="/profile">В профиль</Link>
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Button asChild>
+            <Link to="/subscription/manage">Управление подпиской</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to="/profile">В профиль</Link>
+          </Button>
+        </div>
       </div>
     </MobileLayout>
   );

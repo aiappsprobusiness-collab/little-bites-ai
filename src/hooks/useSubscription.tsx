@@ -42,11 +42,42 @@ export function useSubscription() {
     enabled: !!user,
   });
 
+  const { data: latestSubscription } = useQuery({
+    queryKey: ["subscription-plan", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data, error } = await supabase.rpc("get_my_latest_confirmed_subscription");
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      return row as { plan: string | null; expires_at: string | null } | null;
+    },
+    enabled: !!user,
+  });
+
+  /** Для free: лимит проверяется по usage_events (фича chat_recipe), а не по profiles_v2.requests_today. */
+  const { data: chatRecipeUsedToday } = useQuery({
+    queryKey: ["usage-chat-recipe-today", user?.id],
+    queryFn: async () => {
+      if (!user) return 0;
+      const { data, error } = await supabase.rpc("get_usage_count_today", {
+        p_user_id: user.id,
+        p_feature: "chat_recipe",
+      });
+      if (error) throw error;
+      return typeof data === "number" ? data : 0;
+    },
+    enabled: !!user && (profileV2 == null || profileV2.status === "free"),
+  });
+
   const UNLIMITED_ACCESS_EMAILS = ["alesah007@gmail.com"];
   const hasUnlimitedAccess = user?.email && UNLIMITED_ACCESS_EMAILS.includes(user.email);
 
   const status = profileV2?.status ?? "free";
   const expiresAt = profileV2?.premium_until ?? null;
+  const subscriptionPlan = (latestSubscription?.plan === "month" || latestSubscription?.plan === "year")
+    ? latestSubscription.plan
+    : null;
+  const subscriptionExpiresAt = latestSubscription?.expires_at ?? null;
   const trialUntil = profileV2?.trial_until ?? null;
   const trialUsed = profileV2?.trial_used ?? false;
   const planInitialized = profileV2?.plan_initialized ?? false;
@@ -74,7 +105,11 @@ export function useSubscription() {
   /** Платный premium всегда приоритетнее trial: при активной оплате UI показывает premium. */
   const effectiveStatus = hasPremiumAccess ? "premium" : hasTrialAccess ? "trial" : "free";
 
-  const usedToday = profileV2?.requests_today ?? 0;
+  /** У free лимит считается по usage_events (chat_recipe), у trial/premium — по profiles_v2.requests_today. */
+  const usedTodayFromProfile = profileV2?.requests_today ?? 0;
+  const usedTodayFromEvents = chatRecipeUsedToday ?? 0;
+  const usedToday = effectiveStatus === "free" ? usedTodayFromEvents : usedTodayFromProfile;
+
   const dailyLimitFromDb = profileV2?.daily_limit ?? 5;
   const limits = getSubscriptionLimits(effectiveStatus);
   const aiDailyLimit = limits.aiDailyLimit;
@@ -105,6 +140,8 @@ export function useSubscription() {
 
   const refetchUsage = () => {
     queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["subscription-plan", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["usage-chat-recipe-today", user?.id] });
   };
 
   const setPlanInitialized = useMutation({
@@ -130,6 +167,7 @@ export function useSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-plan", user?.id] });
     },
   });
 
@@ -144,6 +182,7 @@ export function useSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-plan", user?.id] });
     },
   });
 
@@ -167,6 +206,7 @@ export function useSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-plan", user?.id] });
     },
   });
 
@@ -179,6 +219,7 @@ export function useSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-plan", user?.id] });
     },
   });
 
@@ -216,9 +257,12 @@ export function useSubscription() {
 
   return {
     status,
+    subscriptionPlan,
+    subscriptionExpiresAt,
     planInitialized,
     setPlanInitialized: setPlanInitialized.mutateAsync,
     expiresAt,
+    trialUntil,
     isExpired,
     isPremium,
     hasPremiumAccess,

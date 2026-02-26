@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Crown, Check, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ const FEATURES = [
 ] as const;
 
 export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const paywallCustomMessage = useAppStore((s) => s.paywallCustomMessage);
   const {
@@ -70,8 +72,8 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
   };
 
   const handleManageSubscription = () => {
-    // TODO: Открыть управление подпиской (RevenueCat / App Store)
     onClose();
+    navigate("/subscription/manage");
   };
 
   return (
@@ -244,7 +246,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
               Оплачивая подписку, вы соглашаетесь с{" "}
               <a href="/terms" className="underline hover:text-foreground">Пользовательским соглашением</a>,{" "}
               <a href="/privacy" className="underline hover:text-foreground">Политикой конфиденциальности</a> и{" "}
-              <a href="/subscription" className="underline hover:text-foreground">Условиями подписки</a>.
+              <a href="/subscription/terms" className="underline hover:text-foreground">Условиями подписки</a>.
             </p>
           </motion.div>
         </motion.div>

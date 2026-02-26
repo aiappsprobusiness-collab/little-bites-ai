@@ -15,6 +15,13 @@ import {
   buildIngredientPayloadItem,
   type IngredientForValidation,
 } from "../_shared/planValidation.ts";
+import { getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
+import {
+  extractSoftPrefs,
+  shouldFavorBerries,
+  isBerryRecipe,
+  type SoftPrefs,
+} from "../_shared/preferences.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -581,26 +588,9 @@ function containsAnyToken(haystack: string, tokens: string[]): boolean {
 type MemberDataPool = { allergies?: string[]; preferences?: string[]; age_months?: number };
 
 /** [3] Р Р°СЃС€РёСЂРµРЅРЅС‹Рµ С‚РѕРєРµРЅС‹ РґР»СЏ Р°Р»Р»РµСЂРіРёРё РЅР° РјРѕР»РѕРєРѕ/Р»Р°РєС‚РѕР·Сѓ (RU + EN). РќРµ РІРєР»СЋС‡Р°С‚СЊ "РјР°СЃР»Рѕ" вЂ” Р±Р°РЅРёС‚ СЂР°СЃС‚РёС‚РµР»СЊРЅРѕРµ РјР°СЃР»Рѕ. */
-const DAIRY_ALLERGY_TOKENS = [
-  "РјРѕР»РѕРєРѕ", "РјРѕР»РѕС‡РЅС‹Р№", "СЃР»РёРІРєРё", "СЃРјРµС‚Р°РЅР°", "С‚РІРѕСЂРѕРі", "СЃС‹СЂ", "Р№РѕРіСѓСЂС‚", "РєРµС„РёСЂ", "СЂСЏР¶РµРЅРєР°", "РјРѕСЂРѕР¶РµРЅРѕРµ", "СЃРіСѓС‰РµРЅРєР°", "Р»Р°РєС‚РѕР·Р°", "РєР°Р·РµРёРЅ",
-  "СЃР»РёРІРѕС‡РЅ", "СЃР»РёРІРѕС‡РЅРѕРµ РјР°СЃР»Рѕ",
-  "milk", "dairy", "cream", "sour cream", "curd", "cheese", "yogurt", "kefir", "butter", "ghee", "lactose", "casein",
-];
-
+/** Токены аллергенов из _shared/allergens (курица→кур/куриц, орехи→орех, молоко→dairy и т.д.). */
 function getAllergyTokens(memberData: MemberDataPool | null | undefined): string[] {
-  if (!memberData?.allergies?.length) return [];
-  const tokens = new Set<string>();
-  const rawLower = memberData.allergies.map((a) => String(a).toLowerCase()).join(" ");
-  const isMilkAllergy = /РјРѕР»РѕРє|milk|Р»Р°РєС‚РѕР·|lactose|dairy|РєР°Р·РµРёРЅ|casein/.test(rawLower);
-  for (const a of memberData.allergies) {
-    for (const t of tokenize(String(a))) {
-      if (t.length >= 2) tokens.add(t);
-    }
-  }
-  if (isMilkAllergy) {
-    for (const t of DAIRY_ALLERGY_TOKENS) tokens.add(t);
-  }
-  return [...tokens];
+  return getBlockedTokensFromAllergies(memberData?.allergies);
 }
 function getPreferenceExcludeTokens(memberData: MemberDataPool | null | undefined): string[] {
   const prefs = memberData?.preferences;
@@ -622,9 +612,17 @@ const AGE_RESTRICTED_TOKENS = ["РѕСЃС‚СЂ", "РєРѕС„Рµ", "РіС
 type RecipeRowPool = {
   id: string; title: string; tags: string[] | null; description: string | null; meal_type?: string | null;
   source?: string | null;
+  is_soup?: boolean | null;
   recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
   recipe_steps?: Array<{ instruction?: string }> | null;
 };
+
+/** Слот обед заполняется только супами. Источник истины: recipes.is_soup или эвристика по title/description/ingredients. */
+function isSoupRecipe(r: RecipeRowPool): boolean {
+  if (r.is_soup === true) return true;
+  const ingredientsText = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
+  return inferDishCategoryKey(r.title, r.description, ingredientsText) === "soup";
+}
 /** [4] Infer protein key from title+description+ingredients for diversity. Never returns null (falls back to veg). */
 /** Priority on conflict: fish > chicken > beef_pork > legumes > dairy > egg > veg */
 type ProteinKey = "fish" | "chicken" | "beef_pork" | "legumes" | "dairy" | "egg" | "veg";
@@ -772,7 +770,7 @@ async function fetchPoolCandidates(
   const baseQ = () =>
     supabase
       .from("recipes")
-      .select("id, title, tags, description, meal_type, source, recipe_ingredients(name, display_text), recipe_steps(instruction)")
+      .select("id, title, tags, description, meal_type, source, is_soup, recipe_ingredients(name, display_text), recipe_steps(instruction)")
       .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
       .order("created_at", { ascending: false })
       .limit(limitCandidates);
@@ -815,6 +813,10 @@ async function pickFromPool(
     preloadedCandidates?: RecipeRowPool[] | null;
     /** Р"Р»СЏ [POOL DIAG]: Р»РѕР³РёСЂРѕРІР°С‚СЊ СЃС‚СѓРїРµРЅРё С„РёР»С‚СЂР° С‚РѕР»СЊРєРѕ РїСЂРё debug_plan. */
     logDiag?: { requestId: string; dayKey: string; mealKey: string; usedTitleKeysByMealTypeSize?: number } | null;
+    /** РњСЏРіРєРёРµ РїСЂРµРґРїРѕС‡С‚РµРЅРёСЏ (РЅР°РїСЂ. "Р»СЋР±РёС‚ СЏРіРѕРґС‹" вЂ” ~25% СЃР»РѕС‚РѕРІ СЃ СЏРіРѕРґР°РјРё). */
+    softPrefs?: SoftPrefs;
+    /** РЎРѕСЃС‚РѕСЏРЅРёРµ СЏРіРѕРґ РЅР° РЅРµРґРµР»Рµ: СѓР¶Рµ РїРѕРґРѕР±СЂР°РЅРѕ СЏРіРѕРґРЅС‹С…, РёРЅРґРµРєСЃ С‚РµРєСѓС‰РµРіРіРѕ СЃР»РѕС‚Р°. */
+    berryState?: { alreadyBerryCount: number; slotIndex: number };
   }
 ): Promise<
   | { id: string; title: string; candidatesAfterAllFilters?: number; topTitleKeys?: string[] }
@@ -854,7 +856,7 @@ async function pickFromPool(
     const baseQ = () =>
       supabase
         .from("recipes")
-        .select("id, title, tags, description, meal_type, source, recipe_ingredients(name, display_text), recipe_steps(instruction)")
+        .select("id, title, tags, description, meal_type, source, is_soup, recipe_ingredients(name, display_text), recipe_steps(instruction)")
         .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
         .order("created_at", { ascending: false })
         .limit(limitCandidates);
@@ -937,10 +939,30 @@ async function pickFromPool(
     ? rawCandidates.slice(0, 5).map((r) => r.meal_type)
     : undefined;
 
+  /** Аллергии/профиль ДО soup-only: сначала убираем кандидатов с аллергенами, потом тип блюда (суп на обед). */
+  const beforeProfile = filtered.length;
+  const candidatesBeforeProfile = [...filtered];
+  const afterAllergy = candidatesBeforeProfile.filter((r) => checkAllergyWithDetail(r, memberData).pass).length;
+  const firstFailReason = { current: undefined as string | undefined };
+  filtered = filtered.filter((r) => {
+    const result = passesProfileFilter(r, memberData);
+    if (!result.pass && !firstFailReason.current) firstFailReason.current = result.reason;
+    return result.pass;
+  });
+  const afterProfile = filtered.length;
+  const allergyRejectedCount = beforeProfile - afterAllergy;
+  const profileRejectedCount = beforeProfile - afterProfile;
+
   if (normalizedSlot === "breakfast") {
     filtered = filtered.filter((r) => !isSoupLikeTitle(r.title));
   }
   const afterNoSoup = filtered.length;
+
+  /** Lunch slot: только супы (is_soup или эвристика categoryKey === "soup"). */
+  if (normalizedSlot === "lunch") {
+    filtered = filtered.filter((r) => isSoupRecipe(r));
+  }
+  const afterLunchSoup = filtered.length;
 
   const sanityBlockedReasons: string[] = [];
   const beforeSanity = filtered.length;
@@ -963,23 +985,11 @@ async function pickFromPool(
   else if (candidatesStrict === 0 && candidatesLoose > 0) rejectReason = "member_id_mismatch";
   else if (afterExclude === 0) rejectReason = "source_filter_too_strict";
   else if (afterMealType === 0) rejectReason = "meal_type_mismatch";
+  else if (beforeProfile > 0 && afterProfile === 0 && firstFailReason.current) rejectReason = firstFailReason.current;
   else if (normalizedSlot === "breakfast" && afterNoSoup === 0) rejectReason = "all_soup_for_breakfast";
+  else if (normalizedSlot === "lunch" && afterLunchSoup === 0) rejectReason = "lunch_soup_only";
   else if (afterSanity === 0 && blockedBySanityRules.length > 0) rejectReason = "sanity_rules";
   else if (excludedMainIngredientSet.size > 0 && afterMainIngredient === 0 && afterExcludeTitleKeys > 0) rejectReason = "main_ingredient_repeat";
-
-  const beforeProfile = filtered.length;
-  const candidatesBeforeProfile = [...filtered];
-  const afterAllergy = candidatesBeforeProfile.filter((r) => checkAllergyWithDetail(r, memberData).pass).length;
-  const firstFailReason = { current: undefined as string | undefined };
-  filtered = filtered.filter((r) => {
-    const result = passesProfileFilter(r, memberData);
-    if (!result.pass && !firstFailReason.current) firstFailReason.current = result.reason;
-    return result.pass;
-  });
-  const afterProfile = filtered.length;
-  const allergyRejectedCount = beforeProfile - afterAllergy;
-  const profileRejectedCount = beforeProfile - afterProfile;
-  if (beforeProfile > 0 && afterProfile === 0 && firstFailReason.current) rejectReason = firstFailReason.current;
 
   const hasMilkAllergy = memberData?.allergies?.length && memberData?.allergies?.some((a) => /РјРѕР»РѕРє|milk|Р»Р°РєС‚РѕР·|lactose|dairy|РєР°Р·РµРёРЅ|casein/i.test(String(a)));
   if (debugPool && hasMilkAllergy && allergyTokens.length === 0) {
@@ -1014,12 +1024,13 @@ async function pickFromPool(
   }
 
   const sanityRejectedCount = beforeSanity - afterSanity;
+  const soupBreakfastRejected = normalizedSlot === "breakfast" ? afterProfile - afterNoSoup : 0;
+  const soupLunchRejected = normalizedSlot === "lunch" ? afterNoSoup - afterLunchSoup : 0;
   const proteinRejectedCount = 0;
-  const finalCount = afterProfile;
+  const finalCount = afterSanity;
   const rejectedTotal = startCount - finalCount;
-  // profileRejectedCount includes allergy; do not add allergyRejectedCount to avoid double-count
   const topRejectReasonsSum =
-    titleKeyRejectedCount + mealTypeRejectedCount + sanityRejectedCount + profileRejectedCount + proteinRejectedCount;
+    titleKeyRejectedCount + mealTypeRejectedCount + profileRejectedCount + soupBreakfastRejected + soupLunchRejected + sanityRejectedCount + proteinRejectedCount;
 
   if (debugPool) {
     safeLog("[POOL DEBUG] reject_breakdown", {
@@ -1034,8 +1045,10 @@ async function pickFromPool(
       topRejectReasonsPrimary: {
         titleKey: titleKeyRejectedCount,
         mealType: mealTypeRejectedCount,
-        sanity: sanityRejectedCount,
         profile: profileRejectedCount,
+        soupBreakfast: soupBreakfastRejected,
+        soupLunch: soupLunchRejected,
+        sanity: sanityRejectedCount,
         protein: proteinRejectedCount,
       },
       topRejectReasonsDetails: { allergy: allergyRejectedCount },
@@ -1059,7 +1072,7 @@ async function pickFromPool(
         afterMealType,
         afterSanity,
         afterAllergies: afterAllergy,
-        final: afterProfile,
+        final: finalCount,
       },
       rejectReason: rejectReason ?? (filtered.length === 0 ? "all_filtered_out" : undefined),
     });
@@ -1080,6 +1093,26 @@ async function pickFromPool(
     });
   }
 
+  /** Soft preference "любит ягоды": после аллергий и lunch soup — выбираем подмножество для скоринга (~25% слотов с ягодами). */
+  let candidatesToScore = filtered;
+  const softPrefs = options?.softPrefs;
+  const berryState = options?.berryState;
+  if (softPrefs?.berriesLiked && berryState != null && filtered.length > 0) {
+    const { alreadyBerryCount, slotIndex } = berryState;
+    const wantBerries = shouldFavorBerries({
+      slotIndex,
+      targetRatio: 0.25,
+      alreadyBerryCount,
+    });
+    const berryCandidates = filtered.filter((r) => isBerryRecipe(r));
+    const nonBerryCandidates = filtered.filter((r) => !isBerryRecipe(r));
+    if (wantBerries && berryCandidates.length > 0) {
+      candidatesToScore = berryCandidates;
+    } else if (!wantBerries && nonBerryCandidates.length > 0) {
+      candidatesToScore = nonBerryCandidates;
+    }
+  }
+
   if (filtered.length === 0) {
     const sanityRej = sanityRejectedCount;
     const allergyRej = allergyRejectedCount;
@@ -1092,7 +1125,7 @@ async function pickFromPool(
         afterExcludeIds,
         afterTitleKeys: afterExcludeTitleKeys,
         afterMainIngredient,
-        afterProfile,
+        afterProfile: finalCount,
         pickedRecipeId: null,
         pickedTitle: null,
         pickedMealTypeNorm: null,
@@ -1131,7 +1164,7 @@ async function pickFromPool(
     return null;
   }
 
-  const scored = filtered.map((r) => {
+  const scored = candidatesToScore.map((r) => {
     const sr = scorePoolCandidate(r, normalizedSlot, allergyTokens, proteinKeyCounts, excludeProteinSet, excludeTitleSet, effectiveAdaptive);
     return { recipe: r, ...sr };
   });
@@ -1150,7 +1183,7 @@ async function pickFromPool(
         proteinKey: x.proteinKey,
         titleKey: normalizeTitleKey(x.recipe.title),
       }));
-    return { topCandidates, candidatesAfterAllFilters: filtered.length };
+    return { topCandidates, candidatesAfterAllFilters: candidatesToScore.length };
   }
   if (debugPool && sorted.length > 0) {
     const top5 = sorted.slice(0, 5);
@@ -1280,7 +1313,7 @@ async function pickFromPool(
   });
   const base = { id: picked.id, title: picked.title };
   if (options?.returnExtra) {
-    const topTitleKeys = filtered.slice(0, 5).map((r) => normalizeTitleKey(r.title));
+    const topTitleKeys = candidatesToScore.slice(0, 5).map((r) => normalizeTitleKey(r.title));
     return { ...base, candidatesAfterAllFilters: afterFiltersCount, topTitleKeys };
   }
   return base;
@@ -1658,6 +1691,8 @@ serve(async (req) => {
       const deepseekUrlUpgrade = SUPABASE_URL.replace(/\/$/, "") + "/functions/v1/deepseek-chat";
 
       const poolCandidates = await fetchPoolCandidates(supabase, userId, memberId, 120);
+      const softPrefsUpgrade = extractSoftPrefs(memberDataPool);
+      let berryCountUpgrade = 0;
       const startedAt = Date.now();
       const BUDGET_MS = 25000;
       let filledSlotsCountUpgrade = 0;
@@ -1732,7 +1767,9 @@ serve(async (req) => {
         const dayCategoriesUpgrade: Record<string, string> = {};
         let dayExcludedMainIngredientsUpgrade: string[] = [];
         const poolPicks: Record<string, { id: string; title: string } | null> = {};
-        for (const mealKey of MEAL_KEYS) {
+        for (let slotInDayUp = 0; slotInDayUp < MEAL_KEYS.length; slotInDayUp++) {
+          const mealKey = MEAL_KEYS[slotInDayUp];
+          const slotIndexUpgrade = di * MEAL_KEYS.length + slotInDayUp;
           const slot = currentMeals[mealKey];
           const hadRecipeId = slot?.recipe_id ?? null;
           const useRerankUp = isPremiumOrTrialUpgrade;
@@ -1773,6 +1810,8 @@ serve(async (req) => {
               returnTopCandidates: useRerankUp ? 10 : undefined,
               preloadedCandidates: poolCandidates,
               logDiag: debugPlanUpgrade ? { requestId, dayKey, mealKey, usedTitleKeysByMealTypeSize: usedTitleKeysByMealTypeUpgrade[mealKey]?.size ?? 0 } : undefined,
+              softPrefs: softPrefsUpgrade,
+              berryState: { alreadyBerryCount: berryCountUpgrade, slotIndex: slotIndexUpgrade },
             }
           );
           let picked: { id: string; title: string; categoryKey?: string } | null = null;
@@ -1852,6 +1891,7 @@ serve(async (req) => {
           const needAiFallback = !picked && isPremiumOrTrialUpgrade && (pickedRawUp == null || ("topCandidates" in pickedRawUp && (pickedRawUp.topCandidates?.length ?? 0) > 0));
 
           if (picked) {
+            if (isBerryRecipe({ title: picked.title })) berryCountUpgrade++;
             poolPicks[mealKey] = { id: picked.id, title: picked.title };
             newMeals[mealKey] = {
               recipe_id: picked.id,
@@ -2259,6 +2299,8 @@ serve(async (req) => {
         : "";
 
     const poolCandidatesRun = await fetchPoolCandidates(supabase, userId, memberId, 120);
+    const softPrefsRun = extractSoftPrefs(memberDataPool);
+    let berryCountRun = 0;
     const jobStartedAt = Date.now();
     const runDebug = body.debug_pool ?? (typeof Deno !== "undefined" && Deno.env?.get?.("GENERATE_PLAN_DEBUG") === "1");
     const runDebugPlan = body.debug_plan === true || body.debug_plan === "1" || (typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_PLAN") === "1");
@@ -2349,7 +2391,9 @@ serve(async (req) => {
       }
       if ((rejectsByReason.allergy ?? 0) > 0) adaptiveParams.allergyPenalty = -200;
       let dayExcludedMainIngredients: string[] = [];
-      for (const mealKey of MEAL_KEYS) {
+      for (let slotInDay = 0; slotInDay < MEAL_KEYS.length; slotInDay++) {
+        const mealKey = MEAL_KEYS[slotInDay];
+        const slotIndexRun = filledSlotsSoFar + slotInDay;
         const slotStats: Record<string, unknown> = {};
         const useRerank = isPremiumOrTrial;
         const effectiveExcludeTitleKeysRun = new Set<string>([...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ?? [])]);
@@ -2388,6 +2432,8 @@ serve(async (req) => {
             returnTopCandidates: useRerank ? 10 : undefined,
             preloadedCandidates: poolCandidatesRun,
             logDiag: runDebugPlan ? { requestId: jobId ?? "run", dayKey, mealKey, usedTitleKeysByMealTypeSize: usedTitleKeysByMealType[mealKey]?.size ?? 0 } : undefined,
+            softPrefs: softPrefsRun,
+            berryState: { alreadyBerryCount: berryCountRun, slotIndex: slotIndexRun },
           }
         );
         let picked: { id: string; title: string; categoryKey?: string } | null = null;
@@ -2548,6 +2594,7 @@ serve(async (req) => {
           });
         }
         if (picked) {
+          if (isBerryRecipe({ title: picked.title })) berryCountRun++;
           usedRecipeIds.push(picked.id);
           usedTitleKeys.push(normalizeTitleKey(picked.title));
           usedTitleKeysByMealType[mealKey].add(normalizeTitleKey(picked.title));
@@ -2609,11 +2656,12 @@ serve(async (req) => {
           if (runDebug) safeLog("[JOB] pool_exhausted_free", { dayKey, mealKey, reason: "pool_exhausted_free" });
           continue;
         }
+        const excludeProteinKeysForAi = mealKey === "breakfast" ? [] : [...excludeProteinKeysFromPrevDay, ...dayUsedProteinKeys].filter((pk) => pk !== "veg");
         const mealLabel = mealKey === "breakfast" ? "Р·Р°РІС‚СЂР°Рє" : mealKey === "lunch" ? "РѕР±РµРґ" : mealKey === "snack" ? "РїРѕР»РґРЅРёРє" : "СѓР¶РёРЅ";
         const excludeStr = usedTitleKeys.length > 0 ? ` РќРµ РїРѕРІС‚РѕСЂСЏР№ Р±Р»СЋРґР°: ${usedTitleKeys.slice(-20).join(", ")}.` : "";
         const mainIngredientExcludeStr =
           dayExcludedMainIngredients.length > 0 ? ` Р’ СЌС‚РѕС‚ РґРµРЅСЊ СѓР¶Рµ РµСЃС‚СЊ Р±Р»СЋРґР° СЃ: ${[...new Set(dayExcludedMainIngredients)].join(", ")} вЂ” РЅРµ РёСЃРїРѕР»СЊР·СѓР№ РёС….` : "";
-        const proteinExcludeStr = excludeProteinKeysForSlotRun.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeysForSlotRun.join(", ")} вЂ” РїСЂРµРґР»РѕР¶Рё РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
+        const proteinExcludeStr = excludeProteinKeysForAi.length > 0 ? ` Р’С‡РµСЂР° СѓР¶Рµ Р±С‹Р» СЌС‚РѕС‚ РїСЂРёС‘Рј СЃ: ${excludeProteinKeysForAi.join(", ")} вЂ” РїСЂРµРґР»РѕР¶Рё РґСЂСѓРіРѕР№ Р±РµР»РѕРє.` : "";
         const slotForbidden: Record<string, string> = {
           breakfast: "СЃСѓРїС‹, СЂР°РіСѓ, РїР»РѕРІ. РўРѕР»СЊРєРѕ Р·Р°РІС‚СЂР°РєРё: РєР°С€Рё, РѕРјР»РµС‚С‹, СЃС‹СЂРЅРёРєРё, С‚РѕСЃС‚С‹.",
           lunch: "СЃС‹СЂРЅРёРєРё, РѕР»Р°РґСЊРё, РєР°С€Сѓ. РўРѕР»СЊРєРѕ РѕР±РµРґС‹: СЃСѓРїС‹, РІС‚РѕСЂС‹Рµ Р±Р»СЋРґР°.",

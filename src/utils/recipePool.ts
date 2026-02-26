@@ -1,9 +1,11 @@
 /**
  * Pool-first v1: подбор рецептов из пула (seed, manual, week_ai) для Premium weekly генерации.
  * Используется при подборе рецептов по кнопке «Подобрать рецепты».
+ * Токены аллергенов — из allergenTokens (в унисон с Edge _shared/allergens).
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { buildBlockedTokens, containsAnyToken } from "@/utils/allergenTokens";
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -31,16 +33,6 @@ export function tokenize(text: string): string[] {
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
     .filter((t) => t.length >= 2);
-}
-
-/** Проверка: haystack содержит хотя бы один токен из tokens. */
-export function containsAnyToken(haystack: string, tokens: string[]): boolean {
-  if (!haystack || tokens.length === 0) return false;
-  const h = (haystack ?? "").toLowerCase();
-  for (const t of tokens) {
-    if (t.length >= 2 && h.includes(t)) return true;
-  }
-  return false;
 }
 
 export type MealType = "breakfast" | "lunch" | "snack" | "dinner";
@@ -121,26 +113,9 @@ type RecipeRow = {
   meal_type?: string | null;
 };
 
-/** Расширенные токены для аллергии на молоко/лактозу. */
-const DAIRY_ALLERGY_TOKENS = ["молоко", "творог", "йогурт", "сыр", "кефир", "сливки", "сметана", "ряженка", "простокваша", "молочн", "лактоз", "сливочн"];
-
-/** Извлечь токены аллергенов из allergies (строка или массив). При молоке/лактозе добавляет молочные токены. */
+/** Токены аллергенов из allergenTokens (курица→кур/куриц, орехи→орех, молоко→dairy и т.д.). */
 function getAllergyTokens(memberData: MemberDataForPool | null | undefined): string[] {
-  if (!memberData?.allergies) return [];
-  const raw = memberData.allergies;
-  const arr = Array.isArray(raw) ? raw : [String(raw ?? "")];
-  const tokens = new Set<string>();
-  const rawLower = arr.map((a) => String(a).toLowerCase()).join(" ");
-  const isMilkAllergy = /молок|milk|лактоз|dairy/.test(rawLower);
-  for (const a of arr) {
-    for (const t of tokenize(String(a))) {
-      if (t.length >= 2) tokens.add(t);
-    }
-  }
-  if (isMilkAllergy) {
-    for (const t of DAIRY_ALLERGY_TOKENS) tokens.add(t);
-  }
-  return [...tokens];
+  return buildBlockedTokens(memberData?.allergies);
 }
 
 /** Извлечь токены предпочтений "не любит X", "без X" из preferences. */
@@ -171,8 +146,8 @@ export function passesProfileFilter(
 ): { pass: boolean; reason?: string } {
   const allergyTokens = getAllergyTokens(memberData);
   if (allergyTokens.length > 0) {
-    const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" ")].join(" ");
-    if (containsAnyToken(text, allergyTokens)) {
+    const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" ")].join(" ").toLowerCase();
+    if (containsAnyToken(text, allergyTokens).hit) {
       if (IS_DEV) console.log("[DEBUG] pool filter: allergy hit", { title: recipe.title, tokens: allergyTokens });
       return { pass: false, reason: "allergy" };
     }
@@ -181,7 +156,7 @@ export function passesProfileFilter(
   const prefTokens = getPreferenceExcludeTokens(memberData);
   if (prefTokens.length > 0) {
     const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" ")].join(" ");
-    if (containsAnyToken(text, prefTokens)) {
+    if (containsAnyToken(text, prefTokens).hit) {
       if (IS_DEV) console.log("[DEBUG] pool filter: preference hit", { title: recipe.title, tokens: prefTokens });
       return { pass: false, reason: "preference" };
     }
@@ -190,7 +165,7 @@ export function passesProfileFilter(
   const ageMonths = memberData?.age_months ?? (memberData?.age_years != null ? memberData.age_years * 12 : null);
   if (ageMonths != null && ageMonths < 36) {
     const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" ")].join(" ");
-    if (containsAnyToken(text, AGE_RESTRICTED_TOKENS)) {
+    if (containsAnyToken(text, AGE_RESTRICTED_TOKENS).hit) {
       if (IS_DEV) console.log("[DEBUG] pool filter: age < 3 hit", { title: recipe.title });
       return { pass: false, reason: "age" };
     }

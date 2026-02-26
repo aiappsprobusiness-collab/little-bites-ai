@@ -105,6 +105,8 @@ export interface CanonicalizeRecipePayloadInput {
   ingredients: CanonicalIngredient[] | Array<Record<string, unknown>>;
   /** Для тегов: "chat" | "plan" | "week_ai". По умолчанию: chat_ai→chat, week_ai→week_ai. */
   sourceTag?: SourceTag;
+  /** Явный признак супа для RPC (слот обед = только супы). При meal_type lunch по умолчанию true. */
+  is_soup?: boolean | null;
 }
 
 /**
@@ -175,6 +177,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     throw new Error("recipeCanonical: минимум 3 ингредиента требуются для create_recipe_with_steps");
   }
 
+  const is_soup = meal_type === "lunch" ? true : (input.is_soup === true);
+
   return {
     user_id,
     member_id: member_id ?? null,
@@ -189,5 +193,6 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     advice: advice ?? null,
     steps: stepsPayload,
     ingredients: ingredientsPayload,
+    is_soup,
   };
 }

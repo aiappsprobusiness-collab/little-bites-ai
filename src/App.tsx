@@ -28,6 +28,7 @@ import NotFound from "./pages/NotFound";
 import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
 import Subscription from "./pages/legal/Subscription";
+import SubscriptionManagePage from "./pages/SubscriptionManagePage";
 import { PaymentSuccess, PaymentFail } from "./pages/PaymentResult";
 import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
@@ -247,7 +248,13 @@ const App = () => (
               />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
-              <Route path="/subscription" element={<Subscription />} />
+              <Route path="/subscription/manage" element={
+                <ProtectedRoute>
+                  <SubscriptionManagePage />
+                </ProtectedRoute>
+              } />
+              <Route path="/subscription/terms" element={<Subscription />} />
+              <Route path="/subscription" element={<Navigate to="/subscription/terms" replace />} />
               <Route path="/payment/success" element={<PaymentSuccess />} />
               <Route path="/payment/fail" element={<PaymentFail />} />
               <Route path="/payment/cancel" element={<Navigate to="/payment/fail" replace />} />
