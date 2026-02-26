@@ -21,6 +21,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
+import { normalizeAllergyInput } from "@/utils/allergyAliases";
 import type { MembersRow, AllergyItemRow } from "@/integrations/supabase/types-v2";
 
 function ageMonthsToBirthDate(ageMonths: number | null): string {
@@ -103,8 +104,9 @@ export default function ChildProfileEditPage() {
       }
       const nextActive = hasAccess ? true : activeAllergyCount === 0;
       const existing = allergyItems.map((i) => i.value.toLowerCase());
-      const newItems = toAdd.filter((v) => !existing.includes(v.trim().toLowerCase())).map((value, i) => ({
-        value: value.trim(),
+      const normalized = toAdd.map((v) => normalizeAllergyInput(v));
+      const newItems = normalized.filter((v) => !existing.includes(v.toLowerCase())).map((value, i) => ({
+        value,
         is_active: nextActive && i === 0,
         sort_order: allergyItems.length + i,
       }));

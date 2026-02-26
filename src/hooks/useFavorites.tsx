@@ -114,18 +114,21 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
         });
       }
 
-      const { data: recipeMetaRows } = await supabase.from('recipes').select('id, member_id, chef_advice, advice').in('id', recipeIds);
+      const { data: recipeMetaRows } = await supabase.from('recipes').select('id, member_id, chef_advice, advice, meal_type').in('id', recipeIds);
       const memberIdByRecipeId = new Map<string, string | null>();
       const chefAdviceByRecipeId = new Map<string, string | null>();
       const adviceByRecipeId = new Map<string, string | null>();
-      for (const row of (recipeMetaRows ?? []) as { id: string; member_id: string | null; chef_advice?: string | null; advice?: string | null }[]) {
+      const mealTypeByRecipeId = new Map<string, string | null>();
+      for (const row of (recipeMetaRows ?? []) as { id: string; member_id: string | null; chef_advice?: string | null; advice?: string | null; meal_type?: string | null }[]) {
         memberIdByRecipeId.set(row.id, row.member_id ?? null);
         chefAdviceByRecipeId.set(row.id, row.chef_advice ?? null);
         adviceByRecipeId.set(row.id, row.advice ?? null);
+        mealTypeByRecipeId.set(row.id, row.meal_type ?? null);
       }
 
       return list.map((f) => {
         const preview = previewMap.get(f.recipe_id);
+        const mealTypeFromDb = mealTypeByRecipeId.get(f.recipe_id) ?? (f.recipe_data as { mealType?: string })?.mealType ?? null;
         const recipe: StoredRecipe = preview
           ? {
             id: f.recipe_id,
@@ -138,8 +141,9 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
             ingredientNames: preview.ingredient_names,
             ingredientTotalCount: preview.ingredient_total_count,
             member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined,
+            ...(mealTypeFromDb && { mealType: mealTypeFromDb }),
           }
-          : { id: f.recipe_id, member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined } as StoredRecipe;
+          : { id: f.recipe_id, member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined, ...(mealTypeFromDb && { mealType: mealTypeFromDb }) } as StoredRecipe;
         const chefFromDb = chefAdviceByRecipeId.get(f.recipe_id);
         const adviceFromDb = adviceByRecipeId.get(f.recipe_id);
         if (typeof chefFromDb === 'string' && chefFromDb.trim()) {

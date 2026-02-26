@@ -1,14 +1,12 @@
 /**
- * Re-export из единого источника истины (src/shared/allergensDictionary.ts).
- * Используется для проверки запроса в чате и в плане/рецептах.
+ * Токены аллергий: алиасы (БКМ, глютен и т.д.) + fallback из allergensDictionary.
  */
 
-import {
-  buildBlockedTokens,
-  containsAnyToken as containsAnyTokenShared,
-} from "@/shared/allergensDictionary";
+import { buildBlockedTokensFromAllergies, expandAllergyToTokens } from "@/utils/allergyAliases";
+import { containsAnyToken as containsAnyTokenShared } from "@/shared/allergensDictionary";
 
-export { buildBlockedTokens };
+/** Строит блокирующие токены по списку аллергий (canonical/aliases + fallback). */
+export const buildBlockedTokens = buildBlockedTokensFromAllergies;
 
 /** Совместимость: возвращает { hit, found }. Используйте .hit для boolean. */
 export const containsAnyToken = containsAnyTokenShared;
@@ -19,8 +17,9 @@ export function getBlockedTokensPerAllergy(
 ): Array<{ allergy: string; tokens: string[] }> {
   return allergies
     .filter((a) => typeof a === "string" && a.trim().length > 0)
-    .map((allergy) => ({
-      allergy: allergy.trim(),
-      tokens: buildBlockedTokens([allergy]),
-    }));
+    .map((allergy) => {
+      const trimmed = allergy.trim();
+      const { tokens } = expandAllergyToTokens(trimmed);
+      return { allergy: trimmed, tokens };
+    });
 }

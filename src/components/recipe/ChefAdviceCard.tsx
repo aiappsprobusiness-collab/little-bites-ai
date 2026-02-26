@@ -22,12 +22,12 @@ export function ChefAdviceCard({
 
   return (
     <div className={cn(cardClass, className)}>
-      <span className="text-base shrink-0 opacity-80" aria-hidden>
+      <span className="text-sm shrink-0 opacity-70 mt-0.5" aria-hidden>
         {isChefTip ? "👨‍🍳" : "💡"}
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 space-y-1.5">
         <p className={titleClass}>{title}</p>
-        <p className="text-xs text-foreground leading-snug">{body}</p>
+        <p className="text-sm text-foreground leading-[1.6]">{body}</p>
       </div>
     </div>
   );

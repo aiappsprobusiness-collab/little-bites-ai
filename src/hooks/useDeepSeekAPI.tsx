@@ -329,6 +329,7 @@ export function useDeepSeekAPI() {
       messageType = 'text',
       recipeId,
       childId,
+      meta,
     }: {
       message: string;
       response: string;
@@ -337,6 +338,8 @@ export function useDeepSeekAPI() {
       recipeId?: string | null;
       /** Контекст чата: null = Семья, иначе id члена семьи */
       childId?: string | null;
+      /** Мета (blocked follow-up и др.); сохраняется в chat_history.meta */
+      meta?: Record<string, unknown> | null;
     }) => {
       if (!user) throw new Error('Not authenticated');
 
@@ -351,6 +354,7 @@ export function useDeepSeekAPI() {
           response,
           message_type: messageType,
           recipe_id: recipeId ?? null,
+          ...(meta && Object.keys(meta).length > 0 && { meta }),
         });
 
       if (insertError) {

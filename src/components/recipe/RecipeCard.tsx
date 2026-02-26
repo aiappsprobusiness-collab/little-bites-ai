@@ -72,6 +72,7 @@ export function RecipeCard({
         overrides={ingredientOverrides}
         maxVisible={maxChips}
         variant={isPreview ? "preview" : "full"}
+        hideSectionLabel={isPreview}
         showSubstituteButton={showSubstituteButton}
         onSubstituteClick={onSubstituteClick}
       />

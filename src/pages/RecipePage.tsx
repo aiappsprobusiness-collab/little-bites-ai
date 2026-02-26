@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, RotateCcw, Heart, Share2, CalendarPlus, Pencil, Trash2, Lock } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, Share2, CalendarPlus, Pencil, Trash2, Clock } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMyRecipes } from "@/hooks/useMyRecipes";
@@ -9,7 +10,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
-import { ingredientDisplayLabel, scaleIngredientDisplay } from "@/types/recipe";
+import { scaleIngredientDisplay } from "@/types/recipe";
 import { buildRecipeShareText } from "@/utils/shareRecipeText";
 import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
@@ -17,10 +18,12 @@ import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
-import { RecipeHeader } from "@/components/recipe/RecipeHeader";
+import { getMealLabel } from "@/data/mealLabels";
+import { recipeHeroCard, recipeTimeClass, recipeMealBadge } from "@/theme/recipeTokens";
 import { IngredientChips, type IngredientOverrides } from "@/components/recipe/IngredientChips";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,15 +34,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-
-function formatAge(ageMonths: number | null | undefined): string {
-  if (ageMonths == null) return "";
-  if (ageMonths < 12) return `${ageMonths} мес`;
-  const years = Math.floor(ageMonths / 12);
-  if (years === 1) return "1 год";
-  if (years >= 2 && years <= 4) return `${years} года`;
-  return `${years} лет`;
-}
 
 /** Привести рецепт к списку IngredientItem: приоритет ingredients_items, иначе нормализация ingredients. */
 function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem[] {
@@ -194,9 +188,22 @@ export default function RecipePage() {
     return Object.fromEntries(displayIngredients.map((ing, i) => [i, scaleIngredientDisplay(ing, multiplier)])) as IngredientOverrides;
   }, [recipe?.id, servingsSelected, recipe?.servings_base ?? 1, recipe?.servings_recommended ?? 1, ingredientsSignature]);
 
+  const backButton = (
+    <motion.button
+      type="button"
+      onClick={() => (fromMealPlan ? navigate("/meal-plan") : navigate(-1))}
+      aria-label="Назад"
+      whileTap={{ scale: 0.96 }}
+      transition={{ duration: 0.15 }}
+      className="h-10 w-10 min-h-[40px] min-w-[40px] rounded-full flex items-center justify-center text-foreground hover:bg-primary/10 active:bg-primary/15 transition-colors duration-150 touch-manipulation"
+    >
+      <ArrowLeft className="w-5 h-5" />
+    </motion.button>
+  );
+
   if (isLoading) {
     return (
-      <MobileLayout title="Рецепт" headerLeft={<Button variant="ghost" size="icon" className="min-w-[44px] min-h-[44px]" onClick={() => navigate(-1)} aria-label="Назад"><ArrowLeft className="w-5 h-5" /></Button>}>
+      <MobileLayout title="Рецепт" headerLeft={backButton}>
         <div className="flex items-center justify-center min-h-[60vh]">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
@@ -206,7 +213,7 @@ export default function RecipePage() {
 
   if (error || !recipe) {
     return (
-      <MobileLayout title="Рецепт" headerLeft={<Button variant="ghost" size="icon" className="min-w-[44px] min-h-[44px]" onClick={() => navigate(-1)} aria-label="Назад"><ArrowLeft className="w-5 h-5" /></Button>}>
+      <MobileLayout title="Рецепт" headerLeft={backButton}>
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <p className="text-muted-foreground mb-4">Рецепт не найден</p>
           <Button className="bg-primary hover:opacity-90 text-white border-0" onClick={() => (fromMealPlan ? navigate("/meal-plan") : navigate("/home"))}>
@@ -235,6 +242,8 @@ export default function RecipePage() {
   const chefAdvice = recipeDisplay.chefAdvice ?? (recipeDisplay as { chef_advice?: string | null }).chef_advice;
   const advice = recipeDisplay.advice ?? (recipeDisplay as { advice?: string | null }).advice;
   const cookingTime = recipeDisplay.cooking_time_minutes;
+  const mealType = (recipeDisplay as { meal_type?: string | null }).meal_type ?? null;
+  const mealLabel = getMealLabel(mealType);
   const minAgeMonths = recipeDisplay.min_age_months;
   const description = recipeDisplay.description;
 
@@ -250,144 +259,175 @@ export default function RecipePage() {
     }
   };
 
-  const ageStr = formatAge(minAgeMonths ?? null);
-  const mealStr = mealTypeLabel ?? "";
-  const timeStr = cookingTime != null ? `${cookingTime} мин` : "";
-
-  const handleBack = () => {
-    if (fromMealPlan) navigate("/meal-plan");
-    else navigate(-1);
-  };
+  const benefitLabel = description?.trim() ? getBenefitLabel(selectedMember?.age_months ?? undefined) : null;
 
   return (
     <MobileLayout
       title={recipe.title ?? "Рецепт"}
-      headerLeft={
-        <Button variant="ghost" size="icon" className="min-w-[44px] min-h-[44px]" onClick={handleBack} aria-label="Назад">
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-      }
+      headerNoBlur
+      headerClassName="layout-header-recipe border-b border-border/30"
+      mainClassName="recipe-page-main"
+      headerLeft={backButton}
     >
       <div className="px-4 pb-6 max-w-[100%] mx-auto overflow-x-hidden">
-        {/* Карточка рецепта — те же стили, что и в чате */}
-        <div className="rounded-2xl sm:rounded-[28px] overflow-hidden bg-card border border-border shadow-soft">
-          <RecipeHeader
-            variant="full"
-            mealLabel={mealStr || null}
-            cookingTimeMinutes={cookingTime ?? null}
-            title={recipe.title ?? "Рецепт"}
-            benefitLabel={description?.trim() ? getBenefitLabel(selectedMember?.age_months ?? undefined) : null}
-            description={description?.trim() ?? null}
-          />
-          <div className="px-3 py-3 sm:px-6 sm:py-4 space-y-4 sm:space-y-5">
-          {/* Действия: оливковый акцент */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {hasAccess && (
+        {/* Hero card: чуть шире (меньше отступ от краёв на 8px), визуальный акцент */}
+        <div className="-mx-2">
+          <div className={cn(recipeHeroCard, "space-y-3")}>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+            {mealLabel && <span className={recipeMealBadge}>{mealLabel}</span>}
+            {cookingTime != null && cookingTime > 0 && (
+              <span className={cn(recipeTimeClass)}>
+                <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                <span>{cookingTime} мин</span>
+              </span>
+            )}
+          </div>
+          {benefitLabel && (
+            <p className="text-xs font-semibold text-muted-foreground">{benefitLabel}</p>
+          )}
+          {description?.trim() && (
+            <p className="text-sm text-muted-foreground leading-[1.6]">{description.trim()}</p>
+          )}
+          </div>
+        </div>
+
+        {/* Actions: Hero → 12px; тактильная отдача scale 0.96, 150ms */}
+        <div className="flex flex-wrap items-center gap-3 mt-3">
+          {hasAccess && (
+            <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
               <Button
                 variant="outline"
                 size="sm"
-                className="gap-1.5 rounded-full border-primary-border text-primary hover:bg-primary/10 hover:border-primary/50"
+                className="gap-1.5 rounded-full border-primary-border text-primary hover:bg-primary/10 hover:border-primary/50 h-10 px-3 transition-opacity duration-150"
                 onClick={() => setAddToPlanOpen(true)}
                 aria-label="Добавить в план"
               >
                 <CalendarPlus className="h-4 w-4 shrink-0" />
-                <span className="text-typo-caption sm:text-typo-muted">Добавить в план</span>
+                <span className="text-sm">В план</span>
               </Button>
+            </motion.div>
+          )}
+          <motion.button
+            type="button"
+            onClick={handleToggleFavorite}
+            aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className={cn(
+              "h-10 w-10 min-h-[40px] min-w-[40px] rounded-full shrink-0 flex items-center justify-center border touch-manipulation transition-colors duration-150",
+              isFavorite
+                ? "text-primary bg-primary/10 border-primary/40 fill-primary"
+                : "text-muted-foreground bg-primary-light/50 border-primary-border/80 hover:bg-primary/10 hover:border-primary/40 hover:text-foreground"
             )}
-            <button
-              type="button"
-              onClick={handleToggleFavorite}
-              aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
-              className={`h-8 w-8 sm:h-9 sm:w-9 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 border ${
-                isFavorite
-                  ? "text-primary bg-primary/10 border-primary/40 fill-primary"
-                  : "text-muted-foreground bg-primary-light/50 border-primary-border hover:border-primary/40 hover:text-foreground"
-              }`}
-            >
-              <Heart className={`h-4 w-4 sm:h-4.5 sm:w-4.5 ${isFavorite ? "fill-current" : ""}`} />
-            </button>
-            <button
-              type="button"
-              onClick={handleShare}
-              aria-label="Поделиться"
-              className="h-8 w-8 sm:h-9 sm:w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-primary-light/50 border border-primary-border hover:border-primary/40 hover:text-foreground transition-all active:scale-95"
-            >
-              <Share2 className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
-            </button>
-            {isUserCustom && (
-              <>
+          >
+            <Heart className={cn("h-4 w-4 transition-opacity duration-150", isFavorite && "fill-current")} />
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={handleShare}
+            aria-label="Поделиться"
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className="h-10 w-10 min-h-[40px] min-w-[40px] rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-primary-light/50 border border-primary-border/80 hover:bg-primary/10 hover:border-primary/40 hover:text-foreground transition-colors duration-150 touch-manipulation"
+          >
+            <Share2 className="h-4 w-4" />
+          </motion.button>
+          {isUserCustom && (
+            <>
+              <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 rounded-full border-[#6b7c3d]/40 text-[#6b7c3d] hover:bg-[#6b7c3d]/10"
+                  className="gap-1.5 rounded-full border-primary-border/60 text-primary hover:bg-primary/10 h-10 px-3"
                   onClick={() => setEditSheetOpen(true)}
                   aria-label="Редактировать"
                 >
                   <Pencil className="h-4 w-4 shrink-0" />
-                  <span className="text-typo-caption sm:text-typo-muted">Редактировать</span>
+                  <span className="text-sm">Изменить</span>
                 </Button>
+              </motion.div>
+              <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5 rounded-full border-destructive/40 text-destructive hover:bg-destructive/10"
+                  className="gap-1.5 rounded-full border-destructive/40 text-destructive hover:bg-destructive/10 h-10 px-3"
                   onClick={() => setDeleteConfirmOpen(true)}
                   disabled={isDeleting}
                   aria-label="Удалить рецепт"
                 >
                   <Trash2 className="h-4 w-4 shrink-0" />
-                  <span className="text-typo-caption sm:text-typo-muted">Удалить</span>
+                  <span className="text-sm">Удалить</span>
                 </Button>
-              </>
-            )}
-          </div>
+              </motion.div>
+            </>
+          )}
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-muted-foreground">Порции:</span>
-            <select
-              value={servingsSelected}
-              onChange={(e) => setServingsSelected(Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)))}
-              className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-              aria-label="Количество порций"
+        {/* Порции: Actions → 18px; капсула − [ 1 ] + */}
+        <div className="space-y-2 mt-[18px]">
+          <span className="text-[11px] font-medium text-muted-foreground/90 block">Порции</span>
+          <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
+            <motion.button
+              type="button"
+              onClick={() => setServingsSelected((s) => Math.max(1, s - 1))}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.1 }}
+              className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
+              aria-label="Уменьшить порции"
             >
-              {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
-          <IngredientChips
-            ingredients={displayIngredients}
-            overrides={overrides}
-            scaledOverrides={scaledOverrides}
-            variant="full"
-            showSubstituteButton
-            onSubstituteClick={isFree ? undefined : (index, ing) => setSubstituteSheet({ open: true, index, ing: ing as IngredientItem })}
-            onLockClick={isFree ? () => {
-              setPaywallCustomMessage("Замена ингредиентов доступна в Premium. Попробуйте Trial или оформите подписку.");
-              setShowPaywall(true);
-            } : undefined}
-          />
-          {chefAdvice?.trim() ? (
-            <ChefAdviceCard title="Совет от шефа" body={chefAdvice.trim()} isChefTip />
-          ) : advice?.trim() ? (
-            <ChefAdviceCard title="Совет от шефа" body={advice.trim()} isChefTip={false} />
-          ) : null}
-
-          <IngredientSubstituteSheet
-            open={!!substituteSheet?.open}
-            onOpenChange={(open) => setSubstituteSheet((s) => (s ? { ...s, open } : null))}
-            ingredientName={substituteSheet?.ing.name ?? ""}
-            substituteFromDb={substituteSheet?.ing.substitute}
-            onSelect={(replacement) => {
-              if (substituteSheet != null) {
-                setOverrides((prev) => ({ ...prev, [substituteSheet.index]: replacement }));
-                toast({ title: "Ингредиент заменён" });
-              }
-            }}
-          />
-
-          <RecipeSteps steps={steps} />
+              −
+            </motion.button>
+            <span className="min-w-[2.75rem] text-center text-sm font-semibold text-foreground" aria-live="polite">
+              {servingsSelected}
+            </span>
+            <motion.button
+              type="button"
+              onClick={() => setServingsSelected((s) => Math.min(20, s + 1))}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.1 }}
+              className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
+              aria-label="Увеличить порции"
+            >
+              +
+            </motion.button>
           </div>
         </div>
+
+        {/* Ингредиенты: нижние секции — 24px как раньше */}
+        <IngredientChips
+          className="mt-6"
+          ingredients={displayIngredients}
+          overrides={overrides}
+          scaledOverrides={scaledOverrides}
+          variant="full"
+          showSubstituteButton
+          onSubstituteClick={isFree ? undefined : (index, ing) => setSubstituteSheet({ open: true, index, ing: ing as IngredientItem })}
+          onLockClick={isFree ? () => {
+            setPaywallCustomMessage("Замена ингредиентов доступна в Premium. Попробуйте Trial или оформите подписку.");
+            setShowPaywall(true);
+          } : undefined}
+        />
+
+        {chefAdvice?.trim() ? (
+          <ChefAdviceCard title="Совет от шефа" body={chefAdvice.trim()} isChefTip className="mt-6" />
+        ) : advice?.trim() ? (
+          <ChefAdviceCard title="Совет от шефа" body={advice.trim()} isChefTip={false} className="mt-6" />
+        ) : null}
+
+        <RecipeSteps steps={steps} className="mt-6" />
+
+        <IngredientSubstituteSheet
+          open={!!substituteSheet?.open}
+          onOpenChange={(open) => setSubstituteSheet((s) => (s ? { ...s, open } : null))}
+          ingredientName={substituteSheet?.ing.name ?? ""}
+          substituteFromDb={substituteSheet?.ing.substitute}
+          onSelect={(replacement) => {
+            if (substituteSheet != null) {
+              setOverrides((prev) => ({ ...prev, [substituteSheet.index]: replacement }));
+              toast({ title: "Ингредиент заменён" });
+            }
+          }}
+        />
       </div>
 
       {id && recipe && (

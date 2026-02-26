@@ -230,6 +230,23 @@
     box-sizing: border-box;
   }
 
+  /** Рецепт: AppBar 60–64px контент + safe-area, лёгкий фон 1–2% */
+  .layout-header.layout-header-recipe {
+    height: calc(env(safe-area-inset-top, 0px) + 62px);
+    min-height: calc(env(safe-area-inset-top, 0px) + 62px);
+    background: linear-gradient(180deg, hsl(var(--primary) / 0.015) 0%, hsl(var(--background)) 100%);
+  }
+  .layout-header.layout-header-recipe .layout-header-inner {
+    min-height: 62px;
+  }
+  .layout-header.layout-header-recipe .layout-header-inner h1 {
+    letter-spacing: -0.02em;
+  }
+  /** Контент под хедером рецепта: компактный отступ 12–16px */
+  .recipe-page-main.main-below-header {
+    padding-top: 14px;
+  }
+
   /** Отступ main под хедер (уменьшен на 12px для единообразия + чуть сверху чтобы не заползало). */
   .main-below-header {
     padding-top: calc(var(--layout-header-offset) - 12px + 0.25rem);

@@ -20,18 +20,21 @@
     <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
 
-    <!-- Open Graph: по умолчанию og-brain; для смены подставьте og-onion.jpg или og-panic.jpg -->
+    <!-- Open Graph: по умолчанию вариант #2 (og-onion). Варианты: og-brain.jpg, og-onion.jpg, og-panic.jpg -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Mom Recipes — План питания для семьи" />
     <meta property="og:description" content="От первого прикорма до изысканного ужина. Умное планирование рациона для здоровья и спокойствия." />
     <meta property="og:url" content="https://momrecipes.online" />
-    <meta property="og:image" content="https://momrecipes.online/og/og-brain.jpg" />
+    <!-- v=2: cache-bust so Telegram fetches fresh preview (og-onion = variant #2) -->
+    <meta property="og:image" content="https://momrecipes.online/og/og-onion.jpg?v=2" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Mom Recipes — План питания для семьи" />
     <meta name="twitter:description" content="Умное планирование рациона для всей семьи." />
-    <meta name="twitter:image" content="https://momrecipes.online/og/og-brain.jpg" />
+    <meta name="twitter:image" content="https://momrecipes.online/og/og-onion.jpg?v=2" />
   </head>
 
   <body>

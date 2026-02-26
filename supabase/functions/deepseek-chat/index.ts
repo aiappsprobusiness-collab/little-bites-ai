@@ -17,7 +17,7 @@ import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
-import { buildAllergenSet, containsAnyToken, getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
+import { buildBlockedTokenSet, findMatchedTokens } from "../_shared/blockedTokens.ts";
 import { validateRecipeJson, ingredientsNeedAmountRetry, type RecipeJson } from "./recipeSchema.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -49,6 +49,10 @@ function sanitizeRecipeText(text: string | null | undefined): string {
     /\d+\s*(мес|месяц|месяцев|год|года|лет)\s*(\.|,|$)/gi,
     /с аллергией\s+на/gi,
     /аллергией на/gi,
+    // Упоминания «готовится без X» / «без X и Y» — особенности профиля (аллергии/dislikes), рецепт не должен попадать в пул с этим.
+    /готовится без[^.!?]*[.!?]?/gi,
+    /приготовлено без[^.!?]*[.!?]?/gi,
+    /,?\s*без\s+[а-яё]+\s+и\s+[а-яё]+[^.!?]*[.!?]?/gi,
   ];
   let result = text;
   for (const pattern of forbiddenPatterns) {
@@ -83,28 +87,9 @@ function sanitizeMealMentions(text: string | null | undefined): string {
   return result.replace(/\s+/g, " ").trim();
 }
 
-/** Токенизация для проверки «не любит»: lower, убрать пунктуацию, слова от 2 символов. */
-function tokenizeForDislikes(text: string): string[] {
-  if (!text || typeof text !== "string") return [];
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .split(/\s+/)
-    .filter((t) => t.length >= 2);
-}
-
-function getDislikeTokensForChat(dislikesList: string[]): string[] {
-  const tokens = new Set<string>();
-  for (const item of dislikesList) {
-    const s = String(item).trim().toLowerCase();
-    if (!s) continue;
-    for (const t of tokenizeForDislikes(s)) tokens.add(t);
-  }
-  return [...tokens];
-}
-
 /** Единый формат ответа «заблокировано» (аллергия или dislikes). Не вызываем модель, не пишем usage_events. */
 type BlockedBy = "allergy" | "dislike";
+
 const BLOCKED_ALTERNATIVES: Record<string, string[]> = {
   куриц: ["индейка", "говядина", "рыба"],
   курица: ["индейка", "говядина", "рыба"],
@@ -119,9 +104,14 @@ const BLOCKED_ALTERNATIVES: Record<string, string[]> = {
   рыб: ["индейка", "курица", "тофу"],
   глютен: ["рис", "гречка", "киноа"],
   мясо: ["индейка", "рыба", "бобовые"],
+  ягод: ["фрукты", "банан", "яблоко"],
+  ягоды: ["фрукты", "банан", "яблоко"],
+  berry: ["фрукты", "банан", "яблоко"],
+  berries: ["фрукты", "банан", "яблоко"],
 };
-function getAlternatives(matched: string[]): string[] {
-  const lower = matched.map((m) => String(m).trim().toLowerCase());
+
+function getSuggestedAlternatives(matchedDisplay: string[]): string[] {
+  const lower = matchedDisplay.map((m) => String(m).trim().toLowerCase()).filter(Boolean);
   for (const m of lower) {
     for (const [key, alts] of Object.entries(BLOCKED_ALTERNATIVES)) {
       if (m.includes(key) || key.includes(m)) return alts.slice(0, 3);
@@ -129,12 +119,35 @@ function getAlternatives(matched: string[]): string[] {
   }
   return ["другие ингредиенты на ваш выбор"];
 }
-function buildBlockedMessageEdge(profileName: string, blockedBy: BlockedBy, matched: string[]): string {
-  const label = blockedBy === "allergy" ? "аллергия" : "не любит";
-  const items = matched.length > 0 ? matched.join(", ") : "это";
-  const line1 = `У профиля «${profileName}» указано: ${label} — ${items}. Поэтому рецепт с этим ингредиентом я не предложу.`;
-  const alts = getAlternatives(matched);
-  const line2 = `Попробуйте заменить на: ${alts.join(", ")}.`;
+
+/** Вытаскивает «блюдо» из запроса: последнее слово или фраза без стопа (для подсказки follow-up). */
+function extractIntendedDishHint(originalQuery: string, blockedItem: string): string {
+  const q = (originalQuery ?? "").trim();
+  if (!q) return "";
+  const words = q.split(/\s+/).filter((w) => w.length > 1);
+  const blockedLower = (blockedItem ?? "").toLowerCase();
+  const withoutBlocked = words.filter((w) => !w.toLowerCase().includes(blockedLower) && blockedLower !== w.toLowerCase());
+  if (withoutBlocked.length > 0) return withoutBlocked.join(" ");
+  return words.length > 0 ? words[words.length - 1]! : q;
+}
+
+function buildBlockedMessageEdge(
+  profileName: string,
+  blockedBy: BlockedBy,
+  matchedDisplay: string[],
+  suggestedAlternatives: string[],
+  intendedDishHint: string
+): string {
+  const items = matchedDisplay.length > 0 ? matchedDisplay.join(", ") : "это";
+  let line1: string;
+  if (blockedBy === "allergy") {
+    line1 = `У профиля «${profileName}» указана аллергия на: ${items}. Поэтому рецепт с этим ингредиентом я не предложу.`;
+  } else {
+    line1 = `Профиль «${profileName}» не любит: ${items}. Поэтому рецепт с этим ингредиентом я не предложу.`;
+  }
+  const firstAlt = suggestedAlternatives[0] ?? "банан";
+  const dishWord = intendedDishHint || "десерт";
+  const line2 = `Напишите: «вариант с ${firstAlt}» или просто «${firstAlt}» — и я предложу тот же ${dishWord} без ${items}.`;
   return `${line1}\n\n${line2}`;
 }
 
@@ -813,47 +826,47 @@ serve(async (req) => {
     // Страховка: запрос с аллергеном или dislikes — отказ без вызова модели, без usage_events
     if ((type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest) {
       const profileName = (memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля";
-
       const allergiesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
         ? [...new Set(allMembersForPrompt.flatMap((m) => m.allergies ?? []))]
         : (memberDataForPrompt?.allergies ?? []);
-      const allergenSet = buildAllergenSet(allergiesList);
-      if (allergenSet.blockedTokens.length > 0 && containsAnyToken(userMessage, allergenSet.blockedTokens)) {
-        const matched: string[] = [];
-        for (const a of allergiesList) {
-          if (!a?.trim()) continue;
-          const tokens = getBlockedTokensFromAllergies([a]);
-          if (tokens.length > 0 && containsAnyToken(userMessage, tokens)) matched.push(a.trim());
-        }
-        const matchedDisplay = matched.length > 0 ? matched : allergiesList.filter(Boolean).map((a) => a.trim());
-        const message = buildBlockedMessageEdge(profileName, "allergy", matchedDisplay);
+      const dislikesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
+        ? [...new Set(allMembersForPrompt.flatMap((m) => (m as MemberData).dislikes ?? []).filter(Boolean))]
+        : ((memberDataForPrompt as MemberData)?.dislikes ?? []);
+
+      const tokenSet = buildBlockedTokenSet({ allergies: allergiesList, dislikes: dislikesList });
+      const allergyMatch = tokenSet.allergyItems.find((item) => findMatchedTokens(userMessage, item.tokens).length > 0);
+      if (allergyMatch) {
+        const blockedItems = [allergyMatch.display];
+        const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
+        const intendedDishHint = extractIntendedDishHint(userMessage, allergyMatch.display);
+        const message = buildBlockedMessageEdge(profileName, "allergy", blockedItems, suggestedAlternatives, intendedDishHint);
         return new Response(JSON.stringify({
           blocked: true,
           blocked_by: "allergy",
           profile_name: profileName,
-          matched: matchedDisplay,
+          blocked_items: blockedItems,
+          suggested_alternatives: suggestedAlternatives,
+          original_query: userMessage,
+          intended_dish_hint: intendedDishHint || undefined,
           message,
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-
-      const dislikesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
-        ? [...new Set(allMembersForPrompt.flatMap((m) => (m as MemberData).dislikes ?? []).filter(Boolean))]
-        : ((memberDataForPrompt as MemberData)?.dislikes ?? []);
-      if (dislikesList.length > 0) {
-        const dislikeTokens = getDislikeTokensForChat(dislikesList);
-        if (dislikeTokens.length > 0 && containsAnyToken(userMessage, dislikeTokens)) {
-          const userLower = userMessage.toLowerCase();
-          const matchedDislike = dislikesList.find((d) => tokenizeForDislikes(d).some((t) => userLower.includes(t)));
-          const matched = matchedDislike ? [matchedDislike] : [dislikesList[0]];
-          const message = buildBlockedMessageEdge(profileName, "dislike", matched);
-          return new Response(JSON.stringify({
-            blocked: true,
-            blocked_by: "dislike",
-            profile_name: profileName,
-            matched,
-            message,
-          }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
+      const dislikeMatch = tokenSet.dislikeItems.find((item) => findMatchedTokens(userMessage, item.tokens).length > 0);
+      if (dislikeMatch) {
+        const blockedItems = [dislikeMatch.display];
+        const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
+        const intendedDishHint = extractIntendedDishHint(userMessage, dislikeMatch.display);
+        const message = buildBlockedMessageEdge(profileName, "dislike", blockedItems, suggestedAlternatives, intendedDishHint);
+        return new Response(JSON.stringify({
+          blocked: true,
+          blocked_by: "dislike",
+          profile_name: profileName,
+          blocked_items: blockedItems,
+          suggested_alternatives: suggestedAlternatives,
+          original_query: userMessage,
+          intended_dish_hint: intendedDishHint || undefined,
+          message,
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
 

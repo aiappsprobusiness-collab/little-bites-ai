@@ -58,4 +58,28 @@ describe("checkChatRequestAgainstProfile", () => {
     expect(result).not.toBeNull();
     expect(result!.blocked_by).toBe("allergy");
   });
+
+  it('blocks "ягодный пудинг" when member has allergy ягоды', () => {
+    const result = checkChatRequestAgainstProfile({
+      text: "ягодный пудинг",
+      member: { name: "Маша", allergies: ["ягоды"], dislikes: [] },
+    });
+    expect(result).not.toBeNull();
+    expect(result!.blocked).toBe(true);
+    expect(result!.blocked_by).toBe("allergy");
+    expect(result!.matched).toContain("ягоды");
+    expect(result!.message).toMatch(/аллергия/);
+  });
+
+  it('blocks "ягодный пудинг" when member dislikes ягоды', () => {
+    const result = checkChatRequestAgainstProfile({
+      text: "ягодный пудинг",
+      member: { name: "Вася", allergies: [], dislikes: ["ягоды"] },
+    });
+    expect(result).not.toBeNull();
+    expect(result!.blocked).toBe(true);
+    expect(result!.blocked_by).toBe("dislike");
+    expect(result!.matched).toContain("ягоды");
+    expect(result!.message).toMatch(/не любит/);
+  });
 });

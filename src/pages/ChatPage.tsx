@@ -48,6 +48,8 @@ import { getSuggestionChips } from "@/utils/chatSuggestionChips";
 import { getTimeOfDayLine, formatAllergySummary } from "@/utils/chatHeroUtils";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import type { LimitReachedFeature } from "@/utils/limitReachedMessages";
+import { getRewrittenQueryIfFollowUp, deriveDishHint } from "@/utils/blockedFollowUp";
+import type { BlockedMeta } from "@/types/chatBlocked";
 import { useAppStore } from "@/store/useAppStore";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
@@ -100,6 +102,10 @@ interface Message {
   preParsedRecipe?: ParsedRecipe | null;
   /** ID рецепта в БД (из createRecipe), для добавления в избранное через favorites_v2.recipe_id */
   recipeId?: string | null;
+  /** Ответ «заблокировано» по аллергии/dislikes — показывать как обычный текст, без RecipeCard */
+  isBlockedRefusal?: boolean;
+  /** Мета для follow-up (то же блюдо с заменой); из Edge или chat_history.meta */
+  blockedMeta?: BlockedMeta;
 }
 
 /** Формат сообщений help-чата в localStorage (timestamp как строка). */
@@ -369,9 +375,16 @@ export default function ChatPage() {
     }
     if (Date.now() < skipHistorySyncUntilRef.current) return;
     const recipeIds = [...new Set(historyMessages.map((m: { recipe_id?: string | null }) => m.recipe_id).filter(Boolean))] as string[];
+    const isBlockedRefusalResponse = (response: string) => {
+      const r = (response ?? "").trim();
+      return (
+        r.includes("Поэтому рецепт с этим ингредиентом я не предложу") &&
+        (r.includes("аллерги") || r.includes("не любит"))
+      );
+    };
     const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>) => {
       const formatted: Message[] = [];
-      historyMessages.forEach((msg: { id: string; message?: string; response?: string; created_at: string; recipe_id?: string | null }) => {
+      historyMessages.forEach((msg: { id: string; message?: string; response?: string; created_at: string; recipe_id?: string | null; meta?: BlockedMeta | Record<string, unknown> | null }) => {
         formatted.push({
           id: `${msg.id}-user`,
           role: "user",
@@ -379,19 +392,37 @@ export default function ChatPage() {
           timestamp: new Date(msg.created_at),
         });
         if (msg.response) {
-          const dbRecipe = msg.recipe_id ? recipeMap[msg.recipe_id] : null;
-          const { displayText, recipes } = dbRecipe
-            ? { displayText: `Вот рецепт: ${dbRecipe.title}`, recipes: [dbRecipe] }
-            : parseRecipesFromChat(msg.message ?? "", msg.response);
-          formatted.push({
-            id: `${msg.id}-assistant`,
-            role: "assistant",
-            content: displayText,
-            timestamp: new Date(msg.created_at),
-            rawContent: msg.response,
-            preParsedRecipe: recipes[0] ?? null,
-            recipeId: msg.recipe_id ?? undefined,
-          });
+          const isBlocked = !msg.recipe_id && isBlockedRefusalResponse(msg.response);
+          const blockedMetaFromDb = msg.meta && typeof msg.meta === "object" && (msg.meta as { blocked?: boolean }).blocked === true
+            ? (msg.meta as BlockedMeta)
+            : undefined;
+          if (isBlocked) {
+            formatted.push({
+              id: `${msg.id}-assistant`,
+              role: "assistant",
+              content: msg.response,
+              timestamp: new Date(msg.created_at),
+              rawContent: undefined,
+              preParsedRecipe: null,
+              recipeId: undefined,
+              isBlockedRefusal: true,
+              blockedMeta: blockedMetaFromDb,
+            });
+          } else {
+            const dbRecipe = msg.recipe_id ? recipeMap[msg.recipe_id] : null;
+            const { displayText, recipes } = dbRecipe
+              ? { displayText: `Вот рецепт: ${dbRecipe.title}`, recipes: [dbRecipe] }
+              : parseRecipesFromChat(msg.message ?? "", msg.response);
+            formatted.push({
+              id: `${msg.id}-assistant`,
+              role: "assistant",
+              content: displayText,
+              timestamp: new Date(msg.created_at),
+              rawContent: msg.response,
+              preParsedRecipe: recipes[0] ?? null,
+              recipeId: msg.recipe_id ?? undefined,
+            });
+          }
         }
       });
       setMessages(formatted);
@@ -549,7 +580,16 @@ export default function ChatPage() {
 
     try {
       const chatMessages = messages.map((m) => ({ role: m.role, content: m.content }));
-      chatMessages.push({ role: "user", content: userMessage.content });
+      const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+      const rewrittenQuery =
+        mode === "recipes"
+          ? getRewrittenQueryIfFollowUp({
+              lastAssistantMeta: lastAssistant?.blockedMeta,
+              lastAssistantTimestamp: lastAssistant?.timestamp ?? 0,
+              userText: toSend,
+            })
+          : null;
+      chatMessages.push({ role: "user", content: rewrittenQuery ?? toSend });
 
       if (mode === "help") {
         const response = await chat({
@@ -681,11 +721,21 @@ export default function ChatPage() {
       const showRecipe = !!finalRecipe && (finalValidation.ok || hasRecipeFromApi);
 
       if (isBlockedResponse) {
+        const originalQuery = (response as { original_query?: string })?.original_query ?? userMessage.content;
+        const blockedItems = (response as { blocked_items?: string[] })?.blocked_items ?? (response as { matched?: string[] })?.matched ?? [];
+        const intendedDishHint = (response as { intended_dish_hint?: string })?.intended_dish_hint ?? deriveDishHint(originalQuery, blockedItems);
+        const blockedMeta: BlockedMeta = {
+          blocked: true,
+          original_query: originalQuery,
+          blocked_items: blockedItems,
+          suggested_alternatives: (response as { suggested_alternatives?: string[] })?.suggested_alternatives ?? [],
+          intended_dish_hint: intendedDishHint || undefined,
+        };
         streamDoneForMessageIdRef.current = assistantMessageId;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
-              ? { ...m, content: rawMessage, rawContent: undefined, isStreaming: false, preParsedRecipe: null }
+              ? { ...m, content: rawMessage, rawContent: undefined, isStreaming: false, preParsedRecipe: null, isBlockedRefusal: true, blockedMeta }
               : m
           )
         );
@@ -695,6 +745,7 @@ export default function ChatPage() {
             response: rawMessage,
             recipeId: null,
             childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+            meta: blockedMeta,
           });
         } catch (e) {
           safeError("Failed to save blocked refusal to chat history:", e);
@@ -1118,8 +1169,8 @@ export default function ChatPage() {
                 }
                 timestamp={m.timestamp}
                 rawContent={mode === "recipes" ? m.rawContent : undefined}
-                expectRecipe={mode === "recipes" && m.role === "assistant"}
-                preParsedRecipe={mode === "recipes" ? m.preParsedRecipe : null}
+                expectRecipe={mode === "recipes" && m.role === "assistant" && !m.isBlockedRefusal}
+                preParsedRecipe={mode === "recipes" && !m.isBlockedRefusal ? m.preParsedRecipe : null}
                 recipeId={mode === "recipes" ? m.recipeId : undefined}
                 isStreaming={m.isStreaming}
                 onDelete={handleDeleteMessage}

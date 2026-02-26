@@ -5,6 +5,15 @@
 
 export type ChatBlockedBy = "allergy" | "dislike";
 
+/** Мета для follow-up после blocked: хранится в chat_history.meta и в состоянии сообщения. */
+export interface BlockedMeta {
+  blocked: true;
+  original_query: string;
+  blocked_items: string[];
+  suggested_alternatives: string[];
+  intended_dish_hint?: string;
+}
+
 export interface ChatBlockedResponse {
   blocked: true;
   blocked_by: ChatBlockedBy;
@@ -13,6 +22,11 @@ export interface ChatBlockedResponse {
   matched: string[];
   /** Готовый текст для UI. */
   message: string;
+  /** Для follow-up и сохранения в chat_history.meta */
+  blocked_items?: string[];
+  suggested_alternatives?: string[];
+  original_query?: string;
+  intended_dish_hint?: string;
 }
 
 /** Проверка: ответ от чата — заблокирован по профилю. */
@@ -45,9 +59,18 @@ const ALTERNATIVES: Record<string, string[]> = {
   рыба: ["индейка", "курица", "тофу"],
   глютен: ["рис", "гречка", "киноа"],
   мясо: ["индейка", "рыба", "бобовые"],
+  ягод: ["фрукты", "банан", "яблоко"],
+  ягоды: ["фрукты", "банан", "яблоко"],
+  berry: ["фрукты", "банан", "яблоко"],
+  berries: ["фрукты", "банан", "яблоко"],
 };
 
 const DEFAULT_ALTERNATIVES = ["другие ингредиенты на ваш выбор"];
+
+/** Экспорт для использования в checkChatRequestAgainstProfile (meta для follow-up). */
+export function getSuggestedAlternativesForBlocked(matched: string[]): string[] {
+  return findAlternatives(matched);
+}
 
 function findAlternatives(matched: string[]): string[] {
   const lower = matched.map((m) => String(m).trim().toLowerCase()).filter(Boolean);

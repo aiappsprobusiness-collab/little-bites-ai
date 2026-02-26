@@ -25,6 +25,8 @@ export type Database = {
           recipe_id: string | null
           response: string | null
           user_id: string
+          archived_at: string | null
+          meta: Record<string, unknown>
         }
         Insert: {
           child_id?: string | null
@@ -35,6 +37,8 @@ export type Database = {
           recipe_id?: string | null
           response?: string | null
           user_id: string
+          archived_at?: string | null
+          meta?: Record<string, unknown>
         }
         Update: {
           child_id?: string | null
@@ -45,6 +49,8 @@ export type Database = {
           recipe_id?: string | null
           response?: string | null
           user_id?: string
+          archived_at?: string | null
+          meta?: Record<string, unknown>
         }
         Relationships: [
           {

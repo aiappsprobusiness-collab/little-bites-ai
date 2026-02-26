@@ -11,7 +11,8 @@ export type AllergenKey =
   | "nuts"
   | "eggs"
   | "fish"
-  | "gluten";
+  | "gluten"
+  | "berries";
 
 /** По категории — полный список токенов для матча (подстроки в тексте). */
 export const ALLERGEN_TOKENS: Record<AllergenKey, string[]> = {
@@ -95,6 +96,18 @@ export const ALLERGEN_TOKENS: Record<AllergenKey, string[]> = {
     "flour",
     "bread",
   ],
+  berries: [
+    "ягод",
+    "ягоды",
+    "ягодн",
+    "berry",
+    "berries",
+    "blueberr",
+    "raspberr",
+    "strawberr",
+    "blackberr",
+    "currant",
+  ],
 };
 
 /** Триггер-подстроки (ключ введённой аллергии) → категория. Для расширения по словарю. */
@@ -127,6 +140,15 @@ const TRIGGER_TO_KEY: Record<string, AllergenKey> = {
   gluten: "gluten",
   пшениц: "gluten",
   wheat: "gluten",
+  ягод: "berries",
+  ягоды: "berries",
+  berry: "berries",
+  berries: "berries",
+  blueberr: "berries",
+  raspberr: "berries",
+  strawberr: "berries",
+  blackberr: "berries",
+  currant: "berries",
 };
 
 function tokenize(text: string): string[] {

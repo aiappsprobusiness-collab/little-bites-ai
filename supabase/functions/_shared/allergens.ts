@@ -1,24 +1,21 @@
 /**
- * Thin wrapper над общим словарём аллергенов (allergensDictionary.ts).
- * Единый источник истины: src/shared/allergensDictionary.ts, в Edge копируется через scripts/sync-allergens-dict.mjs.
+ * Thin wrapper над словарём аллергенов и алиасов (allergyAliases + allergensDictionary fallback).
  */
 
-import {
-  buildBlockedTokens,
-  containsAnyToken as containsAnyTokenShared,
-} from "./allergensDictionary.ts";
+import { buildBlockedTokensFromAllergies } from "./allergyAliases.ts";
+import { containsAnyToken as containsAnyTokenShared } from "./allergensDictionary.ts";
 
 export interface AllergenSet {
   blockedTokens: string[];
 }
 
 /**
- * Строит набор запрещённых токенов по списку аллергий профиля (или всех членов семьи).
+ * Строит набор запрещённых токенов по списку аллергий (алиасы БКМ, глютен и т.д. + fallback).
  */
 export function buildAllergenSet(
   allergies: string[] | null | undefined
 ): AllergenSet {
-  return { blockedTokens: buildBlockedTokens(allergies) };
+  return { blockedTokens: buildBlockedTokensFromAllergies(allergies) };
 }
 
 /** Для совместимости с generate-plan и deepseek-chat: boolean. */
@@ -60,10 +57,10 @@ export function isRecipeAllowedByAllergens(
 }
 
 /**
- * Для совместимости с generate-plan: возвращает массив токенов так же, как старый getAllergyTokens(memberData).
+ * Для совместимости с generate-plan и blockedTokens: токены по алиасам (БКМ → молоко/йогурт/...).
  */
 export function getBlockedTokensFromAllergies(
   allergies: string[] | null | undefined
 ): string[] {
-  return buildBlockedTokens(allergies);
+  return buildBlockedTokensFromAllergies(allergies);
 }

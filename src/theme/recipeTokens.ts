@@ -11,23 +11,27 @@ export const recipeCard =
 /** Hero-шапка: оливковый фон 4–6% */
 export const recipeHeaderBg = "bg-primary/[0.06] rounded-t-2xl -mb-px";
 
+/** Hero-карточка (Recipe Details): лёгкая тень, 20px padding, без внутренних разделителей */
+export const recipeHeroCard =
+  "rounded-2xl border border-border/80 bg-card p-5 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06),0_4px_16px_-6px_rgba(0,0,0,0.04)]";
+
+/** Время в hero: мелко, muted */
+export const recipeTimeClass = "inline-flex items-center gap-1.5 text-xs text-muted-foreground";
+
 /** Бейдж типа приёма пищи: оливковый фон, белый текст */
 export const recipeMealBadge =
   "inline-flex items-center rounded-full bg-primary text-primary-foreground text-[11px] font-medium px-2.5 py-1";
 
-/** Время: иконка + текст, вторичный цвет */
-export const recipeTimeClass = "inline-flex items-center gap-1 text-xs text-muted-foreground";
-
-/** Чипсы ингредиентов: нейтральный/оливковый (не розовый) */
+/** Чипсы ингредиентов: тонкий бордер, лёгкий hover/press */
 export const recipeIngredientChip =
-  "inline-flex items-center gap-1.5 max-w-full rounded-full px-2.5 py-1 bg-primary-light border border-primary-border";
+  "inline-flex items-center gap-1.5 max-w-full rounded-full px-2.5 py-1.5 bg-primary-light/70 border border-primary-border/60 transition-colors duration-150 hover:border-primary-border/90 active:bg-primary-light";
 
 export const recipeIngredientChipText =
   "text-foreground font-medium text-xs min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis";
 
-/** Блок «Совет от шефа»: мягкий info, оливковый бордер */
+/** Блок «Совет от шефа»: премиум callout, больше padding, опциональный акцент */
 export const recipeChefAdviceCard =
-  "rounded-xl p-3 border border-primary-border bg-primary/[0.06] flex gap-2.5 items-start";
+  "rounded-2xl p-5 border border-primary-border/50 bg-primary/[0.05] flex gap-3 items-start border-l-2 border-l-primary/20";
 
 /** Мини-совет (free): нейтральный фон */
 export const recipeMiniAdviceCard =
@@ -37,8 +41,8 @@ export const recipeMiniAdviceCard =
 export const recipeMetaRow = "flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground";
 
 /** Заголовок секции (Ингредиенты, Шаги) */
-export const recipeSectionLabel = "text-xs font-medium text-muted-foreground";
+export const recipeSectionLabel = "text-xs font-medium text-muted-foreground uppercase tracking-wide";
 
-/** Нумерация шагов */
-export const recipeStepNum = "text-xs font-semibold text-primary shrink-0";
-export const recipeStepText = "text-xs text-foreground leading-relaxed flex-1 min-w-0 break-words";
+/** Нумерация шагов: жирный номер в лёгком круге */
+export const recipeStepNum = "inline-flex shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold items-center justify-center";
+export const recipeStepText = "text-sm text-foreground leading-[1.6] flex-1 min-w-0 break-words";

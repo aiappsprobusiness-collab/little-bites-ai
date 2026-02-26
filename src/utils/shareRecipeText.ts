@@ -93,7 +93,7 @@ function formatPreparationSteps(steps: ShareRecipeInput["steps"]): string {
 
 /**
  * Собирает один текстовый блок рецепта для шаринга в формате «карточки».
- * Порядок: заголовок (+ тип приёма) → полезность → ингредиенты → время → приготовление → совет → подпись + ссылки.
+ * Порядок: заголовок → тип приёма → время → описание → ингредиенты → шаги → совет → подпись + ссылки.
  */
 export function buildRecipeShareText(params: ShareRecipeInput): string {
   const {
@@ -109,21 +109,29 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
   } = params;
 
   const lines: string[] = [];
+  const blank = () => lines.push("");
 
-  // 1) Заголовок + тип приёма
-  lines.push(`🍽️ ${title.trim() || "Рецепт"}`);
+  // 1) Заголовок
+  lines.push(title.trim() || "Рецепт");
+
+  // 2) Тип приёма пищи
   const mealLine = getMealLine({ mealTypeLabel, meal_type });
   if (mealLine) lines.push(mealLine);
 
-  // 2) Почему это полезно
+  // 3) Время приготовления (сразу под типом приёма, без дублирования)
+  if (cooking_time_minutes != null && Number(cooking_time_minutes) > 0) {
+    lines.push(`⏱ ${cooking_time_minutes} мин`);
+  }
+
+  // 4) Описание / польза
   if (description != null && String(description).trim() !== "") {
-    lines.push("");
+    blank();
     lines.push("💚 Почему это полезно:");
     lines.push(String(description).trim());
   }
 
-  // 3) Ингредиенты
-  lines.push("");
+  // 5) Ингредиенты
+  blank();
   lines.push("🧾 Ингредиенты:");
   if (ingredients.length > 0) {
     for (const ing of ingredients) {
@@ -132,14 +140,8 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
     }
   }
 
-  // 4) Время приготовления (без ссылки после)
-  if (cooking_time_minutes != null && Number(cooking_time_minutes) > 0) {
-    lines.push("");
-    lines.push(`⏱️ Время приготовления: ${cooking_time_minutes} мин`);
-  }
-
-  // 5) Приготовление
-  lines.push("");
+  // 6) Шаги приготовления
+  blank();
   const stepsFormatted = formatPreparationSteps(steps);
   if (stepsFormatted) {
     lines.push("👩‍🍳 Приготовление:");
@@ -148,14 +150,14 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
     lines.push("👩‍🍳 Приготовление: " + PREP_FALLBACK);
   }
 
-  // 6) Совет от шефа
+  // 7) Совет от шефа
   if (chefAdvice != null && String(chefAdvice).trim() !== "") {
-    lines.push("");
+    blank();
     lines.push("👩‍🍳✨ Совет от шефа:");
     lines.push(String(chefAdvice).trim());
   }
 
-  // 7) Хвост: подпись + ссылка на сайт (чистый URL, отдельная строка, без markdown)
+  // 8) Подпись + ссылка
   const body = lines.join("\n");
   const footer = `${SHARE_SIGNATURE_LINE}\n${BASE_URL}`;
   return `${body}\n\n${footer}`;

@@ -25,7 +25,8 @@
     "supabase:deploy:chat:slow": "npm run sync:allergens && node scripts/deploy-function.mjs deepseek-chat",
     "scripts:create-test-users": "node scripts/create-test-users.mjs",
     "debug:plan": "node scripts/collect-plan-debug-logs.mjs --mode week --debug",
-    "check:migrations": "node scripts/check-migrations-immutable.mjs"
+    "check:migrations": "node scripts/check-migrations-immutable.mjs",
+    "resize:og-onion": "node scripts/resize-og-onion.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",

@@ -240,7 +240,7 @@ export function MealCard({
       )}
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-1">
-          {chips.map((name, i) => (
+          {chips.slice(0, extraCount > 0 ? chips.length - 1 : chips.length).map((name, i) => (
             <span
               key={`${name}-${i}`}
               className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-light border border-primary-border text-foreground text-typo-caption"
@@ -249,8 +249,15 @@ export function MealCard({
             </span>
           ))}
           {extraCount > 0 && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-light border border-primary-border text-foreground text-typo-caption">
-              +{extraCount}
+            <span className="inline-flex items-center gap-1.5 shrink-0">
+              {chips.length > 0 && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-light border border-primary-border text-foreground text-typo-caption">
+                  {chips[chips.length - 1]}
+                </span>
+              )}
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary-light border border-primary-border text-foreground text-typo-caption">
+                +{extraCount}
+              </span>
             </span>
           )}
         </div>

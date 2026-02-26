@@ -9,6 +9,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
+import { normalizeAllergyInput } from "@/utils/allergyAliases";
 import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
 function ageMonthsFromYearsMonths(years: number, months: number): number {
@@ -96,7 +97,14 @@ export function AddChildForm({
         setShowPaywall(true);
         return;
       }
-      addToList(setAllergies, setAllergyInput)(raw);
+      const toAdd = parseTags(raw).map((s) => normalizeAllergyInput(s)).filter(Boolean);
+      if (toAdd.length) {
+        const existing = new Set(allergies.map((s) => s.trim().toLowerCase()));
+        const added = toAdd.filter((v) => !existing.has(v.toLowerCase()));
+        added.forEach((v) => existing.add(v.toLowerCase()));
+        if (added.length) setAllergies((prev) => [...prev, ...added].slice(0, 20));
+      }
+      setAllergyInput("");
     },
     remove: removeFromList(setAllergies),
     edit: editInList(setAllergies, setAllergyInput),

@@ -29,14 +29,15 @@ export default function FavoritesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { members } = useFamily();
+  const { members, selectedMemberId } = useFamily();
   const { hasAccess } = useSubscription();
   const stateTab = (location.state as { tab?: FavoritesTab } | null)?.tab;
   const [tab, setTab] = useState<FavoritesTab>("favorites");
   useEffect(() => {
     if (stateTab === "my_recipes") setTab("my_recipes");
   }, [stateTab]);
-  const { favorites, removeFavorite } = useFavorites("all", { queryEnabled: tab === "favorites" });
+  const favoritesFilter = selectedMemberId === null || selectedMemberId === "family" ? "family" : selectedMemberId;
+  const { favorites, removeFavorite } = useFavorites(favoritesFilter, { queryEnabled: tab === "favorites" });
   const { myRecipes } = useMyRecipes();
   const [addToPlanRecipe, setAddToPlanRecipe] = useState<{ id: string; title: string; member_id: string | null } | null>(null);
   const [formOpen, setFormOpen] = useState(false);

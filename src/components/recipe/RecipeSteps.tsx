@@ -11,16 +11,16 @@ export function RecipeSteps({ steps, className }: RecipeStepsProps) {
 
   return (
     <div className={className}>
-      <p className={cn(recipeSectionLabel, "mb-1")}>Шаги приготовления</p>
-      <div className="space-y-1">
+      <p className={cn(recipeSectionLabel, "mb-2")}>Шаги приготовления</p>
+      <div className="space-y-[14px]">
         {steps.map((step, idx) => {
           const text = typeof step === "string" ? step : (step as { instruction?: string }).instruction ?? "";
           const num = typeof step === "object" && (step as { step_number?: number }).step_number != null
             ? (step as { step_number: number }).step_number
             : idx + 1;
           return (
-            <div key={idx} className="flex gap-2 items-start">
-              <span className={recipeStepNum}>{num}.</span>
+            <div key={idx} className="flex gap-3 items-start">
+              <span className={recipeStepNum}>{num}</span>
               <p className={recipeStepText}>{text}</p>
             </div>
           );

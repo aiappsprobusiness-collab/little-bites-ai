@@ -1,13 +1,12 @@
 /**
  * Pre-check запроса в чате по профилю: аллергии + dislikes.
+ * Используется тот же словарь токенов, что и на Edge (в т.ч. ягоды → ягодный/berry и т.д.).
  * Если запрос содержит запрещённый ингредиент — возвращаем ChatBlockedResponse (Edge не вызываем).
  */
 
-import { buildBlockedTokens, containsAnyToken } from "@/utils/allergenTokens";
-import { getBlockedTokensPerAllergy } from "@/utils/allergenTokens";
-import { getDislikeTokens } from "@/utils/dislikeTokens";
+import { buildBlockedTokens, containsAnyToken, getBlockedTokensPerAllergy } from "@/utils/allergenTokens";
 import type { ChatBlockedResponse } from "@/types/chatBlocked";
-import { buildBlockedMessage } from "@/types/chatBlocked";
+import { buildBlockedMessage, getSuggestedAlternativesForBlocked } from "@/types/chatBlocked";
 
 export interface MemberForBlockCheck {
   name?: string | null;
@@ -49,6 +48,9 @@ export function checkChatRequestAgainstProfile(params: {
           profile_name: profileName,
           matched,
           message,
+          original_query: text,
+          blocked_items: matched,
+          suggested_alternatives: getSuggestedAlternativesForBlocked(matched),
         };
       }
     }
@@ -58,36 +60,27 @@ export function checkChatRequestAgainstProfile(params: {
     (d) => typeof d === "string" && (d as string).trim().length > 0
   );
   if (dislikes.length > 0) {
-    const dislikeTokens = getDislikeTokens(dislikes);
-    if (dislikeTokens.length > 0) {
-      const result = containsAnyToken(messageLower, dislikeTokens);
-      if (result.hit) {
-        const matchedDislike = dislikes.find((d) => {
-          const s = String(d).trim().toLowerCase();
-          const words = tokenizeForDislikes(s);
-          return words.some((t) => messageLower.includes(t));
-        });
-        const matched = matchedDislike ? [matchedDislike] : result.found;
-        const message = buildBlockedMessage(profileName, "dislike", matched);
-        return {
-          blocked: true,
-          blocked_by: "dislike",
-          profile_name: profileName,
-          matched,
-          message,
-        };
+    for (const d of dislikes) {
+      const tokens = buildBlockedTokens([d]);
+      if (tokens.length > 0) {
+        const result = containsAnyToken(messageLower, tokens);
+        if (result.hit) {
+          const matchedItem = String(d).trim();
+          const message = buildBlockedMessage(profileName, "dislike", [matchedItem]);
+          return {
+            blocked: true,
+            blocked_by: "dislike",
+            profile_name: profileName,
+            matched: [matchedItem],
+            message,
+            original_query: text,
+            blocked_items: [matchedItem],
+            suggested_alternatives: getSuggestedAlternativesForBlocked([matchedItem]),
+          };
+        }
       }
     }
   }
 
   return null;
-}
-
-function tokenizeForDislikes(text: string): string[] {
-  if (!text || typeof text !== "string") return [];
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .split(/\s+/)
-    .filter((t) => t.length >= 2);
 }
