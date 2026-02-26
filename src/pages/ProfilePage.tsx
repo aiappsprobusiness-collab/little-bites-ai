@@ -36,15 +36,12 @@ import { useToast } from "@/hooks/use-toast";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { ProfileHeaderCard } from "@/components/profile/ProfileHeaderCard";
 import { FamilyMemberCard } from "@/components/profile/FamilyMemberCard";
-import { SubscriptionCard } from "@/components/profile/SubscriptionCard";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
 
 function memberAvatar(_member: MembersRow, index: number): string {
   return VEGETABLE_EMOJIS[index % VEGETABLE_EMOJIS.length];
 }
-
-const FREE_PLAN_LINE = "Free план · 1 профиль · 5 запросов в день";
 
 function formatSubscriptionEndDate(isoDate: string | null): string {
   if (!isoDate) return "";
@@ -162,16 +159,36 @@ export default function ProfilePage() {
   return (
     <MobileLayout>
       <div className="min-h-full bg-[var(--color-bg-main)] overflow-x-hidden">
-        <div className="px-4 pt-4 pb-24 max-w-md mx-auto flex flex-col gap-6">
-          {/* Header: белая карточка как «Почему это полезно» */}
+        <div className="px-4 pt-4 pb-24 max-w-md mx-auto flex flex-col gap-5">
+          {/* Hero: аккаунт + подписка в одной карточке */}
           <ProfileHeaderCard
             displayName={displayName}
             status={subscriptionStatus}
             onEditClick={handleOpenNameModal}
+            freePlanLine="5 запросов в день · 1 профиль"
+            trialUntilFormatted={trialUntil ? formatSubscriptionEndDateWithYear(trialUntil) : null}
+            expiresAtFormatted={expiresAt ? formatSubscriptionEndDateWithYear(expiresAt) : null}
+            onSubscriptionCta={handleSubscriptionCta}
+            onCancelSubscription={hasAccess ? async () => {
+              try {
+                await cancelSubscription();
+                toast({
+                  title: "Подписка отменена",
+                  description: "Доступ сохранится до конца оплаченного периода.",
+                });
+              } catch {
+                toast({
+                  variant: "destructive",
+                  title: "Не удалось отменить подписку",
+                });
+              }
+            } : undefined}
+            isCancellingSubscription={isCancellingSubscription}
+            canCancel={hasAccess}
           />
 
-          {/* Моя семья: uppercase, мелко, letter-spacing, серо-зелёный; подзаголовок secondary */}
-          <section className="flex flex-col gap-3">
+          {/* Моя семья */}
+          <section className="flex flex-col gap-2">
             <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
               Моя семья
             </p>
@@ -222,86 +239,58 @@ export default function ProfilePage() {
               <motion.div
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: members.length * 0.03 }}
-                className="w-full mt-1"
+                transition={{ delay: members.length * 0.03, duration: 0.15 }}
+                className="w-full"
               >
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full gap-2 rounded-xl border-border/80 text-foreground hover:bg-muted/30 hover:border-border h-9 text-sm font-medium"
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ duration: 0.12 }}
                   onClick={handleAddProfile}
                   disabled={members.length >= subscriptionLimits.maxProfiles}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-border/70 bg-muted/30 text-foreground hover:bg-muted/50 h-10 text-sm font-medium transition-colors disabled:opacity-60"
                 >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                  <Plus className="h-4 w-4" strokeWidth={2} />
                   Добавить профиль
-                </Button>
+                </motion.button>
               </motion.div>
             </div>
           </section>
 
-          {/* Подписка: карточка в стиле «Совет от шефа» */}
-          <SubscriptionCard
-            status={subscriptionStatus as "free" | "trial" | "premium"}
-            freePlanLine={FREE_PLAN_LINE}
-            trialUntilFormatted={trialUntil ? formatSubscriptionEndDateWithYear(trialUntil) : null}
-            expiresAtFormatted={expiresAt ? formatSubscriptionEndDateWithYear(expiresAt) : null}
-            onCta={handleSubscriptionCta}
-            onCancel={hasAccess ? async () => {
-              try {
-                await cancelSubscription();
-                toast({
-                  title: "Подписка отменена",
-                  description: "Доступ сохранится до конца оплаченного периода.",
-                });
-              } catch {
-                toast({
-                  variant: "destructive",
-                  title: "Не удалось отменить подписку",
-                });
-              }
-            } : undefined}
-            isCancelling={isCancellingSubscription}
-            canCancel={hasAccess}
-          />
-
-          {/* Нижний блок: лёгкий list-style, без тяжёлых теней */}
+          {/* Утилиты: одна карточка, строки 48–52px, мелкие иконки и шевроны */}
           <section className="flex flex-col gap-2">
-            <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+            <div className="rounded-2xl border border-border/70 bg-card overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
               <button
                 type="button"
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/20 transition-colors text-sm border-b border-border/30"
+                className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm border-b border-border/20"
               >
-                <Bell className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={2} />
+                <Bell className="h-[18px] w-[18px] text-muted-foreground/80 shrink-0" strokeWidth={2} />
                 <span className="text-foreground">Уведомления</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground/70 ml-auto shrink-0" strokeWidth={2} />
+                <ChevronRight className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" strokeWidth={2} />
               </button>
               <a
                 href="mailto:momrecipesai@gmail.com"
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/20 transition-colors text-sm"
+                className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm border-b border-border/20"
               >
-                <HelpCircle className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={2} />
+                <HelpCircle className="h-[18px] w-[18px] text-muted-foreground/80 shrink-0" strokeWidth={2} />
                 <span className="text-foreground">Обратная связь</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground/70 ml-auto shrink-0" strokeWidth={2} />
+                <ChevronRight className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" strokeWidth={2} />
               </a>
-            </div>
-            <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
               <button
                 type="button"
                 onClick={() => setShowLegalModal(true)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/20 transition-colors text-sm"
+                className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm border-b border-border/20"
               >
-                <FileText className="h-4 w-4 text-muted-foreground shrink-0" strokeWidth={2} />
+                <FileText className="h-[18px] w-[18px] text-muted-foreground/80 shrink-0" strokeWidth={2} />
                 <span className="text-foreground">Правовая информация</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground/70 ml-auto shrink-0" strokeWidth={2} />
+                <ChevronRight className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" strokeWidth={2} />
               </button>
-            </div>
-            <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
               <button
                 type="button"
                 onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/20 transition-colors text-sm text-destructive"
+                className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm text-destructive"
               >
-                <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} />
+                <LogOut className="h-[18px] w-[18px] shrink-0 opacity-80" strokeWidth={2} />
                 <span>Выйти из аккаунта</span>
               </button>
             </div>
