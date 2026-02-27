@@ -64,6 +64,36 @@ export function ingredientsNeedAmountRetry(ingredients: Array<{ name?: string; a
   return false;
 }
 
+/** Default unit by product type: liquids -> ml, countables -> шт, else г. */
+function defaultUnitForName(name: string): string {
+  const n = (name ?? "").toLowerCase();
+  if (/\b(молоко|вода|масло|бульон|кефир|йогурт|сливки|сок|компот|чай|кофе)\b/.test(n) || /мл|литр|л\b/.test(n)) return "мл";
+  if (/\b(яйц|яйко|банан|груша|яблоко|апельсин|луковиц|зубчик|головк|ломтик|кусок|шт)\b/.test(n) || /штук|штуки/.test(n)) return "шт";
+  return "г";
+}
+
+/**
+ * Apply fallback when amount/unit are missing: set amount "1", unit "шт" or "г"/"мл" by product type.
+ * Mutates ingredients in place (displayText, canonical).
+ */
+export function applyIngredientsFallbackHeuristic(
+  ingredients: Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>
+): void {
+  if (!Array.isArray(ingredients)) return;
+  for (const ing of ingredients) {
+    const name = (ing?.name ?? "").trim() || "Ингредиент";
+    const amountStr = (ing.amount ?? "").trim();
+    const displayTextRaw = (ing.displayText ?? "").trim();
+    const hasQ = amountStr.length > 0 && (QUANTITY_UNIT_PATTERN.test(amountStr) || DISPLAY_TEXT_QUANTITY_REGEX.test(amountStr));
+    const displayHasQ = displayTextRaw.length > 0 && (QUANTITY_UNIT_PATTERN.test(displayTextRaw) || DISPLAY_TEXT_QUANTITY_REGEX.test(displayTextRaw));
+    const qualitative = /по вкусу|для подачи/i.test(displayTextRaw) || /по вкусу|для подачи/i.test(amountStr);
+    if (hasQ || displayHasQ || qualitative) continue;
+    const unit = defaultUnitForName(name);
+    ing.displayText = `${name} — 1 ${unit}`;
+    ing.canonical = { amount: 1, unit: unit === "мл" ? "ml" : "g" };
+  }
+}
+
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(200),

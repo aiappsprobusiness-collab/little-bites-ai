@@ -17,8 +17,8 @@ import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
-import { buildBlockedTokenSet, findMatchedTokens } from "../_shared/blockedTokens.ts";
-import { validateRecipeJson, ingredientsNeedAmountRetry, type RecipeJson } from "./recipeSchema.ts";
+import { buildBlockedTokenSet, findMatchedTokens, textWithoutExclusionPhrases } from "../_shared/blockedTokens.ts";
+import { validateRecipeJson, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +26,15 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Max-Age": "86400",
 };
+
+function logPerf(step: string, start: number, requestId?: string): void {
+  console.log(JSON.stringify({
+    tag: "PERF",
+    step,
+    ms: Date.now() - start,
+    requestId: requestId ?? undefined,
+  }));
+}
 
 /** Fail-safe: strip personal references from description/chef_advice/advice so recipe is reusable in pool. */
 function sanitizeRecipeText(text: string | null | undefined): string {
@@ -141,9 +150,9 @@ function buildBlockedMessageEdge(
   const items = matchedDisplay.length > 0 ? matchedDisplay.join(", ") : "это";
   let line1: string;
   if (blockedBy === "allergy") {
-    line1 = `У профиля «${profileName}» указана аллергия на: ${items}. Поэтому рецепт с этим ингредиентом я не предложу.`;
+    line1 = `У профиля «${profileName}» указана аллергия на: ${items}. Смените профиль или замените аллерген на новый ингредиент.`;
   } else {
-    line1 = `Профиль «${profileName}» не любит: ${items}. Поэтому рецепт с этим ингредиентом я не предложу.`;
+    line1 = `Профиль «${profileName}» не любит: ${items}. Смените профиль или замените аллерген на новый ингредиент.`;
   }
   const firstAlt = suggestedAlternatives[0] ?? "банан";
   const dishWord = intendedDishHint || "десерт";
@@ -538,21 +547,24 @@ serve(async (req) => {
     return new Response("ok", { status: 200, headers: corsHeaders });
   }
 
+  const t0 = Date.now();
   try {
+    logPerf("start", t0);
+
     const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
     if (!DEEPSEEK_API_KEY) throw new Error("DEEPSEEK_API_KEY is not configured");
 
     const authHeader = req.headers.get("Authorization");
     let userId: string | null = null;
-    type ProfileRow = { subscription_status?: string | null } | null;
-    let profile: ProfileRow = null;
     type ProfileV2Row = { status: string; requests_today: number; daily_limit: number } | null;
     let profileV2: (ProfileV2Row & { premium_until?: string | null }) | null = null;
 
-    // Создаём supabase клиент на уровне всего handler-а
+    const tProfileStart = Date.now();
+    // Создаём supabase клиент на уровне всего handler-а (service role для чтения профиля и лимитов)
     const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
       ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       : null;
@@ -563,7 +575,7 @@ serve(async (req) => {
       userId = user?.id ?? null;
 
       if (userId) {
-        // Загружаем profiles_v2. Trial — по trial_until, premium — по premium_until (не смешивать).
+        // Загружаем только profiles_v2 (таблица public.profiles не используется).
         const { data: profileV2Row } = await supabase
           .from("profiles_v2")
           .select("status, requests_today, daily_limit, premium_until, trial_until")
@@ -589,11 +601,8 @@ serve(async (req) => {
           }
         }
 
-        // Feature limits (chat_recipe / help) checked after body.type is known; no single requests_today gate here.
-        if (profileV2) {
-          // Keep trial expiry correction
-        } else {
-          // Нет строки в profiles_v2 — fallback на старую проверку (profiles + user_usage)
+        if (!profileV2) {
+          // Нет строки в profiles_v2 — fallback на check_usage_limit для лимита free.
           const { data: usageData } = await supabase.rpc("check_usage_limit", { _user_id: userId });
           if (usageData && !usageData.can_generate) {
             return new Response(
@@ -606,22 +615,19 @@ serve(async (req) => {
             );
           }
         }
-
-        const { data: profileRow, error: profileError } = await supabase
-          .from("profiles")
-          .select("subscription_status")
-          .eq("user_id", userId)
-          .maybeSingle();
-        if (profileError) {
-          safeWarn("Profile fetch error (treating as free):", profileError.message);
-          profile = null;
-        } else {
-          profile = profileRow as ProfileRow;
-        }
       }
     }
 
-    const subscriptionStatus = (profileV2?.status ?? profile?.subscription_status ?? "free") as string;
+    const requestIdEarly = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+    logPerf("profile_fetch", tProfileStart, requestIdEarly);
+    console.log(JSON.stringify({
+      tag: "PROFILE_STATUS",
+      status: profileV2?.status ?? "free",
+      premium_until: profileV2?.premium_until ?? undefined,
+      requestId: requestIdEarly,
+    }));
+
+    const subscriptionStatus = (profileV2?.status ?? "free") as string;
     const isPremiumUser = subscriptionStatus === "premium" || subscriptionStatus === "trial";
 
     const requestId = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
@@ -824,6 +830,7 @@ serve(async (req) => {
     }
 
     // Страховка: запрос с аллергеном или dislikes — отказ без вызова модели, без usage_events
+    // Исключение: «суп без лука» при аллергии на лук — не блокируем, отдаём рецепт без него
     if ((type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest) {
       const profileName = (memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля";
       const allergiesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
@@ -834,7 +841,8 @@ serve(async (req) => {
         : ((memberDataForPrompt as MemberData)?.dislikes ?? []);
 
       const tokenSet = buildBlockedTokenSet({ allergies: allergiesList, dislikes: dislikesList });
-      const allergyMatch = tokenSet.allergyItems.find((item) => findMatchedTokens(userMessage, item.tokens).length > 0);
+      const messageForBlockCheck = textWithoutExclusionPhrases(userMessage);
+      const allergyMatch = tokenSet.allergyItems.find((item) => findMatchedTokens(messageForBlockCheck, item.tokens).length > 0);
       if (allergyMatch) {
         const blockedItems = [allergyMatch.display];
         const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
@@ -851,7 +859,7 @@ serve(async (req) => {
           message,
         }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      const dislikeMatch = tokenSet.dislikeItems.find((item) => findMatchedTokens(userMessage, item.tokens).length > 0);
+      const dislikeMatch = tokenSet.dislikeItems.find((item) => findMatchedTokens(messageForBlockCheck, item.tokens).length > 0);
       if (dislikeMatch) {
         const blockedItems = [dislikeMatch.display];
         const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
@@ -898,6 +906,7 @@ serve(async (req) => {
       }
     }
 
+    const tSystemPromptStart = Date.now();
     const promptUserMessage = (type === "sos_consultant" || type === "balance_check") ? userMessage : undefined;
     const cached = getCachedSystemPrompt(type, memberDataForPrompt, isPremiumUser);
     let systemPrompt =
@@ -938,6 +947,7 @@ serve(async (req) => {
     if (isRecipeRequest && (type === "chat" || type === "recipe" || type === "diet_plan")) {
       systemPrompt += "\n\nРазнообразь стиль описаний. Не используй одни и те же формулировки в нескольких подряд ответах.";
     }
+    logPerf("system_prompt", tSystemPromptStart, requestId);
 
     const isRecipeJsonRequest = (type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest;
 
@@ -976,10 +986,12 @@ serve(async (req) => {
         }
       }
 
-      const timeoutMs = type === "single_day" ? 60000 : (payload as { stream?: boolean }).stream ? 90000 : 120000;
+      const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "single_day" ? 60000 : (payload as { stream?: boolean }).stream ? 90000 : 120000);
+      const timeoutMs = MAIN_LLM_TIMEOUT_MS;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
+      const tLlmStart = Date.now();
       safeLog("SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
       let response: Response;
       try {
@@ -995,9 +1007,20 @@ serve(async (req) => {
         clearTimeout(timeoutId);
       } catch (error) {
         clearTimeout(timeoutId);
-        if (error instanceof Error && error.name === "AbortError") throw new Error(`Request timeout after ${timeoutMs}ms`);
+        if (error instanceof Error && error.name === "AbortError") {
+          logPerf("llm_call", tLlmStart, requestId);
+          logPerf("total_ms", t0, requestId);
+          const fallbackMsg = isRecipeRequest
+            ? "Генерация заняла слишком много времени. Попробуйте ещё раз или упростите запрос."
+            : `Request timeout after ${timeoutMs}ms`;
+          return new Response(
+            JSON.stringify({ error: "timeout", message: fallbackMsg }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
         throw error;
       }
+      logPerf("llm_call", tLlmStart, requestId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1016,6 +1039,7 @@ serve(async (req) => {
       }
 
       if (stream && response.body) {
+        logPerf("total_ms", t0, requestId);
         return new Response(response.body, {
           headers: {
             ...corsHeaders,
@@ -1026,6 +1050,7 @@ serve(async (req) => {
         });
       }
 
+      const tParseStart = Date.now();
       try {
         data = await response.json();
       } catch {
@@ -1035,6 +1060,7 @@ serve(async (req) => {
         );
       }
       assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
+      logPerf("parse_response", tParseStart, requestId);
       if (!assistantMessage) {
         return new Response(
           JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
@@ -1060,39 +1086,80 @@ serve(async (req) => {
       }
 
       if (isRecipeJsonRequest) {
+        const tNormStart = Date.now();
         let validated = validateRecipeJson(assistantMessage);
+        logPerf("normalize_ingredients", tNormStart, requestId);
         if (validated) {
           if (isPremiumUser && ingredientsNeedAmountRetry(validated.ingredients)) {
-            safeLog("Recipe ingredients missing amount/unit, retrying with hint (Premium/Trial)", requestId);
-            const retryRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                model: "deepseek-chat",
-                messages: [
-                  { role: "system", content: currentSystemPrompt + "\n\nКРИТИЧНО: Верни ингредиенты с количеством и единицей для каждого (например «Молоко — 200 мл», «Яйцо — 2 шт.»). Запрещено указывать только название без количества." },
-                  { role: "user", content: userMessage },
-                ],
-                stream: false,
-                max_tokens: 1500,
-                temperature: 0.4,
-                response_format: { type: "json_object" },
-              }),
-            });
-            if (retryRes.ok) {
-              const retryData = (await retryRes.json()) as { choices?: Array<{ message?: { content?: string } }> };
-              const retryContent = (retryData.choices?.[0]?.message?.content ?? "").trim();
-              if (retryContent) {
-                const retryValidated = validateRecipeJson(retryContent);
-                if (retryValidated && !ingredientsNeedAmountRetry(retryValidated.ingredients)) {
-                  validated = retryValidated;
-                  safeLog("Recipe ingredients retry succeeded", requestId);
+            const tRetryStart = Date.now();
+            const INGREDIENTS_RETRY_TIMEOUT_MS = 7000;
+            const retryController = new AbortController();
+            const retryTimeoutId = setTimeout(() => retryController.abort(), INGREDIENTS_RETRY_TIMEOUT_MS);
+            const ingredientNames = (validated.ingredients ?? []).map((i) => (typeof i === "string" ? i : (i as { name?: string }).name ?? "")).filter(Boolean);
+            const retryUserContent = `Список ингредиентов (только названия):\n${ingredientNames.join("\n")}\n\nВерни JSON с одним полем "ingredients" — массив объектов { "name": string, "amount": string, "unit": string } для каждого. Пример: {"ingredients":[{"name":"Молоко","amount":"200","unit":"мл"}]}.`;
+            let retrySucceeded = false;
+            try {
+              const retryRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  model: "deepseek-chat",
+                  messages: [
+                    { role: "system", content: "Ты возвращаешь только JSON. Один объект с полем ingredients: массив { name, amount, unit }. Без пояснений." },
+                    { role: "user", content: retryUserContent },
+                  ],
+                  stream: false,
+                  max_tokens: 800,
+                  temperature: 0.3,
+                  response_format: { type: "json_object" },
+                }),
+                signal: retryController.signal,
+              });
+              clearTimeout(retryTimeoutId);
+              if (retryRes.ok) {
+                const retryData = (await retryRes.json()) as { choices?: Array<{ message?: { content?: string } }> };
+                const retryContent = (retryData.choices?.[0]?.message?.content ?? "").trim();
+                if (retryContent) {
+                  try {
+                    const parsed = JSON.parse(retryContent) as { ingredients?: Array<{ name?: string; amount?: string; unit?: string }> };
+                    const arr = parsed?.ingredients;
+                    if (Array.isArray(arr) && arr.length >= (validated!.ingredients?.length ?? 0)) {
+                      const merged = (validated!.ingredients ?? []).map((orig, idx) => {
+                        const r = arr[idx];
+                        const name = typeof orig === "string" ? orig : (orig as { name?: string }).name ?? "";
+                        if (r && (r.amount ?? "").trim() && (r.unit ?? "").trim()) {
+                          const amount = (r.amount ?? "").trim();
+                          const unit = (r.unit ?? "").trim();
+                          return {
+                            name: r.name ?? name,
+                            displayText: `${r.name ?? name} — ${amount} ${unit}`,
+                            canonical: { amount: parseFloat(amount) || 1, unit: /мл|ml/i.test(unit) ? "ml" : "g" },
+                          };
+                        }
+                        return orig;
+                      });
+                      (validated as Record<string, unknown>).ingredients = merged;
+                      retrySucceeded = !ingredientsNeedAmountRetry(merged);
+                    }
+                  } catch {
+                    // ignore parse error
+                  }
                 }
               }
+            } catch {
+              clearTimeout(retryTimeoutId);
             }
+            logPerf("ingredients_retry", tRetryStart, requestId);
+            if (!retrySucceeded) {
+              applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
+              safeLog("Recipe ingredients: retry skipped or failed, applied heuristic fallback", requestId);
+            }
+          } else if (validated && ingredientsNeedAmountRetry(validated.ingredients)) {
+            applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
+            safeLog("Recipe ingredients: applied heuristic fallback (no retry for free)", requestId);
           }
           if (validated) {
             assistantMessage = JSON.stringify(validated);
@@ -1100,39 +1167,7 @@ serve(async (req) => {
           }
         }
         if (!validated) {
-          safeLog("Recipe JSON parse/validate failed, attempting repair", requestId);
-          const repairRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "deepseek-chat",
-              messages: [
-                { role: "system", content: "Fix this into a single valid JSON object. Output only JSON, no markdown or explanation. Return the complete recipe json." },
-                { role: "user", content: `Broken response:\n${assistantMessage.slice(0, 8000)}\n\nReturn only the fixed complete JSON.` },
-              ],
-              stream: false,
-              max_tokens: 1500,
-              temperature: 0.3,
-              response_format: { type: "json_object" },
-            }),
-          });
-          if (repairRes.ok) {
-            const repairData = (await repairRes.json()) as { choices?: Array<{ message?: { content?: string } }> };
-            const repairedContent = (repairData.choices?.[0]?.message?.content ?? "").trim();
-            if (repairedContent) {
-              validated = validateRecipeJson(repairedContent);
-              if (validated) {
-                assistantMessage = JSON.stringify(validated);
-                responseRecipes = [validated as Record<string, unknown>];
-                safeLog("Recipe JSON repair succeeded", requestId);
-              }
-            }
-          }
-        }
-        if (!validated) {
+          safeLog("Recipe JSON parse/validate failed", requestId);
           const truncate = 2048;
           const rawTruncated = assistantMessage.length > truncate ? assistantMessage.slice(0, truncate) + "\n...[truncated]" : assistantMessage;
           safeWarn("INVALID_JSON after repair", requestId, rawTruncated);
@@ -1150,7 +1185,7 @@ serve(async (req) => {
         }
       }
 
-    // Учёт по фичам для лимитов Free (Plan/Help не тратят chat_recipe)
+    // Учёт по фичам для лимитов Free (Plan/Help не тратят chat_recipe) (Plan/Help не тратят chat_recipe)
     if (userId && supabase) {
       if (type === "sos_consultant") {
         await supabase.from("usage_events").insert({ user_id: userId, member_id: null, feature: "help" });
@@ -1224,7 +1259,14 @@ serve(async (req) => {
     }
 
     let savedRecipeId: string | null = null;
-    if (responseRecipes.length > 0 && userId && supabase && !fromPlanReplace) {
+    if (responseRecipes.length > 0 && !fromPlanReplace) {
+      if (!userId || !authHeader) {
+        safeLog(JSON.stringify({ tag: "auth_failed", step: "save_recipe", requestId }));
+        return new Response(
+          JSON.stringify({ error: "unauthorized", message: "Требуется авторизация для сохранения рецепта." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       const validatedRecipe = responseRecipes[0] as RecipeJson;
       const status = subscriptionStatus as string;
       let chefAdviceToSave: string | null = validatedRecipe.chefAdvice ?? null;
@@ -1244,60 +1286,69 @@ serve(async (req) => {
         savedAdvice: adviceToSave != null && adviceToSave.length > 0,
         savedChefAdvice: chefAdviceToSave != null && chefAdviceToSave.length > 0,
       }));
-      try {
-        const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
-        const rawSteps = Array.isArray(validatedRecipe.steps) ? validatedRecipe.steps : [];
-        const stepsPayload = rawSteps.length >= 1
-          ? (rawSteps.length >= 3
-            ? rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 }))
-            : [
-                ...rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 })),
-                ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг по инструкции.", step_number: rawSteps.length + i + 1 })),
-              ])
-          : [{ instruction: "Шаг 1", step_number: 1 }, { instruction: "Шаг 2", step_number: 2 }, { instruction: "Шаг 3", step_number: 3 }];
-        const rawIngredients = Array.isArray(validatedRecipe.ingredients) ? validatedRecipe.ingredients : [];
-        const ingredientsPayload = rawIngredients.length >= 3
-          ? rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
-              const nameStr = typeof ing === "string" ? ing : ing.name;
-              const displayText = typeof ing === "string" ? ing : (ing.displayText ?? ing.name);
-              const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
-              return { name: nameStr, display_text: displayText, canonical_amount: canonical?.amount ?? null, canonical_unit: canonical?.unit ?? null };
-            })
-          : [
-              ...rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
+      const supabaseUser = SUPABASE_URL && SUPABASE_ANON_KEY && authHeader
+        ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            global: { headers: { Authorization: authHeader } },
+          })
+        : null;
+      if (supabaseUser) {
+        const tDbStart = Date.now();
+        try {
+          const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
+          const rawSteps = Array.isArray(validatedRecipe.steps) ? validatedRecipe.steps : [];
+          const stepsPayload = rawSteps.length >= 1
+            ? (rawSteps.length >= 3
+              ? rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 }))
+              : [
+                  ...rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 })),
+                  ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг по инструкции.", step_number: rawSteps.length + i + 1 })),
+                ])
+            : [{ instruction: "Шаг 1", step_number: 1 }, { instruction: "Шаг 2", step_number: 2 }, { instruction: "Шаг 3", step_number: 3 }];
+          const rawIngredients = Array.isArray(validatedRecipe.ingredients) ? validatedRecipe.ingredients : [];
+          const ingredientsPayload = rawIngredients.length >= 3
+            ? rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
                 const nameStr = typeof ing === "string" ? ing : ing.name;
                 const displayText = typeof ing === "string" ? ing : (ing.displayText ?? ing.name);
                 const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
                 return { name: nameStr, display_text: displayText, canonical_amount: canonical?.amount ?? null, canonical_unit: canonical?.unit ?? null };
-              }),
-              ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({ name: `Ингредиент ${rawIngredients.length + i + 1}`, display_text: null, canonical_amount: null, canonical_unit: null })),
-            ];
-        const payload = canonicalizeRecipePayload({
-          user_id: userId,
-          member_id: memberIdForRecipe,
-          child_id: memberIdForRecipe,
-          source: "chat_ai",
-          mealType: validatedRecipe.mealType ?? null,
-          tags: (validatedRecipe as { tags?: string[] }).tags ?? null,
-          title: validatedRecipe.title ?? "Рецепт",
-          description: validatedRecipe.description ?? null,
-          cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
-          chef_advice: chefAdviceToSave,
-          advice: adviceToSave,
-          steps: stepsPayload,
-          ingredients: ingredientsPayload,
-          sourceTag: "chat",
-          servings: (validatedRecipe as { servings?: number }).servings ?? 1,
-        });
-        const { data: recipeId, error: rpcErr } = await supabase.rpc("create_recipe_with_steps", { payload });
-        if (rpcErr) throw rpcErr;
-        savedRecipeId = recipeId ?? null;
-        if (DEBUG && savedRecipeId) {
-          const idSuffix = savedRecipeId.slice(-6);
-          safeLog("[DEBUG] saved recipe source=chat_ai id=...", idSuffix);
+              })
+            : [
+                ...rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
+                  const nameStr = typeof ing === "string" ? ing : ing.name;
+                  const displayText = typeof ing === "string" ? ing : (ing.displayText ?? ing.name);
+                  const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
+                  return { name: nameStr, display_text: displayText, canonical_amount: canonical?.amount ?? null, canonical_unit: canonical?.unit ?? null };
+                }),
+                ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({ name: `Ингредиент ${rawIngredients.length + i + 1}`, display_text: null, canonical_amount: null, canonical_unit: null })),
+              ];
+          const payload = canonicalizeRecipePayload({
+            user_id: userId,
+            member_id: memberIdForRecipe,
+            child_id: memberIdForRecipe,
+            source: "chat_ai",
+            mealType: validatedRecipe.mealType ?? null,
+            tags: (validatedRecipe as { tags?: string[] }).tags ?? null,
+            title: validatedRecipe.title ?? "Рецепт",
+            description: validatedRecipe.description ?? null,
+            cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
+            chef_advice: chefAdviceToSave,
+            advice: adviceToSave,
+            steps: stepsPayload,
+            ingredients: ingredientsPayload,
+            sourceTag: "chat",
+            servings: (validatedRecipe as { servings?: number }).servings ?? 1,
+          });
+          const { data: recipeId, error: rpcErr } = await supabaseUser.rpc("create_recipe_with_steps", { payload });
+          if (rpcErr) throw rpcErr;
+          savedRecipeId = recipeId ?? null;
+          if (DEBUG && savedRecipeId) {
+            const idSuffix = savedRecipeId.slice(-6);
+            safeLog("[DEBUG] saved recipe source=chat_ai id=...", idSuffix);
+          }
+        } catch (err) {
+          safeWarn("Failed to save recipe to DB, continuing without recipe_id:", err instanceof Error ? err.message : err);
         }
-      } catch (err) {
-        safeWarn("Failed to save recipe to DB, continuing without recipe_id:", err instanceof Error ? err.message : err);
+        logPerf("db_insert", tDbStart, requestId);
       }
     }
 
@@ -1314,6 +1365,7 @@ serve(async (req) => {
     if (savedRecipeId) {
       responseBody.recipe_id = savedRecipeId;
     }
+    logPerf("total_ms", t0, requestId);
     return new Response(
       JSON.stringify(responseBody),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1322,6 +1374,7 @@ serve(async (req) => {
     const errRequestId = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? "";
     safeError("Error in deepseek-chat:", error);
     safeLog("[help]", { requestId: errRequestId, status: "error" });
+    logPerf("total_ms", t0, errRequestId);
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";
     return new Response(
       JSON.stringify({ error: "server_error", message }),
