@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.generate-plan]
 verify_jwt = false
+
+[functions.track-usage-event]
+verify_jwt = false

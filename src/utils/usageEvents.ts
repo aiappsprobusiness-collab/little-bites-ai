@@ -1,18 +1,21 @@
 /**
  * Аналитика trial flow и вирусности через usage_events.
  * Fire-and-forget: клиент не зависит от ответа edge.
+ * Singleton: cooldown 60s при 401/404/network, дедуп 2s по feature+page+entry_point.
  */
 
-import { SUPABASE_URL } from "@/integrations/supabase/client";
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
 import { supabase } from "@/integrations/supabase/client";
 
-const ANON_ID_KEY = "usage_anon_id";
-const SESSION_ID_KEY = "usage_session_id";
+const ANON_ID_KEY = "mr_anon_id";
+const SESSION_ID_KEY = "mr_session_id";
 const LAST_UTM_KEY = "last_touch_utm";
 const LAST_ENTRY_POINT_KEY = "last_touch_entry_point";
 const LAST_SHARE_CHANNEL_KEY = "last_touch_share_channel";
 const LAST_SHARE_REF_KEY = "last_touch_share_ref";
 const TRACK_EDGE_PATH = "/functions/v1/track-usage-event";
+const COOLDOWN_MS = 60_000;
+const DEDUP_MS = 2_000;
 
 function randomUuid(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -46,6 +49,14 @@ export function getOrCreateSessionId(): string {
   }
   return id;
 }
+
+/** Singleton: cooldown и дедуп, один раз лог при входе в cooldown. */
+const trackerState = {
+  cooldownUntil: 0,
+  lastDedupKey: "",
+  lastDedupTime: 0,
+  cooldownLogged: false,
+};
 
 export interface StoredUtm {
   utm_source?: string;
@@ -158,6 +169,7 @@ export interface TrackUsageEventOptions {
 /**
  * Отправить событие в usage_events (fire-and-forget).
  * Автоматически добавляет: anon_id, session_id, page, entry_point, utm, share_ref, share_channel в properties.
+ * Cooldown 60s при 401/404/network; дедуп 2s по feature+page+entry_point. apikey обязателен для anon.
  */
 export function trackUsageEvent(
   feature: string,
@@ -165,13 +177,28 @@ export function trackUsageEvent(
 ): void {
   if (!feature || typeof feature !== "string") return;
   const baseUrl = SUPABASE_URL?.replace(/\/$/, "");
-  if (!baseUrl) return;
+  const anonKey = SUPABASE_PUBLISHABLE_KEY;
+  if (!baseUrl || !anonKey) return;
 
-  const url = `${baseUrl}${TRACK_EDGE_PATH}`;
+  const now = Date.now();
+  const page = typeof window !== "undefined" ? window.location.pathname || "" : "";
+  const entryPoint = getStoredEntryPoint() ?? "";
+  const dedupKey = `${feature}|${page}|${entryPoint}`;
+
+  if (now < trackerState.cooldownUntil) return;
+  if (
+    trackerState.lastDedupKey === dedupKey &&
+    now - trackerState.lastDedupTime < DEDUP_MS
+  ) {
+    return;
+  }
+
+  if (now >= trackerState.cooldownUntil) trackerState.cooldownLogged = false;
+  trackerState.lastDedupKey = dedupKey;
+  trackerState.lastDedupTime = now;
+
   const anonId = getOrCreateAnonId();
   const sessionId = getOrCreateSessionId();
-  const page = typeof window !== "undefined" ? window.location.pathname || undefined : undefined;
-  const entryPoint = getStoredEntryPoint() ?? undefined;
   const utm = getStoredUtm() ?? undefined;
   const shareRef = getStoredShareRef() ?? undefined;
   const shareChannel = getStoredShareChannel() ?? undefined;
@@ -187,8 +214,8 @@ export function trackUsageEvent(
     anon_id: anonId,
     session_id: sessionId,
     member_id: options.memberId ?? null,
-    page: page ?? null,
-    entry_point: entryPoint ?? null,
+    page: page || null,
+    entry_point: entryPoint || null,
     utm: utm ?? null,
     properties,
   };
@@ -197,9 +224,12 @@ export function trackUsageEvent(
     console.debug("[usageEvents]", feature, body);
   }
 
+  const url = `${baseUrl}${TRACK_EDGE_PATH}`;
+
   supabase.auth.getSession().then(({ data: { session } }) => {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      apikey: anonKey,
     };
     if (session?.access_token) {
       headers.Authorization = `Bearer ${session.access_token}`;
@@ -209,9 +239,27 @@ export function trackUsageEvent(
       headers,
       body: JSON.stringify(body),
       keepalive: true,
-    }).catch(() => {
-      /* fire-and-forget: ignore */
-    });
+    })
+      .then((res) => {
+        if (!res.ok) {
+          trackerState.cooldownUntil = now + COOLDOWN_MS;
+          if (!trackerState.cooldownLogged) {
+            trackerState.cooldownLogged = true;
+            if (import.meta.env.DEV) {
+              console.warn("[usageEvents] track-usage-event failed, cooldown 60s:", res.status);
+            }
+          }
+        }
+      })
+      .catch(() => {
+        trackerState.cooldownUntil = now + COOLDOWN_MS;
+        if (!trackerState.cooldownLogged) {
+          trackerState.cooldownLogged = true;
+          if (import.meta.env.DEV) {
+            console.warn("[usageEvents] track-usage-event network error, cooldown 60s");
+          }
+        }
+      });
   });
 }
 

@@ -15,7 +15,7 @@ function jsonResponse(body: unknown, status: number) {
   });
 }
 
-/** Извлечь user_id из JWT (payload.sub) без верификации — только для атрибуции события. */
+/** Извлечь user_id из JWT (payload.sub) без верификации — только для атрибуции. Не возвращаем 401 при отсутствии/невалидном JWT. */
 function getUserIdFromAuthHeader(authHeader: string | null): string | null {
   if (!authHeader?.startsWith("Bearer ")) return null;
   const token = authHeader.slice(7).trim();
@@ -69,24 +69,33 @@ serve(async (req) => {
     try {
       body = (await req.json()) as TrackBody;
     } catch {
-      return jsonResponse({ ok: false }, 400);
+      return jsonResponse({ ok: false, error: "Invalid JSON" }, 400);
     }
 
     const feature = typeof body.feature === "string" ? body.feature.trim() : "";
     if (!feature) {
-      return jsonResponse({ ok: false }, 400);
+      return jsonResponse({ ok: false, error: "feature required" }, 400);
     }
 
     const authHeader = req.headers.get("Authorization");
     const userId = getUserIdFromAuthHeader(authHeader);
+    const hasAnonId = typeof body.anon_id === "string" && body.anon_id.trim().length > 0;
+    const hasSessionId = typeof body.session_id === "string" && body.session_id.trim().length > 0;
+    if (!userId && !hasAnonId && !hasSessionId) {
+      return jsonResponse(
+        { ok: false, error: "anon_id or session_id required when not authenticated" },
+        400
+      );
+    }
 
     const utm = body.utm ?? {};
-    const properties = body.properties != null && typeof body.properties === "object"
-      ? body.properties
-      : {};
+    const properties =
+      body.properties != null && typeof body.properties === "object"
+        ? body.properties
+        : {};
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
-    const { error } = await supabase.from("usage_events").insert({
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
+    const { error } = await supabaseAdmin.from("usage_events").insert({
       user_id: userId ?? null,
       member_id: body.member_id ?? null,
       feature,
