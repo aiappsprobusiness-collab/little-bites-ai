@@ -9,6 +9,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
+import { trackUsageEvent } from "@/utils/usageEvents";
 import { normalizeAllergyInput } from "@/utils/allergyAliases";
 import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
@@ -147,6 +148,7 @@ export function AddChildForm({
       return;
     }
 
+    trackUsageEvent("member_create_start");
     try {
       const newMember = await createMember({
         name: trimmedName,
@@ -155,6 +157,7 @@ export function AddChildForm({
         allergies,
         ...(hasAccess && { likes, dislikes }),
       });
+      trackUsageEvent("member_create_success", { properties: { member_id: newMember.id } });
       toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
       onSaved(newMember.id);
       resetForm();

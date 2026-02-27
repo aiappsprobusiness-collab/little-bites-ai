@@ -52,12 +52,23 @@ import { getRewrittenQueryIfFollowUp, deriveDishHint } from "@/utils/blockedFoll
 import type { BlockedMeta } from "@/types/chatBlocked";
 import { useAppStore } from "@/store/useAppStore";
 import { Textarea } from "@/components/ui/textarea";
+import { trackUsageEvent } from "@/utils/usageEvents";
 import { Progress } from "@/components/ui/progress";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
 const CHAT_HELP_TOOLTIP_SEEN_KEY = "chat_help_tooltip_seen";
 /** Порог (px) от низа скролла: если пользователь в пределах — автоскролл вниз при новых сообщениях. */
 const NEAR_BOTTOM_THRESHOLD = 120;
+
+function useChatOpenTrack() {
+  const location = useLocation();
+  const trackedRef = useRef(false);
+  useEffect(() => {
+    if (location.pathname !== "/chat" || trackedRef.current) return;
+    trackedRef.current = true;
+    trackUsageEvent("chat_open");
+  }, [location.pathname]);
+}
 
 /** Сменяющиеся надписи во время генерации рецепта (интервал 2.5 с), по аналогии с Планом. Нейтрально по возрасту (дети, подростки, взрослые). */
 const RECIPE_GENERATION_PHRASES = [
@@ -141,6 +152,7 @@ export type ChatMode = "recipes" | "help";
 
 export default function ChatPage() {
   const location = useLocation();
+  useChatOpenTrack();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const mode: ChatMode = (searchParams.get("mode") === "help" ? "help" : "recipes");
@@ -554,10 +566,12 @@ export default function ChatPage() {
     sendInProgressRef.current = true;
     if (!canGenerate && !isPremium) {
       sendInProgressRef.current = false;
+      useAppStore.getState().setPaywallReason("limit_chat");
       setShowPaywall(true);
       return;
     }
 
+    if (mode === "recipes") trackUsageEvent("chat_generate_click");
     setInput("");
     userNearBottomRef.current = true;
 
@@ -600,6 +614,7 @@ export default function ChatPage() {
           overrideMembers: members,
         });
         const rawMessage = (response?.message ?? "").trim() || "Не удалось получить ответ.";
+        trackUsageEvent("help_answer_received");
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
@@ -767,6 +782,7 @@ export default function ChatPage() {
       }
 
       if (!isBlockedResponse && !finalRecipe) {
+        trackUsageEvent("chat_generate_error", { properties: { message: FAILED_MESSAGE } });
         streamDoneForMessageIdRef.current = assistantMessageId;
         setMessages((prev) =>
           prev.map((m) =>
@@ -787,6 +803,7 @@ export default function ChatPage() {
           description: FAILED_MESSAGE,
         });
       } else if (finalRecipe && !isBlockedResponse) {
+        trackUsageEvent("chat_generate_success");
         // Один setMessages с рецептом и recipeId — без второго обновления после тоста «Рецепты сохранены», чтобы не было моргания
         let recipeIdForHistory: string | null = response?.recipe_id ?? null;
         let savedRecipesCount = 0;
@@ -880,14 +897,17 @@ export default function ChatPage() {
         toast({ title: "Остановлено" });
         return;
       }
+      trackUsageEvent("chat_generate_error", { properties: { message: err?.message ?? "Unknown error" } });
       const limitPayload = (err as { payload?: { feature: string } })?.payload;
       if (err?.message === "LIMIT_REACHED" && limitPayload?.feature) {
+        useAppStore.getState().setPaywallReason("limit_chat");
         useAppStore.getState().setPaywallCustomMessage(
           `${getLimitReachedTitle()}\n\n${getLimitReachedMessage(limitPayload.feature as LimitReachedFeature)}`
         );
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
       } else if (err?.message === "usage_limit_exceeded") {
+        useAppStore.getState().setPaywallReason("limit_chat");
         useAppStore.getState().setPaywallCustomMessage(
           `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("chat_recipe")}`
         );

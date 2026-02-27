@@ -44,6 +44,10 @@ export interface MealCardProps {
   hint?: string | null;
   /** Optional: pass to Recipe page for header meta */
   mealTypeLabel?: string;
+  /** Plan slot context: for ingredient overrides (save to meal_plans_v2.meals). */
+  plannedDate?: string;
+  /** Member id for plan row (null = family). */
+  planMemberId?: string | null;
   /** When true (e.g. Plan day view): slot header shown outside; still shows title + cookTime + chips when provided */
   compact?: boolean;
   className?: string;
@@ -76,6 +80,8 @@ export function MealCard({
   ingredientTotalCount,
   hint,
   mealTypeLabel,
+  plannedDate,
+  planMemberId,
   compact = false,
   className,
   isLoadingPreviews = false,
@@ -103,7 +109,13 @@ export function MealCard({
 
   const handleClick = () => {
     navigate(`/recipe/${recipeId}`, {
-      state: { fromMealPlan: true, mealTypeLabel: mealTypeLabel ?? meta.label },
+      state: {
+        fromMealPlan: true,
+        mealTypeLabel: mealTypeLabel ?? meta.label,
+        plannedDate: plannedDate ?? undefined,
+        mealType,
+        memberId: planMemberId ?? undefined,
+      },
     });
   };
 

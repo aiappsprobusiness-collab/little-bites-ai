@@ -45,6 +45,8 @@ export interface ShareRecipeInput {
   /** Тип приёма пищи: для строки 🥣 Завтрак / 🍲 Обед и т.д. Может быть уже локализованная строка (mealTypeLabel) или ключ. */
   mealTypeLabel?: string | null;
   meal_type?: MealTypeKey | string | null;
+  /** URL для подписи (с ep/ch/sr для вирусности). Если не передан — используется BASE_URL. */
+  shareUrl?: string | null;
 }
 
 function getMealLine(params: Pick<ShareRecipeInput, "mealTypeLabel" | "meal_type">): string | null {
@@ -106,6 +108,7 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
     chefAdvice,
     mealTypeLabel,
     meal_type,
+    shareUrl,
   } = params;
 
   const lines: string[] = [];
@@ -157,9 +160,10 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
     lines.push(String(chefAdvice).trim());
   }
 
-  // 8) Подпись + ссылка
+  // 8) Подпись + ссылка (shareUrl с ep/ch/sr для аналитики вирусности)
   const body = lines.join("\n");
-  const footer = `${SHARE_SIGNATURE_LINE}\n${BASE_URL}`;
+  const linkUrl = shareUrl && shareUrl.trim() ? shareUrl.trim() : BASE_URL;
+  const footer = `${SHARE_SIGNATURE_LINE}\n${linkUrl}`;
   return `${body}\n\n${footer}`;
 }
 

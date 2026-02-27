@@ -5,14 +5,23 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Loader2, ArrowLeft, Heart, Share2, CalendarPlus, Pencil, Trash2, Clock } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useMealPlans } from "@/hooks/useMealPlans";
 import { useMyRecipes } from "@/hooks/useMyRecipes";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { scaleIngredientDisplay } from "@/types/recipe";
-import { buildRecipeShareText } from "@/utils/shareRecipeText";
-import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
+import { applyIngredientOverrides, ingredientKey } from "@/types/ingredientOverrides";
+import { buildRecipeShareText, SHARE_APP_URL } from "@/utils/shareRecipeText";
+import {
+  trackUsageEvent,
+  generateShareRef,
+  getShareChannelFromContext,
+  getShortShareUrl,
+  saveShareRef,
+  getShareRecipeUrl,
+} from "@/utils/usageEvents";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
@@ -72,7 +81,13 @@ export default function RecipePage() {
   const [searchParams] = useSearchParams();
   const { getRecipeById } = useRecipes();
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
-  const state = location.state as { fromMealPlan?: boolean; mealTypeLabel?: string; memberId?: string } | null;
+  const state = location.state as {
+    fromMealPlan?: boolean;
+    mealTypeLabel?: string;
+    memberId?: string;
+    plannedDate?: string;
+    mealType?: string;
+  } | null;
 
   useEffect(() => {
     if (import.meta.env.DEV && searchParams.get("debugIngredients") === "1" && id && recipe) {
@@ -80,10 +95,33 @@ export default function RecipePage() {
       console.debug("[debugIngredients] recipe_id=", id, "recipe_title=", (recipe as { title?: string }).title, "recipe_ingredients (raw)=", raw);
     }
   }, [import.meta.env.DEV, searchParams, id, recipe]);
+
+  // Вирусность: приход по share-ссылке (ep=share_recipe)
+  useEffect(() => {
+    if (!id) return;
+    const ep = searchParams.get("ep");
+    const sr = searchParams.get("sr");
+    if (ep === "share_recipe" || sr) {
+      trackUsageEvent("share_landing_view", { properties: { recipe_id: id } });
+    }
+  }, [id, searchParams]);
   const fromMealPlan = state?.fromMealPlan;
   const mealTypeLabel = state?.mealTypeLabel;
   const stateMemberId = state?.memberId ?? null;
+  const plannedDate = state?.plannedDate ?? null;
+  const planMealType = state?.mealType ?? null;
   const favoriteMemberId = stateMemberId ?? (selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : null);
+
+  const planMemberId = state?.memberId ?? selectedMemberId ?? null;
+  const planDate = fromMealPlan && plannedDate ? new Date(plannedDate + "T12:00:00") : new Date();
+  const { data: dayPlans } = useMealPlans(planMemberId ?? undefined).getMealPlansByDate(planDate);
+  const planSlot = fromMealPlan && plannedDate && planMealType
+    ? dayPlans?.find((p) => p.planned_date === plannedDate && p.meal_type === planMealType)
+    : null;
+  const slotOverrides = planSlot?.ingredient_overrides ?? [];
+  const slotServings = planSlot?.servings;
+
+  const { updateSlotIngredientOverrides } = useMealPlans(planMemberId ?? undefined);
 
   const { isFavorite: isFavoriteFn, toggleFavorite } = useFavorites("all");
   const isFavorite = !!id && isFavoriteFn(id, favoriteMemberId);
@@ -117,6 +155,21 @@ export default function RecipePage() {
   };
   const handleShare = async () => {
     if (!id || !recipe) return;
+    const shareRef = generateShareRef();
+    const usedNativeShare = typeof navigator !== "undefined" && !!navigator.share;
+    const channel = getShareChannelFromContext(usedNativeShare, false);
+    const saved = await saveShareRef(id, shareRef);
+    const shareUrl = saved
+      ? getShortShareUrl(shareRef, SHARE_APP_URL)
+      : getShareRecipeUrl(id, channel, shareRef, SHARE_APP_URL);
+    trackUsageEvent("share_click", {
+      properties: {
+        recipe_id: id,
+        share_ref: shareRef,
+        channel,
+        source_screen: "recipe_page",
+      },
+    });
     const recipeDisplay = recipe as RecipeDisplayIngredients & {
       title?: string;
       description?: string;
@@ -137,12 +190,14 @@ export default function RecipePage() {
       chefAdvice: recipeDisplay.chefAdvice ?? recipeDisplay.chef_advice ?? null,
       mealTypeLabel: mealTypeLabel ?? null,
       meal_type: recipeDisplay.meal_type ?? null,
+      shareUrl,
     });
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({
           title: recipeDisplay.title ?? "Рецепт",
           text: shareText,
+          url: shareUrl,
         });
         toast({ title: "Рецепт отправлен" });
       } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
@@ -160,33 +215,42 @@ export default function RecipePage() {
 
   const [overrides, setOverrides] = useState<IngredientOverrides>({});
   const [servingsSelected, setServingsSelected] = useState(1);
-  const [substituteSheet, setSubstituteSheet] = useState<{
-    open: boolean;
-    index: number;
-    ing: IngredientItem;
-  } | null>(null);
 
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
 
-  // Синхронизируем порции при смене рецепта: family-sized (servings_base >= 4) → default = servings_base, иначе servings_recommended
+  // Синхронизируем порции: из слота плана (from plan) или из рецепта
   useEffect(() => {
     if (!recipe?.id) return;
+    if (fromMealPlan && slotServings != null && slotServings >= 1) {
+      setServingsSelected(slotServings);
+      return;
+    }
     const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
     const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
     const defaultServings = base >= 4 ? base : recommended;
     setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
-  }, [recipe?.id]);
+  }, [recipe?.id, fromMealPlan, slotServings]);
 
-  // Масштабирование ингредиентов по выбранным порциям; зависимости без всего recipe — не пересчёт при refetch
+  const displayIngredients = recipe ? getDisplayIngredients(recipe as RecipeDisplayIngredients) : [];
+  const servingsBase = Math.max(1, (recipe as { servings_base?: number | null })?.servings_base ?? 1);
+  const servingMultiplier = servingsSelected / servingsBase;
+
+  const planApplied = useMemo(() => {
+    if (!fromMealPlan || !recipe || displayIngredients.length === 0) return null;
+    return applyIngredientOverrides(displayIngredients, slotOverrides, servingMultiplier, servingsBase);
+  }, [fromMealPlan, recipe?.id, displayIngredients, slotOverrides, servingMultiplier, servingsBase]);
+
+  const ingredientsForChips = fromMealPlan && planApplied ? planApplied.displayItems : displayIngredients;
+  const keysForDisplayItems = planApplied?.keysForDisplayItems ?? [];
+  const keysByIndex = planApplied?.keysByIndex ?? displayIngredients.map((ing, i) => ingredientKey(ing as { name?: string } & Record<string, unknown>, i));
+
   const scaledOverrides: IngredientOverrides = useMemo(() => {
-    if (!recipe) return {};
-    const displayIngredients = getDisplayIngredients(recipe as RecipeDisplayIngredients);
-    const servingsBase = Math.max(1, (recipe as { servings_base?: number | null }).servings_base ?? 1);
+    if (!recipe || fromMealPlan) return {};
     const multiplier = servingsSelected / servingsBase;
     if (multiplier === 1) return {};
     return Object.fromEntries(displayIngredients.map((ing, i) => [i, scaleIngredientDisplay(ing, multiplier)])) as IngredientOverrides;
-  }, [recipe?.id, servingsSelected, recipe?.servings_base ?? 1, recipe?.servings_recommended ?? 1, ingredientsSignature]);
+  }, [recipe?.id, servingsSelected, servingsBase, ingredientsSignature, fromMealPlan]);
 
   const backButton = (
     <motion.button
@@ -237,7 +301,6 @@ export default function RecipePage() {
     servings_recommended?: number | null;
   };
   const isUserCustom = recipeDisplay.source === "user_custom";
-  const displayIngredients = getDisplayIngredients(recipeDisplay);
   const steps = recipeDisplay.steps ?? [];
   const chefAdvice = recipeDisplay.chefAdvice ?? (recipeDisplay as { chef_advice?: string | null }).chef_advice;
   const advice = recipeDisplay.advice ?? (recipeDisplay as { advice?: string | null }).advice;
@@ -396,12 +459,17 @@ export default function RecipePage() {
         {/* Ингредиенты: нижние секции — 24px как раньше */}
         <IngredientChips
           className="mt-6"
-          ingredients={displayIngredients}
-          overrides={overrides}
-          scaledOverrides={scaledOverrides}
+          ingredients={ingredientsForChips}
+          overrides={fromMealPlan ? {} : overrides}
+          scaledOverrides={fromMealPlan ? undefined : scaledOverrides}
           variant="full"
           showSubstituteButton
-          onSubstituteClick={isFree ? undefined : (index, ing) => setSubstituteSheet({ open: true, index, ing: ing as IngredientItem })}
+          onSubstituteClick={() => {
+            toast({
+              title: "Скоро будет доступно",
+              description: "Замена ингредиентов в разработке. Мы дорабатываем эту функцию для вас.",
+            });
+          }}
           onLockClick={isFree ? () => {
             setPaywallCustomMessage("Замена ингредиентов доступна в Premium. Попробуйте Trial или оформите подписку.");
             setShowPaywall(true);
@@ -416,18 +484,6 @@ export default function RecipePage() {
 
         <RecipeSteps steps={steps} className="mt-6" />
 
-        <IngredientSubstituteSheet
-          open={!!substituteSheet?.open}
-          onOpenChange={(open) => setSubstituteSheet((s) => (s ? { ...s, open } : null))}
-          ingredientName={substituteSheet?.ing.name ?? ""}
-          substituteFromDb={substituteSheet?.ing.substitute}
-          onSelect={(replacement) => {
-            if (substituteSheet != null) {
-              setOverrides((prev) => ({ ...prev, [substituteSheet.index]: replacement }));
-              toast({ title: "Ингредиент заменён" });
-            }
-          }}
-        />
       </div>
 
       {id && recipe && (

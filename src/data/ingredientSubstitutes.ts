@@ -91,26 +91,42 @@ const DICT: Record<string, SubstituteOption[]> = {
   ],
 };
 
-/** Получить до 3 вариантов замены по названию ингредиента. */
-export function getSubstituteOptions(ingredientName: string, substituteFromDb?: string | null): SubstituteOption[] {
+/** Варианты «пропустить» / «уменьшить количество» не считаются аналогами для swap. */
+const ACTION_OPTIONS = new Set(["пропустить", "уменьшить количество"]);
+
+function isRealSubstitute(opt: SubstituteOption): boolean {
+  return !ACTION_OPTIONS.has(opt.option.trim().toLowerCase());
+}
+
+/**
+ * Получить только реальные аналоги из словаря или БД (без fallback).
+ * Для ингредиентов без аналогов (например морковь) вернёт [].
+ */
+export function getRealSubstituteOptions(ingredientName: string, substituteFromDb?: string | null): SubstituteOption[] {
+  let raw: SubstituteOption[];
   if (typeof substituteFromDb === "string" && substituteFromDb.trim()) {
-    return parseSubstituteFromDb(substituteFromDb);
+    raw = parseSubstituteFromDb(substituteFromDb);
+  } else {
+    const name = ingredientName.trim().toLowerCase();
+    if (!name) return [];
+
+    if (DICT[name]) raw = DICT[name].slice(0, 3);
+    else {
+      const firstWord = name.split(/\s+/)[0] ?? name;
+      if (DICT[firstWord]) raw = DICT[firstWord].slice(0, 3);
+      else {
+        const found = Object.keys(DICT).find((key) => name.includes(key));
+        raw = found ? DICT[found].slice(0, 3) : [];
+      }
+    }
   }
-  const name = ingredientName.trim().toLowerCase();
-  if (!name) return getDefaultOptions();
+  return raw.filter(isRealSubstitute);
+}
 
-  // Точное совпадение
-  if (DICT[name]) return DICT[name].slice(0, 3);
-
-  // Частичное: ищем по первому слову или ключу
-  const firstWord = name.split(/\s+/)[0] ?? name;
-  if (DICT[firstWord]) return DICT[firstWord].slice(0, 3);
-
-  // Поиск ключа, который содержится в названии
-  for (const key of Object.keys(DICT)) {
-    if (name.includes(key)) return DICT[key].slice(0, 3);
-  }
-
+/** Получить до 3 вариантов замены по названию ингредиента (с fallback для обратной совместимости). */
+export function getSubstituteOptions(ingredientName: string, substituteFromDb?: string | null): SubstituteOption[] {
+  const real = getRealSubstituteOptions(ingredientName, substituteFromDb);
+  if (real.length > 0) return real;
   return getDefaultOptions();
 }
 

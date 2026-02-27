@@ -555,6 +555,12 @@ export type Database = {
         Update: { id?: string; title?: string; description?: string; content?: string; category?: string | null; is_premium?: boolean; cover_image_url?: string | null; age_category?: string | null }
         Relationships: []
       }
+      share_refs: {
+        Row: { id: string; share_ref: string; recipe_id: string; created_at: string }
+        Insert: { id?: string; share_ref: string; recipe_id: string; created_at?: string }
+        Update: { id?: string; share_ref?: string; recipe_id?: string; created_at?: string }
+        Relationships: [{ foreignKeyName: "share_refs_recipe_id_fkey"; columns: ["recipe_id"]; isOneToOne: false; referencedRelation: "recipes"; referencedColumns: ["id"] }]
+      }
     }
     Views: {
       [_ in never]: never

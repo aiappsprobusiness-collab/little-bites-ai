@@ -10,6 +10,8 @@ export interface IngredientItem {
   name: string;
   /** Готовый текст для UI. Приоритет над name+amount+unit. */
   display_text?: string | null;
+  /** Название для агрегации в списке покупок (нормализованное). */
+  canonical_name?: string | null;
   /** Количество в канонических единицах (г/мл) для списка покупок. */
   canonical_amount?: number | null;
   canonical_unit?: IngredientCanonicalUnit | null;

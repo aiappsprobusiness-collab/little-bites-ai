@@ -4,12 +4,22 @@ import { useAuth } from './useAuth';
 import { formatLocalDate } from '@/utils/dateUtils';
 import { isDateInRollingRange } from '@/utils/dateRange';
 import type { MealPlansV2Row, MealPlansV2Insert, MealPlansV2Update } from '@/integrations/supabase/types-v2';
+import type { IngredientOverrideEntry } from '@/types/ingredientOverrides';
 
 const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'] as const;
 type MealType = (typeof MEAL_SLOTS)[number];
 
-/** V2: one row per day; meals = { breakfast?: { recipe_id, title?, plan_source? }, ... } */
-type MealsJson = Record<string, { recipe_id?: string; title?: string; plan_source?: "pool" | "ai" } | undefined>;
+/** Slot in meals jsonb: recipe_id, title, servings, ingredient_overrides (plan-only, never in recipes table). */
+export interface MealSlotJson {
+  recipe_id?: string;
+  title?: string;
+  plan_source?: "pool" | "ai";
+  servings?: number;
+  ingredient_overrides?: IngredientOverrideEntry[];
+}
+
+/** V2: one row per day; meals = { breakfast?: MealSlotJson, ... } */
+type MealsJson = Record<string, MealSlotJson | undefined>;
 
 /** Expanded item for UI compatibility: one "row" per meal slot (like old meal_plans). */
 export interface MealPlanItemV2 {
@@ -27,6 +37,10 @@ export interface MealPlanItemV2 {
   isStarter?: boolean;
   /** 'pool' = из БД (pool-first), 'ai' = сгенерировано AI. Для debug-бейджа DB/AI. */
   plan_source?: "pool" | "ai";
+  /** Порции для слота (из assign_recipe_to_plan_slot / UI). */
+  servings?: number;
+  /** Замены ингредиентов только для этого слота (не в БД рецептов). */
+  ingredient_overrides?: IngredientOverrideEntry[];
 }
 
 function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
@@ -44,6 +58,8 @@ function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
       child_id: row.member_id,
       member_id: row.member_id,
       plan_source: slot.plan_source,
+      servings: slot.servings,
+      ingredient_overrides: slot.ingredient_overrides,
     });
   }
   return result;
@@ -205,9 +221,14 @@ export function useMealPlans(
       const { data: existing } = await existingQuery.maybeSingle();
       const existingRow = existing as unknown as { id: string; meals?: MealsJson } | null;
       const currentMeals = (existingRow?.meals ?? {}) as MealsJson;
+      const existingSlot = currentMeals[mealType];
       const newMeals = {
         ...currentMeals,
-        [mealType]: { recipe_id: payload.recipe_id, title: payload.title ?? undefined },
+        [mealType]: {
+          ...existingSlot,
+          recipe_id: payload.recipe_id,
+          title: payload.title ?? undefined,
+        },
       };
 
       if (existingRow?.id) {
@@ -285,6 +306,50 @@ export function useMealPlans(
         .update({ meals })
         .eq('id', rowId);
       if (updateError) throw updateError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+    },
+  });
+
+  /** Обновить только ingredient_overrides слота (planned_date + member_id + meal_type). Не трогает recipes/recipe_ingredients. */
+  const updateSlotIngredientOverrides = useMutation({
+    mutationFn: async (params: {
+      planned_date: string;
+      member_id: string | null;
+      meal_type: MealType;
+      ingredient_overrides: IngredientOverrideEntry[];
+    }) => {
+      if (!user) throw new Error('User not authenticated');
+      let rowQuery = supabase
+        .from('meal_plans_v2')
+        .select('id, meals')
+        .eq('user_id', user.id)
+        .eq('planned_date', params.planned_date);
+      if (params.member_id == null) {
+        rowQuery = rowQuery.is('member_id', null);
+      } else {
+        rowQuery = rowQuery.eq('member_id', params.member_id);
+      }
+      const { data: row, error: fetchErr } = await rowQuery.maybeSingle();
+      if (fetchErr || !row) throw new Error('Plan row not found');
+      const meals = { ...((row as { meals?: MealsJson }).meals ?? {}) } as MealsJson;
+      const slot = meals[params.meal_type];
+      const newSlot: MealSlotJson = {
+        ...slot,
+        recipe_id: slot?.recipe_id,
+        title: slot?.title,
+        plan_source: slot?.plan_source,
+        servings: slot?.servings,
+        ingredient_overrides: params.ingredient_overrides,
+      };
+      (meals as Record<string, MealSlotJson>)[params.meal_type] = newSlot;
+      const { error: updateErr } = await supabase
+        .from('meal_plans_v2')
+        .update({ meals })
+        .eq('id', (row as { id: string }).id);
+      if (updateErr) throw updateErr;
+      return row as unknown as MealPlansV2Row;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
@@ -430,6 +495,7 @@ export function useMealPlans(
     getMealPlanRowExists,
     createMealPlan: createMealPlan.mutateAsync,
     updateMealPlan: updateMealPlan.mutateAsync,
+    updateSlotIngredientOverrides: updateSlotIngredientOverrides.mutateAsync,
     deleteMealPlan: deleteMealPlan.mutateAsync,
     clearWeekPlan: clearWeekPlan.mutateAsync,
     markAsCompleted: markAsCompleted.mutateAsync,

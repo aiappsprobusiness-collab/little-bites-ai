@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Crown, Check, Heart } from "lucide-react";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
+import { trackUsageEvent } from "@/utils/usageEvents";
 // Единый источник цен с бэкендом (create-payment)
 import pricing from "../../../supabase/functions/create-payment/pricing.json";
 
@@ -41,14 +42,25 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
     isStartingTrial,
   } = useSubscription();
   const [pricingOption, setPricingOption] = useState<"month" | "year">("year");
+  const paywallReason = useAppStore((s) => s.paywallReason);
   /** Показывать форму оплаты, если нет доступа или активен trial (чтобы оформить подписку). */
   const showPayForm = !hasAccess || hasTrialAccess;
   /** Триал уже был использован и истёк — не показывать кнопку Trial */
   const trialUnavailable = trialUsed && !hasTrialAccess;
 
+  useEffect(() => {
+    if (isOpen) {
+      trackUsageEvent("paywall_view", {
+        properties: { paywall_reason: paywallReason ?? "unknown" },
+      });
+    }
+  }, [isOpen, paywallReason]);
+
   const handleStartTrial = async () => {
+    trackUsageEvent("paywall_primary_click");
     try {
       await startTrial();
+      trackUsageEvent("trial_started");
       onSubscribe?.();
       onClose();
     } catch (err) {
@@ -68,6 +80,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
   };
 
   const handleContinueFree = () => {
+    trackUsageEvent("paywall_secondary_click");
     onClose();
   };
 
@@ -122,10 +135,10 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
             {/* Title */}
             <div className="text-center mb-5">
               <h2 className="text-typo-title font-semibold mb-2 text-foreground">
-                Откройте полный функционал Mom Recipes
+                Продолжить без ограничений
               </h2>
               <p className="text-muted-foreground text-typo-muted leading-relaxed">
-                Персональные рецепты, планы питания и ИИ-помощник для всей семьи.
+                Открыть неделю, замены, чат и «Помощь маме» — чтобы меню собиралось само.
               </p>
             </div>
 
@@ -200,7 +213,7 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                     disabled={isStartingTrial}
                   >
                     <Heart className="w-5 h-5 mr-2" />
-                    {isStartingTrial ? "Активация…" : "Попробовать 3 дня бесплатно"}
+                    {isStartingTrial ? "Активация…" : "Включить Trial (полный доступ)"}
                   </Button>
                 )}
 
@@ -218,14 +231,14 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
                   {isStartingPayment ? "Перенаправление…" : `Продолжить с Premium — ${pricingOption === "month" ? `${pricing.monthRub} ₽/мес` : `${pricing.yearRub.toLocaleString("ru-RU")} ₽/год`}`}
                 </Button>
 
-                {/* CTA: Позже / Продолжить с Free (при лимите показываем «Позже») */}
+                {/* CTA: Позже / Остаться на Free (при лимите показываем «Позже») */}
                 <Button
                   variant="ghost"
                   size="lg"
                   className="w-full h-11 text-muted-foreground hover:text-foreground rounded-xl"
                   onClick={handleContinueFree}
                 >
-                  {paywallCustomMessage ? "Позже" : "Продолжить с Free"}
+                  {paywallCustomMessage ? "Позже" : "Остаться на Free"}
                 </Button>
               </>
             )}

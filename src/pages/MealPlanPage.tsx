@@ -67,6 +67,7 @@ function isPerf(): boolean {
 
 import { applyReplaceSlotToPlanCache } from "@/utils/planCache";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
+import { trackUsageEvent } from "@/utils/usageEvents";
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -169,6 +170,7 @@ export default function MealPlanPage() {
   const { hasAccess, subscriptionStatus, planInitialized, setPlanInitialized } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const isFree = !hasAccess;
   const statusBadgeLabel = subscriptionStatus === "premium" ? "Premium" : subscriptionStatus === "trial" ? "Триал" : "Free";
 
@@ -560,6 +562,16 @@ export default function MealPlanPage() {
 
   const planDebug = isPlanDebug();
 
+  const showNoProfile = members.length === 0 && !isMembersLoading;
+  const showEmptyFamily = isFamilyMode && members.length === 0 && !isMembersLoading;
+
+  const planViewDayTrackedRef = useRef(false);
+  useEffect(() => {
+    if (location.pathname !== "/meal-plan" || showNoProfile || showEmptyFamily || planViewDayTrackedRef.current) return;
+    planViewDayTrackedRef.current = true;
+    trackUsageEvent("plan_view_day");
+  }, [location.pathname, showNoProfile, showEmptyFamily]);
+
   /** Строка статуса под CTA: "N приёмов пищи" / "План на сегодня готов" / "Заполним день за 30 секунд" */
   const heroStatusText = useMemo(() => {
     const filledCount = dayMealPlans.filter((p) => p.recipe_id).length;
@@ -585,9 +597,6 @@ export default function MealPlanPage() {
     }
     return { dbCount: db, aiCount: ai };
   }, [dayMealPlans, previews]);
-
-  const showNoProfile = members.length === 0 && !isMembersLoading;
-  const showEmptyFamily = isFamilyMode && members.length === 0 && !isMembersLoading;
 
   if ((isPlanDebug() || isPerf()) && (typeof window !== "undefined")) {
     console.log("[PLAN state]", {
@@ -714,6 +723,7 @@ export default function MealPlanPage() {
                 disabled={isAnyGenerating || (isFree && todayIndex < 0)}
                 onClick={async () => {
                   if (isAnyGenerating) return;
+                  trackUsageEvent("plan_fill_day_click");
                   if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
                   setPoolUpgradeLoading(true);
                   try {
@@ -724,6 +734,7 @@ export default function MealPlanPage() {
                       day_key: selectedDayKey,
                       day_keys: dayKeys,
                     });
+                    trackUsageEvent("plan_fill_day_success");
                     await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                     const filled = result.filledSlotsCount ?? result.replacedCount;
                     const total = result.totalSlots ?? 4;
@@ -733,6 +744,7 @@ export default function MealPlanPage() {
                       toast({ title: "Заполнить день", description: `Подобрано: ${filled} из ${total}` });
                     }
                   } catch (e: unknown) {
+                    trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
                     const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
                     if (msg === "LIMIT_REACHED") {
                       /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
@@ -909,10 +921,12 @@ export default function MealPlanPage() {
                   disabled={isAnyGenerating || (isFree && todayIndex < 0)}
                   onClick={async () => {
                     if (isAnyGenerating) return;
+                    trackUsageEvent("plan_fill_day_click");
                     if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
                     setPoolUpgradeLoading(true);
                     try {
                       const result = await runPoolUpgrade({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: selectedDayKey, day_keys: dayKeys });
+                      trackUsageEvent("plan_fill_day_success");
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                       const filled = result.filledSlotsCount ?? result.replacedCount;
                       const total = result.totalSlots ?? 4;
@@ -922,6 +936,7 @@ export default function MealPlanPage() {
                         toast({ title: "Заполнить день", description: `Подобрано: ${filled} из ${total}` });
                       }
                     } catch (e: unknown) {
+                      trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
                       const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
                       if (msg === "LIMIT_REACHED") {
                         /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
@@ -965,6 +980,8 @@ export default function MealPlanPage() {
                       recipeTitle={recipe!.title}
                       recipeId={recipeId!}
                       mealTypeLabel={slot.label}
+                      plannedDate={selectedDayKey}
+                      planMemberId={mealPlanMemberId ?? null}
                       compact
                       isLoadingPreviews={isLoadingPreviews}
                       cookTimeMinutes={previews[recipeId!]?.cookTimeMinutes}

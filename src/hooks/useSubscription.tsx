@@ -227,6 +227,8 @@ export function useSubscription() {
   const startPayment = useMutation({
     mutationFn: async (plan: "month" | "year") => {
       if (!user) throw new Error("User not authenticated");
+      const { trackUsageEvent } = await import("@/utils/usageEvents");
+      trackUsageEvent("purchase_start", { properties: { plan } });
       const base =
         (typeof window !== "undefined" && window.location.origin) ||
         (import.meta.env.VITE_APP_URL as string) ||

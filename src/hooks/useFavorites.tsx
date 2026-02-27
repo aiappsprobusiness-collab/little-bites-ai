@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { safeError } from "@/utils/safeLogger";
 import { useAuth } from './useAuth';
 import { useAppStore } from '@/store/useAppStore';
+import { trackUsageEvent } from '@/utils/usageEvents';
 import type { RecipeSuggestion } from '@/services/deepseek';
 
 /** Рецепт в БД: в recipe_data JSONB сохраняются child_id/child_name. member_id в SavedFavorite — из favorites_v2 (для кого избранное). */
@@ -263,7 +264,11 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
         throw err;
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      trackUsageEvent(variables.isFavorite ? 'favorite_add' : 'favorite_remove', {
+        properties: { recipe_id: variables.recipeId },
+        memberId: variables.memberId,
+      });
       queryClient.invalidateQueries({ queryKey: ['favorites', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['recipe_previews'] });
     },

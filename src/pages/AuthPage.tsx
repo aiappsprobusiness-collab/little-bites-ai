@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useA2HSInstall } from "@/hooks/useA2HSInstall";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2, Download } from "lucide-react";
+import { trackUsageEvent } from "@/utils/usageEvents";
 
 const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
@@ -57,6 +58,10 @@ export default function AuthPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    trackUsageEvent("landing_view");
+  }, []);
+
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
@@ -69,30 +74,39 @@ export default function AuthPage() {
 
   const onLogin = async (data: LoginFormData) => {
     setIsLoading(true);
+    trackUsageEvent("auth_start");
     try {
       const { error } = await signIn(data.email, data.password);
       setIsLoading(false);
       if (error) {
+        trackUsageEvent("auth_error", { properties: { message: error.message } });
         toast({ variant: "destructive", title: "Ошибка входа", description: error.message || "Не удалось войти. Проверьте email и пароль." });
       } else {
+        trackUsageEvent("auth_success");
         navigate("/");
       }
     } catch (err) {
       setIsLoading(false);
+      trackUsageEvent("auth_error", { properties: { message: err instanceof Error ? err.message : "Произошла непредвиденная ошибка" } });
       toast({ variant: "destructive", title: "Ошибка входа", description: err instanceof Error ? err.message : "Произошла непредвиденная ошибка" });
     }
   };
 
   const onSignup = async (data: SignupFormData) => {
     setIsLoading(true);
+    trackUsageEvent("cta_start_click");
+    trackUsageEvent("auth_start");
     try {
       const { error } = await signUp(data.email, data.password, data.displayName);
       if (error) {
+        trackUsageEvent("auth_error", { properties: { message: error.message } });
         toast({ variant: "destructive", title: "Ошибка регистрации", description: error.message });
       } else {
+        trackUsageEvent("auth_success");
         toast({ title: "Регистрация успешна!", description: "Проверьте почту для подтверждения аккаунта" });
       }
     } catch (err) {
+      trackUsageEvent("auth_error", { properties: { message: err instanceof Error ? err.message : "Произошла непредвиденная ошибка" } });
       toast({ variant: "destructive", title: "Ошибка регистрации", description: err instanceof Error ? err.message : "Произошла непредвиденная ошибка" });
     } finally {
       setIsLoading(false);
@@ -117,10 +131,10 @@ export default function AuthPage() {
             MomRecipes 🌿
           </h1>
           <p className="text-base sm:text-lg font-medium text-foreground/90 leading-snug mb-1.5">
-            Умное питание для детей и всей семьи
+            Меню на сегодня за 1 минуту
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            От первого прикорма до семейных ужинов без стресса
+            Подберём блюда, рецепт и советы — без лишней болтовни.
           </p>
         </motion.div>
 
@@ -184,8 +198,8 @@ export default function AuthPage() {
         >
           <Card className="bg-white/90 backdrop-blur-xl border-0 rounded-[28px] sm:rounded-[32px] shadow-xl shadow-slate-200/50">
             <CardHeader className="text-center pb-5 sm:pb-6 px-4 sm:px-6 pt-6 sm:pt-7">
-              <CardTitle className="text-lg sm:text-xl font-semibold text-foreground/95">Начните заботиться о питании уже сегодня</CardTitle>
-              <CardDescription className="text-muted-foreground mt-1.5">Войдите или создайте аккаунт за 1 минуту</CardDescription>
+              <CardTitle className="text-lg sm:text-xl font-semibold text-foreground/95">Меню на сегодня за 1 минуту</CardTitle>
+              <CardDescription className="text-muted-foreground mt-1.5">Подберём блюда, рецепт и советы — без лишней болтовни.</CardDescription>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pt-0 pb-5 sm:pb-6">
               <Tabs defaultValue="login" className="w-full">
@@ -332,7 +346,7 @@ export default function AuthPage() {
                         disabled={isLoading}
                       >
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
-                        <span>Создать аккаунт</span>
+                        <span>Начать и собрать меню</span>
                       </Button>
                     </form>
                   </Form>

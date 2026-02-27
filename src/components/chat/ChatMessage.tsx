@@ -17,13 +17,20 @@ import {
 import { ingredientDisplayLabel, type IngredientItem } from "@/types/recipe";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
-import { IngredientSubstituteSheet } from "@/components/recipe/IngredientSubstituteSheet";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { HelpSectionCard, HelpWarningCard } from "@/components/help-ui";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { SHARE_APP_URL } from "@/utils/shareRecipeText";
 import { ChatRecipeCard } from "@/components/chat/ChatRecipeCard";
+import {
+  trackUsageEvent,
+  generateShareRef,
+  getShareChannelFromContext,
+  getShortShareUrl,
+  saveShareRef,
+  getShareRecipeUrl,
+} from "@/utils/usageEvents";
 
 const UUID_REGEX = /\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
 
@@ -165,11 +172,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const { toast } = useToast();
 
     const [ingredientOverrides, setIngredientOverrides] = useState<Record<number, string>>({});
-    const [substituteSheet, setSubstituteSheet] = useState<{
-      open: boolean;
-      idx: number;
-      ing: ParsedIngredient;
-    } | null>(null);
 
     const effectiveRecipe = forcePlainText ? null : (preParsedRecipe ?? null);
     const isRecipeParseFailure =
@@ -327,11 +329,34 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const handleShare = async () => {
       if (!shareText) return;
+      const rid = recipeId ?? undefined;
+      const shareRef = generateShareRef();
+      const usedNativeShare = typeof navigator !== "undefined" && !!navigator.share;
+      const channel = getShareChannelFromContext(usedNativeShare, false);
+      let shareUrl = SHARE_APP_URL;
+      if (rid) {
+        const saved = await saveShareRef(rid, shareRef);
+        shareUrl = saved
+          ? getShortShareUrl(shareRef, SHARE_APP_URL)
+          : getShareRecipeUrl(rid, channel, shareRef, SHARE_APP_URL);
+      }
+      trackUsageEvent("share_click", {
+        properties: {
+          ...(rid ? { recipe_id: rid } : {}),
+          share_ref: shareRef,
+          channel,
+          source_screen: "chat",
+        },
+      });
+      const textWithUrl = rid
+        ? `${shareText.replace(SHARE_APP_URL, shareUrl)}`
+        : shareText;
       try {
         if (typeof navigator !== "undefined" && navigator.share) {
           await navigator.share({
             title: effectiveRecipe?.title ?? "Рецепт",
-            text: shareText,
+            text: textWithUrl,
+            ...(rid ? { url: shareUrl } : {}),
           });
           toast({ title: "Поделиться", description: "Рецепт отправлен" });
         } else {
@@ -344,7 +369,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             });
             return;
           }
-          await navigator.clipboard.writeText(shareText);
+          await navigator.clipboard.writeText(textWithUrl);
           toast({ title: "Рецепт скопирован для отправки" });
         }
       } catch (e: any) {
@@ -393,18 +418,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   ageMonths={ageMonths}
                   showChefTip={showChefTip}
                   ingredientOverrides={ingredientOverrides}
-                  onSubstituteClick={(idx, ing) => setSubstituteSheet({ open: true, idx, ing })}
-                />
-                <IngredientSubstituteSheet
-                  open={!!substituteSheet?.open}
-                  onOpenChange={(open) => setSubstituteSheet((s) => (s ? { ...s, open } : null))}
-                  ingredientName={typeof substituteSheet?.ing === "string" ? substituteSheet.ing : (substituteSheet?.ing as IngredientWithSubstitute)?.name ?? ""}
-                  substituteFromDb={isIngredientObject(substituteSheet?.ing ?? null) ? (substituteSheet?.ing as IngredientWithSubstitute).substitute : undefined}
-                  onSelect={(replacement) => {
-                    if (substituteSheet != null) {
-                      setIngredientOverrides((prev) => ({ ...prev, [substituteSheet.idx]: replacement }));
-                      toast({ title: "Ингредиент заменён" });
-                    }
+                  onSubstituteClick={() => {
+                    toast({
+                      title: "Скоро будет доступно",
+                      description: "Замена ингредиентов в разработке. Мы дорабатываем эту функцию для вас.",
+                    });
                   }}
                 />
               </>

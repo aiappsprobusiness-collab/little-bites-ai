@@ -98,7 +98,7 @@ export default function ChildProfileEditPage() {
       const toAdd = parseTags(raw);
       if (!toAdd.length) return;
       if (activeAllergyCount >= limits.maxAllergiesPerProfile) {
-        setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+        setPaywallCustomMessage("Аллергии и исключения — в Trial");
         setShowPaywall(true);
         return;
       }
@@ -120,7 +120,7 @@ export default function ChildProfileEditPage() {
     },
     setActive: (index: number, active: boolean) => {
       if (!hasAccess && active) {
-        setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+        setPaywallCustomMessage("Аллергии и исключения — в Trial");
         setShowPaywall(true);
         return;
       }
@@ -205,7 +205,7 @@ export default function ChildProfileEditPage() {
       return;
     }
     if (activeAllergyCount > limits.maxAllergiesPerProfile) {
-      setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+      setPaywallCustomMessage("Аллергии и исключения — в Trial");
       setShowPaywall(true);
       return;
     }
@@ -347,10 +347,10 @@ export default function ChildProfileEditPage() {
                                 role="button"
                                 tabIndex={0}
                                 onClick={() => {
-                                  setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+                                  setPaywallCustomMessage("Аллергии и исключения — в Trial");
                                   setShowPaywall(true);
                                 }}
-                                onKeyDown={(e) => e.key === "Enter" && (setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium."), setShowPaywall(true))}
+                                onKeyDown={(e) => e.key === "Enter" && (setPaywallCustomMessage("Аллергии и исключения — в Trial"), setShowPaywall(true))}
                                 className="inline-flex items-center gap-1.5 h-8 rounded-full px-3 text-[13px] bg-amber-50 text-amber-800 cursor-pointer hover:bg-amber-100 border-0"
                               >
                                 <span className="truncate max-w-[120px]">{item.value}</span>
@@ -384,7 +384,7 @@ export default function ChildProfileEditPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setPaywallCustomMessage("Несколько аллергий на профиль доступны в Premium.");
+                          setPaywallCustomMessage("Аллергии и исключения — в Trial");
                           setShowPaywall(true);
                         }}
                         className="flex h-12 items-center gap-3 px-4 rounded-2xl border border-primary-border/60 bg-white hover:bg-muted/30 transition-colors w-full text-left"

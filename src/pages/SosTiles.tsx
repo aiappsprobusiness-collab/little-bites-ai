@@ -21,6 +21,7 @@ import { getTopicById } from "@/constants/sos";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { useAppStore } from "@/store/useAppStore";
 import { cn } from "@/lib/utils";
+import { trackUsageEvent } from "@/utils/usageEvents";
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -49,6 +50,10 @@ export default function SosTiles() {
     return allTopics.filter((t) => getTopicCategory(t.id) === topicFilter);
   }, [allTopics, topicFilter]);
 
+  useEffect(() => {
+    trackUsageEvent("help_open");
+  }, []);
+
   // Блокировка скролла фона при открытом sheet (мобильная)
   useEffect(() => {
     if (sheetOpen) {
@@ -67,6 +72,7 @@ export default function SosTiles() {
     const topicConfig = getSosTopicConfig(key);
     const topicMeta = getTopicById(key);
     if (topicConfig) {
+      trackUsageEvent("help_topic_open", { properties: { topic_id: topicConfig.id } });
       setSheetTopic({
         key: topicConfig.id,
         title: topicConfig.title,
@@ -77,6 +83,7 @@ export default function SosTiles() {
       setSheetOpen(true);
       navigate("/sos", { replace: true });
     } else if (topicMeta) {
+      trackUsageEvent("help_topic_open", { properties: { topic_id: topicMeta.id } });
       setSheetTopic({
         key: topicMeta.id,
         title: topicMeta.label,
@@ -95,6 +102,7 @@ export default function SosTiles() {
 
   const handleTopicSelect = (topic: SosTopicConfig) => {
     const locked = topic.requiredTier === "paid" && !hasAccess;
+    trackUsageEvent("help_topic_open", { properties: { topic_id: topic.id } });
     setSheetTopic({
       key: topic.id,
       title: topic.title,

@@ -1,11 +1,17 @@
 import { Link, useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle } from "lucide-react";
+import { trackUsageEvent } from "@/utils/usageEvents";
 
 export function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get("OrderId") ?? searchParams.get("order_id") ?? "";
+
+  useEffect(() => {
+    trackUsageEvent("purchase_success", { properties: orderId ? { order_id: orderId } : {} });
+  }, [orderId]);
 
   return (
     <MobileLayout>
@@ -35,7 +41,9 @@ export function PaymentSuccess() {
 export function PaymentFail() {
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get("OrderId") ?? searchParams.get("order_id") ?? "";
-
+  useEffect(() => {
+    trackUsageEvent("purchase_error", { properties: orderId ? { order_id: orderId } : {} });
+  }, [orderId]);
   return (
     <MobileLayout>
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">

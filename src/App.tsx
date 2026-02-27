@@ -24,6 +24,7 @@ import SosScenarioScreen from "./pages/SosScenarioScreen";
 import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
+import ShareRedirectPage from "./pages/ShareRedirectPage";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
@@ -36,6 +37,7 @@ import { Paywall } from "./components/subscription/Paywall";
 import { FavoritesLimitSheet } from "./components/plan/FavoritesLimitSheet";
 import { useAppStore } from "./store/useAppStore";
 import { useSubscription } from "./hooks/useSubscription";
+import { captureAttributionFromLocationOnce } from "./utils/usageEvents";
 
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
@@ -53,6 +55,13 @@ function AppHeightSync() {
       window.removeEventListener("resize", setHeight);
       window.removeEventListener("orientationchange", setHeight);
     };
+  }, []);
+  return null;
+}
+
+function AttributionCapture() {
+  useEffect(() => {
+    captureAttributionFromLocationOnce();
   }, []);
   return null;
 }
@@ -117,6 +126,7 @@ const App = () => (
       >
         <AuthProvider>
           <AppHeightSync />
+          <AttributionCapture />
           <LegacyCacheClear />
           <FamilyProvider>
             <Toaster />
@@ -128,6 +138,7 @@ const App = () => (
             <TrialSoftBanner />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
+              <Route path="/r/:shareRef" element={<ShareRedirectPage />} />
               <Route path="/" element={<Navigate to="/meal-plan" replace />} />
               <Route
                 path="/home"
