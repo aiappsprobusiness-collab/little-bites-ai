@@ -27,16 +27,18 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-function logPerf(step: string, start: number, requestId?: string): void {
-  console.log(JSON.stringify({
+function logPerf(step: string, start: number, requestId?: string, extra?: Record<string, number>): void {
+  const obj: Record<string, unknown> = {
     tag: "PERF",
     step,
     ms: Date.now() - start,
     requestId: requestId ?? undefined,
-  }));
+  };
+  if (extra) Object.assign(obj, extra);
+  console.log(JSON.stringify(obj));
 }
 
-/** Fail-safe: strip personal references from description/chef_advice/advice so recipe is reusable in pool. */
+/** Fail-safe: strip personal references from description/chefAdvice so recipe is reusable in pool. */
 function sanitizeRecipeText(text: string | null | undefined): string {
   if (text == null || typeof text !== "string") return text ?? "";
   const forbiddenPatterns = [
@@ -70,7 +72,7 @@ function sanitizeRecipeText(text: string | null | undefined): string {
   return result.replace(/\s+/g, " ").trim();
 }
 
-/** Fail-safe: strip meal/time mentions so description/chef_advice/advice are reusable for any meal tag. */
+/** Fail-safe: strip meal/time mentions so description/chefAdvice are reusable for any meal tag. */
 function sanitizeMealMentions(text: string | null | undefined): string {
   if (text == null || typeof text !== "string") return text ?? "";
   const patterns = [
@@ -902,7 +904,7 @@ serve(async (req) => {
     if (isRecipeRequest && userId && supabase) {
       recentTitleKeys = await fetchRecentTitleKeys(supabase, userId, memberId ?? null, targetIsFamily);
       if (recentTitleKeys.length > 0) {
-        recentTitleKeysLine = "Не повторять блюда или близкие варианты: " + recentTitleKeys.slice(0, 20).join(", ") + ".";
+        recentTitleKeysLine = "Не повторять: " + recentTitleKeys.slice(0, 12).join(", ") + ".";
       }
     }
 
@@ -963,7 +965,7 @@ serve(async (req) => {
       const maxTokensChat =
         type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
       const promptConfig = {
-        maxTokens: isRecipeRequest ? 1500 : maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
+        maxTokens: isRecipeRequest ? 900 : maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
       };
       const messagesForPayload = isRecipeRequest
         ? [{ role: "user" as const, content: userMessage }]
@@ -1060,7 +1062,11 @@ serve(async (req) => {
         );
       }
       assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
-      logPerf("parse_response", tParseStart, requestId);
+      logPerf("parse_response", tParseStart, requestId, {
+        prompt_chars: currentSystemPrompt.length,
+        user_chars: userMessage.length,
+        response_chars: assistantMessage.length,
+      });
       if (!assistantMessage) {
         return new Response(
           JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
@@ -1234,7 +1240,6 @@ serve(async (req) => {
       const recipe = responseRecipes[0] as RecipeJson;
       (recipe as Record<string, unknown>).description = sanitizeMealMentions(sanitizeRecipeText(recipe.description ?? ""));
       (recipe as Record<string, unknown>).chefAdvice = sanitizeMealMentions(sanitizeRecipeText(recipe.chefAdvice ?? ""));
-      (recipe as Record<string, unknown>).advice = sanitizeMealMentions(sanitizeRecipeText(recipe.advice ?? ""));
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
@@ -1270,20 +1275,11 @@ serve(async (req) => {
       const validatedRecipe = responseRecipes[0] as RecipeJson;
       const status = subscriptionStatus as string;
       let chefAdviceToSave: string | null = validatedRecipe.chefAdvice ?? null;
-      let adviceToSave: string | null = validatedRecipe.advice ?? null;
-      if (status === "free") {
-        chefAdviceToSave = null;
-      } else if (status === "trial" || status === "premium") {
-        adviceToSave = null;
-      } else {
-        chefAdviceToSave = null;
-        adviceToSave = null;
-      }
+      if (status === "free") chefAdviceToSave = null;
       safeLog(JSON.stringify({
         tag: "ADVICE_GATE",
         requestId,
         subStatus: status,
-        savedAdvice: adviceToSave != null && adviceToSave.length > 0,
         savedChefAdvice: chefAdviceToSave != null && chefAdviceToSave.length > 0,
       }));
       const supabaseUser = SUPABASE_URL && SUPABASE_ANON_KEY && authHeader
@@ -1332,7 +1328,7 @@ serve(async (req) => {
             description: validatedRecipe.description ?? null,
             cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
             chef_advice: chefAdviceToSave,
-            advice: adviceToSave,
+            advice: null,
             steps: stepsPayload,
             ingredients: ingredientsPayload,
             sourceTag: "chat",

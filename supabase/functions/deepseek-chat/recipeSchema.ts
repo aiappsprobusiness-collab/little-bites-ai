@@ -94,6 +94,7 @@ export function applyIngredientsFallbackHeuristic(
   }
 }
 
+/** Contract: title, description, ingredients[{name, amount}], steps[], cookingTime, mealType, servings, chefAdvice. No advice field. */
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(200),
@@ -101,7 +102,6 @@ export const RecipeJsonSchema = z.object({
   cookingTimeMinutes: z.number().int().min(1).max(240).optional(),
   ingredients: z.array(IngredientSchema).min(3, "at least 3 ingredients required"),
   steps: z.array(z.string().min(1)).min(1).max(7),
-  advice: z.string().nullable().optional(),
   chefAdvice: z.string().max(300).nullable().optional(),
   mealType: z.enum(["breakfast", "lunch", "snack", "dinner"]).optional(),
   servings: z.number().int().min(1).max(20).optional(),
@@ -162,7 +162,7 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
       return null;
     const p = parsed as Record<string, unknown> & {
       title?: string; description?: string; cookingTimeMinutes?: number; cookingTime?: number;
-      ingredients: unknown[]; steps: unknown[]; advice?: string; chefAdvice?: string; chef_advice?: string; chefAdviceText?: string; mealType?: string;
+      ingredients: unknown[]; steps: unknown[]; chefAdvice?: string; chef_advice?: string; chefAdviceText?: string; mealType?: string;
     };
     const cooking = p.cookingTimeMinutes ?? p.cookingTime;
     const normalized = {
@@ -196,7 +196,6 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
         .map((s: unknown) => String(s ?? "").trim())
         .filter((s) => s.length > 0)
         .slice(0, 7),
-      advice: p.advice ?? null,
       chefAdvice: (p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText) != null
         ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 300)
         : null,

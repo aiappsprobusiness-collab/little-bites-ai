@@ -60,99 +60,30 @@ export const SAFETY_RULES = `
 - СТИЛЬ: Экспертный нутрициолог. Без лишних слов.
 `;
 
-/** Strict JSON contract for single-recipe chat response. */
+/** Strict JSON contract for single-recipe chat response. Fields only: title, description, ingredients[{name,amount}], steps, cookingTime, mealType, servings, chefAdvice. No advice. */
 export const RECIPE_STRICT_JSON_CONTRACT = `
-Return ONLY valid JSON. No markdown, no text before or after, no explanation, no comments.
+Return ONLY valid JSON. No markdown, no text before or after. One object only.
 
 {
   "title": string,
   "description": string (max 200 chars),
-  "ingredients": [
-    { "name": string, "amount": string (MUST include quantity and unit, e.g. "150 g", "1 ст.л.", "2 шт.") }
-  ],
-  "steps": string[] (max 7 short steps),
+  "ingredients": [ { "name": string, "amount": string } ],
+  "steps": string[] (max 7),
   "cookingTime": number,
   "mealType": "breakfast" | "lunch" | "dinner" | "snack",
-  "servings": number (base serving count, usually 1),
-  "chefAdvice": string (max 300 chars — professional culinary tip about the dish only: taste, texture, technique, or serving; 1–2 sentences)
+  "servings": number,
+  "chefAdvice": string (max 300 chars, optional)
 }
 
-SERVINGS RULE: All ingredient amounts must be calculated for the base serving count (servings). Return "servings" in JSON (typically 1).
-
-INGREDIENTS RULE: Every ingredient MUST include amount and unit. No bare names.
-Use: "г" or "мл" for grams/ml; "шт." for pieces; "ч.л." / "ст.л." for spoons. Example: "Молоко — 200 мл", "Яйцо — 2 шт."
+INGREDIENTS: every item MUST have "amount" with quantity and unit (e.g. "200 мл", "2 шт.", "1 ст.л."). No bare names.
 `;
 
-/** CRITICAL: description, chef_advice, advice must be generic — recipes go to shared pool and are shown to other users. */
-export const RECIPE_GENERIC_FIELDS_RULE = `
-CRITICAL RULE: description, chef_advice, and advice MUST be completely generic.
-
-DO NOT mention:
-- child / baby / toddler / children
-- age (months, years)
-- allergies
-- user / member name
-- preferences
-- "your child" / "your baby" / "for this child"
-- "для ребёнка" / "для малыша" / "для детей"
-
-These fields must describe ONLY the dish itself, not who it is for.
-
-BAD examples:
-❌ "This is great for a 2 year old"
-❌ "Perfect for children with milk allergy"
-❌ "Ideal for your child"
-❌ "Отлично подходит для ребёнка 2 лет"
-❌ "Для детей с аллергией на молоко используйте..."
-
-GOOD examples:
-✅ "Rich in iron and protein" / "Богато железом и белком"
-✅ "Easy to digest and gentle on the stomach" / "Легко усваивается"
-✅ "Helps support healthy growth" / "Поддерживает здоровый рост"
-✅ "Используйте свежие ингредиенты для лучшего вкуса"
-
-description, chef_advice, advice must be reusable for ANY user.
-`;
-
-/** Совет от шефа (chefAdvice): только про само блюдо, без профиля/возраста/адаптаций. */
-export const RECIPE_CHEF_ADVICE_RULE = `
-CHEF ADVICE (chefAdvice) — СТРОГО только про блюдо:
-- 1–2 предложения.
-- Профессиональная кулинарная рекомендация: вкус, текстура, техника приготовления или подача.
-- НЕ упоминать: профиль, возраст, адаптации, диетические ограничения, детей, взрослых, изменение порций, «детскую порцию», «для малыша», «размять вилкой для ребёнка» и т.п.
-- Совет должен быть универсальным и относиться только к рецепту (как улучшить вкус, добиться нужной текстуры, подать, хранить).
-
-Плохо: «Для адаптации: размять вилкой, не солить детскую порцию, добавить масло для мягкости.»
-Хорошо: «Подавайте тефтели с рисом сразу после приготовления — так рис не размокает. Для сочности сбрызните готовое блюдо оливковым маслом.»
-`;
-
-/** CRITICAL: description, chef_advice, advice must NOT mention meal type — recipes can have multiple meal tags in pool. */
-export const RECIPE_MEAL_AGNOSTIC_RULE = `
-CRITICAL RULE: description, chef_advice, and advice MUST NOT mention any specific meal or time of day.
-
-DO NOT mention:
-- breakfast / lunch / dinner / snack
-- morning / evening
-- "perfect for breakfast" / "ideal for snack" / "great dinner option"
-- "на завтрак" / "на обед" / "на ужин" / "на перекус" / "для завтрака" / "для перекуса"
-
-These fields must describe ONLY:
-- nutrition
-- taste
-- texture
-- preparation tips
-
-They must be reusable for ANY meal type.
-
-BAD:
-❌ "Perfect for breakfast"
-❌ "Great snack option"
-❌ "Идеально на завтрак"
-
-GOOD:
-✅ "Provides steady energy" / "Даёт стабильную энергию"
-✅ "Easy to digest" / "Легко усваивается"
-✅ "Naturally sweet and gentle" / "Натурально сладкий, нежный вкус"
+/** Single short block: description and chefAdvice must be generic (no age/children/allergies/names/meal). One recipe, strict JSON. Ingredients always with amount+unit. */
+export const RECIPE_JSON_RULES = `
+[OUTPUT]
+- One recipe only. Strict JSON, no extra text.
+- description, chefAdvice: describe ONLY the dish (nutrition, taste, texture, tips). Do NOT mention: age, children, baby, toddler, allergies, user name, meal type or time of day ("на завтрак", "for breakfast"). Reusable for any user and any meal tag.
+- ingredients: every item with amount and unit (г, мл, шт., ст.л., ч.л.).
 `;
 
 /** Description variety: avoid template openings (e.g. "Нежное блюдо…"); vary beginnings; cap overuse of same adjective. */
@@ -238,25 +169,17 @@ ${SAFETY_RULES}
 
 [RECIPE TASK]
 ${RECIPE_STRICT_JSON_CONTRACT}
-${RECIPE_GENERIC_FIELDS_RULE}
-${RECIPE_CHEF_ADVICE_RULE}
-${RECIPE_MEAL_AGNOSTIC_RULE}
+${RECIPE_JSON_RULES}
 ${RECIPE_DESCRIPTION_VARIETY_RULE}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
-ИНГРЕДИЕНТЫ: каждый ингредиент ОБЯЗАТЕЛЬНО с количеством и единицей. Формат: { "name": "Название", "amount": "150 г" } или "2 шт.", "1 ст.л.". Запрещено указывать только название без количества. Для штук — "шт.", для ложек — "ч.л." / "ст.л.", для граммов/мл — "г" / "мл". ШАГИ: максимум 5 коротких шагов.
-Обязательно заполни поле advice (мини-совет, 1–2 предложения): короткий практический совет по приготовлению или подаче.
+ИНГРЕДИЕНТЫ: каждый с amount и единицей (г, мл, шт., ст.л., ч.л.). ШАГИ: макс. 5.
 `;
 
-/**
- * Жёсткая инструкция при выборе профиля СЕМЬЯ: полный рецепт в том же JSON-формате.
- * chefAdvice — только профессиональный совет по блюду (вкус, текстура, техника, подача). Адаптация для малыша — только в advice.
- */
+/** При выборе профиля СЕМЬЯ: один рецепт в том же JSON (title, description, ingredients, steps, cookingTime, mealType, servings, chefAdvice). */
 export const FAMILY_RECIPE_INSTRUCTION = `
-Если выбран профиль СЕМЬЯ: выдай один рецепт блюда, подходящего и взрослым, и ребёнку. Формат ответа — ТОЛЬКО валидный JSON (как в [RECIPE TASK]). Всегда ровно один рецепт, без списков и вариантов.
-Поле chefAdvice: только профессиональный кулинарный совет по самому блюду (1–2 предложения: вкус, текстура, техника или подача). Без упоминаний детей, возраста, адаптаций, порций.
-Поле advice: сюда при необходимости добавь блок «Адаптация для малыша»: как из этого блюда сделать безопасную порцию для ребёнка {{ageMonths}} мес (не солить, измельчить, убрать специи). Не меняй структуру JSON.
+Если выбран профиль СЕМЬЯ: один рецепт, подходящий и взрослым, и ребёнку. Формат — только валидный JSON как в [RECIPE TASK]. chefAdvice: только про блюдо (вкус, текстура, техника, подача), без возраста и адаптаций.
 `;
 
 /**
@@ -284,14 +207,12 @@ ${SAFETY_RULES}
 
 [RECIPE TASK]
 ${RECIPE_STRICT_JSON_CONTRACT}
-${RECIPE_GENERIC_FIELDS_RULE}
-${RECIPE_CHEF_ADVICE_RULE}
-${RECIPE_MEAL_AGNOSTIC_RULE}
+${RECIPE_JSON_RULES}
 ${RECIPE_DESCRIPTION_VARIETY_RULE}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
-ИНГРЕДИЕНТЫ: каждый ингредиент ОБЯЗАТЕЛЬНО с количеством и единицей. Формат: { "name": "Название", "amount": "150 г" } или "2 шт.", "1 ст.л.". Запрещено указывать только название без количества. Для штук — "шт.", для ложек — "ч.л." / "ст.л.", для граммов/мл — "г" / "мл". ШАГИ: максимум 7 коротких шагов. chefAdvice: макс. 200 символов; только профессиональный совет по блюду (вкус, текстура, техника, подача), без профиля, возраста и адаптаций.
+ИНГРЕДИЕНТЫ: каждый с amount и единицей (г, мл, шт., ст.л., ч.л.). ШАГИ: макс. 7. chefAdvice: макс. 300 символов.
 `;
 
 /**
@@ -325,11 +246,11 @@ ${VARIETY_AND_MEALS_RULES}
 - amount: строка с количеством и единицей. ОБЯЗАТЕЛЬНО: каждый ингредиент MUST include amount; no bare names. Примеры: "100 г", "2 шт.", "1 ст.л.", "1 ч.л.", "200 мл". Для штук — "шт.", для ложек — "ч.л." / "ст.л.", для граммов/мл — "г" / "мл". Если по вкусу — "по вкусу"; для подачи — "для подачи". ЗАПРЕЩЕНО передавать ингредиенты строками или только названием без amount.
 
 ОТВЕЧАЙ СТРОГО JSON. Без markdown, без текста вне JSON.
-Для каждого блюда: chefAdvice — только профессиональный совет по блюду (вкус, текстура, техника, подача), 1–2 предложения, без упоминаний возраста/адаптаций/детей. advice — мини-совет или адаптация (макс. 100 символов).
+Для каждого блюда: chefAdvice — только про блюдо (вкус, текстура, техника, подача), без возраста/адаптаций.
 {
-  "breakfast": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": "", "advice": ""},
-  "lunch": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": "", "advice": ""},
-  "snack": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": "", "advice": ""},
-  "dinner": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": "", "advice": ""}
+  "breakfast": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": ""},
+  "lunch": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": ""},
+  "snack": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": ""},
+  "dinner": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": ""}
 }
 `;
