@@ -238,6 +238,7 @@ export function useDeepSeekAPI() {
         const decoder = new TextDecoder();
         let fullContent = '';
         let buffer = '';
+        let eventType = '';
 
         while (true) {
           const { done, value } = await reader.read();
@@ -247,12 +248,26 @@ export function useDeepSeekAPI() {
           buffer = lines.pop() ?? '';
 
           for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+              continue;
+            }
             if (line.startsWith('data: ')) {
               const data = line.slice(6).trim();
               if (data === '[DONE]') continue;
               try {
                 const parsed = JSON.parse(data);
-                const content = parsed?.choices?.[0]?.delta?.content;
+                if (eventType === 'done' && (parsed?.recipe_id !== undefined || parsed?.recipes !== undefined)) {
+                  await refetchUsage();
+                  return {
+                    message: typeof parsed.message === 'string' ? parsed.message : fullContent,
+                    recipes: Array.isArray(parsed.recipes) ? parsed.recipes : [],
+                    recipe_id: parsed.recipe_id ?? null,
+                  };
+                }
+                const content = typeof parsed?.delta === 'string'
+                  ? parsed.delta
+                  : parsed?.choices?.[0]?.delta?.content;
                 if (typeof content === 'string') {
                   fullContent += content;
                   onChunk?.(content);
@@ -260,6 +275,7 @@ export function useDeepSeekAPI() {
               } catch {
                 // ignore malformed SSE lines
               }
+              eventType = '';
             }
           }
         }

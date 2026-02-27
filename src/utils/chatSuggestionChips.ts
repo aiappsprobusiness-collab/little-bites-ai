@@ -96,24 +96,6 @@ export function getTimeOfDay(): "morning" | "day" | "evening" | "night" {
   return "night";
 }
 
-/** Род. падеж аллергена для фразы «Рецепт без {X}». */
-function allergenToGenitive(name: string): string {
-  const lower = name.trim().toLowerCase();
-  const map: Record<string, string> = {
-    молоко: "молока",
-    яйцо: "яйца",
-    яйца: "яиц",
-    глютен: "глютена",
-    орехи: "орехов",
-    орех: "орехов",
-    рыба: "рыбы",
-    соя: "сои",
-    мёд: "мёда",
-    мед: "мёда",
-  };
-  return map[lower] ?? name.trim();
-}
-
 /** Якорные чипсы по времени суток (1–2 шт.): завтрак/обед/ужин/перекус. */
 const TIME_ANCHORS: Record<"morning" | "day" | "evening" | "night", string[]> = {
   morning: ["Быстрый завтрак", "Каша без сахара"],
@@ -138,10 +120,10 @@ export interface SuggestionChipsInput {
 /**
  * Строит список подсказок (макс. 8): строго по возрасту.
  * 18+ — только взрослые чипсы; < 18 — только детские по группе.
- * При аллергиях один чип заменяется на «Рецепт без {аллерген}».
+ * Вариант «Рецепт без …» в подсказки не добавляем.
  */
 export function getSuggestionChips(input: SuggestionChipsInput): string[] {
-  const { ageMonths, allergies, memberName } = input;
+  const { ageMonths, memberName } = input;
   const out: string[] = [];
   const used = new Set<string>();
 
@@ -153,12 +135,6 @@ export function getSuggestionChips(input: SuggestionChipsInput): string[] {
   }
 
   const ageGroup = getAgeGroup(ageMonths ?? null);
-
-  // Аллергии: один чип «Рецепт без X» (род. падеж)
-  if (allergies.length > 0) {
-    const first = allergies[0]?.trim();
-    if (first) add(`Рецепт без ${allergenToGenitive(first)}`);
-  }
 
   if (ageGroup === "18+" || ageMonths != null && ageMonths >= ADULT_AGE_MONTHS) {
     ADULT_CHIPS.forEach(add);

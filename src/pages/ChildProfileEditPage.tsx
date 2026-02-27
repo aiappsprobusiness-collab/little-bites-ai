@@ -1,9 +1,8 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TagListEditor } from "@/components/ui/tag-list-editor";
 import {
   AlertDialog,
@@ -15,7 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Calendar, Loader2, Lock, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Calendar, Loader2, Lock, Plus, Trash2, X } from "lucide-react";
 import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
@@ -198,6 +197,35 @@ export default function ChildProfileEditPage() {
 
   const ageMonths = birthDate ? birthDateToAgeMonths(birthDate) : null;
 
+  const hasChanges = useMemo(() => {
+    if (isNew) {
+      return Boolean(
+        name.trim() ||
+        birthDate ||
+        allergyItems.length > 0 ||
+        likes.length > 0 ||
+        dislikes.length > 0 ||
+        difficulty !== "easy"
+      );
+    }
+    if (!member) return false;
+    const origName = (member.name ?? "").trim();
+    const origBirth = ageMonthsToBirthDate(member.age_months ?? null);
+    const origItems = (member as MembersRow).allergy_items ?? (member.allergies ?? []).map((value, sort_order) => ({ value, is_active: true, sort_order }));
+    const origLikes = (member as MembersRow).likes ?? [];
+    const origDislikes = (member as MembersRow).dislikes ?? [];
+    const origDiff = ((member as MembersRow).difficulty?.trim() === "medium" || (member as MembersRow).difficulty?.trim() === "any") ? (member as MembersRow).difficulty?.trim() : "easy";
+    if (name.trim() !== origName || birthDate !== origBirth || difficulty !== (origDiff ?? "easy")) return true;
+    if (allergyItems.length !== origItems.length) return true;
+    for (let i = 0; i < allergyItems.length; i++) {
+      if (allergyItems[i].value !== origItems[i]?.value || allergyItems[i].is_active !== origItems[i]?.is_active) return true;
+    }
+    if (likes.length !== origLikes.length || dislikes.length !== origDislikes.length) return true;
+    const toKey = (a: string[]) => [...a].sort().join(",");
+    if (toKey(likes) !== toKey(origLikes) || toKey(dislikes) !== toKey(origDislikes)) return true;
+    return false;
+  }, [isNew, member, name, birthDate, allergyItems, likes, dislikes, difficulty]);
+
   const handleSave = async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -223,7 +251,7 @@ export default function ChildProfileEditPage() {
           difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
         }),
       });
-      toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
+      toast({ title: "Профиль сохранён" });
         navigate("/profile", { replace: true });
         return;
       }
@@ -240,7 +268,7 @@ export default function ChildProfileEditPage() {
           difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
         }),
       });
-      toast({ title: "Профиль обновлён", description: "Данные сохранены" });
+      toast({ title: "Профиль сохранён" });
       navigate("/profile", { replace: true });
     } catch (e: unknown) {
       toast({
@@ -277,213 +305,228 @@ export default function ChildProfileEditPage() {
 
   return (
     <MobileLayout
-      title={isNew ? "Новый ребёнок" : "Редактировать"}
+      title="Профиль"
       headerLeft={
-        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => navigate("/profile")}>
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => navigate("/profile")} aria-label="Назад">
           <ArrowLeft className="h-5 w-5" />
         </Button>
       }
+      headerRight={
+        <Button
+          className="bg-[#7A8F4D] hover:bg-[#6a7e41] text-white border-0 rounded-[10px] px-[14px] py-2 h-auto font-medium"
+          onClick={handleSave}
+          disabled={isCreating || isUpdating || !hasChanges}
+        >
+          {(isCreating || isUpdating) ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            "Сохранить"
+          )}
+        </Button>
+      }
     >
-      <div className="plan-page-bg min-h-0 flex-1 overflow-y-auto">
-        <div className="px-4 py-4 max-w-lg mx-auto">
+      <div className="profile-edit-page min-h-0 flex-1 overflow-y-auto">
+        <div className="px-4 py-4 max-w-lg mx-auto flex flex-col gap-4">
           {loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
-              {/* Один мягкий контейнер в стиле Plan */}
-              <div className="rounded-[20px] bg-primary-light/50 border border-primary-border/80 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.04)] p-5 flex flex-col gap-5">
-                {/* Основное: Имя, Дата рождения */}
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="child-name" className="text-sm font-semibold text-foreground">
-                    Имя
-                  </Label>
-                  <Input
-                    id="child-name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Имя ребёнка"
-                    className="h-[52px] rounded-[16px] px-3 text-base border border-primary-border/60 bg-white shadow-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0 focus-visible:border-primary/40"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="child-birth" className="text-sm font-semibold text-foreground">
-                    Дата рождения
-                  </Label>
-                  <div className="relative">
+              {/* Карточка 1: Основная информация */}
+              <div className="profile-card">
+                <h2 className="profile-card-title mb-4">Основная информация</h2>
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="child-name" className="profile-label">
+                      Имя
+                    </label>
                     <Input
-                      id="child-birth"
-                      type="date"
-                      value={birthDate}
-                      onChange={(e) => setBirthDate(e.target.value)}
-                      className="h-[52px] rounded-[16px] pl-3 pr-12 text-base border border-primary-border/60 bg-white shadow-none focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-0 focus-visible:border-primary/40"
+                      id="child-name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Имя ребёнка"
+                      className="profile-input h-auto min-h-[44px] text-base placeholder:text-[#9CA3AF] focus-visible:ring-0 focus-visible:ring-offset-0"
                     />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="child-birth" className="profile-label">
+                      Дата рождения
+                    </label>
+                    <div className="relative">
+                      <Input
+                        id="child-birth"
+                        type="date"
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        className="profile-input h-auto min-h-[44px] pl-3 pr-12 text-base placeholder:text-[#9CA3AF] focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById("child-birth")?.focus()}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-[#9CA3AF] hover:text-foreground"
+                        aria-label="Выбрать дату"
+                      >
+                        <Calendar className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <p className="text-[13px] text-[#9CA3AF] mt-0.5">
+                      Возраст считается автоматически
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Карточка 2: Аллергии */}
+              <div className="profile-card">
+                <h2 className="profile-card-title mb-4">Аллергии</h2>
+                {allergyItems.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {allergyItems.map((item, i) => {
+                      const isLocked = !hasAccess && !item.is_active;
+                      return (
+                        <span
+                          key={i}
+                          className={`profile-tag-enter ${isLocked ? "bg-amber-50 text-amber-800 cursor-pointer hover:bg-amber-100 inline-flex items-center gap-1.5 rounded-[999px] py-1.5 px-3 text-[13px]" : "profile-pill"}`}
+                          role={isLocked ? "button" : undefined}
+                          tabIndex={isLocked ? 0 : undefined}
+                          onClick={isLocked ? () => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); } : undefined}
+                          onKeyDown={isLocked ? (e) => e.key === "Enter" && (setPaywallCustomMessage("Аллергии и исключения — в Trial"), setShowPaywall(true)) : undefined}
+                        >
+                          <span
+                            className={!isLocked ? "cursor-pointer truncate max-w-[120px]" : "truncate max-w-[120px]"}
+                            onClick={!isLocked ? (e) => { e.stopPropagation(); allergiesHandlers.edit(item.value, i); } : undefined}
+                          >
+                            {item.value}
+                          </span>
+                          {isLocked ? (
+                            <Lock className="w-3.5 h-3.5 shrink-0" />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); allergiesHandlers.remove(i); }}
+                              className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-[#d4e0b8] shrink-0 -mr-0.5"
+                              aria-label="Удалить"
+                            >
+                              <X className="w-3 h-3 text-[#556B2F]" />
+                            </button>
+                          )}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {isFree && activeAllergyCount >= 1 ? (
+                  <>
                     <button
                       type="button"
-                      onClick={() => document.getElementById("child-birth")?.focus()}
-                      className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:bg-primary-light/80 hover:text-foreground"
-                      aria-label="Выбрать дату"
+                      onClick={() => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); }}
+                      className="profile-pill-add-btn w-full gap-2 font-medium text-sm"
                     >
-                      <Calendar className="w-5 h-5" />
+                      <Plus className="w-5 h-5" />
+                      Добавить аллергию
                     </button>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-                    Возраст считается автоматически
-                  </p>
-                </div>
-
-                {/* Аллергии */}
-                <div className="flex flex-col gap-2">
-                  <Label className="text-sm font-semibold text-foreground">Аллергии</Label>
-                  {allergyItems.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {allergyItems.map((item, i) => {
-                        const isLocked = !hasAccess && !item.is_active;
-                        return (
-                          <div key={i} className="relative">
-                            {isLocked ? (
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => {
-                                  setPaywallCustomMessage("Аллергии и исключения — в Trial");
-                                  setShowPaywall(true);
-                                }}
-                                onKeyDown={(e) => e.key === "Enter" && (setPaywallCustomMessage("Аллергии и исключения — в Trial"), setShowPaywall(true))}
-                                className="inline-flex items-center gap-1.5 h-8 rounded-full px-3 text-[13px] bg-amber-50 text-amber-800 cursor-pointer hover:bg-amber-100 border-0"
-                              >
-                                <span className="truncate max-w-[120px]">{item.value}</span>
-                                <Lock className="w-3.5 h-3.5 shrink-0" />
-                              </div>
-                            ) : (
-                              <div className="inline-flex items-center gap-1.5 h-8 rounded-full px-3 text-[13px] bg-primary-light/80 text-foreground border-0">
-                                <span
-                                  className="cursor-pointer truncate max-w-[120px]"
-                                  onClick={() => allergiesHandlers.edit(item.value, i)}
-                                >
-                                  {item.value}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={(e) => { e.stopPropagation(); allergiesHandlers.remove(i); }}
-                                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-primary-light shrink-0 -mr-0.5"
-                                  aria-label="Удалить"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {isFree && activeAllergyCount >= 1 ? (
-                    <>
+                    <p className="text-[13px] text-[#9CA3AF] mt-2">
+                      В Free доступна 1 аллергия
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <label htmlFor="child-allergy-add" className="flex h-11 items-center gap-3 px-4 rounded-xl border border-[#E5E7EB] bg-white hover:border-[#7A8F4D]/40 transition-colors cursor-text w-full profile-input">
                       <button
                         type="button"
-                        onClick={() => {
-                          setPaywallCustomMessage("Аллергии и исключения — в Trial");
-                          setShowPaywall(true);
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (allergyInput.trim()) allergiesHandlers.add(allergyInput);
                         }}
-                        className="flex h-12 items-center gap-3 px-4 rounded-2xl border border-primary-border/60 bg-white hover:bg-muted/30 transition-colors w-full text-left"
+                        disabled={!allergyInput.trim()}
+                        aria-label="Добавить аллергию"
                       >
-                        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0" aria-hidden>
-                          <Plus className="w-5 h-5 text-primary-foreground" />
-                        </div>
-                        <span className="flex-1 min-w-0 py-2 text-[15px] font-medium text-muted-foreground">
-                          Добавить аллергию
-                        </span>
+                        <Plus className="w-4 h-4" />
                       </button>
-                      <p className="text-[10px] text-muted-foreground/60 truncate">
-                        В Free доступна 1 аллергия
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <label htmlFor="child-allergy-add" className="flex h-12 items-center gap-3 px-4 rounded-2xl border border-primary-border/60 bg-white hover:bg-muted/30 transition-colors cursor-text w-full">
-                        <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center shrink-0 pointer-events-none" aria-hidden>
-                          <Plus className="w-5 h-5 text-primary-foreground" />
-                        </div>
-                        <input
-                          id="child-allergy-add"
-                          value={allergyInput}
-                          onChange={(e) => setAllergyInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === ",") {
-                              e.preventDefault();
-                              allergiesHandlers.add(allergyInput);
-                            }
-                          }}
-                          placeholder="Добавить аллергию"
-                          className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
-                        />
-                      </label>
-                      <p className="text-[10px] text-muted-foreground/60 truncate">
-                        {!hasAccess ? "В Free доступна 1 аллергия" : "Запятая или Enter."}
-                      </p>
-                    </>
-                  )}
-                </div>
+                      <input
+                        id="child-allergy-add"
+                        value={allergyInput}
+                        onChange={(e) => setAllergyInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === ",") {
+                            e.preventDefault();
+                            allergiesHandlers.add(allergyInput);
+                          }
+                        }}
+                        placeholder="Добавить аллергию"
+                        className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground placeholder:text-[#9CA3AF] focus:outline-none focus:ring-0"
+                      />
+                    </label>
+                    <p className="text-[13px] text-[#9CA3AF] mt-1.5">
+                      {!hasAccess ? "В Free доступна 1 аллергия" : "Запятая или Enter."}
+                    </p>
+                  </>
+                )}
+              </div>
 
-                {/* Предпочтения + Сложность: Premium/Trial — форма; Free — teaser-карточки */}
-                <div className="flex flex-col gap-5">
-                  {isFree ? (
-                    <>
-                      {/* Free: превью-карточки без инпутов */}
-                      <button
-                        type="button"
-                        onClick={openPaywallLikesDislikes}
-                        className="text-left rounded-2xl border border-primary-border/60 bg-white p-4 hover:bg-primary-light/20 hover:border-primary/30 transition-colors active:opacity-95"
-                      >
-                        <Label className="text-sm font-semibold text-foreground">Любит</Label>
-                        <p className="text-[12px] text-muted-foreground mt-0.5">Помогает точнее подбирать рецепты</p>
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {LIKES_GHOST_CHIPS.map((chip) => (
-                            <span key={chip} className="inline-flex h-8 items-center rounded-full px-3 text-[13px] bg-primary-light/60 text-foreground border-0">
-                              {chip}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="mt-3 w-full rounded-xl bg-primary/10 text-primary font-medium text-sm py-2.5 text-center">
-                          ✨ Настроить (Premium)
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openPaywallLikesDislikes}
-                        className="text-left rounded-2xl border border-primary-border/60 bg-white p-4 hover:bg-primary-light/20 hover:border-primary/30 transition-colors active:opacity-95"
-                      >
-                        <Label className="text-sm font-semibold text-foreground">Не любит</Label>
-                        <p className="text-[12px] text-muted-foreground mt-0.5">Помогает точнее подбирать рецепты</p>
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {DISLIKES_GHOST_CHIPS.map((chip) => (
-                            <span key={chip} className="inline-flex h-8 items-center rounded-full px-3 text-[13px] bg-primary-light/60 text-foreground border-0">
-                              {chip}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="mt-3 w-full rounded-xl bg-primary/10 text-primary font-medium text-sm py-2.5 text-center">
-                          ✨ Настроить (Premium)
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openPaywallLikesDislikes}
-                        className="text-left rounded-2xl border border-primary-border/60 bg-white p-4 hover:bg-primary-light/20 hover:border-primary/30 transition-colors active:opacity-95"
-                      >
-                        <Label className="text-sm font-semibold text-foreground">Сложность блюд</Label>
-                        <p className="text-[12px] text-muted-foreground mt-0.5">Простые, средние или любые — настраивается в Premium</p>
-                        <div className="mt-3 w-full rounded-xl bg-primary/10 text-primary font-medium text-sm py-2.5 text-center">
-                          ✨ Настроить (Premium)
-                        </div>
-                      </button>
-                    </>
-                  ) : (
-                    <>
+              {/* Карточка 3: Предпочтения */}
+              <div className="profile-card">
+                <h2 className="profile-card-title mb-4">Предпочтения</h2>
+                {isFree ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={openPaywallLikesDislikes}
+                      className="text-left w-full rounded-xl border border-[#E5E7EB] bg-white p-4 hover:border-[#7A8F4D]/40 hover:bg-[#EEF3E5]/30 transition-colors"
+                    >
+                      <p className="profile-label font-medium text-[#2F3A2E]">Любит</p>
+                      <p className="text-[13px] text-[#9CA3AF] mt-0.5">Помогает точнее подбирать рецепты</p>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {LIKES_GHOST_CHIPS.map((chip) => (
+                          <span key={chip} className="profile-pill" style={{ background: "#EEF3E5", color: "#556B2F" }}>
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium profile-pill-add-btn">
+                        ✨ Настроить (Premium)
+                      </div>
+                    </button>
+                    <div className="profile-divider" />
+                    <button
+                      type="button"
+                      onClick={openPaywallLikesDislikes}
+                      className="text-left w-full rounded-xl border border-[#E5E7EB] bg-white p-4 hover:border-[#7A8F4D]/40 hover:bg-[#EEF3E5]/30 transition-colors"
+                    >
+                      <p className="profile-label font-medium text-[#2F3A2E]">Не любит</p>
+                      <p className="text-[13px] text-[#9CA3AF] mt-0.5">Помогает точнее подбирать рецепты</p>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {DISLIKES_GHOST_CHIPS.map((chip) => (
+                          <span key={chip} className="profile-pill" style={{ background: "#EEF3E5", color: "#556B2F" }}>
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium profile-pill-add-btn">
+                        ✨ Настроить (Premium)
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openPaywallLikesDislikes}
+                      className="text-left w-full rounded-xl border border-[#E5E7EB] bg-white p-4 mt-3 hover:border-[#7A8F4D]/40 hover:bg-[#EEF3E5]/30 transition-colors"
+                    >
+                      <p className="profile-label font-medium text-[#2F3A2E]">Сложность блюд</p>
+                      <p className="text-[13px] text-[#9CA3AF] mt-0.5">Простые, средние или любые — в Premium</p>
+                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium profile-pill-add-btn">
+                        ✨ Настроить (Premium)
+                      </div>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-2">
+                      <p className="profile-label font-medium text-[#2F3A2E]">Любит</p>
                       <TagListEditor
-                        label="Любит"
+                        id="profile-likes"
+                        label=""
                         items={likes}
                         inputValue={likesInput}
                         onInputChange={setLikesInput}
@@ -492,10 +535,16 @@ export default function ChildProfileEditPage() {
                         onRemove={likesHandlers.remove}
                         placeholder="Добавить (например: ягоды, рыба)"
                         unified
+                        variant="pill"
                         helperText={`Запятая или Enter. До ${MAX_CHIPS} пунктов.`}
                       />
+                    </div>
+                    <div className="profile-divider" />
+                    <div className="flex flex-col gap-2">
+                      <p className="profile-label font-medium text-[#2F3A2E]">Не любит</p>
                       <TagListEditor
-                        label="Не любит"
+                        id="profile-dislikes"
+                        label=""
                         items={dislikes}
                         inputValue={dislikesInput}
                         onInputChange={setDislikesInput}
@@ -504,56 +553,41 @@ export default function ChildProfileEditPage() {
                         onRemove={dislikesHandlers.remove}
                         placeholder="Добавить (например: лук, мясо)"
                         unified
+                        variant="pill"
                         helperText={`Запятая или Enter. До ${MAX_CHIPS} пунктов.`}
                       />
-                      <div className="flex flex-col gap-2">
-                        <Label className="text-sm font-semibold text-foreground">Сложность блюд</Label>
-                        <div className="flex rounded-2xl bg-primary-light/40 p-1 gap-0 border-0">
-                          {[
-                            { value: "easy", label: "Простые" },
-                            { value: "medium", label: "Средние" },
-                            { value: "any", label: "Любые" },
-                          ].map((opt) => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => setDifficulty(opt.value)}
-                              className={`flex-1 h-9 rounded-[14px] text-sm font-medium transition-colors border-0 ${
-                                difficulty === opt.value
-                                  ? "bg-primary text-primary-foreground shadow-sm"
-                                  : "bg-transparent text-foreground hover:bg-primary-light/60"
-                              }`}
-                            >
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
+                    </div>
+                    <div className="flex flex-col gap-2 mt-4">
+                      <p className="profile-label font-medium text-[#2F3A2E]">Сложность блюд</p>
+                      <div className="flex rounded-xl bg-[#EEF3E5]/60 p-1 gap-0">
+                        {[
+                          { value: "easy", label: "Простые" },
+                          { value: "medium", label: "Средние" },
+                          { value: "any", label: "Любые" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setDifficulty(opt.value)}
+                            className={`flex-1 h-9 rounded-[10px] text-sm font-medium transition-colors ${
+                              difficulty === opt.value
+                                ? "bg-[#7A8F4D] text-white shadow-sm"
+                                : "bg-transparent text-[#556B2F] hover:bg-[#EEF3E5]"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Кнопка Сохранить — как «Обновить план» */}
-              <Button
-                className="w-full h-12 rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-sm font-semibold text-base mt-6"
-                onClick={handleSave}
-                disabled={isCreating || isUpdating}
-              >
-                {(isCreating || isUpdating) ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Сохраняем…
+                    </div>
                   </>
-                ) : (
-                  "Сохранить изменения"
                 )}
-              </Button>
+              </div>
 
               {!isNew && member && (
                 <Button
                   variant="ghost"
-                  className="w-full h-11 rounded-2xl text-muted-foreground hover:text-destructive hover:bg-destructive/5 text-sm font-medium mt-1"
+                  className="w-full h-11 rounded-xl text-[#6B7280] hover:text-destructive hover:bg-destructive/5 text-sm font-medium"
                   onClick={() => setShowDeleteConfirm(true)}
                   disabled={isDeleting}
                 >

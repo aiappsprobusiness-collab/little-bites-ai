@@ -43,7 +43,7 @@ export function ChatRecipeCard({
       }}
       ingredients={recipe.ingredients ?? []}
       ingredientOverrides={ingredientOverrides}
-      showSubstituteButton={showChefTip}
+      showSubstituteButton={false}
       onSubstituteClick={onSubstituteClick as (idx: number, ing: unknown) => void}
       chefAdvice={recipe.chefAdvice ?? null}
       advice={recipe.advice ?? null}

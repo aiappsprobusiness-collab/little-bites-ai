@@ -84,7 +84,7 @@ function findAlternatives(matched: string[]): string[] {
 
 /**
  * Собирает сообщение для пользователя при блокировке.
- * Формат: "У профиля «X» указано: АЛЛЕРГИЯ/НЕ ЛЮБИТ — {items}. Поэтому рецепт с этим ингредиентом я не предложу."
+ * Формат: "У профиля «X» указано: АЛЛЕРГИЯ/НЕ ЛЮБИТ — {items}. Смените профиль или замените аллерген на новый ингредиент."
  * Вторая строка: "Попробуйте заменить на: A, B, C."
  */
 export function buildBlockedMessage(
@@ -95,7 +95,7 @@ export function buildBlockedMessage(
 ): string {
   const label = blockedBy === "allergy" ? "аллергия" : "не любит";
   const items = matched.length > 0 ? matched.join(", ") : "это";
-  const line1 = `У профиля «${profileName}» указано: ${label} — ${items}. Поэтому рецепт с этим ингредиентом я не предложу.`;
+  const line1 = `У профиля «${profileName}» указано: ${label} — ${items}. Смените профиль или замените аллерген на новый ингредиент.`;
   if (options?.addAlternatives !== false && matched.length > 0) {
     const alts = findAlternatives(matched);
     const line2 = `Попробуйте заменить на: ${alts.join(", ")}.`;

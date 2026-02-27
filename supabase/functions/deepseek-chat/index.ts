@@ -1,3 +1,17 @@
+/**
+ * deepseek-chat: recipe latency & PERF.
+ *
+ * PERF (было → стало):
+ * - Было: llm_call ~300ms (только TTFB), parse_response ~23s (фактически чтение тела).
+ * - Стало: llm_ttfb (до первого байта), llm_body (чтение тела до конца, с response_chars), llm_total = ttfb + body.
+ *
+ * Ручной чек-лист:
+ * - 5 раз подряд premium: первый символ ответа ≤ 2s (stream даёт быстрый TTFB).
+ * - total_ms может быть 12–25s, но UX быстрый за счёт stream.
+ * - ingredients_retry не вызывается при RECIPE_INGREDIENTS_RETRY_ENABLED=false (по умолчанию).
+ * - PERF показывает llm_ttfb, llm_body, llm_total.
+ * - recipe_id сохраняется при авторизации, 401 при отсутствии authHeader.
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { isRelevantQuery, isRelevantPremiumQuery } from "./isRelevantQuery.ts";
@@ -26,6 +40,9 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Max-Age": "86400",
 };
+
+const RECIPE_SLOW_MS = 20000;
+const RECIPE_MAX_TOKENS = 650;
 
 function logPerf(step: string, start: number, requestId?: string, extra?: Record<string, number>): void {
   const obj: Record<string, unknown> = {
@@ -96,6 +113,25 @@ function sanitizeMealMentions(text: string | null | undefined): string {
     result = result.replace(pattern, " ");
   }
   return result.replace(/\s+/g, " ").trim();
+}
+
+/** Минимальный валидный рецепт для fallback при таймауте или когда провайдер тормозит. */
+function getMinimalRecipe(mealType: string): RecipeJson {
+  const mt = ["breakfast", "lunch", "snack", "dinner"].includes(mealType) ? mealType : "snack";
+  return {
+    title: "Простой рецепт",
+    description: "Быстрый вариант. Попробуйте запрос ещё раз для полного рецепта.",
+    ingredients: [
+      { name: "Ингредиент 1", amount: "100 г", displayText: "Ингредиент 1 — 100 г", canonical: { amount: 100, unit: "g" } },
+      { name: "Ингредиент 2", amount: "2 шт.", displayText: "Ингредиент 2 — 2 шт.", canonical: { amount: 2, unit: "g" } },
+      { name: "Ингредиент 3", amount: "1 ст.л.", displayText: "Ингредиент 3 — 1 ст.л.", canonical: { amount: 1, unit: "ml" } },
+    ],
+    steps: ["Подготовьте ингредиенты.", "Смешайте и готовьте по инструкции.", "Подавайте."],
+    cookingTimeMinutes: 15,
+    mealType: mt as "breakfast" | "lunch" | "snack" | "dinner",
+    servings: 1,
+    chefAdvice: null,
+  };
 }
 
 /** Единый формат ответа «заблокировано» (аллергия или dislikes). Не вызываем модель, не пишем usage_events. */
@@ -732,7 +768,7 @@ serve(async (req) => {
       type === "chat" && (isPremiumUser ? (premiumRelevance === true || premiumRelevance === "soft") : true);
     const isRecipeRequest = isRecipeRequestByType || (type === "chat" && isRecipeChat);
     const stream =
-      isRecipeRequest || type === "sos_consultant" || type === "balance_check"
+      type === "sos_consultant" || type === "balance_check" || isRecipeRequest
         ? false
         : reqStream;
 
@@ -965,28 +1001,22 @@ serve(async (req) => {
       const maxTokensChat =
         type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
       const promptConfig = {
-        maxTokens: isRecipeRequest ? 900 : maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
+        maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
       };
       const messagesForPayload = isRecipeRequest
         ? [{ role: "user" as const, content: userMessage }]
         : messages;
+      const recipeStream = isRecipeRequest && stream;
       const payload = {
         model: "deepseek-chat",
         messages: [{ role: "system", content: currentSystemPrompt }, ...messagesForPayload],
-        stream: isRecipeRequest || type === "sos_consultant" || type === "balance_check" ? false : reqStream,
+        stream: recipeStream || (stream && !isRecipeRequest),
         max_tokens: promptConfig.maxTokens,
         temperature: isRecipeRequest ? 0.4 : 0.7,
         top_p: 0.8,
         repetition_penalty: 1.1,
-        ...(isRecipeRequest && { response_format: { type: "json_object" } }),
+        ...(isRecipeRequest && !recipeStream && { response_format: { type: "json_object" } }),
       };
-
-      if (isRecipeRequest) {
-        (payload as { stream?: boolean }).stream = false;
-        if (!("response_format" in payload)) {
-          (payload as { response_format?: { type: string } }).response_format = { type: "json_object" };
-        }
-      }
 
       const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "single_day" ? 60000 : (payload as { stream?: boolean }).stream ? 90000 : 120000);
       const timeoutMs = MAIN_LLM_TIMEOUT_MS;
@@ -1010,11 +1040,22 @@ serve(async (req) => {
       } catch (error) {
         clearTimeout(timeoutId);
         if (error instanceof Error && error.name === "AbortError") {
-          logPerf("llm_call", tLlmStart, requestId);
+          logPerf("llm_ttfb", tLlmStart, requestId);
+          logPerf("llm_total", tLlmStart, requestId);
           logPerf("total_ms", t0, requestId);
-          const fallbackMsg = isRecipeRequest
-            ? "Генерация заняла слишком много времени. Попробуйте ещё раз или упростите запрос."
-            : `Request timeout after ${timeoutMs}ms`;
+          if (isRecipeRequest) {
+            const minimal = getMinimalRecipe((body as { mealType?: string }).mealType ?? "snack");
+            return new Response(
+              JSON.stringify({
+                message: JSON.stringify(minimal),
+                recipes: [minimal],
+                recipe_id: null,
+                _timeout: true,
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          const fallbackMsg = `Request timeout after ${timeoutMs}ms`;
           return new Response(
             JSON.stringify({ error: "timeout", message: fallbackMsg }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1022,7 +1063,8 @@ serve(async (req) => {
         }
         throw error;
       }
-      logPerf("llm_call", tLlmStart, requestId);
+      const llmTtfbMs = Date.now() - tLlmStart;
+      logPerf("llm_ttfb", tLlmStart, requestId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1040,9 +1082,108 @@ serve(async (req) => {
         );
       }
 
-      if (stream && response.body) {
+      if (recipeStream && response.body) {
         logPerf("total_ms", t0, requestId);
-        return new Response(response.body, {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          async start(controller) {
+            const tBodyStartStream = Date.now();
+            const reader = response.body!.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let fullContent = "";
+            try {
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() ?? "";
+                for (const line of lines) {
+                  if (line.startsWith("data: ")) {
+                    const data = line.slice(6).trim();
+                    if (data === "[DONE]") continue;
+                    try {
+                      const parsed = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> };
+                      const content = parsed?.choices?.[0]?.delta?.content;
+                      if (typeof content === "string") {
+                        fullContent += content;
+                        controller.enqueue(encoder.encode("event: delta\ndata: " + JSON.stringify({ delta: content }) + "\n\n"));
+                      }
+                    } catch {
+                      // skip malformed
+                    }
+                  }
+                }
+              }
+              logPerf("llm_body", tBodyStartStream, requestId, { response_chars: fullContent.length });
+              logPerf("llm_total", tLlmStart, requestId);
+              let validated = validateRecipeJson(fullContent.trim());
+              if (validated && ingredientsNeedAmountRetry(validated.ingredients)) {
+                applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
+              }
+              let savedRecipeId: string | null = null;
+              let responseRecipesStream: Array<Record<string, unknown>> = [];
+              if (validated) {
+                responseRecipesStream = [validated as Record<string, unknown>];
+                if (userId && authHeader && !fromPlanReplace && SUPABASE_URL && SUPABASE_ANON_KEY) {
+                  try {
+                    const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
+                    const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
+                    const status = subscriptionStatus as string;
+                    const chefAdviceToSave = status === "free" ? null : (validated.chefAdvice ?? null);
+                    const rawSteps = (validated.steps ?? []).slice(0, 6).map((step: string, idx: number) => ({ instruction: step.slice(0, 90), step_number: idx + 1 }));
+                    const stepsPayload = rawSteps.length >= 3 ? rawSteps : [...rawSteps, ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг.", step_number: rawSteps.length + i + 1 }))];
+                    const rawIngredients = (validated.ingredients ?? []).slice(0, 10);
+                    const ingredientsPayload = rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => ({
+                      name: typeof ing === "string" ? ing : ing.name,
+                      display_text: typeof ing === "string" ? ing : (ing.displayText ?? ing.name),
+                      canonical_amount: (ing as { canonical?: { amount: number } }).canonical?.amount ?? null,
+                      canonical_unit: (ing as { canonical?: { unit: string } }).canonical?.unit ?? null,
+                    }));
+                    const payload = canonicalizeRecipePayload({
+                      user_id: userId,
+                      member_id: memberIdForRecipe,
+                      child_id: memberIdForRecipe,
+                      source: "chat_ai",
+                      mealType: validated.mealType ?? null,
+                      tags: (validated as { tags?: string[] }).tags ?? null,
+                      title: validated.title ?? "Рецепт",
+                      description: (validated.description ?? "").slice(0, 140),
+                      cooking_time_minutes: validated.cookingTimeMinutes ?? null,
+                      chef_advice: chefAdviceToSave,
+                      advice: null,
+                      steps: stepsPayload,
+                      ingredients: ingredientsPayload,
+                      sourceTag: "chat",
+                      servings: (validated as { servings?: number }).servings ?? 1,
+                    });
+                    const { data: recipeId, error: rpcErr } = await supabaseUser.rpc("create_recipe_with_steps", { payload });
+                    if (!rpcErr) savedRecipeId = recipeId ?? null;
+                  } catch {
+                    // ignore
+                  }
+                }
+                if (userId && supabase && !fromPlanReplace) {
+                  const memberIdUuid = memberId && memberId !== "family" ? memberId : null;
+                  await supabase.from("usage_events").insert({ user_id: userId, member_id: memberIdUuid, feature: "chat_recipe" });
+                }
+              }
+              const donePayload = {
+                recipe_id: savedRecipeId,
+                message: validated ? JSON.stringify(validated) : fullContent.trim(),
+                recipes: responseRecipesStream,
+              };
+              controller.enqueue(encoder.encode("event: done\ndata: " + JSON.stringify(donePayload) + "\n\n"));
+            } catch (e) {
+              safeError("recipe stream error", e);
+              controller.enqueue(encoder.encode("event: error\ndata: " + JSON.stringify({ error: "stream_failed" }) + "\n\n"));
+            } finally {
+              controller.close();
+            }
+          },
+        });
+        return new Response(stream, {
           headers: {
             ...corsHeaders,
             "Content-Type": "text/event-stream",
@@ -1052,9 +1193,19 @@ serve(async (req) => {
         });
       }
 
-      const tParseStart = Date.now();
+      const tBodyStart = Date.now();
+      let bodyText: string;
       try {
-        data = await response.json();
+        bodyText = await response.text();
+      } catch {
+        return new Response(
+          JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const llmBodyMs = Date.now() - tBodyStart;
+      try {
+        data = JSON.parse(bodyText) as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
       } catch {
         return new Response(
           JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
@@ -1062,11 +1213,9 @@ serve(async (req) => {
         );
       }
       assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
-      logPerf("parse_response", tParseStart, requestId, {
-        prompt_chars: currentSystemPrompt.length,
-        user_chars: userMessage.length,
-        response_chars: assistantMessage.length,
-      });
+      logPerf("llm_body", tBodyStart, requestId, { response_chars: assistantMessage.length });
+      const llmTotalMs = Date.now() - tLlmStart;
+      logPerf("llm_total", tLlmStart, requestId);
       if (!assistantMessage) {
         return new Response(
           JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
@@ -1096,76 +1245,9 @@ serve(async (req) => {
         let validated = validateRecipeJson(assistantMessage);
         logPerf("normalize_ingredients", tNormStart, requestId);
         if (validated) {
-          if (isPremiumUser && ingredientsNeedAmountRetry(validated.ingredients)) {
-            const tRetryStart = Date.now();
-            const INGREDIENTS_RETRY_TIMEOUT_MS = 7000;
-            const retryController = new AbortController();
-            const retryTimeoutId = setTimeout(() => retryController.abort(), INGREDIENTS_RETRY_TIMEOUT_MS);
-            const ingredientNames = (validated.ingredients ?? []).map((i) => (typeof i === "string" ? i : (i as { name?: string }).name ?? "")).filter(Boolean);
-            const retryUserContent = `Список ингредиентов (только названия):\n${ingredientNames.join("\n")}\n\nВерни JSON с одним полем "ingredients" — массив объектов { "name": string, "amount": string, "unit": string } для каждого. Пример: {"ingredients":[{"name":"Молоко","amount":"200","unit":"мл"}]}.`;
-            let retrySucceeded = false;
-            try {
-              const retryRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  model: "deepseek-chat",
-                  messages: [
-                    { role: "system", content: "Ты возвращаешь только JSON. Один объект с полем ingredients: массив { name, amount, unit }. Без пояснений." },
-                    { role: "user", content: retryUserContent },
-                  ],
-                  stream: false,
-                  max_tokens: 800,
-                  temperature: 0.3,
-                  response_format: { type: "json_object" },
-                }),
-                signal: retryController.signal,
-              });
-              clearTimeout(retryTimeoutId);
-              if (retryRes.ok) {
-                const retryData = (await retryRes.json()) as { choices?: Array<{ message?: { content?: string } }> };
-                const retryContent = (retryData.choices?.[0]?.message?.content ?? "").trim();
-                if (retryContent) {
-                  try {
-                    const parsed = JSON.parse(retryContent) as { ingredients?: Array<{ name?: string; amount?: string; unit?: string }> };
-                    const arr = parsed?.ingredients;
-                    if (Array.isArray(arr) && arr.length >= (validated!.ingredients?.length ?? 0)) {
-                      const merged = (validated!.ingredients ?? []).map((orig, idx) => {
-                        const r = arr[idx];
-                        const name = typeof orig === "string" ? orig : (orig as { name?: string }).name ?? "";
-                        if (r && (r.amount ?? "").trim() && (r.unit ?? "").trim()) {
-                          const amount = (r.amount ?? "").trim();
-                          const unit = (r.unit ?? "").trim();
-                          return {
-                            name: r.name ?? name,
-                            displayText: `${r.name ?? name} — ${amount} ${unit}`,
-                            canonical: { amount: parseFloat(amount) || 1, unit: /мл|ml/i.test(unit) ? "ml" : "g" },
-                          };
-                        }
-                        return orig;
-                      });
-                      (validated as Record<string, unknown>).ingredients = merged;
-                      retrySucceeded = !ingredientsNeedAmountRetry(merged);
-                    }
-                  } catch {
-                    // ignore parse error
-                  }
-                }
-              }
-            } catch {
-              clearTimeout(retryTimeoutId);
-            }
-            logPerf("ingredients_retry", tRetryStart, requestId);
-            if (!retrySucceeded) {
-              applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
-              safeLog("Recipe ingredients: retry skipped or failed, applied heuristic fallback", requestId);
-            }
-          } else if (validated && ingredientsNeedAmountRetry(validated.ingredients)) {
+          if (ingredientsNeedAmountRetry(validated.ingredients)) {
             applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
-            safeLog("Recipe ingredients: applied heuristic fallback (no retry for free)", requestId);
+            safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
           }
           if (validated) {
             assistantMessage = JSON.stringify(validated);

@@ -11,6 +11,8 @@ export interface AssignRecipeToPlanSlotParams {
   meal_type: string;
   recipe_id: string;
   recipe_title?: string | null;
+  /** Порции (опционально; в БД два overload — передаём явно, чтобы вызывалась версия с p_servings). */
+  servings?: number | null;
 }
 
 export function useAssignRecipeToPlanSlot(memberId: string | null | undefined) {
@@ -26,6 +28,7 @@ export function useAssignRecipeToPlanSlot(memberId: string | null | undefined) {
         p_meal_type: params.meal_type,
         p_recipe_id: params.recipe_id,
         p_recipe_title: params.recipe_title ?? null,
+        p_servings: params.servings ?? null,
       });
       if (error) throw error;
       return data as { id: string; planned_date: string; meal_type: string; recipe_id: string; title: string };

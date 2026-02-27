@@ -389,10 +389,10 @@ export default function ChatPage() {
     const recipeIds = [...new Set(historyMessages.map((m: { recipe_id?: string | null }) => m.recipe_id).filter(Boolean))] as string[];
     const isBlockedRefusalResponse = (response: string) => {
       const r = (response ?? "").trim();
-      return (
-        r.includes("Поэтому рецепт с этим ингредиентом я не предложу") &&
-        (r.includes("аллерги") || r.includes("не любит"))
-      );
+      const hasBlockedPhrase =
+        r.includes("Смените профиль или замените аллерген на новый ингредиент") ||
+        r.includes("Поэтому рецепт с этим ингредиентом я не предложу");
+      return hasBlockedPhrase && (r.includes("аллерги") || r.includes("не любит"));
     };
     const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>) => {
       const formatted: Message[] = [];
@@ -598,10 +598,10 @@ export default function ChatPage() {
       const rewrittenQuery =
         mode === "recipes"
           ? getRewrittenQueryIfFollowUp({
-              lastAssistantMeta: lastAssistant?.blockedMeta,
-              lastAssistantTimestamp: lastAssistant?.timestamp ?? 0,
-              userText: toSend,
-            })
+            lastAssistantMeta: lastAssistant?.blockedMeta,
+            lastAssistantTimestamp: lastAssistant?.timestamp ?? 0,
+            userText: toSend,
+          })
           : null;
       chatMessages.push({ role: "user", content: rewrittenQuery ?? toSend });
 
@@ -1200,6 +1200,7 @@ export default function ChatPage() {
                 onOpenArticle={setOpenArticleId}
                 forcePlainText={mode === "help"}
                 isConsultationMode={isConsultationMode}
+                isBlockedRefusal={m.isBlockedRefusal}
               />
             ))}
           </AnimatePresence>
@@ -1281,17 +1282,17 @@ export default function ChatPage() {
                 </div>
               )}
               <button
-              type="button"
-              disabled={!input.trim() || isChatting}
-              onClick={() => handleSend()}
-              className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-primary-foreground bg-primary hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
-            >
-              {isChatting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-            </button>
+                type="button"
+                disabled={!input.trim() || isChatting}
+                onClick={() => handleSend()}
+                className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-primary-foreground bg-primary hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
+              >
+                {isChatting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </button>
             </div>
           </div>
         </div>

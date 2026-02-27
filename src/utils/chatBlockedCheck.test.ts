@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkChatRequestAgainstProfile } from "./chatBlockedCheck";
+import { checkChatRequestAgainstProfile, textWithoutExclusionPhrases } from "./chatBlockedCheck";
 
 describe("checkChatRequestAgainstProfile", () => {
   it('returns blocked by allergy for "ужин курица" when member has allergy курица', () => {
@@ -81,5 +81,36 @@ describe("checkChatRequestAgainstProfile", () => {
     expect(result!.blocked_by).toBe("dislike");
     expect(result!.matched).toContain("ягоды");
     expect(result!.message).toMatch(/не любит/);
+  });
+
+  it('does NOT block "суп без картошки" when member has allergy картошка', () => {
+    const result = checkChatRequestAgainstProfile({
+      text: "суп без картошки",
+      member: { name: "Маша", allergies: ["картошка"], dislikes: [] },
+    });
+    expect(result).toBeNull();
+  });
+
+  it('textWithoutExclusionPhrases removes "без лук" from "рецепт без лук"', () => {
+    expect(textWithoutExclusionPhrases("рецепт без лук").includes("лук")).toBe(false);
+    expect(textWithoutExclusionPhrases("суп без картошки").includes("картош")).toBe(false);
+  });
+
+  it('does NOT block "Рецепт без Лук" when member has allergy лук', () => {
+    const result = checkChatRequestAgainstProfile({
+      text: "Рецепт без Лук",
+      member: { name: "Ави", allergies: ["Лук"], dislikes: [] },
+    });
+    expect(result).toBeNull();
+  });
+
+  it('blocks "суп с курицей" when member has allergy курица', () => {
+    const result = checkChatRequestAgainstProfile({
+      text: "суп с курицей",
+      member: { name: "Маша", allergies: ["курица"], dislikes: [] },
+    });
+    expect(result).not.toBeNull();
+    expect(result!.blocked_by).toBe("allergy");
+    expect(result!.message).toMatch(/аллергия/);
   });
 });

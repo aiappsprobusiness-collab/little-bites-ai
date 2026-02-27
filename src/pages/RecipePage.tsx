@@ -463,17 +463,6 @@ export default function RecipePage() {
           overrides={fromMealPlan ? {} : overrides}
           scaledOverrides={fromMealPlan ? undefined : scaledOverrides}
           variant="full"
-          showSubstituteButton
-          onSubstituteClick={() => {
-            toast({
-              title: "Скоро будет доступно",
-              description: "Замена ингредиентов в разработке. Мы дорабатываем эту функцию для вас.",
-            });
-          }}
-          onLockClick={isFree ? () => {
-            setPaywallCustomMessage("Замена ингредиентов доступна в Premium. Попробуйте Trial или оформите подписку.");
-            setShowPaywall(true);
-          } : undefined}
         />
 
         {chefAdvice?.trim() ? (

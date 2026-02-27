@@ -92,6 +92,8 @@ interface ChatMessageProps {
   forcePlainText?: boolean;
   /** Режим консультации (Help Chat): карточка рекомендации, без action icons */
   isConsultationMode?: boolean;
+  /** Ответ-отказ по аллергии/dislike: скрываем кнопки лайк, шэринг, в план */
+  isBlockedRefusal?: boolean;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
@@ -157,7 +159,7 @@ function isValidRecipeId(v: string): boolean {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false, isConsultationMode = false }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const [addToPlanOpen, setAddToPlanOpen] = useState(false);
@@ -530,66 +532,70 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 onPointerDown={(e) => e.stopPropagation()}
                 onPointerDownCapture={(e) => e.stopPropagation()}
               >
-                <div className="flex flex-row gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleToggleFavorite();
-                    }}
-                    disabled={isToggling}
-                    className={`h-9 w-9 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 ${isFavorite
-                      ? "text-primary bg-primary/10 border border-primary/20 fill-primary"
-                      : "text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground"
-                      }`}
-                    title="В избранное"
-                  >
-                    <Heart className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleShare();
-                    }}
-                    disabled={!shareText}
-                    className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground disabled:opacity-50 transition-all active:scale-95"
-                    title="Поделиться"
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </button>
-                  {hasAccess ? (
+                {!isBlockedRefusal ? (
+                  <div className="flex flex-row gap-2">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (recipeId && isValidRecipeId(recipeId)) setAddToPlanOpen(true);
+                        handleToggleFavorite();
                       }}
-                      disabled={!recipeId || !isValidRecipeId(recipeId)}
+                      disabled={isToggling}
+                      className={`h-9 w-9 rounded-full shrink-0 flex items-center justify-center transition-all active:scale-95 ${isFavorite
+                        ? "text-primary bg-primary/10 border border-primary/20 fill-primary"
+                        : "text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground"
+                        }`}
+                      title="В избранное"
+                    >
+                      <Heart className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleShare();
+                      }}
+                      disabled={!shareText}
                       className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground disabled:opacity-50 transition-all active:scale-95"
-                      title="В план"
+                      title="Поделиться"
                     >
-                      <CalendarPlus className="h-4 w-4" />
+                      <Share2 className="h-4 w-4" />
                     </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setPaywallCustomMessage("Добавление в план доступно в Premium.");
-                        setShowPaywall(true);
-                      }}
-                      className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all active:scale-95"
-                      title="В план (Premium)"
-                    >
-                      <CalendarPlus className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
+                    {hasAccess ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (recipeId && isValidRecipeId(recipeId)) setAddToPlanOpen(true);
+                        }}
+                        disabled={!recipeId || !isValidRecipeId(recipeId)}
+                        className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground disabled:opacity-50 transition-all active:scale-95"
+                        title="В план"
+                      >
+                        <CalendarPlus className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setPaywallCustomMessage("Добавление в план доступно в Premium.");
+                          setShowPaywall(true);
+                        }}
+                        className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all active:scale-95"
+                        title="В план (Premium)"
+                      >
+                        <CalendarPlus className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div />
+                )}
                 <button
                   type="button"
                   onClick={(e) => {

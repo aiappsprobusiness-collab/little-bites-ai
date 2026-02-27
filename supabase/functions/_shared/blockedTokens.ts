@@ -44,6 +44,14 @@ export function buildBlockedTokenSet(params: {
 }
 
 /**
+ * Удаляет из текста фразы «без X» (запрос исключения ингредиента).
+ * Если аллерген упомянут только в таком контексте — не блокируем (даём рецепт без него).
+ */
+export function textWithoutExclusionPhrases(text: string): string {
+  return text.replace(/без\s+[^,.\n]+/gi, " ");
+}
+
+/**
  * Возвращает токены из списка, которые встречаются в text (подстрока, без regex).
  */
 export function findMatchedTokens(text: string, tokens: string[]): string[] {
