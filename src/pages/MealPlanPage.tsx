@@ -188,6 +188,7 @@ export default function MealPlanPage() {
       return {
         name: "Семья",
         age_months: youngest.age_months ?? 0,
+        type: "family" as const,
         allergies: allAllergies,
         likes: allLikes,
         dislikes: allDislikes,
@@ -195,10 +196,11 @@ export default function MealPlanPage() {
     }
     const memberForPlan = selectedMember ?? (isFree && selectedMemberId === "family" && members.length > 0 ? members[0] : null);
     if (memberForPlan) {
-      const m = memberForPlan as { allergies?: string[]; likes?: string[]; dislikes?: string[] };
+      const m = memberForPlan as { allergies?: string[]; likes?: string[]; dislikes?: string[]; type?: string };
       return {
         name: memberForPlan.name,
         age_months: memberForPlan.age_months ?? 0,
+        type: m.type ?? "child",
         allergies: m.allergies ?? [],
         likes: m.likes ?? [],
         dislikes: m.dislikes ?? [],
@@ -320,6 +322,8 @@ export default function MealPlanPage() {
     if (planJob.status === "done" && wasRunning) {
       if (planJob.error_text === "partial:time_budget") {
         /* Автопродолжение по nextCursor — тост не показываем, в UI уже "Догенерируем план…". */
+      } else if (planJob.error_text?.includes("взрослого профиля")) {
+        toast({ description: planJob.error_text });
       } else if (planJob.error_text?.startsWith("partial:")) {
         const filled = (planJob.progress_done ?? 0) * 4;
         const total = (planJob.progress_total ?? (planGenType === "week" ? 7 : 1)) * 4;
@@ -427,6 +431,9 @@ export default function MealPlanPage() {
   /** Единый источник: dayMealPlans (развёрнутые слоты из одной строки). Пустой день только когда загрузка завершена и слотов с recipe_id нет. При refetch после fill не показываем empty. */
   const hasNoDishes = dayMealPlans.filter((p) => p.recipe_id).length === 0;
   const isEmptyDay = !isLoading && !isFetching && hasNoDishes;
+  /** Последняя генерация завершилась с сообщением «нет рецептов для взрослого» — показываем отдельный empty state. */
+  const isAdultNoRecipesEmpty =
+    isEmptyDay && !!planJob?.status && planJob.status === "done" && (planJob.error_text ?? "").includes("взрослого профиля");
 
   const renderStartRef = useRef(0);
   if (isPerf()) renderStartRef.current = performance.now();
@@ -736,7 +743,7 @@ export default function MealPlanPage() {
                     });
                     trackUsageEvent("plan_fill_day_success");
                     await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                    const filled = result.filledSlotsCount ?? result.replacedCount;
+                    const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                     const total = result.totalSlots ?? 4;
                     if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
                       toast({ title: "Заполнить день", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
@@ -809,7 +816,7 @@ export default function MealPlanPage() {
                   });
                   setMutedWeekKeyAndStorage(null);
                   await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                  const filled = result.filledSlotsCount ?? result.replacedCount;
+                  const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                   const total = result.totalSlots ?? 28;
                   if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
                     toast({ title: "Заполнить всю неделю", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
@@ -909,12 +916,26 @@ export default function MealPlanPage() {
             </div>
           ) : isEmptyDay ? (
             <div className="mt-2 rounded-2xl border border-primary-border/60 bg-primary-light/30 p-4 text-center">
-              <p className="text-4xl mb-1.5" aria-hidden>✨</p>
-              <h3 className="text-plan-hero-title font-semibold text-foreground mb-1">План на день пока пуст</h3>
+              <p className="text-4xl mb-1.5" aria-hidden>{isAdultNoRecipesEmpty ? "📋" : "✨"}</p>
+              <h3 className="text-plan-hero-title font-semibold text-foreground mb-1">
+                {isAdultNoRecipesEmpty ? "Недостаточно рецептов в пуле для этого профиля" : "План на день пока пуст"}
+              </h3>
               <p className="text-plan-secondary text-muted-foreground text-sm mb-3">
-                Нажми «Заполнить день» или подбери рецепт для нужного приёма пищи.
+                {isAdultNoRecipesEmpty
+                  ? "Добавьте рецепты для взрослых через Чат (например: «Подбери обед на понедельник») или Избранное."
+                  : "Нажми «Заполнить день» или подбери рецепт для нужного приёма пищи."}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
+                {isAdultNoRecipesEmpty ? (
+                  <Button
+                    size="sm"
+                    className="rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-soft"
+                    onClick={() => navigate("/chat")}
+                  >
+                    <Plus className="w-4 h-4 mr-1.5 shrink-0" />
+                    Сгенерировать в чате
+                  </Button>
+                ) : (
                 <Button
                   size="sm"
                   className="rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-soft"
@@ -928,7 +949,7 @@ export default function MealPlanPage() {
                       const result = await runPoolUpgrade({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: selectedDayKey, day_keys: dayKeys });
                       trackUsageEvent("plan_fill_day_success");
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                      const filled = result.filledSlotsCount ?? result.replacedCount;
+                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                       const total = result.totalSlots ?? 4;
                       if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
                         toast({ title: "Заполнить день", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
@@ -953,6 +974,7 @@ export default function MealPlanPage() {
                   <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
                   Заполнить день
                 </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -960,7 +982,7 @@ export default function MealPlanPage() {
                   onClick={() => navigate("/chat")}
                 >
                   <Plus className="w-4 h-4 mr-1.5 shrink-0" />
-                  Подобрать рецепт
+                  {isAdultNoRecipesEmpty ? "Сгенерировать в чате" : "Подобрать рецепт"}
                 </Button>
               </div>
             </div>
@@ -1263,14 +1285,14 @@ export default function MealPlanPage() {
                         day_keys: dayKeys,
                       });
                       queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                      const filled = result.filledSlotsCount ?? result.replacedCount;
+                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                       const total = result.totalSlots ?? 4;
                       if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
                         toast({ title: "Подобрать рецепты", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
                       } else {
                         const aiFallback = result.aiFallbackCount ?? 0;
                         const desc = aiFallback > 0
-                          ? `Подобрано из базы: ${result.replacedCount}, добавлено AI: ${aiFallback}`
+                          ? `Подобрано из базы: ${result.replacedCount ?? 0}, добавлено AI: ${aiFallback}`
                           : `Подобрано: ${filled} из ${total}`;
                         toast({ title: "Подобрать рецепты", description: desc });
                       }

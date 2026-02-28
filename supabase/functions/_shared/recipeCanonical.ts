@@ -87,6 +87,9 @@ export interface CanonicalizeRecipePayloadInput {
   servings?: number | null;
   /** Explicit soup flag for create_recipe_with_steps. For lunch slot we set true if not provided. */
   is_soup?: boolean | null;
+  /** Age range for plan/pool filtering. infant 6–12, toddler 12–60, school 60–216, adult 216–1200. */
+  min_age_months?: number | null;
+  max_age_months?: number | null;
 }
 
 /**
@@ -111,6 +114,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     sourceTag: explicitSourceTag,
     servings,
     is_soup: rawIsSoup,
+    min_age_months: rawMinAge,
+    max_age_months: rawMaxAge,
   } = input;
 
   const safeSource = ensurePoolSource(source);
@@ -179,5 +184,7 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     servings_base,
     servings_recommended,
     is_soup,
+    min_age_months: rawMinAge ?? null,
+    max_age_months: rawMaxAge ?? null,
   };
 }

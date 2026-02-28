@@ -42,7 +42,14 @@ const corsHeaders: Record<string, string> = {
 };
 
 const RECIPE_SLOW_MS = 20000;
-const RECIPE_MAX_TOKENS = 650;
+const RECIPE_MAX_TOKENS = 2048;
+
+const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
+  infant: { min: 6, max: 12 },
+  toddler: { min: 12, max: 60 },
+  school: { min: 60, max: 216 },
+  adult: { min: 216, max: 1200 },
+};
 
 function logPerf(step: string, start: number, requestId?: string, extra?: Record<string, number>): void {
   const obj: Record<string, unknown> = {
@@ -53,6 +60,45 @@ function logPerf(step: string, start: number, requestId?: string, extra?: Record
   };
   if (extra) Object.assign(obj, extra);
   console.log(JSON.stringify(obj));
+}
+
+const DESCRIPTION_INCOMPLETE_SUFFIXES = [/\sи\s*$/i, /\sили\s*$/i, /\sа также\s*$/i, /[—:]\s*$/];
+function isDescriptionIncomplete(desc: string | null | undefined): boolean {
+  if (!desc || typeof desc !== "string") return false;
+  const t = desc.trim();
+  if (t.length < 20) return true;
+  if (/\.\.\.\s*$/.test(t)) return true;
+  if (DESCRIPTION_INCOMPLETE_SUFFIXES.some((re) => re.test(t))) return true;
+  return false;
+}
+
+/** Cheap repair: one short LLM call to fix only description. Returns new description or null. */
+async function repairDescriptionOnly(current: string, apiKey: string): Promise<string | null> {
+  const sys = "Ты исправляешь только поле description. Верни ТОЛЬКО валидный JSON: {\"description\": \"...\"}. 2–4 полных предложения, без обрыва, без троеточий.";
+  const user = `Текущее описание (обрывается): «${current.slice(0, 300)}». Допиши до 2–4 законченных предложений.`;
+  try {
+    const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
+        max_tokens: 256,
+        temperature: 0.3,
+      }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const raw = data?.choices?.[0]?.message?.content?.trim();
+    if (!raw) return null;
+    const match = raw.match(/\{\s*"description"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*\}/) || raw.match(/"description"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
+    if (match && match[1]) {
+      return match[1].replace(/\\"/g, '"').slice(0, 500);
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /** Fail-safe: strip personal references from description/chefAdvice so recipe is reusable in pool. */
@@ -1122,6 +1168,12 @@ serve(async (req) => {
               if (validated && ingredientsNeedAmountRetry(validated.ingredients)) {
                 applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
               }
+              if (validated && isDescriptionIncomplete((validated as { description?: string }).description) && DEEPSEEK_API_KEY) {
+                const repaired = await repairDescriptionOnly((validated as { description?: string }).description ?? "", DEEPSEEK_API_KEY);
+                if (repaired) {
+                  (validated as Record<string, unknown>).description = repaired;
+                }
+              }
               let savedRecipeId: string | null = null;
               let responseRecipesStream: Array<Record<string, unknown>> = [];
               if (validated) {
@@ -1132,7 +1184,7 @@ serve(async (req) => {
                     const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
                     const status = subscriptionStatus as string;
                     const chefAdviceToSave = status === "free" ? null : (validated.chefAdvice ?? null);
-                    const rawSteps = (validated.steps ?? []).slice(0, 6).map((step: string, idx: number) => ({ instruction: step.slice(0, 90), step_number: idx + 1 }));
+                    const rawSteps = (validated.steps ?? []).slice(0, 10).map((step: string, idx: number) => ({ instruction: (typeof step === "string" ? step : (step as { instruction?: string }).instruction ?? "").slice(0, 200), step_number: idx + 1 }));
                     const stepsPayload = rawSteps.length >= 3 ? rawSteps : [...rawSteps, ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг.", step_number: rawSteps.length + i + 1 }))];
                     const rawIngredients = (validated.ingredients ?? []).slice(0, 10);
                     const ingredientsPayload = rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => ({
@@ -1141,6 +1193,7 @@ serve(async (req) => {
                       canonical_amount: (ing as { canonical?: { amount: number } }).canonical?.amount ?? null,
                       canonical_unit: (ing as { canonical?: { unit: string } }).canonical?.unit ?? null,
                     }));
+                    const ageRange = AGE_RANGE_BY_CATEGORY[ageCategoryForLog] ?? AGE_RANGE_BY_CATEGORY.adult;
                     const payload = canonicalizeRecipePayload({
                       user_id: userId,
                       member_id: memberIdForRecipe,
@@ -1149,7 +1202,7 @@ serve(async (req) => {
                       mealType: validated.mealType ?? null,
                       tags: (validated as { tags?: string[] }).tags ?? null,
                       title: validated.title ?? "Рецепт",
-                      description: (validated.description ?? "").slice(0, 140),
+                      description: (validated.description ?? "").slice(0, 500),
                       cooking_time_minutes: validated.cookingTimeMinutes ?? null,
                       chef_advice: chefAdviceToSave,
                       advice: null,
@@ -1157,6 +1210,8 @@ serve(async (req) => {
                       ingredients: ingredientsPayload,
                       sourceTag: "chat",
                       servings: (validated as { servings?: number }).servings ?? 1,
+                      min_age_months: ageRange.min,
+                      max_age_months: ageRange.max,
                     });
                     const { data: recipeId, error: rpcErr } = await supabaseUser.rpc("create_recipe_with_steps", { payload });
                     if (!rpcErr) savedRecipeId = recipeId ?? null;
@@ -1270,6 +1325,13 @@ serve(async (req) => {
             }),
             { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
+        }
+        if (validated && isDescriptionIncomplete((validated as { description?: string }).description) && DEEPSEEK_API_KEY) {
+          const repaired = await repairDescriptionOnly((validated as { description?: string }).description ?? "", DEEPSEEK_API_KEY);
+          if (repaired) {
+            (validated as Record<string, unknown>).description = repaired;
+            responseRecipes = [validated as Record<string, unknown>];
+          }
         }
       }
 
@@ -1399,6 +1461,7 @@ serve(async (req) => {
                 }),
                 ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({ name: `Ингредиент ${rawIngredients.length + i + 1}`, display_text: null, canonical_amount: null, canonical_unit: null })),
               ];
+          const ageRange = AGE_RANGE_BY_CATEGORY[ageCategoryForLog] ?? AGE_RANGE_BY_CATEGORY.adult;
           const payload = canonicalizeRecipePayload({
             user_id: userId,
             member_id: memberIdForRecipe,
@@ -1415,6 +1478,8 @@ serve(async (req) => {
             ingredients: ingredientsPayload,
             sourceTag: "chat",
             servings: (validatedRecipe as { servings?: number }).servings ?? 1,
+            min_age_months: ageRange.min,
+            max_age_months: ageRange.max,
           });
           const { data: recipeId, error: rpcErr } = await supabaseUser.rpc("create_recipe_with_steps", { payload });
           if (rpcErr) throw rpcErr;

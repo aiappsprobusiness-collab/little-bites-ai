@@ -94,15 +94,15 @@ export function applyIngredientsFallbackHeuristic(
   }
 }
 
-/** Contract: title, description (max 140), ingredients (max 10), steps (max 6, each ≤90 chars), cookingTime, mealType, servings, chefAdvice (max 160). No advice field. */
+/** Contract: title, description (2–4 sentences, max 500), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (max 400). */
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().max(140),
+  description: z.string().max(500),
   cookingTime: z.number().int().min(1).max(240).optional(),
   cookingTimeMinutes: z.number().int().min(1).max(240).optional(),
   ingredients: z.array(IngredientSchema).min(3, "at least 3 ingredients required").max(10),
-  steps: z.array(z.string().min(1).max(90)).min(1).max(6),
-  chefAdvice: z.string().max(160).nullable().optional(),
+  steps: z.array(z.string().min(1).max(200)).min(1).max(10),
+  chefAdvice: z.string().max(400).nullable().optional(),
   mealType: z.enum(["breakfast", "lunch", "snack", "dinner"]).optional(),
   servings: z.number().int().min(1).max(20).optional(),
 });
@@ -139,6 +139,17 @@ function extractJsonFromResponse(text: string): string | null {
       if (depth === 0) return trimmed.slice(start, j + 1);
     }
   }
+  if (depth > 0 && trimmed.length > 100) {
+    let repaired = trimmed.slice(start);
+    if (inString) repaired += quote;
+    for (let i = 0; i < depth; i++) repaired += "}";
+    try {
+      JSON.parse(repaired);
+      return repaired;
+    } catch {
+      // ignore
+    }
+  }
   return null;
 }
 
@@ -167,7 +178,7 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
     const cooking = p.cookingTimeMinutes ?? p.cookingTime;
     const normalized = {
       title: String(p.title).trim(),
-      description: String(p.description ?? "").slice(0, 140),
+      description: String(p.description ?? "").slice(0, 500),
       cookingTimeMinutes: typeof cooking === "number" ? Math.max(1, Math.min(240, Math.floor(cooking))) : 1,
       ingredients: p.ingredients.slice(0, 10).map((ing: unknown) => {
         let name: string;
@@ -193,11 +204,11 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
         return { name, displayText, canonical, ...(substitute != null && { substitute: String(substitute) }) };
       }),
       steps: p.steps
-        .map((s: unknown) => String(s ?? "").trim().slice(0, 90))
+        .map((s: unknown) => String(s ?? "").trim().slice(0, 200))
         .filter((s) => s.length > 0)
-        .slice(0, 6),
+        .slice(0, 10),
       chefAdvice: (p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText) != null
-        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 160)
+        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 400)
         : null,
       mealType: p.mealType ?? undefined,
     };

@@ -66,15 +66,16 @@ Return ONLY valid JSON. No markdown, no text before or after. One object only.
 
 {
   "title": string,
-  "description": string (max 140 chars),
+  "description": string (2–4 full sentences; NO truncation, NO ellipsis, NO unfinished phrases; complete thoughts only),
   "ingredients": [ { "name": string, "amount": string } ] (max 10 items),
-  "steps": string[] (max 6 steps, each max 90 chars),
+  "steps": string[] (6–10 steps, each step one clear sentence, max 200 chars per step),
   "cookingTime": number,
   "mealType": "breakfast" | "lunch" | "dinner" | "snack",
   "servings": number,
-  "chefAdvice": string (max 160 chars, optional)
+  "chefAdvice": string (2–4 sentences, optional)
 }
 
+DESCRIPTION: 2–4 sentences. Do NOT end with "и", "или", "а также", "—", ":" or "...". Write complete, closed sentences.
 INGREDIENTS: every item MUST have "amount" with quantity and unit (e.g. "200 мл", "2 шт.", "1 ст.л."). No bare names.
 `;
 
@@ -88,7 +89,8 @@ export const RECIPE_JSON_RULES = `
 
 /** Description variety: avoid template openings (e.g. "Нежное блюдо…"); vary beginnings; cap overuse of same adjective. */
 export const RECIPE_DESCRIPTION_VARIETY_RULE = `
-DESCRIPTION RULES (field "description", 1–2 sentences, max 140 chars):
+DESCRIPTION RULES (field "description", 2–4 sentences, complete; no truncation, no ellipsis, no unfinished phrases):
+- description: 2–4 full sentences. Never end with "и", "или", "а также", "—", ":" or "...". Each sentence must be complete.
 - Do NOT use template or fixed openings. Do NOT start description with the same adjective in more than 20% of recipes.
 - AVOID overusing: "нежный", "нежное", "нежные", "мягкий", "вкусный", "полезный" at the start of description.
 - Vary your openings. Do NOT repeat the same adjectives in several recipes in a row.
