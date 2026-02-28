@@ -14,8 +14,9 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { safeError, safeLog, safeWarn } from "../_shared/safeLogger.ts";
 import { getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
 import { getMemberAgeContext, isAdultContext } from "../_shared/memberAgeContext.ts";
-import { getInfantMember, decideInfantMode, buildInfantAdaptSlot, buildInfantAltSlot, pickAltRecipeForInfant } from "../_shared/familyPlan.ts";
+import { buildFamilyMemberDataForPlan } from "../_shared/familyMode.ts";
 import { normalizeSlotForWrite } from "../_shared/mealJson.ts";
+import { isFamilyDinnerCandidate } from "../_shared/plan/familyDinnerFilter.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -43,12 +44,7 @@ type RecipeRowPool = {
   max_age_months?: number | null; min_age_months?: number | null;
   recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
 };
-type MealSlot = {
-  recipe_id?: string;
-  title?: string;
-  plan_source?: "pool" | "ai";
-  family?: { infant?: { member_id: string; mode: "adapt" | "alt"; adaptation?: string; alt_recipe_id?: string } };
-};
+type MealSlot = { recipe_id?: string; title?: string; plan_source?: "pool" | "ai" };
 
 const SANITY_BREAKFAST = ["суп", "борщ", "рагу", "плов"];
 const SANITY_LUNCH = ["сырник", "оладь", "каша", "гранола", "тост"];
@@ -424,6 +420,12 @@ serve(async (req) => {
       if (!dayKey || !mealType || !MEAL_KEYS.includes(mealType as NormalizedMealType)) {
         return new Response(JSON.stringify({ error: "missing_day_key_or_meal_type" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+      let replaceMemberData: MemberDataPool | null = memberData;
+      if (memberId == null) {
+        const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, likes, dislikes").eq("user_id", userId);
+        const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
+        replaceMemberData = buildFamilyMemberDataForPlan(membersList);
+      }
       const { data: existingRow } = await supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey).is("member_id", memberId).maybeSingle();
       const currentMeals = (existingRow as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
       const dateKeys = [dayKey, ...getLastNDaysKeys(dayKey, 6)];
@@ -431,7 +433,9 @@ serve(async (req) => {
       const excludeRecipeIds = [...(body.exclude_recipe_ids ?? []), ...replaceRecipeIds];
       const excludeTitleKeys = [...new Set([...(body.exclude_title_keys ?? []), ...replaceTitleKeys])];
       const pool = await fetchPoolCandidates(supabase, userId, memberId, 120);
-      const picked = pickFromPoolInMemory(pool, mealType, memberData, excludeRecipeIds, excludeTitleKeys);
+      const poolForReplace =
+        memberId == null && mealType === "dinner" ? pool.filter((r) => isFamilyDinnerCandidate(r)) : pool;
+      const picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys);
       if (picked) {
         const newMeals = { ...currentMeals, [mealType]: { recipe_id: picked.id, title: picked.title, plan_source: "pool" as const } };
         const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
@@ -511,24 +515,17 @@ serve(async (req) => {
     }
 
     const poolCandidates = await fetchPoolCandidates(supabase, userId, memberId, 120);
-    const isAdultPlan = isAdultContext(memberData);
-    const poolSuitableCount = isAdultPlan ? poolCandidates.filter((r) => r.max_age_months == null || r.max_age_months > 12).length : poolCandidates.length;
 
-    let familyInfant: { id: string; name?: string; age_months: number; allergies?: string[] } | null = null;
+    let effectiveMemberData: MemberDataPool | null = memberData;
     if (memberId == null) {
-      const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies").eq("user_id", userId);
-      const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null }>;
-      const infant = getInfantMember(membersList);
-      if (infant?.id && infant.age_months != null) {
-        familyInfant = {
-          id: infant.id,
-          name: infant.name,
-          age_months: infant.age_months,
-          allergies: (infant as { allergies?: string[] }).allergies ?? undefined,
-        };
-        safeLog("family_mode enabled", { infant_member_id: infant.id, infant_age_months: infant.age_months });
-      }
+      const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, likes, dislikes").eq("user_id", userId);
+      const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
+      effectiveMemberData = buildFamilyMemberDataForPlan(membersList);
+      safeLog("family_mode", { members_count: membersList.length });
     }
+
+    const isAdultPlan = isAdultContext(effectiveMemberData);
+    const poolSuitableCount = isAdultPlan ? poolCandidates.filter((r) => r.max_age_months == null || r.max_age_months > 12).length : poolCandidates.length;
 
     if (poolCandidates.length === 0 || (isAdultPlan && poolSuitableCount === 0)) {
       const totalMs = Date.now() - tRunStart;
@@ -551,7 +548,7 @@ serve(async (req) => {
     }
 
     let cheapTotal = 0;
-    for (const mk of MEAL_KEYS) cheapTotal += getCheapFilteredCount(poolCandidates, mk, [], [], memberData);
+    for (const mk of MEAL_KEYS) cheapTotal += getCheapFilteredCount(poolCandidates, mk, [], [], effectiveMemberData);
     if (cheapTotal === 0) {
       const totalMs = Date.now() - tRunStart;
       safeLog("[TIMING] done", { requestId, totalMs, filledDaysCount: 0, filledSlotsCount: 0, fastFailReason: "cheap_zero" });
@@ -628,8 +625,12 @@ serve(async (req) => {
       const newMeals = { ...currentMeals } as Record<string, MealSlot>;
 
       for (const mealKey of MEAL_KEYS) {
+        const poolForSlot =
+          memberId == null && mealKey === "dinner"
+            ? poolCandidates.filter((r) => isFamilyDinnerCandidate(r))
+            : poolCandidates;
         const excludeTitles = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
-        const picked = pickFromPoolInMemory(poolCandidates, mealKey, memberData, usedRecipeIds, excludeTitles);
+        const picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, usedRecipeIds, excludeTitles);
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
           usedRecipeIds.push(picked.id);
@@ -638,55 +639,6 @@ serve(async (req) => {
           usedCategoriesByMealType[mealKey]?.add(inferDishCategoryKey(picked.title, null, null));
           totalDbCount++;
         }
-      }
-
-      if (familyInfant && Object.keys(newMeals).length > 0) {
-        let adaptCount = 0;
-        let altCount = 0;
-        const altExcludeIds: string[] = [];
-        for (const mealKey of MEAL_KEYS) {
-          const slot = newMeals[mealKey];
-          if (!slot?.recipe_id) continue;
-          const recipe = poolCandidates.find((r) => r.id === slot.recipe_id);
-          if (!recipe) continue;
-          const mode = decideInfantMode(recipe, mealKey);
-          const slotNorm = normalizeMealType(mealKey) ?? mealKey;
-          const mealTypeMatches = (r: import("../_shared/familyPlan.ts").RecipeForFamily, s: string) => {
-            const resolved = getResolvedMealType(r as RecipeRowPool).resolved;
-            return resolved != null && resolved === (normalizeMealType(s) ?? s);
-          };
-          if (mode === "adapt") {
-            slot.family = { infant: buildInfantAdaptSlot(familyInfant.id, recipe) };
-            adaptCount++;
-          } else {
-            const infantMemberData: MemberDataPool = {
-              age_months: familyInfant.age_months,
-              allergies: familyInfant.allergies,
-            };
-            const infantPool = poolCandidates.filter(
-              (r) =>
-                recipeFitsAgeRange(r, familyInfant!.age_months) &&
-                !recipeBlockedByInfantKeywords(r, familyInfant!.age_months) &&
-                passesProfileFilter(r, infantMemberData)
-            );
-            const altRecipe = pickAltRecipeForInfant(
-              infantPool,
-              mealKey,
-              familyInfant.age_months,
-              [...usedRecipeIds, ...altExcludeIds],
-              mealTypeMatches
-            );
-            if (altRecipe) {
-              slot.family = { infant: buildInfantAltSlot(familyInfant.id, altRecipe.id) };
-              altExcludeIds.push(altRecipe.id);
-              altCount++;
-            } else {
-              slot.family = { infant: buildInfantAdaptSlot(familyInfant.id, recipe) };
-              adaptCount++;
-            }
-          }
-        }
-        safeLog("family_layer", { adapt_count: adaptCount, alt_count: altCount });
       }
 
       const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);

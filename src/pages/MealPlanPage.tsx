@@ -18,14 +18,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useLocation } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
+import { PlanModeHint } from "@/components/plan/PlanModeHint";
+import { isFamilySelected } from "@/utils/planModeUtils";
 import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { normalizeTitleKey } from "@/utils/recipePool";
-import { Check, Trash2, MoreVertical, Info } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Check, Trash2, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -260,7 +261,6 @@ export default function MealPlanPage() {
 
   const [replacingSlotKey, setReplacingSlotKey] = useState<string | null>(null);
   const [poolExhaustedContext, setPoolExhaustedContext] = useState<{ dayKey: string; mealType: string } | null>(null);
-  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [clearConfirm, setClearConfirm] = useState<"day" | "week" | null>(null);
   /** Session-level excludes per day for replace_slot: после каждой замены добавляем recipe_id и titleKey, чтобы не крутить одни и те же рецепты. */
   const [sessionExcludeRecipeIds, setSessionExcludeRecipeIds] = useState<Record<string, string[]>>({});
@@ -663,11 +663,16 @@ export default function MealPlanPage() {
                       <MemberSelectorButton className="shrink-0" />
                     </>
                   )}
+                </div>
+                {members.length > 0 && (
+                  <PlanModeHint
+                    mode={isFamilySelected(selectedMemberId, members) ? "family" : "member"}
+                  />
+                )}
                   {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
                     <span className="text-xs text-slate-500">DB: {dayDbCount} | AI: {dayAiCount}</span>
                   )}
                 </div>
-              </div>
               <div className="flex items-center gap-1 shrink-0">
                 <span
                   className={`
@@ -774,16 +779,6 @@ export default function MealPlanPage() {
                 {heroStatusText}
                 {isEmptyDay && selectedDayKey === todayKey && " · Экономит до 30 мин"}
               </p>
-              {(memberDataForPlan?.allergies?.length || memberDataForPlan?.likes?.length || memberDataForPlan?.dislikes?.length) ? (
-                <button
-                  type="button"
-                  onClick={() => setProfileSheetOpen(true)}
-                  className="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <span>Профиль учитывается</span>
-                  <Info className="w-3.5 h-3.5 shrink-0" />
-                </button>
-              ) : null}
             </div>
           </motion.div>
 
@@ -1013,20 +1008,6 @@ export default function MealPlanPage() {
                       proteins={previews[recipeId!]?.proteins}
                       fats={previews[recipeId!]?.fats}
                       carbs={previews[recipeId!]?.carbs}
-                      familyInfant={
-                        plannedMeal?.family_infant
-                          ? {
-                              memberId: plannedMeal.family_infant.member_id,
-                              infantName: members.find((m) => m.id === plannedMeal!.family_infant!.member_id)?.name ?? "Малыш",
-                              mode: plannedMeal.family_infant.mode,
-                              adaptation: plannedMeal.family_infant.adaptation,
-                              altRecipeId: plannedMeal.family_infant.alt_recipe_id,
-                              altRecipeTitle: plannedMeal.family_infant.alt_recipe_id
-                                ? previews[plannedMeal.family_infant.alt_recipe_id]?.title
-                                : undefined,
-                            }
-                          : undefined
-                      }
                       isFavorite={isFavoriteForPlan(recipeId!, memberIdForPlan)}
                       onToggleFavorite={async (rid, next) => {
                         const p = previews[rid];
@@ -1351,37 +1332,6 @@ export default function MealPlanPage() {
         mealPlansKeyDay={mealPlansKeyDay}
         queryClient={queryClient}
       />
-
-      <Sheet open={profileSheetOpen} onOpenChange={setProfileSheetOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl">
-          <SheetHeader className="text-left pb-3">
-            <SheetTitle>Профиль учитывается</SheetTitle>
-          </SheetHeader>
-          <div className="flex flex-col gap-4 pb-6 text-sm">
-            {memberDataForPlan?.allergies?.length ? (
-              <div>
-                <p className="font-medium text-muted-foreground mb-1">Аллергии</p>
-                <p className="text-foreground">{memberDataForPlan.allergies.join(", ")}</p>
-              </div>
-            ) : null}
-            {memberDataForPlan?.likes?.length ? (
-              <div>
-                <p className="font-medium text-muted-foreground mb-1">Любит</p>
-                <p className="text-foreground">{memberDataForPlan.likes.join(", ")}</p>
-              </div>
-            ) : null}
-            {memberDataForPlan?.dislikes?.length ? (
-              <div>
-                <p className="font-medium text-muted-foreground mb-1">Не любит</p>
-                <p className="text-foreground">{memberDataForPlan.dislikes.join(", ")}</p>
-              </div>
-            ) : null}
-            {(!memberDataForPlan?.allergies?.length && !memberDataForPlan?.likes?.length && !memberDataForPlan?.dislikes?.length) ? (
-              <p className="text-muted-foreground">Нет указанных аллергий и предпочтений.</p>
-            ) : null}
-          </div>
-        </SheetContent>
-      </Sheet>
 
       <ConfirmActionModal
         open={clearConfirm !== null}

@@ -3,17 +3,19 @@ import { safeError } from "@/utils/safeLogger";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { CHAT_HISTORY_SELECT, CHAT_LAST_MESSAGES } from '@/lib/supabase-constants';
+import { getChatThreadKey } from '@/utils/chatThreadKey';
 
 /**
  * selectedMemberId: "family" | member_id — контекст чата.
  * family → child_id IS NULL, иначе child_id = selectedMemberId.
- * Загружаем только неархивные (archived_at IS NULL).
+ * History is per threadKey (member:id or family:userId).
  */
 export function useChatHistory(selectedMemberId: string | null) {
   const { user } = useAuth();
+  const threadKey = getChatThreadKey({ userId: user?.id, selectedMemberId });
 
   const { data: messages = [], isLoading, refetch } = useQuery({
-    queryKey: ['chat_history', user?.id, selectedMemberId ?? 'family'],
+    queryKey: ['chat_history', user?.id, threadKey],
     queryFn: async () => {
       if (!user) return [];
 

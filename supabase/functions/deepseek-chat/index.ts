@@ -36,6 +36,8 @@ import { validateRecipeJson, parseAndValidateRecipeJsonFromString, getRecipeOrFa
 import { isExplicitDishRequest, inferMealTypeFromQuery } from "../_shared/mealType/inferMealType.ts";
 import { validateRecipe, retryFixJson } from "../_shared/parsing/index.ts";
 import { buildRecipeDescription, buildChefAdvice, shouldReplaceDescription, shouldReplaceChefAdvice } from "../_shared/recipeCopy.ts";
+import { buildFamilyMemberDataForChat } from "../_shared/familyMode.ts";
+import { getFamilyContextPromptLine, getFamilyContextPromptLineEmpty } from "../_shared/memberConstraints.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -412,9 +414,9 @@ function applyPromptTemplate(
   allMembers: MemberData[] = [],
   options?: { weekContext?: string; varietyRules?: string; userMessage?: string; generationContextBlock?: string; mealType?: string; maxCookingTime?: number; servings?: number; recentTitleKeysLine?: string }
 ): string {
-  // Семья: для ageMonths используем самого младшего члена; иначе — выбранный Member
+  // Семья: используем merged memberData (взрослый возраст, без возрастных ограничений); иначе — выбранный Member или самый младший
   const youngestMember = targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : null;
-  const primaryMember = youngestMember ?? memberData;
+  const primaryMember = (targetIsFamily && memberData) ? memberData : (youngestMember ?? memberData);
 
   const name = (primaryMember?.name ?? "").trim() || "член семьи";
   const targetProfile = targetIsFamily ? "Семья" : name;
@@ -459,25 +461,11 @@ function applyPromptTemplate(
   const servings = options?.servings != null && options.servings >= 1 ? String(options.servings) : "1";
   const recentTitleKeysLine = options?.recentTitleKeysLine?.trim() || "";
 
-  const ADULT_AGE_MONTHS = 336; // 28+ лет — взрослое меню
   let familyContext = `Профиль: ${name}`;
   if (targetIsFamily && allMembers.length > 0) {
-    const adults = allMembers.filter((m) => getAgeMonths(m) >= ADULT_AGE_MONTHS);
-    const children = allMembers.filter((m) => getAgeMonths(m) < ADULT_AGE_MONTHS);
-    const adultNames = adults.map((m) => m.name || "взрослый").join(", ");
-    const childInfo = children
-      .map((m) => `${m.name || "ребёнок"} (${getCalculatedAge(m) || getAgeMonths(m) + " мес."})`)
-      .join(", ");
-    const parts: string[] = [];
-    if (adultNames) {
-      parts.push(`Меню для взрослых (Adult Menu): ${adultNames}. Для взрослых ТОЛЬКО взрослые блюда — НЕ предлагай детские каши на воде, пюре, прикормовые блюда.`);
-    }
-    if (childInfo) {
-      parts.push(`Прикорм/меню для ребёнка (Infant/Toddler Menu): ${childInfo}.`);
-    }
-    familyContext = parts.length > 0 ? parts.join(" ") : `Готовим для всей семьи: ${allMembers.map((m) => `${m.name || "член семьи"} (${getCalculatedAge(m)})`).join(", ")}`;
+    familyContext = getFamilyContextPromptLine();
   } else if (targetIsFamily) {
-    familyContext = `Готовим для всей семьи (${name}, ${age})`;
+    familyContext = getFamilyContextPromptLineEmpty();
   }
 
   let out = template
@@ -740,13 +728,6 @@ serve(async (req) => {
     } = body;
     const servings = typeof reqServings === "number" && reqServings >= 1 && reqServings <= 20 ? reqServings : 1;
 
-    if (type === "chat" && (memberId == null || memberId === "family")) {
-      return new Response(
-        JSON.stringify({ error: "select_profile", message: "Выберите профиль" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
     const isRecipeRequestByType = recipeTypes.includes(type as (typeof recipeTypes)[number]);
 
@@ -890,8 +871,12 @@ serve(async (req) => {
       }
     }
 
+    if (targetIsFamily && allMembers.length > 0) {
+      memberDataNorm = buildFamilyMemberDataForChat(allMembers) as MemberData;
+    }
+
     const primaryForAge =
-      targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : memberDataNorm;
+      targetIsFamily && memberDataNorm ? memberDataNorm : (memberDataNorm ?? (allMembers.length > 0 ? findYoungestMember(allMembers) : null));
     let ageMonthsForCategory = primaryForAge ? getAgeMonths(primaryForAge) : 0;
     // Страховка: если возраст получился 0, но в теле запроса он есть — берём из запроса (один профиль)
     if (ageMonthsForCategory === 0 && memberDataNorm && !targetIsFamily) {

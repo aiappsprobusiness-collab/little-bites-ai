@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, Heart, Share2, CalendarPlus, Pencil, Trash2, Clock } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, Share2, CalendarPlus, Pencil, Trash2 } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -28,11 +28,11 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { getMealLabel } from "@/data/mealLabels";
-import { recipeHeroCard, recipeTimeClass, recipeMealBadge } from "@/theme/recipeTokens";
+import { recipeHeroCard } from "@/theme/recipeTokens";
 import { IngredientChips, type IngredientOverrides } from "@/components/recipe/IngredientChips";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
-import { NutritionBadge } from "@/components/recipe/NutritionBadge";
+import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -324,10 +324,18 @@ export default function RecipePage() {
   };
 
   const benefitLabel = description?.trim() ? getBenefitLabel(selectedMember?.age_months ?? undefined) : null;
-  const recipeCalories = (recipe as { calories?: number | null }).calories;
-  const recipeProteins = (recipe as { proteins?: number | null }).proteins;
-  const recipeFats = (recipe as { fats?: number | null }).fats;
-  const recipeCarbs = (recipe as { carbs?: number | null }).carbs;
+  const recipeNutrition =
+    (recipe as { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).calories != null ||
+    (recipe as { proteins?: number | null }).proteins != null ||
+    (recipe as { fats?: number | null }).fats != null ||
+    (recipe as { carbs?: number | null }).carbs != null
+      ? {
+          calories: (recipe as { calories?: number | null }).calories ?? null,
+          proteins: (recipe as { proteins?: number | null }).proteins ?? null,
+          fats: (recipe as { fats?: number | null }).fats ?? null,
+          carbs: (recipe as { carbs?: number | null }).carbs ?? null,
+        }
+      : null;
 
   return (
     <MobileLayout
@@ -341,37 +349,12 @@ export default function RecipePage() {
         {/* Hero card: чуть шире (меньше отступ от краёв на 8px), визуальный акцент */}
         <div className="-mx-2">
           <div className={cn(recipeHeroCard, "space-y-3")}>
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2 gap-y-1.5">
-              {mealLabel && <span className={recipeMealBadge}>{mealLabel}</span>}
-              {cookingTime != null && cookingTime > 0 && (
-                <span className={cn(recipeTimeClass)}>
-                  <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                  <span>{cookingTime} мин</span>
-                </span>
-              )}
-              {(recipeCalories != null && recipeProteins != null && recipeFats != null && recipeCarbs != null) && (
-                <NutritionBadge
-                  variant="detail"
-                  part="row1"
-                  calories={recipeCalories}
-                  proteins={recipeProteins}
-                  fats={recipeFats}
-                  carbs={recipeCarbs}
-                />
-              )}
-            </div>
-            {(recipeCalories != null && recipeProteins != null && recipeFats != null && recipeCarbs != null) && (
-              <NutritionBadge
-                variant="detail"
-                part="row2"
-                calories={recipeCalories}
-                proteins={recipeProteins}
-                fats={recipeFats}
-                carbs={recipeCarbs}
-              />
-            )}
-          </div>
+          <RecipeNutritionHeader
+            mealTypeLabel={mealLabel}
+            cookingTimeMinutes={typeof cookingTime === "number" ? cookingTime : null}
+            nutrition={recipeNutrition}
+            variant="details"
+          />
           {benefitLabel && (
             <p className="text-xs font-semibold text-muted-foreground">{benefitLabel}</p>
           )}

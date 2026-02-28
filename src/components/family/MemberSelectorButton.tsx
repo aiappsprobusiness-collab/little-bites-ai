@@ -21,8 +21,6 @@ export interface MemberSelectorButtonProps {
   className?: string;
   /** light = компактная пилюля без тяжёлой заливки (Chat). */
   variant?: "default" | "light";
-  /** Скрыть пункт «Семья» (только реальные профили). Используется во вкладке Чат. */
-  hideFamilyOption?: boolean;
 }
 
 /**
@@ -36,7 +34,6 @@ export function MemberSelectorButton({
   onProfileChange,
   className = "",
   variant = "default",
-  hideFamilyOption = false,
 }: MemberSelectorButtonProps) {
   const { members, selectedMemberId, setSelectedMemberId, isFreeLocked } = useFamily();
   const { hasAccess } = useSubscription();
@@ -47,13 +44,9 @@ export function MemberSelectorButton({
   const [showPicker, setShowPicker] = useState(false);
 
   const displayName = useMemo(() => {
-    if (hideFamilyOption && (selectedMemberId === "family" || !selectedMemberId)) {
-      const first = members[0];
-      return first?.name ?? "Выберите профиль";
-    }
     if (selectedMemberId === "family" || !selectedMemberId) return "Семья";
     return members.find((c) => c.id === selectedMemberId)?.name ?? "Семья";
-  }, [selectedMemberId, members, hideFamilyOption]);
+  }, [selectedMemberId, members]);
 
   const isLight = variant === "light";
   const pillClasses = isLight
@@ -126,7 +119,7 @@ export function MemberSelectorButton({
             <DialogTitle className="text-typo-title font-semibold">Кому готовим?</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-1 py-2">
-            {!isFree && !hideFamilyOption && (
+            {!isFree && (
               <button
                 type="button"
                 disabled={disabled}

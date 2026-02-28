@@ -61,8 +61,5 @@ export function normalizeSlotForWrite(slot: MealSlotValue | null | undefined): M
   };
   if (slot.servings != null) out.servings = slot.servings;
   if (Array.isArray(slot.ingredient_overrides)) out.ingredient_overrides = slot.ingredient_overrides;
-  if (slot.family != null && typeof slot.family === "object" && slot.family.infant != null) {
-    out.family = { infant: slot.family.infant };
-  }
   return out;
 }

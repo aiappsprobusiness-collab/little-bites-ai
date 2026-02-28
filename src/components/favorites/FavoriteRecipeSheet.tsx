@@ -15,7 +15,6 @@ import { IngredientChips } from "@/components/recipe/IngredientChips";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeMetaRow } from "@/components/recipe/RecipeMetaRow";
-import { NutritionBadge } from "@/components/recipe/NutritionBadge";
 
 function normalizeIngredients(raw: unknown): ParsedIngredient[] {
   if (!Array.isArray(raw)) return [];
@@ -70,10 +69,18 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
   const advice = (recipe as { advice?: string }).advice;
   const tip = (isPremium && chefAdvice?.trim()) ? chefAdvice.trim() : (advice?.trim() ?? chefAdvice?.trim());
   const isChefTip = isPremium && chefAdvice?.trim();
-  const calories = (recipe as { calories?: number | null }).calories;
-  const proteins = (recipe as { proteins?: number | null }).proteins;
-  const fats = (recipe as { fats?: number | null }).fats;
-  const carbs = (recipe as { carbs?: number | null }).carbs;
+  const nutrition =
+    (recipe as { calories?: number | null }).calories != null ||
+    (recipe as { proteins?: number | null }).proteins != null ||
+    (recipe as { fats?: number | null }).fats != null ||
+    (recipe as { carbs?: number | null }).carbs != null
+      ? {
+          calories: (recipe as { calories?: number | null }).calories ?? null,
+          proteins: (recipe as { proteins?: number | null }).proteins ?? null,
+          fats: (recipe as { fats?: number | null }).fats ?? null,
+          carbs: (recipe as { carbs?: number | null }).carbs ?? null,
+        }
+      : null;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -94,12 +101,8 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
               title={title}
               benefitLabel={description ? getBenefitLabel(ageMonths) : null}
               description={description || null}
+              nutrition={nutrition}
             />
-            {(calories != null || proteins != null || fats != null || carbs != null) && (
-              <div className="mt-2 mb-1">
-                <NutritionBadge variant="full" calories={calories} proteins={proteins} fats={fats} carbs={carbs} />
-              </div>
-            )}
             <IngredientChips ingredients={ingredients} variant="full" />
             <RecipeMetaRow>
               <span className="inline-flex items-center gap-1 rounded-full bg-primary-light border border-primary-border px-2 py-0.5 text-[11px] font-medium text-foreground">

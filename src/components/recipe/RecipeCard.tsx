@@ -3,7 +3,6 @@ import { RecipeHeader, type RecipeHeaderVariant } from "./RecipeHeader";
 import { IngredientChips, type IngredientDisplayItem } from "./IngredientChips";
 import { ChefAdviceCard } from "./ChefAdviceCard";
 import { RecipeSteps } from "./RecipeSteps";
-import { NutritionBadge } from "./NutritionBadge";
 import { cn } from "@/lib/utils";
 
 export type RecipeCardVariant = "preview" | "chat" | "full";
@@ -33,7 +32,7 @@ export interface RecipeCardProps {
   onClick?: () => void;
   className?: string;
   children?: React.ReactNode;
-  /** КБЖУ на порцию. Отображается только для Premium/Trial внутри NutritionBadge. */
+  /** КБЖУ на порцию (мета-строка в шапке + строка БЖУ под шапкой). */
   nutrition?: { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null } | null;
 }
 
@@ -59,6 +58,7 @@ export function RecipeCard({
   const isPreview = variant === "preview";
   const isFull = variant === "full";
   const headerVariant: RecipeHeaderVariant = isPreview ? "compact" : isFull ? "full" : "chat";
+  const headerWithNutrition = { ...header, nutrition };
 
   const tipBody = (showChefTip && chefAdvice?.trim()) ? chefAdvice!.trim() : (advice?.trim() ?? chefAdvice?.trim());
   const isChefTip = !!(showChefTip && chefAdvice?.trim());
@@ -71,16 +71,6 @@ export function RecipeCard({
 
   const innerBody = (
     <>
-      {!isPreview && nutrition != null && (
-        <NutritionBadge
-          variant="full"
-          calories={nutrition.calories}
-          proteins={nutrition.proteins}
-          fats={nutrition.fats}
-          carbs={nutrition.carbs}
-          className="mt-2"
-        />
-      )}
       <IngredientChips
         ingredients={ingredients}
         overrides={ingredientOverrides}
@@ -121,9 +111,8 @@ export function RecipeCard({
         <div className="flex items-start justify-between gap-2 w-full">
           <div className="min-w-0 flex-1">
             <RecipeHeader
-              {...header}
+              {...headerWithNutrition}
               variant="compact"
-              nutritionCompact={isPreview && nutrition != null ? nutrition : undefined}
             />
             <div className={cn(bodyPadding, bodySpace)}>
               {innerBody}
@@ -141,7 +130,7 @@ export function RecipeCard({
 
   return (
     <div className={cn(recipeCard, className)}>
-      <RecipeHeader {...header} variant={headerVariant} />
+      <RecipeHeader {...headerWithNutrition} variant={headerVariant} />
       <div className={cn(bodyPadding, bodySpace)}>
         {innerBody}
       </div>

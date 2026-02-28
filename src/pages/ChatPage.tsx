@@ -22,12 +22,6 @@ import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type
 import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import {
   DropdownMenu,
@@ -35,8 +29,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getSuggestionChips } from "@/utils/chatSuggestionChips";
-import { getTimeOfDayLine, formatAllergySummary } from "@/utils/chatHeroUtils";
+import { getQuickPromptsForMode } from "@/utils/quickPrompts";
+import { QuickPromptsSheet } from "@/components/chat/QuickPromptsSheet";
+import { formatAllergySummary } from "@/utils/chatHeroUtils";
+import { ChatModeHint } from "@/components/chat/ChatModeHint";
+import { isFamilySelected } from "@/utils/planModeUtils";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import type { LimitReachedFeature } from "@/utils/limitReachedMessages";
 import { getRewrittenQueryIfFollowUp, deriveDishHint } from "@/utils/blockedFollowUp";
@@ -235,14 +232,6 @@ export default function ChatPage() {
     const t = setTimeout(dismissHelpTooltip, 3000);
     return () => clearTimeout(t);
   }, [showHelpTooltip, mode, dismissHelpTooltip]);
-
-  /** Во вкладке Чат нет профиля «Семья»: при открытии с family/null авто-выбираем первого участника. */
-  useEffect(() => {
-    if (mode !== "recipes" || isLoadingMembers || members.length === 0) return;
-    if (selectedMemberId === "family" || selectedMemberId == null) {
-      setSelectedMemberId(members[0].id);
-    }
-  }, [mode, isLoadingMembers, members, selectedMemberId, setSelectedMemberId]);
 
   // Очищаем сообщения при смене профиля или списка членов семьи (только в recipes)
   useEffect(() => {
@@ -531,24 +520,13 @@ export default function ChatPage() {
     }
   }, [messages]);
 
-  const suggestionChips = useMemo(() => {
+  const quickPrompts = useMemo(() => {
     if (mode !== "recipes") return [];
-    const isFamily = selectedMemberId === "family";
-    const allergies = isFamily
-      ? [...new Set(members.flatMap((m) => m.allergies ?? []))]
-      : (selectedMember?.allergies ?? []);
-    const ageMonths = isFamily
-      ? (() => {
-        const ages = members.map((m) => m.age_months).filter((a): a is number => a != null);
-        return ages.length > 0 ? Math.min(...ages) : null;
-      })()
-      : (selectedMember?.age_months ?? null);
-    return getSuggestionChips({
-      selectedMemberId: selectedMemberId ?? null,
-      ageMonths,
-      allergies,
-      isFamily,
-      memberName: isFamily ? null : selectedMember?.name ?? null,
+    const isFamily = selectedMemberId === "family" || selectedMemberId == null;
+    return getQuickPromptsForMode({
+      mode: isFamily ? "family" : "member",
+      selectedMember: selectedMember ?? null,
+      members: members,
     });
   }, [mode, selectedMemberId, selectedMember, members]);
 
@@ -557,13 +535,13 @@ export default function ChatPage() {
 
   /** Пустой чат (recipes): один раз за сессию 2 pulse на кнопке "?". Без зависимости от производной константы — только примитивы, чтобы избежать TDZ в prod-бандле. */
   useEffect(() => {
-    const isEmptyHintState = showStarter && !hasUserMessage && members.length > 0 && mode === "recipes" && (hintsSeen || suggestionChips.length === 0);
+    const isEmptyHintState = showStarter && !hasUserMessage && members.length > 0 && mode === "recipes" && (hintsSeen || quickPrompts.length === 0);
     if (!isEmptyHintState || hintPulseShownRef.current) return;
     hintPulseShownRef.current = true;
     setShowHintPulseAccent(true);
     const t = setTimeout(() => setShowHintPulseAccent(false), 2000);
     return () => clearTimeout(t);
-  }, [showStarter, hasUserMessage, members.length, mode, hintsSeen, suggestionChips]);
+  }, [showStarter, hasUserMessage, members.length, mode, hintsSeen, quickPrompts]);
 
   const sendInProgressRef = useRef(false);
   const handleSend = useCallback(async (text?: string) => {
@@ -920,13 +898,6 @@ export default function ChatPage() {
         );
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
-      } else if (err?.message === "Выберите профиль") {
-        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
-        toast({
-          variant: "destructive",
-          title: "Выберите профиль",
-          description: "Для генерации рецептов в чате выберите, кому готовим.",
-        });
       } else {
         const fallbackText = "Не удалось распознать рецепт. Попробуйте уточнить запрос.";
         setMessages((prev) =>
@@ -1052,8 +1023,6 @@ export default function ChatPage() {
     return `Для ${name} · ${allergySummary}`;
   }, [mode, selectedMemberId, selectedMember, members, chatProfileName]);
 
-  const chatTimeOfDayLine = useMemo(() => getTimeOfDayLine(), []);
-
   /** Строка статуса в hero (без имени — имя только в pill): "Аллергии: ..." или "Без ограничений". */
   const chatHeroStatusLine = useMemo(() => {
     if (mode === "help") return "";
@@ -1074,11 +1043,7 @@ export default function ChatPage() {
         {mode === "recipes" && members.length > 0 && (
           <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-2 pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <MemberSelectorButton
-                hideFamilyOption
-                onProfileChange={() => setMessages([])}
-                className="shrink-0"
-              />
+              <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
               {mode === "recipes" && members.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -1101,9 +1066,11 @@ export default function ChatPage() {
                 </DropdownMenu>
               )}
             </div>
-            <p className="text-xs text-muted-foreground/80 mt-1.5 leading-snug">
-              {chatTimeOfDayLine}
-            </p>
+            <div className="mt-1.5">
+              <ChatModeHint
+                mode={isFamilySelected(selectedMemberId, members) ? "family" : "member"}
+              />
+            </div>
             {chatHeaderMeta != null && <div className="mt-0.5">{chatHeaderMeta}</div>}
             {messages.length === 0 && (
               <button
@@ -1148,14 +1115,14 @@ export default function ChatPage() {
             <FamilyOnboarding onComplete={() => { }} />
           )}
 
-          {mode === "recipes" && showStarter && !hasUserMessage && members.length > 0 && !hintsSeen && suggestionChips.length > 0 && (
+          {mode === "recipes" && showStarter && !hasUserMessage && members.length > 0 && !hintsSeen && quickPrompts.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">Начните с подсказки</p>
               <div
                 className="flex gap-2 overflow-x-auto overflow-y-hidden pb-2 min-w-0 scrollbar-none"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
-                {suggestionChips.slice(0, 4).map((phrase) => (
+                {quickPrompts.slice(0, 4).map((phrase) => (
                   <button
                     key={phrase}
                     type="button"
@@ -1329,33 +1296,16 @@ export default function ChatPage() {
         onOpenChange={(open) => !open && setOpenArticleId(null)}
         isLoading={isArticleLoading}
       />
-      <Sheet open={showHintsModal} onOpenChange={setShowHintsModal}>
-        <SheetContent
-          side="bottom"
-          overlayClassName="sheet-hints-overlay"
-          className="sheet-hints-content rounded-t-2xl max-h-[70vh] flex flex-col"
-        >
-          <SheetHeader className="text-left pb-3">
-            <SheetTitle>Подсказки</SheetTitle>
-          </SheetHeader>
-          <div className="flex flex-col gap-1.5 overflow-y-auto pb-safe">
-            {suggestionChips.slice(0, 8).map((phrase) => (
-              <button
-                key={phrase}
-                type="button"
-                onClick={() => {
-                  setInput(phrase);
-                  setShowHintsModal(false);
-                  textareaRef.current?.focus();
-                }}
-                className="text-left px-3 py-2.5 rounded-xl bg-primary-light/80 border border-primary-border hover:bg-primary-light text-[13px] leading-snug transition-colors"
-              >
-                {phrase}
-              </button>
-            ))}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <QuickPromptsSheet
+        open={showHintsModal}
+        onOpenChange={setShowHintsModal}
+        prompts={quickPrompts}
+        onSelect={(phrase) => {
+          setInput(phrase);
+          setShowHintsModal(false);
+          textareaRef.current?.focus();
+        }}
+      />
       <ConfirmActionModal
         open={showClearConfirm}
         onOpenChange={setShowClearConfirm}
