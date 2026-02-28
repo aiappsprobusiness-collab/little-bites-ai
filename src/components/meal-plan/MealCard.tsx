@@ -71,6 +71,15 @@ export interface MealCardProps {
   proteins?: number | null;
   fats?: number | null;
   carbs?: number | null;
+  /** Family 1.0: блок "👶 Для <имя>: adapt текст или alt-рецепт". */
+  familyInfant?: {
+    memberId: string;
+    infantName: string;
+    mode: "adapt" | "alt";
+    adaptation?: string;
+    altRecipeId?: string;
+    altRecipeTitle?: string;
+  } | null;
 }
 
 const CHIP_PLACEHOLDER_COUNT = 3;
@@ -102,6 +111,7 @@ export function MealCard({
   proteins: nutritionProteins,
   fats: nutritionFats,
   carbs: nutritionCarbs,
+  familyInfant,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -178,6 +188,7 @@ export function MealCard({
         : null;
 
     return (
+      <>
       <RecipeCard
         variant="preview"
         header={{
@@ -245,6 +256,30 @@ export function MealCard({
         }
         className={className}
       />
+      {familyInfant && (
+        <div className="mt-2 rounded-xl bg-muted/60 border border-border px-3 py-2 text-typo-caption text-muted-foreground">
+          <span className="font-medium text-foreground">👶 Для {familyInfant.infantName}:</span>{" "}
+          {familyInfant.mode === "adapt" && familyInfant.adaptation}
+          {familyInfant.mode === "alt" && (
+            <>
+              {familyInfant.altRecipeTitle ?? "Отдельный рецепт"}
+              {familyInfant.altRecipeId && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/recipe/${familyInfant!.altRecipeId!}`);
+                  }}
+                  className="ml-1.5 text-primary font-medium hover:underline"
+                >
+                  Открыть
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </>
     );
   }
 
@@ -297,6 +332,31 @@ export function MealCard({
       {hint && (
         <div className="text-typo-caption text-muted-foreground mt-0.5 leading-relaxed">
           {hint}
+        </div>
+      )}
+      {familyInfant && (
+        <div className="mt-2 rounded-xl bg-muted/60 border border-border px-3 py-2 text-typo-caption text-muted-foreground">
+          <span className="font-medium text-foreground">👶 Для {familyInfant.infantName}:</span>{" "}
+          {familyInfant.mode === "adapt" && familyInfant.adaptation}
+          {familyInfant.mode === "alt" && (
+            <>
+              {familyInfant.altRecipeTitle ?? "Отдельный рецепт"}
+              {familyInfant.altRecipeId && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/recipe/${familyInfant!.altRecipeId!}`);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), navigate(`/recipe/${familyInfant!.altRecipeId!}`))}
+                  className="ml-1.5 text-primary font-medium hover:underline cursor-pointer"
+                >
+                  Открыть
+                </span>
+              )}
+            </>
+          )}
         </div>
       )}
     </button>

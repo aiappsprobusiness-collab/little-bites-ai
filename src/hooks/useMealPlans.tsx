@@ -9,13 +9,22 @@ import type { IngredientOverrideEntry } from '@/types/ingredientOverrides';
 const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'] as const;
 type MealType = (typeof MEAL_SLOTS)[number];
 
-/** Slot in meals jsonb: recipe_id, title, servings, ingredient_overrides (plan-only, never in recipes table). */
+/** Family 1.0: infant layer for a meal slot (adapt or alt recipe). */
+export interface FamilyInfantSlotJson {
+  member_id: string;
+  mode: "adapt" | "alt";
+  adaptation?: string;
+  alt_recipe_id?: string;
+}
+
+/** Slot in meals jsonb: recipe_id, title, servings, ingredient_overrides, family (plan-only). */
 export interface MealSlotJson {
   recipe_id?: string;
   title?: string;
   plan_source?: "pool" | "ai";
   servings?: number;
   ingredient_overrides?: IngredientOverrideEntry[];
+  family?: { infant?: FamilyInfantSlotJson };
 }
 
 /** V2: one row per day; meals = { breakfast?: MealSlotJson, ... } */
@@ -41,6 +50,8 @@ export interface MealPlanItemV2 {
   servings?: number;
   /** Замены ингредиентов только для этого слота (не в БД рецептов). */
   ingredient_overrides?: IngredientOverrideEntry[];
+  /** Family 1.0: infant adapt/alt для этого приёма пищи. */
+  family_infant?: FamilyInfantSlotJson;
 }
 
 function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
@@ -60,6 +71,7 @@ function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
       plan_source: slot.plan_source,
       servings: slot.servings,
       ingredient_overrides: slot.ingredient_overrides,
+      family_infant: slot.family?.infant,
     });
   }
   return result;

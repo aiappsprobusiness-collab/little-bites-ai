@@ -236,6 +236,14 @@ export default function ChatPage() {
     return () => clearTimeout(t);
   }, [showHelpTooltip, mode, dismissHelpTooltip]);
 
+  /** Во вкладке Чат нет профиля «Семья»: при открытии с family/null авто-выбираем первого участника. */
+  useEffect(() => {
+    if (mode !== "recipes" || isLoadingMembers || members.length === 0) return;
+    if (selectedMemberId === "family" || selectedMemberId == null) {
+      setSelectedMemberId(members[0].id);
+    }
+  }, [mode, isLoadingMembers, members, selectedMemberId, setSelectedMemberId]);
+
   // Очищаем сообщения при смене профиля или списка членов семьи (только в recipes)
   useEffect(() => {
     if (mode !== "recipes") return;
@@ -912,6 +920,13 @@ export default function ChatPage() {
         );
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+      } else if (err?.message === "Выберите профиль") {
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+        toast({
+          variant: "destructive",
+          title: "Выберите профиль",
+          description: "Для генерации рецептов в чате выберите, кому готовим.",
+        });
       } else {
         const fallbackText = "Не удалось распознать рецепт. Попробуйте уточнить запрос.";
         setMessages((prev) =>
@@ -1059,7 +1074,11 @@ export default function ChatPage() {
         {mode === "recipes" && members.length > 0 && (
           <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-2 pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
+              <MemberSelectorButton
+                hideFamilyOption
+                onProfileChange={() => setMessages([])}
+                className="shrink-0"
+              />
               {mode === "recipes" && members.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

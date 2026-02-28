@@ -740,6 +740,13 @@ serve(async (req) => {
     } = body;
     const servings = typeof reqServings === "number" && reqServings >= 1 && reqServings <= 20 ? reqServings : 1;
 
+    if (type === "chat" && (memberId == null || memberId === "family")) {
+      return new Response(
+        JSON.stringify({ error: "select_profile", message: "Выберите профиль" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
     const isRecipeRequestByType = recipeTypes.includes(type as (typeof recipeTypes)[number]);
 

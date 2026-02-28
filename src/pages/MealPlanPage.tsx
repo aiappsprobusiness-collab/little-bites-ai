@@ -1013,6 +1013,20 @@ export default function MealPlanPage() {
                       proteins={previews[recipeId!]?.proteins}
                       fats={previews[recipeId!]?.fats}
                       carbs={previews[recipeId!]?.carbs}
+                      familyInfant={
+                        plannedMeal?.family_infant
+                          ? {
+                              memberId: plannedMeal.family_infant.member_id,
+                              infantName: members.find((m) => m.id === plannedMeal!.family_infant!.member_id)?.name ?? "Малыш",
+                              mode: plannedMeal.family_infant.mode,
+                              adaptation: plannedMeal.family_infant.adaptation,
+                              altRecipeId: plannedMeal.family_infant.alt_recipe_id,
+                              altRecipeTitle: plannedMeal.family_infant.alt_recipe_id
+                                ? previews[plannedMeal.family_infant.alt_recipe_id]?.title
+                                : undefined,
+                            }
+                          : undefined
+                      }
                       isFavorite={isFavoriteForPlan(recipeId!, memberIdForPlan)}
                       onToggleFavorite={async (rid, next) => {
                         const p = previews[rid];

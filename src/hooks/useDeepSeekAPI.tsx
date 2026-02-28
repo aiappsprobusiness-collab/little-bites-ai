@@ -123,6 +123,9 @@ export function useDeepSeekAPI() {
       const activeProfileId: string | 'family' = (currentSelectedMemberId === null || currentSelectedMemberId === 'family')
         ? 'family'
         : currentSelectedMemberId;
+      if (type === 'chat' && (activeProfileId === 'family' || currentSelectedMemberId == null)) {
+        throw new Error('Выберите профиль');
+      }
       const family: Family = {
         id: 'family',
         profiles: freshMembers.map((c) => toProfile(c)),
