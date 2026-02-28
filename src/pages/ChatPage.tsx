@@ -28,16 +28,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1338,27 +1329,15 @@ export default function ChatPage() {
           </div>
         </SheetContent>
       </Sheet>
-      <AlertDialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Очистить чат?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Все сообщения будут скрыты. Данные не удаляются.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col gap-2 sm:flex-col">
-            <AlertDialogAction
-              onClick={handleClearChatConfirm}
-              className="w-full rounded-full bg-primary text-primary-foreground hover:opacity-90"
-            >
-              Очистить
-            </AlertDialogAction>
-            <AlertDialogCancel className="w-full rounded-full border-primary text-primary">
-              Отмена
-            </AlertDialogCancel>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmActionModal
+        open={showClearConfirm}
+        onOpenChange={setShowClearConfirm}
+        title="Очистить чат?"
+        description="Все сообщения будут скрыты. Данные не удаляются."
+        confirmText="Очистить"
+        cancelText="Отмена"
+        onConfirm={handleClearChatConfirm}
+      />
     </MobileLayout>
   );
 }

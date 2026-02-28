@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { TagListEditor } from "@/components/ui/tag-list-editor";
 import {
   AlertDialog,
@@ -232,6 +233,10 @@ export default function ChildProfileEditPage() {
       toast({ variant: "destructive", title: "Введите имя" });
       return;
     }
+    if (!birthDate?.trim()) {
+      toast({ variant: "destructive", title: "Укажите дату рождения" });
+      return;
+    }
     if (activeAllergyCount > limits.maxAllergiesPerProfile) {
       setPaywallCustomMessage("Аллергии и исключения — в Trial");
       setShowPaywall(true);
@@ -315,7 +320,7 @@ export default function ChildProfileEditPage() {
         <Button
           className="bg-[#7A8F4D] hover:bg-[#6a7e41] text-white border-0 rounded-[10px] px-[14px] py-2 h-auto font-medium"
           onClick={handleSave}
-          disabled={isCreating || isUpdating || !hasChanges}
+          disabled={isCreating || isUpdating || !hasChanges || !birthDate?.trim()}
         >
           {(isCreating || isUpdating) ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -332,56 +337,53 @@ export default function ChildProfileEditPage() {
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <>
-              {/* Карточка 1: Основная информация */}
-              <div className="profile-card">
-                <h2 className="profile-card-title mb-4">Основная информация</h2>
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="child-name" className="profile-label">
-                      Имя
-                    </label>
+            <div className="bg-background rounded-2xl p-6 shadow-lg border border-border space-y-5">
+              {/* Основная информация */}
+              <div className="space-y-5">
+                <h2 className="text-typo-title font-semibold text-foreground">Основная информация</h2>
+                <div className="space-y-2">
+                  <Label htmlFor="child-name" className="text-typo-muted font-medium">Имя</Label>
+                  <Input
+                    id="child-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Имя ребёнка или взрослого"
+                    className="h-11 border-2"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="child-birth" className="text-typo-muted font-medium">Дата рождения <span className="text-destructive">*</span></Label>
+                  <div className="relative">
                     <Input
-                      id="child-name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Имя ребёнка"
-                      className="profile-input h-auto min-h-[44px] text-base placeholder:text-[#9CA3AF] focus-visible:ring-0 focus-visible:ring-offset-0"
+                      id="child-birth"
+                      type="date"
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      className="h-11 border-2 pl-3 pr-12"
                     />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById("child-birth")?.focus()}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground"
+                      aria-label="Выбрать дату"
+                    >
+                      <Calendar className="w-5 h-5" />
+                    </button>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label htmlFor="child-birth" className="profile-label">
-                      Дата рождения
-                    </label>
-                    <div className="relative">
-                      <Input
-                        id="child-birth"
-                        type="date"
-                        value={birthDate}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                        className="profile-input h-auto min-h-[44px] pl-3 pr-12 text-base placeholder:text-[#9CA3AF] focus-visible:ring-0 focus-visible:ring-offset-0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById("child-birth")?.focus()}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-[#9CA3AF] hover:text-foreground"
-                        aria-label="Выбрать дату"
-                      >
-                        <Calendar className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <p className="text-[13px] text-[#9CA3AF] mt-0.5">
-                      Возраст считается автоматически
-                    </p>
-                  </div>
+                  <p className="text-typo-caption text-muted-foreground">
+                    Возраст считается автоматически
+                  </p>
                 </div>
               </div>
 
-              {/* Карточка 2: Аллергии */}
-              <div className="profile-card">
-                <h2 className="profile-card-title mb-4">Аллергии</h2>
+              {/* Аллергии */}
+              <div className="space-y-2">
+                <h2 className="text-typo-title font-semibold text-foreground">Аллергии</h2>
+                <p className="text-typo-caption text-muted-foreground">
+                  Нажмите на чип для редактирования, крестик — удалить
+                </p>
                 {allergyItems.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3">
+                  <div className="flex flex-wrap gap-2 mb-2">
                     {allergyItems.map((item, i) => {
                       const isLocked = !hasAccess && !item.is_active;
                       return (
@@ -421,31 +423,19 @@ export default function ChildProfileEditPage() {
                     <button
                       type="button"
                       onClick={() => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); }}
-                      className="profile-pill-add-btn w-full gap-2 font-medium text-sm"
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-border bg-background font-medium text-sm text-muted-foreground hover:bg-muted/30"
                     >
                       <Plus className="w-5 h-5" />
                       Добавить аллергию
                     </button>
-                    <p className="text-[13px] text-[#9CA3AF] mt-2">
+                    <p className="text-typo-caption text-muted-foreground mt-1.5">
                       В Free доступна 1 аллергия
                     </p>
                   </>
                 ) : (
                   <>
-                    <label htmlFor="child-allergy-add" className="flex h-11 items-center gap-3 px-4 rounded-xl border border-[#E5E7EB] bg-white hover:border-[#7A8F4D]/40 transition-colors cursor-text w-full profile-input">
-                      <button
-                        type="button"
-                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (allergyInput.trim()) allergiesHandlers.add(allergyInput);
-                        }}
-                        disabled={!allergyInput.trim()}
-                        aria-label="Добавить аллергию"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                      <input
+                    <div className="flex gap-2">
+                      <Input
                         id="child-allergy-add"
                         value={allergyInput}
                         onChange={(e) => setAllergyInput(e.target.value)}
@@ -455,29 +445,40 @@ export default function ChildProfileEditPage() {
                             allergiesHandlers.add(allergyInput);
                           }
                         }}
-                        placeholder="Добавить аллергию"
-                        className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground placeholder:text-[#9CA3AF] focus:outline-none focus:ring-0"
+                        placeholder="Добавить аллергию (запятая или Enter)"
+                        className="h-11 border-2 flex-1"
                       />
-                    </label>
-                    <p className="text-[13px] text-[#9CA3AF] mt-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-11 w-11 shrink-0"
+                        onClick={() => allergyInput.trim() && allergiesHandlers.add(allergyInput)}
+                        disabled={!allergyInput.trim()}
+                        aria-label="Добавить"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </Button>
+                    </div>
+                    <p className="text-typo-caption text-muted-foreground mt-1.5">
                       {!hasAccess ? "В Free доступна 1 аллергия" : "Запятая или Enter."}
                     </p>
                   </>
                 )}
               </div>
 
-              {/* Карточка 3: Предпочтения */}
-              <div className="profile-card">
-                <h2 className="profile-card-title mb-4">Предпочтения</h2>
+              {/* Предпочтения */}
+              <div className="space-y-2">
+                <h2 className="text-typo-title font-semibold text-foreground">Предпочтения</h2>
                 {isFree ? (
                   <>
                     <button
                       type="button"
                       onClick={openPaywallLikesDislikes}
-                      className="text-left w-full rounded-xl border border-[#E5E7EB] bg-white p-4 hover:border-[#7A8F4D]/40 hover:bg-[#EEF3E5]/30 transition-colors"
+                      className="text-left w-full rounded-xl border-2 border-border bg-background p-4 hover:bg-muted/30 transition-colors"
                     >
-                      <p className="profile-label font-medium text-[#2F3A2E]">Любит</p>
-                      <p className="text-[13px] text-[#9CA3AF] mt-0.5">Помогает точнее подбирать рецепты</p>
+                      <p className="text-typo-muted font-medium">Любит</p>
+                      <p className="text-typo-caption text-muted-foreground mt-0.5">Помогает точнее подбирать рецепты</p>
                       <div className="flex flex-wrap gap-2 mt-3">
                         {LIKES_GHOST_CHIPS.map((chip) => (
                           <span key={chip} className="profile-pill" style={{ background: "#EEF3E5", color: "#556B2F" }}>
@@ -485,18 +486,18 @@ export default function ChildProfileEditPage() {
                           </span>
                         ))}
                       </div>
-                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium profile-pill-add-btn">
+                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border-2 border-border">
                         ✨ Настроить (Premium)
                       </div>
                     </button>
-                    <div className="profile-divider" />
+                    <div className="h-px bg-border my-4" />
                     <button
                       type="button"
                       onClick={openPaywallLikesDislikes}
-                      className="text-left w-full rounded-xl border border-[#E5E7EB] bg-white p-4 hover:border-[#7A8F4D]/40 hover:bg-[#EEF3E5]/30 transition-colors"
+                      className="text-left w-full rounded-xl border-2 border-border bg-background p-4 hover:bg-muted/30 transition-colors"
                     >
-                      <p className="profile-label font-medium text-[#2F3A2E]">Не любит</p>
-                      <p className="text-[13px] text-[#9CA3AF] mt-0.5">Помогает точнее подбирать рецепты</p>
+                      <p className="text-typo-muted font-medium">Не любит</p>
+                      <p className="text-typo-caption text-muted-foreground mt-0.5">Помогает точнее подбирать рецепты</p>
                       <div className="flex flex-wrap gap-2 mt-3">
                         {DISLIKES_GHOST_CHIPS.map((chip) => (
                           <span key={chip} className="profile-pill" style={{ background: "#EEF3E5", color: "#556B2F" }}>
@@ -504,80 +505,75 @@ export default function ChildProfileEditPage() {
                           </span>
                         ))}
                       </div>
-                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium profile-pill-add-btn">
+                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border-2 border-border">
                         ✨ Настроить (Premium)
                       </div>
                     </button>
                     <button
                       type="button"
                       onClick={openPaywallLikesDislikes}
-                      className="text-left w-full rounded-xl border border-[#E5E7EB] bg-white p-4 mt-3 hover:border-[#7A8F4D]/40 hover:bg-[#EEF3E5]/30 transition-colors"
+                      className="text-left w-full rounded-xl border-2 border-border bg-background p-4 mt-3 hover:bg-muted/30 transition-colors"
                     >
-                      <p className="profile-label font-medium text-[#2F3A2E]">Сложность блюд</p>
-                      <p className="text-[13px] text-[#9CA3AF] mt-0.5">Простые, средние или любые — в Premium</p>
-                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium profile-pill-add-btn">
+                      <p className="text-typo-muted font-medium">Сложность блюд</p>
+                      <p className="text-typo-caption text-muted-foreground mt-0.5">Простые, средние или любые — в Premium</p>
+                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border-2 border-border">
                         ✨ Настроить (Premium)
                       </div>
                     </button>
                   </>
                 ) : (
                   <>
-                    <div className="flex flex-col gap-2">
-                      <p className="profile-label font-medium text-[#2F3A2E]">Любит</p>
+                    <div className="space-y-5">
                       <TagListEditor
                         id="profile-likes"
-                        label=""
+                        label="Любит"
                         items={likes}
                         inputValue={likesInput}
                         onInputChange={setLikesInput}
                         onAdd={likesHandlers.add}
                         onEdit={likesHandlers.edit}
                         onRemove={likesHandlers.remove}
-                        placeholder="Добавить (например: ягоды, рыба)"
-                        unified
-                        variant="pill"
-                        helperText={`Запятая или Enter. До ${MAX_CHIPS} пунктов.`}
+                        placeholder="Например: ягоды, рыба (запятая или Enter)"
                       />
-                    </div>
-                    <div className="profile-divider" />
-                    <div className="flex flex-col gap-2">
-                      <p className="profile-label font-medium text-[#2F3A2E]">Не любит</p>
                       <TagListEditor
                         id="profile-dislikes"
-                        label=""
+                        label="Не любит"
                         items={dislikes}
-                        inputValue={dislikesInput}
-                        onInputChange={setDislikesInput}
-                        onAdd={dislikesHandlers.add}
-                        onEdit={dislikesHandlers.edit}
-                        onRemove={dislikesHandlers.remove}
-                        placeholder="Добавить (например: лук, мясо)"
-                        unified
-                        variant="pill"
-                        helperText={`Запятая или Enter. До ${MAX_CHIPS} пунктов.`}
+                      inputValue={dislikesInput}
+                      onInputChange={setDislikesInput}
+                      onAdd={dislikesHandlers.add}
+                      onEdit={dislikesHandlers.edit}
+                      onRemove={dislikesHandlers.remove}
+                      placeholder="Например: лук, мясо (запятая или Enter)"
                       />
                     </div>
-                    <div className="flex flex-col gap-2 mt-4">
-                      <p className="profile-label font-medium text-[#2F3A2E]">Сложность блюд</p>
-                      <div className="flex rounded-xl bg-[#EEF3E5]/60 p-1 gap-0">
-                        {[
-                          { value: "easy", label: "Простые" },
-                          { value: "medium", label: "Средние" },
-                          { value: "any", label: "Любые" },
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => setDifficulty(opt.value)}
-                            className={`flex-1 h-9 rounded-[10px] text-sm font-medium transition-colors ${
-                              difficulty === opt.value
-                                ? "bg-[#7A8F4D] text-white shadow-sm"
-                                : "bg-transparent text-[#556B2F] hover:bg-[#EEF3E5]"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
+                    <div className="space-y-2">
+                      <Label className="text-typo-muted font-medium">Сложность блюд</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={difficulty === "easy" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setDifficulty("easy")}
+                        >
+                          Простые
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={difficulty === "medium" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setDifficulty("medium")}
+                        >
+                          Средние
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={difficulty === "any" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setDifficulty("any")}
+                        >
+                          Любые
+                        </Button>
                       </div>
                     </div>
                   </>
@@ -587,7 +583,7 @@ export default function ChildProfileEditPage() {
               {!isNew && member && (
                 <Button
                   variant="ghost"
-                  className="w-full h-11 rounded-xl text-[#6B7280] hover:text-destructive hover:bg-destructive/5 text-sm font-medium"
+                  className="w-full h-11 text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-sm font-medium"
                   onClick={() => setShowDeleteConfirm(true)}
                   disabled={isDeleting}
                 >
@@ -595,7 +591,7 @@ export default function ChildProfileEditPage() {
                   Удалить профиль
                 </Button>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>
