@@ -32,7 +32,10 @@ import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
 import { buildBlockedTokenSet, findMatchedTokens, textWithoutExclusionPhrases } from "../_shared/blockedTokens.ts";
-import { validateRecipeJson, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
+import { validateRecipeJson, parseAndValidateRecipeJsonFromString, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
+import { isExplicitDishRequest, inferMealTypeFromQuery } from "../_shared/mealType/inferMealType.ts";
+import { validateRecipe, retryFixJson } from "../_shared/parsing/index.ts";
+import { buildRecipeDescription, buildChefAdvice, isGenericText } from "../_shared/recipeCopy.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -992,9 +995,13 @@ serve(async (req) => {
 
     const tSystemPromptStart = Date.now();
     const promptUserMessage = (type === "sos_consultant" || type === "balance_check") ? userMessage : undefined;
+    const mealTypeForPrompt =
+      isRecipeRequest && userMessage && isExplicitDishRequest(userMessage) && inferMealTypeFromQuery(userMessage)
+        ? inferMealTypeFromQuery(userMessage)!
+        : (reqMealType ?? "");
     const cached = getCachedSystemPrompt(type, memberDataForPrompt, isPremiumUser);
     let systemPrompt =
-      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContextForPrompt, promptUserMessage, reqGenerationContextBlock, reqMealType, reqMaxCookingTime, varietyRulesForPrompt, servings, recentTitleKeysLine);
+      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContextForPrompt, promptUserMessage, reqGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, varietyRulesForPrompt, servings, recentTitleKeysLine);
 
     // Только если рецепт не запрашиваем — даём краткий ответ без рецепта (для soft теперь рецепт генерируем)
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft" && !isRecipeRequest) {
@@ -1164,14 +1171,41 @@ serve(async (req) => {
               }
               logPerf("llm_body", tBodyStartStream, requestId, { response_chars: fullContent.length });
               logPerf("llm_total", tLlmStart, requestId);
-              let validated = validateRecipeJson(fullContent.trim());
+              const streamParseLog = (msg: string, meta?: Record<string, unknown>) =>
+                console.log(JSON.stringify({ tag: "RECIPE_PARSE", requestId, ...meta, msg }));
+              const rawStreamContent = fullContent.trim();
+              let validated: RecipeJson | null = null;
+              const streamResult = validateRecipe(rawStreamContent, parseAndValidateRecipeJsonFromString);
+              if (streamResult.stage === "ok" && streamResult.valid) {
+                validated = streamResult.valid;
+              } else if (DEEPSEEK_API_KEY && streamResult.stage !== "ok") {
+                streamParseLog("stream first attempt failed", { stage: streamResult.stage, responseLength: rawStreamContent.length });
+                const retryResult = await retryFixJson({
+                  apiKey: DEEPSEEK_API_KEY,
+                  rawResponse: rawStreamContent.slice(0, 3500),
+                  validationError: (streamResult as { error?: string }).error ?? "unknown",
+                  requestId,
+                  log: streamParseLog,
+                });
+                if (retryResult.success && retryResult.fixed) {
+                  validated = parseAndValidateRecipeJsonFromString(retryResult.fixed);
+                  if (validated) streamParseLog("stream retry succeeded", { retrySuccess: true });
+                }
+              }
               if (validated && ingredientsNeedAmountRetry(validated.ingredients)) {
                 applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
               }
-              if (validated && isDescriptionIncomplete((validated as { description?: string }).description) && DEEPSEEK_API_KEY) {
-                const repaired = await repairDescriptionOnly((validated as { description?: string }).description ?? "", DEEPSEEK_API_KEY);
-                if (repaired) {
-                  (validated as Record<string, unknown>).description = repaired;
+              if (validated) {
+                const desc = (validated as { description?: string }).description;
+                const advice = validated.chefAdvice ?? "";
+                if (!desc || isGenericText(desc) || isDescriptionIncomplete(desc)) {
+                  const keyIngredient = Array.isArray(validated.ingredients) && validated.ingredients[0] && typeof validated.ingredients[0] === "object" && validated.ingredients[0].name ? String(validated.ingredients[0].name) : undefined;
+                  (validated as Record<string, unknown>).description = isDescriptionIncomplete(desc) && DEEPSEEK_API_KEY
+                    ? (await repairDescriptionOnly(desc ?? "", DEEPSEEK_API_KEY)) ?? buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient })
+                    : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
+                }
+                if (!advice.trim() || isGenericText(advice)) {
+                  (validated as Record<string, unknown>).chefAdvice = buildChefAdvice({ title: validated.title, userText: userMessage });
                 }
               }
               let savedRecipeId: string | null = null;
@@ -1210,6 +1244,7 @@ serve(async (req) => {
                       ingredients: ingredientsPayload,
                       sourceTag: "chat",
                       servings: (validated as { servings?: number }).servings ?? 1,
+                      nutrition: validated.nutrition ?? null,
                       min_age_months: ageRange.min,
                       max_age_months: ageRange.max,
                     });
@@ -1226,7 +1261,7 @@ serve(async (req) => {
               }
               const donePayload = {
                 recipe_id: savedRecipeId,
-                message: validated ? JSON.stringify(validated) : fullContent.trim(),
+                message: validated ? JSON.stringify(validated) : "Не удалось распознать рецепт из ответа. Попробуйте переформулировать запрос или упростить его.",
                 recipes: responseRecipesStream,
               };
               controller.enqueue(encoder.encode("event: done\ndata: " + JSON.stringify(donePayload) + "\n\n"));
@@ -1297,41 +1332,70 @@ serve(async (req) => {
 
       if (isRecipeJsonRequest) {
         const tNormStart = Date.now();
-        let validated = validateRecipeJson(assistantMessage);
+        const parseLog = (msg: string, meta?: Record<string, unknown>) =>
+          console.log(JSON.stringify({ tag: "RECIPE_PARSE", requestId, ...meta, msg }));
+        let validated: RecipeJson | null = null;
+        const result = validateRecipe(assistantMessage, parseAndValidateRecipeJsonFromString);
+        if (result.stage === "ok" && result.valid) {
+          validated = result.valid;
+        } else {
+          parseLog("first attempt failed", { stage: result.stage, error: result.stage !== "ok" ? (result as { error: string }).error : undefined, responseLength: assistantMessage.length });
+          if (DEEPSEEK_API_KEY && result.stage !== "ok") {
+            const retryResult = await retryFixJson({
+              apiKey: DEEPSEEK_API_KEY,
+              rawResponse: assistantMessage.slice(0, 3500),
+              validationError: (result as { error?: string }).error ?? "unknown",
+              requestId,
+              log: parseLog,
+            });
+            if (retryResult.success && retryResult.fixed) {
+              const retryValidated = parseAndValidateRecipeJsonFromString(retryResult.fixed);
+              if (retryValidated) {
+                validated = retryValidated;
+                parseLog("retry succeeded", { retrySuccess: true });
+              } else {
+                parseLog("retry returned invalid JSON", { retrySuccess: false });
+              }
+            } else {
+              parseLog("retry failed or empty", { retrySuccess: false });
+            }
+          }
+        }
         logPerf("normalize_ingredients", tNormStart, requestId);
         if (validated) {
           if (ingredientsNeedAmountRetry(validated.ingredients)) {
             applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
             safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
           }
-          if (validated) {
-            assistantMessage = JSON.stringify(validated);
-            responseRecipes = [validated as Record<string, unknown>];
+          const desc = (validated as { description?: string }).description;
+          const advice = validated.chefAdvice ?? "";
+          if (!desc || isGenericText(desc) || isDescriptionIncomplete(desc)) {
+            const keyIngredient = Array.isArray(validated.ingredients) && validated.ingredients[0] && typeof validated.ingredients[0] === "object" && validated.ingredients[0].name
+              ? String(validated.ingredients[0].name)
+              : undefined;
+            (validated as Record<string, unknown>).description = isDescriptionIncomplete(desc) && DEEPSEEK_API_KEY
+              ? (await repairDescriptionOnly(desc ?? "", DEEPSEEK_API_KEY)) ?? buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient })
+              : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
           }
+          if (!advice.trim() || isGenericText(advice)) {
+            (validated as Record<string, unknown>).chefAdvice = buildChefAdvice({ title: validated.title, userText: userMessage });
+          }
+          assistantMessage = JSON.stringify(validated);
+          responseRecipes = [validated as Record<string, unknown>];
         }
         if (!validated) {
-          safeLog("Recipe JSON parse/validate failed", requestId);
-          const truncate = 2048;
-          const rawTruncated = assistantMessage.length > truncate ? assistantMessage.slice(0, truncate) + "\n...[truncated]" : assistantMessage;
-          safeWarn("INVALID_JSON after repair", requestId, rawTruncated);
+          parseLog("Recipe JSON parse/validate failed (no validated after retry)", { responseLength: assistantMessage.length });
           return new Response(
             JSON.stringify({
               ok: false,
               error: {
                 code: "INVALID_JSON",
-                message: "Model returned invalid JSON",
+                message: "Не удалось распознать рецепт из ответа. Попробуйте переформулировать запрос или упростить его.",
                 request_id: requestId,
               },
             }),
             { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
-        }
-        if (validated && isDescriptionIncomplete((validated as { description?: string }).description) && DEEPSEEK_API_KEY) {
-          const repaired = await repairDescriptionOnly((validated as { description?: string }).description ?? "", DEEPSEEK_API_KEY);
-          if (repaired) {
-            (validated as Record<string, unknown>).description = repaired;
-            responseRecipes = [validated as Record<string, unknown>];
-          }
         }
       }
 
@@ -1478,6 +1542,7 @@ serve(async (req) => {
             ingredients: ingredientsPayload,
             sourceTag: "chat",
             servings: (validatedRecipe as { servings?: number }).servings ?? 1,
+            nutrition: validatedRecipe.nutrition ?? null,
             min_age_months: ageRange.min,
             max_age_months: ageRange.max,
           });

@@ -66,6 +66,11 @@ export interface MealCardProps {
   onDelete?: () => void;
   /** При включённом __PLAN_DEBUG / ?debugPool=1: показывать бейдж DB или AI. */
   debugSource?: "db" | "ai";
+  /** КБЖУ на порцию (для NutritionBadge, только Premium/Trial). */
+  calories?: number | null;
+  proteins?: number | null;
+  fats?: number | null;
+  carbs?: number | null;
 }
 
 const CHIP_PLACEHOLDER_COUNT = 3;
@@ -93,6 +98,10 @@ export function MealCard({
   replaceShowsLock = false,
   onDelete,
   debugSource,
+  calories: nutritionCalories,
+  proteins: nutritionProteins,
+  fats: nutritionFats,
+  carbs: nutritionCarbs,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -158,6 +167,16 @@ export function MealCard({
         </div>
       );
     }
+    const nutrition =
+      nutritionCalories != null || nutritionProteins != null || nutritionFats != null || nutritionCarbs != null
+        ? {
+            calories: nutritionCalories ?? null,
+            proteins: nutritionProteins ?? null,
+            fats: nutritionFats ?? null,
+            carbs: nutritionCarbs ?? null,
+          }
+        : null;
+
     return (
       <RecipeCard
         variant="preview"
@@ -169,6 +188,7 @@ export function MealCard({
         ingredients={ingredientNames}
         maxIngredientChips={INGREDIENT_CHIPS_MAX_COMPACT}
         hint={hint ?? null}
+        nutrition={nutrition}
         onClick={handleClick}
         actions={
           showActionsCompact ? (

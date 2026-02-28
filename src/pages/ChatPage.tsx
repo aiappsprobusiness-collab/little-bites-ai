@@ -436,7 +436,7 @@ export default function ChatPage() {
     }
     supabase
       .from("recipes")
-      .select("id, title, description, cooking_time_minutes, meal_type, chef_advice, advice, recipe_ingredients(name, display_text, canonical_amount, canonical_unit), recipe_steps(instruction, step_number)")
+      .select("id, title, description, cooking_time_minutes, meal_type, chef_advice, advice, calories, proteins, fats, carbs, recipe_ingredients(name, display_text, canonical_amount, canonical_unit), recipe_steps(instruction, step_number)")
       .in("id", recipeIds)
       .then(({ data: rows, error }) => {
         const recipeMap: Record<string, ParsedRecipe> = {};
@@ -452,6 +452,10 @@ export default function ChatPage() {
           meal_type?: string | null;
           chef_advice?: string | null;
           advice?: string | null;
+          calories?: number | null;
+          proteins?: number | null;
+          fats?: number | null;
+          carbs?: number | null;
           recipe_ingredients?: Array<{ name: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null }>;
           recipe_steps?: Array<{ instruction: string; step_number: number }>;
         }) => {
@@ -471,6 +475,10 @@ export default function ChatPage() {
             mealType: (r.meal_type as ParsedRecipe["mealType"]) ?? undefined,
             chefAdvice: r.chef_advice ?? undefined,
             advice: r.advice ?? undefined,
+            calories: r.calories ?? undefined,
+            proteins: r.proteins ?? undefined,
+            fats: r.fats ?? undefined,
+            carbs: r.carbs ?? undefined,
           };
         });
         formatWithRecipeMap(recipeMap);

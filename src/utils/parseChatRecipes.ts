@@ -27,6 +27,11 @@ export interface ParsedRecipe {
   chefAdvice?: string;
   /** Мини-совет (Free, поле advice в JSON). */
   advice?: string;
+  /** КБЖУ на порцию (от API/БД). Отображаются только для Premium/Trial. */
+  calories?: number | null;
+  proteins?: number | null;
+  fats?: number | null;
+  carbs?: number | null;
 }
 
 /** Проверка: элемент ингредиента — объект с полем name (Premium-формат). */
@@ -436,6 +441,23 @@ export function parseRecipesFromApiResponse(
       return String(item);
     });
     const steps = Array.isArray(r.steps) ? (r.steps as string[]).map((s) => String(s ?? "").trim()).filter(Boolean) : [];
+    const nutrition = r.nutrition as { kcal_per_serving?: number; protein_g_per_serving?: number; fat_g_per_serving?: number; carbs_g_per_serving?: number } | undefined;
+    const calories =
+      typeof r.calories === "number" ? r.calories
+        : nutrition && typeof nutrition.kcal_per_serving === "number" ? Math.round(nutrition.kcal_per_serving)
+        : null;
+    const proteins =
+      typeof r.proteins === "number" ? r.proteins
+        : nutrition && typeof nutrition.protein_g_per_serving === "number" ? nutrition.protein_g_per_serving
+        : null;
+    const fats =
+      typeof r.fats === "number" ? r.fats
+        : nutrition && typeof nutrition.fat_g_per_serving === "number" ? nutrition.fat_g_per_serving
+        : null;
+    const carbs =
+      typeof r.carbs === "number" ? r.carbs
+        : nutrition && typeof nutrition.carbs_g_per_serving === "number" ? nutrition.carbs_g_per_serving
+        : null;
     return {
       title: String(title).trim(),
       description: typeof r.description === "string" ? r.description : undefined,
@@ -445,6 +467,10 @@ export function parseRecipesFromApiResponse(
       mealType: r.mealType as ParsedRecipe["mealType"],
       chefAdvice: extractChefAdvice(r as Record<string, unknown>),
       advice: typeof r.advice === "string" ? r.advice : undefined,
+      calories: calories ?? undefined,
+      proteins: proteins ?? undefined,
+      fats: fats ?? undefined,
+      carbs: carbs ?? undefined,
     };
   });
   const displayText = recipes.length > 0 ? formatRecipeForDisplay(recipes[0]) : fallbackDisplayText;

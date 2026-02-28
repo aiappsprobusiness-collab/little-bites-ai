@@ -115,16 +115,39 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
         });
       }
 
-      const { data: recipeMetaRows } = await supabase.from('recipes').select('id, member_id, chef_advice, advice, meal_type').in('id', recipeIds);
+      const { data: recipeMetaRows } = await supabase
+        .from('recipes')
+        .select('id, member_id, chef_advice, advice, meal_type, calories, proteins, fats, carbs')
+        .in('id', recipeIds);
       const memberIdByRecipeId = new Map<string, string | null>();
       const chefAdviceByRecipeId = new Map<string, string | null>();
       const adviceByRecipeId = new Map<string, string | null>();
       const mealTypeByRecipeId = new Map<string, string | null>();
-      for (const row of (recipeMetaRows ?? []) as { id: string; member_id: string | null; chef_advice?: string | null; advice?: string | null; meal_type?: string | null }[]) {
+      const nutritionByRecipeId = new Map<
+        string,
+        { calories: number | null; proteins: number | null; fats: number | null; carbs: number | null }
+      >();
+      for (const row of (recipeMetaRows ?? []) as {
+        id: string;
+        member_id: string | null;
+        chef_advice?: string | null;
+        advice?: string | null;
+        meal_type?: string | null;
+        calories?: number | null;
+        proteins?: number | null;
+        fats?: number | null;
+        carbs?: number | null;
+      }[]) {
         memberIdByRecipeId.set(row.id, row.member_id ?? null);
         chefAdviceByRecipeId.set(row.id, row.chef_advice ?? null);
         adviceByRecipeId.set(row.id, row.advice ?? null);
         mealTypeByRecipeId.set(row.id, row.meal_type ?? null);
+        nutritionByRecipeId.set(row.id, {
+          calories: row.calories ?? null,
+          proteins: row.proteins ?? null,
+          fats: row.fats ?? null,
+          carbs: row.carbs ?? null,
+        });
       }
 
       return list.map((f) => {
@@ -147,6 +170,7 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
           : { id: f.recipe_id, member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined, ...(mealTypeFromDb && { mealType: mealTypeFromDb }) } as StoredRecipe;
         const chefFromDb = chefAdviceByRecipeId.get(f.recipe_id);
         const adviceFromDb = adviceByRecipeId.get(f.recipe_id);
+        const nutrition = nutritionByRecipeId.get(f.recipe_id);
         if (typeof chefFromDb === 'string' && chefFromDb.trim()) {
           (recipe as StoredRecipe & { chefAdvice?: string }).chefAdvice = chefFromDb.trim();
         } else if (typeof (f.recipe_data as { chefAdvice?: string })?.chefAdvice === 'string' && (f.recipe_data as { chefAdvice: string }).chefAdvice.trim()) {
@@ -156,6 +180,12 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
           (recipe as StoredRecipe & { advice?: string }).advice = adviceFromDb.trim();
         } else if (typeof (f.recipe_data as { advice?: string })?.advice === 'string' && (f.recipe_data as { advice: string }).advice.trim()) {
           (recipe as StoredRecipe & { advice?: string }).advice = (f.recipe_data as { advice: string }).advice.trim();
+        }
+        if (nutrition && (nutrition.calories != null || nutrition.proteins != null || nutrition.fats != null || nutrition.carbs != null)) {
+          (recipe as StoredRecipe & { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).calories = nutrition.calories;
+          (recipe as StoredRecipe & { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).proteins = nutrition.proteins;
+          (recipe as StoredRecipe & { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).fats = nutrition.fats;
+          (recipe as StoredRecipe & { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).carbs = nutrition.carbs;
         }
         return {
           id: f.id,

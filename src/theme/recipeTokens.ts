@@ -46,3 +46,16 @@ export const recipeSectionLabel = "text-xs font-medium text-muted-foreground upp
 /** Нумерация шагов: жирный номер в лёгком круге */
 export const recipeStepNum = "inline-flex shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold items-center justify-center";
 export const recipeStepText = "text-sm text-foreground leading-[1.6] flex-1 min-w-0 break-words";
+
+/** Чипса КБЖУ: тот же стиль, что и ингредиенты (мягкая, спокойная) */
+export const recipeNutritionChip =
+  "inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 bg-primary-light/70 border border-primary-border/60 text-xs text-foreground";
+/** Ккал с мягким primary (деталь/чат) */
+export const recipeNutritionChipKcal =
+  "inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 bg-primary/10 border border-primary-border/50 text-xs text-primary";
+/** БЖУ вторичные (менее контрастные) */
+export const recipeNutritionChipBju =
+  "inline-flex items-center gap-1 rounded-full px-2 py-1 bg-muted/50 border border-border/60 text-xs text-muted-foreground";
+/** Компактная ккал в meta-row (план): как время, часть строки мета */
+export const recipeNutritionMetaKcal =
+  "inline-flex items-center gap-1 text-xs text-muted-foreground";

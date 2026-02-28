@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Clock } from "lucide-react";
 import { recipeHeaderBg, recipeMealBadge, recipeTimeClass } from "@/theme/recipeTokens";
+import { NutritionBadge } from "./NutritionBadge";
 import { cn } from "@/lib/utils";
 
 export type RecipeHeaderVariant = "compact" | "chat" | "full";
@@ -15,6 +16,8 @@ export interface RecipeHeaderProps {
   /** Скрыть заголовок (например, когда он уже в SheetTitle) */
   hideTitle?: boolean;
   className?: string;
+  /** Компактная чипса КБЖУ в одну строку со временем (план/избранное) */
+  nutritionCompact?: { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null } | null;
 }
 
 export function RecipeHeader({
@@ -26,6 +29,7 @@ export function RecipeHeader({
   variant = "chat",
   hideTitle = false,
   className,
+  nutritionCompact,
 }: RecipeHeaderProps) {
   const isCompact = variant === "compact";
   const isFull = variant === "full";
@@ -49,13 +53,24 @@ export function RecipeHeader({
   return (
     <header className={cn(recipeHeaderBg, paddingClass, className)}>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 mb-2">
-        {mealLabel && <span className={recipeMealBadge}>{mealLabel}</span>}
-        {cookingTimeMinutes != null && cookingTimeMinutes > 0 && (
-          <span className={recipeTimeClass}>
-            <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
-            <span>{cookingTimeMinutes} мин</span>
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          {mealLabel && <span className={recipeMealBadge}>{mealLabel}</span>}
+          {cookingTimeMinutes != null && cookingTimeMinutes > 0 && (
+            <span className={recipeTimeClass}>
+              <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+              <span>{cookingTimeMinutes} мин</span>
+            </span>
+          )}
+          {isCompact && nutritionCompact != null && (
+            <NutritionBadge
+              variant="compact"
+              calories={nutritionCompact.calories}
+              proteins={nutritionCompact.proteins}
+              fats={nutritionCompact.fats}
+              carbs={nutritionCompact.carbs}
+            />
+          )}
+        </div>
       </div>
       {!hideTitle && <h2 className={cn(titleClass, "mb-1")}>{title}</h2>}
       {showDescription && (

@@ -18,6 +18,11 @@ const MAX_INGREDIENT_CHIPS = 3;
 
 export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isPremium = false, members, onAddToPlan }: FavoriteCardProps) {
   const vm = toFavoriteCardViewModel(favorite.recipe);
+  const r = favorite.recipe as { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null };
+  const nutrition =
+    r.calories != null || r.proteins != null || r.fats != null || r.carbs != null
+      ? { calories: r.calories ?? null, proteins: r.proteins ?? null, fats: r.fats ?? null, carbs: r.carbs ?? null }
+      : null;
 
   return (
     <motion.div
@@ -35,6 +40,7 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
         ingredients={vm.ingredientNames}
         maxIngredientChips={MAX_INGREDIENT_CHIPS}
         hint={vm.hint}
+        nutrition={nutrition}
         onClick={onTap}
         actions={
           <>

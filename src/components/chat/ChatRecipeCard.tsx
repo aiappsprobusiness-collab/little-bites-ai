@@ -12,6 +12,10 @@ export interface ChatRecipeCardRecipe {
   chefAdvice?: string;
   advice?: string;
   mealType?: string;
+  calories?: number | null;
+  proteins?: number | null;
+  fats?: number | null;
+  carbs?: number | null;
 }
 
 export interface ChatRecipeCardProps {
@@ -31,6 +35,16 @@ export function ChatRecipeCard({
 }: ChatRecipeCardProps) {
   const mealLabel = getMealLabel(recipe.mealType) ?? null;
 
+  const nutrition =
+    recipe.calories != null || recipe.proteins != null || recipe.fats != null || recipe.carbs != null
+      ? {
+          calories: recipe.calories ?? null,
+          proteins: recipe.proteins ?? null,
+          fats: recipe.fats ?? null,
+          carbs: recipe.carbs ?? null,
+        }
+      : null;
+
   return (
     <RecipeCard
       variant="chat"
@@ -49,6 +63,7 @@ export function ChatRecipeCard({
       advice={recipe.advice ?? null}
       showChefTip={showChefTip}
       steps={recipe.steps}
+      nutrition={nutrition}
     />
   );
 }

@@ -94,7 +94,16 @@ export function applyIngredientsFallbackHeuristic(
   }
 }
 
-/** Contract: title, description (2–4 sentences, max 500), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (max 400). */
+/** Optional nutrition: per serving. If missing or invalid we set null, do not fail recipe. */
+const NutritionSchema = z.object({
+  kcal_per_serving: z.number().min(30).max(900),
+  protein_g_per_serving: z.number().min(0).max(100),
+  fat_g_per_serving: z.number().min(0).max(100),
+  carbs_g_per_serving: z.number().min(0).max(150),
+  is_estimate: z.literal(true).optional(),
+}).nullable().optional();
+
+/** Contract: title, description (2–4 sentences, max 500), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (max 400), nutrition optional. */
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(500),
@@ -105,6 +114,7 @@ export const RecipeJsonSchema = z.object({
   chefAdvice: z.string().max(400).nullable().optional(),
   mealType: z.enum(["breakfast", "lunch", "snack", "dinner"]).optional(),
   servings: z.number().int().min(1).max(20).optional(),
+  nutrition: NutritionSchema,
 });
 
 export type RecipeJson = z.infer<typeof RecipeJsonSchema>;
@@ -154,12 +164,11 @@ function extractJsonFromResponse(text: string): string | null {
 }
 
 /**
- * Validates AI response. Returns parsed RecipeJson or null if invalid.
- * Handles new contract (name + amount) and legacy (displayText, canonical). Normalizes to internal shape.
+ * Parses and validates already-extracted JSON string (e.g. after extractJsonObject + normalizeQuotes).
+ * Use from Edge with validateRecipe pipeline; preserves nutrition (KBJU).
  */
-export function validateRecipeJson(assistantMessage: string): RecipeJson | null {
-  const jsonStr = extractJsonFromResponse(assistantMessage);
-  if (!jsonStr) return null;
+export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJson | null {
+  if (!jsonStr || typeof jsonStr !== "string") return null;
   try {
     let parsed: unknown = JSON.parse(jsonStr);
     // Если модель вернула массив рецептов — берём первый, остальные игнорируем
@@ -174,8 +183,27 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
     const p = parsed as Record<string, unknown> & {
       title?: string; description?: string; cookingTimeMinutes?: number; cookingTime?: number;
       ingredients: unknown[]; steps: unknown[]; chefAdvice?: string; chef_advice?: string; chefAdviceText?: string; mealType?: string;
+      nutrition?: { kcal_per_serving?: number; protein_g_per_serving?: number; fat_g_per_serving?: number; carbs_g_per_serving?: number; is_estimate?: boolean } | null;
     };
     const cooking = p.cookingTimeMinutes ?? p.cookingTime;
+    let nutritionNorm: { kcal_per_serving: number; protein_g_per_serving: number; fat_g_per_serving: number; carbs_g_per_serving: number; is_estimate: true } | null = null;
+    if (p.nutrition && typeof p.nutrition === "object") {
+      const n = p.nutrition as Record<string, unknown>;
+      const kcal = typeof n.kcal_per_serving === "number" ? n.kcal_per_serving : Number(n.kcal_per_serving);
+      const protein = typeof n.protein_g_per_serving === "number" ? n.protein_g_per_serving : Number(n.protein_g_per_serving);
+      const fat = typeof n.fat_g_per_serving === "number" ? n.fat_g_per_serving : Number(n.fat_g_per_serving);
+      const carbs = typeof n.carbs_g_per_serving === "number" ? n.carbs_g_per_serving : Number(n.carbs_g_per_serving);
+      if (Number.isFinite(kcal) && kcal >= 30 && kcal <= 900 && Number.isFinite(protein) && protein >= 0 && protein <= 100 &&
+          Number.isFinite(fat) && fat >= 0 && fat <= 100 && Number.isFinite(carbs) && carbs >= 0 && carbs <= 150) {
+        nutritionNorm = {
+          kcal_per_serving: Math.round(kcal * 10) / 10,
+          protein_g_per_serving: Math.round(protein * 10) / 10,
+          fat_g_per_serving: Math.round(fat * 10) / 10,
+          carbs_g_per_serving: Math.round(carbs * 10) / 10,
+          is_estimate: true,
+        };
+      }
+    }
     const normalized = {
       title: String(p.title).trim(),
       description: String(p.description ?? "").slice(0, 500),
@@ -211,10 +239,21 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
         ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 400)
         : null,
       mealType: p.mealType ?? undefined,
+      nutrition: nutritionNorm,
     };
     const result = RecipeJsonSchema.safeParse(normalized);
     return result.success ? result.data : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Validates AI response. Returns parsed RecipeJson or null if invalid.
+ * Handles new contract (name + amount) and legacy (displayText, canonical). Normalizes to internal shape. Preserves nutrition (KBJU).
+ */
+export function validateRecipeJson(assistantMessage: string): RecipeJson | null {
+  const jsonStr = extractJsonFromResponse(assistantMessage);
+  if (!jsonStr) return null;
+  return parseAndValidateRecipeJsonFromString(jsonStr);
 }

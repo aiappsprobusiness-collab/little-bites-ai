@@ -85,6 +85,13 @@ export interface CanonicalizeRecipePayloadInput {
   sourceTag?: SourceTag;
   /** Base serving count (default 1). */
   servings?: number | null;
+  /** Nutrition per serving (from chat AI). If null, calories/proteins/fats/carbs not written. */
+  nutrition?: {
+    kcal_per_serving: number;
+    protein_g_per_serving: number;
+    fat_g_per_serving: number;
+    carbs_g_per_serving: number;
+  } | null;
   /** Explicit soup flag for create_recipe_with_steps. For lunch slot we set true if not provided. */
   is_soup?: boolean | null;
   /** Age range for plan/pool filtering. infant 6–12, toddler 12–60, school 60–216, adult 216–1200. */
@@ -113,6 +120,7 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     ingredients: rawIngredients,
     sourceTag: explicitSourceTag,
     servings,
+    nutrition: rawNutrition,
     is_soup: rawIsSoup,
     min_age_months: rawMinAge,
     max_age_months: rawMaxAge,
@@ -167,6 +175,11 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
   /** Lunch slot => only soups; set is_soup for RPC so new recipes get recipes.is_soup = true. Assign to plan does not change recipe. */
   const is_soup = meal_type === "lunch" ? true : (rawIsSoup === true);
 
+  const calories = rawNutrition != null ? Math.round(rawNutrition.kcal_per_serving) : null;
+  const proteins = rawNutrition != null ? rawNutrition.protein_g_per_serving : null;
+  const fats = rawNutrition != null ? rawNutrition.fat_g_per_serving : null;
+  const carbs = rawNutrition != null ? rawNutrition.carbs_g_per_serving : null;
+
   return {
     user_id,
     member_id: member_id ?? null,
@@ -184,6 +197,10 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     servings_base,
     servings_recommended,
     is_soup,
+    calories,
+    proteins,
+    fats,
+    carbs,
     min_age_months: rawMinAge ?? null,
     max_age_months: rawMaxAge ?? null,
   };

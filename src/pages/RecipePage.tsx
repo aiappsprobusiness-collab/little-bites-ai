@@ -32,6 +32,7 @@ import { recipeHeroCard, recipeTimeClass, recipeMealBadge } from "@/theme/recipe
 import { IngredientChips, type IngredientOverrides } from "@/components/recipe/IngredientChips";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
+import { NutritionBadge } from "@/components/recipe/NutritionBadge";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -323,6 +324,10 @@ export default function RecipePage() {
   };
 
   const benefitLabel = description?.trim() ? getBenefitLabel(selectedMember?.age_months ?? undefined) : null;
+  const recipeCalories = (recipe as { calories?: number | null }).calories;
+  const recipeProteins = (recipe as { proteins?: number | null }).proteins;
+  const recipeFats = (recipe as { fats?: number | null }).fats;
+  const recipeCarbs = (recipe as { carbs?: number | null }).carbs;
 
   return (
     <MobileLayout
@@ -336,13 +341,35 @@ export default function RecipePage() {
         {/* Hero card: чуть шире (меньше отступ от краёв на 8px), визуальный акцент */}
         <div className="-mx-2">
           <div className={cn(recipeHeroCard, "space-y-3")}>
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-            {mealLabel && <span className={recipeMealBadge}>{mealLabel}</span>}
-            {cookingTime != null && cookingTime > 0 && (
-              <span className={cn(recipeTimeClass)}>
-                <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
-                <span>{cookingTime} мин</span>
-              </span>
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2 gap-y-1.5">
+              {mealLabel && <span className={recipeMealBadge}>{mealLabel}</span>}
+              {cookingTime != null && cookingTime > 0 && (
+                <span className={cn(recipeTimeClass)}>
+                  <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+                  <span>{cookingTime} мин</span>
+                </span>
+              )}
+              {(recipeCalories != null && recipeProteins != null && recipeFats != null && recipeCarbs != null) && (
+                <NutritionBadge
+                  variant="detail"
+                  part="row1"
+                  calories={recipeCalories}
+                  proteins={recipeProteins}
+                  fats={recipeFats}
+                  carbs={recipeCarbs}
+                />
+              )}
+            </div>
+            {(recipeCalories != null && recipeProteins != null && recipeFats != null && recipeCarbs != null) && (
+              <NutritionBadge
+                variant="detail"
+                part="row2"
+                calories={recipeCalories}
+                proteins={recipeProteins}
+                fats={recipeFats}
+                carbs={recipeCarbs}
+              />
             )}
           </div>
           {benefitLabel && (

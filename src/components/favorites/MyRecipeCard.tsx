@@ -18,6 +18,15 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
   const chips = recipe.ingredientNames ?? [];
   const cookTime = recipe.cookTimeMinutes;
   const cookingTimeMinutes = Number.isFinite(cookTime) && cookTime != null ? cookTime : null;
+  const nutrition =
+    recipe.calories != null || recipe.proteins != null || recipe.fats != null || recipe.carbs != null
+      ? {
+          calories: recipe.calories ?? null,
+          proteins: recipe.proteins ?? null,
+          fats: recipe.fats ?? null,
+          carbs: recipe.carbs ?? null,
+        }
+      : null;
 
   return (
     <motion.div
@@ -34,6 +43,7 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
         }}
         ingredients={chips}
         maxIngredientChips={MAX_INGREDIENT_CHIPS}
+        nutrition={nutrition}
         onClick={onTap}
         actions={
           <>

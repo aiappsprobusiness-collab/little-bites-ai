@@ -30,6 +30,16 @@ export const BALANCE_CHECK_TEMPLATE = `
 `;
 
 
+/** Короткий блок: блюдо по запросу пользователя; mealType не подменяет тип блюда; только валидный JSON. */
+export const RULES_USER_INTENT = `
+[ЗАПРОС ПОЛЬЗОВАТЕЛЯ]
+- Блюдо ДОЛЖНО соответствовать запросу пользователя.
+- Если указано конкретное блюдо или ингредиент («рисовая каша», «кукурузная каша») — title и ingredients обязаны это отражать.
+- mealType НЕ должен менять тип блюда. Если mealType конфликтует с запросом — выведи корректный mealType исходя из блюда.
+- Подменять основной ингредиент можно только при наличии аллергий.
+- Выводи ТОЛЬКО валидный JSON, без markdown и без текста до/после.
+`;
+
 /** [1] Universal semantic constraints: allergies + preferences as strict restrictions. */
 export const STRICT_RULES = `
 You MUST strictly follow profiles Allergies and Preferences.
@@ -60,7 +70,7 @@ export const SAFETY_RULES = `
 - СТИЛЬ: Экспертный нутрициолог. Без лишних слов.
 `;
 
-/** Strict JSON contract for single-recipe chat response. Fields only: title, description, ingredients[{name,amount}], steps, cookingTime, mealType, servings, chefAdvice. No advice. */
+/** Strict JSON contract for single-recipe chat response. Fields only: title, description, ingredients[{name,amount}], steps, cookingTime, mealType, servings, chefAdvice, nutrition. No advice. */
 export const RECIPE_STRICT_JSON_CONTRACT = `
 Return ONLY valid JSON. No markdown, no text before or after. One object only.
 
@@ -72,11 +82,13 @@ Return ONLY valid JSON. No markdown, no text before or after. One object only.
   "cookingTime": number,
   "mealType": "breakfast" | "lunch" | "dinner" | "snack",
   "servings": number,
-  "chefAdvice": string (2–4 sentences, optional)
+  "chefAdvice": string (2–4 sentences, optional),
+  "nutrition": { "kcal_per_serving": number, "protein_g_per_serving": number, "fat_g_per_serving": number, "carbs_g_per_serving": number, "is_estimate": true }
 }
 
 DESCRIPTION: 2–4 sentences. Do NOT end with "и", "или", "а также", "—", ":" or "...". Write complete, closed sentences.
 INGREDIENTS: every item MUST have "amount" with quantity and unit (e.g. "200 мл", "2 шт.", "1 ст.л."). No bare names.
+NUTRITION: integers or one decimal; kcal_per_serving 30–900; for infant (<12 мес) use lower kcal, no extremes. Only numbers and is_estimate: true, no other text.
 `;
 
 /** Single short block: description and chefAdvice must be generic (no age/children/allergies/names/meal). One recipe, strict JSON. Ingredients always with amount+unit. */
@@ -169,6 +181,8 @@ ${SAFETY_RULES}
 [ЗАПРЕЩЕНО В ТЕКСТЕ]
 Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
 
+${RULES_USER_INTENT}
+
 [RECIPE TASK]
 ${RECIPE_STRICT_JSON_CONTRACT}
 ${RECIPE_JSON_RULES}
@@ -206,6 +220,8 @@ ${SAFETY_RULES}
 
 [ЗАПРЕЩЕНО В ТЕКСТЕ]
 Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
+
+${RULES_USER_INTENT}
 
 [RECIPE TASK]
 ${RECIPE_STRICT_JSON_CONTRACT}

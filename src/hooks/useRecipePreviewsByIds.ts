@@ -67,12 +67,34 @@ export function useRecipePreviewsByIds(recipeIds: string[]) {
       if (!user || ids.length === 0) return {};
       const [previewsResult, tipsResult] = await Promise.all([
         supabase.rpc("get_recipe_previews", { recipe_ids: ids }),
-        supabase.from("recipes").select("id, chef_advice, advice, source").in("id", ids),
+        supabase.from("recipes").select("id, chef_advice, advice, source, calories, proteins, fats, carbs").in("id", ids),
       ]);
       const { data: previewRows, error } = previewsResult;
       if (error) throw error;
-      const tipsRows = (tipsResult.data ?? []) as Array<{ id: string; chef_advice?: string | null; advice?: string | null; source?: string | null }>;
-      const tipsMap = new Map(tipsRows.map((r) => [r.id, { chefAdvice: r.chef_advice ?? null, advice: r.advice ?? null, source: r.source ?? null }]));
+      const tipsRows = (tipsResult.data ?? []) as Array<{
+        id: string;
+        chef_advice?: string | null;
+        advice?: string | null;
+        source?: string | null;
+        calories?: number | null;
+        proteins?: number | null;
+        fats?: number | null;
+        carbs?: number | null;
+      }>;
+      const tipsMap = new Map(
+        tipsRows.map((r) => [
+          r.id,
+          {
+            chefAdvice: r.chef_advice ?? null,
+            advice: r.advice ?? null,
+            source: r.source ?? null,
+            calories: r.calories ?? null,
+            proteins: r.proteins ?? null,
+            fats: r.fats ?? null,
+            carbs: r.carbs ?? null,
+          },
+        ])
+      );
       const rows = (previewRows ?? []) as Array<{
         id: string;
         title: string | null;
@@ -92,6 +114,10 @@ export function useRecipePreviewsByIds(recipeIds: string[]) {
           preview.chefAdvice = tips.chefAdvice;
           preview.advice = tips.advice;
           preview.source = tips.source;
+          preview.calories = tips.calories ?? undefined;
+          preview.proteins = tips.proteins ?? undefined;
+          preview.fats = tips.fats ?? undefined;
+          preview.carbs = tips.carbs ?? undefined;
         }
         map[r.id] = preview;
       });

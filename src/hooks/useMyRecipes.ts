@@ -51,13 +51,30 @@ export function useMyRecipes() {
       if (ids.length === 0) return [];
       const [previewsRes, metaRes] = await Promise.all([
         supabase.rpc("get_recipe_previews", { recipe_ids: ids }),
-        supabase.from("recipes").select("id, chef_advice, advice, source").in("id", ids),
+        supabase.from("recipes").select("id, chef_advice, advice, source, calories, proteins, fats, carbs").in("id", ids),
       ]);
       if (previewsRes.error) throw previewsRes.error;
       const metaMap = new Map(
-        ((metaRes.data ?? []) as { id: string; chef_advice?: string | null; advice?: string | null; source?: string | null }[]).map((r) => [
+        ((metaRes.data ?? []) as {
+          id: string;
+          chef_advice?: string | null;
+          advice?: string | null;
+          source?: string | null;
+          calories?: number | null;
+          proteins?: number | null;
+          fats?: number | null;
+          carbs?: number | null;
+        }[]).map((r) => [
           r.id,
-          { chefAdvice: r.chef_advice ?? null, advice: r.advice ?? null, source: r.source ?? null },
+          {
+            chefAdvice: r.chef_advice ?? null,
+            advice: r.advice ?? null,
+            source: r.source ?? null,
+            calories: r.calories ?? null,
+            proteins: r.proteins ?? null,
+            fats: r.fats ?? null,
+            carbs: r.carbs ?? null,
+          },
         ])
       );
       const rows = (previewsRes.data ?? []) as Array<{
@@ -78,6 +95,10 @@ export function useMyRecipes() {
           preview.chefAdvice = meta.chefAdvice;
           preview.advice = meta.advice;
           preview.source = meta.source;
+          preview.calories = meta.calories ?? undefined;
+          preview.proteins = meta.proteins ?? undefined;
+          preview.fats = meta.fats ?? undefined;
+          preview.carbs = meta.carbs ?? undefined;
         }
         return preview;
       });

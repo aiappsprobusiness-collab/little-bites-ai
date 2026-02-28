@@ -1009,6 +1009,10 @@ export default function MealPlanPage() {
                       cookTimeMinutes={previews[recipeId!]?.cookTimeMinutes}
                       ingredientNames={previews[recipeId!]?.ingredientNames}
                       ingredientTotalCount={previews[recipeId!]?.ingredientTotalCount}
+                      calories={previews[recipeId!]?.calories}
+                      proteins={previews[recipeId!]?.proteins}
+                      fats={previews[recipeId!]?.fats}
+                      carbs={previews[recipeId!]?.carbs}
                       isFavorite={isFavoriteForPlan(recipeId!, memberIdForPlan)}
                       onToggleFavorite={async (rid, next) => {
                         const p = previews[rid];
