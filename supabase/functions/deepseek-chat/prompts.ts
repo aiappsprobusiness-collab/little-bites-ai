@@ -86,9 +86,9 @@ Return ONLY valid JSON. No markdown, no text before or after. One object only.
   "nutrition": { "kcal_per_serving": number, "protein_g_per_serving": number, "fat_g_per_serving": number, "carbs_g_per_serving": number, "is_estimate": true }
 }
 
-DESCRIPTION: 2–4 sentences. Do NOT end with "и", "или", "а также", "—", ":" or "...". Write complete, closed sentences.
+DESCRIPTION: 2–4 full sentences (минимум 2). Упомяни блюдо, ингредиенты и текстуру. Не одна короткая общая фраза. Do NOT end with "и", "или", "а также", "—", ":" or "...".
 INGREDIENTS: every item MUST have "amount" with quantity and unit (e.g. "200 мл", "2 шт.", "1 ст.л."). No bare names.
-NUTRITION: integers or one decimal; kcal_per_serving 30–900; for infant (<12 мес) use lower kcal, no extremes. Only numbers and is_estimate: true, no other text.
+NUTRITION: обязательно. integers or one decimal; kcal_per_serving 30–900; protein/fat/carbs per serving; is_estimate: true. For infant (<12 мес) use lower kcal.
 `;
 
 /** Single short block: description and chefAdvice must be generic (no age/children/allergies/names/meal). One recipe, strict JSON. Ingredients always with amount+unit. */
@@ -99,27 +99,12 @@ export const RECIPE_JSON_RULES = `
 - ingredients: every item with amount and unit (г, мл, шт., ст.л., ч.л.).
 `;
 
-/** Description variety: avoid template openings (e.g. "Нежное блюдо…"); vary beginnings; cap overuse of same adjective. */
+/** Description: 2–4 полных предложения, разнообразие зачинов, без обрывов. */
 export const RECIPE_DESCRIPTION_VARIETY_RULE = `
-DESCRIPTION RULES (field "description", 2–4 sentences, complete; no truncation, no ellipsis, no unfinished phrases):
-- description: 2–4 full sentences. Never end with "и", "или", "а также", "—", ":" or "...". Each sentence must be complete.
-- Do NOT use template or fixed openings. Do NOT start description with the same adjective in more than 20% of recipes.
-- AVOID overusing: "нежный", "нежное", "нежные", "мягкий", "вкусный", "полезный" at the start of description.
-- Vary your openings. Do NOT repeat the same adjectives in several recipes in a row.
-
-Good ways to start description (use different ones):
-- "Лёгкое блюдо, которое…"
-- "Сбалансированное сочетание…"
-- "Простой и быстрый вариант…"
-- "Ароматное блюдо с…"
-- "Домашний вариант…"
-- "Идеально подходит для…"
-- "Сытное, но при этом…"
-- "Отличный выбор для…"
-- "Богато…" / "Содержит…"
-- "Готовится из…"
-
-Do NOT start many descriptions with "Нежное" or "Нежный/Нежная/Нежные". Vary the style.
+DESCRIPTION (поле "description") — ОБЯЗАТЕЛЬНО 2–4 полных предложения:
+- Не обрывать на "и", "или", "а также", "—", ":" или "...". Каждое предложение закончено.
+- Разнообразить зачины: не начинать подряд с одних и тех же формулировок ("Нежное блюдо…", "Вкусное и полезное…").
+- Упомянуть конкретику: что за блюдо, ключевые ингредиенты, текстура или способ подачи. Не ограничиваться одной общей фразой.
 `;
 
 /** Output rules for recipe: one member → no other family; no reasoning; no markdown; no extra text. */

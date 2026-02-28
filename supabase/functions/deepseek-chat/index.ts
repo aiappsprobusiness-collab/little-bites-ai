@@ -35,7 +35,7 @@ import { buildBlockedTokenSet, findMatchedTokens, textWithoutExclusionPhrases } 
 import { validateRecipeJson, parseAndValidateRecipeJsonFromString, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
 import { isExplicitDishRequest, inferMealTypeFromQuery } from "../_shared/mealType/inferMealType.ts";
 import { validateRecipe, retryFixJson } from "../_shared/parsing/index.ts";
-import { buildRecipeDescription, buildChefAdvice, isGenericText } from "../_shared/recipeCopy.ts";
+import { buildRecipeDescription, buildChefAdvice, shouldReplaceDescription, shouldReplaceChefAdvice } from "../_shared/recipeCopy.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -1198,13 +1198,13 @@ serve(async (req) => {
               if (validated) {
                 const desc = (validated as { description?: string }).description;
                 const advice = validated.chefAdvice ?? "";
-                if (!desc || isGenericText(desc) || isDescriptionIncomplete(desc)) {
+                if (!desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc)) {
                   const keyIngredient = Array.isArray(validated.ingredients) && validated.ingredients[0] && typeof validated.ingredients[0] === "object" && validated.ingredients[0].name ? String(validated.ingredients[0].name) : undefined;
                   (validated as Record<string, unknown>).description = isDescriptionIncomplete(desc) && DEEPSEEK_API_KEY
                     ? (await repairDescriptionOnly(desc ?? "", DEEPSEEK_API_KEY)) ?? buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient })
                     : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
                 }
-                if (!advice.trim() || isGenericText(advice)) {
+                if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
                   (validated as Record<string, unknown>).chefAdvice = buildChefAdvice({ title: validated.title, userText: userMessage });
                 }
               }
@@ -1369,7 +1369,7 @@ serve(async (req) => {
           }
           const desc = (validated as { description?: string }).description;
           const advice = validated.chefAdvice ?? "";
-          if (!desc || isGenericText(desc) || isDescriptionIncomplete(desc)) {
+          if (!desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc)) {
             const keyIngredient = Array.isArray(validated.ingredients) && validated.ingredients[0] && typeof validated.ingredients[0] === "object" && validated.ingredients[0].name
               ? String(validated.ingredients[0].name)
               : undefined;
@@ -1377,7 +1377,7 @@ serve(async (req) => {
               ? (await repairDescriptionOnly(desc ?? "", DEEPSEEK_API_KEY)) ?? buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient })
               : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
           }
-          if (!advice.trim() || isGenericText(advice)) {
+          if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
             (validated as Record<string, unknown>).chefAdvice = buildChefAdvice({ title: validated.title, userText: userMessage });
           }
           assistantMessage = JSON.stringify(validated);
