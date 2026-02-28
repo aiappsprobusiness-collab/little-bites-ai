@@ -115,6 +115,8 @@ function getDislikeTokens(memberData: MemberDataPool | null | undefined): string
 }
 const AGE_RESTRICTED = ["острый", "кофе", "гриб"];
 const INFANT_FORBIDDEN_12 = ["свинина", "говядина", "стейк", "жарен", "копчен", "колбас"];
+/** Hard-guard для 12–24 мес: без жёстких кусочков, стейка, жареного, котлет, запеканок (грубая текстура). */
+const TODDLER_UNDER_24_FORBIDDEN = ["стейк", "жарен", "копчен", "колбас", "бекон", "отбивн", "котлет", "запеканк", "кусоч"];
 function recipeFitsAgeRange(r: RecipeRowPool, ageMonths: number): boolean {
   const max = r.max_age_months;
   if (max != null && ageMonths > max) return false;
@@ -126,6 +128,7 @@ function recipeBlockedByInfantKeywords(r: RecipeRowPool, ageMonths: number): boo
   const text = [r.title ?? "", r.description ?? ""].join(" ").toLowerCase();
   if (ageMonths < 36 && AGE_RESTRICTED.some((t) => text.includes(t))) return true;
   if (ageMonths <= 12 && INFANT_FORBIDDEN_12.some((t) => text.includes(t))) return true;
+  if (ageMonths < 24 && TODDLER_UNDER_24_FORBIDDEN.some((t) => text.includes(t))) return true;
   return false;
 }
 function passesProfileFilter(r: RecipeRowPool, memberData: MemberDataPool | null | undefined): boolean {

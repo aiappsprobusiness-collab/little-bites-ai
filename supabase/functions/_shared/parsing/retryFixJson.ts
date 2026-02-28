@@ -11,13 +11,15 @@ const RECIPE_JSON_SCHEMA_HINT = `
   "description": string,
   "ingredients": [ { "name": string, "amount": string } ],
   "steps": string[],
-  "cookingTimeMinutes": number,
+  "cookingTimeMinutes": number (число, не строка),
   "mealType": "breakfast"|"lunch"|"snack"|"dinner",
-  "servings": number,
+  "servings": number (целое >= 1),
   "chefAdvice": string или null,
   "nutrition": { "kcal_per_serving": number, "protein_g_per_serving": number, "fat_g_per_serving": number, "carbs_g_per_serving": number, "is_estimate": true }
 }
-Сохрани все поля из исходного ответа, включая nutrition. Исправь только то, что сломало валидацию.
+
+NUTRITION — обязательно числа (не строки). Допустимые имена полей: kcal_per_serving (или calories), protein_g_per_serving (или protein), fat_g_per_serving (или fat), carbs_g_per_serving (или carbs). Все числа: kcal 30–900, protein/fat/carbs 0–100/0–100/0–150.
+Сохрани все поля. Исправь только то, что указано в ошибке валидации.
 `;
 
 export interface RetryFixJsonOptions {
@@ -42,7 +44,7 @@ export async function retryFixJson(options: RetryFixJsonOptions): Promise<RetryF
   const systemContent =
     `Ты исправляешь JSON рецепта. Верни ТОЛЬКО валидный JSON, без markdown и без текста до/после. Сохрани все поля: title, description, ingredients, steps, cookingTimeMinutes, mealType, servings, chefAdvice, nutrition (калории, белки, жиры, углеводы). ${RECIPE_JSON_SCHEMA_HINT}`.trim();
 
-  const userContent = `Исходный ответ модели (содержит ошибку):\n${rawResponse.slice(0, 3500)}\n\nОшибка валидации: ${validationError}\n\nВерни исправленный JSON (только объект).`;
+  const userContent = `Исходный ответ модели (содержит ошибку):\n${rawResponse.slice(0, 3500)}\n\nОшибка валидации (исправь именно это): ${validationError}\n\nВерни ТОЛЬКО исправленный JSON-объект, без markdown и без текста до/после.`;
 
   try {
     const res = await fetch("https://api.deepseek.com/v1/chat/completions", {

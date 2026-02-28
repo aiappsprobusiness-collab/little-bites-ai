@@ -100,8 +100,28 @@ const NutritionSchema = z.object({
   protein_g_per_serving: z.number().min(0).max(100),
   fat_g_per_serving: z.number().min(0).max(100),
   carbs_g_per_serving: z.number().min(0).max(150),
-  is_estimate: z.literal(true).optional(),
+  is_estimate: z.boolean().optional(),
 }).nullable().optional();
+
+/** Normalize raw nutrition from model (may use calories/protein/fat/carbs). Return null if invalid. */
+function normalizeNutrition(raw: unknown): { kcal_per_serving: number; protein_g_per_serving: number; fat_g_per_serving: number; carbs_g_per_serving: number; is_estimate: true } | null {
+  if (raw == null || typeof raw !== "object") return null;
+  const n = raw as Record<string, unknown>;
+  const kcal = n.kcal_per_serving ?? n.calories ?? n.kcal;
+  const protein = n.protein_g_per_serving ?? n.protein;
+  const fat = n.fat_g_per_serving ?? n.fat;
+  const carbs = n.carbs_g_per_serving ?? n.carbs;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" ? Number(v) : NaN);
+  const k = num(kcal), p = num(protein), f = num(fat), c = num(carbs);
+  if (!(k >= 30 && k <= 900 && p >= 0 && p <= 100 && f >= 0 && f <= 100 && c >= 0 && c <= 150)) return null;
+  return {
+    kcal_per_serving: Math.round(k * 10) / 10,
+    protein_g_per_serving: Math.round(p * 10) / 10,
+    fat_g_per_serving: Math.round(f * 10) / 10,
+    carbs_g_per_serving: Math.round(c * 10) / 10,
+    is_estimate: true,
+  };
+}
 
 /** Contract: title, description (2–4 sentences, max 500), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (max 400), nutrition optional. */
 export const RecipeJsonSchema = z.object({
@@ -118,6 +138,13 @@ export const RecipeJsonSchema = z.object({
 });
 
 export type RecipeJson = z.infer<typeof RecipeJsonSchema>;
+
+let lastValidationError: string | null = null;
+
+/** Last validation error message (e.g. for retryFixJson). Reset on successful parse. */
+export function getLastValidationError(): string | null {
+  return lastValidationError;
+}
 
 function extractJsonFromResponse(text: string): string | null {
   const trimmed = text.trim();
@@ -183,53 +210,48 @@ export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJso
     const p = parsed as Record<string, unknown> & {
       title?: string; description?: string; cookingTimeMinutes?: number; cookingTime?: number;
       ingredients: unknown[]; steps: unknown[]; chefAdvice?: string; chef_advice?: string; chefAdviceText?: string; mealType?: string;
-      nutrition?: { kcal_per_serving?: number; protein_g_per_serving?: number; fat_g_per_serving?: number; carbs_g_per_serving?: number; is_estimate?: boolean } | null;
+      servings?: number;
+      nutrition?: unknown;
     };
-    const cooking = p.cookingTimeMinutes ?? p.cookingTime;
-    let nutritionNorm: { kcal_per_serving: number; protein_g_per_serving: number; fat_g_per_serving: number; carbs_g_per_serving: number; is_estimate: true } | null = null;
-    if (p.nutrition && typeof p.nutrition === "object") {
-      const n = p.nutrition as Record<string, unknown>;
-      const kcal = typeof n.kcal_per_serving === "number" ? n.kcal_per_serving : Number(n.kcal_per_serving);
-      const protein = typeof n.protein_g_per_serving === "number" ? n.protein_g_per_serving : Number(n.protein_g_per_serving);
-      const fat = typeof n.fat_g_per_serving === "number" ? n.fat_g_per_serving : Number(n.fat_g_per_serving);
-      const carbs = typeof n.carbs_g_per_serving === "number" ? n.carbs_g_per_serving : Number(n.carbs_g_per_serving);
-      if (Number.isFinite(kcal) && kcal >= 30 && kcal <= 900 && Number.isFinite(protein) && protein >= 0 && protein <= 100 &&
-          Number.isFinite(fat) && fat >= 0 && fat <= 100 && Number.isFinite(carbs) && carbs >= 0 && carbs <= 150) {
-        nutritionNorm = {
-          kcal_per_serving: Math.round(kcal * 10) / 10,
-          protein_g_per_serving: Math.round(protein * 10) / 10,
-          fat_g_per_serving: Math.round(fat * 10) / 10,
-          carbs_g_per_serving: Math.round(carbs * 10) / 10,
-          is_estimate: true,
-        };
-      }
-    }
+    const cookingRaw = p.cookingTimeMinutes ?? p.cookingTime;
+    const cooking = typeof cookingRaw === "number" && Number.isFinite(cookingRaw)
+      ? Math.max(1, Math.min(240, Math.floor(cookingRaw)))
+      : typeof cookingRaw === "string" ? Math.max(1, Math.min(240, parseInt(cookingRaw, 10) || 15)) : 15;
+    const servingsRaw = p.servings;
+    const servings = typeof servingsRaw === "number" && Number.isFinite(servingsRaw) && servingsRaw >= 1
+      ? Math.min(20, Math.floor(servingsRaw))
+      : typeof servingsRaw === "string" ? Math.max(1, parseInt(servingsRaw, 10) || 1) : 1;
+    const nutritionNorm = normalizeNutrition(p.nutrition);
     const normalized = {
       title: String(p.title).trim(),
       description: String(p.description ?? "").slice(0, 500),
-      cookingTimeMinutes: typeof cooking === "number" ? Math.max(1, Math.min(240, Math.floor(cooking))) : 1,
+      cookingTimeMinutes: cooking,
       ingredients: p.ingredients.slice(0, 10).map((ing: unknown) => {
         let name: string;
         let displayText: string;
+        let amount: string;
         let canonical: { amount: number; unit: string } | null = null;
         let substitute: string | undefined;
         if (typeof ing === "string") {
           name = ing;
           displayText = ing;
+          amount = ing;
         } else if (ing && typeof ing === "object" && "name" in ing) {
-          const o = ing as { name: string; displayText?: string; amount?: string; canonical?: { amount: number; unit: string } | null; substitute?: string };
+          const o = ing as { name: string; displayText?: string; amount?: string | number; canonical?: { amount: number; unit: string } | null; substitute?: string };
           name = o.name;
-          displayText = o.displayText ?? (o.amount ? `${o.name} — ${o.amount}` : o.name);
+          amount = o.amount != null ? String(o.amount) : (o.displayText ?? (o.amount != null ? `${o.name} — ${o.amount}` : o.name));
+          displayText = o.displayText ?? (amount ? `${o.name} — ${amount}` : o.name);
           canonical = o.canonical ?? null;
           substitute = o.substitute;
         } else {
           name = String(ing);
           displayText = String(ing);
+          amount = String(ing);
         }
         if (!DISPLAY_TEXT_QUANTITY_REGEX.test(displayText) && !shouldOmitPortionSuffix(displayText)) {
           displayText = displayText.trim() + " (1 порция)";
         }
-        return { name, displayText, canonical, ...(substitute != null && { substitute: String(substitute) }) };
+        return { name, amount, displayText, canonical, ...(substitute != null && { substitute: String(substitute) }) };
       }),
       steps: p.steps
         .map((s: unknown) => String(s ?? "").trim().slice(0, 200))
@@ -239,10 +261,30 @@ export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJso
         ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 400)
         : null,
       mealType: p.mealType ?? undefined,
+      servings,
       nutrition: nutritionNorm,
     };
-    const result = RecipeJsonSchema.safeParse(normalized);
-    return result.success ? result.data : null;
+    let result = RecipeJsonSchema.safeParse(normalized);
+    if (!result.success) {
+      const err = result.error as { issues?: Array<{ path: unknown[]; message: string }> };
+      const details = (err.issues ?? []).map((i) => ({ path: i.path, message: i.message }));
+      const firstMessage = details[0]?.message ?? "schema validation failed";
+      lastValidationError = details.map((d) => (d.path?.length ? `${d.path.join(".")}: ${d.message}` : d.message)).join("; ") || firstMessage;
+      console.log(JSON.stringify({ tag: "VALIDATION_ERROR_DETAILS", details }));
+      const fallbackNormalized = { ...normalized, nutrition: null };
+      result = RecipeJsonSchema.safeParse(fallbackNormalized);
+      if (result.success) {
+        lastValidationError = null;
+        return result.data;
+      }
+      const err2 = result.error as { issues?: Array<{ path: unknown[]; message: string }> };
+      const fallbackDetails = (err2.issues ?? []).map((i) => ({ path: i.path, message: i.message }));
+      lastValidationError = fallbackDetails.map((d) => (d.path?.length ? `${d.path.join(".")}: ${d.message}` : d.message)).join("; ") || firstMessage;
+      console.log(JSON.stringify({ tag: "VALIDATION_ERROR_DETAILS_FALLBACK", details: fallbackDetails }));
+      return null;
+    }
+    lastValidationError = null;
+    return result.data;
   } catch {
     return null;
   }
@@ -256,4 +298,56 @@ export function validateRecipeJson(assistantMessage: string): RecipeJson | null 
   const jsonStr = extractJsonFromResponse(assistantMessage);
   if (!jsonStr) return null;
   return parseAndValidateRecipeJsonFromString(jsonStr);
+}
+
+/** Minimal valid recipe for fallback when validation fails. nutrition = null. */
+function getMinimalRecipeJson(options: { title?: string; ingredients?: unknown[]; steps?: unknown[] }): RecipeJson {
+  const title = (options.title ?? "Рецепт").toString().trim() || "Рецепт";
+  const rawIng = Array.isArray(options.ingredients) ? options.ingredients.slice(0, 10) : [];
+  const ingredients = rawIng.length >= 3
+    ? rawIng.map((ing: unknown) => {
+        const o = ing && typeof ing === "object" && "name" in ing ? (ing as { name: string; amount?: string }) : null;
+        const name = o?.name ? String(o.name) : "Ингредиент";
+        const amount = o?.amount != null ? String(o.amount) : "по вкусу";
+        return { name, amount, displayText: `${name} — ${amount}` };
+      })
+    : [
+        { name: "Ингредиент 1", amount: "по вкусу", displayText: "Ингредиент 1 — по вкусу" },
+        { name: "Ингредиент 2", amount: "по вкусу", displayText: "Ингредиент 2 — по вкусу" },
+        { name: "Ингредиент 3", amount: "по вкусу", displayText: "Ингредиент 3 — по вкусу" },
+      ];
+  const rawSteps = Array.isArray(options.steps) ? options.steps : [];
+  const steps = rawSteps.length >= 1
+    ? rawSteps.map((s: unknown) => (typeof s === "string" ? s : (s && typeof s === "object" && "instruction" in s ? (s as { instruction?: string }).instruction : String(s)) ?? "Шаг").slice(0, 200)).filter((s: string) => s.length > 0).slice(0, 10)
+    : ["Подготовьте ингредиенты и следуйте инструкции."];
+  return {
+    title,
+    description: "Рецепт по вашему запросу. При необходимости уточните детали.",
+    cookingTimeMinutes: 15,
+    ingredients,
+    steps,
+    mealType: "snack",
+    servings: 1,
+    chefAdvice: null,
+    nutrition: null,
+  };
+}
+
+/**
+ * Returns validated recipe or a minimal fallback (nutrition = null) so the UI never gets a hard error.
+ */
+export function getRecipeOrFallback(assistantMessage: string): RecipeJson {
+  const jsonStr = extractJsonFromResponse(assistantMessage);
+  if (!jsonStr) return getMinimalRecipeJson({});
+  const validated = parseAndValidateRecipeJsonFromString(jsonStr);
+  if (validated) return validated;
+  try {
+    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+    const title = parsed?.title != null ? String(parsed.title) : undefined;
+    const ingredients = Array.isArray(parsed?.ingredients) ? parsed.ingredients : undefined;
+    const steps = Array.isArray(parsed?.steps) ? parsed.steps : undefined;
+    return getMinimalRecipeJson({ title, ingredients, steps });
+  } catch {
+    return getMinimalRecipeJson({});
+  }
 }

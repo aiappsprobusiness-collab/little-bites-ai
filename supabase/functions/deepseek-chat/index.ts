@@ -32,7 +32,7 @@ import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
 import { buildBlockedTokenSet, findMatchedTokens, textWithoutExclusionPhrases } from "../_shared/blockedTokens.ts";
-import { validateRecipeJson, parseAndValidateRecipeJsonFromString, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
+import { validateRecipeJson, parseAndValidateRecipeJsonFromString, getRecipeOrFallback, getLastValidationError, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
 import { isExplicitDishRequest, inferMealTypeFromQuery } from "../_shared/mealType/inferMealType.ts";
 import { validateRecipe, retryFixJson } from "../_shared/parsing/index.ts";
 import { buildRecipeDescription, buildChefAdvice, shouldReplaceDescription, shouldReplaceChefAdvice } from "../_shared/recipeCopy.ts";
@@ -1179,11 +1179,12 @@ serve(async (req) => {
               if (streamResult.stage === "ok" && streamResult.valid) {
                 validated = streamResult.valid;
               } else if (DEEPSEEK_API_KEY && streamResult.stage !== "ok") {
+                const validationErrorMsg = streamResult.stage === "validate" ? (getLastValidationError() ?? (streamResult as { error?: string }).error) : (streamResult as { error?: string }).error;
                 streamParseLog("stream first attempt failed", { stage: streamResult.stage, responseLength: rawStreamContent.length });
                 const retryResult = await retryFixJson({
                   apiKey: DEEPSEEK_API_KEY,
                   rawResponse: rawStreamContent.slice(0, 3500),
-                  validationError: (streamResult as { error?: string }).error ?? "unknown",
+                  validationError: validationErrorMsg ?? "unknown",
                   requestId,
                   log: streamParseLog,
                 });
@@ -1191,6 +1192,9 @@ serve(async (req) => {
                   validated = parseAndValidateRecipeJsonFromString(retryResult.fixed);
                   if (validated) streamParseLog("stream retry succeeded", { retrySuccess: true });
                 }
+                if (!validated) validated = getRecipeOrFallback(rawStreamContent);
+              } else if (streamResult.stage !== "ok") {
+                validated = getRecipeOrFallback(rawStreamContent);
               }
               if (validated && ingredientsNeedAmountRetry(validated.ingredients)) {
                 applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
@@ -1339,12 +1343,13 @@ serve(async (req) => {
         if (result.stage === "ok" && result.valid) {
           validated = result.valid;
         } else {
-          parseLog("first attempt failed", { stage: result.stage, error: result.stage !== "ok" ? (result as { error: string }).error : undefined, responseLength: assistantMessage.length });
+          const validationErrorMsg = result.stage === "validate" ? getLastValidationError() : null;
+          parseLog("first attempt failed", { stage: result.stage, error: (result as { error?: string }).error ?? validationErrorMsg ?? undefined, responseLength: assistantMessage.length });
           if (DEEPSEEK_API_KEY && result.stage !== "ok") {
             const retryResult = await retryFixJson({
               apiKey: DEEPSEEK_API_KEY,
               rawResponse: assistantMessage.slice(0, 3500),
-              validationError: (result as { error?: string }).error ?? "unknown",
+              validationError: validationErrorMsg ?? (result as { error?: string }).error ?? "unknown",
               requestId,
               log: parseLog,
             });
@@ -1354,11 +1359,15 @@ serve(async (req) => {
                 validated = retryValidated;
                 parseLog("retry succeeded", { retrySuccess: true });
               } else {
-                parseLog("retry returned invalid JSON", { retrySuccess: false });
+                parseLog("retry returned invalid JSON, using fallback", { retrySuccess: false });
+                validated = getRecipeOrFallback(assistantMessage);
               }
             } else {
-              parseLog("retry failed or empty", { retrySuccess: false });
+              parseLog("retry failed or empty, using fallback", { retrySuccess: false });
+              validated = getRecipeOrFallback(assistantMessage);
             }
+          } else {
+            validated = getRecipeOrFallback(assistantMessage);
           }
         }
         logPerf("normalize_ingredients", tNormStart, requestId);
@@ -1384,18 +1393,8 @@ serve(async (req) => {
           responseRecipes = [validated as Record<string, unknown>];
         }
         if (!validated) {
-          parseLog("Recipe JSON parse/validate failed (no validated after retry)", { responseLength: assistantMessage.length });
-          return new Response(
-            JSON.stringify({
-              ok: false,
-              error: {
-                code: "INVALID_JSON",
-                message: "Не удалось распознать рецепт из ответа. Попробуйте переформулировать запрос или упростить его.",
-                request_id: requestId,
-              },
-            }),
-            { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+          validated = getRecipeOrFallback(assistantMessage);
+          parseLog("using fallback recipe (nutrition may be null)", { responseLength: assistantMessage.length });
         }
       }
 
