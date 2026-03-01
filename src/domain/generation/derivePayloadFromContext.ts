@@ -82,7 +82,12 @@ export function derivePayloadFromContext(
   }
 
   if (context.mode === "family" && context.targets && context.targets.length > 0) {
-    const targets = context.targets;
+    // Для режима «Семья» не учитываем младенцев (<12 мес) в подборе — только общий стол без них
+    const nonInfantTargets = context.targets.filter(
+      (t) => getAgeMonths(t, membersWithAgeMonths) >= 12
+    );
+    const targets =
+      nonInfantTargets.length > 0 ? nonInfantTargets : context.targets;
     const ages = targets.map((t) => getAgeMonths(t, membersWithAgeMonths));
     const ageMonths = Math.min(...ages);
     const allAllergies = new Set<string>();

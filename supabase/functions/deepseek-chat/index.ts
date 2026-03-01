@@ -1,16 +1,9 @@
 /**
- * deepseek-chat: recipe latency & PERF.
+ * deepseek-chat: чат-рецепт (JSON), SOS-консультант, анализ тарелки.
  *
- * PERF (было → стало):
- * - Было: llm_call ~300ms (только TTFB), parse_response ~23s (фактически чтение тела).
- * - Стало: llm_ttfb (до первого байта), llm_body (чтение тела до конца, с response_chars), llm_total = ttfb + body.
- *
- * Ручной чек-лист:
- * - 5 раз подряд premium: первый символ ответа ≤ 2s (stream даёт быстрый TTFB).
- * - total_ms может быть 12–25s, но UX быстрый за счёт stream.
- * - ingredients_retry не вызывается при RECIPE_INGREDIENTS_RETRY_ENABLED=false (по умолчанию).
- * - PERF показывает llm_ttfb, llm_body, llm_total.
- * - recipe_id сохраняется при авторизации, 401 при отсутствии authHeader.
+ * Поддерживаемые type: chat, recipe (один рецепт в JSON), sos_consultant, balance_check.
+ * Ответ всегда JSON (без SSE). Рецепт: message + recipes[] + recipe_id при авторизации.
+ * Семейный режим: дети <12 мес исключаются из учёта; 12–35 мес — kid safety (тег kid_1_3_safe).
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -20,24 +13,28 @@ import {
   AGE_CONTEXTS,
   FREE_RECIPE_TEMPLATE,
   PREMIUM_RECIPE_TEMPLATE,
-  SINGLE_DAY_PLAN_TEMPLATE,
   SOS_PROMPT_TEMPLATE,
   BALANCE_CHECK_TEMPLATE,
   NO_ARTICLES_RULE,
   GREETING_STYLE_RULE,
   FAMILY_RECIPE_INSTRUCTION,
+  KID_SAFETY_1_3_INSTRUCTION,
 } from "./prompts.ts";
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
 import { buildBlockedTokenSet, findMatchedTokens, textWithoutExclusionPhrases } from "../_shared/blockedTokens.ts";
-import { validateRecipeJson, parseAndValidateRecipeJsonFromString, getRecipeOrFallback, getLastValidationError, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
+import { parseAndValidateRecipeJsonFromString, getRecipeOrFallback, getLastValidationError, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
 import { isExplicitDishRequest, inferMealTypeFromQuery } from "../_shared/mealType/inferMealType.ts";
 import { validateRecipe, retryFixJson } from "../_shared/parsing/index.ts";
 import { buildRecipeDescription, buildChefAdvice, shouldReplaceDescription, shouldReplaceChefAdvice } from "../_shared/recipeCopy.ts";
-import { buildFamilyMemberDataForChat } from "../_shared/familyMode.ts";
+import { buildFamilyMemberDataForChat, getFamilyPromptMembers } from "../_shared/familyMode.ts";
+import { resolveFamilyStorageMemberId } from "../_shared/familyStorageResolver.ts";
+import { serializeError } from "../_shared/logging.ts";
 import { getFamilyContextPromptLine, getFamilyContextPromptLineEmpty } from "../_shared/memberConstraints.ts";
+import { shouldFavorLikes, buildLikesLine } from "../_shared/likesFavoring.ts";
+import { buildFamilyGenerationContextBlock } from "../_shared/familyContextBlock.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -46,8 +43,8 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-const RECIPE_SLOW_MS = 20000;
-const RECIPE_MAX_TOKENS = 2048;
+/** Ограничение длины ответа рецепта: меньше токенов — быстрее генерация (целевой порядок 15–18 с вместо 20+). */
+const RECIPE_MAX_TOKENS = 1536;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
   infant: { min: 6, max: 12 },
@@ -263,7 +260,7 @@ function normalizeTitleKey(title: string): string {
 async function fetchRecentTitleKeys(
   supabase: ReturnType<typeof createClient>,
   userId: string,
-  memberId: string | null,
+  memberIdOrFamilyStorage: string | null,
   targetIsFamily: boolean
 ): Promise<string[]> {
   try {
@@ -279,9 +276,9 @@ async function fetchRecentTitleKeys(
       .order("created_at", { ascending: false })
       .limit(50);
     if (targetIsFamily) {
-      q = q.is("child_id", null);
-    } else if (memberId) {
-      q = q.eq("child_id", memberId);
+      q = memberIdOrFamilyStorage ? q.eq("child_id", memberIdOrFamilyStorage) : q.is("child_id", null);
+    } else if (memberIdOrFamilyStorage) {
+      q = q.eq("child_id", memberIdOrFamilyStorage);
     }
     const { data: rows } = await q;
     const recipeIds = (rows ?? []).map((r: { recipe_id?: string }) => r?.recipe_id).filter(Boolean) as string[];
@@ -310,24 +307,6 @@ function getAiDailyLimitForStatus(isPremiumOrTrial: boolean): number | null {
   return isPremiumOrTrial ? null : FREE_AI_DAILY_LIMIT;
 }
 
-// ——— Кэш: префикс v_template_system, принудительно отключён ———
-const CACHE_KEY_PREFIX = "v_template_system";
-
-function getCacheKey(type: string, memberData?: MemberData | null, isPremium?: boolean): string {
-  return `${CACHE_KEY_PREFIX}_${type}_${isPremium ? "premium" : "free"}_${JSON.stringify(memberData ?? {})}`;
-}
-
-function getCachedSystemPrompt(
-  _type: string,
-  _memberData?: MemberData | null,
-  _isPremium?: boolean
-): string | null {
-  // const key = getCacheKey(type, memberData, isPremium);
-  // const cached = systemPromptCache.get(key);
-  // if (cached) return cached;  // временно закомментировано
-  return null;
-}
-
 /** Возраст по birth_date (YYYY-MM-DD) или по ageMonths. */
 function calculateAge(birthDate: string): { years: number; months: number } {
   const s = (birthDate || "").trim();
@@ -350,6 +329,7 @@ function formatAgeString(birthDate: string): string {
 }
 
 interface MemberData {
+  id?: string;
   name?: string;
   birth_date?: string;
   age_months?: number;
@@ -406,13 +386,13 @@ function findYoungestMember(members: MemberData[]): MemberData | null {
     , members[0]);
 }
 
-/** Подставляет в шаблон переменные V2: {{ageRule}}, {{allergies}}, {{familyContext}}, {{ageMonths}}, {{weekContext}} и др. */
+/** Подставляет в шаблон переменные V2: {{ageRule}}, {{allergies}}, {{familyContext}}, {{ageMonths}} и др. */
 function applyPromptTemplate(
   template: string,
   memberData: MemberData | null | undefined,
   targetIsFamily: boolean,
   allMembers: MemberData[] = [],
-  options?: { weekContext?: string; varietyRules?: string; userMessage?: string; generationContextBlock?: string; mealType?: string; maxCookingTime?: number; servings?: number; recentTitleKeysLine?: string }
+  options?: { userMessage?: string; generationContextBlock?: string; mealType?: string; maxCookingTime?: number; servings?: number; recentTitleKeysLine?: string }
 ): string {
   // Семья: используем merged memberData (взрослый возраст, без возрастных ограничений); иначе — выбранный Member или самый младший
   const youngestMember = targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : null;
@@ -452,8 +432,6 @@ function applyPromptTemplate(
 
   const ageCategory = getAgeCategory(rawMonths === 999 ? 0 : rawMonths);
   const ageRule = ageCategory in AGE_CONTEXTS ? AGE_CONTEXTS[ageCategory as keyof typeof AGE_CONTEXTS] : AGE_CONTEXTS.adult;
-  const weekContext = options?.weekContext?.trim() || "";
-  const varietyRules = options?.varietyRules?.trim() || "";
   const userMessage = options?.userMessage?.trim() || "";
   const generationContextBlock = options?.generationContextBlock?.trim() || "";
   const mealType = options?.mealType?.trim() || "";
@@ -479,8 +457,6 @@ function applyPromptTemplate(
     .split("{{preferences}}").join(preferencesText)
     .split("{{difficulty}}").join(difficultyText)
     .split("{{generationContextBlock}}").join(generationContextBlock)
-    .split("{{weekContext}}").join(weekContext)
-    .split("{{varietyRules}}").join(varietyRules)
     .split("{{familyContext}}").join(familyContext)
     .split("{{userMessage}}").join(userMessage)
     .split("{{mealType}}").join(mealType)
@@ -500,8 +476,6 @@ function applyPromptTemplate(
       [/\{\{\s*preferences\s*\}\}/g, preferencesText],
       [/\{\{\s*difficulty\s*\}\}/g, difficultyText],
       [/\{\{\s*generationContextBlock\s*\}\}/g, generationContextBlock],
-      [/\{\{\s*weekContext\s*\}\}/g, weekContext],
-      [/\{\{\s*varietyRules\s*\}\}/g, varietyRules],
       [/\{\{\s*familyContext\s*\}\}/g, familyContext],
       [/\{\{\s*userMessage\s*\}\}/g, userMessage],
       [/\{\{\s*mealType\s*\}\}/g, mealType],
@@ -533,12 +507,10 @@ function getSystemPromptForType(
   isPremium: boolean,
   targetIsFamily: boolean,
   allMembers: MemberData[] = [],
-  weekContext?: string,
   userMessage?: string,
   generationContextBlock?: string,
   mealType?: string,
   maxCookingTime?: number,
-  varietyRules?: string,
   servings?: number,
   recentTitleKeysLine?: string
 ): string {
@@ -553,14 +525,9 @@ function getSystemPromptForType(
   if (type === "chat") {
     return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers, recipeOpts);
   }
-  if (type === "recipe" || type === "diet_plan") {
+  if (type === "recipe") {
     const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
     return applyPromptTemplate(template, memberData, targetIsFamily, allMembers, recipeOpts);
-  }
-  if (type === "single_day") {
-    const ctx = weekContext?.trim() || "Пока ничего не запланировано.";
-    const variety = varietyRules?.trim() || "Избегай повторов с уже запланированными блюдами; разнообразь базы завтраков.";
-    return applyPromptTemplate(SINGLE_DAY_PLAN_TEMPLATE, memberData, targetIsFamily, allMembers, { weekContext: ctx, varietyRules: variety, ...genBlockOpt });
   }
   if (type === "sos_consultant") {
     return applyPromptTemplate(SOS_PROMPT_TEMPLATE, memberData, false, allMembers, { userMessage: userMessage || "" });
@@ -574,8 +541,7 @@ function getSystemPromptForType(
 interface ChatRequest {
   messages: Array<{ role: string; content: string }>;
   memberData?: MemberData | null;
-  type?: "chat" | "recipe" | "diet_plan" | "single_day" | "sos_consultant" | "balance_check";
-  stream?: boolean;
+  type?: "chat" | "recipe" | "sos_consultant" | "balance_check";
   maxRecipes?: number;
   /** true, если выбран профиль «Семья» (рецепт для всех членов) */
   targetIsFamily?: boolean;
@@ -587,33 +553,10 @@ interface ChatRequest {
   generationContextBlock?: string;
   /** Optional suffix appended to system prompt */
   extraSystemSuffix?: string;
-  dayName?: string;
-  /** string = legacy "Уже запланировано: ..."; object = накопленный контекст для VARIETY_RULES */
-  weekContext?: string | WeekContextPayload;
-}
-
-interface WeekContextPayload {
-  chosenTitles?: string[];
-  chosenBreakfastTitles?: string[];
-  chosenBreakfastBases?: string[];
-}
-
-/** Строит блок [VARIETY_RULES] для single_day из накопленного контекста недели. */
-function buildVarietyRules(w: WeekContextPayload): string {
-  const chosen = w.chosenTitles ?? [];
-  const breakfastTitles = w.chosenBreakfastTitles ?? [];
-  const bases = w.chosenBreakfastBases ?? [];
-  const lines: string[] = [];
-  if (chosen.length > 0) {
-    lines.push("- ЗАПРЕЩЕНО повторять точные названия блюд из списка уже запланированных: " + chosen.join(", ") + ".");
-  }
-  const hasOatmeal = breakfastTitles.some((t) => /овсян|oat/i.test(t)) || bases.includes("oatmeal");
-  if (hasOatmeal) {
-    lines.push("- Овсянка/каша овсяная уже есть на неделе. ЗАПРЕЩЕНО предлагать овсянку снова. Выбери другую базу завтрака: омлет/яйца, творог/сырники, йогурт/гранола, гречка/рис, бутерброд/тост/лаваш, запеканка, блинчики.");
-  }
-  lines.push("- Разнообразие завтраков: за неделю должно быть минимум 5 разных баз (яйца, творог, йогурт, крупы кроме овсянки, бутерброды, запеканка, блинчики). Не овсянка каждый день.");
-  lines.push("- Если не можешь выполнить ограничения — замени завтрак на другую базу из списка выше, а не повторяй уже использованные.");
-  return lines.join("\n");
+  mealType?: string;
+  maxCookingTime?: number;
+  servings?: number;
+  from_plan_replace?: boolean;
 }
 
 serve(async (req) => {
@@ -639,15 +582,22 @@ serve(async (req) => {
     let profileV2: (ProfileV2Row & { premium_until?: string | null }) | null = null;
 
     const tProfileStart = Date.now();
-    // Создаём supabase клиент на уровне всего handler-а (service role для чтения профиля и лимитов)
-    const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-      ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    // Supabase client с пробросом Authorization, чтобы auth.getUser() и запросы от имени пользователя (members и т.д.) работали
+    const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
+      ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          global: {
+            headers: {
+              Authorization: authHeader ?? "",
+            },
+          },
+        })
       : null;
 
     if (authHeader && supabase) {
-      const token = authHeader.replace("Bearer ", "");
+      const token = authHeader.replace(/^Bearer\s+/i, "").trim();
       const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id ?? null;
+      console.log(JSON.stringify({ tag: "AUTH_DEBUG", userId: user?.id ?? null }));
 
       if (userId) {
         // Загружаем только profiles_v2 (таблица public.profiles не используется).
@@ -713,12 +663,9 @@ serve(async (req) => {
     const reqAllMembersRaw = body.allMembers ?? body.allChildren;
     const {
       messages,
-      type = "chat",
-      stream: reqStream = true,
+      type: reqType = "chat",
       targetIsFamily: reqTargetIsFamily,
       memberId = body.memberId ?? body.childId,
-      dayName,
-      weekContext,
       generationContextBlock: reqGenerationContextBlock,
       extraSystemSuffix: reqExtraSystemSuffix,
       mealType: reqMealType,
@@ -726,40 +673,26 @@ serve(async (req) => {
       servings: reqServings,
       from_plan_replace: fromPlanReplace = false,
     } = body;
+    const type = reqType as "chat" | "recipe" | "sos_consultant" | "balance_check";
+
+    // Неподдерживаемые типы (планы вынесены в generate-plan и др.)
+    if (reqType === "single_day" || reqType === "diet_plan") {
+      return new Response(
+        JSON.stringify({
+          error: "unsupported_type",
+          message: `Тип запроса "${reqType}" не поддерживается. Используйте функцию генерации плана (generate-plan) или другой endpoint.`,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const servings = typeof reqServings === "number" && reqServings >= 1 && reqServings <= 20 ? reqServings : 1;
 
-    const recipeTypes = ["recipe", "single_day", "diet_plan", "balance_check"] as const;
+    const recipeTypes = ["recipe", "balance_check"] as const;
     const isRecipeRequestByType = recipeTypes.includes(type as (typeof recipeTypes)[number]);
 
-    let weekContextForPrompt = typeof weekContext === "string" ? (weekContext ?? "") : "";
-    let varietyRulesForPrompt = "";
-    if (type === "single_day") {
-      if (weekContext && typeof weekContext === "object" && !Array.isArray(weekContext)) {
-        const w = weekContext as WeekContextPayload;
-        weekContextForPrompt = w.chosenTitles?.length
-          ? "Уже запланировано на неделю: " + w.chosenTitles.join(", ") + ". Не повторяй эти блюда и названия."
-          : "Пока ничего не запланировано.";
-        varietyRulesForPrompt = buildVarietyRules(w);
-      } else if (typeof weekContext === "string" && weekContext.trim()) {
-        weekContextForPrompt = "Уже запланировано: " + weekContext.trim() + ". Сделай этот день максимально непохожим на уже запланированные.";
-      } else {
-        weekContextForPrompt = "Пока ничего не запланировано.";
-      }
-    }
-
-    const DEBUG = Deno.env.get("DEBUG") === "1" || Deno.env.get("DEBUG") === "true";
-    if (DEBUG && type === "single_day") {
-      const ctxSummary =
-        weekContext && typeof weekContext === "object" && !Array.isArray(weekContext)
-          ? `object chosenTitles=${(weekContext as WeekContextPayload).chosenTitles?.length ?? 0}`
-          : typeof weekContext === "string"
-            ? `string len=${(weekContext as string).length}`
-            : "empty";
-      safeLog("[DEBUG] single_day: no pool used; plan by AI; recipes on client. dayName:", dayName ?? "(none)", "memberId:", !!memberId, "weekContext:", ctxSummary);
-    }
-
     // Нормализация: фронт может присылать ageMonths (camelCase), без age_months
-    const memberDataNorm = normalizeMemberData(memberDataRaw);
+    let memberDataNorm = normalizeMemberData(memberDataRaw);
     const reqAllMembersNorm = Array.isArray(reqAllMembersRaw)
       ? reqAllMembersRaw.map((m: MemberData) => {
         const n = normalizeMemberData(m);
@@ -769,7 +702,10 @@ serve(async (req) => {
 
     safeLog("DEBUG: Received memberData:", JSON.stringify(memberDataNorm));
 
-    const memberName = memberDataNorm?.name?.trim() || "член семьи";
+    /** Family-mode: не зависит от type. Применяется для chat, recipe и т.п. */
+    const targetIsFamilyRaw = reqTargetIsFamily === true || memberId === "family";
+    const isFamilyRequest = targetIsFamilyRaw;
+    const memberName = isFamilyRequest ? "Семья" : (memberDataNorm?.name?.trim() || "член семьи");
 
     const userMessage =
       (Array.isArray(messages) && messages.length > 0)
@@ -804,13 +740,8 @@ serve(async (req) => {
     const isRecipeChat =
       type === "chat" && (isPremiumUser ? (premiumRelevance === true || premiumRelevance === "soft") : true);
     const isRecipeRequest = isRecipeRequestByType || (type === "chat" && isRecipeChat);
-    const stream =
-      type === "sos_consultant" || type === "balance_check" || isRecipeRequest
-        ? false
-        : reqStream;
 
-    const targetIsFamily =
-      type === "chat" && (reqTargetIsFamily === true || memberId === "family");
+    const targetIsFamily = targetIsFamilyRaw;
 
     // SOS-консультант (Помощь маме): Free — лимит 2/день по фиче help; Premium/Trial — без лимита
     const FREE_FEATURE_LIMIT = 2;
@@ -846,19 +777,29 @@ serve(async (req) => {
       }
     }
 
-    // Данные только из members: из запроса (нормализованные) или запрос в БД
+    // В режиме «Семья»: allMembers из тела или гарантированно из БД по user_id (не по member_id)
     let allMembers: MemberData[] = [];
     if (targetIsFamily) {
-      if (Array.isArray(reqAllMembersNorm) && reqAllMembersNorm.length > 0) {
-        allMembers = reqAllMembersNorm as MemberData[];
-      } else if (userId && supabase) {
-        const { data: rows, error: membersError } = await supabase
-          .from("members")
-          .select("name, age_months, allergies, preferences, likes, dislikes, difficulty")
-          .eq("user_id", userId);
+      const fromBody = Array.isArray(reqAllMembersNorm) && reqAllMembersNorm.length > 0 ? (reqAllMembersNorm as MemberData[]) : null;
+      allMembers = fromBody ?? [];
 
-        if (!membersError && rows) {
-          allMembers = rows.map((m: { name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; difficulty?: string }) => ({
+      if (!allMembers || allMembers.length === 0) {
+        if (userId && supabase) {
+          const { data, error } = await supabase
+            .from("members")
+            .select("*")
+            .eq("user_id", userId);
+
+          if (error) {
+            safeError("Members fetch error", serializeError(error));
+            return new Response(
+              JSON.stringify({ error: "INTERNAL_ERROR", message: "Ошибка загрузки членов семьи." }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          const rows = (data ?? []) as Array<{ id?: string; name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; difficulty?: string }>;
+          allMembers = rows.map((m) => ({
+            ...(m.id && { id: m.id }),
             name: m.name,
             age_months: m.age_months ?? 0,
             allergies: m.allergies ?? [],
@@ -869,10 +810,48 @@ serve(async (req) => {
           })) as MemberData[];
         }
       }
+
+      console.log(JSON.stringify({ tag: "FAMILY_MEMBERS_DEBUG", count: allMembers.length, userId: userId ?? null }));
+      console.log(JSON.stringify({ tag: "FAMILY_MEMBERS_FINAL", userId: userId ?? null, count: allMembers?.length ?? 0 }));
+
+      if (allMembers.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "NO_MEMBERS", message: "Добавьте хотя бы одного члена семьи для режима «Семья»." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
+    // Для режима «Семья» — storageMemberId всегда из БД (у allMembers с фронта может не быть id).
+    let storageMemberId: string | null = null;
+    if (targetIsFamily) {
+      if (!userId || !supabase) {
+        return new Response(
+          JSON.stringify({ error: "unauthorized", message: "Требуется авторизация для режима «Семья»." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      storageMemberId = await resolveFamilyStorageMemberId({ supabase, userId });
+      console.log(JSON.stringify({ tag: "FAMILY_STORAGE_ID", userId, storageMemberIdFound: !!storageMemberId }));
+      if (!storageMemberId) {
+        return new Response(
+          JSON.stringify({ error: "NO_MEMBERS", message: "Добавьте хотя бы одного члена семьи, чтобы использовать режим «Семья»." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    /** Для записи в БД (recipes, usage_events, plate_logs, chat_history): в режиме Семья — storageMemberId, иначе — выбранный member или null. */
+    const memberIdForDb: string | null = targetIsFamily ? storageMemberId : (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId) ? memberId : null);
+
+    let applyKidFilter = false;
+    /** В семейном режиме — только non-infant для агрегации аллергий/лайков/дизлайков; иначе все allMembers. */
+    let familyMembersForPrompt: MemberData[] | null = null;
     if (targetIsFamily && allMembers.length > 0) {
-      memberDataNorm = buildFamilyMemberDataForChat(allMembers) as MemberData;
+      const { membersForPrompt, applyKidFilter: kidFilter } = getFamilyPromptMembers(allMembers as Array<{ age_months?: number | null; allergies?: string[]; dislikes?: string[]; [k: string]: unknown }>);
+      applyKidFilter = kidFilter;
+      memberDataNorm = buildFamilyMemberDataForChat(membersForPrompt as Array<{ age_months?: number | null; allergies?: string[]; dislikes?: string[]; [k: string]: unknown }>) as MemberData;
+      familyMembersForPrompt = membersForPrompt as MemberData[];
     }
 
     const primaryForAge =
@@ -897,7 +876,7 @@ serve(async (req) => {
     });
 
     let memberDataForPrompt = memberDataNorm;
-    let allMembersForPrompt = allMembers;
+    let allMembersForPrompt = familyMembersForPrompt ?? allMembers;
     if (!tariffResult.useAllAllergies) {
       memberDataForPrompt = memberDataNorm
         ? { ...memberDataNorm, allergies: (memberDataNorm.allergies ?? []).slice(0, 1) }
@@ -910,8 +889,10 @@ serve(async (req) => {
 
     // Страховка: запрос с аллергеном или dislikes — отказ без вызова модели, без usage_events
     // Исключение: «суп без лука» при аллергии на лук — не блокируем, отдаём рецепт без него
-    if ((type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest) {
-      const profileName = (memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля";
+    if ((type === "chat" || type === "recipe") && isRecipeRequest) {
+      const profileName = targetIsFamily
+        ? "Семья"
+        : ((memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля");
       const allergiesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
         ? [...new Set(allMembersForPrompt.flatMap((m) => m.allergies ?? []))]
         : (memberDataForPrompt?.allergies ?? []);
@@ -957,9 +938,22 @@ serve(async (req) => {
       }
     }
 
-    if (type === "chat" || type === "recipe" || type === "diet_plan") {
+    // В режиме «Семья» подменяем generationContextBlock на server-truth (без младенцев <12m, без "Children:", без "safe for ALL children")
+    let effectiveGenerationContextBlock: string = typeof reqGenerationContextBlock === "string" ? reqGenerationContextBlock : "";
+    if (targetIsFamily && allMembersForPrompt.length > 0) {
+      const reqBlock = effectiveGenerationContextBlock.trim();
+      if (reqBlock.includes("Children:") || /safe\s+(and\s+)?suitable\s+for\s+ALL\s+children/i.test(reqBlock) || /safe\s+for\s+ALL\s+children/i.test(reqBlock)) {
+        console.log(JSON.stringify({ tag: "FAMILY_CTX_OVERRIDDEN" }));
+      }
+      effectiveGenerationContextBlock = buildFamilyGenerationContextBlock({
+        membersForPrompt: allMembersForPrompt as Array<{ name?: string | null; age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null; likes?: string[] | null; [k: string]: unknown }>,
+        applyKidFilter,
+      });
+    }
+
+    if (type === "chat" || type === "recipe") {
       const templateName = isPremiumUser ? "PREMIUM_RECIPE_TEMPLATE" : "FREE_RECIPE_TEMPLATE";
-      const genBlockLen = typeof reqGenerationContextBlock === "string" ? reqGenerationContextBlock.trim().length : 0;
+      const genBlockLen = effectiveGenerationContextBlock.trim().length;
       safeLog(
         "Template selected:",
         templateName,
@@ -979,7 +973,8 @@ serve(async (req) => {
     let recentTitleKeys: string[] = [];
     let recentTitleKeysLine = "";
     if (isRecipeRequest && userId && supabase) {
-      recentTitleKeys = await fetchRecentTitleKeys(supabase, userId, memberId ?? null, targetIsFamily);
+      const memberIdForHistory = targetIsFamily ? storageMemberId : (memberId && memberId !== "family" ? memberId : null);
+      recentTitleKeys = await fetchRecentTitleKeys(supabase, userId, memberIdForHistory, targetIsFamily);
       if (recentTitleKeys.length > 0) {
         recentTitleKeysLine = "Не повторять: " + recentTitleKeys.slice(0, 12).join(", ") + ".";
       }
@@ -991,9 +986,8 @@ serve(async (req) => {
       isRecipeRequest && userMessage && isExplicitDishRequest(userMessage) && inferMealTypeFromQuery(userMessage)
         ? inferMealTypeFromQuery(userMessage)!
         : (reqMealType ?? "");
-    const cached = getCachedSystemPrompt(type, memberDataForPrompt, isPremiumUser);
     let systemPrompt =
-      cached ?? getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, weekContextForPrompt, promptUserMessage, reqGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, varietyRulesForPrompt, servings, recentTitleKeysLine);
+      getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
 
     // Только если рецепт не запрашиваем — даём краткий ответ без рецепта (для soft теперь рецепт генерируем)
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft" && !isRecipeRequest) {
@@ -1014,25 +1008,33 @@ serve(async (req) => {
       NO_ARTICLES_RULE +
       (!isRecipeRequest && type !== "sos_consultant" && type !== "balance_check" ? "\n" + GREETING_STYLE_RULE : "");
 
-    if ((type === "chat" || type === "recipe" || type === "diet_plan") && targetIsFamily) {
+    if ((type === "chat" || type === "recipe") && targetIsFamily) {
       systemPrompt += "\n\n" + applyPromptTemplate(
         FAMILY_RECIPE_INSTRUCTION,
         memberDataForPrompt,
         true,
         allMembersForPrompt
       );
+      if (applyKidFilter) {
+        systemPrompt += "\n\n" + KID_SAFETY_1_3_INSTRUCTION;
+      }
+      const likesForPrompt = memberDataForPrompt?.likes ?? [];
+      if (isRecipeRequest && likesForPrompt.length > 0 && shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type })) {
+        const likesLine = buildLikesLine(likesForPrompt);
+        if (likesLine) systemPrompt += "\n\n" + likesLine;
+      }
     }
 
     const extraSuffix = typeof reqExtraSystemSuffix === "string" ? reqExtraSystemSuffix.trim() : "";
     if (extraSuffix) {
       systemPrompt += "\n\n" + extraSuffix;
     }
-    if (isRecipeRequest && (type === "chat" || type === "recipe" || type === "diet_plan")) {
+    if (isRecipeRequest && (type === "chat" || type === "recipe")) {
       systemPrompt += "\n\nРазнообразь стиль описаний. Не используй одни и те же формулировки в нескольких подряд ответах.";
     }
     logPerf("system_prompt", tSystemPromptStart, requestId);
 
-    const isRecipeJsonRequest = (type === "chat" || type === "recipe" || type === "diet_plan") && isRecipeRequest;
+    const isRecipeJsonRequest = (type === "chat" || type === "recipe") && isRecipeRequest;
 
     let currentSystemPrompt = systemPrompt;
     let assistantMessage = "";
@@ -1042,28 +1044,26 @@ serve(async (req) => {
     safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
 
       const isExpertSoft = type === "chat" && isPremiumUser && premiumRelevance === "soft";
-      const isMealPlan = type === "single_day" || type === "diet_plan";
       const maxTokensChat =
         type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
       const promptConfig = {
-        maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : type === "single_day" ? 1000 : 8192),
+        maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : 8192),
       };
       const messagesForPayload = isRecipeRequest
         ? [{ role: "user" as const, content: userMessage }]
         : messages;
-      const recipeStream = isRecipeRequest && stream;
       const payload = {
         model: "deepseek-chat",
         messages: [{ role: "system", content: currentSystemPrompt }, ...messagesForPayload],
-        stream: recipeStream || (stream && !isRecipeRequest),
+        stream: false,
         max_tokens: promptConfig.maxTokens,
         temperature: isRecipeRequest ? 0.4 : 0.7,
         top_p: 0.8,
         repetition_penalty: 1.1,
-        ...(isRecipeRequest && !recipeStream && { response_format: { type: "json_object" } }),
+        ...(isRecipeRequest && { response_format: { type: "json_object" } }),
       };
 
-      const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "single_day" ? 60000 : (payload as { stream?: boolean }).stream ? 90000 : 120000);
+      const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "sos_consultant" ? 30000 : 120000);
       const timeoutMs = MAIN_LLM_TIMEOUT_MS;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -1084,6 +1084,7 @@ serve(async (req) => {
         clearTimeout(timeoutId);
       } catch (error) {
         clearTimeout(timeoutId);
+        safeError("deepseek-chat request error", serializeError(error));
         if (error instanceof Error && error.name === "AbortError") {
           logPerf("llm_ttfb", tLlmStart, requestId);
           logPerf("llm_total", tLlmStart, requestId);
@@ -1113,7 +1114,7 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        safeError("DeepSeek API error:", response.status, errorText);
+        safeError("DeepSeek API error", { ...serializeError(new Error(`HTTP ${response.status}`)), status: response.status, body: errorText.slice(0, 500) });
         if (response.status === 429) {
           return new Response(
             JSON.stringify({ error: "rate_limit", message: "Превышен лимит запросов DeepSeek. Попробуйте позже." }),
@@ -1127,163 +1128,12 @@ serve(async (req) => {
         );
       }
 
-      if (recipeStream && response.body) {
-        logPerf("total_ms", t0, requestId);
-        const encoder = new TextEncoder();
-        const stream = new ReadableStream({
-          async start(controller) {
-            const tBodyStartStream = Date.now();
-            const reader = response.body!.getReader();
-            const decoder = new TextDecoder();
-            let buffer = "";
-            let fullContent = "";
-            try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop() ?? "";
-                for (const line of lines) {
-                  if (line.startsWith("data: ")) {
-                    const data = line.slice(6).trim();
-                    if (data === "[DONE]") continue;
-                    try {
-                      const parsed = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string } }> };
-                      const content = parsed?.choices?.[0]?.delta?.content;
-                      if (typeof content === "string") {
-                        fullContent += content;
-                        controller.enqueue(encoder.encode("event: delta\ndata: " + JSON.stringify({ delta: content }) + "\n\n"));
-                      }
-                    } catch {
-                      // skip malformed
-                    }
-                  }
-                }
-              }
-              logPerf("llm_body", tBodyStartStream, requestId, { response_chars: fullContent.length });
-              logPerf("llm_total", tLlmStart, requestId);
-              const streamParseLog = (msg: string, meta?: Record<string, unknown>) =>
-                console.log(JSON.stringify({ tag: "RECIPE_PARSE", requestId, ...meta, msg }));
-              const rawStreamContent = fullContent.trim();
-              let validated: RecipeJson | null = null;
-              const streamResult = validateRecipe(rawStreamContent, parseAndValidateRecipeJsonFromString);
-              if (streamResult.stage === "ok" && streamResult.valid) {
-                validated = streamResult.valid;
-              } else if (DEEPSEEK_API_KEY && streamResult.stage !== "ok") {
-                const validationErrorMsg = streamResult.stage === "validate" ? (getLastValidationError() ?? (streamResult as { error?: string }).error) : (streamResult as { error?: string }).error;
-                streamParseLog("stream first attempt failed", { stage: streamResult.stage, responseLength: rawStreamContent.length });
-                const retryResult = await retryFixJson({
-                  apiKey: DEEPSEEK_API_KEY,
-                  rawResponse: rawStreamContent.slice(0, 3500),
-                  validationError: validationErrorMsg ?? "unknown",
-                  requestId,
-                  log: streamParseLog,
-                });
-                if (retryResult.success && retryResult.fixed) {
-                  validated = parseAndValidateRecipeJsonFromString(retryResult.fixed);
-                  if (validated) streamParseLog("stream retry succeeded", { retrySuccess: true });
-                }
-                if (!validated) validated = getRecipeOrFallback(rawStreamContent);
-              } else if (streamResult.stage !== "ok") {
-                validated = getRecipeOrFallback(rawStreamContent);
-              }
-              if (validated && ingredientsNeedAmountRetry(validated.ingredients)) {
-                applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
-              }
-              if (validated) {
-                const desc = (validated as { description?: string }).description;
-                const advice = validated.chefAdvice ?? "";
-                if (!desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc)) {
-                  const keyIngredient = Array.isArray(validated.ingredients) && validated.ingredients[0] && typeof validated.ingredients[0] === "object" && validated.ingredients[0].name ? String(validated.ingredients[0].name) : undefined;
-                  (validated as Record<string, unknown>).description = isDescriptionIncomplete(desc) && DEEPSEEK_API_KEY
-                    ? (await repairDescriptionOnly(desc ?? "", DEEPSEEK_API_KEY)) ?? buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient })
-                    : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
-                }
-                if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
-                  (validated as Record<string, unknown>).chefAdvice = buildChefAdvice({ title: validated.title, userText: userMessage });
-                }
-              }
-              let savedRecipeId: string | null = null;
-              let responseRecipesStream: Array<Record<string, unknown>> = [];
-              if (validated) {
-                responseRecipesStream = [validated as Record<string, unknown>];
-                if (userId && authHeader && !fromPlanReplace && SUPABASE_URL && SUPABASE_ANON_KEY) {
-                  try {
-                    const supabaseUser = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { global: { headers: { Authorization: authHeader } } });
-                    const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
-                    const status = subscriptionStatus as string;
-                    const chefAdviceToSave = status === "free" ? null : (validated.chefAdvice ?? null);
-                    const rawSteps = (validated.steps ?? []).slice(0, 10).map((step: string, idx: number) => ({ instruction: (typeof step === "string" ? step : (step as { instruction?: string }).instruction ?? "").slice(0, 200), step_number: idx + 1 }));
-                    const stepsPayload = rawSteps.length >= 3 ? rawSteps : [...rawSteps, ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг.", step_number: rawSteps.length + i + 1 }))];
-                    const rawIngredients = (validated.ingredients ?? []).slice(0, 10);
-                    const ingredientsPayload = rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => ({
-                      name: typeof ing === "string" ? ing : ing.name,
-                      display_text: typeof ing === "string" ? ing : (ing.displayText ?? ing.name),
-                      canonical_amount: (ing as { canonical?: { amount: number } }).canonical?.amount ?? null,
-                      canonical_unit: (ing as { canonical?: { unit: string } }).canonical?.unit ?? null,
-                    }));
-                    const ageRange = AGE_RANGE_BY_CATEGORY[ageCategoryForLog] ?? AGE_RANGE_BY_CATEGORY.adult;
-                    const payload = canonicalizeRecipePayload({
-                      user_id: userId,
-                      member_id: memberIdForRecipe,
-                      child_id: memberIdForRecipe,
-                      source: "chat_ai",
-                      mealType: validated.mealType ?? null,
-                      tags: (validated as { tags?: string[] }).tags ?? null,
-                      title: validated.title ?? "Рецепт",
-                      description: (validated.description ?? "").slice(0, 500),
-                      cooking_time_minutes: validated.cookingTimeMinutes ?? null,
-                      chef_advice: chefAdviceToSave,
-                      advice: null,
-                      steps: stepsPayload,
-                      ingredients: ingredientsPayload,
-                      sourceTag: "chat",
-                      servings: (validated as { servings?: number }).servings ?? 1,
-                      nutrition: validated.nutrition ?? null,
-                      min_age_months: ageRange.min,
-                      max_age_months: ageRange.max,
-                    });
-                    const { data: recipeId, error: rpcErr } = await supabaseUser.rpc("create_recipe_with_steps", { payload });
-                    if (!rpcErr) savedRecipeId = recipeId ?? null;
-                  } catch {
-                    // ignore
-                  }
-                }
-                if (userId && supabase && !fromPlanReplace) {
-                  const memberIdUuid = memberId && memberId !== "family" ? memberId : null;
-                  await supabase.from("usage_events").insert({ user_id: userId, member_id: memberIdUuid, feature: "chat_recipe" });
-                }
-              }
-              const donePayload = {
-                recipe_id: savedRecipeId,
-                message: validated ? JSON.stringify(validated) : "Не удалось распознать рецепт из ответа. Попробуйте переформулировать запрос или упростить его.",
-                recipes: responseRecipesStream,
-              };
-              controller.enqueue(encoder.encode("event: done\ndata: " + JSON.stringify(donePayload) + "\n\n"));
-            } catch (e) {
-              safeError("recipe stream error", e);
-              controller.enqueue(encoder.encode("event: error\ndata: " + JSON.stringify({ error: "stream_failed" }) + "\n\n"));
-            } finally {
-              controller.close();
-            }
-          },
-        });
-        return new Response(stream, {
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-          },
-        });
-      }
-
       const tBodyStart = Date.now();
       let bodyText: string;
       try {
         bodyText = await response.text();
-      } catch {
+      } catch (err) {
+        safeWarn("response.text failed", serializeError(err));
         return new Response(
           JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1292,7 +1142,8 @@ serve(async (req) => {
       const llmBodyMs = Date.now() - tBodyStart;
       try {
         data = JSON.parse(bodyText) as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
-      } catch {
+      } catch (err) {
+        safeWarn("parse response body failed", serializeError(err));
         return new Response(
           JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1307,23 +1158,6 @@ serve(async (req) => {
           JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
-      }
-
-      if (DEBUG && type === "single_day") {
-        safeLog("[DEBUG] single_day: response length:", assistantMessage.length, "recipes created on client only (no server insert); total recipes for plan = 4 per day × 7 days (client-side).");
-        try {
-          const parsed = JSON.parse(assistantMessage) as Record<string, { ingredients?: unknown[] } | undefined>;
-          const mealKeys = ["breakfast", "lunch", "snack", "dinner"];
-          for (const key of mealKeys) {
-            const meal = parsed[key];
-            const arr = meal?.ingredients;
-            if (Array.isArray(arr) && arr.some((item) => typeof item === "string")) {
-              safeWarn("[DEBUG] single_day: meal", key, "has string ingredients (expected [{name, amount}]); response length:", assistantMessage.length);
-            }
-          }
-        } catch {
-          // ignore parse errors for debug
-        }
       }
 
       if (isRecipeJsonRequest) {
@@ -1387,6 +1221,8 @@ serve(async (req) => {
         if (!validated) {
           validated = getRecipeOrFallback(assistantMessage);
           parseLog("using fallback recipe (nutrition may be null)", { responseLength: assistantMessage.length });
+          responseRecipes = [validated as Record<string, unknown>];
+          assistantMessage = JSON.stringify(validated);
         }
       }
 
@@ -1395,43 +1231,39 @@ serve(async (req) => {
       if (type === "sos_consultant") {
         await supabase.from("usage_events").insert({ user_id: userId, member_id: null, feature: "help" });
       } else if ((type === "chat" || type === "recipe") && responseRecipes.length > 0 && !fromPlanReplace) {
-        const memberIdUuid = memberId && memberId !== "family" ? memberId : null;
-        await supabase.from("usage_events").insert({ user_id: userId, member_id: memberIdUuid, feature: "chat_recipe" });
+        await supabase.from("usage_events").insert({ user_id: userId, member_id: memberIdForDb, feature: "chat_recipe" });
       }
     }
 
     if (type === "balance_check" && userId && supabase) {
-      const memberIdForLog = (memberId && memberId !== "family") ? memberId : null;
       await supabase.from("plate_logs").insert({
         user_id: userId,
-        member_id: memberIdForLog,
+        member_id: memberIdForDb,
         user_message: userMessage,
         assistant_message: assistantMessage,
       });
     }
 
-    // Учёт токенов по типу действия (рецепт в чате, план на неделю, Мы рядом и т.д.)
+    // Учёт токенов по типу действия (рецепт в чате, план на неделю, Мы рядом и т.д.). Пишем только при авторизованном user_id (RLS требует auth.uid() = user_id).
     const usageObj = data.usage as { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; input_tokens?: number; output_tokens?: number } | undefined;
-    if (usageObj && supabase) {
+    if (usageObj && supabase && userId) {
       const inputTokens = usageObj.prompt_tokens ?? usageObj.input_tokens ?? 0;
       const outputTokens = usageObj.completion_tokens ?? usageObj.output_tokens ?? 0;
       const totalTokens = usageObj.total_tokens ?? inputTokens + outputTokens;
       const actionType =
         fromPlanReplace ? "plan_replace"
-        : type === "single_day" ? "weekly_plan"
         : type === "sos_consultant" ? "sos_consultant"
         : type === "balance_check" ? "balance_check"
-        : type === "diet_plan" ? "diet_plan"
         : (type === "chat" || type === "recipe") ? "chat_recipe"
         : "other";
       await supabase.from("token_usage_log").insert({
-        user_id: userId ?? null,
+        user_id: userId,
         action_type: actionType,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         total_tokens: totalTokens,
       }).then(({ error }) => {
-        if (error) safeWarn("token_usage_log insert failed", error.message);
+        if (error) safeWarn("token_usage_log insert failed", serializeError(error));
       });
     }
 
@@ -1489,7 +1321,7 @@ serve(async (req) => {
       if (supabaseUser) {
         const tDbStart = Date.now();
         try {
-          const memberIdForRecipe = (memberId && memberId !== "family" && /^[0-9a-f-]{36}$/i.test(memberId)) ? memberId : null;
+          const memberIdForRecipe = memberIdForDb;
           const rawSteps = Array.isArray(validatedRecipe.steps) ? validatedRecipe.steps : [];
           const stepsPayload = rawSteps.length >= 1
             ? (rawSteps.length >= 3
@@ -1517,13 +1349,15 @@ serve(async (req) => {
                 ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({ name: `Ингредиент ${rawIngredients.length + i + 1}`, display_text: null, canonical_amount: null, canonical_unit: null })),
               ];
           const ageRange = AGE_RANGE_BY_CATEGORY[ageCategoryForLog] ?? AGE_RANGE_BY_CATEGORY.adult;
+          const baseTags = (validatedRecipe as { tags?: string[] }).tags ?? [];
+          const recipeTags = targetIsFamily ? [...baseTags, "family", ...(applyKidFilter ? ["kid_1_3_safe"] : [])] : baseTags;
           const payload = canonicalizeRecipePayload({
             user_id: userId,
             member_id: memberIdForRecipe,
             child_id: memberIdForRecipe,
             source: "chat_ai",
             mealType: validatedRecipe.mealType ?? null,
-            tags: (validatedRecipe as { tags?: string[] }).tags ?? null,
+            tags: recipeTags.length > 0 ? recipeTags : null,
             title: validatedRecipe.title ?? "Рецепт",
             description: validatedRecipe.description ?? null,
             cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
@@ -1540,12 +1374,11 @@ serve(async (req) => {
           const { data: recipeId, error: rpcErr } = await supabaseUser.rpc("create_recipe_with_steps", { payload });
           if (rpcErr) throw rpcErr;
           savedRecipeId = recipeId ?? null;
-          if (DEBUG && savedRecipeId) {
-            const idSuffix = savedRecipeId.slice(-6);
-            safeLog("[DEBUG] saved recipe source=chat_ai id=...", idSuffix);
+          if (savedRecipeId) {
+            safeLog(JSON.stringify({ tag: "RECIPE_SAVED", recipeIdSuffix: savedRecipeId.slice(-6), requestId }));
           }
         } catch (err) {
-          safeWarn("Failed to save recipe to DB, continuing without recipe_id:", err instanceof Error ? err.message : err);
+          safeWarn("Failed to save recipe to DB, continuing without recipe_id:", serializeError(err));
         }
         logPerf("db_insert", tDbStart, requestId);
       }
@@ -1571,7 +1404,7 @@ serve(async (req) => {
     );
   } catch (error) {
     const errRequestId = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? "";
-    safeError("Error in deepseek-chat:", error);
+    safeError("Error in deepseek-chat:", serializeError(error));
     safeLog("[help]", { requestId: errRequestId, status: "error" });
     logPerf("total_ms", t0, errRequestId);
     const message = error instanceof Error ? error.message : "Неизвестная ошибка";

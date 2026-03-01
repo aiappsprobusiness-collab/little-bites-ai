@@ -65,6 +65,28 @@ export function buildFamilyConstraints(members: MemberWithAge[]): FamilyConstrai
 const ADULT_AGE_MONTHS = 216;
 
 /**
+ * Члены семьи для промпта: исключаем младенцев <12 мес, если есть хотя бы один ≥12 мес (или null age).
+ * Также определяет, нужен ли kid-safety фильтр (1–3 года: 12–35 мес).
+ */
+export function getFamilyPromptMembers(members: MemberWithAge[]): {
+  membersForPrompt: MemberWithAge[];
+  applyKidFilter: boolean;
+} {
+  if (!members || members.length === 0) {
+    return { membersForPrompt: [], applyKidFilter: false };
+  }
+  const nonInfantMembers = members.filter(
+    (m) => m.age_months == null || (Number.isFinite(m.age_months) && (m.age_months as number) >= 12)
+  );
+  const membersForPrompt = nonInfantMembers.length > 0 ? nonInfantMembers : members;
+  const hasToddlers1to3 = membersForPrompt.some((m) => {
+    const age = m.age_months;
+    return age != null && Number.isFinite(age) && age >= 12 && age <= 35;
+  });
+  return { membersForPrompt, applyKidFilter: hasToddlers1to3 };
+}
+
+/**
  * Builds member data for plan generation in family mode: constraints from ALL members, no age filter.
  * Use in generate-plan when member_id == null.
  */

@@ -51,10 +51,32 @@ export function textWithoutExclusionPhrases(text: string): string {
   return text.replace(/без\s+[^,.\n]+/gi, " ");
 }
 
+/** Буква (Unicode letter) для проверки границы слова. */
+function isLetter(c: string): boolean {
+  return /^\p{L}$/u.test(c);
+}
+
 /**
- * Возвращает токены из списка, которые встречаются в text (подстрока, без regex).
+ * Проверяет, что token встречается в text как отдельное слово (не часть другого слова).
+ * Исключает ложные срабатывания: «пекан» (орех) не матчится в «запеканка».
+ */
+function tokenMatchesAsWord(textNorm: string, token: string): boolean {
+  if (token.length < 2) return false;
+  let idx = textNorm.indexOf(token);
+  while (idx !== -1) {
+    const before = idx === 0 ? "" : textNorm[idx - 1]!;
+    const after = idx + token.length >= textNorm.length ? "" : textNorm[idx + token.length]!;
+    if (!isLetter(before) && !isLetter(after)) return true;
+    idx = textNorm.indexOf(token, idx + 1);
+  }
+  return false;
+}
+
+/**
+ * Возвращает токены из списка, которые встречаются в text как отдельное слово.
+ * Блокируем только при явном упоминании аллергена (например «орехи»), не при совпадении подстроки («запеканка»).
  */
 export function findMatchedTokens(text: string, tokens: string[]): string[] {
   const textNorm = normalizeToken(text);
-  return tokens.filter((t) => t.length >= 2 && textNorm.includes(t));
+  return tokens.filter((t) => tokenMatchesAsWord(textNorm, t));
 }

@@ -412,7 +412,12 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             return (
               <Wrapper className={wrapperClassName}>
             {role === "assistant" && showParseError ? (
-              <p className="text-xs text-muted-foreground">Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
+                {rawContent?.trim() && !rawContent.trim().startsWith("{") && rawContent.length < 500 ? (
+                  <p className="text-[10px] opacity-80 pt-0.5 border-t border-border/50 mt-1">{rawContent.trim().slice(0, 300)}</p>
+                ) : null}
+              </div>
             ) : role === "assistant" && effectiveRecipe ? (
               <>
                 <ChatRecipeCard

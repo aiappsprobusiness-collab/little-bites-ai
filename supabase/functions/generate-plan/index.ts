@@ -15,6 +15,7 @@ import { safeError, safeLog, safeWarn } from "../_shared/safeLogger.ts";
 import { getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
 import { getMemberAgeContext, isAdultContext } from "../_shared/memberAgeContext.ts";
 import { buildFamilyMemberDataForPlan } from "../_shared/familyMode.ts";
+import { pickFamilyStorageMemberId } from "../_shared/familyStorageMember.ts";
 import { normalizeSlotForWrite } from "../_shared/mealJson.ts";
 import { isFamilyDinnerCandidate } from "../_shared/plan/familyDinnerFilter.ts";
 
@@ -399,6 +400,14 @@ serve(async (req) => {
     const memberId = body.member_id ?? null;
     const memberData: MemberDataPool | null = body.member_data ?? null;
 
+    // Для режима «Семья» (member_id == null) выбираем одного члена для хранения (старший >= 12 мес)
+    let effectiveMemberId: string | null = memberId;
+    if (memberId == null && userId && supabase) {
+      const { data: membersRows } = await supabase.from("members").select("id, age_months").eq("user_id", userId);
+      const list = (membersRows ?? []) as Array<{ id: string; age_months?: number | null }>;
+      effectiveMemberId = pickFamilyStorageMemberId(list);
+    }
+
     safeLog("[generate-plan] request", { action: action ?? "none", mode: body.mode, type, hasDayKey: !!body.day_key, hasJobId: !!body.job_id });
 
     if (action === "cancel") {
@@ -426,19 +435,19 @@ serve(async (req) => {
         const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
         replaceMemberData = buildFamilyMemberDataForPlan(membersList);
       }
-      const { data: existingRow } = await supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey).is("member_id", memberId).maybeSingle();
+      const { data: existingRow } = await supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey).is("member_id", effectiveMemberId).maybeSingle();
       const currentMeals = (existingRow as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
       const dateKeys = [dayKey, ...getLastNDaysKeys(dayKey, 6)];
-      const { recipeIds: replaceRecipeIds, titleKeys: replaceTitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, memberId, dateKeys);
+      const { recipeIds: replaceRecipeIds, titleKeys: replaceTitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, effectiveMemberId, dateKeys);
       const excludeRecipeIds = [...(body.exclude_recipe_ids ?? []), ...replaceRecipeIds];
       const excludeTitleKeys = [...new Set([...(body.exclude_title_keys ?? []), ...replaceTitleKeys])];
-      const pool = await fetchPoolCandidates(supabase, userId, memberId, 120);
+      const pool = await fetchPoolCandidates(supabase, userId, effectiveMemberId, 120);
       const poolForReplace =
         memberId == null && mealType === "dinner" ? pool.filter((r) => isFamilyDinnerCandidate(r)) : pool;
       const picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys);
       if (picked) {
         const newMeals = { ...currentMeals, [mealType]: { recipe_id: picked.id, title: picked.title, plan_source: "pool" as const } };
-        const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+        const upsertErr = await upsertMealPlanRow(supabase, userId, effectiveMemberId, dayKey, newMeals);
         if (upsertErr.error) {
           return new Response(JSON.stringify({ error: "replace_failed", reason: "attach_failed" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
@@ -459,13 +468,13 @@ serve(async (req) => {
     }
 
     if (body.action === "start") {
-      const { data: existing } = await supabase.from("plan_generation_jobs").select("id, status").eq("user_id", userId).eq("member_id", memberId).eq("type", type).eq("status", "running").maybeSingle();
+      const { data: existing } = await supabase.from("plan_generation_jobs").select("id, status").eq("user_id", userId).eq("member_id", effectiveMemberId).eq("type", type).eq("status", "running").maybeSingle();
       if ((existing as { id?: string } | null)?.id) {
         return new Response(JSON.stringify({ job_id: (existing as { id: string }).id, status: "running" }), { status: 202, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       const { data: job, error: jobInsertError } = await supabase
         .from("plan_generation_jobs")
-        .insert({ user_id: userId, member_id: memberId, type, status: "running", progress_total: dayKeys.length, progress_done: 0 })
+        .insert({ user_id: userId, member_id: effectiveMemberId, type, status: "running", progress_total: dayKeys.length, progress_done: 0 })
         .select("id")
         .single();
       if (jobInsertError || !(job as { id?: string })?.id) {
@@ -514,7 +523,7 @@ serve(async (req) => {
       }
     }
 
-    const poolCandidates = await fetchPoolCandidates(supabase, userId, memberId, 120);
+    const poolCandidates = await fetchPoolCandidates(supabase, userId, effectiveMemberId, 120);
 
     let effectiveMemberData: MemberDataPool | null = memberData;
     if (memberId == null) {
@@ -579,8 +588,8 @@ serve(async (req) => {
     }
     if (dayKeys.length > 1 && poolSuitableCount >= MIN_QUALITY_CANDIDATES) {
       let weekQ = supabase.from("meal_plans_v2").select("planned_date, meals").eq("user_id", userId).gte("planned_date", dayKeys[0]).lte("planned_date", dayKeys[dayKeys.length - 1]);
-      if (memberId == null) weekQ = weekQ.is("member_id", null);
-      else weekQ = weekQ.eq("member_id", memberId);
+      if (effectiveMemberId == null) weekQ = weekQ.is("member_id", null);
+      else weekQ = weekQ.eq("member_id", effectiveMemberId);
       const { data: weekRows } = await weekQ;
       for (const row of weekRows ?? []) {
         const meals = (row as { planned_date?: string; meals?: Record<string, { recipe_id?: string; title?: string }> }).meals ?? {};
@@ -595,11 +604,11 @@ serve(async (req) => {
         }
       }
       const last4Keys = getLastNDaysKeys(dayKeys[0], 4);
-      const { recipeIds: prev4RecipeIds, titleKeys: prev4TitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, memberId, last4Keys);
+      const { recipeIds: prev4RecipeIds, titleKeys: prev4TitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, effectiveMemberId, last4Keys);
       usedRecipeIds = [...usedRecipeIds, ...prev4RecipeIds];
       usedTitleKeys = [...usedTitleKeys, ...prev4TitleKeys];
-      const last4TitleByMeal = await fetchTitleKeysByMealTypeFromPlans(supabase, userId, memberId, last4Keys);
-      const last4CatByMeal = await fetchCategoriesByMealTypeFromPlans(supabase, userId, memberId, last4Keys);
+      const last4TitleByMeal = await fetchTitleKeysByMealTypeFromPlans(supabase, userId, effectiveMemberId, last4Keys);
+      const last4CatByMeal = await fetchCategoriesByMealTypeFromPlans(supabase, userId, effectiveMemberId, last4Keys);
       for (const k of MEAL_KEYS) {
         usedTitleKeysByMealType[k] = new Set([...usedTitleKeysByMealType[k], ...(last4TitleByMeal[k] ?? [])]);
         usedCategoriesByMealType[k] = new Set([...usedCategoriesByMealType[k], ...(last4CatByMeal[k] ?? [])]);
@@ -620,7 +629,7 @@ serve(async (req) => {
       if (jobId && !isSingleDay) {
         await supabase.from("plan_generation_jobs").update({ progress_done: i, last_day_key: dayKey, updated_at: new Date().toISOString() }).eq("id", jobId);
       }
-      const { data: existingRow } = await supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey).is("member_id", memberId).maybeSingle();
+      const { data: existingRow } = await supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey).is("member_id", effectiveMemberId).maybeSingle();
       const currentMeals = (existingRow as { meals?: Record<string, MealSlot> } | null)?.meals ?? {};
       const newMeals = { ...currentMeals } as Record<string, MealSlot>;
 
@@ -641,12 +650,12 @@ serve(async (req) => {
         }
       }
 
-      const upsertErr = await upsertMealPlanRow(supabase, userId, memberId, dayKey, newMeals);
+      const upsertErr = await upsertMealPlanRow(supabase, userId, effectiveMemberId, dayKey, newMeals);
       if (upsertErr.error && debugPool()) safeWarn("[plan] upsert failed", { dayKey, error: upsertErr.error });
     }
 
     if (!isPremiumOrTrial) {
-      await supabase.from("usage_events").insert({ user_id: userId, member_id: memberId, feature: "plan_fill_day" });
+      await supabase.from("usage_events").insert({ user_id: userId, member_id: effectiveMemberId, feature: "plan_fill_day" });
     }
 
     if (jobId) {

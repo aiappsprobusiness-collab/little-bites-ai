@@ -56,8 +56,9 @@ Preferences are RESTRICTIONS, not mandatory ingredients.
 
 Allergies are ABSOLUTE bans.
 
-If constraints conflict with a dish idea — constraints always win.
+If constraints conflict with a dish idea — constraints always win: replace the forbidden ingredient with a safe alternative and still output a valid recipe.
 
+CRITICAL: You MUST always respond with exactly one valid recipe JSON. Never respond with an explanation, refusal, or "I cannot" message. If the user asks for a dish that contains an allergen — suggest the same dish WITHOUT that ingredient (e.g. vegetable soup instead of fish soup, chicken instead of the allergen). Output only the JSON object.
 If unsure → choose the safest plant-based option.
 `;
 
@@ -65,20 +66,20 @@ If unsure → choose the safest plant-based option.
 /** [2] Safety and age rules. {{...}} filled in Edge Function. */
 export const SAFETY_RULES = `
 ### СТРОГИЕ ПРАВИЛА БЕЗОПАСНОСТИ
-- АЛЛЕРГИИ: Полный запрет на указанные аллергены. Прредлагай замены.
+- АЛЛЕРГИИ: Полный запрет на указанные аллергены. Предлагай замены.
 - ВОЗРАСТ < 12 мес: СТРОГО без соли, сахара, меда и цельного молока.
 - СТИЛЬ: Экспертный нутрициолог. Без лишних слов.
 `;
 
 /** Strict JSON contract for single-recipe chat response. Fields only: title, description, ingredients[{name,amount}], steps, cookingTime, mealType, servings, chefAdvice, nutrition. No advice. */
 export const RECIPE_STRICT_JSON_CONTRACT = `
-Return ONLY valid JSON. No markdown, no text before or after. One object only.
+Return ONLY valid JSON. No markdown, no text before or after. One object only. Never output explanatory text or "I cannot" — always output a valid recipe (substitute forbidden ingredients if needed).
 
 {
   "title": string,
   "description": string (2–4 full sentences; NO truncation, NO ellipsis, NO unfinished phrases; complete thoughts only),
   "ingredients": [ { "name": string, "amount": string } ] (max 10 items),
-  "steps": string[] (6–10 steps, each step one clear sentence, max 200 chars per step),
+  "steps": string[] (5–7 steps preferred, each step one clear sentence, max 150 chars per step),
   "cookingTime": number,
   "mealType": "breakfast" | "lunch" | "dinner" | "snack",
   "servings": number,
@@ -122,17 +123,6 @@ export const RECIPE_ONE_ONLY_RULE = `
 - Даже если запрос общий («гарнир к мясу», «что на ужин», «что приготовить из курицы») — выбери один лучший вариант и верни только его.
 - Не возвращай списки из нескольких рецептов. Не пиши «Вариант 1», «Вариант 2» или перечисление блюд.
 - Не пиши текст вне JSON. Строго соблюдай формат: один JSON-объект рецепта, без обёртки в массив и без пояснений до/после.
-`;
-
-/** v2: Обязательное разнообразие и правила приёмов пищи (планы на день/неделю). */
-export const VARIETY_AND_MEALS_RULES = `
-### ОБЯЗАТЕЛЬНОЕ РАЗНООБРАЗИЕ
-- Не повторять основные ингредиенты более 2 раз в неделю. Разные типы белков и гарниров для каждого дня.
-- Избегай однообразия: не стейк/паста/яичница каждый день.
-
-### ЗАВТРАК (breakfast)
-- Стейк на завтрак — ЗАПРЕЩЕНО. Завтраки — только утренние блюда: каши, яйца (омлет, яичница), сырники, тосты, творог, блинчики, мюсли.
-- Супы ТОЛЬКО на обед.
 `;
 
 /** v2: Контексты возраста. Подставляются как {{ageRule}} через getAgeCategory() в index. НЕ использовать: toddler, infant, preschool, тоддлер, инфант. */
@@ -187,6 +177,16 @@ export const FAMILY_RECIPE_INSTRUCTION = `
 Если выбран профиль СЕМЬЯ: один рецепт, подходящий и взрослым, и ребёнку. Формат — только валидный JSON как в [RECIPE TASK]. chefAdvice: только про блюдо (вкус, текстура, техника, подача), без возраста и адаптаций.
 `;
 
+/** Безопасность 1–3 года (12–35 мес): меньше соли/сахара, без жареного/острого/копчёного, без choking hazards. */
+export const KID_SAFETY_1_3_INSTRUCTION = `
+[БЕЗОПАСНОСТЬ ДЛЯ ВОЗРАСТА 1–3 ГОДА]
+В семье есть ребёнок 1–3 года — рецепт должен быть безопасным:
+- Соль и сахар — умеренно (не ноль, но минимум).
+- Без: фритюр, сильная жарка, копчёное, фастфуд, острое, маринады, кетчуп, майонез.
+- Избегать choking hazards: цельные орехи, попкорн, крупные куски сырой моркови, цельный виноград/черри, крупные твёрдые куски.
+- Предпочитать: тушение, запекание, варка; кусочки мягкие; мясо не стейком, в виде фарша или мелких мягких кусочков.
+`;
+
 /**
  * // v2: Шаблон для PREMIUM пользователей. Контекст — только member(s), allergies, preferences, mealType, maxCookingTime.
  */
@@ -220,44 +220,4 @@ ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
 ИНГРЕДИЕНТЫ: каждый с amount и единицей (г, мл, шт., ст.л., ч.л.). ШАГИ: макс. 7. chefAdvice: макс. 300 символов.
-`;
-
-/**
- * // v2: Шаблон ПЛАНА НА ДЕНЬ. Порядок: STRICT_RULES → SAFETY_RULES → ROLE → TASK.
- * {{weekContext}} — уже запланированные блюда (кратко). {{varietyRules}} — строгие правила разнообразия по контексту недели.
- */
-export const SINGLE_DAY_PLAN_TEMPLATE = `
-${STRICT_RULES}
-${SAFETY_RULES}
-${VARIETY_AND_MEALS_RULES}
-{{ageRule}}
-
-Диетолог Mom Recipes. План на день ({{ageMonths}} мес).
-
-[УЖЕ ЗАПЛАНИРОВАНО НА НЕДЕЛЮ]
-{{weekContext}}
-
-[VARIETY_RULES — ОБЯЗАТЕЛЬНО]
-{{varietyRules}}
-
-[КАЧЕСТВО БЛЮД — СТРОГО]
-1. ЗАПРЕЩЕНО предлагать слишком простые блюда из одного ингредиента. Каждое блюдо — полноценный рецепт.
-2. Завтрак (breakfast), обед (lunch) и ужин (dinner) ОБЯЗАТЕЛЬНО содержат минимум 3 ингредиента в поле ingredients.
-3. Полдник (snack) Только комбинированный перекус: йогурт + ягоды, фрукт + орехи, творог + фрукты, печенье + молоко, бутерброд + овощи и т.п. Минимум 2 ингредиента для snack.
-4. Блюда должны быть разнообразными и выглядеть как полноценные рецепты (название + несколько ингредиентов + шаги), а не перечень базовых продуктов.
-5. Каша как единственный завтрак — не чаще одного раза в неделю; в остальные дни — другие базы (омлет, творог, сырники, тост, блинчики и т.д.).
-
-[ФОРМАТ ИНГРЕДИЕНТОВ — ОБЯЗАТЕЛЬНО]
-Для каждого блюда (breakfast, lunch, snack, dinner) поле ingredients — массив объектов строго вида { "name": "...", "amount": "..." }.
-- name: название ингредиента.
-- amount: строка с количеством и единицей. ОБЯЗАТЕЛЬНО: каждый ингредиент MUST include amount; no bare names. Примеры: "100 г", "2 шт.", "1 ст.л.", "1 ч.л.", "200 мл". Для штук — "шт.", для ложек — "ч.л." / "ст.л.", для граммов/мл — "г" / "мл". Если по вкусу — "по вкусу"; для подачи — "для подачи". ЗАПРЕЩЕНО передавать ингредиенты строками или только названием без amount.
-
-ОТВЕЧАЙ СТРОГО JSON. Без markdown, без текста вне JSON.
-Для каждого блюда: chefAdvice — только про блюдо (вкус, текстура, техника, подача), без возраста/адаптаций.
-{
-  "breakfast": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": ""},
-  "lunch": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": ""},
-  "snack": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": ""},
-  "dinner": {"name": "", "ingredients": [{"name": "", "amount": ""}], "steps": [], "cookingTime": "", "chefAdvice": ""}
-}
 `;

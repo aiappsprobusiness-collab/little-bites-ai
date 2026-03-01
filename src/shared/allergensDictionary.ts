@@ -204,16 +204,34 @@ export function buildBlockedTokens(
   return [...out];
 }
 
+/** Буква (Unicode) для проверки границы слова — не матчить «пекан» внутри «запеканка». */
+function isLetter(c: string): boolean {
+  return /^\p{L}$/u.test(c);
+}
+
+/** Проверяет, что token встречается в text как отдельное слово (не часть слова). */
+function tokenMatchesAsWord(text: string, token: string): boolean {
+  if (token.length < 2) return false;
+  let idx = text.indexOf(token);
+  while (idx !== -1) {
+    const before = idx === 0 ? "" : text[idx - 1]!;
+    const after = idx + token.length >= text.length ? "" : text[idx + token.length]!;
+    if (!isLetter(before) && !isLetter(after)) return true;
+    idx = text.indexOf(token, idx + 1);
+  }
+  return false;
+}
+
 export function containsAnyToken(
   text: string,
   tokens: string[]
 ): { hit: boolean; found: string[] } {
   if (!text || tokens.length === 0)
     return { hit: false, found: [] };
-  const h = (text ?? "").toLowerCase();
+  const h = (text ?? "").toLowerCase().trim().replace(/\s+/g, " ");
   const found: string[] = [];
   for (const t of tokens) {
-    if (t.length >= 2 && h.includes(t)) found.push(t);
+    if (t.length >= 2 && tokenMatchesAsWord(h, t)) found.push(t);
   }
   return { hit: found.length > 0, found };
 }
