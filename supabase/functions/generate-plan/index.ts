@@ -15,7 +15,6 @@ import { safeError, safeLog, safeWarn } from "../_shared/safeLogger.ts";
 import { getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
 import { getMemberAgeContext, isAdultContext } from "../_shared/memberAgeContext.ts";
 import { buildFamilyMemberDataForPlan } from "../_shared/familyMode.ts";
-import { pickFamilyStorageMemberId } from "../_shared/familyStorageMember.ts";
 import { normalizeSlotForWrite } from "../_shared/mealJson.ts";
 import { isFamilyDinnerCandidate } from "../_shared/plan/familyDinnerFilter.ts";
 
@@ -234,7 +233,7 @@ async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _m
   return (rows ?? []) as RecipeRowPool[];
 }
 
-/** In-memory only: no await. Filters pool and returns first match for slot. */
+/** In-memory only: no await. Filters pool and returns best match for slot (scoring: likes, recency, variety). */
 function pickFromPoolInMemory(
   pool: RecipeRowPool[],
   mealType: string,
@@ -264,8 +263,13 @@ function pickFromPoolInMemory(
     const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
     return slotSanityCheck(slot, [r.title ?? "", r.description ?? "", ing].join(" "));
   });
-  const first = filtered[0];
-  return first ? { id: first.id, title: first.title } : null;
+  const likeTokens: string[] = [];
+  for (const item of memberData?.likes ?? []) {
+    for (const t of tokenizePrefText(String(item).trim())) likeTokens.push(t);
+  }
+  const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
+  const best = pickBestRecipeForSlot(filtered, { likeTokens, recentSignatures });
+  return best ? { id: best.id, title: best.title } : null;
 }
 
 function normalizeMealsForWrite(meals: Record<string, MealSlot | null | undefined>): Record<string, MealSlot> {
@@ -356,7 +360,108 @@ async function fetchCategoriesByMealTypeFromPlans(supabase: SupabaseClient, user
 const MIN_QUALITY_CANDIDATES = 8;
 const FREE_PLAN_FILL_LIMIT = 2;
 const SUPABASE_TIMEOUT_MS = 8000;
+/** Single-day pool size. */
+const POOL_LIMIT_ONE_DAY = 120;
+/** Week plan: need at least 7 per meal type (breakfast/lunch/snack/dinner); family dinner filter and meal-type inference reduce effective pool — use larger fetch. */
+const POOL_LIMIT_WEEK = 280;
+/** Top-K candidates to score (rest filtered but not scored). */
+const TOP_K_SCORE = 80;
+/** Min candidates for family dinner before we fall back to pool without family-dinner filter. */
+const MIN_FAMILY_DINNER = 5;
 const debugPool = () => typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_POOL") === "true";
+
+// ——— Scoring helpers (likes bonus, recency, variety penalty) ———
+function tokenizePrefText(s: string): string[] {
+  if (!s || typeof s !== "string") return [];
+  const lower = s.trim().toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ");
+  const tokens = lower.split(/\s+/).filter((t) => t.length >= 2);
+  return [...new Set(tokens)];
+}
+function recipeTextIndex(r: RecipeRowPool): string {
+  const title = (r.title ?? "").trim();
+  const desc = (r.description ?? "").trim();
+  const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
+  const raw = [title, desc, ing].join(" ").toLowerCase();
+  return raw.replace(/[^\p{L}\p{N}]/gu, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Soft word-boundary: token matches as whole word (avoids "рыба" inside random substrings). */
+function includesTokenSoft(text: string, token: string): boolean {
+  if (!token || token.length < 4) return text.includes(token);
+  const space = " ";
+  if (text.includes(space + token + space)) return true;
+  if (text.startsWith(token + space)) return true;
+  if (text.endsWith(space + token)) return true;
+  if (text === token) return true;
+  return false;
+}
+
+const STOP_WORDS = new Set(["и", "в", "на", "с", "по", "для", "из", "к", "о", "у", "без", "от", "до", "the", "and", "with", "for", "from", "with"]);
+/** Signatures from week + last days + body.exclude_title_keys (session); used for variety penalty. */
+function buildRecentSignatureSet(existingTitleKeys: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const key of existingTitleKeys) {
+    if (!key || typeof key !== "string") continue;
+    const tokens = key.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+    const meaningful = tokens.slice(0, 3);
+    if (meaningful.length > 0) out.add(meaningful.sort().join(" "));
+  }
+  return out;
+}
+type ScoreRecipeCtx = { likeTokens: string[]; recentSignatures: Set<string> };
+function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecipeCtx): number {
+  const text = recipeTextIndex(r);
+  let likeHits = 0;
+  for (const tok of ctx.likeTokens) {
+    if (tok.length >= 2 && includesTokenSoft(text, tok)) likeHits++;
+  }
+  const likeScore = Math.min(likeHits, 3) * 5;
+  const recencyScore = Math.max(0, 3 - Math.floor(rankIndex / 20));
+  const titleTokens = (r.title ?? "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((t) => t.length >= 2 && !STOP_WORDS.has(t)).slice(0, 3);
+  let varietyPenalty = 0;
+  if (titleTokens.length > 0) {
+    let overlap = 0;
+    for (const t of titleTokens) {
+      for (const existing of ctx.recentSignatures) {
+        if (existing.includes(t)) {
+          overlap++;
+          break;
+        }
+      }
+    }
+    if (overlap >= 2) varietyPenalty = 4;
+    else if (overlap === 1) varietyPenalty = 2;
+  }
+  return likeScore + recencyScore - varietyPenalty;
+}
+const TOP_K_EXTEND = 120;
+function pickBestRecipeForSlot(candidates: RecipeRowPool[], ctx: ScoreRecipeCtx): RecipeRowPool | null {
+  if (candidates.length === 0) return null;
+  const firstWindow = candidates.slice(0, TOP_K_SCORE);
+  let best = firstWindow[0];
+  let bestScore = scoreRecipeForSlot(firstWindow[0], 0, ctx);
+  let bestIndex = 0;
+  for (let i = 1; i < firstWindow.length; i++) {
+    const s = scoreRecipeForSlot(firstWindow[i], i, ctx);
+    if (s > bestScore || (s === bestScore && i < bestIndex)) {
+      bestScore = s;
+      best = firstWindow[i];
+      bestIndex = i;
+    }
+  }
+  if (bestScore <= 0 && candidates.length > TOP_K_SCORE) {
+    const secondWindow = candidates.slice(0, TOP_K_EXTEND);
+    for (let i = TOP_K_SCORE; i < secondWindow.length; i++) {
+      const s = scoreRecipeForSlot(secondWindow[i], i, ctx);
+      if (s > bestScore || (s === bestScore && i < bestIndex)) {
+        bestScore = s;
+        best = secondWindow[i];
+        bestIndex = i;
+      }
+    }
+  }
+  return best;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -394,19 +499,15 @@ serve(async (req) => {
       meal_type?: string;
       exclude_recipe_ids?: string[];
       exclude_title_keys?: string[];
+      /** 1 = first try (may return retry_suggested); 2 = second try → then show PoolExhaustedSheet. Default 1. */
+      attempt?: number;
     };
     const action = body.action === "run" ? "run" : body.action === "replace_slot" ? "replace_slot" : body.action === "cancel" ? "cancel" : body.action === "start" ? "start" : null;
     const type = body.type === "day" || body.type === "week" ? body.type : "day";
     const memberId = body.member_id ?? null;
     const memberData: MemberDataPool | null = body.member_data ?? null;
-
-    // Для режима «Семья» (member_id == null) выбираем одного члена для хранения (старший >= 12 мес)
-    let effectiveMemberId: string | null = memberId;
-    if (memberId == null && userId && supabase) {
-      const { data: membersRows } = await supabase.from("members").select("id, age_months").eq("user_id", userId);
-      const list = (membersRows ?? []) as Array<{ id: string; age_months?: number | null }>;
-      effectiveMemberId = pickFamilyStorageMemberId(list);
-    }
+    /** Для режима «Семья» (member_id == null) храним план в meal_plans_v2 с member_id = null, чтобы фронт читал по member_id IS NULL. */
+    const effectiveMemberId: string | null = memberId;
 
     safeLog("[generate-plan] request", { action: action ?? "none", mode: body.mode, type, hasDayKey: !!body.day_key, hasJobId: !!body.job_id });
 
@@ -440,12 +541,17 @@ serve(async (req) => {
       const dateKeys = [dayKey, ...getLastNDaysKeys(dayKey, 6)];
       const { recipeIds: replaceRecipeIds, titleKeys: replaceTitleKeys } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, effectiveMemberId, dateKeys);
       const excludeRecipeIds = [...(body.exclude_recipe_ids ?? []), ...replaceRecipeIds];
+      // include body.exclude_title_keys (session) + week/last days so recentSignatures and exclude set match.
       const excludeTitleKeys = [...new Set([...(body.exclude_title_keys ?? []), ...replaceTitleKeys])];
-      const pool = await fetchPoolCandidates(supabase, userId, effectiveMemberId, 120);
+      const pool = await fetchPoolCandidates(supabase, userId, effectiveMemberId, POOL_LIMIT_ONE_DAY);
       const poolForReplace =
         memberId == null && mealType === "dinner" ? pool.filter((r) => isFamilyDinnerCandidate(r)) : pool;
-      const picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys);
+      let picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys);
+      if (!picked && memberId == null && mealType === "dinner" && poolForReplace.length < MIN_FAMILY_DINNER) {
+        picked = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys);
+      }
       if (picked) {
+        // TODO: when migration + RPC for atomic increment exist, increment recipes.picked_count here only (not in plan fill).
         const newMeals = { ...currentMeals, [mealType]: { recipe_id: picked.id, title: picked.title, plan_source: "pool" as const } };
         const upsertErr = await upsertMealPlanRow(supabase, userId, effectiveMemberId, dayKey, newMeals);
         if (upsertErr.error) {
@@ -453,7 +559,18 @@ serve(async (req) => {
         }
         return new Response(JSON.stringify({ pickedSource: "pool", newRecipeId: picked.id, title: picked.title, plan_source: "pool", reason: "pool" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
-      return new Response(JSON.stringify({ ok: false, error: "replace_failed", code: "pool_exhausted", reason: "pool_exhausted" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const attempt = typeof body.attempt === "number" ? body.attempt : 1;
+      const retrySuggested = attempt < 2;
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: "replace_failed",
+          code: retrySuggested ? "pool_exhausted_retry" : "pool_exhausted",
+          reason: retrySuggested ? "pool_exhausted_retry" : "pool_exhausted",
+          retry_suggested: retrySuggested,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const startKey = type === "week" ? (body.start_key ?? getRolling7Dates(getTodayKey())[0]) : null;
@@ -523,7 +640,8 @@ serve(async (req) => {
       }
     }
 
-    const poolCandidates = await fetchPoolCandidates(supabase, userId, effectiveMemberId, 120);
+    const poolLimit = dayKeys.length > 1 ? POOL_LIMIT_WEEK : POOL_LIMIT_ONE_DAY;
+    const poolCandidates = await fetchPoolCandidates(supabase, userId, effectiveMemberId, poolLimit);
 
     let effectiveMemberData: MemberDataPool | null = memberData;
     if (memberId == null) {
@@ -639,7 +757,10 @@ serve(async (req) => {
             ? poolCandidates.filter((r) => isFamilyDinnerCandidate(r))
             : poolCandidates;
         const excludeTitles = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
-        const picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, usedRecipeIds, excludeTitles);
+        let picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, usedRecipeIds, excludeTitles);
+        if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
+          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, usedRecipeIds, excludeTitles);
+        }
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
           usedRecipeIds.push(picked.id);

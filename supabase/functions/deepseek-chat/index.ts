@@ -9,12 +9,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { isRelevantQuery, isRelevantPremiumQuery } from "./isRelevantQuery.ts";
 import {
-  SAFETY_RULES,
-  AGE_CONTEXTS,
-  FREE_RECIPE_TEMPLATE,
-  PREMIUM_RECIPE_TEMPLATE,
-  SOS_PROMPT_TEMPLATE,
-  BALANCE_CHECK_TEMPLATE,
   NO_ARTICLES_RULE,
   GREETING_STYLE_RULE,
   FAMILY_RECIPE_INSTRUCTION,
@@ -24,17 +18,33 @@ import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
-import { buildBlockedTokenSet, findMatchedTokens, textWithoutExclusionPhrases } from "../_shared/blockedTokens.ts";
-import { parseAndValidateRecipeJsonFromString, getRecipeOrFallback, getLastValidationError, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
-import { isExplicitDishRequest, inferMealTypeFromQuery } from "../_shared/mealType/inferMealType.ts";
-import { validateRecipe, retryFixJson } from "../_shared/parsing/index.ts";
-import { buildRecipeDescription, buildChefAdvice, shouldReplaceDescription, shouldReplaceChefAdvice } from "../_shared/recipeCopy.ts";
-import { buildFamilyMemberDataForChat, getFamilyPromptMembers } from "../_shared/familyMode.ts";
-import { resolveFamilyStorageMemberId } from "../_shared/familyStorageResolver.ts";
 import { serializeError } from "../_shared/logging.ts";
-import { getFamilyContextPromptLine, getFamilyContextPromptLineEmpty } from "../_shared/memberConstraints.ts";
-import { shouldFavorLikes, buildLikesLine } from "../_shared/likesFavoring.ts";
-import { buildFamilyGenerationContextBlock } from "../_shared/familyContextBlock.ts";
+import { parseAndValidateRecipeJsonFromString, getRecipeOrFallback, getLastValidationError, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
+import { getSystemPromptForType, applyPromptTemplate, normalizeMemberData, findYoungestMember, getAgeMonths, type MemberData } from "./buildPrompt.ts";
+import { checkRecipeRequestBlocked } from "./domain/policies/index.ts";
+import {
+  getFamilyPromptMembers,
+  buildFamilyMemberDataForChat,
+  resolveFamilyStorageMemberId,
+  buildFamilyGenerationContextBlock,
+  shouldFavorLikes,
+  buildLikesLine,
+  buildLikesLineForProfile,
+} from "./domain/family/index.ts";
+import { isExplicitDishRequest, inferMealTypeFromQuery } from "./domain/meal/index.ts";
+import {
+  validateRecipe,
+  retryFixJson,
+  buildRecipeDescription,
+  buildChefAdvice,
+  shouldReplaceDescription,
+  shouldReplaceChefAdvice,
+  isDescriptionIncomplete,
+  repairDescriptionOnly,
+  sanitizeRecipeText,
+  sanitizeMealMentions,
+  getMinimalRecipe,
+} from "./domain/recipe_io/index.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -62,188 +72,6 @@ function logPerf(step: string, start: number, requestId?: string, extra?: Record
   };
   if (extra) Object.assign(obj, extra);
   console.log(JSON.stringify(obj));
-}
-
-const DESCRIPTION_INCOMPLETE_SUFFIXES = [/\sи\s*$/i, /\sили\s*$/i, /\sа также\s*$/i, /[—:]\s*$/];
-function isDescriptionIncomplete(desc: string | null | undefined): boolean {
-  if (!desc || typeof desc !== "string") return false;
-  const t = desc.trim();
-  if (t.length < 20) return true;
-  if (/\.\.\.\s*$/.test(t)) return true;
-  if (DESCRIPTION_INCOMPLETE_SUFFIXES.some((re) => re.test(t))) return true;
-  return false;
-}
-
-/** Cheap repair: one short LLM call to fix only description. Returns new description or null. */
-async function repairDescriptionOnly(current: string, apiKey: string): Promise<string | null> {
-  const sys = "Ты исправляешь только поле description. Верни ТОЛЬКО валидный JSON: {\"description\": \"...\"}. 2–4 полных предложения, без обрыва, без троеточий.";
-  const user = `Текущее описание (обрывается): «${current.slice(0, 300)}». Допиши до 2–4 законченных предложений.`;
-  try {
-    const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-        max_tokens: 256,
-        temperature: 0.3,
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const raw = data?.choices?.[0]?.message?.content?.trim();
-    if (!raw) return null;
-    const match = raw.match(/\{\s*"description"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*\}/) || raw.match(/"description"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
-    if (match && match[1]) {
-      return match[1].replace(/\\"/g, '"').slice(0, 500);
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/** Fail-safe: strip personal references from description/chefAdvice so recipe is reusable in pool. */
-function sanitizeRecipeText(text: string | null | undefined): string {
-  if (text == null || typeof text !== "string") return text ?? "";
-  const forbiddenPatterns = [
-    /your child/gi,
-    /your baby/gi,
-    /your toddler/gi,
-    /for your child/gi,
-    /for your baby/gi,
-    /for this child/gi,
-    /\d+\s*(month|months|year|years)\s*(old)?/gi,
-    /toddler/gi,
-    /baby/gi,
-    /\bchild\b/gi,
-    /for children/gi,
-    /для ребёнка/gi,
-    /для ребенка/gi,
-    /для малыша/gi,
-    /для детей/gi,
-    /\d+\s*(мес|месяц|месяцев|год|года|лет)\s*(\.|,|$)/gi,
-    /с аллергией\s+на/gi,
-    /аллергией на/gi,
-    // Упоминания «готовится без X» / «без X и Y» — особенности профиля (аллергии/dislikes), рецепт не должен попадать в пул с этим.
-    /готовится без[^.!?]*[.!?]?/gi,
-    /приготовлено без[^.!?]*[.!?]?/gi,
-    /,?\s*без\s+[а-яё]+\s+и\s+[а-яё]+[^.!?]*[.!?]?/gi,
-  ];
-  let result = text;
-  for (const pattern of forbiddenPatterns) {
-    result = result.replace(pattern, " ");
-  }
-  return result.replace(/\s+/g, " ").trim();
-}
-
-/** Fail-safe: strip meal/time mentions so description/chefAdvice are reusable for any meal tag. */
-function sanitizeMealMentions(text: string | null | undefined): string {
-  if (text == null || typeof text !== "string") return text ?? "";
-  const patterns = [
-    /breakfast/gi,
-    /lunch/gi,
-    /dinner/gi,
-    /snack/gi,
-    /morning/gi,
-    /evening/gi,
-    /на завтрак/gi,
-    /на обед/gi,
-    /на ужин/gi,
-    /на перекус/gi,
-    /для завтрака/gi,
-    /для перекуса/gi,
-    /для обеда/gi,
-    /для ужина/gi,
-  ];
-  let result = text;
-  for (const pattern of patterns) {
-    result = result.replace(pattern, " ");
-  }
-  return result.replace(/\s+/g, " ").trim();
-}
-
-/** Минимальный валидный рецепт для fallback при таймауте или когда провайдер тормозит. */
-function getMinimalRecipe(mealType: string): RecipeJson {
-  const mt = ["breakfast", "lunch", "snack", "dinner"].includes(mealType) ? mealType : "snack";
-  return {
-    title: "Простой рецепт",
-    description: "Быстрый вариант. Попробуйте запрос ещё раз для полного рецепта.",
-    ingredients: [
-      { name: "Ингредиент 1", amount: "100 г", displayText: "Ингредиент 1 — 100 г", canonical: { amount: 100, unit: "g" } },
-      { name: "Ингредиент 2", amount: "2 шт.", displayText: "Ингредиент 2 — 2 шт.", canonical: { amount: 2, unit: "g" } },
-      { name: "Ингредиент 3", amount: "1 ст.л.", displayText: "Ингредиент 3 — 1 ст.л.", canonical: { amount: 1, unit: "ml" } },
-    ],
-    steps: ["Подготовьте ингредиенты.", "Смешайте и готовьте по инструкции.", "Подавайте."],
-    cookingTimeMinutes: 15,
-    mealType: mt as "breakfast" | "lunch" | "snack" | "dinner",
-    servings: 1,
-    chefAdvice: null,
-  };
-}
-
-/** Единый формат ответа «заблокировано» (аллергия или dislikes). Не вызываем модель, не пишем usage_events. */
-type BlockedBy = "allergy" | "dislike";
-
-const BLOCKED_ALTERNATIVES: Record<string, string[]> = {
-  куриц: ["индейка", "говядина", "рыба"],
-  курица: ["индейка", "говядина", "рыба"],
-  chicken: ["индейка", "говядина", "рыба"],
-  молок: ["овощной бульон", "вода", "кокосовое молоко"],
-  молоко: ["овощной бульон", "вода", "кокосовое молоко"],
-  орех: ["семечки", "кунжут", "подсолнечник"],
-  орехи: ["семечки", "кунжут", "подсолнечник"],
-  лук: ["чеснок", "зелень", "сладкий перец"],
-  лука: ["чеснок", "зелень", "сладкий перец"],
-  яйц: ["льняная мука", "банан", "йогурт"],
-  рыб: ["индейка", "курица", "тофу"],
-  глютен: ["рис", "гречка", "киноа"],
-  мясо: ["индейка", "рыба", "бобовые"],
-  ягод: ["фрукты", "банан", "яблоко"],
-  ягоды: ["фрукты", "банан", "яблоко"],
-  berry: ["фрукты", "банан", "яблоко"],
-  berries: ["фрукты", "банан", "яблоко"],
-};
-
-function getSuggestedAlternatives(matchedDisplay: string[]): string[] {
-  const lower = matchedDisplay.map((m) => String(m).trim().toLowerCase()).filter(Boolean);
-  for (const m of lower) {
-    for (const [key, alts] of Object.entries(BLOCKED_ALTERNATIVES)) {
-      if (m.includes(key) || key.includes(m)) return alts.slice(0, 3);
-    }
-  }
-  return ["другие ингредиенты на ваш выбор"];
-}
-
-/** Вытаскивает «блюдо» из запроса: последнее слово или фраза без стопа (для подсказки follow-up). */
-function extractIntendedDishHint(originalQuery: string, blockedItem: string): string {
-  const q = (originalQuery ?? "").trim();
-  if (!q) return "";
-  const words = q.split(/\s+/).filter((w) => w.length > 1);
-  const blockedLower = (blockedItem ?? "").toLowerCase();
-  const withoutBlocked = words.filter((w) => !w.toLowerCase().includes(blockedLower) && blockedLower !== w.toLowerCase());
-  if (withoutBlocked.length > 0) return withoutBlocked.join(" ");
-  return words.length > 0 ? words[words.length - 1]! : q;
-}
-
-function buildBlockedMessageEdge(
-  profileName: string,
-  blockedBy: BlockedBy,
-  matchedDisplay: string[],
-  suggestedAlternatives: string[],
-  intendedDishHint: string
-): string {
-  const items = matchedDisplay.length > 0 ? matchedDisplay.join(", ") : "это";
-  let line1: string;
-  if (blockedBy === "allergy") {
-    line1 = `У профиля «${profileName}» указана аллергия на: ${items}. Смените профиль или замените аллерген на новый ингредиент.`;
-  } else {
-    line1 = `Профиль «${profileName}» не любит: ${items}. Смените профиль или замените аллерген на новый ингредиент.`;
-  }
-  const firstAlt = suggestedAlternatives[0] ?? "банан";
-  const dishWord = intendedDishHint || "десерт";
-  const line2 = `Напишите: «вариант с ${firstAlt}» или просто «${firstAlt}» — и я предложу тот же ${dishWord} без ${items}.`;
-  return `${line1}\n\n${line2}`;
 }
 
 /** Нормализация title для сравнения (anti-duplicate). Та же логика, что в pool/diag. */
@@ -305,237 +133,6 @@ const FREE_AI_DAILY_LIMIT = 2;
 
 function getAiDailyLimitForStatus(isPremiumOrTrial: boolean): number | null {
   return isPremiumOrTrial ? null : FREE_AI_DAILY_LIMIT;
-}
-
-/** Возраст по birth_date (YYYY-MM-DD) или по ageMonths. */
-function calculateAge(birthDate: string): { years: number; months: number } {
-  const s = (birthDate || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { years: 0, months: 0 };
-  const birth = new Date(s);
-  const today = new Date();
-  let months = (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
-  if (today.getDate() < birth.getDate()) months -= 1;
-  months = Math.max(0, months);
-  return { years: Math.floor(months / 12), months: months % 12 };
-}
-
-function formatAgeString(birthDate: string): string {
-  const { years, months } = calculateAge(birthDate);
-  const total = years * 12 + months;
-  if (total === 0) return "";
-  if (total < 12) return `${total} мес.`;
-  if (months === 0) return `${years} ${years === 1 ? "год" : years < 5 ? "года" : "лет"}`;
-  return `${years} г. ${months} мес.`;
-}
-
-interface MemberData {
-  id?: string;
-  name?: string;
-  birth_date?: string;
-  age_months?: number;
-  ageMonths?: number;
-  ageDescription?: string;
-  allergies?: string[];
-  preferences?: string[];
-  likes?: string[];
-  dislikes?: string[];
-  difficulty?: string;
-}
-
-function getCalculatedAge(memberData?: MemberData | null): string {
-  if (!memberData) return "";
-  if (memberData.birth_date && /^\d{4}-\d{2}-\d{2}$/.test(memberData.birth_date.trim())) {
-    return formatAgeString(memberData.birth_date);
-  }
-  if (memberData.ageDescription) return memberData.ageDescription;
-  const m = memberData.age_months ?? memberData.ageMonths ?? 0;
-  if (m < 12) return `${m} мес.`;
-  const y = Math.floor(m / 12);
-  const rest = m % 12;
-  return rest ? `${y} г. ${rest} мес.` : `${y} ${y === 1 ? "год" : y < 5 ? "года" : "лет"}`;
-}
-
-/** Возвращает возраст в месяцах для MemberData. Проверяет ОБА варианта: age_months (snake) и ageMonths (camelCase от фронта). */
-function getAgeMonths(member: MemberData): number {
-  const m = member.age_months ?? member.ageMonths;
-  if (m != null && typeof m === "number" && !Number.isNaN(m)) return Math.max(0, m);
-  const s = (member.birth_date || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return 999;
-  const { years, months } = calculateAge(s);
-  return years * 12 + months;
-}
-
-/** Нормализует объект из запроса: гарантирует наличие age_months и ageMonths (фронт может присылать только camelCase или число строкой). */
-function normalizeMemberData(raw: MemberData | null | undefined): MemberData | null | undefined {
-  if (raw == null) return raw;
-  const months = raw.age_months ?? raw.ageMonths;
-  let num: number | undefined;
-  if (typeof months === "number" && !Number.isNaN(months)) num = Math.max(0, months);
-  else if (typeof months === "string") {
-    const parsed = parseInt(months, 10);
-    num = !Number.isNaN(parsed) ? Math.max(0, parsed) : undefined;
-  }
-  return { ...raw, age_months: num, ageMonths: num };
-}
-
-/** В семейном режиме для правил возраста используем самого младшего члена семьи (inline, без отдельной функции). */
-function findYoungestMember(members: MemberData[]): MemberData | null {
-  if (members.length === 0) return null;
-  return members.reduce((youngest, m) =>
-    getAgeMonths(m) < getAgeMonths(youngest) ? m : youngest
-    , members[0]);
-}
-
-/** Подставляет в шаблон переменные V2: {{ageRule}}, {{allergies}}, {{familyContext}}, {{ageMonths}} и др. */
-function applyPromptTemplate(
-  template: string,
-  memberData: MemberData | null | undefined,
-  targetIsFamily: boolean,
-  allMembers: MemberData[] = [],
-  options?: { userMessage?: string; generationContextBlock?: string; mealType?: string; maxCookingTime?: number; servings?: number; recentTitleKeysLine?: string }
-): string {
-  // Семья: используем merged memberData (взрослый возраст, без возрастных ограничений); иначе — выбранный Member или самый младший
-  const youngestMember = targetIsFamily && allMembers.length > 0 ? findYoungestMember(allMembers) : null;
-  const primaryMember = (targetIsFamily && memberData) ? memberData : (youngestMember ?? memberData);
-
-  const name = (primaryMember?.name ?? "").trim() || "член семьи";
-  const targetProfile = targetIsFamily ? "Семья" : name;
-  const age = getCalculatedAge(primaryMember) || "не указан";
-  // ageMonths — число (месяцы) для правил безопасности; 999 → 0 при неизвестном
-  const rawMonths = primaryMember ? getAgeMonths(primaryMember) : 0;
-  const ageMonths = String(rawMonths === 999 ? 0 : rawMonths);
-
-  // Семья: учитываем аллергии всех членов; выбранный Member — только его
-  let allergiesSet = new Set<string>();
-  if (targetIsFamily && allMembers.length > 0) {
-    allMembers.forEach((m) => m.allergies?.forEach((a) => allergiesSet.add(a)));
-  } else if (primaryMember?.allergies?.length) {
-    primaryMember.allergies.forEach((a) => allergiesSet.add(a));
-  }
-  const allergies = allergiesSet.size > 0 ? Array.from(allergiesSet).join(", ") : "не указано";
-  const allergiesExclude = allergiesSet.size > 0 ? `ИСКЛЮЧИТЬ (аллергия): ${allergies}.` : "";
-
-  let preferencesSet = new Set<string>();
-  const addPrefs = (m: MemberData) => {
-    const likes = m.likes;
-    const prefs = Array.isArray(likes) && likes.length > 0 ? likes : m.preferences;
-    prefs?.forEach((p) => p?.trim() && preferencesSet.add(p.trim()));
-  };
-  if (targetIsFamily && allMembers.length > 0) {
-    allMembers.forEach((m) => addPrefs(m as MemberData));
-  } else if (primaryMember) {
-    addPrefs(primaryMember as MemberData);
-  }
-  const preferencesText = preferencesSet.size > 0 ? Array.from(preferencesSet).join(", ") : "не указано";
-  const primaryDifficulty = (primaryMember as MemberData)?.difficulty?.trim();
-  const difficultyText = primaryDifficulty === "easy" ? "Простые" : primaryDifficulty === "medium" ? "Средние" : primaryDifficulty === "any" ? "Любые" : "не указано";
-
-  const ageCategory = getAgeCategory(rawMonths === 999 ? 0 : rawMonths);
-  const ageRule = ageCategory in AGE_CONTEXTS ? AGE_CONTEXTS[ageCategory as keyof typeof AGE_CONTEXTS] : AGE_CONTEXTS.adult;
-  const userMessage = options?.userMessage?.trim() || "";
-  const generationContextBlock = options?.generationContextBlock?.trim() || "";
-  const mealType = options?.mealType?.trim() || "";
-  const maxCookingTime = options?.maxCookingTime != null && Number.isFinite(options.maxCookingTime) ? String(options.maxCookingTime) : "";
-  const servings = options?.servings != null && options.servings >= 1 ? String(options.servings) : "1";
-  const recentTitleKeysLine = options?.recentTitleKeysLine?.trim() || "";
-
-  let familyContext = `Профиль: ${name}`;
-  if (targetIsFamily && allMembers.length > 0) {
-    familyContext = getFamilyContextPromptLine();
-  } else if (targetIsFamily) {
-    familyContext = getFamilyContextPromptLineEmpty();
-  }
-
-  let out = template
-    .split("{{name}}").join(name)
-    .split("{{target_profile}}").join(targetProfile)
-    .split("{{age}}").join(age)
-    .split("{{ageMonths}}").join(ageMonths)
-    .split("{{ageRule}}").join(ageRule)
-    .split("{{allergies}}").join(allergies)
-    .split("{{allergiesExclude}}").join(allergiesExclude)
-    .split("{{preferences}}").join(preferencesText)
-    .split("{{difficulty}}").join(difficultyText)
-    .split("{{generationContextBlock}}").join(generationContextBlock)
-    .split("{{familyContext}}").join(familyContext)
-    .split("{{userMessage}}").join(userMessage)
-    .split("{{mealType}}").join(mealType)
-    .split("{{maxCookingTime}}").join(maxCookingTime)
-    .split("{{servings}}").join(servings)
-    .split("{{recentTitleKeysLine}}").join(recentTitleKeysLine);
-
-  if (out.includes("{{")) {
-    const replacers: [RegExp, string][] = [
-      [/\{\{\s*name\s*\}\}/g, name],
-      [/\{\{\s*target_profile\s*\}\}/g, targetProfile],
-      [/\{\{\s*age\s*\}\}/g, age],
-      [/\{\{\s*ageMonths\s*\}\}/g, ageMonths],
-      [/\{\{\s*ageRule\s*\}\}/g, ageRule],
-      [/\{\{\s*allergies\s*\}\}/g, allergies],
-      [/\{\{\s*allergiesExclude\s*\}\}/g, allergiesExclude],
-      [/\{\{\s*preferences\s*\}\}/g, preferencesText],
-      [/\{\{\s*difficulty\s*\}\}/g, difficultyText],
-      [/\{\{\s*generationContextBlock\s*\}\}/g, generationContextBlock],
-      [/\{\{\s*familyContext\s*\}\}/g, familyContext],
-      [/\{\{\s*userMessage\s*\}\}/g, userMessage],
-      [/\{\{\s*mealType\s*\}\}/g, mealType],
-      [/\{\{\s*maxCookingTime\s*\}\}/g, maxCookingTime],
-      [/\{\{\s*servings\s*\}\}/g, servings],
-      [/\{\{\s*recentTitleKeysLine\s*\}\}/g, recentTitleKeysLine],
-    ];
-    for (const [re, val] of replacers) out = out.replace(re, val);
-    out = out.replace(/\{\{[^}]*\}\}/g, "не указано");
-  }
-  return out;
-}
-
-/** Промпт для type === "chat": V2 шаблон по тарифу + подстановка (Member/семья). */
-function generateChatSystemPrompt(
-  isPremium: boolean,
-  memberData: MemberData | null | undefined,
-  targetIsFamily: boolean,
-  allMembers: MemberData[] = [],
-  options?: { generationContextBlock?: string }
-): string {
-  const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
-  return applyPromptTemplate(template, memberData, targetIsFamily, allMembers, options);
-}
-
-function getSystemPromptForType(
-  type: string,
-  memberData: MemberData | null | undefined,
-  isPremium: boolean,
-  targetIsFamily: boolean,
-  allMembers: MemberData[] = [],
-  userMessage?: string,
-  generationContextBlock?: string,
-  mealType?: string,
-  maxCookingTime?: number,
-  servings?: number,
-  recentTitleKeysLine?: string
-): string {
-  const genBlockOpt = generationContextBlock?.trim() ? { generationContextBlock: generationContextBlock.trim() } : undefined;
-  const recipeOpts = {
-    ...genBlockOpt,
-    ...(mealType && { mealType: String(mealType).trim() }),
-    ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime: Number(maxCookingTime) }),
-    servings: servings != null && servings >= 1 ? servings : 1,
-    recentTitleKeysLine: recentTitleKeysLine?.trim() ?? "",
-  };
-  if (type === "chat") {
-    return generateChatSystemPrompt(isPremium, memberData, targetIsFamily, allMembers, recipeOpts);
-  }
-  if (type === "recipe") {
-    const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
-    return applyPromptTemplate(template, memberData, targetIsFamily, allMembers, recipeOpts);
-  }
-  if (type === "sos_consultant") {
-    return applyPromptTemplate(SOS_PROMPT_TEMPLATE, memberData, false, allMembers, { userMessage: userMessage || "" });
-  }
-  if (type === "balance_check") {
-    return applyPromptTemplate(BALANCE_CHECK_TEMPLATE, memberData, false, allMembers, { userMessage: userMessage || "" });
-  }
-  return "Ты — помощник. Отвечай кратко и по делу.";
 }
 
 interface ChatRequest {
@@ -887,8 +484,7 @@ serve(async (req) => {
       }));
     }
 
-    // Страховка: запрос с аллергеном или dislikes — отказ без вызова модели, без usage_events
-    // Исключение: «суп без лука» при аллергии на лук — не блокируем, отдаём рецепт без него
+    // Policy block: аллергия/dislikes в запросе — отказ без вызова модели (исключение: «без X»)
     if ((type === "chat" || type === "recipe") && isRecipeRequest) {
       const profileName = targetIsFamily
         ? "Семья"
@@ -900,41 +496,14 @@ serve(async (req) => {
         ? [...new Set(allMembersForPrompt.flatMap((m) => (m as MemberData).dislikes ?? []).filter(Boolean))]
         : ((memberDataForPrompt as MemberData)?.dislikes ?? []);
 
-      const tokenSet = buildBlockedTokenSet({ allergies: allergiesList, dislikes: dislikesList });
-      const messageForBlockCheck = textWithoutExclusionPhrases(userMessage);
-      const allergyMatch = tokenSet.allergyItems.find((item) => findMatchedTokens(messageForBlockCheck, item.tokens).length > 0);
-      if (allergyMatch) {
-        const blockedItems = [allergyMatch.display];
-        const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
-        const intendedDishHint = extractIntendedDishHint(userMessage, allergyMatch.display);
-        const message = buildBlockedMessageEdge(profileName, "allergy", blockedItems, suggestedAlternatives, intendedDishHint);
-        return new Response(JSON.stringify({
-          blocked: true,
-          blocked_by: "allergy",
-          profile_name: profileName,
-          blocked_items: blockedItems,
-          suggested_alternatives: suggestedAlternatives,
-          original_query: userMessage,
-          intended_dish_hint: intendedDishHint || undefined,
-          message,
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      const dislikeMatch = tokenSet.dislikeItems.find((item) => findMatchedTokens(messageForBlockCheck, item.tokens).length > 0);
-      if (dislikeMatch) {
-        const blockedItems = [dislikeMatch.display];
-        const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
-        const intendedDishHint = extractIntendedDishHint(userMessage, dislikeMatch.display);
-        const message = buildBlockedMessageEdge(profileName, "dislike", blockedItems, suggestedAlternatives, intendedDishHint);
-        return new Response(JSON.stringify({
-          blocked: true,
-          blocked_by: "dislike",
-          profile_name: profileName,
-          blocked_items: blockedItems,
-          suggested_alternatives: suggestedAlternatives,
-          original_query: userMessage,
-          intended_dish_hint: intendedDishHint || undefined,
-          message,
-        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      const blockedPayload = checkRecipeRequestBlocked({
+        userMessage,
+        allergiesList,
+        dislikesList,
+        profileName,
+      });
+      if (blockedPayload) {
+        return new Response(JSON.stringify(blockedPayload), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
 
@@ -1021,6 +590,12 @@ serve(async (req) => {
       const likesForPrompt = memberDataForPrompt?.likes ?? [];
       if (isRecipeRequest && likesForPrompt.length > 0 && shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type })) {
         const likesLine = buildLikesLine(likesForPrompt);
+        if (likesLine) systemPrompt += "\n\n" + likesLine;
+      }
+    } else if ((type === "chat" || type === "recipe") && isRecipeRequest && memberDataForPrompt?.likes?.length) {
+      // Обычный профиль: в ~20% запросов явно добавляем приоритет лайков (как для Семьи), чтобы не перебирать с любимым ингредиентом
+      if (shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type })) {
+        const likesLine = buildLikesLineForProfile(memberDataForPrompt.name ?? "профиль", memberDataForPrompt.likes ?? []);
         if (likesLine) systemPrompt += "\n\n" + likesLine;
       }
     }

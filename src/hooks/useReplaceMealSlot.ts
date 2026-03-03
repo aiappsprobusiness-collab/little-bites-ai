@@ -11,7 +11,8 @@ import { normalizeMealType, isSoupLikeTitle, passesProfileFilter, getSanityBlock
 import { isDebugPlanEnabled } from "@/utils/debugPlan";
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
 
-const MEAL_SWAP_FREE_KEY = "mealSwap_free_dayKey";
+const MEAL_SWAP_FREE_KEY = "mealSwap_free";
+const FREE_SWAP_LIMIT_PER_DAY = 2;
 
 /** Fisher–Yates shuffle, returns new array. */
 function shuffle<T>(arr: T[]): T[] {
@@ -21,6 +22,24 @@ function shuffle<T>(arr: T[]): T[] {
     [out[i], out[j]] = [out[j], out[i]];
   }
   return out;
+}
+
+function getStoredFreeSwap(dayKey: string): { dayKey: string; count: number } {
+  if (typeof localStorage === "undefined") return { dayKey: "", count: 0 };
+  try {
+    const raw = localStorage.getItem(MEAL_SWAP_FREE_KEY);
+    if (!raw) return { dayKey: "", count: 0 };
+    const parsed = JSON.parse(raw) as { dayKey?: string; count?: number };
+    return { dayKey: parsed.dayKey ?? "", count: typeof parsed.count === "number" ? parsed.count : 0 };
+  } catch {
+    return { dayKey: "", count: 0 };
+  }
+}
+
+function setStoredFreeSwap(dayKey: string, count: number) {
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(MEAL_SWAP_FREE_KEY, JSON.stringify({ dayKey, count }));
+  }
 }
 
 export function useReplaceMealSlot(
@@ -33,16 +52,16 @@ export function useReplaceMealSlot(
   const { createRecipe } = useRecipes(memberId ?? undefined);
   const hasAccess = options?.hasAccess ?? true;
 
-  /** Проверить, использовал ли free-пользователь замену сегодня (по dayKey). */
+  /** Free: true если по dayKey уже использовано >= FREE_SWAP_LIMIT_PER_DAY замен. */
   const getFreeSwapUsedForDay = useCallback((dayKey: string): boolean => {
-    if (typeof localStorage === "undefined") return false;
-    return localStorage.getItem(MEAL_SWAP_FREE_KEY) === dayKey;
+    const stored = getStoredFreeSwap(dayKey);
+    return stored.dayKey === dayKey && stored.count >= FREE_SWAP_LIMIT_PER_DAY;
   }, []);
 
   const setFreeSwapUsedForDay = useCallback((dayKey: string) => {
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(MEAL_SWAP_FREE_KEY, dayKey);
-    }
+    const stored = getStoredFreeSwap(dayKey);
+    const nextCount = stored.dayKey === dayKey ? Math.min(stored.count + 1, FREE_SWAP_LIMIT_PER_DAY) : 1;
+    setStoredFreeSwap(dayKey, nextCount);
   }, []);
 
   /** Фильтрация кандидатов: исключаем по id (primary) и по title (вторично). */
@@ -307,38 +326,52 @@ export function useReplaceMealSlot(
       const token = freshSession?.access_token ?? undefined;
       if (!token) return { ok: false, error: "unauthorized" };
 
-      const replaceBody: Record<string, unknown> = {
-        action: "replace_slot",
-        member_id: memberId ?? null,
-        day_key: params.dayKey,
-        meal_type: params.mealType,
-        member_data: params.memberData
-          ? { allergies: params.memberData.allergies, likes: params.memberData.likes, dislikes: params.memberData.dislikes, age_months: params.memberData.age_months }
-          : null,
-        exclude_recipe_ids: params.excludeRecipeIds,
-        exclude_title_keys: params.excludeTitleKeys,
+      const doRequest = async (attempt: number) => {
+        const replaceBody: Record<string, unknown> = {
+          action: "replace_slot",
+          member_id: memberId ?? null,
+          day_key: params.dayKey,
+          meal_type: params.mealType,
+          member_data: params.memberData
+            ? { allergies: params.memberData.allergies, likes: params.memberData.likes, dislikes: params.memberData.dislikes, age_months: params.memberData.age_months }
+            : null,
+          exclude_recipe_ids: params.excludeRecipeIds,
+          exclude_title_keys: params.excludeTitleKeys,
+          attempt,
+        };
+        if (isDebugPlanEnabled()) replaceBody.debug_plan = true;
+        const res = await invokeGeneratePlan(SUPABASE_URL, token, replaceBody, {
+          label: "replace_slot",
+          clientDebug: { selectedMemberId: memberId ?? null, dayKey: params.dayKey, mealType: params.mealType, attempt },
+        });
+        const data = await res.json().catch(() => ({})) as {
+          pickedSource?: "pool" | "ai";
+          newRecipeId?: string;
+          recipe_id?: string;
+          title?: string;
+          plan_source?: "pool" | "ai";
+          error?: string;
+          code?: string;
+          reasonIfAi?: string;
+          requestId?: string;
+          reason?: string;
+          retry_suggested?: boolean;
+        };
+        return { res, data };
       };
-      if (isDebugPlanEnabled()) replaceBody.debug_plan = true;
-      const res = await invokeGeneratePlan(SUPABASE_URL, token, replaceBody, {
-        label: "replace_slot",
-        clientDebug: { selectedMemberId: memberId ?? null, dayKey: params.dayKey, mealType: params.mealType },
-      });
 
-      const data = await res.json().catch(() => ({})) as {
-        pickedSource?: "pool" | "ai";
-        newRecipeId?: string;
-        recipe_id?: string;
-        title?: string;
-        plan_source?: "pool" | "ai";
-        error?: string;
-        code?: string;
-        reasonIfAi?: string;
-        requestId?: string;
-        reason?: string;
-      };
+      let res: Awaited<ReturnType<typeof invokeGeneratePlan>>;
+      let data: Awaited<ReturnType<typeof doRequest>>["data"];
+      ({ res, data } = await doRequest(1));
+
+      const retrySuggested = data.code === "pool_exhausted_retry" || data.retry_suggested === true;
+      if (data.error === "replace_failed" && retrySuggested) {
+        ({ res, data } = await doRequest(2));
+      }
 
       const requestId = data.requestId;
       const reason = data.reason;
+      let didCountFreeSwap = false;
 
       if (!res.ok) {
         if (res.status === 429 && (data as { code?: string }).code === "LIMIT_REACHED") {
@@ -351,15 +384,18 @@ export function useReplaceMealSlot(
         const code = data.code;
         return {
           ok: false,
-          error: code === "pool_exhausted" ? "Нет подходящих рецептов в пуле" : failReason === "no_recipe_in_response" ? "Не удалось подобрать рецепт" : "Не удалось заменить",
-          code,
+          error: code === "pool_exhausted" || code === "pool_exhausted_retry" ? "Нет подходящих рецептов в пуле" : failReason === "no_recipe_in_response" ? "Не удалось подобрать рецепт" : "Не удалось заменить",
+          code: code === "pool_exhausted_retry" ? "pool_exhausted" : code,
           requestId,
           reason: failReason,
         };
       }
       const recipeId = data.newRecipeId ?? data.recipe_id;
       if (data.pickedSource && recipeId && data.title != null) {
-        setFreeSwapUsedForDay(params.dayKey);
+        if (!didCountFreeSwap) {
+          didCountFreeSwap = true;
+          setFreeSwapUsedForDay(params.dayKey);
+        }
         return {
           ok: true,
           pickedSource: data.pickedSource,

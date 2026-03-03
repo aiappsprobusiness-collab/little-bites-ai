@@ -40,3 +40,14 @@ export function buildLikesLine(likesForPrompt: string[]): string {
   const joined = list.join(", ");
   return `ПРИОРИТЕТ ЛАЙКОВ СЕМЬИ: старайся подобрать рецепт, где ключевые ингредиенты/основа соответствуют лайкам: ${joined}. Это мягкое предпочтение, но постарайся учесть.`;
 }
+
+/**
+ * То же для одного профиля: «ПРИОРИТЕТ ЛАЙКОВ (имя): …». Используется в ~20% запросов для обычного профиля.
+ */
+export function buildLikesLineForProfile(profileName: string, likesForPrompt: string[]): string {
+  const list = (likesForPrompt ?? []).filter((l) => typeof l === "string" && l.trim()).map((l) => l.trim());
+  if (list.length === 0) return "";
+  const joined = list.join(", ");
+  const label = (profileName ?? "профиль").trim() || "профиль";
+  return `ПРИОРИТЕТ ЛАЙКОВ (${label}): старайся подобрать рецепт, где ключевые ингредиенты/основа соответствуют лайкам: ${joined}. Это мягкое предпочтение, но постарайся учесть.`;
+}

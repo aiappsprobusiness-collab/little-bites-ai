@@ -173,13 +173,11 @@ export default function MealPlanPage() {
     : (isFamilyMode ? null : (selectedMemberId || undefined));
   const memberDataForPlan = useMemo(() => {
     if (isFamilyMode && members.length > 0) {
-      const youngest = [...members].sort((a, b) => (a.age_months ?? 0) - (b.age_months ?? 0))[0];
       const allAllergies = Array.from(new Set(members.flatMap((c) => c.allergies ?? [])));
       const allLikes = Array.from(new Set(members.flatMap((c) => (c as { likes?: string[] }).likes ?? []).map((p) => String(p).trim()).filter(Boolean)));
       const allDislikes = Array.from(new Set(members.flatMap((c) => (c as { dislikes?: string[] }).dislikes ?? []).map((p) => String(p).trim()).filter(Boolean)));
       return {
         name: "Семья",
-        age_months: youngest.age_months ?? 0,
         type: "family" as const,
         allergies: allAllergies,
         likes: allLikes,
@@ -1100,7 +1098,7 @@ export default function MealPlanPage() {
                                 toast({
                                   variant: "destructive",
                                   title: "Лимит",
-                                  description: "1 замена в день (Free). В Premium — без ограничений.",
+                                  description: "2 замены в день (Free). В Premium — без ограничений.",
                                 });
                               } else if (err === "premium_required") {
                                 setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
@@ -1223,7 +1221,7 @@ export default function MealPlanPage() {
                                     toast({
                                       variant: "destructive",
                                       title: "Лимит",
-                                      description: "1 замена в день (Free). В Premium — без ограничений.",
+                                      description: "2 замены в день (Free). В Premium — без ограничений.",
                                     });
                                   } else if (err === "premium_required") {
                                     setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
