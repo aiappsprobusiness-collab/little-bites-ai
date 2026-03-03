@@ -5,6 +5,11 @@ import { formatLocalDate } from "@/utils/dateUtils";
 import { addDays } from "@/utils/dateRange";
 import type { ProductCategory } from "./useShoppingList";
 
+export interface SourceRecipe {
+  id: string;
+  title: string;
+}
+
 export interface AggregatedIngredient {
   name: string;
   amount: number | null;
@@ -13,6 +18,8 @@ export interface AggregatedIngredient {
   displayAmount: number | null;
   displayUnit: string | null;
   category: ProductCategory | null;
+  /** Рецепты, из которых попал ингредиент (для фильтра по рецептам). */
+  source_recipes: SourceRecipe[];
 }
 
 type MealsSlot = { recipe_id?: string; title?: string; servings?: number };
@@ -72,7 +79,7 @@ export function usePlanShoppingIngredients(
 
       const recipeIds = [...new Set(slotEntries.map((e) => e.recipe_id))];
       const [recipesRes, ingredientsRes] = await Promise.all([
-        supabase.from("recipes").select("id, servings_base").in("id", recipeIds),
+        supabase.from("recipes").select("id, servings_base, title").in("id", recipeIds),
         supabase
           .from("recipe_ingredients")
           .select("recipe_id, name, amount, unit, canonical_amount, canonical_unit, category")
@@ -81,11 +88,12 @@ export function usePlanShoppingIngredients(
       if (recipesRes.error) throw recipesRes.error;
       if (ingredientsRes.error) throw ingredientsRes.error;
 
+      type RecipeRow = { id: string; servings_base?: number | null; title?: string | null };
       const recipeBase = new Map(
-        (recipesRes.data ?? []).map((r: { id: string; servings_base?: number | null }) => [
-          r.id,
-          Math.max(1, r.servings_base ?? 1),
-        ])
+        (recipesRes.data ?? []).map((r: RecipeRow) => [r.id, Math.max(1, r.servings_base ?? 1)])
+      );
+      const recipeTitles = new Map(
+        (recipesRes.data ?? []).map((r: RecipeRow) => [r.id, (r.title ?? "").trim()])
       );
       const ingredientsByRecipe = new Map<string, { name: string; amount: number | null; unit: string | null; canonical_amount: number | null; canonical_unit: string | null; category: string | null }[]>();
       for (const ing of ingredientsRes.data ?? []) {
@@ -94,8 +102,23 @@ export function usePlanShoppingIngredients(
         ingredientsByRecipe.get(r.recipe_id)!.push(r);
       }
 
-      const aggByKey = new Map<string, { name: string; amount: number; unit: string | null; canonicalAmount: number; canonicalUnit: string | null; category: ProductCategory | null }>();
-      const rawByKey = new Map<string, { name: string; amount: number; unit: string | null; category: ProductCategory | null }>();
+      type AggVal = {
+        name: string;
+        amount: number;
+        unit: string | null;
+        canonicalAmount?: number;
+        canonicalUnit?: string | null;
+        category: ProductCategory | null;
+        sourceRecipeIds: Set<string>;
+      };
+      const aggByKey = new Map<string, AggVal>();
+      const rawByKey = new Map<string, AggVal>();
+
+      function addSource(acc: AggVal, recipeId: string) {
+        const title = recipeTitles.get(recipeId) ?? "";
+        if (!acc.sourceRecipeIds) acc.sourceRecipeIds = new Set<string>();
+        acc.sourceRecipeIds.add(recipeId);
+      }
 
       for (const { recipe_id, servings } of slotEntries) {
         const base = recipeBase.get(recipe_id) ?? 1;
@@ -111,16 +134,19 @@ export function usePlanShoppingIngredients(
             const key = `${normalizeName(ing.name)}|${canUnit}`;
             const cur = aggByKey.get(key);
             if (cur) {
-              cur.canonicalAmount += canAmount;
+              cur.canonicalAmount! += canAmount;
+              addSource(cur, recipe_id);
             } else {
-              aggByKey.set(key, {
+              const v: AggVal = {
                 name: ing.name.trim(),
                 amount: amount ?? 0,
                 unit: ing.unit,
                 canonicalAmount: canAmount,
                 canonicalUnit: canUnit,
                 category,
-              });
+                sourceRecipeIds: new Set([recipe_id]),
+              };
+              aggByKey.set(key, v);
             }
           } else {
             const u = ing.unit ?? "";
@@ -128,16 +154,22 @@ export function usePlanShoppingIngredients(
             const cur = rawByKey.get(key);
             if (cur) {
               cur.amount += amount ?? 0;
+              addSource(cur, recipe_id);
             } else {
               rawByKey.set(key, {
                 name: ing.name.trim(),
                 amount: amount ?? 0,
                 unit: ing.unit ?? null,
                 category,
+                sourceRecipeIds: new Set([recipe_id]),
               });
             }
           }
         }
+      }
+
+      function toSourceRecipes(ids: Set<string>): SourceRecipe[] {
+        return [...ids].map((id) => ({ id, title: recipeTitles.get(id) ?? "" }));
       }
 
       const result: AggregatedIngredient[] = [];
@@ -146,9 +178,10 @@ export function usePlanShoppingIngredients(
           name: v.name,
           amount: v.amount || null,
           unit: v.unit,
-          displayAmount: Math.round(v.canonicalAmount * 10) / 10,
-          displayUnit: v.canonicalUnit,
+          displayAmount: Math.round((v.canonicalAmount ?? 0) * 10) / 10,
+          displayUnit: v.canonicalUnit ?? null,
           category: v.category,
+          source_recipes: toSourceRecipes(v.sourceRecipeIds),
         });
       }
       for (const v of rawByKey.values()) {
@@ -160,6 +193,7 @@ export function usePlanShoppingIngredients(
             displayAmount: v.amount,
             displayUnit: v.unit,
             category: v.category,
+            source_recipes: toSourceRecipes(v.sourceRecipeIds),
           });
         }
       }
