@@ -358,7 +358,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           await navigator.share({
             title: effectiveRecipe?.title ?? "Рецепт",
             text: textWithUrl,
-            ...(rid ? { url: shareUrl } : {}),
           });
           toast({ title: "Поделиться", description: "Рецепт отправлен" });
         } else {

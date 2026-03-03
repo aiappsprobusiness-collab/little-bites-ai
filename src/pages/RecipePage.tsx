@@ -198,7 +198,6 @@ export default function RecipePage() {
         await navigator.share({
           title: recipeDisplay.title ?? "Рецепт",
           text: shareText,
-          url: shareUrl,
         });
         toast({ title: "Рецепт отправлен" });
       } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {

@@ -14,8 +14,6 @@ interface FavoriteCardProps {
   onAddToPlan?: () => void;
 }
 
-const MAX_INGREDIENT_CHIPS = 3;
-
 export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isPremium = false, members, onAddToPlan }: FavoriteCardProps) {
   const vm = toFavoriteCardViewModel(favorite.recipe);
   const r = favorite.recipe as { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null };
@@ -38,7 +36,8 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
           title: vm.title,
         }}
         ingredients={vm.ingredientNames}
-        maxIngredientChips={MAX_INGREDIENT_CHIPS}
+        showIngredientChips={false}
+        showHint={false}
         hint={vm.hint}
         nutrition={nutrition}
         onClick={onTap}

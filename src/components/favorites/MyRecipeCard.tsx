@@ -3,8 +3,6 @@ import { CalendarPlus, Pencil } from "lucide-react";
 import type { MyRecipePreview } from "@/hooks/useMyRecipes";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
 
-const MAX_INGREDIENT_CHIPS = 3;
-
 export interface MyRecipeCardProps {
   recipe: MyRecipePreview;
   index?: number;
@@ -42,7 +40,8 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
           title: recipe.title ?? "Рецепт",
         }}
         ingredients={chips}
-        maxIngredientChips={MAX_INGREDIENT_CHIPS}
+        showIngredientChips={false}
+        showHint={false}
         nutrition={nutrition}
         onClick={onTap}
         actions={

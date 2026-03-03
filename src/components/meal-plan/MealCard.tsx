@@ -187,6 +187,8 @@ export function MealCard({
           title: recipeTitle,
         }}
         ingredients={ingredientNames}
+        showIngredientChips={false}
+        showHint={false}
         maxIngredientChips={INGREDIENT_CHIPS_MAX_COMPACT}
         hint={hint ?? null}
         nutrition={nutrition}

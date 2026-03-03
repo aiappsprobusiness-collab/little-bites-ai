@@ -20,6 +20,10 @@ export interface RecipeCardProps {
   header: RecipeCardHeaderProps;
   ingredients: IngredientDisplayItem[];
   ingredientOverrides?: Record<number, string>;
+  /** When false, ingredient chips are hidden (e.g. Favorites/Plan/MyRecipes previews). Default true in full/chat, false in preview from lists. */
+  showIngredientChips?: boolean;
+  /** When false, hint (💡 Chef advice line) is hidden in preview. Used in Plan/Favorites/My Recipes lists. */
+  showHint?: boolean;
   maxIngredientChips?: number;
   showSubstituteButton?: boolean;
   onSubstituteClick?: (idx: number, ing: IngredientDisplayItem) => void;
@@ -41,6 +45,8 @@ export function RecipeCard({
   header,
   ingredients,
   ingredientOverrides = {},
+  showIngredientChips,
+  showHint = true,
   maxIngredientChips,
   showSubstituteButton = false,
   onSubstituteClick,
@@ -67,20 +73,24 @@ export function RecipeCard({
   const bodyPadding = isPreview ? "p-3 pt-2" : isFull ? "p-4 pt-3 sm:p-6 sm:pt-4" : "p-3 pt-2";
   const bodySpace = "space-y-3";
 
+  /** Show chips in full/chat; in preview only when showIngredientChips is explicitly true (e.g. not in Favorites/Plan/MyRecipes lists). */
+  const showChips = showIngredientChips ?? !isPreview;
   const maxChips = maxIngredientChips ?? (isPreview ? 3 : undefined);
 
   const innerBody = (
     <>
-      <IngredientChips
-        ingredients={ingredients}
-        overrides={ingredientOverrides}
-        maxVisible={maxChips}
-        variant={isPreview ? "preview" : "full"}
-        hideSectionLabel={isPreview}
-        showSubstituteButton={showSubstituteButton}
-        onSubstituteClick={onSubstituteClick}
-      />
-      {hint && isPreview && (
+      {showChips && (
+        <IngredientChips
+          ingredients={ingredients}
+          overrides={ingredientOverrides}
+          maxVisible={maxChips}
+          variant={isPreview ? "preview" : "full"}
+          hideSectionLabel={isPreview}
+          showSubstituteButton={showSubstituteButton}
+          onSubstituteClick={onSubstituteClick}
+        />
+      )}
+      {hint && isPreview && showHint && (
         <p className="text-xs text-muted-foreground leading-snug line-clamp-1" title={hint}>
           💡 {hint}
         </p>

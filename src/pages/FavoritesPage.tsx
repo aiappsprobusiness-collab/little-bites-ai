@@ -13,8 +13,11 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { FavoriteCard } from "@/components/favorites/FavoriteCard";
 import { MyRecipeCard } from "@/components/favorites/MyRecipeCard";
 import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
+import { IngredientFilterBar } from "@/components/favorites/IngredientFilterBar";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
+import { useRecipeIdsByIngredients } from "@/hooks/useRecipeIdsByIngredients";
 import type { SavedFavorite } from "@/hooks/useFavorites";
+import type { IngredientFilterMode } from "@/components/favorites/IngredientFilterBar";
 import { safeError } from "@/utils/safeLogger";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +45,28 @@ export default function FavoritesPage() {
   const [addToPlanRecipe, setAddToPlanRecipe] = useState<{ id: string; title: string; member_id: string | null } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formRecipeId, setFormRecipeId] = useState<string | null>(null);
+  const [ingredientFilterTerms, setIngredientFilterTerms] = useState<string[]>([]);
+  const [ingredientFilterMode, setIngredientFilterMode] = useState<IngredientFilterMode>("include");
+
+  const scope = tab === "favorites" ? "favorites" : "my_recipes";
+  const memberIdForFilter = favoritesFilter === "family" || favoritesFilter === "all" ? null : favoritesFilter;
+  const { allowedRecipeIds } = useRecipeIdsByIngredients(ingredientFilterTerms, scope, {
+    memberId: tab === "favorites" ? memberIdForFilter : null,
+    mode: ingredientFilterMode,
+    enabled: true,
+  });
+
+  const favoritesFiltered =
+    allowedRecipeIds == null
+      ? favorites
+      : favorites.filter((f) => {
+          const id = getRecipeId(f);
+          return id != null && allowedRecipeIds.has(id);
+        });
+  const myRecipesFiltered =
+    allowedRecipeIds == null
+      ? myRecipes
+      : myRecipes.filter((r) => allowedRecipeIds.has(r.id));
 
   const handleRemove = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -98,6 +123,14 @@ export default function FavoritesPage() {
           <MemberSelectorButton className="shrink-0 ml-auto" />
         </div>
 
+        <IngredientFilterBar
+          selectedIngredients={ingredientFilterTerms}
+          onSelectedChange={setIngredientFilterTerms}
+          mode={ingredientFilterMode}
+          onModeChange={setIngredientFilterMode}
+          className="mb-3"
+        />
+
         {tab === "my_recipes" && (
           <>
             {myRecipes.length === 0 ? (
@@ -123,6 +156,10 @@ export default function FavoritesPage() {
                   </Button>
                 </div>
               </motion.div>
+            ) : myRecipesFiltered.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                По выбранным ингредиентам ничего не найдено. Измените фильтр или сбросьте его.
+              </p>
             ) : (
               <>
                 <div className="flex justify-end mb-2">
@@ -134,8 +171,8 @@ export default function FavoritesPage() {
                     Создать свой рецепт
                   </Button>
                 </div>
-<div className="space-y-3">
-                {myRecipes.map((recipe, index) => (
+                <div className="space-y-3">
+                {myRecipesFiltered.map((recipe, index) => (
                     <MyRecipeCard
                       key={recipe.id}
                       recipe={recipe}
@@ -180,9 +217,13 @@ export default function FavoritesPage() {
                   </Button>
                 </div>
               </motion.div>
+            ) : favoritesFiltered.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">
+                По выбранным ингредиентам ничего не найдено. Измените фильтр или сбросьте его.
+              </p>
             ) : (
               <div className="space-y-3">
-                {favorites.map((favorite, index) => (
+                {favoritesFiltered.map((favorite, index) => (
                   <FavoriteCard
                     key={favorite.id}
                     favorite={favorite}

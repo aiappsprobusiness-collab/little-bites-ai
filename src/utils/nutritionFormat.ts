@@ -48,7 +48,7 @@ export function formatMacrosSentence(
 }
 
 /**
- * Премиум-строка макросов: "Пищевая ценность на порцию: Белки 4 г · Жиры 2 г · Углеводы 22 г".
+ * Премиум-строка макросов: "В одной порции: Белки 4 г · Жиры 2 г · Углеводы 22 г".
  * Только присутствующие значения; разделитель " · ".
  */
 export function formatMacrosShort(opt: {
@@ -61,5 +61,5 @@ export function formatMacrosShort(opt: {
   if (opt.fat != null && Number.isFinite(opt.fat)) parts.push(`Жиры ${Math.round(Number(opt.fat))} г`);
   if (opt.carbs != null && Number.isFinite(opt.carbs)) parts.push(`Углеводы ${Math.round(Number(opt.carbs))} г`);
   if (parts.length === 0) return "";
-  return `Пищевая ценность на порцию: ${parts.join(" · ")}`;
+  return `В одной порции: ${parts.join(" · ")}`;
 }
