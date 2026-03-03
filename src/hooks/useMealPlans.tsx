@@ -356,6 +356,50 @@ export function useMealPlans(
     },
   });
 
+  /** Обновить только servings слота (planned_date + member_id + meal_type). */
+  const updateSlotServings = useMutation({
+    mutationFn: async (params: {
+      planned_date: string;
+      member_id: string | null;
+      meal_type: MealType;
+      servings: number;
+    }) => {
+      if (!user) throw new Error('User not authenticated');
+      let rowQuery = supabase
+        .from('meal_plans_v2')
+        .select('id, meals')
+        .eq('user_id', user.id)
+        .eq('planned_date', params.planned_date);
+      if (params.member_id == null) {
+        rowQuery = rowQuery.is('member_id', null);
+      } else {
+        rowQuery = rowQuery.eq('member_id', params.member_id);
+      }
+      const { data: row, error: fetchErr } = await rowQuery.maybeSingle();
+      if (fetchErr || !row) throw new Error('Plan row not found');
+      const meals = { ...((row as { meals?: MealsJson }).meals ?? {}) } as MealsJson;
+      const slot = meals[params.meal_type];
+      const newSlot: MealSlotJson = {
+        ...slot,
+        recipe_id: slot?.recipe_id,
+        title: slot?.title,
+        plan_source: slot?.plan_source,
+        servings: params.servings,
+        ingredient_overrides: slot?.ingredient_overrides,
+      };
+      (meals as Record<string, MealSlotJson>)[params.meal_type] = newSlot;
+      const { error: updateErr } = await supabase
+        .from('meal_plans_v2')
+        .update({ meals })
+        .eq('id', (row as { id: string }).id);
+      if (updateErr) throw updateErr;
+      return row as unknown as MealPlansV2Row;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+    },
+  });
+
   const markAsCompleted = useMutation({
     mutationFn: async (id: string) => {
       if (!id) return;
@@ -496,6 +540,7 @@ export function useMealPlans(
     createMealPlan: createMealPlan.mutateAsync,
     updateMealPlan: updateMealPlan.mutateAsync,
     updateSlotIngredientOverrides: updateSlotIngredientOverrides.mutateAsync,
+    updateSlotServings: updateSlotServings.mutateAsync,
     deleteMealPlan: deleteMealPlan.mutateAsync,
     clearWeekPlan: clearWeekPlan.mutateAsync,
     markAsCompleted: markAsCompleted.mutateAsync,

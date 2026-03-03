@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Heart, MessageCircle, Plus } from "lucide-react";
+import { Heart, MessageCircle, Plus, Lock, ShoppingCart } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,12 @@ import { useMyRecipes } from "@/hooks/useMyRecipes";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useFamily } from "@/contexts/FamilyContext";
+import { useAppStore } from "@/store/useAppStore";
 import { FavoriteCard } from "@/components/favorites/FavoriteCard";
 import { MyRecipeCard } from "@/components/favorites/MyRecipeCard";
 import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { IngredientFilterBar } from "@/components/favorites/IngredientFilterBar";
+import { ShoppingListView } from "@/components/favorites/ShoppingListView";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { useRecipeIdsByIngredients } from "@/hooks/useRecipeIdsByIngredients";
 import type { SavedFavorite } from "@/hooks/useFavorites";
@@ -21,7 +23,7 @@ import type { IngredientFilterMode } from "@/components/favorites/IngredientFilt
 import { safeError } from "@/utils/safeLogger";
 import { cn } from "@/lib/utils";
 
-type FavoritesTab = "favorites" | "my_recipes";
+type FavoritesTab = "favorites" | "my_recipes" | "shopping_list";
 
 function getRecipeId(favorite: SavedFavorite): string | null {
   const f = favorite as { _recipeId?: string };
@@ -34,11 +36,23 @@ export default function FavoritesPage() {
   const { toast } = useToast();
   const { members, selectedMemberId } = useFamily();
   const { hasAccess } = useSubscription();
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const stateTab = (location.state as { tab?: FavoritesTab } | null)?.tab;
   const [tab, setTab] = useState<FavoritesTab>("favorites");
   useEffect(() => {
     if (stateTab === "my_recipes") setTab("my_recipes");
+    if (stateTab === "shopping_list") setTab("shopping_list");
   }, [stateTab]);
+
+  const handleShoppingListTabClick = () => {
+    if (!hasAccess) {
+      setPaywallCustomMessage("Список продуктов доступен в Premium");
+      setShowPaywall(true);
+      return;
+    }
+    setTab("shopping_list");
+  };
   const favoritesFilter = selectedMemberId === null || selectedMemberId === "family" ? "family" : selectedMemberId;
   const { favorites, removeFavorite } = useFavorites(favoritesFilter, { queryEnabled: tab === "favorites" });
   const { myRecipes } = useMyRecipes();
@@ -98,14 +112,14 @@ export default function FavoritesPage() {
   return (
     <MobileLayout>
       <div className="px-4 pb-4 overflow-x-hidden max-w-full">
-        {/* Первая строка: чипсы Избранное/Мои рецепты + пилюля выбора профиля */}
+        {/* Табы: единый оливковый акцент для активного */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <button
             type="button"
             onClick={() => setTab("favorites")}
             className={cn(
               "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors",
-              tab === "favorites" ? "bg-primary/[0.08] border-primary/20 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
+              tab === "favorites" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
             )}
           >
             Избранное
@@ -120,9 +134,22 @@ export default function FavoritesPage() {
           >
             Мои рецепты
           </button>
+          <button
+            type="button"
+            onClick={handleShoppingListTabClick}
+            className={cn(
+              "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors inline-flex items-center gap-1.5",
+              tab === "shopping_list" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <ShoppingCart className="w-3.5 h-3.5" />
+            Список продуктов
+            {!hasAccess && <Lock className="w-3 h-3 opacity-70" />}
+          </button>
           <MemberSelectorButton className="shrink-0 ml-auto" />
         </div>
 
+        {(tab === "favorites" || tab === "my_recipes") && (
         <IngredientFilterBar
           selectedIngredients={ingredientFilterTerms}
           onSelectedChange={setIngredientFilterTerms}
@@ -130,6 +157,9 @@ export default function FavoritesPage() {
           onModeChange={setIngredientFilterMode}
           className="mb-3"
         />
+        )}
+
+        {tab === "shopping_list" && hasAccess && <ShoppingListView />}
 
         {tab === "my_recipes" && (
           <>

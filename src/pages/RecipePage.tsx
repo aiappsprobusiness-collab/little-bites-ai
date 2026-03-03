@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, Heart, Share2, CalendarPlus, Pencil, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, Share2, CalendarPlus, Pencil, Trash2, ListPlus } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -23,6 +23,7 @@ import {
   getShareRecipeUrl,
 } from "@/utils/usageEvents";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
+import { useShoppingList } from "@/hooks/useShoppingList";
 import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useAppStore } from "@/store/useAppStore";
@@ -122,7 +123,8 @@ export default function RecipePage() {
   const slotOverrides = planSlot?.ingredient_overrides ?? [];
   const slotServings = planSlot?.servings;
 
-  const { updateSlotIngredientOverrides } = useMealPlans(planMemberId ?? undefined);
+  const { updateSlotIngredientOverrides, updateSlotServings } = useMealPlans(planMemberId ?? undefined);
+  const { addRecipeIngredients, isAddingToList } = useShoppingList();
 
   const { isFavorite: isFavoriteFn, toggleFavorite } = useFavorites("all");
   const isFavorite = !!id && isFavoriteFn(id, favoriteMemberId);
@@ -231,6 +233,28 @@ export default function RecipePage() {
     const defaultServings = base >= 4 ? base : recommended;
     setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
   }, [recipe?.id, fromMealPlan, slotServings]);
+
+  // Сохранение порций слота плана при изменении пользователем (debounce); не сохраняем, если значение совпадает со слотом
+  const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!fromMealPlan || plannedDate == null || planMealType == null || planMemberId === undefined) return;
+    if (slotServings === servingsSelected) return;
+    if (servingsSaveRef.current) clearTimeout(servingsSaveRef.current);
+    servingsSaveRef.current = setTimeout(() => {
+      servingsSaveRef.current = null;
+      const next = servingsSelected;
+      if (next < 1) return;
+      updateSlotServings({
+        planned_date: plannedDate,
+        member_id: planMemberId ?? null,
+        meal_type: planMealType as "breakfast" | "lunch" | "snack" | "dinner",
+        servings: next,
+      }).catch(() => {});
+    }, 400);
+    return () => {
+      if (servingsSaveRef.current) clearTimeout(servingsSaveRef.current);
+    };
+  }, [fromMealPlan, plannedDate, planMealType, planMemberId, slotServings, servingsSelected, updateSlotServings]);
 
   const displayIngredients = recipe ? getDisplayIngredients(recipe as RecipeDisplayIngredients) : [];
   const servingsBase = Math.max(1, (recipe as { servings_base?: number | null })?.servings_base ?? 1);
@@ -435,34 +459,91 @@ export default function RecipePage() {
           )}
         </div>
 
-        {/* Порции: Actions → 18px; капсула − [ 1 ] + */}
-        <div className="space-y-2 mt-[18px]">
-          <span className="text-[11px] font-medium text-muted-foreground/90 block">Порции</span>
-          <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
-            <motion.button
-              type="button"
-              onClick={() => setServingsSelected((s) => Math.max(1, s - 1))}
-              whileTap={{ scale: 0.96 }}
-              transition={{ duration: 0.1 }}
-              className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
-              aria-label="Уменьшить порции"
-            >
-              −
-            </motion.button>
-            <span className="min-w-[2.75rem] text-center text-sm font-semibold text-foreground" aria-live="polite">
-              {servingsSelected}
-            </span>
-            <motion.button
-              type="button"
-              onClick={() => setServingsSelected((s) => Math.min(20, s + 1))}
-              whileTap={{ scale: 0.96 }}
-              transition={{ duration: 0.1 }}
-              className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
-              aria-label="Увеличить порции"
-            >
-              +
-            </motion.button>
+        {/* Порции и кнопка «В список» */}
+        <div className="space-y-2 mt-[18px] flex flex-wrap items-end gap-3">
+          <div>
+            <span className="text-[11px] font-medium text-muted-foreground/90 block">Порции</span>
+            <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
+              <motion.button
+                type="button"
+                onClick={() => setServingsSelected((s) => Math.max(1, s - 1))}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.1 }}
+                className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
+                aria-label="Уменьшить порции"
+              >
+                −
+              </motion.button>
+              <span className="min-w-[2.75rem] text-center text-sm font-semibold text-foreground" aria-live="polite">
+                {servingsSelected}
+              </span>
+              <motion.button
+                type="button"
+                onClick={() => setServingsSelected((s) => Math.min(20, s + 1))}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.1 }}
+                className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
+                aria-label="Увеличить порции"
+              >
+                +
+              </motion.button>
+            </div>
           </div>
+          {hasAccess ? (
+            <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 rounded-full border-[#6b7c3d]/50 text-[#6b7c3d] hover:bg-[#6b7c3d]/10 h-10 px-3"
+                onClick={async () => {
+                  if (!id || !recipe || displayIngredients.length === 0) return;
+                  const mult = servingsSelected / servingsBase;
+                  const ingredients = displayIngredients.map((ing) => {
+                    const ingAny = ing as { name?: string; amount?: number | null; unit?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; category?: string };
+                    const name = (ingAny.name ?? "").trim() || "Ингредиент";
+                    const canAmt = ingAny.canonical_amount != null ? ingAny.canonical_amount * mult : null;
+                    const amt = ingAny.amount != null ? ingAny.amount * mult : null;
+                    const canUnit = ingAny.canonical_unit === "g" || ingAny.canonical_unit === "ml" ? ingAny.canonical_unit : null;
+                    return {
+                      name,
+                      amount: canAmt ?? amt,
+                      unit: canUnit ?? ingAny.unit ?? null,
+                      category: (ingAny.category as "vegetables" | "fruits" | "dairy" | "meat" | "grains" | "other") ?? "other",
+                    };
+                  });
+                  try {
+                    await addRecipeIngredients({
+                      ingredients,
+                      recipeId: id,
+                      recipeTitle: (recipe as { title?: string }).title ?? null,
+                    });
+                    toast({ title: "Добавлено в список" });
+                  } catch {
+                    toast({ variant: "destructive", title: "Не удалось добавить в список" });
+                  }
+                }}
+                disabled={isAddingToList}
+                aria-label="Добавить в список продуктов"
+              >
+                {isAddingToList ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListPlus className="w-3.5 h-3.5" />}
+                <span className="text-sm">В список</span>
+              </Button>
+            </motion.div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 rounded-full border-border text-muted-foreground h-10 px-3"
+              onClick={() => {
+                setPaywallCustomMessage("Список продуктов доступен в Premium");
+                setShowPaywall(true);
+              }}
+              aria-label="Добавить в список (доступно в Premium)"
+            >
+              <ListPlus className="w-3.5 h-3.5" />
+              <span className="text-sm">В список</span>
+            </Button>
+          )}
         </div>
 
         {/* Ингредиенты: нижние секции — 24px как раньше */}

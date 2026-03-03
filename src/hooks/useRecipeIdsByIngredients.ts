@@ -40,6 +40,8 @@ export function useRecipeIdsByIngredients(
   );
   const queryEnabled = !!user && enabled;
 
+  const safeMemberId = memberId && memberId !== "family" ? memberId : null;
+
   const { data: rawIds, isLoading } = useQuery({
     queryKey: recipeIdsByIngredientsKey(user?.id ?? undefined, terms, scope, memberId ?? null, mode),
     queryFn: async (): Promise<string[]> => {
@@ -47,7 +49,7 @@ export function useRecipeIdsByIngredients(
         ingredient_terms: terms,
         mode,
         scope,
-        p_member_id: memberId ?? null,
+        p_member_id: safeMemberId,
       });
       if (error) throw error;
       if (!Array.isArray(data)) return [];
