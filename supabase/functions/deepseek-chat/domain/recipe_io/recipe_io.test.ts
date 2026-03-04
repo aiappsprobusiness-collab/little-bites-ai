@@ -1,10 +1,21 @@
 /**
- * Контрактные тесты: парсинг/валидация рецепта, санитизация, минимальный fallback.
+ * Контрактные тесты: парсинг/валидация рецепта, санитизация, enforce description/chefAdvice, минимальный fallback.
  * Запуск: из supabase/functions: deno test deepseek-chat/domain/recipe_io/recipe_io.test.ts --allow-read
  */
 import { validateRecipe } from "./index.ts";
 import { parseAndValidateRecipeJsonFromString } from "../../recipeSchema.ts";
-import { sanitizeRecipeText, sanitizeMealMentions, getMinimalRecipe } from "./index.ts";
+import {
+  sanitizeRecipeText,
+  sanitizeMealMentions,
+  getMinimalRecipe,
+  enforceDescription,
+  enforceChefAdvice,
+  buildDescriptionFallback,
+  buildChefAdviceFallback,
+  hasForbiddenChefAdviceStart,
+  DESCRIPTION_MAX_LENGTH,
+  CHEF_ADVICE_MAX_LENGTH,
+} from "./index.ts";
 
 Deno.test("validateRecipe: валидный JSON рецепт проходит", () => {
   const validJson = `{
@@ -56,5 +67,123 @@ Deno.test("getMinimalRecipe: неизвестный mealType — snack", () => {
   const r = getMinimalRecipe("unknown");
   if (r.mealType !== "snack") {
     throw new Error(`Unknown mealType must fallback to snack, got: ${r.mealType}`);
+  }
+});
+
+// --- enforceDescription / enforceChefAdvice (sanitize guarantees) ---
+
+Deno.test("enforceDescription: результат всегда <= 150 символов", () => {
+  const long = "Очень длинное описание блюда. ".repeat(20);
+  const out = enforceDescription(long, { title: "Блюдо" });
+  if (out.length > DESCRIPTION_MAX_LENGTH) {
+    throw new Error(`Expected description length <= ${DESCRIPTION_MAX_LENGTH}, got ${out.length}`);
+  }
+  const normal = "Каша из риса. Нежная текстура.";
+  const out2 = enforceDescription(normal);
+  if (out2.length > DESCRIPTION_MAX_LENGTH) {
+    throw new Error(`Expected description length <= ${DESCRIPTION_MAX_LENGTH}, got ${out2.length}`);
+  }
+});
+
+Deno.test("enforceChefAdvice: результат всегда <= 350 символов", () => {
+  const long = "Совет от шефа: повторяем много раз. ".repeat(15);
+  const out = enforceChefAdvice(long, { title: "Суп", recipeIdSeed: "id1" });
+  if (out.length > CHEF_ADVICE_MAX_LENGTH) {
+    throw new Error(`Expected chefAdvice length <= ${CHEF_ADVICE_MAX_LENGTH}, got ${out.length}`);
+  }
+});
+
+Deno.test("enforceChefAdvice: запрещённые старты заменяются", () => {
+  if (!hasForbiddenChefAdviceStart("Подавайте горячим.")) {
+    throw new Error("Expected 'Подавайте' to be detected as forbidden start");
+  }
+  if (!hasForbiddenChefAdviceStart("Можно украсить зеленью.")) {
+    throw new Error("Expected 'Можно' to be detected as forbidden start");
+  }
+  const fixed = enforceChefAdvice("Подавайте горячим. Не перегревайте.", { title: "Суп", recipeIdSeed: "seed1" });
+  if (hasForbiddenChefAdviceStart(fixed)) {
+    throw new Error(`Enforced chefAdvice must not start with forbidden phrase, got: ${fixed.slice(0, 50)}`);
+  }
+  if (fixed.length > CHEF_ADVICE_MAX_LENGTH) {
+    throw new Error(`Enforced chefAdvice must be <= ${CHEF_ADVICE_MAX_LENGTH}, got ${fixed.length}`);
+  }
+});
+
+Deno.test("buildDescriptionFallback: детерминированность по recipeIdSeed", () => {
+  const a = buildDescriptionFallback({ title: "Каша", keyIngredient: "рис", recipeIdSeed: "abc" });
+  const b = buildDescriptionFallback({ title: "Каша", keyIngredient: "рис", recipeIdSeed: "abc" });
+  if (a !== b) {
+    throw new Error(`Same seed must give same fallback: ${a} vs ${b}`);
+  }
+  if (a.length > DESCRIPTION_MAX_LENGTH) {
+    throw new Error(`Fallback description must be <= ${DESCRIPTION_MAX_LENGTH}, got ${a.length}`);
+  }
+});
+
+Deno.test("buildChefAdviceFallback: детерминированность по recipeIdSeed", () => {
+  const a = buildChefAdviceFallback({ title: "Суп", recipeIdSeed: "xyz" });
+  const b = buildChefAdviceFallback({ title: "Суп", recipeIdSeed: "xyz" });
+  if (a !== b) {
+    throw new Error(`Same seed must give same chefAdvice fallback: ${a} vs ${b}`);
+  }
+  if (a.length > CHEF_ADVICE_MAX_LENGTH) {
+    throw new Error(`Fallback chefAdvice must be <= ${CHEF_ADVICE_MAX_LENGTH}, got ${a.length}`);
+  }
+});
+
+Deno.test("sanitize + enforce: запрещённые упоминания не появляются в итоге", () => {
+  const withChild = "Для вашего ребёнка подойдёт. Идеально на завтрак.";
+  const sanitized = sanitizeRecipeText(withChild);
+  const mealSanitized = sanitizeMealMentions(sanitized);
+  const desc = enforceDescription(mealSanitized, { title: "Блюдо" });
+  if (/ребёнк|child|завтрак|breakfast/i.test(desc)) {
+    throw new Error(`Forbidden mentions (age/meal) must not appear in final description: ${desc}`);
+  }
+});
+
+Deno.test("enforceDescription: никогда не заканчивается на «в.» или «и.»", () => {
+  const withBadEnd1 = "Нежная консистенция и приятный вкус. Хранить в.";
+  const out1 = enforceDescription(withBadEnd1, { title: "Курица" });
+  if (out1.endsWith(" в.") || out1.endsWith("в.")) {
+    throw new Error(`Description must not end with 'в.': ${out1}`);
+  }
+  const withBadEnd2 = "Каша из риса. Сытная и.";
+  const out2 = enforceDescription(withBadEnd2, { title: "Каша" });
+  if (out2.endsWith(" и.") || out2.endsWith("и.")) {
+    throw new Error(`Description must not end with 'и.': ${out2}`);
+  }
+});
+
+Deno.test("enforceChefAdvice: «Вкус насыщенного вкуса» пересобирается в совет с императивом", () => {
+  const broken = "Вкус насыщенного вкуса добавьте немного чеснока перед запеканием.";
+  const out = enforceChefAdvice(broken, { title: "Курица", recipeIdSeed: "s1" });
+  if (/вкус\s+насыщенного\s+вкуса/i.test(out)) {
+    throw new Error(`Broken phrase must be replaced, got: ${out}`);
+  }
+  if (out.length > CHEF_ADVICE_MAX_LENGTH) {
+    throw new Error(`chefAdvice must be <= ${CHEF_ADVICE_MAX_LENGTH}, got ${out.length}`);
+  }
+  const firstWord = out.trim().split(/\s+/)[0] ?? "";
+  const imperativeEnd = /й$|йте$/.test(firstWord) || /^(Дай|Добавь|Сними|Нарежь|Запекай|Смешай|Подрумянь|Подавай|Разложи|Храни|Остуди|Разогрей|Сбрызни|Увари|Держи|Сократи)$/i.test(firstWord);
+  if (!imperativeEnd && firstWord.length > 0) {
+    throw new Error(`Rebuilt chefAdvice should start with imperative verb, got first word: ${firstWord}, full: ${out.slice(0, 60)}`);
+  }
+});
+
+Deno.test("enforceChefAdvice: результат начинается с глагола (эвристика: й/йте или whitelist)", () => {
+  const templates = [
+    enforceChefAdvice("Подавайте горячим.", { title: "Суп", recipeIdSeed: "a" }),
+    enforceChefAdvice("Можно украсить зеленью.", { title: "Салат", recipeIdSeed: "b" }),
+    buildChefAdviceFallback({ title: "Каша", recipeIdSeed: "c" }),
+  ];
+  const verbLike = /^(Дай|Добавь|Сними|Нарежь|Запекай|Смешай|Подрумянь|Подавай|Разложи|Храни|Остуди|Разогрей|Сбрызни|Увари|Держи|Сократи|Попробуй|Разогрей|Не|Слегка|Держи)/i;
+  const endsWithImperative = (w: string) => /й$|йте$/.test(w) || /ть$/.test(w);
+  for (const t of templates) {
+    const first = t.trim().split(/\s+/)[0] ?? "";
+    if (!first) continue;
+    const ok = verbLike.test(first) || endsWithImperative(first);
+    if (!ok) {
+      throw new Error(`chefAdvice should start with verb-like word, got: ${first}, full: ${t.slice(0, 50)}`);
+    }
   }
 });

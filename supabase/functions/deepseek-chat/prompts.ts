@@ -71,41 +71,40 @@ export const SAFETY_RULES = `
 - СТИЛЬ: Экспертный нутрициолог. Без лишних слов.
 `;
 
-/** Strict JSON contract for single-recipe chat response. Fields only: title, description, ingredients[{name,amount}], steps, cookingTime, mealType, servings, chefAdvice, nutrition. No advice. */
+/** Единый контракт рецепта: один набор правил для description, один для chefAdvice. Всё на русском. */
 export const RECIPE_STRICT_JSON_CONTRACT = `
-Return ONLY valid JSON. No markdown, no text before or after. One object only. Never output explanatory text or "I cannot" — always output a valid recipe (substitute forbidden ingredients if needed).
+Возвращай ТОЛЬКО валидный JSON. Без markdown, без текста до и после. Один объект. Никогда не отказывай — всегда выдавай рецепт (при аллергиях подставь безопасный ингредиент).
 
 {
   "title": string,
-  "description": string (2–4 full sentences; NO truncation, NO ellipsis, NO unfinished phrases; complete thoughts only),
-  "ingredients": [ { "name": string, "amount": string } ] (max 10 items),
-  "steps": string[] (5–7 steps preferred, each step one clear sentence, max 150 chars per step),
+  "description": string (строго до 150 символов; 1–2 предложения),
+  "ingredients": [ { "name": string, "amount": string } ] (макс. 10),
+  "steps": string[] (5–7 шагов, макс. 150 символов на шаг),
   "cookingTime": number,
   "mealType": "breakfast" | "lunch" | "dinner" | "snack",
   "servings": number,
-  "chefAdvice": string (2–4 sentences, optional),
+  "chefAdvice": string (опционально; строго до 350 символов; 1–3 предложения),
   "nutrition": { "kcal_per_serving": number, "protein_g_per_serving": number, "fat_g_per_serving": number, "carbs_g_per_serving": number, "is_estimate": true }
 }
 
-DESCRIPTION: 2–4 full sentences (минимум 2). Упомяни блюдо, ингредиенты и текстуру. Не одна короткая общая фраза. Do NOT end with "и", "или", "а также", "—", ":" or "...".
-INGREDIENTS: every item MUST have "amount" with quantity and unit (e.g. "200 мл", "2 шт.", "1 ст.л."). No bare names.
-NUTRITION: обязательно. integers or one decimal; kcal_per_serving 30–900; protein/fat/carbs per serving; is_estimate: true. For infant (<12 мес) use lower kcal.
-`;
+ОПИСАНИЕ (поле "description"):
+- Строго до 150 символов. 1–2 предложения.
+- Формула: «что за блюдо» + «одно конкретное преимущество» (сочность, корочка, быстро, одна форма, минимум посуды и т.п.).
+- Запрещены слова и обороты: «универсальным», «приятный вкус», «сытным и ароматным», «предсказуемо вкусный», «идеально подходит», «сбалансированное». Запрещено начинать или заканчивать фразой про хранение: «Хранить…», «Можно хранить…».
+- Примеры хорошего описания (копируй стиль):
+  1) «Курица, запечённая с картофелем и овощами, получается сочной. Всё готовится в одной форме — минимум посуды.»
+  2) «Лосось с лимоном и укропом — нежный и яркий по вкусу. Готовится за 20 минут.»
 
-/** Single short block: description and chefAdvice must be generic (no age/children/allergies/names/meal). One recipe, strict JSON. Ingredients always with amount+unit. */
-export const RECIPE_JSON_RULES = `
-[OUTPUT]
-- One recipe only. Strict JSON, no extra text.
-- description, chefAdvice: describe ONLY the dish (nutrition, taste, texture, tips). Do NOT mention: age, children, baby, toddler, allergies, user name, meal type or time of day ("на завтрак", "for breakfast"). Reusable for any user and any meal tag.
-- ingredients: every item with amount and unit (г, мл, шт., ст.л., ч.л.).
-`;
+СОВЕТ ОТ ШЕФА (поле "chefAdvice"):
+- Строго до 350 символов. 1–3 предложения.
+- Это шефский совет: конкретный приём + зачем (текстура, сочность, корочка, аромат). Обязательно начинай с глагола в повелительном наклонении: «Запекай…», «Смешай…», «Подрумянь…», «Дай…», «Добавь…», «Сними…», «Нарежь…».
+- Запрещены старты и клише: «Для более…», «Если хотите…», «Чтобы сделать…», «Вкус…», «Вкус насыщенного вкуса…», «Можно…», «Подавайте…».
+- Примеры хорошего совета (копируй стиль):
+  1) «Запекай курицу первые 15 минут при 210°C, затем убавь до 180°C — так появится корочка, а внутри останется сок.»
+  2) «Нарежь картофель чуть крупнее моркови: овощи приготовятся одновременно и не разварятся.»
 
-/** Description: 2–4 полных предложения, разнообразие зачинов, без обрывов. */
-export const RECIPE_DESCRIPTION_VARIETY_RULE = `
-DESCRIPTION (поле "description") — ОБЯЗАТЕЛЬНО 2–4 полных предложения:
-- Не обрывать на "и", "или", "а также", "—", ":" или "...". Каждое предложение закончено.
-- Разнообразить зачины: не начинать подряд с одних и тех же формулировок ("Нежное блюдо…", "Вкусное и полезное…").
-- Упомянуть конкретику: что за блюдо, ключевые ингредиенты, текстура или способ подачи. Не ограничиваться одной общей фразой.
+ИНГРЕДИЕНТЫ: у каждого обязательно "amount" с числом и единицей (200 мл, 2 шт., 1 ст.л.). Без голых названий.
+NUTRITION: обязательно. Целые или один знак после запятой; kcal_per_serving 30–900; белки/жиры/углеводы на порцию; is_estimate: true. Для возраста <12 мес — ниже калорийность.
 `;
 
 /** Output rules for recipe: one member → no other family; no reasoning; no markdown; no extra text. */
@@ -164,8 +163,6 @@ ${RULES_USER_INTENT}
 
 [RECIPE TASK]
 ${RECIPE_STRICT_JSON_CONTRACT}
-${RECIPE_JSON_RULES}
-${RECIPE_DESCRIPTION_VARIETY_RULE}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
@@ -214,10 +211,8 @@ ${RULES_USER_INTENT}
 
 [RECIPE TASK]
 ${RECIPE_STRICT_JSON_CONTRACT}
-${RECIPE_JSON_RULES}
-${RECIPE_DESCRIPTION_VARIETY_RULE}
 ${RECIPE_OUTPUT_RULES}
 ${RECIPE_ONE_ONLY_RULE}
 
-ИНГРЕДИЕНТЫ: каждый с amount и единицей (г, мл, шт., ст.л., ч.л.). ШАГИ: макс. 7. chefAdvice: макс. 300 символов.
+ИНГРЕДИЕНТЫ: каждый с amount и единицей (г, мл, шт., ст.л., ч.л.). ШАГИ: макс. 7. chefAdvice: макс. 350 символов.
 `;

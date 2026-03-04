@@ -1,9 +1,18 @@
 /**
- * Санитизация и ремонт рецепта: описание, советы шефа, минимальный fallback.
- * Поведение совместимо с текущим index.
+ * Санитизация и ремонт рецепта: описание (≤150 символов), совет шефа (≤300), минимальный fallback.
+ * Без дополнительных LLM: trim, нормализация пробелов, усечение по границе предложения, детерминированные fallback.
  */
 
 import type { RecipeJson } from "../../recipeSchema.ts";
+
+/** Максимальная длина description (1–2 предложения). */
+export const DESCRIPTION_MAX_LENGTH = 150;
+
+/** Максимальная длина chefAdvice (1–3 предложения). */
+export const CHEF_ADVICE_MAX_LENGTH = 350;
+
+/** Минимальная длина description; ниже — подставляем fallback. */
+const DESCRIPTION_MIN_FOR_VALID = 60;
 
 const DESCRIPTION_INCOMPLETE_SUFFIXES = [/\sи\s*$/i, /\sили\s*$/i, /\sа также\s*$/i, /[—:]\s*$/];
 
@@ -16,10 +25,245 @@ export function isDescriptionIncomplete(desc: string | null | undefined): boolea
   return false;
 }
 
-/** Один короткий вызов LLM для исправления только description. */
+function normalizeSpaces(s: string): string {
+  return (s ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** Ищет последнюю границу предложения (. ! ?) в пределах maxLen; иначе последний пробел. Не режет посередине слова. */
+function truncateAtSentenceBoundary(text: string, maxLen: number): string {
+  const t = normalizeSpaces(text);
+  if (t.length <= maxLen) return t;
+  const slice = t.slice(0, maxLen + 1);
+  const lastSentenceEnd = Math.max(
+    slice.lastIndexOf("."),
+    slice.lastIndexOf("!"),
+    slice.lastIndexOf("?")
+  );
+  if (lastSentenceEnd > 0) {
+    return slice.slice(0, lastSentenceEnd + 1).trim();
+  }
+  const lastSpace = slice.lastIndexOf(" ");
+  if (lastSpace > 0) {
+    return slice.slice(0, lastSpace).trim() + ".";
+  }
+  return t.slice(0, maxLen).trim() + ".";
+}
+
+/** Хвосты, на которых description не должен заканчиваться (обрубки). */
+const DESCRIPTION_BAD_ENDINGS = /\s+(в|на|и|или|а|—|:)\s*\.?$/i;
+
+/** Убирает обрубок в конце: если строка заканчивается предлогом/частицей — обрезаем до предыдущего слова и ставим точку. */
+function trimBadDescriptionEnd(s: string): string {
+  const t = normalizeSpaces(s);
+  if (!t.length) return t;
+  if (!DESCRIPTION_BAD_ENDINGS.test(t)) return t;
+  const withoutBad = t.replace(DESCRIPTION_BAD_ENDINGS, "").trim();
+  if (!withoutBad.length) return t;
+  const lastSpace = withoutBad.lastIndexOf(" ");
+  const base = lastSpace <= 0 ? withoutBad : withoutBad.slice(0, lastSpace).trim();
+  const alreadyEnds = /[.!?]$/.test(base);
+  return alreadyEnds ? base : base + ".";
+}
+
+/** Безопасные преимущества для fallback (без «хранить» и воды). */
+const DESCRIPTION_ADVANTAGES = [
+  "быстро готовится",
+  "нежная текстура",
+  "сытно",
+  "легко разогреть",
+  "минимум посуды",
+  "ароматные специи",
+  "простой состав",
+  "приятная консистенция",
+  "насыщенный вкус",
+  "готовится в одной форме",
+];
+
+function simpleHash(str: string): number {
+  let h = 0;
+  const s = (str ?? "").trim();
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function pickByHash<T>(arr: T[], seed: string): T {
+  const idx = simpleHash(seed) % arr.length;
+  return arr[idx] ?? arr[0];
+}
+
+/** Fallback description без «хранить»: сочное блюдо + одно преимущество. */
+const DESCRIPTION_FALLBACK_TEMPLATE = ": сочное и ароматное блюдо из духовки. Готовится в одной форме — минимум посуды.";
+
+export function buildDescriptionFallback(options: {
+  title: string;
+  keyIngredient?: string;
+  recipeIdSeed?: string;
+}): string {
+  const title = (options.title ?? "").trim() || "Блюдо";
+  const key = (options.keyIngredient ?? "").trim() || "простые ингредиенты";
+  const seed = (options.recipeIdSeed ?? title + key) || "default";
+  const advantage = pickByHash(DESCRIPTION_ADVANTAGES, seed);
+  const out = `${title}: ${key}. ${advantage}.`;
+  if (out.length <= DESCRIPTION_MAX_LENGTH) return out;
+  const short = `${title}${DESCRIPTION_FALLBACK_TEMPLATE}`;
+  return short.length <= DESCRIPTION_MAX_LENGTH ? short : short.slice(0, DESCRIPTION_MAX_LENGTH - 1).trim() + ".";
+}
+
+/**
+ * Приводит description к лимиту: умная обрезка по точке/!/? или по последнему пробелу;
+ * всегда убираем обрубки (окончание на «в», «и» и т.д.); при <60 — fallback без «хранить».
+ */
+export function enforceDescription(
+  desc: string | null | undefined,
+  context?: { title?: string; keyIngredient?: string; recipeIdSeed?: string }
+): string {
+  let t = normalizeSpaces(desc ?? "");
+  if (t.length > DESCRIPTION_MAX_LENGTH) {
+    t = truncateAtSentenceBoundary(t, DESCRIPTION_MAX_LENGTH);
+  }
+  t = trimBadDescriptionEnd(t);
+  if (t.length < DESCRIPTION_MIN_FOR_VALID || !t.replace(/[.\s]/g, "").length) {
+    t = buildDescriptionFallback({
+      title: context?.title ?? "",
+      keyIngredient: context?.keyIngredient,
+      recipeIdSeed: context?.recipeIdSeed,
+    });
+  }
+  return t.slice(0, DESCRIPTION_MAX_LENGTH);
+}
+
+/** Запрещённые старты и штампы: при совпадении совет пересобирается из шаблона (не чиним заменой префикса). */
+const CHEF_ADVICE_FORBIDDEN_STARTS = [
+  /^для более\s/i,
+  /^если хотите\s/i,
+  /^чтобы сделать\s/i,
+  /^подавайте\s/i,
+  /^можно\s/i,
+  /^рекомендуем\s/i,
+  /^совет:\s/i,
+  /^важно\s/i,
+  /^вкус\s/i,
+];
+
+/** Кривой штамп — при наличии в тексте совет пересобирается целиком. */
+const CHEF_ADVICE_BROKEN_PHRASE = /вкус\s+насыщенного\s+вкуса/i;
+
+/** Проверяет, нужно ли пересобрать совет (запрещённый старт или штамп). */
+export function hasForbiddenChefAdviceStart(text: string | null | undefined): boolean {
+  const t = normalizeSpaces(text ?? "");
+  if (!t.length) return false;
+  if (CHEF_ADVICE_BROKEN_PHRASE.test(t)) return true;
+  return CHEF_ADVICE_FORBIDDEN_STARTS.some((re) => re.test(t));
+}
+
+/** Известные штампы — слишком общий совет без конкретики. */
+const CHEF_ADVICE_GENERIC_STAMPS = [
+  "добавьте специи по вкусу",
+  "подавайте горячим",
+  "украсьте зеленью",
+  "можно подать с хлебом",
+  "храните в холодильнике",
+  "разогрейте перед подачей",
+  "добавьте соль по вкусу",
+  "попробуйте и скорректируйте",
+  "идеально для семейного ужина",
+  "подойдёт на любой случай",
+];
+
+function isGenericChefAdvice(text: string): boolean {
+  const t = normalizeSpaces(text).toLowerCase();
+  if (t.length < 30) return true;
+  if (CHEF_ADVICE_GENERIC_STAMPS.some((stamp) => t.includes(stamp.toLowerCase()) && t.length < 120)) return true;
+  return false;
+}
+
+/** Шаблоны советов только с императивом в начале (Запекай, Смешай, Дай, Добавь, Сними, Нарежь и т.д.). */
+const CHEF_ADVICE_CATEGORY_TEMPLATES: Record<string, string[]> = {
+  temperature: [
+    "Дай блюду 2–3 минуты постоять под крышкой — так сочность распределится.",
+    "Сними с огня и остуди до тёплого перед подачей.",
+    "Разогрей порцию на среднем огне, не пересушивая.",
+  ],
+  time: [
+    "Запекай первые 15 минут при высокой температуре, затем убавь — появится корочка, внутри останется сок.",
+    "Держи на огне ровно столько, сколько в рецепте — не переваривай.",
+    "Сократи время на 2–3 минуты, если кусочки мельче.",
+  ],
+  texture: [
+    "Нарежь овощи одинаково — так приготовятся одновременно и не разварятся.",
+    "Слегка взбей перед подачей — текстура станет нежнее.",
+    "Увари до нужной густоты на среднем огне, помешивая.",
+  ],
+  spices: [
+    "Добавь зелень и специи в конце — аромат сохранится.",
+    "Попробуй на соль перед подачей и скорректируй.",
+    "Сбрызни лимоном или маслом перед подачей — вкус ярче.",
+  ],
+  serving: [
+    "Подавай сразу после приготовления, пока не остыло.",
+    "Дай постоять 1–2 минуты — соки распределятся.",
+    "Разложи по тарелкам и сбрызни маслом.",
+  ],
+  storage: [
+    "Остуди до комнатной температуры, затем убери в холодильник.",
+    "Храни в закрытой посуде не более 2 дней; разогрей порцию перед едой.",
+    "Не накрывай плотно при остывании — конденсат размочит корочку.",
+  ],
+};
+
+const CHEF_ADVICE_CATEGORIES = Object.keys(CHEF_ADVICE_CATEGORY_TEMPLATES);
+
+/** Детерминированный fallback для chefAdvice по recipeIdSeed (без рандома). */
+export function buildChefAdviceFallback(options: {
+  title?: string;
+  ingredients?: string[];
+  steps?: string[];
+  recipeIdSeed?: string;
+}): string {
+  const seed = (options.recipeIdSeed ?? (options.title ?? "") + (options.ingredients?.[0] ?? "") + (options.steps?.[0] ?? "")).trim() || "default";
+  const catIdx = simpleHash(seed) % CHEF_ADVICE_CATEGORIES.length;
+  const category = CHEF_ADVICE_CATEGORIES[catIdx] ?? "storage";
+  const templates = CHEF_ADVICE_CATEGORY_TEMPLATES[category] ?? CHEF_ADVICE_CATEGORY_TEMPLATES.storage;
+  const templateIdx = simpleHash(seed + "t") % templates.length;
+  const line = templates[templateIdx] ?? templates[0];
+  return normalizeSpaces(line).slice(0, CHEF_ADVICE_MAX_LENGTH);
+}
+
+/**
+ * Приводит chefAdvice к лимиту. При запрещённом старте или «Вкус насыщенного вкуса» — не чиним префикс, а пересобираем из шаблона с императивом.
+ * При >350 — обрезка по границе предложений.
+ */
+export function enforceChefAdvice(
+  advice: string | null | undefined,
+  context?: { title?: string; ingredients?: string[]; steps?: string[]; cookingTimeMinutes?: number; recipeIdSeed?: string }
+): string {
+  let t = normalizeSpaces(advice ?? "");
+  const seed = (context?.recipeIdSeed ?? (context?.title ?? "") + (context?.ingredients?.[0] ?? "") + (context?.steps?.[0] ?? "")).trim() || "default";
+  if (hasForbiddenChefAdviceStart(t)) {
+    t = buildChefAdviceFallback({
+      title: context?.title,
+      ingredients: context?.ingredients,
+      steps: context?.steps,
+      recipeIdSeed: seed,
+    });
+  } else if (t.length > CHEF_ADVICE_MAX_LENGTH) {
+    t = truncateAtSentenceBoundary(t, CHEF_ADVICE_MAX_LENGTH);
+  }
+  if (t.length < 30 || isGenericChefAdvice(t)) {
+    t = buildChefAdviceFallback({
+      title: context?.title,
+      ingredients: context?.ingredients,
+      steps: context?.steps,
+      recipeIdSeed: seed,
+    });
+  }
+  return t.slice(0, CHEF_ADVICE_MAX_LENGTH);
+}
+
+/** Один короткий вызов LLM для исправления только description (если обрыв). */
 export async function repairDescriptionOnly(current: string, apiKey: string): Promise<string | null> {
-  const sys = "Ты исправляешь только поле description. Верни ТОЛЬКО валидный JSON: {\"description\": \"...\"}. 2–4 полных предложения, без обрыва, без троеточий.";
-  const user = `Текущее описание (обрывается): «${current.slice(0, 300)}». Допиши до 2–4 законченных предложений.`;
+  const sys = "Ты исправляешь только поле description. Верни ТОЛЬКО валидный JSON: {\"description\": \"...\"}. 1–2 предложения, макс. 150 символов, без обрыва, без троеточий. Суть блюда + одно преимущество.";
+  const user = `Текущее описание (обрывается): «${current.slice(0, 200)}». Допиши до 1–2 законченных предложений, не более 150 символов.`;
   try {
     const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
@@ -27,7 +271,7 @@ export async function repairDescriptionOnly(current: string, apiKey: string): Pr
       body: JSON.stringify({
         model: "deepseek-chat",
         messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-        max_tokens: 256,
+        max_tokens: 128,
         temperature: 0.3,
       }),
     });
@@ -37,7 +281,8 @@ export async function repairDescriptionOnly(current: string, apiKey: string): Pr
     if (!raw) return null;
     const match = raw.match(/\{\s*"description"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*\}/) || raw.match(/"description"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
     if (match && match[1]) {
-      return match[1].replace(/\\"/g, '"').slice(0, 500);
+      const desc = match[1].replace(/\\"/g, '"');
+      return enforceDescription(desc, {}).slice(0, DESCRIPTION_MAX_LENGTH);
     }
     return null;
   } catch {

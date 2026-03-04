@@ -20,4 +20,11 @@ export {
   sanitizeRecipeText,
   sanitizeMealMentions,
   getMinimalRecipe,
+  DESCRIPTION_MAX_LENGTH,
+  CHEF_ADVICE_MAX_LENGTH,
+  enforceDescription,
+  enforceChefAdvice,
+  buildDescriptionFallback,
+  buildChefAdviceFallback,
+  hasForbiddenChefAdviceStart,
 } from "./sanitizeAndRepair.ts";

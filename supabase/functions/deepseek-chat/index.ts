@@ -44,6 +44,8 @@ import {
   sanitizeRecipeText,
   sanitizeMealMentions,
   getMinimalRecipe,
+  enforceDescription,
+  enforceChefAdvice,
 } from "./domain/recipe_io/index.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -844,12 +846,26 @@ serve(async (req) => {
 
     if (responseRecipes.length > 0) {
       const recipe = responseRecipes[0] as RecipeJson;
-      (recipe as Record<string, unknown>).description = sanitizeMealMentions(sanitizeRecipeText(recipe.description ?? ""));
-      (recipe as Record<string, unknown>).chefAdvice = sanitizeMealMentions(sanitizeRecipeText(recipe.chefAdvice ?? ""));
+      const descRaw = sanitizeMealMentions(sanitizeRecipeText(recipe.description ?? ""));
+      const adviceRaw = sanitizeMealMentions(sanitizeRecipeText(recipe.chefAdvice ?? ""));
+      const title = (recipe.title ?? "").trim();
+      const keyIngredient = Array.isArray(recipe.ingredients) && recipe.ingredients[0] && typeof recipe.ingredients[0] === "object" && (recipe.ingredients[0] as { name?: string }).name
+        ? String((recipe.ingredients[0] as { name: string }).name)
+        : undefined;
+      const steps = Array.isArray(recipe.steps) ? recipe.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean) : [];
+      const recipeIdSeed = title + (keyIngredient ?? "") + (steps[0] ?? "");
+      (recipe as Record<string, unknown>).description = enforceDescription(descRaw, { title, keyIngredient, recipeIdSeed });
+      (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceRaw, {
+        title,
+        ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : undefined,
+        steps,
+        recipeIdSeed,
+      });
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
         descriptionLength: (recipe.description as string)?.length,
+        chefAdviceLength: (recipe.chefAdvice as string)?.length ?? 0,
       }));
       safeLog(JSON.stringify({ tag: "MEAL_MENTION_SANITIZED", requestId }));
     }
