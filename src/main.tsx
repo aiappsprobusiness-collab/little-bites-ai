@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { disableDoubleTapZoom } from "./utils/disableDoubleTapZoom";
 import "./index.css";
 
 // ——— PWA: beforeinstallprompt ———
@@ -69,5 +70,7 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     });
   });
 }
+
+disableDoubleTapZoom();
 
 createRoot(document.getElementById("root")!).render(<App />);
