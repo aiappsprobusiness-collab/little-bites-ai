@@ -118,17 +118,7 @@ Make it look delicious and inviting.`
 
     const imageUrl = publicUrlData.publicUrl;
 
-    // Update recipe with image URL
-    const { error: updateError } = await supabase
-      .from("recipes")
-      .update({ image_url: imageUrl })
-      .eq("id", recipeId);
-
-    if (updateError) {
-      safeError("Update recipe error:", updateError);
-      throw new Error(`Update failed: ${updateError.message}`);
-    }
-
+    // recipes.image_url column removed — image is only in storage; no DB update.
     safeLog(`Image generated and saved for recipe ${recipeId}: ${imageUrl}`);
 
     return new Response(

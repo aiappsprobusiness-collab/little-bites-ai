@@ -46,7 +46,6 @@ export default function RecipeEditPage() {
   const [cookingTime, setCookingTime] = useState("");
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
-  const [imageUrl, setImageUrl] = useState("");
   const [memberId, setMemberId] = useState<string>("none");
   const [ingredients, setIngredients] = useState<
     Array<{ name: string; amount: string; unit: string; category: string }>
@@ -72,7 +71,6 @@ export default function RecipeEditPage() {
       setCookingTime(existingRecipe.cooking_time_minutes?.toString() || "");
       setMinAge(existingRecipe.min_age_months?.toString() || "");
       setMaxAge(existingRecipe.max_age_months?.toString() || "");
-      setImageUrl(existingRecipe.image_url || "");
       setMemberId(existingRecipe.member_id || existingRecipe.child_id || "none");
 
       const existingIngredients = (existingRecipe as any).ingredients || [];
@@ -148,7 +146,6 @@ export default function RecipeEditPage() {
         cooking_time_minutes: parseOptionalInt(cookingTime),
         min_age_months: parseOptionalInt(minAge),
         max_age_months: parseOptionalInt(maxAge),
-        image_url: imageUrl.trim() || null,
         member_id: rawMemberId,
       };
 
@@ -263,17 +260,6 @@ export default function RecipeEditPage() {
                     placeholder="6"
                   />
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="imageUrl">URL изображения</Label>
-                <Input
-                  id="imageUrl"
-                  type="url"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  placeholder="https://..."
-                />
               </div>
 
               {members.length > 0 && (

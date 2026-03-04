@@ -1,6 +1,7 @@
 /**
- * Санитизация и ремонт рецепта: описание (≤150 символов), совет шефа (≤300), минимальный fallback.
+ * Санитизация и ремонт рецепта: описание (≤150 символов), совет шефа (≤350), минимальный fallback.
  * Без дополнительных LLM: trim, нормализация пробелов, усечение по границе предложения, детерминированные fallback.
+ * При «ты»-обращении в chefAdvice — локальная замена на «Вы» и гарантия 2 предложений.
  */
 
 import type { RecipeJson } from "../../recipeSchema.ts";
@@ -8,8 +9,8 @@ import type { RecipeJson } from "../../recipeSchema.ts";
 /** Максимальная длина description (1–2 предложения). */
 export const DESCRIPTION_MAX_LENGTH = 150;
 
-/** Максимальная длина chefAdvice (1–3 предложения). */
-export const CHEF_ADVICE_MAX_LENGTH = 350;
+/** Максимальная длина chefAdvice (2–3 предложения, ориентир 220–520 символов). */
+export const CHEF_ADVICE_MAX_LENGTH = 520;
 
 /** Минимальная длина description; ниже — подставляем fallback. */
 const DESCRIPTION_MIN_FOR_VALID = 60;
@@ -29,7 +30,7 @@ function normalizeSpaces(s: string): string {
   return (s ?? "").replace(/\s+/g, " ").trim();
 }
 
-/** Ищет последнюю границу предложения (. ! ?) в пределах maxLen; иначе последний пробел. Не режет посередине слова. */
+/** Ищет последнюю границу предложения (. ! ? …) в пределах maxLen; иначе последний пробел. Не режет посередине слова. */
 function truncateAtSentenceBoundary(text: string, maxLen: number): string {
   const t = normalizeSpaces(text);
   if (t.length <= maxLen) return t;
@@ -37,7 +38,8 @@ function truncateAtSentenceBoundary(text: string, maxLen: number): string {
   const lastSentenceEnd = Math.max(
     slice.lastIndexOf("."),
     slice.lastIndexOf("!"),
-    slice.lastIndexOf("?")
+    slice.lastIndexOf("?"),
+    slice.lastIndexOf("…")
   );
   if (lastSentenceEnd > 0) {
     return slice.slice(0, lastSentenceEnd + 1).trim();
@@ -47,6 +49,29 @@ function truncateAtSentenceBoundary(text: string, maxLen: number): string {
     return slice.slice(0, lastSpace).trim() + ".";
   }
   return t.slice(0, maxLen).trim() + ".";
+}
+
+/** Обрезка по границе слова: в последних minFromEnd символах ищем последний пробел, режем там. Не режет слово. */
+function truncateAtWordBoundary(text: string, maxLen: number, minFromEnd: number = 20): string {
+  const t = normalizeSpaces(text);
+  if (t.length <= maxLen) return t;
+  const slice = t.slice(0, maxLen);
+  const searchStart = Math.max(0, slice.length - minFromEnd);
+  const segment = slice.slice(searchStart);
+  const lastSpaceInSegment = segment.lastIndexOf(" ");
+  const cutAt = lastSpaceInSegment >= 0 ? searchStart + lastSpaceInSegment : slice.lastIndexOf(" ");
+  if (cutAt > 0) {
+    return slice.slice(0, cutAt).trim();
+  }
+  return slice.trim();
+}
+
+/** Удаляет хвосты «Хранить…» / «Можно хранить…» из description. */
+function stripStorageTail(text: string): string {
+  const t = normalizeSpaces(text);
+  const m = t.match(/^(.+?)(?:\s+Хранить[^.!?]*\.?\s*$|\s+Можно хранить[^.!?]*\.?\s*$)/i);
+  if (m && m[1]) return m[1].trim();
+  return t;
 }
 
 /** Хвосты, на которых description не должен заканчиваться (обрубки). */
@@ -91,6 +116,45 @@ function pickByHash<T>(arr: T[], seed: string): T {
   return arr[idx] ?? arr[0];
 }
 
+/** Нормализация title для сравнения (как в index.ts anti-duplicate). */
+function normalizeTitleKey(title: string): string {
+  return (title ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Универсальные fallback для description без названия блюда (pool-safe). */
+const DESCRIPTION_POOL_FALLBACKS = [
+  "Нежная текстура и понятный вкус; готовится быстро и без лишней посуды.",
+  "Сочно и аккуратно держит форму; удобно готовить порциями.",
+  "Мягкий вкус и ровная текстура; отлично получается даже без сложных техник.",
+  "Приятная консистенция и насыщенный вкус; минимум посуды и времени.",
+];
+
+/**
+ * Убирает дубль title из description: если description содержит нормализованный title или начинается с названия — подставляет универсальный fallback (без названия, без профиля/детей/аллергий).
+ */
+export function sanitizeDescriptionForPool(description: string | null | undefined, title: string, recipeIdSeed?: string): string {
+  const desc = normalizeSpaces(description ?? "");
+  const t = (title ?? "").trim();
+  if (!t || desc.length < 10) return desc;
+  const titleKey = normalizeTitleKey(t);
+  if (!titleKey) return desc;
+  const descLower = desc.toLowerCase().replace(/\s+/g, " ");
+  const titleWords = titleKey.split(" ").filter((w) => w.length >= 2);
+  const startsWithTitle = titleWords.length > 0 && descLower.startsWith(titleWords[0]!);
+  const containsTitleKey = descLower.includes(titleKey) || titleWords.some((w) => descLower.includes(w) && desc.length < 80);
+  if (startsWithTitle || containsTitleKey) {
+    const seed = (recipeIdSeed ?? t + desc.slice(0, 20)).trim() || "default";
+    const idx = simpleHash(seed) % DESCRIPTION_POOL_FALLBACKS.length;
+    return (DESCRIPTION_POOL_FALLBACKS[idx] ?? DESCRIPTION_POOL_FALLBACKS[0]!).slice(0, DESCRIPTION_MAX_LENGTH);
+  }
+  return desc.slice(0, DESCRIPTION_MAX_LENGTH);
+}
+
 /** Fallback description без «хранить»: сочное блюдо + одно преимущество. */
 const DESCRIPTION_FALLBACK_TEMPLATE = ": сочное и ароматное блюдо из духовки. Готовится в одной форме — минимум посуды.";
 
@@ -110,18 +174,32 @@ export function buildDescriptionFallback(options: {
 }
 
 /**
- * Приводит description к лимиту: умная обрезка по точке/!/? или по последнему пробелу;
- * всегда убираем обрубки (окончание на «в», «и» и т.д.); при <60 — fallback без «хранить».
+ * Приводит description к лимиту: обрезка по границе слова (не резать посередине), завершённое предложение;
+ * убираем хвосты «Хранить»/«Можно хранить» и обрубки (окончание на «в», «и» и т.д.); при <60 — fallback.
  */
 export function enforceDescription(
   desc: string | null | undefined,
   context?: { title?: string; keyIngredient?: string; recipeIdSeed?: string }
 ): string {
   let t = normalizeSpaces(desc ?? "");
+  t = stripStorageTail(t);
   if (t.length > DESCRIPTION_MAX_LENGTH) {
     t = truncateAtSentenceBoundary(t, DESCRIPTION_MAX_LENGTH);
+    if (t.length > DESCRIPTION_MAX_LENGTH) {
+      t = truncateAtWordBoundary(t, DESCRIPTION_MAX_LENGTH, 20);
+      if (!/[.!?…]\s*$/.test(t)) t = t.trim() + ".";
+    }
   }
   t = trimBadDescriptionEnd(t);
+  if (t.length > DESCRIPTION_MAX_LENGTH) {
+    t = truncateAtWordBoundary(t, DESCRIPTION_MAX_LENGTH, 20);
+    if (!/[.!?…]\s*$/.test(t)) t = t.trim() + ".";
+  }
+  if (t.length > 1 && !/[.!?…]\s*$/.test(t)) {
+    const lastSpace = t.trim().lastIndexOf(" ");
+    t = (lastSpace > 0 ? t.slice(0, lastSpace) : t).trim();
+    if (!/[.!?…]\s*$/.test(t)) t = t + ".";
+  }
   if (t.length < DESCRIPTION_MIN_FOR_VALID || !t.replace(/[.\s]/g, "").length) {
     t = buildDescriptionFallback({
       title: context?.title ?? "",
@@ -213,6 +291,82 @@ const CHEF_ADVICE_CATEGORY_TEMPLATES: Record<string, string[]> = {
 
 const CHEF_ADVICE_CATEGORIES = Object.keys(CHEF_ADVICE_CATEGORY_TEMPLATES);
 
+/** Шаблоны советов для пула: на «Вы», без упоминаний профиля/аллергий/детей/семьи. */
+const POOL_SAFE_CHEF_ADVICE_TEMPLATES: string[] = [
+  "Запекайте первые 15 минут при высокой температуре, затем убавьте огонь — так появится корочка, а внутри останется сок.",
+  "Дайте блюду 2–3 минуты постоять под крышкой — сочность распределится равномерно.",
+  "Нарежьте овощи одинаковыми кусочками — так они приготовятся одновременно и не разварятся.",
+  "Добавьте зелень и специи в конце приготовления — аромат сохранится лучше.",
+  "Остудите до комнатной температуры, затем уберите в холодильник. Это поможет сохранить текстуру.",
+  "Снимите с огня и дайте постоять 1–2 минуты — соки распределятся. Это даст более сочную текстуру и ровный вкус.",
+];
+
+/** Триггеры запрещённого контента в chefAdvice: аллергии/ограничения/профиль. */
+const CHEF_ADVICE_POOL_FORBIDDEN_ALLERGIES = /бкм|аллерг|неперенос|без\s+молоч|без\s+лакт|коровь(его|ий)\s+бел(ок|ка)|по\s+аллерг|учитыва(я|йте)\s+аллерг/i;
+/** Дети/возраст/семья/общий стол. */
+const CHEF_ADVICE_POOL_FORBIDDEN_FAMILY = /(дет(ям|и|ский)|реб(ен(ок|ка)|ён(ок|ка))|малыш|семь(я|и)|общ(ий|его)\s+стол|для\s+детей)/i;
+/** «Ты»-обращение. */
+const CHEF_ADVICE_POOL_FORBIDDEN_TY = /(^|[\s,.:;!?])(ты|тебе|твой|твоя|твоё|твоим|твоей|давай|ваш(?:ему|ей|е)?\s*малышу)([\s,.:;!?]|$)/i;
+
+function buildPoolSafeChefAdviceFallback(recipeIdSeed: string): string {
+  const idx = simpleHash(recipeIdSeed) % POOL_SAFE_CHEF_ADVICE_TEMPLATES.length;
+  return (POOL_SAFE_CHEF_ADVICE_TEMPLATES[idx] ?? POOL_SAFE_CHEF_ADVICE_TEMPLATES[0]!).slice(0, CHEF_ADVICE_MAX_LENGTH);
+}
+
+/**
+ * Вычищает chefAdvice от упоминаний профиля, аллергий, детей/семьи и «ты». При любом триггере пересобирает совет из pool-safe шаблона (без LLM).
+ */
+export function sanitizeChefAdviceForPool(advice: string | null | undefined, recipeIdSeed?: string): string {
+  const t = normalizeSpaces(advice ?? "");
+  if (!t.length) return t;
+  const seed = (recipeIdSeed ?? "default").trim() || "default";
+  if (CHEF_ADVICE_POOL_FORBIDDEN_ALLERGIES.test(t) || CHEF_ADVICE_POOL_FORBIDDEN_FAMILY.test(t) || CHEF_ADVICE_POOL_FORBIDDEN_TY.test(t)) {
+    return buildPoolSafeChefAdviceFallback(seed);
+  }
+  return t;
+}
+
+/** Определяет обрыв: не заканчивается на .!?… или заканчивается на запятую/двоеточие/тире, или мусорный хвост (2–4 буквы). */
+function isChefAdviceTruncated(advice: string): boolean {
+  const trimmed = advice.trim();
+  if (!trimmed.length) return true;
+  if (/[.!?…]\s*$/.test(trimmed)) return false;
+  if (/[,—:]\s*$/.test(trimmed)) return true;
+  const lastWord = trimmed.split(/\s+/).pop() ?? "";
+  if (lastWord.length >= 2 && lastWord.length <= 4 && !/[.!?]/.test(lastWord)) return true;
+  return true;
+}
+
+/** Обрезает до последнего завершённого предложения и при необходимости добавляет короткое закрывающее (на «Вы»). */
+function fixChefAdviceTruncation(advice: string): string {
+  let t = normalizeSpaces(advice);
+  if (!t.length || !isChefAdviceTruncated(t)) return t;
+  const lastEnd = Math.max(t.lastIndexOf("."), t.lastIndexOf("!"), t.lastIndexOf("?"), t.lastIndexOf("…"));
+  if (lastEnd > 0) {
+    t = t.slice(0, lastEnd + 1).trim();
+  } else {
+    const lastSpace = t.lastIndexOf(" ");
+    t = (lastSpace > 0 ? t.slice(0, lastSpace) : t).trim() + ".";
+  }
+  if (countSentences(t) < 2) {
+    t = normalizeSpaces(t + " Это даст более сочную текстуру и ровный вкус.").slice(0, CHEF_ADVICE_MAX_LENGTH);
+  }
+  return t;
+}
+
+/** Минимальная длина chefAdvice для добавления второго предложения. */
+const CHEF_ADVICE_MIN_LENGTH_FOR_EXTRA = 220;
+
+/** Добавляет второе предложение, если advice короче 220 символов (на «Вы», без запрещённых слов). */
+function ensureChefAdviceMinLength(advice: string): string {
+  if (advice.length >= CHEF_ADVICE_MIN_LENGTH_FOR_EXTRA && countSentences(advice) >= 2) return advice;
+  if (countSentences(advice) < 2) {
+    const suffix = " Это помогает удержать сочность и сделать текстуру более нежной.";
+    return normalizeSpaces(advice.trim() + suffix).slice(0, CHEF_ADVICE_MAX_LENGTH);
+  }
+  return advice.slice(0, CHEF_ADVICE_MAX_LENGTH);
+}
+
 /** Детерминированный fallback для chefAdvice по recipeIdSeed (без рандома). */
 export function buildChefAdviceFallback(options: {
   title?: string;
@@ -229,9 +383,44 @@ export function buildChefAdviceFallback(options: {
   return normalizeSpaces(line).slice(0, CHEF_ADVICE_MAX_LENGTH);
 }
 
+/** Паттерн «ты»-обращения: переписываем на «Вы» без вызова LLM. Граница — пробел/начало/конец/знак препинания (кириллица не поддерживает \\b). */
+const CHEF_ADVICE_TY_PATTERN = /(^|[\s,.:;!?])+(ты|тебе|твой|твоя|твоё|твоим|твоей|давай)([\s,.:;!?]|$)/i;
+
+const TY_TO_VY_MAP: Record<string, string> = {
+  ты: "вы", тебе: "вам", твой: "ваш", твоя: "ваша", твоё: "ваше",
+  твоим: "вашим", твоей: "вашей", давай: "лучше",
+};
+
+/** Замена «ты» на «Вы» и нейтральные конструкции (без LLM). */
+function rewriteChefAdviceTyToVy(advice: string): string {
+  let t = normalizeSpaces(advice);
+  t = t.replace(/(^|[\s,.:;!?])(ты|тебе|твой|твоя|твоё|твоим|твоей|давай)([\s,.:;!?]|$)/gi, (_m, before, word, after) => {
+    const replacement = TY_TO_VY_MAP[word.toLowerCase()] ?? word;
+    return before + replacement + after;
+  });
+  return normalizeSpaces(t);
+}
+
+/** Считает предложения по границам . ! ? */
+function countSentences(text: string): number {
+  const t = text.trim();
+  if (!t.length) return 0;
+  const matches = t.match(/[.!?]+/g);
+  return matches ? matches.length : (t.length > 0 ? 1 : 0);
+}
+
+/** Добавляет второе предложение, если только одно (без LLM). */
+function ensureTwoSentences(advice: string): string {
+  if (countSentences(advice) >= 2) return advice;
+  const suffix = " Это поможет сохранить вкус и текстуру.";
+  return normalizeSpaces(advice.trim() + suffix).slice(0, CHEF_ADVICE_MAX_LENGTH);
+}
+
 /**
- * Приводит chefAdvice к лимиту. При запрещённом старте или «Вкус насыщенного вкуса» — не чиним префикс, а пересобираем из шаблона с императивом.
- * При >350 — обрезка по границе предложений.
+ * Приводит chefAdvice к лимиту. При запрещённом старте или «Вкус насыщенного вкуса» — пересобираем из шаблона.
+ * При «ты»-обращении — переписываем на «Вы» и гарантируем 2 предложения.
+ * Анти-обрыв: если не заканчивается на .!?… — обрезаем до последнего предложения и добавляем закрывающее.
+ * Если длина < 220 или одно предложение — добавляем второе (на «Вы»).
  */
 export function enforceChefAdvice(
   advice: string | null | undefined,
@@ -239,6 +428,19 @@ export function enforceChefAdvice(
 ): string {
   let t = normalizeSpaces(advice ?? "");
   const seed = (context?.recipeIdSeed ?? (context?.title ?? "") + (context?.ingredients?.[0] ?? "") + (context?.steps?.[0] ?? "")).trim() || "default";
+
+  t = fixChefAdviceTruncation(t);
+
+  if (CHEF_ADVICE_TY_PATTERN.test(t)) {
+    t = rewriteChefAdviceTyToVy(t);
+    t = ensureTwoSentences(t);
+    if (t.length > CHEF_ADVICE_MAX_LENGTH) {
+      t = truncateAtSentenceBoundary(t, CHEF_ADVICE_MAX_LENGTH);
+    }
+    t = ensureChefAdviceMinLength(t);
+    return t.slice(0, CHEF_ADVICE_MAX_LENGTH);
+  }
+
   if (hasForbiddenChefAdviceStart(t)) {
     t = buildChefAdviceFallback({
       title: context?.title,
@@ -246,6 +448,7 @@ export function enforceChefAdvice(
       steps: context?.steps,
       recipeIdSeed: seed,
     });
+    if (CHEF_ADVICE_TY_PATTERN.test(t)) t = rewriteChefAdviceTyToVy(t);
   } else if (t.length > CHEF_ADVICE_MAX_LENGTH) {
     t = truncateAtSentenceBoundary(t, CHEF_ADVICE_MAX_LENGTH);
   }
@@ -256,7 +459,9 @@ export function enforceChefAdvice(
       steps: context?.steps,
       recipeIdSeed: seed,
     });
+    if (CHEF_ADVICE_TY_PATTERN.test(t)) t = rewriteChefAdviceTyToVy(t);
   }
+  t = ensureChefAdviceMinLength(t);
   return t.slice(0, CHEF_ADVICE_MAX_LENGTH);
 }
 

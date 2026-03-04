@@ -27,4 +27,6 @@ export {
   buildDescriptionFallback,
   buildChefAdviceFallback,
   hasForbiddenChefAdviceStart,
+  sanitizeDescriptionForPool,
+  sanitizeChefAdviceForPool,
 } from "./sanitizeAndRepair.ts";

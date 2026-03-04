@@ -5,8 +5,10 @@
 
 import {
   AGE_CONTEXTS,
+  AGE_CONTEXTS_SHORT,
   FREE_RECIPE_TEMPLATE,
   PREMIUM_RECIPE_TEMPLATE,
+  RECIPE_SYSTEM_RULES_V3,
   SOS_PROMPT_TEMPLATE,
   BALANCE_CHECK_TEMPLATE,
 } from "./prompts.ts";
@@ -205,6 +207,71 @@ function generateChatSystemPrompt(
 ): string {
   const template = isPremium ? PREMIUM_RECIPE_TEMPLATE : FREE_RECIPE_TEMPLATE;
   return applyPromptTemplate(template, memberData, targetIsFamily, allMembers, options);
+}
+
+export interface RecipePromptV3Options {
+  mealType?: string;
+  maxCookingTime?: number;
+  servings?: number;
+  /** Уже ограниченная строка (например до 5 тайтлов). Формат: "Не повторяй: title1, title2, ..." */
+  recentTitleKeysLine?: string;
+}
+
+/**
+ * Компактный system prompt для recipe-path (chat/recipe при isRecipeRequest).
+ * Не добавляет generationContextBlock. Контекст минимальный.
+ */
+export function generateRecipeSystemPromptV3(
+  memberData: MemberData | null | undefined,
+  isPremium: boolean,
+  targetIsFamily: boolean,
+  allMembers: MemberData[] = [],
+  options?: RecipePromptV3Options
+): string {
+  const primaryMember = (targetIsFamily && allMembers.length > 0)
+    ? findYoungestMember(allMembers)
+    : memberData;
+  const name = (primaryMember?.name ?? "").trim() || "член семьи";
+  const targetProfile = targetIsFamily ? "Семья" : name;
+  const rawMonths = primaryMember ? getAgeMonths(primaryMember) : 0;
+  const ageMonths = String(rawMonths === 999 ? 0 : rawMonths);
+  const ageCategory = getAgeCategory(rawMonths === 999 ? 0 : rawMonths);
+  const ageRule = AGE_CONTEXTS_SHORT[ageCategory] ?? AGE_CONTEXTS_SHORT.adult ?? "";
+
+  const allergiesSet = new Set<string>();
+  const dislikesSet = new Set<string>();
+  const likesSet = new Set<string>();
+  const members = targetIsFamily && allMembers.length > 0 ? allMembers : (primaryMember ? [primaryMember] : []);
+  members.forEach((m) => {
+    m.allergies?.forEach((a) => allergiesSet.add(a));
+    (m as MemberData).dislikes?.forEach((d) => d?.trim() && dislikesSet.add(d.trim()));
+    m.likes?.forEach((l) => l?.trim() && likesSet.add(l.trim()));
+  });
+  const allergiesExclude = allergiesSet.size > 0 ? `ИСКЛЮЧИТЬ (аллергия): ${Array.from(allergiesSet).join(", ")}.` : "";
+  const dislikesLine = dislikesSet.size > 0 ? `ИСКЛЮЧИТЬ (не любят): ${Array.from(dislikesSet).join(", ")}.` : "";
+  const likesLine = likesSet.size > 0 ? `SOFT likes: ${Array.from(likesSet).join(", ")}.` : "";
+
+  const mealType = options?.mealType?.trim() ?? "";
+  const maxCookingTime = options?.maxCookingTime != null && Number.isFinite(options.maxCookingTime) ? String(options.maxCookingTime) : "";
+  const servings = options?.servings != null && options.servings >= 1 ? String(options.servings) : "1";
+  const recentLine = options?.recentTitleKeysLine?.trim() ?? "";
+
+  const role = isPremium ? "Ты — Шеф-нутрициолог Mom Recipes (Premium)." : "Ты — ИИ Mom Recipes (Free). Выдай 1 рецепт.";
+  const contextLines: string[] = [
+    `Профиль: ${targetProfile}. ${ageRule} ВОЗРАСТ_МЕС: ${ageMonths}.`,
+    allergiesExclude,
+    dislikesLine,
+  ].filter(Boolean);
+  if (likesLine) contextLines.push(likesLine);
+  contextLines.push(`mealType: ${mealType || "—"}. Макс. мин: ${maxCookingTime || "—"}. Порций: ${servings}.`);
+  if (recentLine) contextLines.push(recentLine);
+
+  return `${role}
+
+[CONTEXT]
+${contextLines.join("\n")}
+
+${RECIPE_SYSTEM_RULES_V3.trim()}`;
 }
 
 export function getSystemPromptForType(

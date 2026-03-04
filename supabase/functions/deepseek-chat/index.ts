@@ -20,7 +20,7 @@ import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
 import { serializeError } from "../_shared/logging.ts";
 import { parseAndValidateRecipeJsonFromString, getRecipeOrFallback, getLastValidationError, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
-import { getSystemPromptForType, applyPromptTemplate, normalizeMemberData, findYoungestMember, getAgeMonths, type MemberData } from "./buildPrompt.ts";
+import { getSystemPromptForType, generateRecipeSystemPromptV3, applyPromptTemplate, normalizeMemberData, findYoungestMember, getAgeMonths, type MemberData } from "./buildPrompt.ts";
 import { checkRecipeRequestBlocked } from "./domain/policies/index.ts";
 import {
   getFamilyPromptMembers,
@@ -46,6 +46,8 @@ import {
   getMinimalRecipe,
   enforceDescription,
   enforceChefAdvice,
+  sanitizeDescriptionForPool,
+  sanitizeChefAdviceForPool,
 } from "./domain/recipe_io/index.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -55,8 +57,8 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Ограничение длины ответа рецепта: меньше токенов — быстрее генерация (целевой порядок 15–18 с вместо 20+). */
-const RECIPE_MAX_TOKENS = 1536;
+/** Ограничение длины ответа рецепта (в т.ч. для более длинного chefAdvice 220–520 символов). */
+const RECIPE_MAX_TOKENS = 1600;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
   infant: { min: 6, max: 12 },
@@ -84,6 +86,45 @@ function normalizeTitleKey(title: string): string {
     .replace(/[^\p{L}\p{N}\s]/gu, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Парсит строку количества в canonical amount + unit (g/ml) для БД. Без LLM. */
+function parseAmountToCanonical(amountText: string): { amount: number; unit: "g" | "ml" } | null {
+  const t = (amountText ?? "").trim();
+  if (!t.length) return null;
+  const numMatch = t.match(/[\d½¼¾⅓⅔⅛⅜⅝⅞]+|(\d+)\s*\/\s*(\d+)/);
+  const numStr = numMatch?.[0];
+  if (!numStr) return null;
+  let amount = 0;
+  if (numStr.includes("/")) {
+    const [a, b] = numStr.split("/").map((s) => parseInt(s.trim(), 10));
+    amount = Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? a / b : parseFloat(numStr) || 0;
+  } else {
+    amount = parseFloat(numStr.replace(",", ".")) || 0;
+  }
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const rest = t.replace(numStr, "").replace(/,/g, ".").trim().toLowerCase();
+  if (/\b(г|грамм|граммов)\b/.test(rest)) return { amount: Math.round(amount * 100) / 100, unit: "g" };
+  if (/\b(кг|килограмм)\b/.test(rest)) return { amount: Math.round(amount * 1000 * 100) / 100, unit: "g" };
+  if (/\b(мл|миллилитр|миллилитров)\b/.test(rest)) return { amount: Math.round(amount * 100) / 100, unit: "ml" };
+  if (/\b(л|литр|литров)\b/.test(rest)) return { amount: Math.round(amount * 1000 * 100) / 100, unit: "ml" };
+  if (/\b(ст\.?\s*л\.?|столовых?\s*ложек?)\b/.test(rest)) return { amount: Math.round(amount * 15 * 100) / 100, unit: "ml" };
+  if (/\b(ч\.?\s*л\.?|чайных?\s*ложек?)\b/.test(rest)) return { amount: Math.round(amount * 5 * 100) / 100, unit: "ml" };
+  if (/\bг\b/.test(rest) && !/мл|л\b/.test(rest)) return { amount: Math.round(amount * 100) / 100, unit: "g" };
+  if (/\bмл\b/.test(rest)) return { amount: Math.round(amount * 100) / 100, unit: "ml" };
+  return null;
+}
+
+/** Извлекает строку amount из displayText вида «Название — 30 г» или «30 г». */
+function amountFromDisplayText(displayText: string, name: string): string {
+  const d = (displayText ?? "").trim();
+  const dash = d.indexOf("—");
+  if (dash >= 0) {
+    const after = d.slice(dash + 1).trim();
+    if (after.length > 0) return after;
+  }
+  if (/^\d+\s*(г|мл|шт|ст\.|ч\.|кг|л)/i.test(d)) return d;
+  return "";
 }
 
 /** Последние N titleKey из chat_history по (user_id + memberId или family) за 14 дней для anti-duplicate. */
@@ -547,7 +588,8 @@ serve(async (req) => {
       const memberIdForHistory = targetIsFamily ? storageMemberId : (memberId && memberId !== "family" ? memberId : null);
       recentTitleKeys = await fetchRecentTitleKeys(supabase, userId, memberIdForHistory, targetIsFamily);
       if (recentTitleKeys.length > 0) {
-        recentTitleKeysLine = "Не повторять: " + recentTitleKeys.slice(0, 12).join(", ") + ".";
+        const maxTitles = 5;
+        recentTitleKeysLine = "Не повторяй: " + recentTitleKeys.slice(0, maxTitles).join(", ") + ".";
       }
     }
 
@@ -557,29 +599,37 @@ serve(async (req) => {
       isRecipeRequest && userMessage && isExplicitDishRequest(userMessage) && inferMealTypeFromQuery(userMessage)
         ? inferMealTypeFromQuery(userMessage)!
         : (reqMealType ?? "");
-    let systemPrompt =
-      getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
+    let systemPrompt = isRecipeRequest
+      ? generateRecipeSystemPromptV3(memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, {
+          mealType: mealTypeForPrompt,
+          maxCookingTime: reqMaxCookingTime,
+          servings,
+          recentTitleKeysLine,
+        })
+      : getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
 
     // Только если рецепт не запрашиваем — даём краткий ответ без рецепта (для soft теперь рецепт генерируем)
     if (type === "chat" && isPremiumUser && premiumRelevance === "soft" && !isRecipeRequest) {
       systemPrompt = "Ты эксперт по питанию Mom Recipes. Отвечай кратко по вопросу пользователя, без генерации рецепта.";
     }
 
-    // v2: age-based logic — категория возраста и правила питания в промпт (ageCategory уже вычислен выше для лога)
+    // Для non-recipe: добавляем age rules, tariff, NO_ARTICLES, GREETING. Для recipe-path (V3) — не аппендим, всё уже в RECIPE_SYSTEM_RULES_V3.
     const ageCategory = ageCategoryForLog;
-    const ageRulesV2 = getAgeCategoryRules(ageCategory);
-    systemPrompt =
-      systemPrompt +
-      "\n\n" +
-      ageRulesV2 +
-      "\n" +
-      tariffResult.tariffAppendix +
-      (tariffResult.familyBalanceNote ? "\n" + tariffResult.familyBalanceNote : "") +
-      "\n" +
-      NO_ARTICLES_RULE +
-      (!isRecipeRequest && type !== "sos_consultant" && type !== "balance_check" ? "\n" + GREETING_STYLE_RULE : "");
+    if (!isRecipeRequest) {
+      const ageRulesV2 = getAgeCategoryRules(ageCategory);
+      systemPrompt =
+        systemPrompt +
+        "\n\n" +
+        ageRulesV2 +
+        "\n" +
+        tariffResult.tariffAppendix +
+        (tariffResult.familyBalanceNote ? "\n" + tariffResult.familyBalanceNote : "") +
+        "\n" +
+        NO_ARTICLES_RULE +
+        (type !== "sos_consultant" && type !== "balance_check" ? "\n" + GREETING_STYLE_RULE : "");
+    }
 
-    if ((type === "chat" || type === "recipe") && targetIsFamily) {
+    if ((type === "chat" || type === "recipe") && targetIsFamily && !isRecipeRequest) {
       systemPrompt += "\n\n" + applyPromptTemplate(
         FAMILY_RECIPE_INSTRUCTION,
         memberDataForPrompt,
@@ -589,15 +639,16 @@ serve(async (req) => {
       if (applyKidFilter) {
         systemPrompt += "\n\n" + KID_SAFETY_1_3_INSTRUCTION;
       }
-      const likesForPrompt = memberDataForPrompt?.likes ?? [];
-      if (isRecipeRequest && likesForPrompt.length > 0 && shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type })) {
-        const likesLine = buildLikesLine(likesForPrompt);
-        if (likesLine) systemPrompt += "\n\n" + likesLine;
-      }
-    } else if ((type === "chat" || type === "recipe") && isRecipeRequest && memberDataForPrompt?.likes?.length) {
-      // Обычный профиль: в ~20% запросов явно добавляем приоритет лайков (как для Семьи), чтобы не перебирать с любимым ингредиентом
-      if (shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type })) {
-        const likesLine = buildLikesLineForProfile(memberDataForPrompt.name ?? "профиль", memberDataForPrompt.likes ?? []);
+    }
+
+    // Likes: для recipe-path — короткая строка "LIKES (soft): …"; для non-recipe — полная (buildLikesLine/buildLikesLineForProfile)
+    const likesForPrompt = memberDataForPrompt?.likes ?? [];
+    if ((type === "chat" || type === "recipe") && likesForPrompt.length > 0 && shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type })) {
+      if (isRecipeRequest) {
+        const joined = likesForPrompt.filter((l) => typeof l === "string" && l.trim()).map((l) => l.trim()).join(", ");
+        if (joined) systemPrompt += "\n\nLIKES (soft): " + joined + ".";
+      } else {
+        const likesLine = targetIsFamily ? buildLikesLine(likesForPrompt) : buildLikesLineForProfile(memberDataForPrompt?.name ?? "профиль", likesForPrompt);
         if (likesLine) systemPrompt += "\n\n" + likesLine;
       }
     }
@@ -606,7 +657,8 @@ serve(async (req) => {
     if (extraSuffix) {
       systemPrompt += "\n\n" + extraSuffix;
     }
-    if (isRecipeRequest && (type === "chat" || type === "recipe")) {
+    // Разнообразие стиля — только для non-recipe; для recipe-path лишние токены не добавляем
+    if (!isRecipeRequest && (type === "chat" || type === "recipe")) {
       systemPrompt += "\n\nРазнообразь стиль описаний. Не используй одни и те же формулировки в нескольких подряд ответах.";
     }
     logPerf("system_prompt", tSystemPromptStart, requestId);
@@ -833,6 +885,10 @@ serve(async (req) => {
         : type === "balance_check" ? "balance_check"
         : (type === "chat" || type === "recipe") ? "chat_recipe"
         : "other";
+      // Лог для сравнения input_tokens до/после сокращения промпта (recipe-path V3)
+      if (actionType === "chat_recipe") {
+        console.log(JSON.stringify({ tag: "CHAT_RECIPE_INPUT_TOKENS", requestId, input_tokens: inputTokens, output_tokens: outputTokens }));
+      }
       await supabase.from("token_usage_log").insert({
         user_id: userId,
         action_type: actionType,
@@ -854,8 +910,10 @@ serve(async (req) => {
         : undefined;
       const steps = Array.isArray(recipe.steps) ? recipe.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean) : [];
       const recipeIdSeed = title + (keyIngredient ?? "") + (steps[0] ?? "");
-      (recipe as Record<string, unknown>).description = enforceDescription(descRaw, { title, keyIngredient, recipeIdSeed });
-      (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceRaw, {
+      const descForPool = sanitizeDescriptionForPool(descRaw, title, recipeIdSeed);
+      const adviceForPool = sanitizeChefAdviceForPool(adviceRaw, recipeIdSeed);
+      (recipe as Record<string, unknown>).description = enforceDescription(descForPool, { title, keyIngredient, recipeIdSeed });
+      (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceForPool, {
         title,
         ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : undefined,
         steps,
@@ -895,14 +953,11 @@ serve(async (req) => {
         );
       }
       const validatedRecipe = responseRecipes[0] as RecipeJson;
-      const status = subscriptionStatus as string;
-      let chefAdviceToSave: string | null = validatedRecipe.chefAdvice ?? null;
-      if (status === "free") chefAdviceToSave = null;
+      const chefAdviceToSave: string | null = validatedRecipe.chefAdvice ?? null;
       safeLog(JSON.stringify({
         tag: "ADVICE_GATE",
         requestId,
-        subStatus: status,
-        savedChefAdvice: chefAdviceToSave != null && chefAdviceToSave.length > 0,
+        savedChefAdvice: chefAdviceToSave != null && chefAdviceToSave.trim().length > 0,
       }));
       const supabaseUser = SUPABASE_URL && SUPABASE_ANON_KEY && authHeader
         ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -923,23 +978,43 @@ serve(async (req) => {
                 ])
             : [{ instruction: "Шаг 1", step_number: 1 }, { instruction: "Шаг 2", step_number: 2 }, { instruction: "Шаг 3", step_number: 3 }];
           const rawIngredients = Array.isArray(validatedRecipe.ingredients) ? validatedRecipe.ingredients : [];
+          type IngLike = { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null };
+          const buildOneIngredient = (ing: string | IngLike, idx: number) => {
+            const nameStr = typeof ing === "string" ? ing : (ing?.name ?? "Ингредиент");
+            const displayText = typeof ing === "string" ? ing : (ing?.displayText ?? (ing?.amount ? `${ing.name ?? ""} — ${ing.amount}` : ing.name ?? ""));
+            const rawAmount = typeof ing === "object" && ing?.amount != null ? String(ing.amount) : "";
+            const amountStr = rawAmount.trim() || amountFromDisplayText(displayText, nameStr);
+            const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
+            const parsed = canonical ?? (amountStr ? parseAmountToCanonical(amountStr) : null);
+            const numericAmountOnly = parsed?.amount != null ? String(parsed.amount) : (amountStr && /^\d+\.?\d*$/.test(amountStr.trim()) ? amountStr.trim() : null);
+            return {
+              name: nameStr,
+              amount: numericAmountOnly,
+              display_text: displayText || (amountStr ? `${nameStr} — ${amountStr}` : nameStr),
+              canonical_amount: parsed?.amount ?? null,
+              canonical_unit: parsed?.unit ?? null,
+            };
+          };
           const ingredientsPayload = rawIngredients.length >= 3
-            ? rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
-                const nameStr = typeof ing === "string" ? ing : ing.name;
-                const displayText = typeof ing === "string" ? ing : (ing.displayText ?? ing.name);
-                const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
-                return { name: nameStr, display_text: displayText, canonical_amount: canonical?.amount ?? null, canonical_unit: canonical?.unit ?? null };
-              })
+            ? rawIngredients.map((ing: IngLike, idx: number) => buildOneIngredient(ing, idx))
             : [
-                ...rawIngredients.map((ing: { name: string; displayText?: string; canonical?: { amount: number; unit: string } | null }) => {
-                  const nameStr = typeof ing === "string" ? ing : ing.name;
-                  const displayText = typeof ing === "string" ? ing : (ing.displayText ?? ing.name);
-                  const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
-                  return { name: nameStr, display_text: displayText, canonical_amount: canonical?.amount ?? null, canonical_unit: canonical?.unit ?? null };
-                }),
-                ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({ name: `Ингредиент ${rawIngredients.length + i + 1}`, display_text: null, canonical_amount: null, canonical_unit: null })),
+                ...rawIngredients.map((ing: IngLike, idx: number) => buildOneIngredient(ing, idx)),
+                ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({
+                  name: `Ингредиент ${rawIngredients.length + i + 1}`,
+                  amount: null,
+                  display_text: null,
+                  canonical_amount: null,
+                  canonical_unit: null,
+                })),
               ];
           const ageRange = AGE_RANGE_BY_CATEGORY[ageCategoryForLog] ?? AGE_RANGE_BY_CATEGORY.adult;
+          const minAge = Number.isFinite(ageRange?.min) ? ageRange!.min : 6;
+          const maxAge = Number.isFinite(ageRange?.max) ? ageRange!.max : 36;
+          const cookingMinutes =
+            typeof validatedRecipe.cookingTimeMinutes === "number" ? validatedRecipe.cookingTimeMinutes
+            : typeof (validatedRecipe as { cookingTime?: number }).cookingTime === "number" ? (validatedRecipe as { cookingTime: number }).cookingTime
+            : null;
+          const n = validatedRecipe.nutrition ?? null;
           const baseTags = (validatedRecipe as { tags?: string[] }).tags ?? [];
           const recipeTags = targetIsFamily ? [...baseTags, "family", ...(applyKidFilter ? ["kid_1_3_safe"] : [])] : baseTags;
           const payload = canonicalizeRecipePayload({
@@ -951,17 +1026,46 @@ serve(async (req) => {
             tags: recipeTags.length > 0 ? recipeTags : null,
             title: validatedRecipe.title ?? "Рецепт",
             description: validatedRecipe.description ?? null,
-            cooking_time_minutes: validatedRecipe.cookingTimeMinutes ?? null,
+            cooking_time_minutes: cookingMinutes,
             chef_advice: chefAdviceToSave,
             advice: null,
             steps: stepsPayload,
             ingredients: ingredientsPayload,
             sourceTag: "chat",
             servings: (validatedRecipe as { servings?: number }).servings ?? 1,
-            nutrition: validatedRecipe.nutrition ?? null,
-            min_age_months: ageRange.min,
-            max_age_months: ageRange.max,
+            nutrition: n,
+            min_age_months: minAge,
+            max_age_months: maxAge,
           });
+          console.log(JSON.stringify({
+            tag: "RECIPE_SAVE_PAYLOAD_DEBUG",
+            requestId,
+            subscriptionStatus,
+            memberIdForDb: memberIdForRecipe,
+            ageCategoryForLog,
+            ageRange: { min: minAge, max: maxAge },
+            cooking_time_minutes: (payload as Record<string, unknown>).cooking_time_minutes,
+            min_age_months: (payload as Record<string, unknown>).min_age_months,
+            max_age_months: (payload as Record<string, unknown>).max_age_months,
+            calories: (payload as Record<string, unknown>).calories ?? n?.kcal_per_serving,
+            proteins: (payload as Record<string, unknown>).proteins ?? n?.protein_g_per_serving,
+            fats: (payload as Record<string, unknown>).fats ?? n?.fat_g_per_serving,
+            carbs: (payload as Record<string, unknown>).carbs ?? n?.carbs_g_per_serving,
+            nutrition_present: !!n,
+            ing0: ingredientsPayload[0] ? { display_text: (ingredientsPayload[0] as Record<string, unknown>).display_text, canonical_amount: (ingredientsPayload[0] as Record<string, unknown>).canonical_amount, canonical_unit: (ingredientsPayload[0] as Record<string, unknown>).canonical_unit } : null,
+            ing1: ingredientsPayload[1] ? { display_text: (ingredientsPayload[1] as Record<string, unknown>).display_text, canonical_amount: (ingredientsPayload[1] as Record<string, unknown>).canonical_amount, canonical_unit: (ingredientsPayload[1] as Record<string, unknown>).canonical_unit } : null,
+          }));
+          const nullFields: string[] = [];
+          if ((payload as Record<string, unknown>).cooking_time_minutes == null) nullFields.push("cooking_time_minutes");
+          if ((payload as Record<string, unknown>).min_age_months == null) nullFields.push("min_age_months");
+          if ((payload as Record<string, unknown>).max_age_months == null) nullFields.push("max_age_months");
+          if ((payload as Record<string, unknown>).calories == null) nullFields.push("calories");
+          if ((payload as Record<string, unknown>).proteins == null) nullFields.push("proteins");
+          if ((payload as Record<string, unknown>).fats == null) nullFields.push("fats");
+          if ((payload as Record<string, unknown>).carbs == null) nullFields.push("carbs");
+          if (nullFields.length > 0) {
+            console.log(JSON.stringify({ tag: "RECIPE_SAVE_NULL_FIELDS", requestId, nullFields }));
+          }
           const { data: recipeId, error: rpcErr } = await supabaseUser.rpc("create_recipe_with_steps", { payload });
           if (rpcErr) throw rpcErr;
           savedRecipeId = recipeId ?? null;

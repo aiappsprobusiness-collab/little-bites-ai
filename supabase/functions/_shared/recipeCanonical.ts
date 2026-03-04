@@ -141,20 +141,26 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
   }));
 
   const ingredients = Array.isArray(rawIngredients) ? rawIngredients : [];
+  const numericOnly = (v: unknown): string | null => {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s !== "" && /^\d+\.?\d*$/.test(s) ? s : null;
+  };
   const ingredientsPayload = ingredients.map((ing, idx) => {
     const name = typeof ing.name === "string" ? ing.name : "";
-    const amount = ing.amount;
+    const amountRaw = ing.amount;
+    const amount = numericOnly(amountRaw);
     const displayText = ing.display_text;
     const display_text =
       displayText != null && displayText !== ""
         ? displayText
-        : amount != null && amount !== ""
-          ? `${name} — ${amount}`
+        : amountRaw != null && String(amountRaw).trim() !== ""
+          ? `${name} — ${amountRaw}`
           : name;
     return {
       name,
       display_text: display_text || name,
-      amount: amount != null && amount !== "" ? amount : null,
+      amount,
       unit: ing.unit ?? null,
       substitute: ing.substitute ?? null,
       canonical_amount: ing.canonical_amount ?? null,
@@ -180,6 +186,13 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
   const fats = rawNutrition != null ? rawNutrition.fat_g_per_serving : null;
   const carbs = rawNutrition != null ? rawNutrition.carbs_g_per_serving : null;
 
+  const chefAdviceVal = chef_advice != null && String(chef_advice).trim() !== "" ? String(chef_advice).trim() : null;
+  const adviceVal = advice != null && String(advice).trim() !== "" ? String(advice).trim() : null;
+  const needsAdvice = (safeSource === "chat_ai" || safeSource === "week_ai" || safeSource === "manual")
+    && !chefAdviceVal && !adviceVal;
+  const finalChefAdvice = chefAdviceVal ?? (needsAdvice ? "Подавайте тёплым." : null);
+  const finalAdvice = adviceVal ?? null;
+
   return {
     user_id,
     member_id: member_id ?? null,
@@ -190,8 +203,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     title: title || "Рецепт",
     description: description ?? "",
     cooking_time_minutes: cooking_time_minutes ?? null,
-    chef_advice: chef_advice ?? null,
-    advice: advice ?? null,
+    chef_advice: finalChefAdvice,
+    advice: finalAdvice ?? null,
     steps: stepsPayload,
     ingredients: ingredientsPayload,
     servings_base,

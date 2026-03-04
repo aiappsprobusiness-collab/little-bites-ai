@@ -62,7 +62,7 @@ serve(async (req) => {
   const recipeId = shareRow.recipe_id as string;
   const { data: recipe, error: recipeError } = await supabase
     .from("recipes")
-    .select("title, description, image_url")
+    .select("title, description")
     .eq("id", recipeId)
     .limit(1)
     .maybeSingle();
@@ -72,16 +72,12 @@ serve(async (req) => {
     recipe && typeof recipe.description === "string" && recipe.description.trim()
       ? recipe.description.trim().slice(0, 200)
       : "Рецепт из приложения Mom Recipes";
-  const imageUrl =
-    recipe && typeof recipe.image_url === "string" && recipe.image_url.trim()
-      ? recipe.image_url.trim()
-      : "";
   const canonicalUrl = `${BASE_URL}/r/${encodeURIComponent(ref)}`;
   const redirectUrl = `${BASE_URL}/recipe/${recipeId}`;
 
   const ogTitle = escapeHtml(title);
   const ogDesc = escapeHtml(description);
-  const ogImage = imageUrl ? escapeHtml(imageUrl) : "";
+  const ogImage = "";
   const ogUrl = escapeHtml(canonicalUrl);
 
   const metaTags = [

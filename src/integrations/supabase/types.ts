@@ -296,7 +296,6 @@ export type Database = {
           description: string | null
           fats: number | null
           id: string
-          image_url: string | null
           is_favorite: boolean | null
           is_premium_feature: boolean | null
           macros: Json | null
@@ -321,7 +320,6 @@ export type Database = {
           description?: string | null
           fats?: number | null
           id?: string
-          image_url?: string | null
           is_favorite?: boolean | null
           is_premium_feature?: boolean | null
           macros?: Json | null
@@ -346,7 +344,6 @@ export type Database = {
           description?: string | null
           fats?: number | null
           id?: string
-          image_url?: string | null
           is_favorite?: boolean | null
           is_premium_feature?: boolean | null
           macros?: Json | null

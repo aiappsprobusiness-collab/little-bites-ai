@@ -123,7 +123,7 @@ function normalizeNutrition(raw: unknown): { kcal_per_serving: number; protein_g
   };
 }
 
-/** Contract: title, description (1–2 sentences, max 150), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (1–3 sentences, max 350), nutrition optional. */
+/** Contract: title, description (1–2 sentences, max 150), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (2–3 sentences, max 520), nutrition optional. */
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(150, "description: 1–2 sentences, max 150 characters"),
@@ -131,7 +131,7 @@ export const RecipeJsonSchema = z.object({
   cookingTimeMinutes: z.number().int().min(1).max(240).optional(),
   ingredients: z.array(IngredientSchema).min(3, "at least 3 ingredients required").max(10),
   steps: z.array(z.string().min(1).max(200)).min(1).max(10),
-  chefAdvice: z.string().max(350, "chefAdvice: 1–3 sentences, max 350 characters").nullable().optional(),
+  chefAdvice: z.string().max(520, "chefAdvice: 2–3 sentences, max 520 characters").nullable().optional(),
   mealType: z.enum(["breakfast", "lunch", "snack", "dinner"]).optional(),
   servings: z.number().int().min(1).max(20).optional(),
   nutrition: NutritionSchema,
@@ -258,7 +258,7 @@ export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJso
         .filter((s) => s.length > 0)
         .slice(0, 10),
       chefAdvice: (p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText) != null
-        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 350)
+        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 520)
         : null,
       mealType: p.mealType ?? undefined,
       servings,

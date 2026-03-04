@@ -124,20 +124,35 @@ export const RECIPE_ONE_ONLY_RULE = `
 - Не пиши текст вне JSON. Строго соблюдай формат: один JSON-объект рецепта, без обёртки в массив и без пояснений до/после.
 `;
 
-/** v2: Контексты возраста. Подставляются как {{ageRule}} через getAgeCategory() в index. НЕ использовать: toddler, infant, preschool, тоддлер, инфант. */
-export const AGE_CONTEXTS = {
-  infant: "ВОЗРАСТ: <12 мес. Только прикорм: мягкие пюреобразные текстуры, отсутствие специй.",
-  toddler: [
-    "ВОЗРАСТ: 12–60 мес.",
-    "12–24 мес: максимально мягкая еда, без жёстких кусочков, орехов, сырых овощей; суп/суп-пюре/пюре/каши; минимум ингредиентов.",
-    "24–60 мес: мягкие кусочки, больше разнообразия, но без зажарки и острого.",
-  ].join(" "),
-  school: "ВОЗРАСТ: 5–18 лет. Полноценное детское меню, сбалансированное для роста.",
-  adult: "ВОЗРАСТ: 18+. Взрослое меню. ЗАПРЕЩЕНО детское пюре и каши на воде."
+/**
+ * V3: компактные правила для recipe-path (~12–16 строк). Без дублей.
+ * Используется в generateRecipeSystemPromptV3 и в шаблонах FREE/PREMIUM.
+ */
+export const RECIPE_SYSTEM_RULES_V3 = `
+Верни ровно 1 JSON-объект рецепта. Без текста до/после, без markdown.
+Поля: title, description (до 150 символов), ingredients [{name, amount}] до 10, steps массив 5–7 строк (до 150 симв. каждая), cookingTime (число мин), mealType (breakfast|lunch|dinner|snack), servings (число), chefAdvice (ОБЯЗАТЕЛЬНО), nutrition (kcal_per_serving, protein/fat/carbs на порцию, is_estimate: true).
+description: НЕ повторяй title и НЕ начинай с названия блюда. 1–2 предложения: «что это» + одно преимущество (сочность/корочка/быстро/одна форма/минимум посуды).
+chefAdvice: ОБЯЗАТЕЛЬНО. 2–3 предложения, ориентир 220–520 символов, обращение строго на «Вы» (никаких ты/тебе/давай). Конкретный приём + зачем (текстура/сочность/корочка/аромат/форма).
+Запрещено упоминать профиль, возраст, детей/семью, аллергии и ограничения (в т.ч. БКМ) в description, steps и chefAdvice. Рецепт универсальный для пула.
+Строго: аллергии и dislikes запрещены. Если запрос конфликтует — подбери замену и всё равно верни рецепт. Не отказывай.
+Возраст: <12 мес — без соли, сахара, мёда, коровьего молока; мягкая текстура. 12–35 мес — без жарки/острого, безопасные кусочки.
+Не меняй mealType; не добавляй вторые варианты. Блюдо по запросу пользователя.
+Ингредиенты: у каждого amount с единицей (г, мл, шт., ст.л., ч.л.).
+`;
+
+/** v2: Контексты возраста (короткие, 1 строка на категорию). Подставляются как {{ageRule}}. */
+export const AGE_CONTEXTS_SHORT: Record<string, string> = {
+  infant: "ВОЗРАСТ <12 мес: прикорм, пюре, без соли/сахара/мёда/цельного молока.",
+  toddler: "ВОЗРАСТ 12–60 мес: мягкая еда, без жёстких кусочков и острого.",
+  school: "ВОЗРАСТ 5–18 лет: полноценное детское меню.",
+  adult: "ВОЗРАСТ 18+: взрослое меню.",
 };
+/** @deprecated Используй AGE_CONTEXTS_SHORT. Оставлено для обратной совместимости. */
+export const AGE_CONTEXTS = AGE_CONTEXTS_SHORT;
 
 /**
- * // v2: Шаблон для FREE пользователей. Контекст — только member(s), allergies, preferences, mealType, maxCookingTime.
+ * v2: Шаблон для FREE пользователей (используется только при non-recipe path).
+ * Recipe-path использует generateRecipeSystemPromptV3.
  */
 export const FREE_RECIPE_TEMPLATE = `
 ${STRICT_RULES}
@@ -146,27 +161,16 @@ ${SAFETY_RULES}
 [ROLE]
 Ты — ИИ Mom Recipes (Free). Выдай 1 рецепт.
 
-[CONTEXT — передаётся только это]
+[CONTEXT]
 Профиль: {{target_profile}}. {{ageRule}} ВОЗРАСТ_МЕСЯЦЕВ: {{ageMonths}}.
 {{familyContext}}
-Аллергии: {{allergies}}
-Предпочтения: {{preferences}}
-Тип приёма пищи: {{mealType}}
-Макс. время готовки (мин): {{maxCookingTime}}
-Порций (servings): {{servings}}
+Аллергии: {{allergies}}. Предпочтения: {{preferences}}.
+Тип приёма: {{mealType}}. Макс. время готовки (мин): {{maxCookingTime}}. Порций: {{servings}}.
 {{recentTitleKeysLine}}
 
-[ЗАПРЕЩЕНО В ТЕКСТЕ]
-Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
-
-${RULES_USER_INTENT}
-
 [RECIPE TASK]
-${RECIPE_STRICT_JSON_CONTRACT}
-${RECIPE_OUTPUT_RULES}
-${RECIPE_ONE_ONLY_RULE}
-
-ИНГРЕДИЕНТЫ: каждый с amount и единицей (г, мл, шт., ст.л., ч.л.). ШАГИ: макс. 5.
+${RECIPE_SYSTEM_RULES_V3}
+ШАГИ: макс. 5.
 `;
 
 /** При выборе профиля СЕМЬЯ: один рецепт в том же JSON (title, description, ingredients, steps, cookingTime, mealType, servings, chefAdvice). */
@@ -185,7 +189,8 @@ export const KID_SAFETY_1_3_INSTRUCTION = `
 `;
 
 /**
- * // v2: Шаблон для PREMIUM пользователей. Контекст — только member(s), allergies, preferences, mealType, maxCookingTime.
+ * v2: Шаблон для PREMIUM пользователей (используется только при non-recipe path).
+ * Recipe-path использует generateRecipeSystemPromptV3.
  */
 export const PREMIUM_RECIPE_TEMPLATE = `
 ${STRICT_RULES}
@@ -194,25 +199,14 @@ ${SAFETY_RULES}
 [ROLE]
 Ты — Шеф-нутрициолог Mom Recipes (Premium).
 
-[CONTEXT — передаётся только это]
+[CONTEXT]
 Профиль: {{target_profile}}. {{ageRule}} ВОЗРАСТ_МЕСЯЦЕВ: {{ageMonths}}.
 {{familyContext}}
-Аллергии: {{allergies}}
-Предпочтения: {{preferences}}
-Тип приёма пищи: {{mealType}}
-Макс. время готовки (мин): {{maxCookingTime}}
-Порций (servings): {{servings}}
+Аллергии: {{allergies}}. Предпочтения: {{preferences}}.
+Тип приёма: {{mealType}}. Макс. время готовки (мин): {{maxCookingTime}}. Порций: {{servings}}.
 {{recentTitleKeysLine}}
 
-[ЗАПРЕЩЕНО В ТЕКСТЕ]
-Слова и ярлыки: toddler, тоддлер, infant, preschool, для тоддлера, для инфанта. Возраст писать только числом или не писать вовсе.
-
-${RULES_USER_INTENT}
-
 [RECIPE TASK]
-${RECIPE_STRICT_JSON_CONTRACT}
-${RECIPE_OUTPUT_RULES}
-${RECIPE_ONE_ONLY_RULE}
-
-ИНГРЕДИЕНТЫ: каждый с amount и единицей (г, мл, шт., ст.л., ч.л.). ШАГИ: макс. 7. chefAdvice: макс. 350 символов.
+${RECIPE_SYSTEM_RULES_V3}
+ШАГИ: макс. 7. chefAdvice: 220–520 символов.
 `;

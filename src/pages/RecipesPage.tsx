@@ -26,7 +26,7 @@ export default function RecipesPage() {
   const formattedRecipes = recipesWithoutChat.map((recipe) => ({
     id: recipe.id,
     title: recipe.title,
-    image: recipe.image_url || "https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?w=400&h=300&fit=crop",
+    image: "https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?w=400&h=300&fit=crop",
     cookTime: recipe.cooking_time_minutes ? `${recipe.cooking_time_minutes} мин` : "—",
     childName: selectedMember?.name || "—",
     rating: recipe.rating ? recipe.rating / 1 : undefined,
