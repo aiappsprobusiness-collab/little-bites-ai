@@ -22,6 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
 import { useToast } from "@/hooks/use-toast";
+import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
+import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 
 const allergyOptions = [
   "Молоко", "Яйца", "Глютен", "Орехи", "Соя", "Рыба", "Мед", "Цитрусы"
@@ -48,7 +50,7 @@ export default function HomePage() {
 
     try {
       const ageMonths = birthDateToAgeMonths(newMemberBirthDate);
-      await createMember({
+      const newMember = await createMember({
         name: newMemberName.trim(),
         type: "child",
         age_months: ageMonths || null,
@@ -62,6 +64,20 @@ export default function HomePage() {
       setNewMemberName("");
       setNewMemberBirthDate("");
       setNewMemberAllergies([]);
+
+      if (FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
+        try {
+          await startFillDay(newMember.id);
+          setJustCreatedMemberId(newMember.id);
+          navigate(getPlanUrlForMember(newMember.id));
+        } catch (fillError) {
+          toast({
+            variant: "destructive",
+            title: "Ошибка",
+            description: "Не удалось подобрать меню. Попробуйте снова.",
+          });
+        }
+      }
     } catch (error: any) {
       toast({
         variant: "destructive",

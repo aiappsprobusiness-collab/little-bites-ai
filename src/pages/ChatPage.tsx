@@ -148,7 +148,7 @@ export default function ChatPage() {
   const prefillFromQuery = searchParams.get("prefill");
   const { toast } = useToast();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
-  const { canGenerate, canSendAi, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining, aiDailyLimit } = useSubscription();
+  const { canGenerate, canSendAi, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining, aiDailyLimit, hasAccess } = useSubscription();
   const isFree = subscriptionStatus === "free";
   const { chat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage, archiveChat } = useChatHistory(selectedMemberId ?? null);
@@ -556,6 +556,18 @@ export default function ChatPage() {
       return;
     }
 
+    if (mode === "recipes" && !hasAccess && usedToday >= 1) {
+      const adProvider = (await import("@/services/ads/StubRewardedAdProvider").then((m) => m.getRewardedAdProvider()));
+      if (adProvider.isAvailable()) {
+        try {
+          await adProvider.show();
+        } catch {
+          sendInProgressRef.current = false;
+          return;
+        }
+      }
+    }
+
     if (mode === "recipes") trackUsageEvent("chat_generate_click");
     setInput("");
     userNearBottomRef.current = true;
@@ -916,7 +928,7 @@ export default function ChatPage() {
     } finally {
       sendInProgressRef.current = false;
     }
-  }, [input, isChatting, canGenerate, isPremium, messages, selectedMemberId, selectedMember, members, memberIdForSave, chat, saveRecipesFromChat, saveChat, toast, markHintsSeen]);
+  }, [input, isChatting, canGenerate, isPremium, hasAccess, usedToday, messages, selectedMemberId, selectedMember, members, memberIdForSave, chat, saveRecipesFromChat, saveChat, toast, markHintsSeen]);
 
   // Обработка предзаполненного сообщения из state (ScanPage — только для recipes)
   // В help используем только query prefill (?prefill=...)

@@ -17,6 +17,7 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import { useAppStore } from "@/store/useAppStore";
+import { normalizeAllergyToken } from "@/utils/allergyAliases";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
 import {
   Dialog,
@@ -31,6 +32,7 @@ import { PrivacyContent } from "@/components/legal/PrivacyContent";
 import { SubscriptionContent } from "@/components/legal/SubscriptionContent";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
@@ -38,6 +40,19 @@ import { ProfileHeaderCard } from "@/components/profile/ProfileHeaderCard";
 import { FamilyMemberCard } from "@/components/profile/FamilyMemberCard";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
+
+const DINNER_REMINDER_STORAGE_KEY = "dinner_reminder_enabled";
+
+function getDinnerReminderEnabled(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  return localStorage.getItem(DINNER_REMINDER_STORAGE_KEY) === "1";
+}
+
+function setDinnerReminderEnabled(enabled: boolean): void {
+  if (typeof localStorage === "undefined") return;
+  if (enabled) localStorage.setItem(DINNER_REMINDER_STORAGE_KEY, "1");
+  else localStorage.removeItem(DINNER_REMINDER_STORAGE_KEY);
+}
 
 function memberAvatar(_member: MembersRow, index: number): string {
   return VEGETABLE_EMOJIS[index % VEGETABLE_EMOJIS.length];
@@ -80,6 +95,12 @@ export default function ProfilePage() {
   const [showLegalModal, setShowLegalModal] = useState(false);
   const [editName, setEditName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
+  const [dinnerReminderEnabled, setDinnerReminderEnabledState] = useState(getDinnerReminderEnabled);
+
+  const handleDinnerReminderChange = (checked: boolean) => {
+    setDinnerReminderEnabledState(checked);
+    setDinnerReminderEnabled(checked);
+  };
 
   const displayName =
     (user?.user_metadata?.display_name as string)?.trim() ||
@@ -210,7 +231,7 @@ export default function ProfilePage() {
                 const allChips: { type: "like" | "dislike" | "allergy"; label: string }[] = [
                   ...(hasPreferences ? likesArr.map((l) => ({ type: "like" as const, label: l })) : []),
                   ...(hasPreferences ? dislikesArr.map((d) => ({ type: "dislike" as const, label: d })) : []),
-                  ...allergiesArr.map((a) => ({ type: "allergy" as const, label: a })),
+                  ...allergiesArr.map((a) => ({ type: "allergy" as const, label: normalizeAllergyToken(a) })),
                 ];
                 const visibleChips = allChips.slice(0, maxVisible);
                 const overflowCount = allChips.length - maxVisible;
@@ -260,14 +281,14 @@ export default function ProfilePage() {
           {/* Утилиты: одна карточка, строки 48–52px, мелкие иконки и шевроны */}
           <section className="flex flex-col gap-2">
             <div className="rounded-2xl border border-border/70 bg-card overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
-              <button
-                type="button"
-                className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm border-b border-border/20"
-              >
+              <div className="w-full flex items-center gap-3 px-4 min-h-[50px] border-b border-border/20">
                 <Bell className="h-[18px] w-[18px] text-muted-foreground/80 shrink-0" strokeWidth={2} />
-                <span className="text-foreground">Уведомления</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" strokeWidth={2} />
-              </button>
+                <span className="text-foreground text-sm flex-1">Напоминать про ужин</span>
+                <Switch
+                  checked={dinnerReminderEnabled}
+                  onCheckedChange={handleDinnerReminderChange}
+                />
+              </div>
               <a
                 href="mailto:momrecipesai@gmail.com"
                 className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm border-b border-border/20"

@@ -15,7 +15,7 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { usePlanGenerationJob, getStoredJobId, setStoredJobId } from "@/hooks/usePlanGenerationJob";
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { PlanModeHint } from "@/components/plan/PlanModeHint";
@@ -26,7 +26,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { normalizeTitleKey } from "@/utils/recipePool";
-import { Check, Trash2, MoreVertical } from "lucide-react";
+import { Check, Trash2, MoreVertical, Share2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +60,10 @@ function isPerf(): boolean {
 import { applyReplaceSlotToPlanCache } from "@/utils/planCache";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { consumeJustCreatedMemberId } from "@/services/planFill";
+import { FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
+import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/WeekPreviewPaywallSheet";
+import { createSharedPlan } from "@/services/sharedPlan";
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -158,7 +162,16 @@ export default function MealPlanPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { selectedMember, members, selectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
+  const { selectedMember, members, selectedMemberId, setSelectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
+  const [searchParams] = useSearchParams();
+  const [justCreatedMemberId, setJustCreatedMemberIdState] = useState<string | null>(null);
+  const [showWeekPreviewSheet, setShowWeekPreviewSheet] = useState(false);
+
+  useEffect(() => {
+    const id = consumeJustCreatedMemberId();
+    if (id) setJustCreatedMemberIdState(id);
+  }, []);
+
   const { hasAccess, subscriptionStatus, planInitialized, setPlanInitialized } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
@@ -351,6 +364,20 @@ export default function MealPlanPage() {
     }
   }, [startKey, mutedWeekKey]);
 
+  // Синхронизация URL ?memberId= & ?date= при заходе на План (редирект после создания члена семьи)
+  useEffect(() => {
+    if (location.pathname !== "/meal-plan" || members.length === 0) return;
+    const urlMemberId = searchParams.get("memberId");
+    const urlDate = searchParams.get("date");
+    if (urlMemberId && members.some((m) => m.id === urlMemberId)) {
+      setSelectedMemberId(urlMemberId);
+    }
+    if (urlDate && rollingDates.length > 0) {
+      const idx = rollingDates.findIndex((d) => formatLocalDate(d) === urlDate);
+      if (idx >= 0) setSelectedDay(idx);
+    }
+  }, [location.pathname, searchParams, members, rollingDates, setSelectedMemberId]);
+
   const { replaceMealSlotAuto, getFreeSwapUsedForDay } = useReplaceMealSlot(
     memberIdForPlan,
     { startKey, endKey, hasAccess }
@@ -423,6 +450,20 @@ export default function MealPlanPage() {
   const isAdultNoRecipesEmpty =
     isEmptyDay && !!planJob?.status && planJob.status === "done" && (planJob.error_text ?? "").includes("взрослого профиля");
 
+  const planReadyToastShownRef = useRef(false);
+  useEffect(() => {
+    if (!justCreatedMemberId || planReadyToastShownRef.current) return;
+    if (isLoading || isFetching) return;
+    planReadyToastShownRef.current = true;
+    setJustCreatedMemberIdState(null);
+    const t = toast({
+      title: "План питания на сегодня готов 🍽",
+      description: "Мы подобрали меню на сегодня",
+    });
+    const timeoutId = setTimeout(() => t.dismiss(), 2000);
+    return () => clearTimeout(timeoutId);
+  }, [justCreatedMemberId, isLoading, isFetching, toast]);
+
   const renderStartRef = useRef(0);
   if (isPerf()) renderStartRef.current = performance.now();
   useEffect(() => {
@@ -447,6 +488,28 @@ export default function MealPlanPage() {
 
   const { data: weekPlans = [], isLoading: isWeekPlansLoading } = getMealPlans(rollingDates[0], rollingDates[6]);
   const dayKeys = useMemo(() => rollingDates.map((d) => formatLocalDate(d)), [rollingDates]);
+
+  const weekPreviewData = useMemo((): { previewDayLabel: string; previewMeals: PreviewMeal[] } => {
+    const placeholderMeals: PreviewMeal[] = [
+      { meal_type: "breakfast", label: "Завтрак", title: "Сырники" },
+      { meal_type: "lunch", label: "Обед", title: "Суп-пюре" },
+      { meal_type: "snack", label: "Полдник", title: "Фруктовый перекус" },
+      { meal_type: "dinner", label: "Ужин", title: "Индейка с овощами" },
+    ].map((m) => ({ ...m, title: m.title + " (пример)" }));
+    const tomorrowKey = rollingDates.length > 1 ? formatLocalDate(rollingDates[1]) : todayKey;
+    const tomorrowMeals = weekPlans.filter((p) => p.planned_date === tomorrowKey);
+    const todayMeals = weekPlans.filter((p) => p.planned_date === todayKey);
+    const source = tomorrowMeals.length > 0 ? tomorrowMeals : todayMeals;
+    const label = tomorrowMeals.length > 0 ? "Завтра" : "Сегодня";
+    if (source.length === 0) return { previewDayLabel: label, previewMeals: placeholderMeals };
+    const byType: PreviewMeal[] = mealTypes.map((mt) => ({
+      meal_type: mt.id,
+      label: mt.label,
+      title: source.find((p) => p.meal_type === mt.id)?.recipe?.title ?? `${mt.label} (пример)`,
+    }));
+    return { previewDayLabel: label, previewMeals: byType };
+  }, [weekPlans, rollingDates, todayKey]);
+
   const hasMealsByDayIndex = useMemo(
     () =>
       dayKeys.map((dayKey) => {
@@ -693,6 +756,45 @@ export default function MealPlanPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem
+                      onClick={async () => {
+                        if (!user?.id) return;
+                        const meals = dayMealPlans
+                          .filter((p) => p.recipe_id)
+                          .map((p) => ({
+                            meal_type: p.meal_type,
+                            label: mealTypes.find((m) => m.id === p.meal_type)?.label ?? p.meal_type,
+                            title: p.recipe?.title ?? previews[p.recipe_id ?? ""]?.title ?? "Блюдо",
+                          }));
+                        if (meals.length === 0) {
+                          toast({ description: "Добавьте блюда в план дня, чтобы поделиться" });
+                          return;
+                        }
+                        try {
+                          const { ref, url } = await createSharedPlan(user.id, memberIdForPlan, {
+                            date: selectedDayKey,
+                            meals,
+                          });
+                          if (typeof navigator !== "undefined" && navigator.share) {
+                            await navigator.share({
+                              title: "План питания",
+                              text: `Мой план на ${selectedDayKey}`,
+                              url,
+                            });
+                          } else {
+                            await navigator.clipboard?.writeText(url);
+                            toast({ title: "Ссылка скопирована", description: "План дня" });
+                          }
+                        } catch (e) {
+                          toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось поделиться" });
+                        }
+                      }}
+                      disabled={isAnyGenerating}
+                      className="text-muted-foreground"
+                    >
+                      <Share2 className="w-4 h-4 mr-2 shrink-0" />
+                      Поделиться планом
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       onClick={() => setClearConfirm("day")}
                       disabled={isAnyGenerating}
                       className="text-muted-foreground"
@@ -748,11 +850,13 @@ export default function MealPlanPage() {
                     await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                     const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                     const total = result.totalSlots ?? 4;
-                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                      toast({ title: "Заполнить день", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
-                    } else {
-                      toast({ title: "Заполнить день", description: `Подобрано: ${filled} из ${total}` });
-                    }
+                    const planReadyT = toast({
+                      title: "Меню на сегодня готово",
+                      description: result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)
+                        ? `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов.`
+                        : `Подобрано: ${filled} из ${total}`,
+                    });
+                    setTimeout(() => planReadyT.dismiss(), 2000);
                   } catch (e: unknown) {
                     trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
                     const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
@@ -780,17 +884,23 @@ export default function MealPlanPage() {
             </div>
           </motion.div>
 
-          {/* Заполнить неделю: Free — кнопка с подписью (доступно с Premium), по клику пейвол; Premium/Триал — без (Premium), по клику генерация */}
+          {/* Заполнить неделю: Free — primary CTA (preview paywall); Premium/Триал — outline, генерация */}
           <div className="mb-2">
             <Button
               size="sm"
-              variant="outline"
-              className="rounded-xl border-primary-border/70 text-muted-foreground hover:text-foreground h-8 text-xs"
+              variant={isFree ? "default" : "outline"}
+              className={isFree
+                ? "rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground border-0 h-8 text-xs font-medium shadow-sm"
+                : "rounded-xl border-primary-border/70 text-muted-foreground hover:text-foreground h-8 text-xs"}
               disabled={isFree ? false : isAnyGenerating}
               onClick={async () => {
                 if (isFree) {
-                  setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
-                  setShowPaywall(true);
+                  if (FF_WEEK_PAYWALL_PREVIEW) {
+                    setShowWeekPreviewSheet(true);
+                  } else {
+                    setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
+                    setShowPaywall(true);
+                  }
                   return;
                 }
                 if (isAnyGenerating) {
@@ -832,7 +942,8 @@ export default function MealPlanPage() {
                 }
               }}
             >
-              {isFree ? "Заполнить неделю (доступно с Premium)" : "Заполнить неделю"}
+              <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+              Заполнить неделю
             </Button>
           </div>
 
@@ -853,10 +964,14 @@ export default function MealPlanPage() {
                   isLocked={isDayLockedForFree}
                   onClick={() => {
                     if (isDayLockedForFree) {
-                      toast({
-                        title: "Доступно в Premium",
-                        description: "План на 7 дней — только для подписчиков.",
-                      });
+                      if (FF_WEEK_PAYWALL_PREVIEW) {
+                        setShowWeekPreviewSheet(true);
+                      } else {
+                        toast({
+                          title: "Доступно в Premium",
+                          description: "План на 7 дней — только для подписчиков.",
+                        });
+                      }
                       return;
                     }
                     setSelectedDay(index);
@@ -877,12 +992,12 @@ export default function MealPlanPage() {
                 aria-live="polite"
               >
                 <motion.span
-                  key={statusPhraseIndex}
+                  key={justCreatedMemberId ? "justCreated" : statusPhraseIndex}
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.2 }}
                 >
-                  {GENERATION_STATUS_PHRASES[statusPhraseIndex]}
+                  {justCreatedMemberId ? "Подбираем блюда для вашей семьи…" : GENERATION_STATUS_PHRASES[statusPhraseIndex]}
                 </motion.span>
               </div>
               {isPlanGenerating && (
@@ -894,6 +1009,21 @@ export default function MealPlanPage() {
                   Отменить
                 </button>
               )}
+            </div>
+          )}
+
+          {justCreatedMemberId && (isLoading || isFetching) && (
+            <div className="flex items-center gap-3 mt-1 -mx-4 px-4">
+              <div
+                className="inline-flex items-center rounded-full py-2 px-3.5 text-typo-caption font-medium transition-colors"
+                style={{
+                  backgroundColor: "hsl(var(--primary) / 0.08)",
+                  color: "hsl(var(--primary))",
+                }}
+                aria-live="polite"
+              >
+                Подбираем блюда для вашей семьи…
+              </div>
             </div>
           )}
 
@@ -944,11 +1074,13 @@ export default function MealPlanPage() {
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                       const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                       const total = result.totalSlots ?? 4;
-                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                        toast({ title: "Заполнить день", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
-                      } else {
-                        toast({ title: "Заполнить день", description: `Подобрано: ${filled} из ${total}` });
-                      }
+                      const planReadyT = toast({
+                        title: "Меню на сегодня готово",
+                        description: result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)
+                          ? `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов.`
+                          : `Подобрано: ${filled} из ${total}`,
+                      });
+                      setTimeout(() => planReadyT.dismiss(), 2000);
                     } catch (e: unknown) {
                       trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
                       const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
@@ -1315,6 +1447,15 @@ export default function MealPlanPage() {
             )}
         </div>
       </div>
+
+      {FF_WEEK_PAYWALL_PREVIEW && (
+        <WeekPreviewPaywallSheet
+          open={showWeekPreviewSheet}
+          onOpenChange={setShowWeekPreviewSheet}
+          previewDayLabel={weekPreviewData.previewDayLabel}
+          previewMeals={weekPreviewData.previewMeals}
+        />
+      )}
 
       <PoolExhaustedSheet
         open={!!poolExhaustedContext}

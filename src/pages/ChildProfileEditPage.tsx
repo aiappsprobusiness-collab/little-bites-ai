@@ -21,7 +21,9 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
-import { normalizeAllergyInput } from "@/utils/allergyAliases";
+import { normalizeAllergyToken } from "@/utils/allergyAliases";
+import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
+import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import type { MembersRow, AllergyItemRow } from "@/integrations/supabase/types-v2";
 
 function ageMonthsToBirthDate(ageMonths: number | null): string {
@@ -82,7 +84,12 @@ export default function ChildProfileEditPage() {
     initRef.current = true;
     setName(member.name ?? "");
     setBirthDate(ageMonthsToBirthDate(member.age_months ?? null));
-    const items = (member as MembersRow).allergy_items ?? (member.allergies ?? []).map((value, sort_order) => ({ value, is_active: true, sort_order }));
+    const rawItems = (member as MembersRow).allergy_items ?? (member.allergies ?? []).map((value, sort_order) => ({ value, is_active: true, sort_order }));
+    const items = rawItems.map((item, sort_order) => ({
+      ...item,
+      value: normalizeAllergyToken(item.value),
+      sort_order,
+    }));
     setAllergyItems(items);
     setAllergyInput("");
     setLikes((member as MembersRow).likes ?? []);
@@ -104,7 +111,7 @@ export default function ChildProfileEditPage() {
       }
       const nextActive = hasAccess ? true : activeAllergyCount === 0;
       const existing = allergyItems.map((i) => i.value.toLowerCase());
-      const normalized = toAdd.map((v) => normalizeAllergyInput(v));
+      const normalized = toAdd.map((v) => normalizeAllergyToken(v));
       const newItems = normalized.filter((v) => !existing.includes(v.toLowerCase())).map((value, i) => ({
         value,
         is_active: nextActive && i === 0,
@@ -257,7 +264,22 @@ export default function ChildProfileEditPage() {
         }),
       });
       toast({ title: "Профиль сохранён" });
-        navigate("/profile", { replace: true });
+        if (FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
+          try {
+            await startFillDay(newMember.id);
+            setJustCreatedMemberId(newMember.id);
+            navigate(getPlanUrlForMember(newMember.id), { replace: true });
+          } catch (fillError) {
+            toast({
+              variant: "destructive",
+              title: "Ошибка",
+              description: "Не удалось подобрать меню. Попробуйте снова.",
+            });
+            navigate("/profile", { replace: true });
+          }
+        } else {
+          navigate("/profile", { replace: true });
+        }
         return;
       }
       if (!member) return;

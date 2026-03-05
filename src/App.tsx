@@ -25,6 +25,7 @@ import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import ShareRedirectPage from "./pages/ShareRedirectPage";
+import SharedPlanPage from "./pages/SharedPlanPage";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
@@ -35,6 +36,7 @@ import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
 import { FavoritesLimitSheet } from "./components/plan/FavoritesLimitSheet";
+import { DinnerReminderBanner } from "./components/DinnerReminderBanner";
 import { useAppStore } from "./store/useAppStore";
 import { useSubscription } from "./hooks/useSubscription";
 import { captureAttributionFromLocationOnce } from "./utils/usageEvents";
@@ -136,9 +138,11 @@ const App = () => (
             <GlobalPaywall />
             <FavoritesLimitSheet />
             <TrialSoftBanner />
+            <DinnerReminderBanner />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
               <Route path="/r/:shareRef" element={<ShareRedirectPage />} />
+              <Route path="/p/:ref" element={<SharedPlanPage />} />
               <Route path="/" element={<Navigate to="/meal-plan" replace />} />
               <Route
                 path="/home"

@@ -112,6 +112,7 @@ function normalizeInput(s: string): string {
 
 /**
  * Нормализует ввод аллергии: при совпадении с alias возвращает canonical, иначе trimmed.
+ * Единая точка для всех тарифов (Free/Trial/Premium).
  */
 export function normalizeAllergyInput(input: string): string {
   const n = normalizeInput(input);
@@ -122,6 +123,9 @@ export function normalizeAllergyInput(input: string): string {
   }
   return input.trim();
 }
+
+/** Алиас для единого API: нормализация аллергии (аббревиатуры, синонимы → canonical). */
+export const normalizeAllergyToken = normalizeAllergyInput;
 
 export interface ExpandResult {
   canonical?: string;

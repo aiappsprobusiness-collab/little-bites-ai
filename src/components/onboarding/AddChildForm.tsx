@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +12,8 @@ import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { normalizeAllergyInput } from "@/utils/allergyAliases";
+import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
+import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
 function ageMonthsFromYearsMonths(years: number, months: number): number {
@@ -45,6 +48,7 @@ export function AddChildForm({
   memberCount,
 }: AddChildFormProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { createMember, isCreating } = useMembers();
   const { subscriptionStatus, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
@@ -161,6 +165,20 @@ export function AddChildForm({
       toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
       onSaved(newMember.id);
       resetForm();
+
+      if (FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
+        try {
+          await startFillDay(newMember.id);
+          setJustCreatedMemberId(newMember.id);
+          navigate(getPlanUrlForMember(newMember.id));
+        } catch (fillError) {
+          toast({
+            variant: "destructive",
+            title: "Ошибка",
+            description: "Не удалось подобрать меню. Попробуйте снова.",
+          });
+        }
+      }
     } catch (e: unknown) {
       toast({
         variant: "destructive",

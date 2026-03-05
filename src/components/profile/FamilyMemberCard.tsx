@@ -1,13 +1,13 @@
 import { Lock, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { AllergyChip } from "./AllergyChip";
 
 export type ProfileChipItem = { type: "like" | "dislike" | "allergy"; label: string };
 
 const chipBase = "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] border border-[currentColor]/15";
 const likeChipClass = "bg-primary/[0.06] text-primary border-primary/20";
 const dislikeChipClass = "bg-transparent text-stone-500 border-stone-200/60";
-const allergyChipClass = "bg-rose-50/80 text-rose-800/90 border-rose-200/40";
 
 export interface FamilyMemberCardProps {
   name: string;
@@ -78,9 +78,7 @@ export function FamilyMemberCard({
                     {item.label}
                   </span>
                 ) : (
-                  <span key={`${item.type}-${i}-${item.label}`} className={cn(chipBase, allergyChipClass)}>
-                    {item.label}
-                  </span>
+                  <AllergyChip key={`${item.type}-${i}-${item.label}`} label={item.label} />
                 )
               )}
               {overflowCount > 0 && (

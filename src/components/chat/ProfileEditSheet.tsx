@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useNavigate } from "react-router-dom";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,9 @@ import { useMembers } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
+import { normalizeAllergyToken } from "@/utils/allergyAliases";
+import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
+import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
 function ageMonthsFromYearsMonths(years: number, months: number): number {
@@ -75,6 +79,7 @@ export function ProfileEditSheet({
     "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу";
 
   const { toast } = useToast();
+  const navigate = useNavigate();
   const { members, updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
   const { isPremium, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
@@ -125,7 +130,7 @@ export function ProfileEditSheet({
     setMemberType((member as MembersRow).type ?? "child");
     setAgeYears(Math.floor(total / 12));
     setAgeMonths(total % 12);
-    setAllergies(member.allergies ?? []);
+    setAllergies((member.allergies ?? []).map(normalizeAllergyToken));
     setAllergyInput("");
     setLikes((member as MembersRow).likes ?? []);
     setLikesInput("");
@@ -146,7 +151,13 @@ export function ProfileEditSheet({
         setShowPaywall(true);
         return;
       }
-      baseAllergiesHandlers.add(raw);
+      const toAdd = parseTags(raw).map(normalizeAllergyToken).filter(Boolean);
+      if (toAdd.length) {
+        const existing = new Set(allergies.map((s) => s.trim().toLowerCase()));
+        const added = toAdd.filter((v) => !existing.has(v.trim().toLowerCase()));
+        if (added.length) setAllergies((prev) => [...prev, ...added].slice(0, 20));
+        setAllergyInput("");
+      }
     },
   };
   const MAX_CHIPS = 20;
@@ -203,6 +214,20 @@ export function ProfileEditSheet({
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
         onOpenChange(false);
         onCreated?.(newMember.id as string);
+
+        if (FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
+          try {
+            await startFillDay(newMember.id as string);
+            setJustCreatedMemberId(newMember.id as string);
+            navigate(getPlanUrlForMember(newMember.id as string));
+          } catch (fillError) {
+            toast({
+              variant: "destructive",
+              title: "Ошибка",
+              description: "Не удалось подобрать меню. Попробуйте снова.",
+            });
+          }
+        }
       } catch (e: unknown) {
         toast({
           variant: "destructive",
