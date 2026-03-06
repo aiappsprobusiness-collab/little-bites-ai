@@ -1,5 +1,5 @@
 /**
- * Шаринг плана дня: создание short link /p/:ref и получение по ref для landing.
+ * Шаринг плана дня и недели: создание short link /p/:ref и получение по ref для landing.
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -7,15 +7,34 @@ import { generateShareRef } from "@/utils/usageEvents";
 
 const SHARE_PLAN_BASE = "https://momrecipes.online";
 
-export interface SharedPlanPayload {
+/** День: текущая структура (без type для обратной совместимости старых ссылок). */
+export interface SharedPlanPayloadDay {
   date: string;
-  meals: Array<{ meal_type: string; label: string; title: string }>;
+  meals: Array<{ meal_type: string; label?: string; title: string }>;
+}
+
+/** Неделя: type + период + массив дней (включая пустые). */
+export interface SharedPlanPayloadWeek {
+  type: "week";
+  startDate: string;
+  endDate: string;
+  days: Array<{
+    date: string;
+    label: string;
+    meals: Array<{ slot: string; title: string }>;
+  }>;
+}
+
+export type SharedPlanPayload = SharedPlanPayloadDay | SharedPlanPayloadWeek;
+
+export function isSharedPlanWeek(payload: SharedPlanPayload): payload is SharedPlanPayloadWeek {
+  return "type" in payload && payload.type === "week";
 }
 
 export async function createSharedPlan(
   userId: string,
   memberId: string | null,
-  payload: SharedPlanPayload
+  payload: SharedPlanPayloadDay | SharedPlanPayloadWeek
 ): Promise<{ ref: string; url: string }> {
   let ref = generateShareRef();
   const maxAttempts = 5;
