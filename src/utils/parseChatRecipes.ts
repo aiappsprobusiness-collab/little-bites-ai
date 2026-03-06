@@ -51,6 +51,42 @@ export function extractAdvice(obj: Record<string, unknown>): string | undefined 
   return typeof val === "string" && val.trim() ? val.trim() : undefined;
 }
 
+function extractNutritionFields(obj: Record<string, unknown>): Pick<ParsedRecipe, "calories" | "proteins" | "fats" | "carbs"> {
+  const nutrition = obj.nutrition as {
+    kcal_per_serving?: number;
+    protein_g_per_serving?: number;
+    fat_g_per_serving?: number;
+    carbs_g_per_serving?: number;
+  } | undefined;
+
+  return {
+    calories:
+      typeof obj.calories === "number"
+        ? obj.calories
+        : nutrition && typeof nutrition.kcal_per_serving === "number"
+          ? Math.round(nutrition.kcal_per_serving)
+          : undefined,
+    proteins:
+      typeof obj.proteins === "number"
+        ? obj.proteins
+        : nutrition && typeof nutrition.protein_g_per_serving === "number"
+          ? nutrition.protein_g_per_serving
+          : undefined,
+    fats:
+      typeof obj.fats === "number"
+        ? obj.fats
+        : nutrition && typeof nutrition.fat_g_per_serving === "number"
+          ? nutrition.fat_g_per_serving
+          : undefined,
+    carbs:
+      typeof obj.carbs === "number"
+        ? obj.carbs
+        : nutrition && typeof nutrition.carbs_g_per_serving === "number"
+          ? nutrition.carbs_g_per_serving
+          : undefined,
+  };
+}
+
 /** Текст ингредиента для отображения. Приоритет: display_text > "name — amount" > name. */
 export function ingredientDisplayText(ing: ParsedIngredient | { name?: string; display_text?: string | null; amount?: string }): string {
   if (typeof ing === 'string') return ing;
@@ -441,23 +477,7 @@ export function parseRecipesFromApiResponse(
       return String(item);
     });
     const steps = Array.isArray(r.steps) ? (r.steps as string[]).map((s) => String(s ?? "").trim()).filter(Boolean) : [];
-    const nutrition = r.nutrition as { kcal_per_serving?: number; protein_g_per_serving?: number; fat_g_per_serving?: number; carbs_g_per_serving?: number } | undefined;
-    const calories =
-      typeof r.calories === "number" ? r.calories
-        : nutrition && typeof nutrition.kcal_per_serving === "number" ? Math.round(nutrition.kcal_per_serving)
-        : null;
-    const proteins =
-      typeof r.proteins === "number" ? r.proteins
-        : nutrition && typeof nutrition.protein_g_per_serving === "number" ? nutrition.protein_g_per_serving
-        : null;
-    const fats =
-      typeof r.fats === "number" ? r.fats
-        : nutrition && typeof nutrition.fat_g_per_serving === "number" ? nutrition.fat_g_per_serving
-        : null;
-    const carbs =
-      typeof r.carbs === "number" ? r.carbs
-        : nutrition && typeof nutrition.carbs_g_per_serving === "number" ? nutrition.carbs_g_per_serving
-        : null;
+    const nutritionFields = extractNutritionFields(r);
     return {
       title: String(title).trim(),
       description: typeof r.description === "string" ? r.description : undefined,
@@ -467,10 +487,7 @@ export function parseRecipesFromApiResponse(
       mealType: r.mealType as ParsedRecipe["mealType"],
       chefAdvice: extractChefAdvice(r as Record<string, unknown>),
       advice: typeof r.advice === "string" ? r.advice : undefined,
-      calories: calories ?? undefined,
-      proteins: proteins ?? undefined,
-      fats: fats ?? undefined,
-      carbs: carbs ?? undefined,
+      ...nutritionFields,
     };
   });
   const displayText = recipes.length > 0 ? formatRecipeForDisplay(recipes[0]) : fallbackDisplayText;
@@ -698,6 +715,7 @@ export function parseRecipesFromChat(
             ? parsed.steps
             : parsed.steps?.split('\n').filter((s: string) => s.trim()) || [];
           if (ingredients.length > 0 || steps.length > 0) {
+            const nutritionFields = extractNutritionFields(parsed as Record<string, unknown>);
             recipes.push({
               title: title.trim(),
               description: parsed.description || parsed.desc,
@@ -707,6 +725,7 @@ export function parseRecipesFromChat(
               mealType,
               chefAdvice: extractChefAdvice(parsed as Record<string, unknown>),
               advice: typeof parsed.advice === 'string' ? parsed.advice : undefined,
+              ...nutritionFields,
             });
           }
         }
@@ -739,6 +758,7 @@ export function parseRecipesFromChat(
               ? recipe.steps
               : recipe.steps?.split('\n').filter((s: string) => s.trim()) || [];
             if (ingredients.length > 0 || steps.length > 0) {
+              const nutritionFields = extractNutritionFields(recipe as Record<string, unknown>);
               recipes.push({
                 title: title.trim(),
                 description: recipe.description || recipe.desc,
@@ -748,6 +768,7 @@ export function parseRecipesFromChat(
                 mealType: recipe.mealType || mealType,
                 chefAdvice: extractChefAdvice(recipe as Record<string, unknown>),
                 advice: typeof recipe.advice === 'string' ? recipe.advice : undefined,
+                ...nutritionFields,
               });
             }
           }

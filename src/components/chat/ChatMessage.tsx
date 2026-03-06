@@ -247,6 +247,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               title: effectiveRecipe.title,
               description: effectiveRecipe.description || "Рецепт предложен AI ассистентом",
               cooking_time_minutes: Number.isFinite(cookingMinutes) ? cookingMinutes : null,
+              calories: (effectiveRecipe as { calories?: number | null }).calories ?? null,
+              proteins: (effectiveRecipe as { proteins?: number | null }).proteins ?? null,
+              fats: (effectiveRecipe as { fats?: number | null }).fats ?? null,
+              carbs: (effectiveRecipe as { carbs?: number | null }).carbs ?? null,
               member_id: validChildId,
               child_id: validChildId,
               tags: (effectiveRecipe as { mealType?: string }).mealType

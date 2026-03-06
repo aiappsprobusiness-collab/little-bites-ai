@@ -99,6 +99,10 @@ export interface CanonicalizeRecipePayloadInput {
   title: string;
   description?: string | null;
   cooking_time_minutes?: number | null;
+  calories?: number | null;
+  proteins?: number | null;
+  fats?: number | null;
+  carbs?: number | null;
   chef_advice?: string | null;
   advice?: string | null;
   steps: CanonicalStep[] | Array<{ instruction: string; step_number?: number }>;
@@ -125,6 +129,10 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     title,
     description,
     cooking_time_minutes,
+    calories,
+    proteins,
+    fats,
+    carbs,
     chef_advice,
     advice,
     steps: rawSteps,
@@ -189,6 +197,10 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     title: title || "Рецепт",
     description: description ?? "",
     cooking_time_minutes: cooking_time_minutes ?? null,
+    calories: calories ?? null,
+    proteins: proteins ?? null,
+    fats: fats ?? null,
+    carbs: carbs ?? null,
     chef_advice: chef_advice ?? null,
     advice: advice ?? null,
     steps: stepsPayload,

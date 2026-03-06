@@ -73,6 +73,24 @@ export function useDeepSeekAPI() {
     ? subscriptionStatus
     : 'free';
 
+  const getValidAccessToken = async (): Promise<string> => {
+    const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) {
+      safeError('Failed to get auth session for AI request:', sessionError);
+    }
+    const currentToken = currentSession?.access_token ?? session?.access_token;
+    if (currentToken) return currentToken;
+
+    const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      safeError('Failed to refresh auth session for AI request:', refreshError);
+    }
+    const refreshedToken = refreshedSession?.access_token;
+    if (refreshedToken) return refreshedToken;
+
+    throw new Error('Необходима авторизация');
+  };
+
   const abortChat = () => {
     if (chatAbortRef.current) {
       chatAbortRef.current.abort();
@@ -170,6 +188,7 @@ export function useDeepSeekAPI() {
       chatAbortRef.current = new AbortController();
       const timeoutMs = isHelpMode ? HELP_REQUEST_TIMEOUT_MS : RECIPE_REQUEST_TIMEOUT_MS;
       const timeoutId = setTimeout(() => chatAbortRef.current?.abort(), timeoutMs);
+      const accessToken = await getValidAccessToken();
       let response: Response;
       try {
         response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
@@ -177,7 +196,7 @@ export function useDeepSeekAPI() {
           signal: chatAbortRef.current.signal,
           headers: {
             'Content-Type': 'application/json',
-            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+            Authorization: `Bearer ${accessToken}`,
             ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
           },
           body: JSON.stringify({
@@ -297,13 +316,14 @@ export function useDeepSeekAPI() {
         throw new Error('usage_limit_exceeded');
       }
 
+      const accessToken = await getValidAccessToken();
       let response: Response;
       try {
         response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/deepseek-analyze`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
+            Authorization: `Bearer ${accessToken}`,
             ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
           },
           body: JSON.stringify({ imageBase64, mimeType }),
