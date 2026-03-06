@@ -1,10 +1,9 @@
 /**
  * Feature flag: автозаполнение плана дня после создания нового члена семьи (онбординг).
- * По умолчанию в dev — true, если env не задан.
+ * По умолчанию включено (dev и prod); выключить: VITE_FF_AUTO_FILL_AFTER_MEMBER_CREATE=false.
  */
 export const FF_AUTO_FILL_AFTER_MEMBER_CREATE =
-  import.meta.env.VITE_FF_AUTO_FILL_AFTER_MEMBER_CREATE === "true" ||
-  (import.meta.env.DEV && import.meta.env.VITE_FF_AUTO_FILL_AFTER_MEMBER_CREATE !== "false");
+  import.meta.env.VITE_FF_AUTO_FILL_AFTER_MEMBER_CREATE !== "false";
 
 /**
  * Paywall с preview недели: при клике «Заполнить неделю (доступно с Premium)» открывать bottom sheet
