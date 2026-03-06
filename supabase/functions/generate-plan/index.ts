@@ -95,6 +95,18 @@ function getPrevDayKey(dayKey: string): string {
 function normalizeTitleKey(title: string): string {
   return (title ?? "").trim().toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
 }
+/** Shuffle array in place for variety when re-filling plan (same pool order would yield same recipes). */
+function shuffleArray<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const rnd = typeof crypto !== "undefined" && crypto.getRandomValues
+      ? (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 0x100000000
+      : Math.random();
+    const j = Math.floor(rnd * (i + 1));
+    const tmp = arr[i];
+    arr[i] = arr[j] as T;
+    arr[j] = tmp as T;
+  }
+}
 function tokenize(text: string): string[] {
   if (!text || typeof text !== "string") return [];
   return text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((t) => t.length >= 2);
@@ -112,7 +124,10 @@ function getDislikeTokens(memberData: MemberDataPool | null | undefined): string
   if (!list?.length) return [];
   const tokens = new Set<string>();
   for (const item of list) {
-    for (const t of tokenize(String(item).trim())) tokens.add(t);
+    for (const t of tokenize(String(item).trim())) {
+      if (t.length >= 2) tokens.add(t);
+      if (t.length >= 4) tokens.add(t.slice(0, -1));
+    }
   }
   return [...tokens];
 }
@@ -268,6 +283,7 @@ function pickFromPoolInMemory(
     for (const t of tokenizePrefText(String(item).trim())) likeTokens.push(t);
   }
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
+  shuffleArray(filtered);
   const best = pickBestRecipeForSlot(filtered, { likeTokens, recentSignatures });
   return best ? { id: best.id, title: best.title } : null;
 }
@@ -535,6 +551,18 @@ serve(async (req) => {
         const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, likes, dislikes").eq("user_id", userId);
         const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
         replaceMemberData = buildFamilyMemberDataForPlan(membersList);
+      } else {
+        const { data: memberRow } = await supabase.from("members").select("age_months, allergies, likes, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
+        const m = memberRow as { age_months?: number | null; allergies?: string[] | null; likes?: string[] | null; dislikes?: string[] | null } | null;
+        if (m) {
+          replaceMemberData = {
+            ...(memberData ?? {}),
+            age_months: m.age_months ?? memberData?.age_months,
+            allergies: Array.isArray(m.allergies) && m.allergies.length > 0 ? m.allergies : (memberData?.allergies ?? []),
+            likes: Array.isArray(m.likes) && m.likes.length > 0 ? m.likes : (memberData?.likes ?? []),
+            dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
+          };
+        }
       }
       const { data: existingRow } = await supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey).is("member_id", effectiveMemberId).maybeSingle();
       const currentMeals = (existingRow as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
@@ -649,6 +677,18 @@ serve(async (req) => {
       const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
       effectiveMemberData = buildFamilyMemberDataForPlan(membersList);
       safeLog("family_mode", { members_count: membersList.length });
+    } else {
+      const { data: memberRow } = await supabase.from("members").select("age_months, allergies, likes, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
+      const m = memberRow as { age_months?: number | null; allergies?: string[] | null; likes?: string[] | null; dislikes?: string[] | null } | null;
+      if (m) {
+        effectiveMemberData = {
+          ...(memberData ?? {}),
+          age_months: m.age_months ?? memberData?.age_months,
+          allergies: Array.isArray(m.allergies) && m.allergies.length > 0 ? m.allergies : (memberData?.allergies ?? []),
+          likes: Array.isArray(m.likes) && m.likes.length > 0 ? m.likes : (memberData?.likes ?? []),
+          dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
+        };
+      }
     }
 
     const isAdultPlan = isAdultContext(effectiveMemberData);
@@ -704,6 +744,14 @@ serve(async (req) => {
       usedTitleKeysByMealType[k] = new Set<string>();
       usedCategoriesByMealType[k] = new Set<string>();
     }
+    if (dayKeys.length === 1 && Array.isArray(body.day_keys) && body.day_keys.length > 0) {
+      const otherDayKeys = body.day_keys.filter((k) => typeof k === "string" && k !== dayKeys[0]);
+      if (otherDayKeys.length > 0) {
+        const { recipeIds: otherIds, titleKeys: otherTitles } = await fetchRecipeAndTitleKeysFromPlans(supabase, userId, effectiveMemberId, otherDayKeys);
+        usedRecipeIds = [...otherIds];
+        usedTitleKeys = [...otherTitles];
+      }
+    }
     if (dayKeys.length > 1 && poolSuitableCount >= MIN_QUALITY_CANDIDATES) {
       let weekQ = supabase.from("meal_plans_v2").select("planned_date, meals").eq("user_id", userId).gte("planned_date", dayKeys[0]).lte("planned_date", dayKeys[dayKeys.length - 1]);
       if (effectiveMemberId == null) weekQ = weekQ.is("member_id", null);
@@ -756,10 +804,13 @@ serve(async (req) => {
           memberId == null && mealKey === "dinner"
             ? poolCandidates.filter((r) => isFamilyDinnerCandidate(r))
             : poolCandidates;
-        const excludeTitles = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
-        let picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, usedRecipeIds, excludeTitles);
+        const currentSlot = currentMeals[mealKey];
+        const excludeIdsForSlot = currentSlot?.recipe_id ? [...usedRecipeIds, currentSlot.recipe_id] : usedRecipeIds;
+        const excludeTitlesBase = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
+        const excludeTitlesForSlot = currentSlot?.title ? [...excludeTitlesBase, normalizeTitleKey(currentSlot.title)] : excludeTitlesBase;
+        let picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot);
         if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
-          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, usedRecipeIds, excludeTitles);
+          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot);
         }
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };

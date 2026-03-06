@@ -164,6 +164,7 @@ export function usePlanGenerationJob(
         member_id: params.member_id,
         member_data: params.member_data,
         ...(params.type === "day" && params.day_key && { day_key: params.day_key }),
+        ...(params.type === "day" && Array.isArray(params.day_keys) && params.day_keys.length > 0 && { day_keys: params.day_keys }),
         ...(params.type === "week" && {
           start_key: params.start_key ?? getRollingStartKey(),
           ...(Array.isArray(params.day_keys) && params.day_keys.length > 0 && { day_keys: params.day_keys }),
