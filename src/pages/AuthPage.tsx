@@ -68,6 +68,8 @@ export default function AuthPage() {
   const goToWelcome = () => {
     if (hasShareRecipeAttribution()) {
       trackLandingEvent("share_recipe_cta_click");
+      navigate("/welcome?source=share_recipe", { replace: true });
+      return;
     }
     navigate("/welcome", { replace: true });
   };

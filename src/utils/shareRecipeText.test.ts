@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildRecipeShareText, getShareSignature, SHARE_APP_URL } from "./shareRecipeText";
+import { buildRecipeShareText, buildRecipeShareTextShort, getShareSignature, SHARE_APP_URL } from "./shareRecipeText";
 
 describe("shareRecipeText", () => {
   const signature = getShareSignature();
@@ -74,5 +74,18 @@ describe("shareRecipeText", () => {
     });
     expect(text).toContain("👩‍🍳 Приготовление:");
     expect(text).toContain("следуйте привычной технологии");
+  });
+
+  describe("buildRecipeShareTextShort", () => {
+    it("returns only title and link, no full recipe", () => {
+      const url = "https://momrecipes.online/r/abc123";
+      const text = buildRecipeShareTextShort("Омлет с кабачком", url);
+      expect(text).toContain("🍽 Нам предложили вот такой рецепт");
+      expect(text).toContain("Омлет с кабачком");
+      expect(text).toContain("Можно получить своё меню за 1 минуту:");
+      expect(text).toContain(url);
+      expect(text).not.toContain("Ингредиенты");
+      expect(text).not.toContain("Приготовление");
+    });
   });
 });

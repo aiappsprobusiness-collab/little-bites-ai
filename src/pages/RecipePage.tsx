@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { scaleIngredientDisplay } from "@/types/recipe";
 import { applyIngredientOverrides, ingredientKey } from "@/types/ingredientOverrides";
-import { buildRecipeShareText, SHARE_APP_URL } from "@/utils/shareRecipeText";
+import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
 import {
   trackUsageEvent,
   generateShareRef,
@@ -173,28 +173,8 @@ export default function RecipePage() {
         source_screen: "recipe_page",
       },
     });
-    const recipeDisplay = recipe as RecipeDisplayIngredients & {
-      title?: string;
-      description?: string;
-      cooking_time_minutes?: number | null;
-      steps?: { instruction?: string; step_number?: number }[];
-      chefAdvice?: string | null;
-      chef_advice?: string | null;
-      meal_type?: string | null;
-    };
-    const displayIngredients = getDisplayIngredients(recipeDisplay);
-    const shareText = buildRecipeShareText({
-      title: recipeDisplay.title ?? "Рецепт",
-      description: recipeDisplay.description ?? null,
-      cooking_time_minutes: recipeDisplay.cooking_time_minutes ?? null,
-      recipeId: id,
-      ingredients: displayIngredients,
-      steps: recipeDisplay.steps ?? null,
-      chefAdvice: recipeDisplay.chefAdvice ?? recipeDisplay.chef_advice ?? null,
-      mealTypeLabel: mealTypeLabel ?? null,
-      meal_type: recipeDisplay.meal_type ?? null,
-      shareUrl,
-    });
+    const recipeDisplay = recipe as RecipeDisplayIngredients & { title?: string };
+    const shareText = buildRecipeShareTextShort(recipeDisplay.title ?? "Рецепт", shareUrl);
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({
@@ -418,16 +398,18 @@ export default function RecipePage() {
           >
             <Heart className={cn("h-4 w-4 transition-opacity duration-150", isFavorite && "fill-current")} />
           </motion.button>
-          <motion.button
-            type="button"
-            onClick={handleShare}
-            aria-label="Поделиться"
-            whileTap={{ scale: 0.96 }}
-            transition={{ duration: 0.15 }}
-            className="h-10 w-10 min-h-[40px] min-w-[40px] rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-primary-light/50 border border-primary-border/80 hover:bg-primary/10 hover:border-primary/40 hover:text-foreground transition-colors duration-150 touch-manipulation"
-          >
-            <Share2 className="h-4 w-4" />
-          </motion.button>
+          <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 rounded-full border-primary-border text-primary hover:bg-primary/10 hover:border-primary/50 h-10 px-3"
+              onClick={handleShare}
+              aria-label="Поделиться рецептом"
+            >
+              <Share2 className="h-4 w-4 shrink-0" />
+              <span className="text-sm">Поделиться рецептом</span>
+            </Button>
+          </motion.div>
           {isUserCustom && (
             <>
               <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>

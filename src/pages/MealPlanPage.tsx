@@ -611,6 +611,64 @@ export default function MealPlanPage() {
     return plannedMeal?.recipe_id ?? getPlannedMealRecipe(plannedMeal)?.id ?? null;
   };
 
+  const shareDayPlan = useCallback(async () => {
+    if (!user?.id) return;
+    const meals = dayMealPlans
+      .filter((p) => p.recipe_id)
+      .map((p) => ({
+        meal_type: p.meal_type,
+        label: mealTypes.find((m) => m.id === p.meal_type)?.label ?? p.meal_type,
+        title: p.recipe?.title ?? previews[p.recipe_id ?? ""]?.title ?? "Блюдо",
+      }));
+    if (meals.length === 0) {
+      toast({ description: "Добавьте блюда в план дня, чтобы поделиться" });
+      return;
+    }
+    try {
+      const { url } = await createSharedPlan(user.id, memberIdForPlan, { date: selectedDayKey, meals });
+      const shareText = "Посмотри, какой план питания на день нам собрал MomRecipes 👇";
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: "План питания на день", text: shareText, url });
+      } else {
+        await navigator.clipboard?.writeText(`${shareText}\n${url}`);
+        toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось поделиться" });
+    }
+  }, [user?.id, memberIdForPlan, selectedDayKey, dayMealPlans, mealTypes, previews, toast]);
+
+  const shareWeekPlan = useCallback(async () => {
+    if (!user?.id) return;
+    const days = dayKeys.map((dayKey, i) => {
+      const dayPlans = weekPlans.filter((p) => p.planned_date === dayKey);
+      const meals = dayPlans
+        .filter((p) => p.recipe_id)
+        .map((p) => ({ slot: p.meal_type, title: p.recipe?.title ?? "Блюдо" }));
+      const date = rollingDates[i];
+      const label = date.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+      const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
+      return { date: dayKey, label: capitalized, meals };
+    });
+    try {
+      const { url } = await createSharedPlan(user.id, memberIdForPlan, {
+        type: "week",
+        startDate: dayKeys[0],
+        endDate: dayKeys[6],
+        days,
+      });
+      const shareText = "Посмотри, какой план питания на неделю нам собрал MomRecipes 👇";
+      if (typeof navigator !== "undefined" && navigator.share) {
+        await navigator.share({ title: "План питания на неделю", text: shareText, url });
+      } else {
+        await navigator.clipboard?.writeText(`${shareText}\n${url}`);
+        toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось поделиться" });
+    }
+  }, [user?.id, memberIdForPlan, dayKeys, weekPlans, rollingDates, toast]);
+
   // Группируем планы по типу приема пищи
   const mealsByType = mealTypes.reduce((acc, mealType) => {
     const plan = dayMealPlans.find((mp) => mp.meal_type === mealType.id);
@@ -756,39 +814,7 @@ export default function MealPlanPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem
-                      onClick={async () => {
-                        if (!user?.id) return;
-                        const meals = dayMealPlans
-                          .filter((p) => p.recipe_id)
-                          .map((p) => ({
-                            meal_type: p.meal_type,
-                            label: mealTypes.find((m) => m.id === p.meal_type)?.label ?? p.meal_type,
-                            title: p.recipe?.title ?? previews[p.recipe_id ?? ""]?.title ?? "Блюдо",
-                          }));
-                        if (meals.length === 0) {
-                          toast({ description: "Добавьте блюда в план дня, чтобы поделиться" });
-                          return;
-                        }
-                        try {
-                          const { ref, url } = await createSharedPlan(user.id, memberIdForPlan, {
-                            date: selectedDayKey,
-                            meals,
-                          });
-                          const shareText = "Посмотри, какой план питания на день нам собрал MomRecipes 👇";
-                          if (typeof navigator !== "undefined" && navigator.share) {
-                            await navigator.share({
-                              title: "План питания на день",
-                              text: shareText,
-                              url,
-                            });
-                          } else {
-                            await navigator.clipboard?.writeText(`${shareText}\n${url}`);
-                            toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
-                          }
-                        } catch (e) {
-                          toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось поделиться" });
-                        }
-                      }}
+                      onClick={shareDayPlan}
                       disabled={isAnyGenerating}
                       className="text-muted-foreground"
                     >
@@ -797,46 +823,7 @@ export default function MealPlanPage() {
                     </DropdownMenuItem>
                     {hasAccess && (
                       <DropdownMenuItem
-                        onClick={async () => {
-                          if (!user?.id) return;
-                          const startDate = dayKeys[0];
-                          const endDate = dayKeys[6];
-                          const days = dayKeys.map((dayKey, i) => {
-                            const dayPlans = weekPlans.filter((p) => p.planned_date === dayKey);
-                            const meals = dayPlans
-                              .filter((p) => p.recipe_id)
-                              .map((p) => ({
-                                slot: p.meal_type,
-                                title: p.recipe?.title ?? "Блюдо",
-                              }));
-                            const date = rollingDates[i];
-                            const label =
-                              date.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
-                            const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
-                            return { date: dayKey, label: capitalized, meals };
-                          });
-                          try {
-                            const { ref, url } = await createSharedPlan(user.id, memberIdForPlan, {
-                              type: "week",
-                              startDate,
-                              endDate,
-                              days,
-                            });
-                            const shareText = "Посмотри, какой план питания на неделю нам собрал MomRecipes 👇";
-                            if (typeof navigator !== "undefined" && navigator.share) {
-                              await navigator.share({
-                                title: "План питания на неделю",
-                                text: shareText,
-                                url,
-                              });
-                            } else {
-                              await navigator.clipboard?.writeText(`${shareText}\n${url}`);
-                              toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
-                            }
-                          } catch (e) {
-                            toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось поделиться" });
-                          }
-                        }}
+                        onClick={shareWeekPlan}
                         disabled={isAnyGenerating || isWeekPlansLoading}
                         className="text-muted-foreground"
                       >
@@ -877,6 +864,30 @@ export default function MealPlanPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border/60">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl gap-1.5 border-primary-border text-primary hover:bg-primary/10"
+                onClick={shareDayPlan}
+                disabled={isAnyGenerating}
+              >
+                <Share2 className="w-4 h-4 shrink-0" />
+                Поделиться этим меню
+              </Button>
+              {hasAccess && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl gap-1.5 border-primary-border text-primary hover:bg-primary/10"
+                  onClick={shareWeekPlan}
+                  disabled={isAnyGenerating || isWeekPlansLoading}
+                >
+                  <Share2 className="w-4 h-4 shrink-0" />
+                  Поделиться меню на неделю
+                </Button>
+              )}
             </div>
             <div className="mt-2">
               <Button

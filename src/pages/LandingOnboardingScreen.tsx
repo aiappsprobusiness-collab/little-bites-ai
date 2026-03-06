@@ -153,8 +153,8 @@ export default function LandingOnboardingScreen() {
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-muted-foreground mt-4">
-              Такое меню приложение составляет за 1 минуту
+            <p className="text-sm text-muted-foreground mt-4">
+              Такое меню за минуту — с учётом возраста, аллергий и того, что ребёнок любит или не ест
             </p>
           </div>
         </section>
@@ -165,7 +165,7 @@ export default function LandingOnboardingScreen() {
             className="w-full rounded-xl h-14 text-base font-semibold"
             onClick={goToFreeCta}
           >
-            Попробовать бесплатно
+            Получить свой план питания
           </Button>
         </section>
       </main>

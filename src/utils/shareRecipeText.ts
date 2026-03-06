@@ -171,3 +171,14 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
 export function getShareSignature(): { line: string; url: string } {
   return { line: SHARE_SIGNATURE_LINE, url: SHARE_APP_URL };
 }
+
+/**
+ * Короткий текст для шаринга рецепта (только название + ссылка).
+ * Используется в Telegram и мессенджерах — без полного текста рецепта.
+ * Ссылка формата https://momrecipes.online/r/{shareRef}
+ */
+export function buildRecipeShareTextShort(recipeTitle: string, shareUrl: string): string {
+  const title = (recipeTitle || "Рецепт").trim();
+  const url = (shareUrl || BASE_URL).trim();
+  return `🍽 Нам предложили вот такой рецепт\n\n${title}\n\nМожно получить своё меню за 1 минуту:\n${url}`;
+}

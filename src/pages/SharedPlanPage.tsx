@@ -53,8 +53,10 @@ export default function SharedPlanPage() {
     } else {
       trackLandingEvent("share_day_plan_cta_click");
     }
-    const search = location.search ? location.search : "";
-    navigate(`/welcome${search}`, { replace: true });
+    const source = isWeek ? "share_week_plan" : "share_day_plan";
+    const params = new URLSearchParams(location.search);
+    params.set("source", source);
+    navigate(`/welcome?${params.toString()}`, { replace: true });
   };
 
   if (status === "loading") {
@@ -105,7 +107,16 @@ export default function SharedPlanPage() {
               </li>
             ))}
           </ul>
-          <div className="mt-10 pt-6 border-t">
+          <div className="mt-10 pt-6 border-t space-y-6">
+            <div className="rounded-2xl bg-primary/5 border border-primary/10 p-4">
+              <p className="font-semibold text-foreground mb-3">Получите своё меню</p>
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">✓ за 1 минуту</li>
+                <li className="flex items-center gap-2">✓ учитываем возраст ребёнка</li>
+                <li className="flex items-center gap-2">✓ учитываем аллергии</li>
+                <li className="flex items-center gap-2">✓ запоминаем продукты которые ребёнок не любит</li>
+              </ul>
+            </div>
             <Button
               className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-semibold"
               onClick={() => handleOpenApp(true)}
@@ -140,7 +151,16 @@ export default function SharedPlanPage() {
             </li>
           ))}
         </ul>
-        <div className="mt-10 pt-6 border-t">
+        <div className="mt-10 pt-6 border-t space-y-6">
+          <div className="rounded-2xl bg-primary/5 border border-primary/10 p-4">
+            <p className="font-semibold text-foreground mb-3">Получите своё меню</p>
+            <ul className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-center gap-2">✓ за 1 минуту</li>
+              <li className="flex items-center gap-2">✓ учитываем возраст ребёнка</li>
+              <li className="flex items-center gap-2">✓ учитываем аллергии</li>
+              <li className="flex items-center gap-2">✓ запоминаем продукты которые ребёнок не любит</li>
+            </ul>
+          </div>
           <Button
             className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-semibold"
             onClick={() => handleOpenApp(false)}

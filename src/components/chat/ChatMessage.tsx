@@ -21,7 +21,7 @@ import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { HelpSectionCard, HelpWarningCard } from "@/components/help-ui";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
-import { SHARE_APP_URL } from "@/utils/shareRecipeText";
+import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
 import { ChatRecipeCard } from "@/components/chat/ChatRecipeCard";
 import {
   trackUsageEvent,
@@ -324,13 +324,13 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     };
 
     const shareText = useMemo(() => {
-      const base = effectiveRecipe ? formatRecipe(effectiveRecipe) : typeof content === "string" ? content : "";
-      const footer = "\n\n— Рецепт из приложения Mom Recipes\n" + SHARE_APP_URL;
-      return `${base}${footer}`;
+      if (effectiveRecipe?.title) {
+        return null;
+      }
+      return typeof content === "string" ? content + "\n\n— Рецепт из приложения Mom Recipes\n" + SHARE_APP_URL : "";
     }, [effectiveRecipe, content]);
 
     const handleShare = async () => {
-      if (!shareText) return;
       const rid = recipeId ?? undefined;
       const shareRef = generateShareRef();
       const usedNativeShare = typeof navigator !== "undefined" && !!navigator.share;
@@ -342,6 +342,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           ? getShortShareUrl(shareRef, SHARE_APP_URL)
           : getShareRecipeUrl(rid, channel, shareRef, SHARE_APP_URL);
       }
+      const title = effectiveRecipe?.title ?? "Рецепт";
+      const textToShare = effectiveRecipe?.title
+        ? buildRecipeShareTextShort(title, shareUrl)
+        : shareText || "";
+      if (!textToShare) return;
       trackUsageEvent("share_click", {
         properties: {
           ...(rid ? { recipe_id: rid } : {}),
@@ -350,14 +355,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           source_screen: "chat",
         },
       });
-      const textWithUrl = rid
-        ? `${shareText.replace(SHARE_APP_URL, shareUrl)}`
-        : shareText;
       try {
         if (typeof navigator !== "undefined" && navigator.share) {
           await navigator.share({
-            title: effectiveRecipe?.title ?? "Рецепт",
-            text: textWithUrl,
+            title,
+            text: textToShare,
           });
           toast({ title: "Поделиться", description: "Рецепт отправлен" });
         } else {
@@ -370,7 +372,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             });
             return;
           }
-          await navigator.clipboard.writeText(textWithUrl);
+          await navigator.clipboard.writeText(textToShare);
           toast({ title: "Рецепт скопирован для отправки" });
         }
       } catch (e: any) {
@@ -561,7 +563,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                         e.stopPropagation();
                         handleShare();
                       }}
-                      disabled={!shareText}
+                      disabled={!(effectiveRecipe?.title || shareText)}
                       className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground disabled:opacity-50 transition-all active:scale-95"
                       title="Поделиться"
                     >

@@ -1,3 +1,4 @@
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { recipeChefAdviceCard, recipeMiniAdviceCard } from "@/theme/recipeTokens";
 import { cn } from "@/lib/utils";
 
@@ -17,21 +18,23 @@ export function ChefAdviceCard({
 }: ChefAdviceCardProps) {
   const cardClass = isChefTip ? recipeChefAdviceCard : recipeMiniAdviceCard;
   const titleClass = isChefTip
-    ? "text-[11px] font-medium text-foreground mb-0.5"
-    : "text-[11px] font-medium text-muted-foreground mb-0.5";
+    ? "text-[11px] font-medium text-foreground"
+    : "text-[11px] font-medium text-muted-foreground";
 
   const bodyTrimmed = (body ?? "").trim();
   if (!bodyTrimmed) return null;
 
   return (
-    <div className={cn(cardClass, className)}>
-      <span className="text-sm shrink-0 opacity-70 mt-0.5" aria-hidden>
-        {isChefTip ? "👨‍🍳" : "💡"}
-      </span>
-      <div className="min-w-0 flex-1 space-y-1.5 min-h-0">
+    <Card className={cn(cardClass, "flex flex-col overflow-hidden p-0", className)}>
+      <CardHeader className="flex flex-row gap-2 items-center py-3 px-4 pb-1.5">
+        <span className="text-sm shrink-0 opacity-70" aria-hidden>
+          {isChefTip ? "👨‍🍳" : "💡"}
+        </span>
         <p className={titleClass}>{title}</p>
+      </CardHeader>
+      <CardContent className="py-0 px-4 pb-4 min-w-0">
         <p className="text-sm text-foreground leading-[1.6] max-h-[6.5em] overflow-y-auto">{bodyTrimmed}</p>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
