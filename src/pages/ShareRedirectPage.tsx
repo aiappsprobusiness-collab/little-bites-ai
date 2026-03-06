@@ -50,7 +50,7 @@ export default function ShareRedirectPage() {
   }, [shareRef, navigate]);
 
   if (status === "not_found") {
-    navigate("/", { replace: true });
+    navigate("/welcome", { replace: true });
     return null;
   }
 

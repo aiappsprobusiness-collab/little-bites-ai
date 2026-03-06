@@ -26,6 +26,9 @@ import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import ShareRedirectPage from "./pages/ShareRedirectPage";
 import SharedPlanPage from "./pages/SharedPlanPage";
+import LandingOnboardingScreen from "./pages/LandingOnboardingScreen";
+import AppPreloginScreen from "./pages/AppPreloginScreen";
+import { RootRedirect } from "./components/RootRedirect";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
@@ -141,9 +144,11 @@ const App = () => (
             <DinnerReminderBanner />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
+              <Route path="/welcome" element={<LandingOnboardingScreen />} />
+              <Route path="/prelogin" element={<AppPreloginScreen />} />
               <Route path="/r/:shareRef" element={<ShareRedirectPage />} />
               <Route path="/p/:ref" element={<SharedPlanPage />} />
-              <Route path="/" element={<Navigate to="/meal-plan" replace />} />
+              <Route path="/" element={<RootRedirect />} />
               <Route
                 path="/home"
                 element={

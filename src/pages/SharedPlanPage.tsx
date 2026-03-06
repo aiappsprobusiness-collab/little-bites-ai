@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { getSharedPlanByRef, type SharedPlanPayload, isSharedPlanWeek } from "@/services/sharedPlan";
 import { Button } from "@/components/ui/button";
 import { Loader2, Sparkles } from "lucide-react";
+import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
+import { trackLandingEvent } from "@/utils/landingAnalytics";
 
 const MEAL_EMOJI: Record<string, string> = {
   breakfast: "🍳",
@@ -11,8 +13,6 @@ const MEAL_EMOJI: Record<string, string> = {
   dinner: "🥘",
 };
 
-const APP_URL = "https://momrecipes.online";
-
 function formatDateLabel(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
   return d.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
@@ -20,8 +20,14 @@ function formatDateLabel(dateStr: string): string {
 
 export default function SharedPlanPage() {
   const { ref } = useParams<{ ref: string }>();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [plan, setPlan] = useState<SharedPlanPayload | null>(null);
   const [status, setStatus] = useState<"loading" | "found" | "not_found">("loading");
+
+  useEffect(() => {
+    saveOnboardingAttribution(location.pathname, location.search);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     const r = ref?.trim();
@@ -41,8 +47,14 @@ export default function SharedPlanPage() {
       .catch(() => setStatus("not_found"));
   }, [ref]);
 
-  const handleOpenApp = () => {
-    window.location.href = `${APP_URL}/meal-plan`;
+  const handleOpenApp = (isWeek: boolean) => {
+    if (isWeek) {
+      trackLandingEvent("share_week_plan_cta_click");
+    } else {
+      trackLandingEvent("share_day_plan_cta_click");
+    }
+    const search = location.search ? location.search : "";
+    navigate(`/welcome${search}`, { replace: true });
   };
 
   if (status === "loading") {
@@ -61,7 +73,7 @@ export default function SharedPlanPage() {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">План не найден или ссылка устарела</p>
-          <Button onClick={() => (window.location.href = APP_URL)}>Перейти в приложение</Button>
+          <Button onClick={() => navigate("/welcome", { replace: true })}>Перейти в приложение</Button>
         </div>
       </div>
     );
@@ -96,7 +108,7 @@ export default function SharedPlanPage() {
           <div className="mt-10 pt-6 border-t">
             <Button
               className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-semibold"
-              onClick={handleOpenApp}
+              onClick={() => handleOpenApp(true)}
             >
               <Sparkles className="w-5 h-5 mr-2 shrink-0" />
               ✨ Получить свой план питания
@@ -131,7 +143,7 @@ export default function SharedPlanPage() {
         <div className="mt-10 pt-6 border-t">
           <Button
             className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-semibold"
-            onClick={handleOpenApp}
+            onClick={() => handleOpenApp(false)}
           >
             <Sparkles className="w-5 h-5 mr-2 shrink-0" />
             ✨ Получить свой план питания

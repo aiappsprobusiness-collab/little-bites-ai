@@ -161,6 +161,11 @@ export function setShareAttributionFromShortLink(shareRef: string): void {
   }
 }
 
+/** Есть ли атрибуция от shared recipe (приход по /r/:shareRef). */
+export function hasShareRecipeAttribution(): boolean {
+  return getStoredEntryPoint() === "share_recipe" || getStoredShareRef() != null;
+}
+
 export interface TrackUsageEventOptions {
   memberId?: string | null;
   properties?: Record<string, unknown>;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -15,7 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useA2HSInstall } from "@/hooks/useA2HSInstall";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2, Download } from "lucide-react";
-import { trackUsageEvent } from "@/utils/usageEvents";
+import { trackUsageEvent, hasShareRecipeAttribution } from "@/utils/usageEvents";
+import { trackLandingEvent } from "@/utils/landingAnalytics";
 
 const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
@@ -57,10 +58,19 @@ export default function AuthPage() {
   const { promptInstall, isInstalled, hasA2HSSupport } = useA2HSInstall();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const defaultAuthTab = (location.state as { tab?: string } | null)?.tab === "signup" ? "signup" : "login";
 
   useEffect(() => {
-    trackUsageEvent("landing_view");
+    trackUsageEvent("auth_page_view");
   }, []);
+
+  const goToWelcome = () => {
+    if (hasShareRecipeAttribution()) {
+      trackLandingEvent("share_recipe_cta_click");
+    }
+    navigate("/welcome", { replace: true });
+  };
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -202,7 +212,7 @@ export default function AuthPage() {
               <CardDescription className="text-muted-foreground mt-1.5">Подберём блюда, рецепт и советы — без лишней болтовни.</CardDescription>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pt-0 pb-5 sm:pb-6">
-              <Tabs defaultValue="login" className="w-full">
+              <Tabs defaultValue={defaultAuthTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11">
                   <TabsTrigger value="login" className="rounded-[16px]">Вход</TabsTrigger>
                   <TabsTrigger value="signup" className="rounded-[16px]">Создать аккаунт</TabsTrigger>
@@ -352,6 +362,15 @@ export default function AuthPage() {
                   </Form>
                 </TabsContent>
               </Tabs>
+              <p className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={goToWelcome}
+                  className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Попробовать пример без регистрации
+                </button>
+              </p>
             </CardContent>
           </Card>
         </motion.div>
