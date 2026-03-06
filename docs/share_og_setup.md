@@ -51,3 +51,46 @@ npm run supabase:deploy:share-og
 ```
 
 Переменные окружения в Supabase (обычно уже есть): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+
+---
+
+# OG-preview для ссылок /p/:ref (план питания на день)
+
+Каноническая ссылка: `https://momrecipes.online/p/:ref`. Чтобы в Telegram/WhatsApp показывалась превью карточка, запросы от краулеров должны получать HTML с OG-тегами.
+
+## Как это устроено
+
+- **Edge Function `share-og-plan`** (Supabase): по `GET ?ref=:ref` проверяет наличие плана в `shared_plans`, отдаёт HTML с og:title, og:description, og:image, og:url. Редиректа нет — страница для пользователя это SPA по тому же URL.
+- **Прокси**: для запросов на `/p/*` от ботов (User-Agent краулера) отдавать ответ Edge Function; для обычных браузеров отдавать статику (GitHub Pages), чтобы открывалась SPA.
+
+## Прокси для /p/*
+
+Аналогично `/r/*`: правило перед фронтом.
+
+**Cloudflare Worker (пример):**
+
+```js
+// Для пути /p/REF — вызывать share-og-plan (желательно только для ботов)
+const pathname = new URL(request.url).pathname;
+if (pathname.startsWith('/p/')) {
+  const ref = pathname.replace(/^\/p\//, '');
+  const ogUrl = `${SUPABASE_URL}/functions/v1/share-og-plan?ref=${encodeURIComponent(ref)}`;
+  const res = await fetch(ogUrl);
+  return new Response(res.body, { status: res.status, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+}
+```
+
+Рекомендуется вызывать Edge Function только для User-Agent краулеров (Telegram, WhatsApp, Twitter и т.д.), чтобы обычные пользователи получали SPA с GitHub Pages.
+
+## Деплой
+
+```bash
+npm run supabase:deploy:share-og-plan
+```
+
+OG-картинка: статический файл `https://momrecipes.online/og/og-plan.jpg` (деплоится с фронтом в public/og/).
+
+## Ограничения (GitHub Pages)
+
+- Без прокси все запросы на `/p/:ref` получают один и тот же `index.html` с общими meta — превью будет одинаковым для всех планов (og:title/og:description статические для сайта).
+- С прокси и Edge Function превью для `/p/:ref` единое для всех планов (og:title = "Меню на день из MomRecipes", og:description = "План питания для семьи — составлено автоматически за 30 секунд"), но карточка выглядит корректно и по клику открывается нужная страница SPA.

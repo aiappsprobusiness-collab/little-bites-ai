@@ -775,15 +775,14 @@ export default function MealPlanPage() {
                             meals,
                           });
                           const shareText = "Посмотри, какой план питания на день нам собрал MomRecipes 👇";
-                          const shareMessage = `${shareText}\n${url}`;
                           if (typeof navigator !== "undefined" && navigator.share) {
                             await navigator.share({
-                              title: "План на день — MomRecipes",
-                              text: shareMessage,
+                              title: "План питания на день",
+                              text: shareText,
                               url,
                             });
                           } else {
-                            await navigator.clipboard?.writeText(shareMessage);
+                            await navigator.clipboard?.writeText(`${shareText}\n${url}`);
                             toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
                           }
                         } catch (e) {

@@ -26,6 +26,7 @@
     "supabase:deploy:chat:slow": "npm run sync:allergens && node scripts/deploy-function.mjs deepseek-chat",
     "supabase:deploy:track-usage-event": "npx supabase functions deploy track-usage-event",
     "supabase:deploy:share-og": "npx supabase functions deploy share-og",
+    "supabase:deploy:share-og-plan": "npx supabase functions deploy share-og-plan",
     "scripts:create-test-users": "node scripts/create-test-users.mjs",
     "debug:plan": "node scripts/collect-plan-debug-logs.mjs --mode week --debug",
     "check:migrations": "node scripts/check-migrations-immutable.mjs",

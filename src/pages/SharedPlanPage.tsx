@@ -73,9 +73,6 @@ export default function SharedPlanPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 px-4 py-8 max-w-md mx-auto w-full">
-        <div className="mb-6">
-          <p className="text-lg font-semibold text-foreground tracking-tight">MomRecipes</p>
-        </div>
         <h1 className="text-xl font-semibold text-foreground mb-1">Меню на день из MomRecipes</h1>
         <p className="text-muted-foreground text-sm mb-0.5">План питания для семьи</p>
         <p className="text-muted-foreground/80 text-xs mb-4">Составлено автоматически за 30 секунд</p>
