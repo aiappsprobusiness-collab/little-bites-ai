@@ -123,15 +123,15 @@ function normalizeNutrition(raw: unknown): { kcal_per_serving: number; protein_g
   };
 }
 
-/** Contract: title, description (1–2 sentences, max 150), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (2–3 sentences, max 520), nutrition optional. */
+/** Contract: title, description (1–2 sentences, max 170), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (2–3 sentences, max 280), nutrition optional. */
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().max(150, "description: 1–2 sentences, max 150 characters"),
+  description: z.string().max(170, "description: 1–2 sentences, max 170 characters"),
   cookingTime: z.number().int().min(1).max(240).optional(),
   cookingTimeMinutes: z.number().int().min(1).max(240).optional(),
   ingredients: z.array(IngredientSchema).min(3, "at least 3 ingredients required").max(10),
   steps: z.array(z.string().min(1).max(200)).min(1).max(10),
-  chefAdvice: z.string().max(520, "chefAdvice: 2–3 sentences, max 520 characters").nullable().optional(),
+  chefAdvice: z.string().max(280, "chefAdvice: 2–3 sentences, max 280 characters").nullable().optional(),
   mealType: z.enum(["breakfast", "lunch", "snack", "dinner"]).optional(),
   servings: z.number().int().min(1).max(20).optional(),
   nutrition: NutritionSchema,
@@ -224,7 +224,7 @@ export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJso
     const nutritionNorm = normalizeNutrition(p.nutrition);
     const normalized = {
       title: String(p.title).trim(),
-      description: String(p.description ?? "").slice(0, 150),
+      description: String(p.description ?? "").slice(0, 170),
       cookingTimeMinutes: cooking,
       ingredients: p.ingredients.slice(0, 10).map((ing: unknown) => {
         let name: string;
@@ -258,7 +258,7 @@ export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJso
         .filter((s) => s.length > 0)
         .slice(0, 10),
       chefAdvice: (p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText) != null
-        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 520)
+        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 280)
         : null,
       mealType: p.mealType ?? undefined,
       servings,

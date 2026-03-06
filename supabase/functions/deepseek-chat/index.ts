@@ -36,7 +36,7 @@ import {
   validateRecipe,
   retryFixJson,
   buildRecipeDescription,
-  buildChefAdvice,
+  buildChefAdviceFallback,
   shouldReplaceDescription,
   shouldReplaceChefAdvice,
   isDescriptionIncomplete,
@@ -57,7 +57,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Ограничение длины ответа рецепта (в т.ч. для более длинного chefAdvice 220–520 символов). */
+/** Ограничение длины ответа рецепта (description ≤170, chefAdvice ≤280). */
 const RECIPE_MAX_TOKENS = 1600;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
@@ -842,7 +842,17 @@ serve(async (req) => {
               : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
           }
           if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
-            (validated as Record<string, unknown>).chefAdvice = buildChefAdvice({ title: validated.title, userText: userMessage });
+            const ingNames = Array.isArray(validated.ingredients)
+              ? validated.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")).filter(Boolean)
+              : [];
+            const stepStrs = Array.isArray(validated.steps) ? validated.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean) : [];
+            const seed = (validated.title ?? "") + (ingNames[0] ?? "") + (stepStrs[0] ?? "");
+            (validated as Record<string, unknown>).chefAdvice = buildChefAdviceFallback({
+              title: validated.title,
+              ingredients: ingNames,
+              steps: stepStrs,
+              recipeIdSeed: seed,
+            });
           }
           assistantMessage = JSON.stringify(validated);
           responseRecipes = [validated as Record<string, unknown>];
