@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Heart, Calendar, MessageCircle, LifeBuoy, User } from "lucide-react";
+import { Heart, Calendar, MessageCircle, Lightbulb, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -8,7 +8,7 @@ const TABS = [
   { icon: Calendar, label: "План", path: "/meal-plan" },
   { icon: MessageCircle, label: "Чат", path: "/chat" },
   { icon: Heart, label: "Избранное", path: "/favorites" },
-  { icon: LifeBuoy, label: "Помощь маме", path: "/sos" },
+  { icon: Lightbulb, label: "Помощь маме", path: "/sos" },
   { icon: User, label: "Профиль", path: "/profile" },
 ] as const;
 
@@ -39,16 +39,14 @@ export function BottomNavigation() {
             <motion.button
               key={item.path}
               onClick={() => handleTabClick(item.path)}
+              aria-label={item.label}
               className={cn(
-                "relative flex flex-col items-center justify-center gap-1 py-2.5 px-2 min-w-0 flex-1 rounded-xl transition-colors",
+                "relative flex items-center justify-center py-2.5 px-2 min-w-0 flex-1 rounded-xl transition-colors",
                 isActive ? "text-primary" : "text-[#8A8A8A]"
               )}
               whileTap={{ scale: 0.95 }}
             >
               <Icon className={cn("w-5 h-5 shrink-0", isActive && "opacity-90")} />
-              <span className={cn("text-xs truncate w-full text-center", isActive ? "font-semibold text-primary" : "font-normal text-[#8A8A8A]")}>
-                {item.label}
-              </span>
             </motion.button>
           );
         })}

@@ -345,6 +345,7 @@ export default function RecipePage() {
     <MobileLayout
       title={recipe.title ?? "Рецепт"}
       headerNoBlur
+      headerWrapTitle
       headerClassName="layout-header-recipe border-b border-border/30"
       mainClassName="recipe-page-main"
       headerLeft={backButton}
@@ -352,19 +353,42 @@ export default function RecipePage() {
       <div className="px-4 pb-6 max-w-[100%] mx-auto overflow-x-hidden">
         {/* Hero card: чуть шире (меньше отступ от краёв на 8px), визуальный акцент */}
         <div className="-mx-2">
-          <div className={cn(recipeHeroCard, "space-y-3")}>
-          <RecipeNutritionHeader
-            mealTypeLabel={mealLabel}
-            cookingTimeMinutes={typeof cookingTime === "number" ? cookingTime : null}
-            nutrition={recipeNutrition}
-            variant="details"
-          />
-          {benefitLabel && (
-            <p className="text-xs font-semibold text-muted-foreground">{benefitLabel}</p>
-          )}
-          {description?.trim() && (
-            <p className="text-sm text-muted-foreground leading-[1.6]">{description.trim()}</p>
-          )}
+          <div className={cn(recipeHeroCard, "relative space-y-4 p-6")}>
+            <motion.button
+              type="button"
+              onClick={handleToggleFavorite}
+              aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className={cn(
+                "absolute right-5 top-6 z-10 h-[34px] w-[34px] min-h-[34px] min-w-[34px] rounded-full border bg-background/95 shadow-[0_6px_18px_-10px_rgba(0,0,0,0.3)] backdrop-blur-sm",
+                "flex items-center justify-center touch-manipulation transition-colors duration-150",
+                isFavorite
+                  ? "text-primary border-primary/25 bg-primary/10"
+                  : "text-muted-foreground border-border/80 hover:border-primary/30 hover:bg-primary/[0.06] hover:text-foreground"
+              )}
+            >
+              <Heart className={cn("h-4 w-4 transition-opacity duration-150", isFavorite && "fill-current")} />
+            </motion.button>
+
+            <div className="space-y-4 pr-11">
+              <RecipeNutritionHeader
+                mealTypeLabel={mealLabel}
+                cookingTimeMinutes={typeof cookingTime === "number" ? cookingTime : null}
+                nutrition={recipeNutrition}
+                variant="details"
+              />
+
+              {benefitLabel && (
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                  <span aria-hidden="true">🌿</span>
+                  <span>{benefitLabel}</span>
+                </p>
+              )}
+              {description?.trim() && (
+                <p className="text-sm text-muted-foreground leading-[1.6]">{description.trim()}</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -384,21 +408,6 @@ export default function RecipePage() {
               </Button>
             </motion.div>
           )}
-          <motion.button
-            type="button"
-            onClick={handleToggleFavorite}
-            aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
-            whileTap={{ scale: 0.96 }}
-            transition={{ duration: 0.15 }}
-            className={cn(
-              "h-10 w-10 min-h-[40px] min-w-[40px] rounded-full shrink-0 flex items-center justify-center border touch-manipulation transition-colors duration-150",
-              isFavorite
-                ? "text-primary bg-primary/10 border-primary/40 fill-primary"
-                : "text-muted-foreground bg-primary-light/50 border-primary-border/80 hover:bg-primary/10 hover:border-primary/40 hover:text-foreground"
-            )}
-          >
-            <Heart className={cn("h-4 w-4 transition-opacity duration-150", isFavorite && "fill-current")} />
-          </motion.button>
           <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
             <Button
               variant="outline"

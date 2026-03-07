@@ -237,12 +237,13 @@
 
   /** Рецепт: AppBar 60–64px контент + safe-area, лёгкий фон 1–2% */
   .layout-header.layout-header-recipe {
-    height: calc(env(safe-area-inset-top, 0px) + 62px);
+    height: auto;
     min-height: calc(env(safe-area-inset-top, 0px) + 62px);
     background: linear-gradient(180deg, hsl(var(--primary) / 0.015) 0%, hsl(var(--background)) 100%);
   }
   .layout-header.layout-header-recipe .layout-header-inner {
     min-height: 62px;
+    align-items: stretch;
   }
   .layout-header.layout-header-recipe .layout-header-inner h1 {
     letter-spacing: -0.02em;

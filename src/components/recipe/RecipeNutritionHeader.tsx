@@ -1,5 +1,5 @@
 import { Clock } from "lucide-react";
-import { formatKcal, formatMinutes, formatMacrosShort } from "@/utils/nutritionFormat";
+import { formatMinutes, formatMacrosShort } from "@/utils/nutritionFormat";
 import { recipeMealBadge, recipeTimeClass, recipeNutritionMetaKcal } from "@/theme/recipeTokens";
 import { cn } from "@/lib/utils";
 
@@ -58,12 +58,13 @@ export function RecipeNutritionHeader({
 
   const isCard = variant === "card";
   const macrosSize = isCard ? "text-[11px]" : "text-xs";
+  const metaItemClass = "inline-flex items-baseline gap-1.5";
 
   return (
-    <div className={cn("space-y-1.5", className)}>
+    <div className={cn("space-y-2", className)}>
       {hasMeta && (
         <div
-          className="flex flex-wrap items-center gap-2 min-w-0"
+          className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 min-w-0"
           role="group"
           aria-label="Тип приёма, калории, время приготовления"
         >
@@ -71,14 +72,14 @@ export function RecipeNutritionHeader({
             <span className={recipeMealBadge}>{mealTypeLabel!.trim()}</span>
           )}
           {hasTime && (
-            <span className={recipeTimeClass}>
-              <Clock className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            <span className={cn(recipeTimeClass, metaItemClass)}>
+              <Clock className="mt-[1px] h-3.5 w-3.5 shrink-0" aria-hidden />
               <span>{formatMinutes(cookingTimeMinutes)}</span>
             </span>
           )}
           {hasKcal && (
-            <span className={recipeNutritionMetaKcal}>
-              <span className="font-medium text-primary/90">{Math.round(kcal!)}</span>
+            <span className={cn(recipeNutritionMetaKcal, metaItemClass)}>
+              <span className="font-medium text-foreground/90">{Math.round(kcal!)}</span>
               <span> ккал</span>
             </span>
           )}
@@ -86,7 +87,7 @@ export function RecipeNutritionHeader({
       )}
       {hasMacros && (
         <p
-          className={cn(macrosSize, "text-muted-foreground leading-snug")}
+          className={cn(macrosSize, "text-muted-foreground/90 leading-snug")}
           role="paragraph"
         >
           {formatMacrosShort({ protein, fat, carbs })}

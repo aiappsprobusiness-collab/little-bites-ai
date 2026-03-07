@@ -40,6 +40,8 @@ interface MobileLayoutProps {
   headerNoBlur?: boolean;
   /** Доп. классы для header (например граница) */
   headerClassName?: string;
+  /** Разрешить многострочный title в header и авто-высоту шапки. */
+  headerWrapTitle?: boolean;
   /** Доп. классы для main (например отступ под высокий хедер рецепта) */
   mainClassName?: string;
 }
@@ -56,6 +58,7 @@ export function MobileLayout({
   headerCenter,
   headerNoBlur = false,
   headerClassName,
+  headerWrapTitle = false,
   mainClassName,
 }: MobileLayoutProps) {
   const showHeader =
@@ -81,19 +84,32 @@ export function MobileLayout({
                 (title != null && title !== "" ? (
                   <>
                     <div className="flex items-center justify-center gap-1.5 min-w-0 w-full">
-                      <h1 className="text-xl font-semibold text-foreground truncate leading-tight">
+                      <h1
+                        className={
+                          headerWrapTitle
+                            ? "w-full text-[17px] font-semibold text-foreground leading-tight whitespace-normal break-words [overflow-wrap:anywhere]"
+                            : "text-xl font-semibold text-foreground truncate leading-tight"
+                        }
+                      >
                         {title}
                       </h1>
                       {headerTitleIcon}
                     </div>
                     {headerMeta != null && (
-                      <p className="text-xs text-muted-foreground truncate w-full mt-0.5">
+                      <p
+                        className={
+                          headerWrapTitle
+                            ? "text-xs text-muted-foreground w-full mt-0.5 whitespace-normal break-words [overflow-wrap:anywhere]"
+                            : "text-xs text-muted-foreground truncate w-full mt-0.5"
+                        }
+                      >
                         {headerMeta}
                       </p>
                     )}
                   </>
                 ) : undefined)
               }
+              multilineCenter={headerWrapTitle}
               right={headerRight ?? undefined}
             />
           </div>

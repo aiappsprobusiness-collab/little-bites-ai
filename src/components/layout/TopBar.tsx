@@ -30,6 +30,8 @@ export interface TopBarProps {
   subtitle?: string;
   /** Кастомный контент по центру вместо title+subtitle. */
   center?: ReactNode;
+  /** Разрешить центру занимать несколько строк и увеличивать высоту top bar. */
+  multilineCenter?: boolean;
   /** Правый слот (actions). Gap 8px между кнопками. */
   right?: ReactNode;
   className?: string;
@@ -39,14 +41,15 @@ export interface TopBarProps {
  * Единый TopBar приложения: 56px высота контента, 16px отступы, left/center/right.
  * Нижний разделитель и фон задаются через layout-header; safe-area — через обёртку.
  */
-export function TopBar({ left, title, subtitle, center, right, className }: TopBarProps) {
+export function TopBar({ left, title, subtitle, center, multilineCenter = false, right, className }: TopBarProps) {
   const hasLeft = left != null && left !== false;
   const hasRight = right != null;
 
   return (
     <div
       className={cn(
-        "layout-topbar-inner relative flex items-center w-full min-h-[32px] h-8 px-4",
+        "layout-topbar-inner relative flex items-center w-full min-h-[32px] px-4",
+        multilineCenter ? "py-1" : "h-8",
         className
       )}
     >
@@ -56,16 +59,35 @@ export function TopBar({ left, title, subtitle, center, right, className }: TopB
       </div>
 
       {/* Центр: title+subtitle или кастом center */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none px-14">
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center text-center pointer-events-none px-14",
+          multilineCenter ? "relative w-full" : "absolute inset-0"
+        )}
+      >
         {center != null ? (
           center
         ) : title != null && title !== "" ? (
           <>
-            <h1 className="text-xl font-semibold text-foreground truncate w-full leading-tight">
+            <h1
+              className={cn(
+                "font-semibold text-foreground w-full leading-tight",
+                multilineCenter
+                  ? "text-[17px] whitespace-normal break-words [overflow-wrap:anywhere]"
+                  : "text-xl truncate"
+              )}
+            >
               {title}
             </h1>
             {subtitle != null && subtitle !== "" && (
-              <p className="text-xs text-muted-foreground truncate w-full mt-0.5">{subtitle}</p>
+              <p
+                className={cn(
+                  "text-xs text-muted-foreground w-full mt-0.5",
+                  multilineCenter ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"
+                )}
+              >
+                {subtitle}
+              </p>
             )}
           </>
         ) : null}
