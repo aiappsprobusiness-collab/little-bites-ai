@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, Share2, RotateCw, Loader2, Trash2, Lock } from "lucide-react";
+import { Heart, RotateCw, Loader2, Trash2, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";

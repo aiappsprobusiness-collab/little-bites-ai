@@ -1,6 +1,6 @@
 import { useState, useRef, forwardRef, useMemo, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ChefHat, Heart, Share2, BookOpen, AlertCircle, CalendarPlus } from "lucide-react";
+import { Trash2, ChefHat, Heart, BookOpen, AlertCircle, CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -23,6 +23,7 @@ import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
 import { ChatRecipeCard } from "@/components/chat/ChatRecipeCard";
+import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import {
   trackUsageEvent,
   generateShareRef,
@@ -571,7 +572,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground disabled:opacity-50 transition-all active:scale-95"
                       title="Поделиться"
                     >
-                      <Share2 className="h-4 w-4" />
+                      <ShareIosIcon className="h-4 w-4" />
                     </button>
                     {hasAccess ? (
                       <button

@@ -1,4 +1,3 @@
-import { Share2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useToast } from "@/hooks/use-toast";
 import type { ArticlesRow } from "@/integrations/supabase/types-v2";
+import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 
 interface ArticleReaderModalProps {
   article: ArticlesRow | null;
@@ -62,7 +62,7 @@ export function ArticleReaderModal({ article, open, onOpenChange, isLoading }: A
             className="shrink-0"
             title="Поделиться статьей"
           >
-            <Share2 className="w-5 h-5" />
+            <ShareIosIcon className="w-5 h-5 text-primary" />
           </Button>
         </DialogHeader>
         <div className="overflow-y-auto px-4 pb-6 prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 [&>*]:text-typo-muted">

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, Heart, Share2, CalendarPlus, Pencil, Trash2, ListPlus } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ListPlus } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -34,6 +34,7 @@ import { IngredientChips, type IngredientOverrides } from "@/components/recipe/I
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader";
+import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { cn } from "@/lib/utils";
 import {
   AlertDialog,
@@ -406,7 +407,7 @@ export default function RecipePage() {
               onClick={handleShare}
               aria-label="Поделиться рецептом"
             >
-              <Share2 className="h-4 w-4 shrink-0" />
+              <ShareIosIcon className="h-4 w-4 shrink-0" />
               <span className="text-sm">Поделиться рецептом</span>
             </Button>
           </motion.div>

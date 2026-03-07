@@ -26,7 +26,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { normalizeTitleKey } from "@/utils/recipePool";
-import { Check, Trash2, MoreVertical, Share2 } from "lucide-react";
+import { Check, Trash2, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getDebugPlanFromStorage, setDebugPlanInStorage } from "@/utils/debugPlan";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
+import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 
 /** Включить визуальный debug пула и логи replace_slot: window.__PLAN_DEBUG = true или ?debugPool=1 */
 function isPlanDebug(): boolean {
@@ -688,17 +689,6 @@ export default function MealPlanPage() {
     trackUsageEvent("plan_view_day");
   }, [location.pathname, showNoProfile, showEmptyFamily]);
 
-  /** Строка статуса под CTA: "N приёмов пищи" / "План на сегодня готов" / "Заполним день за 30 секунд" */
-  const heroStatusText = useMemo(() => {
-    const filledCount = dayMealPlans.filter((p) => p.recipe_id).length;
-    const isToday = selectedDayKey === todayKey;
-    const todaySuffix = isToday ? " на сегодня" : "";
-    if (filledCount === 0) return isToday ? "Заполним день за 30 секунд" : "Нет блюд на этот день";
-    if (filledCount === 4) return isToday ? "План на сегодня готов" : "План готов";
-    const word = filledCount === 1 ? "приём" : filledCount >= 2 && filledCount <= 4 ? "приёма" : "приёмов";
-    return `${filledCount} ${word} пищи${todaySuffix}`;
-  }, [dayMealPlans, selectedDayKey, todayKey]);
-
   const { dbCount: dayDbCount, aiCount: dayAiCount } = useMemo(() => {
     let db = 0;
     let ai = 0;
@@ -760,7 +750,7 @@ export default function MealPlanPage() {
       <div className="flex flex-col min-h-0 flex-1 px-4 relative overflow-x-hidden touch-pan-y overscroll-x-none max-w-full">
         {/* Content wrapper: один скролл + subtle pattern; горизонтальный скролл/overscroll отключены */}
         <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-x-none">
-          {/* 1) Hero: компактный, один primary CTA, второстепенные в меню/ниже */}
+          {/* 1) Hero: главные CTA сверху, шаринг ниже */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -818,8 +808,8 @@ export default function MealPlanPage() {
                       disabled={isAnyGenerating}
                       className="text-muted-foreground"
                     >
-                      <Share2 className="w-4 h-4 mr-2 shrink-0" />
-                      Поделиться планом
+                      <ShareIosIcon className="w-4 h-4 mr-2 shrink-0 text-primary" />
+                      Поделиться днем
                     </DropdownMenuItem>
                     {hasAccess && (
                       <DropdownMenuItem
@@ -827,7 +817,7 @@ export default function MealPlanPage() {
                         disabled={isAnyGenerating || isWeekPlansLoading}
                         className="text-muted-foreground"
                       >
-                        <Share2 className="w-4 h-4 mr-2 shrink-0" />
+                        <ShareIosIcon className="w-4 h-4 mr-2 shrink-0 text-primary" />
                         Поделиться неделей
                       </DropdownMenuItem>
                     )}
@@ -865,148 +855,142 @@ export default function MealPlanPage() {
                 </DropdownMenu>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-border/60">
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl gap-1.5 border-primary-border text-primary hover:bg-primary/10"
-                onClick={shareDayPlan}
-                disabled={isAnyGenerating}
-              >
-                <Share2 className="w-4 h-4 shrink-0" />
-                Поделиться этим меню
-              </Button>
-              {hasAccess && (
+            <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  className={`min-w-[140px] flex-1 sm:flex-none rounded-xl bg-primary hover:opacity-90 text-white border-0 transition-shadow duration-300 ${ctaGlow ? "shadow-[0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-sm"}`}
+                  disabled={isAnyGenerating || (isFree && todayIndex < 0)}
+                  onClick={async () => {
+                    if (isAnyGenerating) return;
+                    trackUsageEvent("plan_fill_day_click");
+                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
+                    setPoolUpgradeLoading(true);
+                    try {
+                      const result = await runPoolUpgrade({
+                        type: "day",
+                        member_id: memberIdForPlan,
+                        member_data: memberDataForPlan,
+                        day_key: selectedDayKey,
+                        day_keys: dayKeys,
+                      });
+                      trackUsageEvent("plan_fill_day_success");
+                      await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
+                      const total = result.totalSlots ?? 4;
+                      const planReadyT = toast({
+                        title: "Меню на сегодня готово",
+                        description: result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)
+                          ? `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов.`
+                          : `Подобрано: ${filled} из ${total}`,
+                      });
+                      setTimeout(() => planReadyT.dismiss(), 2000);
+                    } catch (e: unknown) {
+                      trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
+                      const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
+                      if (msg === "LIMIT_REACHED") {
+                        /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                      } else if (msg === "member_id_required") {
+                        toast({ description: "Выберите профиль ребёнка вверху" });
+                      } else if (msg.includes("слишком много времени")) {
+                        toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                      } else {
+                        toast({ variant: "destructive", title: "Ошибка", description: msg });
+                      }
+                    } finally {
+                      setPoolUpgradeLoading(false);
+                    }
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                  {isAnyGenerating ? "Подбираем…" : "Заполнить день"}
+                </Button>
+                <Button
+                  size="sm"
+                  aria-disabled={isFree}
+                  className={isFree
+                    ? "min-w-[140px] flex-1 sm:flex-none rounded-xl bg-muted text-muted-foreground hover:bg-muted border-0 shadow-none"
+                    : "min-w-[140px] flex-1 sm:flex-none rounded-xl bg-primary hover:opacity-90 text-white border-0 shadow-sm"}
+                  disabled={!isFree && isAnyGenerating}
+                  onClick={async () => {
+                    if (isFree) {
+                      if (FF_WEEK_PAYWALL_PREVIEW) {
+                        setShowWeekPreviewSheet(true);
+                      } else {
+                        setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
+                        setShowPaywall(true);
+                      }
+                      return;
+                    }
+                    if (isAnyGenerating) {
+                      toast({ description: "Идёт подбор рецептов, подождите…" });
+                      return;
+                    }
+                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
+                    setPoolUpgradeLoading(true);
+                    try {
+                      const result = await runPoolUpgrade({
+                        type: "week",
+                        member_id: memberIdForPlan,
+                        member_data: memberDataForPlan,
+                        start_key: getRollingStartKey(),
+                        day_keys: getRollingDayKeys(),
+                      });
+                      setMutedWeekKeyAndStorage(null);
+                      await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
+                      const total = result.totalSlots ?? 28;
+                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                        toast({ title: "Заполнить всю неделю", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                      } else {
+                        toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
+                      }
+                    } catch (e: unknown) {
+                      const msg = e instanceof Error ? e.message : "Не удалось заполнить неделю";
+                      if (msg === "LIMIT_REACHED") {
+                        /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                      } else if (msg === "member_id_required") {
+                        toast({ description: "Выберите профиль ребёнка вверху" });
+                      } else if (msg.includes("слишком много времени")) {
+                        toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                      } else {
+                        toast({ variant: "destructive", title: "Ошибка", description: msg });
+                      }
+                    } finally {
+                      setPoolUpgradeLoading(false);
+                    }
+                  }}
+                >
+                  <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                  Заполнить неделю
+                </Button>
+              </div>
+              <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-none min-w-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-xl gap-1.5 border-primary-border text-primary hover:bg-primary/10"
-                  onClick={shareWeekPlan}
-                  disabled={isAnyGenerating || isWeekPlansLoading}
+                  className="h-8 px-2.5 rounded-xl gap-1 border-primary-border/80 text-primary hover:bg-primary/10 whitespace-nowrap text-xs font-medium shadow-none shrink-0"
+                  onClick={shareDayPlan}
+                  disabled={isAnyGenerating}
                 >
-                  <Share2 className="w-4 h-4 shrink-0" />
-                  Поделиться меню на неделю
+                  <ShareIosIcon className="w-3.5 h-3.5 shrink-0" />
+                  Поделиться днем
                 </Button>
-              )}
-            </div>
-            <div className="mt-2">
-              <Button
-                size="sm"
-                className={`w-full sm:w-auto rounded-xl bg-primary hover:opacity-90 text-white border-0 transition-shadow duration-300 ${ctaGlow ? "shadow-[0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-sm"}`}
-                disabled={isAnyGenerating || (isFree && todayIndex < 0)}
-                onClick={async () => {
-                  if (isAnyGenerating) return;
-                  trackUsageEvent("plan_fill_day_click");
-                  if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
-                  setPoolUpgradeLoading(true);
-                  try {
-                    const result = await runPoolUpgrade({
-                      type: "day",
-                      member_id: memberIdForPlan,
-                      member_data: memberDataForPlan,
-                      day_key: selectedDayKey,
-                      day_keys: dayKeys,
-                    });
-                    trackUsageEvent("plan_fill_day_success");
-                    await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                    const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
-                    const total = result.totalSlots ?? 4;
-                    const planReadyT = toast({
-                      title: "Меню на сегодня готово",
-                      description: result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)
-                        ? `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов.`
-                        : `Подобрано: ${filled} из ${total}`,
-                    });
-                    setTimeout(() => planReadyT.dismiss(), 2000);
-                  } catch (e: unknown) {
-                    trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
-                    const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
-                    if (msg === "LIMIT_REACHED") {
-                      /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
-                    } else if (msg === "member_id_required") {
-                      toast({ description: "Выберите профиль ребёнка вверху" });
-                    } else if (msg.includes("слишком много времени")) {
-                      toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
-                    } else {
-                      toast({ variant: "destructive", title: "Ошибка", description: msg });
-                    }
-                  } finally {
-                    setPoolUpgradeLoading(false);
-                  }
-                }}
-              >
-                <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                {isAnyGenerating ? "Подбираем…" : isEmptyDay ? "Заполнить день" : "Обновить меню на день"}
-              </Button>
-              <p className="text-xs text-muted-foreground mt-1.5" aria-live="polite">
-                {heroStatusText}
-                {isEmptyDay && selectedDayKey === todayKey && " · Экономит до 30 мин"}
-              </p>
+                {hasAccess && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2.5 rounded-xl gap-1 border-primary-border/80 text-primary hover:bg-primary/10 whitespace-nowrap text-xs font-medium shadow-none shrink-0"
+                    onClick={shareWeekPlan}
+                    disabled={isAnyGenerating || isWeekPlansLoading}
+                  >
+                    <ShareIosIcon className="w-3.5 h-3.5 shrink-0" />
+                    Поделиться неделей
+                  </Button>
+                )}
+              </div>
             </div>
           </motion.div>
-
-          {/* Заполнить неделю: Free — primary CTA (preview paywall); Premium/Триал — outline, генерация */}
-          <div className="mb-2">
-            <Button
-              size="sm"
-              variant={isFree ? "default" : "outline"}
-              className={isFree
-                ? "rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground border-0 h-8 text-xs font-medium shadow-sm"
-                : "rounded-xl border-primary-border/70 text-muted-foreground hover:text-foreground h-8 text-xs"}
-              disabled={isFree ? false : isAnyGenerating}
-              onClick={async () => {
-                if (isFree) {
-                  if (FF_WEEK_PAYWALL_PREVIEW) {
-                    setShowWeekPreviewSheet(true);
-                  } else {
-                    setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
-                    setShowPaywall(true);
-                  }
-                  return;
-                }
-                if (isAnyGenerating) {
-                  toast({ description: "Идёт подбор рецептов, подождите…" });
-                  return;
-                }
-                if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
-                setPoolUpgradeLoading(true);
-                try {
-                  const result = await runPoolUpgrade({
-                    type: "week",
-                    member_id: memberIdForPlan,
-                    member_data: memberDataForPlan,
-                    start_key: getRollingStartKey(),
-                    day_keys: getRollingDayKeys(),
-                  });
-                  setMutedWeekKeyAndStorage(null);
-                  await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                  const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
-                  const total = result.totalSlots ?? 28;
-                  if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                    toast({ title: "Заполнить всю неделю", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
-                  } else {
-                    toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
-                  }
-                } catch (e: unknown) {
-                  const msg = e instanceof Error ? e.message : "Не удалось заполнить неделю";
-                  if (msg === "LIMIT_REACHED") {
-                    /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
-                  } else if (msg === "member_id_required") {
-                    toast({ description: "Выберите профиль ребёнка вверху" });
-                  } else if (msg.includes("слишком много времени")) {
-                    toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
-                  } else {
-                    toast({ variant: "destructive", title: "Ошибка", description: msg });
-                  }
-                } finally {
-                  setPoolUpgradeLoading(false);
-                }
-              }}
-            >
-              <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-              Заполнить неделю
-            </Button>
-          </div>
 
           {/* 2) Чипсы дней — горизонтальный скролл только внутри этого блока, страница по X не двигается */}
           <div className="flex gap-1 overflow-x-auto overflow-y-hidden pb-2 -mx-4 px-4 scrollbar-none min-w-0 max-w-full" style={{ scrollbarWidth: "none" }}>

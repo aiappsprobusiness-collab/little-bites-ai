@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, Share2, Trash2, ShoppingCart, X, Filter, ChevronDown } from "lucide-react";
+import { Copy, Trash2, ShoppingCart, X, Filter, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { useShoppingList, getSourceRecipesFromItem, type ProductCategory, type ShoppingListItemRow, type SourceRecipe } from "@/hooks/useShoppingList";
 import { usePlanShoppingIngredients } from "@/hooks/usePlanShoppingIngredients";
 import { useFamily } from "@/contexts/FamilyContext";
+import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
@@ -258,7 +259,7 @@ export function ShoppingListView() {
           Скопировать
         </Button>
         <Button variant="outline" size="sm" className="gap-1.5 rounded-full h-9" onClick={handleShare}>
-          <Share2 className="w-3.5 h-3.5" />
+          <ShareIosIcon className="w-3.5 h-3.5" />
           Поделиться
         </Button>
         {items.length > 0 && (

@@ -12,11 +12,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import type { SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { safeError, safeLog, safeWarn } from "../_shared/safeLogger.ts";
-import { getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
 import { getMemberAgeContext, isAdultContext } from "../_shared/memberAgeContext.ts";
 import { buildFamilyMemberDataForPlan } from "../_shared/familyMode.ts";
 import { normalizeSlotForWrite } from "../_shared/mealJson.ts";
 import { isFamilyDinnerCandidate } from "../_shared/plan/familyDinnerFilter.ts";
+import { buildLikeTokens, hasLikeMatch, hasLikedTitlesMatch, passesPreferenceFilters, scoreLikeSignal, type LikeMode } from "./preferenceRules.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -107,29 +107,10 @@ function shuffleArray<T>(arr: T[]): void {
     arr[j] = tmp as T;
   }
 }
-function tokenize(text: string): string[] {
-  if (!text || typeof text !== "string") return [];
-  return text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((t) => t.length >= 2);
-}
 function containsAnyToken(haystack: string, tokens: string[]): boolean {
   if (!haystack || tokens.length === 0) return false;
   const h = haystack.toLowerCase();
   return tokens.some((t) => t.length >= 2 && h.includes(t));
-}
-function getAllergyTokens(memberData: MemberDataPool | null | undefined): string[] {
-  return getBlockedTokensFromAllergies(memberData?.allergies);
-}
-function getDislikeTokens(memberData: MemberDataPool | null | undefined): string[] {
-  const list = memberData?.dislikes;
-  if (!list?.length) return [];
-  const tokens = new Set<string>();
-  for (const item of list) {
-    for (const t of tokenize(String(item).trim())) {
-      if (t.length >= 2) tokens.add(t);
-      if (t.length >= 4) tokens.add(t.slice(0, -1));
-    }
-  }
-  return [...tokens];
 }
 const AGE_RESTRICTED = ["острый", "кофе", "гриб"];
 const INFANT_FORBIDDEN_12 = ["свинина", "говядина", "стейк", "жарен", "копчен", "колбас"];
@@ -150,16 +131,7 @@ function recipeBlockedByInfantKeywords(r: RecipeRowPool, ageMonths: number): boo
   return false;
 }
 function passesProfileFilter(r: RecipeRowPool, memberData: MemberDataPool | null | undefined): boolean {
-  const allergyTokens = getAllergyTokens(memberData);
-  if (allergyTokens.length > 0) {
-    const text = [r.title ?? "", r.description ?? "", (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ")].join(" ").toLowerCase();
-    if (allergyTokens.some((tok) => tok.length >= 2 && text.includes(tok))) return false;
-  }
-  const dislikeTokens = getDislikeTokens(memberData);
-  if (dislikeTokens.length > 0) {
-    const text = [r.title ?? "", r.description ?? ""].join(" ");
-    if (containsAnyToken(text, dislikeTokens)) return false;
-  }
+  if (!passesPreferenceFilters(r, memberData)) return false;
   const ageMonths = memberData?.age_months;
   if (ageMonths != null && ageMonths < 36) {
     const text = [r.title ?? "", r.description ?? ""].join(" ");
@@ -254,8 +226,9 @@ function pickFromPoolInMemory(
   mealType: string,
   memberData: MemberDataPool | null,
   excludeRecipeIds: string[],
-  excludeTitleKeys: string[]
-): { id: string; title: string } | null {
+  excludeTitleKeys: string[],
+  likeMode: LikeMode = "neutral"
+): { id: string; title: string; matchedLike: boolean } | null {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
   const slot = normalizeMealType(mealType) ?? (mealType as NormalizedMealType);
@@ -278,14 +251,11 @@ function pickFromPoolInMemory(
     const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
     return slotSanityCheck(slot, [r.title ?? "", r.description ?? "", ing].join(" "));
   });
-  const likeTokens: string[] = [];
-  for (const item of memberData?.likes ?? []) {
-    for (const t of tokenizePrefText(String(item).trim())) likeTokens.push(t);
-  }
+  const likeTokens = buildLikeTokens(memberData);
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
   shuffleArray(filtered);
-  const best = pickBestRecipeForSlot(filtered, { likeTokens, recentSignatures });
-  return best ? { id: best.id, title: best.title } : null;
+  const best = pickBestRecipeForSlot(filtered, { likeTokens, likeMode, recentSignatures });
+  return best ? { id: best.id, title: best.title, matchedLike: hasLikeMatch(best, likeTokens) } : null;
 }
 
 function normalizeMealsForWrite(meals: Record<string, MealSlot | null | undefined>): Record<string, MealSlot> {
@@ -355,6 +325,26 @@ async function fetchTitleKeysByMealTypeFromPlans(supabase: SupabaseClient, userI
   }
   return out;
 }
+async function fetchMealTitlesByDateFromPlans(supabase: SupabaseClient, userId: string, memberId: string | null, dateKeys: string[]): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {};
+  if (dateKeys.length === 0) return out;
+  let q = supabase.from("meal_plans_v2").select("planned_date, meals").eq("user_id", userId).in("planned_date", dateKeys);
+  if (memberId == null) q = q.is("member_id", null);
+  else q = q.eq("member_id", memberId);
+  const { data: rows } = await q;
+  for (const row of rows ?? []) {
+    const dayKey = (row as { planned_date?: string }).planned_date;
+    if (!dayKey) continue;
+    const meals = (row as { meals?: Record<string, { title?: string }> }).meals ?? {};
+    const titles: string[] = [];
+    for (const mealKey of MEAL_KEYS) {
+      const title = meals[mealKey]?.title;
+      if (title) titles.push(title);
+    }
+    out[dayKey] = titles;
+  }
+  return out;
+}
 async function fetchCategoriesByMealTypeFromPlans(supabase: SupabaseClient, userId: string, memberId: string | null, dateKeys: string[]): Promise<Record<string, Set<string>>> {
   const out: Record<string, Set<string>> = {};
   for (const k of MEAL_KEYS) out[k] = new Set<string>();
@@ -387,31 +377,6 @@ const MIN_FAMILY_DINNER = 5;
 const debugPool = () => typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_POOL") === "true";
 
 // ——— Scoring helpers (likes bonus, recency, variety penalty) ———
-function tokenizePrefText(s: string): string[] {
-  if (!s || typeof s !== "string") return [];
-  const lower = s.trim().toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ");
-  const tokens = lower.split(/\s+/).filter((t) => t.length >= 2);
-  return [...new Set(tokens)];
-}
-function recipeTextIndex(r: RecipeRowPool): string {
-  const title = (r.title ?? "").trim();
-  const desc = (r.description ?? "").trim();
-  const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
-  const raw = [title, desc, ing].join(" ").toLowerCase();
-  return raw.replace(/[^\p{L}\p{N}]/gu, " ").replace(/\s+/g, " ").trim();
-}
-
-/** Soft word-boundary: token matches as whole word (avoids "рыба" inside random substrings). */
-function includesTokenSoft(text: string, token: string): boolean {
-  if (!token || token.length < 4) return text.includes(token);
-  const space = " ";
-  if (text.includes(space + token + space)) return true;
-  if (text.startsWith(token + space)) return true;
-  if (text.endsWith(space + token)) return true;
-  if (text === token) return true;
-  return false;
-}
-
 const STOP_WORDS = new Set(["и", "в", "на", "с", "по", "для", "из", "к", "о", "у", "без", "от", "до", "the", "and", "with", "for", "from", "with"]);
 /** Signatures from week + last days + body.exclude_title_keys (session); used for variety penalty. */
 function buildRecentSignatureSet(existingTitleKeys: string[]): Set<string> {
@@ -424,14 +389,9 @@ function buildRecentSignatureSet(existingTitleKeys: string[]): Set<string> {
   }
   return out;
 }
-type ScoreRecipeCtx = { likeTokens: string[]; recentSignatures: Set<string> };
+type ScoreRecipeCtx = { likeTokens: string[]; likeMode: LikeMode; recentSignatures: Set<string> };
 function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecipeCtx): number {
-  const text = recipeTextIndex(r);
-  let likeHits = 0;
-  for (const tok of ctx.likeTokens) {
-    if (tok.length >= 2 && includesTokenSoft(text, tok)) likeHits++;
-  }
-  const likeScore = Math.min(likeHits, 3) * 5;
+  const likeScore = scoreLikeSignal(r, ctx.likeTokens, ctx.likeMode);
   const recencyScore = Math.max(0, 3 - Math.floor(rankIndex / 20));
   const titleTokens = (r.title ?? "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((t) => t.length >= 2 && !STOP_WORDS.has(t)).slice(0, 3);
   let varietyPenalty = 0;
@@ -740,9 +700,19 @@ serve(async (req) => {
     let usedTitleKeys: string[] = [];
     let usedTitleKeysByMealType: Record<string, Set<string>> = {};
     let usedCategoriesByMealType: Record<string, Set<string>> = {};
+    // "Любит" — мягкий сигнал: максимум один явный like-match в день и не чаще, чем примерно раз в 2-3 дня.
+    const likeTokens = buildLikeTokens(effectiveMemberData);
+    const recentLikedDayWindow: boolean[] = [];
     for (const k of MEAL_KEYS) {
       usedTitleKeysByMealType[k] = new Set<string>();
       usedCategoriesByMealType[k] = new Set<string>();
+    }
+    if (likeTokens.length > 0) {
+      const lookbackKeys = [...getLastNDaysKeys(dayKeys[0], 2)].reverse();
+      const titlesByDate = await fetchMealTitlesByDateFromPlans(supabase, userId, effectiveMemberId, lookbackKeys);
+      for (const key of lookbackKeys) {
+        recentLikedDayWindow.push(hasLikedTitlesMatch(titlesByDate[key] ?? [], likeTokens));
+      }
     }
     if (dayKeys.length === 1 && Array.isArray(body.day_keys) && body.day_keys.length > 0) {
       const otherDayKeys = body.day_keys.filter((k) => typeof k === "string" && k !== dayKeys[0]);
@@ -792,6 +762,7 @@ serve(async (req) => {
     for (let i = 0; i < dayKeys.length; i++) {
       const dayKey = dayKeys[i];
       lastDayKey = dayKey;
+      let dayLikedRecipeCount = 0;
       if (jobId && !isSingleDay) {
         await supabase.from("plan_generation_jobs").update({ progress_done: i, last_day_key: dayKey, updated_at: new Date().toISOString() }).eq("id", jobId);
       }
@@ -805,15 +776,19 @@ serve(async (req) => {
             ? poolCandidates.filter((r) => isFamilyDinnerCandidate(r))
             : poolCandidates;
         const currentSlot = currentMeals[mealKey];
+        const slotLikeMode: LikeMode = likeTokens.length === 0
+          ? "neutral"
+          : (dayLikedRecipeCount > 0 || recentLikedDayWindow.some(Boolean) ? "avoid" : "favor");
         const excludeIdsForSlot = currentSlot?.recipe_id ? [...usedRecipeIds, currentSlot.recipe_id] : usedRecipeIds;
         const excludeTitlesBase = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
         const excludeTitlesForSlot = currentSlot?.title ? [...excludeTitlesBase, normalizeTitleKey(currentSlot.title)] : excludeTitlesBase;
-        let picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot);
+        let picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode);
         if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
-          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot);
+          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode);
         }
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
+          if (picked.matchedLike) dayLikedRecipeCount++;
           usedRecipeIds.push(picked.id);
           usedTitleKeys.push(normalizeTitleKey(picked.title));
           usedTitleKeysByMealType[mealKey]?.add(normalizeTitleKey(picked.title));
@@ -824,6 +799,10 @@ serve(async (req) => {
 
       const upsertErr = await upsertMealPlanRow(supabase, userId, effectiveMemberId, dayKey, newMeals);
       if (upsertErr.error && debugPool()) safeWarn("[plan] upsert failed", { dayKey, error: upsertErr.error });
+      if (likeTokens.length > 0) {
+        recentLikedDayWindow.push(dayLikedRecipeCount > 0);
+        while (recentLikedDayWindow.length > 2) recentLikedDayWindow.shift();
+      }
     }
 
     if (!isPremiumOrTrial) {
