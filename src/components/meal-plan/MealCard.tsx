@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
+import { recipeKcalChip } from "@/theme/recipeTokens";
 
 const MEAL_LABELS: Record<string, { label: string; emoji: string; time: string }> = {
   breakfast: { label: "Завтрак", emoji: "🍽", time: "8:30" },
@@ -271,8 +272,17 @@ export function MealCard({
       <div className="text-typo-body font-semibold text-foreground leading-tight">
         {recipeTitle}
       </div>
-      {metaLine2 && (
-        <div className="text-typo-caption text-muted-foreground">{metaLine2}</div>
+      {(metaLine2 || nutritionCalories != null) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {metaLine2 && (
+            <span className="text-typo-caption text-muted-foreground">{metaLine2}</span>
+          )}
+          {nutritionCalories != null && Number.isFinite(nutritionCalories) && (
+            <span className={recipeKcalChip}>
+              {Math.round(Number(nutritionCalories))} ккал
+            </span>
+          )}
+        </div>
       )}
       {chips.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-1">

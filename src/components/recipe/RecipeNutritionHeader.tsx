@@ -1,6 +1,6 @@
 import { Clock } from "lucide-react";
 import { formatMinutes, formatMacrosShort } from "@/utils/nutritionFormat";
-import { recipeMealBadge, recipeTimeClass, recipeNutritionMetaKcal } from "@/theme/recipeTokens";
+import { recipeMealBadge, recipeTimeClass, recipeKcalChip } from "@/theme/recipeTokens";
 import { cn } from "@/lib/utils";
 
 export type RecipeNutritionHeaderSource = {
@@ -78,9 +78,9 @@ export function RecipeNutritionHeader({
             </span>
           )}
           {hasKcal && (
-            <span className={cn(recipeNutritionMetaKcal, metaItemClass)}>
-              <span className="font-medium text-foreground/90">{Math.round(kcal!)}</span>
-              <span> ккал</span>
+            <span className={recipeKcalChip}>
+              <span>{Math.round(kcal!)}</span>
+              <span className="opacity-90"> ккал</span>
             </span>
           )}
         </div>

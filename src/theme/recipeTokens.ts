@@ -59,3 +59,7 @@ export const recipeNutritionChipBju =
 /** Компактная ккал в meta-row (план): как время, часть строки мета */
 export const recipeNutritionMetaKcal =
   "inline-flex items-center gap-1 text-xs text-muted-foreground";
+
+/** Чипса калорий: нейтральный вторичный стиль (не зелёный), везде: план, превью, экран рецепта */
+export const recipeKcalChip =
+  "inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium text-foreground/90 bg-muted/60 border border-border/50";

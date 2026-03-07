@@ -755,7 +755,7 @@ export default function MealPlanPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="rounded-2xl bg-primary-light/50 border border-primary-border/80 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.04)] p-3 sm:p-4 mb-1.5"
+            className="rounded-2xl bg-primary-light/50 border border-primary-border/80 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.04)] p-3 sm:p-4 mb-2"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -804,24 +804,6 @@ export default function MealPlanPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem
-                      onClick={shareDayPlan}
-                      disabled={isAnyGenerating}
-                      className="text-muted-foreground"
-                    >
-                      <ShareIosIcon className="w-4 h-4 mr-2 shrink-0 text-primary" />
-                      Поделиться днем
-                    </DropdownMenuItem>
-                    {hasAccess && (
-                      <DropdownMenuItem
-                        onClick={shareWeekPlan}
-                        disabled={isAnyGenerating || isWeekPlansLoading}
-                        className="text-muted-foreground"
-                      >
-                        <ShareIosIcon className="w-4 h-4 mr-2 shrink-0 text-primary" />
-                        Поделиться неделей
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
                       onClick={() => setClearConfirm("day")}
                       disabled={isAnyGenerating}
                       className="text-muted-foreground"
@@ -855,11 +837,11 @@ export default function MealPlanPage() {
                 </DropdownMenu>
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
+            <div className="mt-4 pt-3 border-t border-border/60 space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   size="sm"
-                  className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary hover:opacity-90 text-white border-0 transition-shadow duration-300 ${ctaGlow ? "shadow-[0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-sm"}`}
+                  className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
                   disabled={isAnyGenerating || (isFree && todayIndex < 0)}
                   onClick={async () => {
                     if (isAnyGenerating) return;
@@ -903,14 +885,14 @@ export default function MealPlanPage() {
                   }}
                 >
                   <Sparkles className="w-[18px] h-[18px] shrink-0" />
-                  {isAnyGenerating ? "Подбираем…" : "Заполнить день"}
+                  {isAnyGenerating ? "Собираем…" : "Собрать день"}
                 </Button>
                 <Button
                   size="sm"
                   aria-disabled={isFree}
                   className={isFree
                     ? "h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-muted text-muted-foreground hover:bg-muted border-0 shadow-none"
-                    : "h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary hover:opacity-90 text-white border-0 shadow-sm"}
+                    : "h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)] active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150"}
                   disabled={!isFree && isAnyGenerating}
                   onClick={async () => {
                     if (isFree) {
@@ -962,29 +944,29 @@ export default function MealPlanPage() {
                   }}
                 >
                   <Sparkles className="w-[18px] h-[18px] shrink-0" />
-                  Заполнить неделю
+                  Собрать неделю
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-11 w-full flex items-center justify-center gap-2 rounded-xl border-primary-border/80 text-primary hover:bg-primary/10 text-sm font-medium shadow-none"
+                  className="h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"
                   onClick={shareDayPlan}
                   disabled={isAnyGenerating}
                 >
-                  <ShareIosIcon className="w-[18px] h-[18px] shrink-0" />
+                  <ShareIosIcon className="w-4 h-4 shrink-0" />
                   Поделиться днем
                 </Button>
                 {hasAccess && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-11 w-full flex items-center justify-center gap-2 rounded-xl border-primary-border/80 text-primary hover:bg-primary/10 text-sm font-medium shadow-none"
+                    className="h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"
                     onClick={shareWeekPlan}
                     disabled={isAnyGenerating || isWeekPlansLoading}
                   >
-                    <ShareIosIcon className="w-[18px] h-[18px] shrink-0" />
+                    <ShareIosIcon className="w-4 h-4 shrink-0" />
                     Поделиться неделей
                   </Button>
                 )}
@@ -1091,7 +1073,7 @@ export default function MealPlanPage() {
               <p className="text-plan-secondary text-muted-foreground text-sm mb-3">
                 {isAdultNoRecipesEmpty
                   ? "Добавьте рецепты для взрослых через Чат (например: «Подбери обед на понедельник») или Избранное."
-                  : "Нажми «Заполнить день» или подбери рецепт для нужного приёма пищи."}
+                  : "Нажми «Собрать день» или подбери рецепт для нужного приёма пищи."}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {isAdultNoRecipesEmpty ? (
@@ -1142,7 +1124,7 @@ export default function MealPlanPage() {
                     }}
                   >
                     <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                    Заполнить день
+                    Собрать день
                   </Button>
                 )}
                 <Button
@@ -1486,7 +1468,7 @@ export default function MealPlanPage() {
                     }
                   }}
                 >
-                  Заполнить день
+                  Собрать день
                 </Button>
               </div>
             )}
