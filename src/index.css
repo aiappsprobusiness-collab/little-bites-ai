@@ -54,7 +54,7 @@
     --header-row-py: 0px;
     --layout-header-gap: 0px;
     --layout-header-offset: calc(env(safe-area-inset-top, 0px) + var(--header-content-height) + var(--header-row-py) * 2 + var(--layout-header-gap));
-    --layout-nav-height: 4rem;
+    --layout-nav-height: 3.625rem;
     --layout-main-bottom: calc(var(--layout-nav-height) + env(safe-area-inset-bottom, 0px) + 0.5rem);
 
     /* Совместимость: mint → primary-light (оливковая система) */

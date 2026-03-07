@@ -1,15 +1,15 @@
 import { motion } from "framer-motion";
-import { Heart, Calendar, MessageCircle, Lightbulb, User } from "lucide-react";
+import { Heart, CalendarDays, CircleUserRound, Lightbulb, MessageCircle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 /** 5 вкладок: План | Чат | Избранное | Помощь маме | Профиль */
 const TABS = [
-  { icon: Calendar, label: "План", path: "/meal-plan" },
+  { icon: CalendarDays, label: "План", path: "/meal-plan" },
   { icon: MessageCircle, label: "Чат", path: "/chat" },
   { icon: Heart, label: "Избранное", path: "/favorites" },
   { icon: Lightbulb, label: "Помощь маме", path: "/sos" },
-  { icon: User, label: "Профиль", path: "/profile" },
+  { icon: CircleUserRound, label: "Профиль", path: "/profile" },
 ] as const;
 
 export function BottomNavigation() {
@@ -41,12 +41,12 @@ export function BottomNavigation() {
               onClick={() => handleTabClick(item.path)}
               aria-label={item.label}
               className={cn(
-                "relative flex items-center justify-center py-2.5 px-2 min-w-0 flex-1 rounded-xl transition-colors",
+                "relative flex items-center justify-center py-2 px-2 min-w-0 flex-1 rounded-xl transition-colors",
                 isActive ? "text-primary" : "text-[#8A8A8A]"
               )}
               whileTap={{ scale: 0.95 }}
             >
-              <Icon className={cn("w-5 h-5 shrink-0", isActive && "opacity-90")} />
+              <Icon className={cn("w-5.5 h-5.5 shrink-0", isActive && "opacity-90")} />
             </motion.button>
           );
         })}
