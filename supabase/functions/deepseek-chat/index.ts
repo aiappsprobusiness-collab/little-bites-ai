@@ -19,7 +19,17 @@ import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
 import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
 import { serializeError } from "../_shared/logging.ts";
-import { parseAndValidateRecipeJsonFromString, getRecipeOrFallback, getLastValidationError, ingredientsNeedAmountRetry, applyIngredientsFallbackHeuristic, type RecipeJson } from "./recipeSchema.ts";
+import {
+  parseAndValidateRecipeJsonFromString,
+  getRecipeOrFallback,
+  getLastValidationError,
+  getLastRecipeParseDiagnostics,
+  resetLastRecipeValidationState,
+  decideRecipeRecovery,
+  ingredientsNeedAmountRetry,
+  applyIngredientsFallbackHeuristic,
+  type RecipeJson,
+} from "./recipeSchema.ts";
 import { getSystemPromptForType, generateRecipeSystemPromptV3, applyPromptTemplate, normalizeMemberData, findYoungestMember, getAgeMonths, type MemberData } from "./buildPrompt.ts";
 import { checkRecipeRequestBlocked } from "./domain/policies/index.ts";
 import {
@@ -794,13 +804,51 @@ serve(async (req) => {
         const parseLog = (msg: string, meta?: Record<string, unknown>) =>
           console.log(JSON.stringify({ tag: "RECIPE_PARSE", requestId, ...meta, msg }));
         let validated: RecipeJson | null = null;
+        let usedFallbackRecipe = false;
+        resetLastRecipeValidationState();
+        const tValidateStart = Date.now();
         const result = validateRecipe(assistantMessage, parseAndValidateRecipeJsonFromString);
+        logPerf("recipe_validate_ms", tValidateStart, requestId);
+        const parseDiagnostics = getLastRecipeParseDiagnostics();
+        logPerf("recipe_local_repair_ms", Date.now() - parseDiagnostics.localRepairMs, requestId, {
+          local_repair_applied: parseDiagnostics.localRepairApplied ? 1 : 0,
+          repaired_fields_count: parseDiagnostics.repairedFields.length,
+        });
+        safeLog(JSON.stringify({
+          tag: "RECIPE_LOCAL_REPAIR",
+          requestId,
+          applied: parseDiagnostics.localRepairApplied,
+          repairedFields: parseDiagnostics.repairedFields,
+          reason: parseDiagnostics.localRepairReason ?? undefined,
+          rawMealType: parseDiagnostics.rawMealType ?? undefined,
+          normalizedMealType: parseDiagnostics.normalizedMealType ?? undefined,
+        }));
         if (result.stage === "ok" && result.valid) {
           validated = result.valid;
         } else {
           const validationErrorMsg = result.stage === "validate" ? getLastValidationError() : null;
-          parseLog("first attempt failed", { stage: result.stage, error: (result as { error?: string }).error ?? validationErrorMsg ?? undefined, responseLength: assistantMessage.length });
-          if (DEEPSEEK_API_KEY && result.stage !== "ok") {
+          const recoveryDecision = decideRecipeRecovery(result.stage, parseDiagnostics);
+          parseLog("first attempt failed", {
+            stage: result.stage,
+            error: (result as { error?: string }).error ?? validationErrorMsg ?? undefined,
+            responseLength: assistantMessage.length,
+            localRepairApplied: parseDiagnostics.localRepairApplied,
+            repairedFields: parseDiagnostics.repairedFields,
+            retryFixJsonInvoked: recoveryDecision.strategy === "llm_retry",
+            retryReason: recoveryDecision.reason,
+          });
+          safeLog(JSON.stringify({
+            tag: "RECIPE_RETRY_DECISION",
+            requestId,
+            stage: result.stage,
+            strategy: recoveryDecision.strategy,
+            reason: recoveryDecision.reason,
+            localRepairApplied: parseDiagnostics.localRepairApplied,
+            repairedFields: parseDiagnostics.repairedFields,
+            validationDetails: parseDiagnostics.validationDetails,
+          }));
+          if (recoveryDecision.strategy === "llm_retry" && DEEPSEEK_API_KEY && result.stage !== "ok") {
+            const tRetryFixJsonStart = Date.now();
             const retryResult = await retryFixJson({
               apiKey: DEEPSEEK_API_KEY,
               rawResponse: assistantMessage.slice(0, 3500),
@@ -808,6 +856,7 @@ serve(async (req) => {
               requestId,
               log: parseLog,
             });
+            logPerf("retry_fix_json_ms", tRetryFixJsonStart, requestId, { success: retryResult.success ? 1 : 0 });
             if (retryResult.success && retryResult.fixed) {
               const retryValidated = parseAndValidateRecipeJsonFromString(retryResult.fixed);
               if (retryValidated) {
@@ -816,21 +865,32 @@ serve(async (req) => {
               } else {
                 parseLog("retry returned invalid JSON, using fallback", { retrySuccess: false });
                 validated = getRecipeOrFallback(assistantMessage);
+                usedFallbackRecipe = true;
               }
             } else {
               parseLog("retry failed or empty, using fallback", { retrySuccess: false });
               validated = getRecipeOrFallback(assistantMessage);
+              usedFallbackRecipe = true;
             }
+          } else if (recoveryDecision.strategy === "fail_fast") {
+            parseLog("non-retryable validation error", {
+              retryFixJsonInvoked: false,
+              retryReason: recoveryDecision.reason,
+              validationDetails: parseDiagnostics.validationDetails,
+            });
+            validated = getRecipeOrFallback(assistantMessage);
+            usedFallbackRecipe = true;
           } else {
             validated = getRecipeOrFallback(assistantMessage);
           }
         }
-        logPerf("normalize_ingredients", tNormStart, requestId);
         if (validated) {
+          const tIngredientNormalizeStart = Date.now();
           if (ingredientsNeedAmountRetry(validated.ingredients)) {
             applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
             safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
           }
+          logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
           const desc = (validated as { description?: string }).description;
           const advice = validated.chefAdvice ?? "";
           if (!desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc)) {
@@ -862,7 +922,15 @@ serve(async (req) => {
           parseLog("using fallback recipe (nutrition may be null)", { responseLength: assistantMessage.length });
           responseRecipes = [validated as Record<string, unknown>];
           assistantMessage = JSON.stringify(validated);
+          usedFallbackRecipe = true;
         }
+        safeLog(JSON.stringify({
+          tag: "RECIPE_VALIDATION_RESULT",
+          requestId,
+          finalValidated: !!validated,
+          usedFallback: usedFallbackRecipe,
+        }));
+        logPerf("normalize_ingredients", tNormStart, requestId);
       }
 
     // Учёт по фичам для лимитов Free (Plan/Help не тратят chat_recipe) (Plan/Help не тратят chat_recipe)

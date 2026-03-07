@@ -116,6 +116,7 @@ export const RECIPE_ONE_ONLY_RULE = `
 export const RECIPE_SYSTEM_RULES_V3 = `
 Верни ровно 1 JSON-объект рецепта. Без текста до/после, без markdown.
 Поля: title, description (до 170 символов), ingredients [{name, amount}] до 10, steps 5–7 строк (до 150 симв. каждая), cookingTime, mealType, servings, chefAdvice (до 280 символов), nutrition (kcal_per_serving, protein/fat/carbs, is_estimate: true).
+mealType (breakfast|lunch|dinner|snack) only; never use Russian values like "завтрак", "обед", "ужин", "перекус".
 description: 1–2 коротких предложения. Не повторять title. Что за блюдо + один конкретный плюс. Без штампов («идеально подходит», «приятный вкус», «универсальный», «сбалансированное», «это блюдо», «подходит для всей семьи»).
 chefAdvice: 2–3 коротких предложения (до 280 символов). Конкретный совет по технике/аромату/текстуре/подаче именно для этого блюда. Без заходов «Для максимальной…», «Для более…», «Если хотите», «Вы можете», «Это блюдо», «Данное блюдо». Лучше короткий и живой, чем длинный и общий.
 Запрещено упоминать профиль, возраст, детей/семью, аллергии в description, steps и chefAdvice. Рецепт универсальный для пула.
