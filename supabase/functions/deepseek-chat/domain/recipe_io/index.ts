@@ -29,4 +29,6 @@ export {
   hasForbiddenChefAdviceStart,
   sanitizeDescriptionForPool,
   sanitizeChefAdviceForPool,
+  passesDescriptionQualityGate,
+  passesChefAdviceQualityGate,
 } from "./sanitizeAndRepair.ts";

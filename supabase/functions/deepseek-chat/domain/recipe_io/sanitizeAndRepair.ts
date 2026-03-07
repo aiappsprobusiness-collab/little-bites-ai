@@ -240,7 +240,7 @@ const CHEF_ADVICE_FORBIDDEN_STARTS = [
 /** Кривой штамп — при наличии совет пересобирается. */
 const CHEF_ADVICE_BROKEN_PHRASE = /вкус\s+насыщенного\s+вкуса/i;
 
-/** Фразы в description: при наличии — подставляем fallback или обрезаем до первого нормального предложения. */
+/** Фразы в description: при наличии — подставляем fallback. */
 const DESCRIPTION_FORBIDDEN_PHRASES = [
   "это блюдо",
   "идеально подходит",
@@ -249,6 +249,9 @@ const DESCRIPTION_FORBIDDEN_PHRASES = [
   "подходит для всей семьи",
   "сбалансированное блюдо",
   "простое в приготовлении блюдо",
+  "простое блюдо",
+  "насыщенный вкус",
+  "универсальное блюдо",
   "в составе",
 ];
 
@@ -444,6 +447,22 @@ function countSentences(text: string): number {
   if (!t.length) return 0;
   const matches = t.match(/[.!?]+/g);
   return matches ? matches.length : (t.length > 0 ? 1 : 0);
+}
+
+/** Проверка качества description для retry: 2 предложения, нет запрещённых фраз. */
+export function passesDescriptionQualityGate(desc: string | null | undefined): boolean {
+  const t = normalizeSpaces(desc ?? "");
+  if (t.length < 20) return false;
+  if (countSentences(t) < 2) return false;
+  return !descriptionFailsQualityGate(t);
+}
+
+/** Проверка качества chefAdvice для retry: минимум 2 предложения, нет запрещённых зачинов. */
+export function passesChefAdviceQualityGate(advice: string | null | undefined): boolean {
+  const t = normalizeSpaces(advice ?? "");
+  if (t.length < 30) return false;
+  if (countSentences(t) < 2) return false;
+  return !hasForbiddenChefAdviceStart(t);
 }
 
 /** Добавляет второе предложение, если только одно (без LLM). */

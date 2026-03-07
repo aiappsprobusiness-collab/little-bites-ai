@@ -58,6 +58,8 @@ import {
   enforceChefAdvice,
   sanitizeDescriptionForPool,
   sanitizeChefAdviceForPool,
+  passesDescriptionQualityGate,
+  passesChefAdviceQualityGate,
 } from "./domain/recipe_io/index.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -825,6 +827,38 @@ serve(async (req) => {
         }));
         if (result.stage === "ok" && result.valid) {
           validated = result.valid;
+          if (DEEPSEEK_API_KEY && (!passesDescriptionQualityGate(validated.description) || !passesChefAdviceQualityGate(validated.chefAdvice ?? null))) {
+            parseLog("quality gate failed, one retry", {
+              descOk: passesDescriptionQualityGate(validated.description),
+              adviceOk: passesChefAdviceQualityGate(validated.chefAdvice ?? null),
+            });
+            try {
+              const controller2 = new AbortController();
+              const timeoutId2 = setTimeout(() => controller2.abort(), MAIN_LLM_TIMEOUT_MS);
+              const response2 = await fetch("https://api.deepseek.com/v1/chat/completions", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                signal: controller2.signal,
+              });
+              clearTimeout(timeoutId2);
+              if (response2.ok) {
+                const bodyText2 = await response2.text();
+                const data2 = JSON.parse(bodyText2) as { choices?: Array<{ message?: { content?: string } }> };
+                const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
+                if (assistantMessage2) {
+                  const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
+                  if (result2.stage === "ok" && result2.valid && passesDescriptionQualityGate(result2.valid.description) && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
+                    validated = result2.valid;
+                    assistantMessage = assistantMessage2;
+                    parseLog("quality retry succeeded", {});
+                  }
+                }
+              }
+            } catch (_e) {
+              parseLog("quality retry failed", { keepFirst: true });
+            }
+          }
         } else {
           const validationErrorMsg = result.stage === "validate" ? getLastValidationError() : null;
           const recoveryDecision = decideRecipeRecovery(result.stage, parseDiagnostics);
