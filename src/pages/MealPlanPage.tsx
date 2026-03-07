@@ -856,10 +856,10 @@ export default function MealPlanPage() {
               </div>
             </div>
             <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   size="sm"
-                  className={`min-w-[140px] flex-1 sm:flex-none rounded-xl bg-primary hover:opacity-90 text-white border-0 transition-shadow duration-300 ${ctaGlow ? "shadow-[0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-sm"}`}
+                  className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary hover:opacity-90 text-white border-0 transition-shadow duration-300 ${ctaGlow ? "shadow-[0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-sm"}`}
                   disabled={isAnyGenerating || (isFree && todayIndex < 0)}
                   onClick={async () => {
                     if (isAnyGenerating) return;
@@ -902,15 +902,15 @@ export default function MealPlanPage() {
                     }
                   }}
                 >
-                  <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                  <Sparkles className="w-[18px] h-[18px] shrink-0" />
                   {isAnyGenerating ? "Подбираем…" : "Заполнить день"}
                 </Button>
                 <Button
                   size="sm"
                   aria-disabled={isFree}
                   className={isFree
-                    ? "min-w-[140px] flex-1 sm:flex-none rounded-xl bg-muted text-muted-foreground hover:bg-muted border-0 shadow-none"
-                    : "min-w-[140px] flex-1 sm:flex-none rounded-xl bg-primary hover:opacity-90 text-white border-0 shadow-sm"}
+                    ? "h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-muted text-muted-foreground hover:bg-muted border-0 shadow-none"
+                    : "h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary hover:opacity-90 text-white border-0 shadow-sm"}
                   disabled={!isFree && isAnyGenerating}
                   onClick={async () => {
                     if (isFree) {
@@ -961,30 +961,30 @@ export default function MealPlanPage() {
                     }
                   }}
                 >
-                  <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
+                  <Sparkles className="w-[18px] h-[18px] shrink-0" />
                   Заполнить неделю
                 </Button>
               </div>
-              <div className="flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-none min-w-0">
+              <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 px-2.5 rounded-xl gap-1 border-primary-border/80 text-primary hover:bg-primary/10 whitespace-nowrap text-xs font-medium shadow-none shrink-0"
+                  className="h-11 w-full flex items-center justify-center gap-2 rounded-xl border-primary-border/80 text-primary hover:bg-primary/10 text-sm font-medium shadow-none"
                   onClick={shareDayPlan}
                   disabled={isAnyGenerating}
                 >
-                  <ShareIosIcon className="w-3.5 h-3.5 shrink-0" />
+                  <ShareIosIcon className="w-[18px] h-[18px] shrink-0" />
                   Поделиться днем
                 </Button>
                 {hasAccess && (
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 px-2.5 rounded-xl gap-1 border-primary-border/80 text-primary hover:bg-primary/10 whitespace-nowrap text-xs font-medium shadow-none shrink-0"
+                    className="h-11 w-full flex items-center justify-center gap-2 rounded-xl border-primary-border/80 text-primary hover:bg-primary/10 text-sm font-medium shadow-none"
                     onClick={shareWeekPlan}
                     disabled={isAnyGenerating || isWeekPlansLoading}
                   >
-                    <ShareIosIcon className="w-3.5 h-3.5 shrink-0" />
+                    <ShareIosIcon className="w-[18px] h-[18px] shrink-0" />
                     Поделиться неделей
                   </Button>
                 )}
