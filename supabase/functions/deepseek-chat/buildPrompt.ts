@@ -26,7 +26,6 @@ export interface MemberData {
   preferences?: string[];
   likes?: string[];
   dislikes?: string[];
-  difficulty?: string;
 }
 
 function calculateAge(birthDate: string): { years: number; months: number } {
@@ -136,8 +135,6 @@ export function applyPromptTemplate(
     addPrefs(primaryMember);
   }
   const preferencesText = preferencesSet.size > 0 ? Array.from(preferencesSet).join(", ") : "не указано";
-  const primaryDifficulty = primaryMember?.difficulty?.trim();
-  const difficultyText = primaryDifficulty === "easy" ? "Простые" : primaryDifficulty === "medium" ? "Средние" : primaryDifficulty === "any" ? "Любые" : "не указано";
 
   const ageCategory = getAgeCategory(rawMonths === 999 ? 0 : rawMonths);
   const ageRule = ageCategory in AGE_CONTEXTS ? AGE_CONTEXTS[ageCategory as keyof typeof AGE_CONTEXTS] : AGE_CONTEXTS.adult;
@@ -164,7 +161,6 @@ export function applyPromptTemplate(
     .split("{{allergies}}").join(allergies)
     .split("{{allergiesExclude}}").join(allergiesExclude)
     .split("{{preferences}}").join(preferencesText)
-    .split("{{difficulty}}").join(difficultyText)
     .split("{{generationContextBlock}}").join(generationContextBlock)
     .split("{{familyContext}}").join(familyContext)
     .split("{{userMessage}}").join(userMessage)
@@ -183,7 +179,6 @@ export function applyPromptTemplate(
       [/\{\{\s*allergies\s*\}\}/g, allergies],
       [/\{\{\s*allergiesExclude\s*\}\}/g, allergiesExclude],
       [/\{\{\s*preferences\s*\}\}/g, preferencesText],
-      [/\{\{\s*difficulty\s*\}\}/g, difficultyText],
       [/\{\{\s*generationContextBlock\s*\}\}/g, generationContextBlock],
       [/\{\{\s*familyContext\s*\}\}/g, familyContext],
       [/\{\{\s*userMessage\s*\}\}/g, userMessage],

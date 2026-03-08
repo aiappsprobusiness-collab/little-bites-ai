@@ -1,6 +1,6 @@
 import type { GenerationContext, Profile } from "./types";
 
-/** Same shape as Edge Function expects for memberData (ageMonths, allergies, likes, dislikes, difficulty). */
+/** Same shape as Edge Function expects for memberData (ageMonths, allergies, likes, dislikes). */
 export interface MemberDataPayload {
   name: string;
   birth_date?: string;
@@ -10,7 +10,6 @@ export interface MemberDataPayload {
   preferences?: string[];
   likes?: string[];
   dislikes?: string[];
-  difficulty?: string;
 }
 
 export interface AllMemberPayload {
@@ -20,7 +19,6 @@ export interface AllMemberPayload {
   preferences?: string[];
   likes?: string[];
   dislikes?: string[];
-  difficulty?: string;
 }
 
 export interface DerivedPayload {
@@ -36,7 +34,6 @@ export interface MemberWithAgeMonths {
   age_months?: number | null;
   allergies?: string[] | null;
   preferences?: string[] | null;
-  difficulty?: string | null;
 }
 
 function getAgeMonths(profile: Profile, lookup?: MemberWithAgeMonths[]): number {
@@ -74,7 +71,6 @@ export function derivePayloadFromContext(
         allergies: allergies.length ? allergies : undefined,
         likes: likes.length ? likes : undefined,
         dislikes: dislikes.length ? dislikes : undefined,
-        difficulty: p.difficulty ?? undefined,
       },
       allMembers: [],
       targetIsFamily: false,
@@ -105,7 +101,6 @@ export function derivePayloadFromContext(
       allergies: t.allergies ?? [],
       likes: t.likes?.length ? t.likes : undefined,
       dislikes: t.dislikes?.length ? t.dislikes : undefined,
-      difficulty: t.difficulty ?? undefined,
     }));
     return {
       memberData: {
@@ -115,7 +110,6 @@ export function derivePayloadFromContext(
         ageDescription,
         likes: allLikes.size ? Array.from(allLikes) : undefined,
         dislikes: allDislikes.size ? Array.from(allDislikes) : undefined,
-        difficulty: undefined,
       },
       allMembers,
       targetIsFamily: true,

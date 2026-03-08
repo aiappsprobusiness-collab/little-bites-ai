@@ -94,7 +94,6 @@ export function ProfileEditSheet({
   const [likesInput, setLikesInput] = useState("");
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [dislikesInput, setDislikesInput] = useState("");
-  const [difficulty, setDifficulty] = useState<string>("easy");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const lastInitRef = useRef<{ isCreate: boolean; memberId: string | null } | null>(null);
 
@@ -122,7 +121,6 @@ export function ProfileEditSheet({
       setLikesInput("");
       setDislikes([]);
       setDislikesInput("");
-      setDifficulty("easy");
       return;
     }
     if (!member) return;
@@ -134,10 +132,8 @@ export function ProfileEditSheet({
     setAllergyInput("");
     setLikes((member as MembersRow).likes ?? []);
     setLikesInput("");
-    setDislikes((member as MembersRow).dislikes ?? []);
+      setDislikes((member as MembersRow).dislikes ?? []);
     setDislikesInput("");
-    const d = (member as MembersRow).difficulty?.trim();
-    setDifficulty(d === "medium" || d === "any" ? d : "easy");
   }, [open, isCreate, member]);
 
   const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
@@ -209,7 +205,7 @@ export function ProfileEditSheet({
           type: memberType,
           age_months: totalAgeMonths || null,
           allergies,
-          ...(isPremium && { likes, dislikes, difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy" }),
+          ...(isPremium && { likes, dislikes }),
         });
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
         onOpenChange(false);
@@ -244,7 +240,7 @@ export function ProfileEditSheet({
         type: memberType,
         age_months: totalAgeMonths || null,
         allergies,
-        ...(isPremium && { likes, dislikes, difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy" }),
+        ...(isPremium && { likes, dislikes }),
       });
       toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
       onOpenChange(false);
@@ -401,35 +397,6 @@ export function ProfileEditSheet({
                 onRemove={dislikesHandlers.remove}
                 placeholder="Например: лук, мясо (запятая или Enter)"
               />
-              <div className="space-y-2">
-                <Label className="text-typo-muted font-medium">Сложность блюд</Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={difficulty === "easy" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setDifficulty("easy")}
-                  >
-                    Простые
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={difficulty === "medium" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setDifficulty("medium")}
-                  >
-                    Средние
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={difficulty === "any" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setDifficulty("any")}
-                  >
-                    Любые
-                  </Button>
-                </div>
-              </div>
             </>
           )}
         </div>

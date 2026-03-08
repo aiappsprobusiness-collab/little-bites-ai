@@ -8,29 +8,18 @@ function getAgeMonths(profile: Profile, lookup?: MemberWithAgeMonths[]): number 
   return 0;
 }
 
-function formatDifficulty(d?: string): string {
-  if (!d || !d.trim()) return "";
-  const s = d.trim().toLowerCase();
-  if (s === "easy") return "Простые";
-  if (s === "medium") return "Средние";
-  if (s === "any") return "Любые";
-  return d;
-}
-
 /** One child block in STRICT format for the LLM (no extra headers). */
 function profileBlock(p: Profile, lookup?: MemberWithAgeMonths[]): string {
   const ageMonths = getAgeMonths(p, lookup);
   const allergies = (p.allergies ?? []).filter((a) => a?.trim());
   const likes = (p.likes ?? []).filter((a) => a?.trim());
   const dislikes = (p.dislikes ?? []).filter((a) => a?.trim());
-  const difficulty = formatDifficulty(p.difficulty) || "any";
 
   const lines: string[] = [
     `- Age: ${ageMonths} months`,
     `- Allergies (STRICT): ${allergies.length ? allergies.join(", ") : "none"}`,
     `- Likes (soft): ${likes.length ? likes.join(", ") : "none"}`,
     `- Dislikes (STRICT): ${dislikes.length ? dislikes.join(", ") : "none"}`,
-    `- Difficulty: ${difficulty}`,
   ];
   return lines.join("\n");
 }

@@ -632,10 +632,6 @@ export default function ChatPage() {
         preferences: m.preferences ?? [],
         likes: (m as { likes?: string[] }).likes ?? [],
         dislikes: (m as { dislikes?: string[] }).dislikes ?? [],
-        difficulty:
-          m.difficulty === "easy" || m.difficulty === "medium" || m.difficulty === "any"
-            ? m.difficulty
-            : undefined,
       }));
       const plan =
         subscriptionStatus === "premium"

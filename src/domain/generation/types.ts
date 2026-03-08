@@ -13,7 +13,6 @@ export interface Profile {
   preferences: string[];
   likes?: string[];
   dislikes?: string[];
-  difficulty?: "easy" | "medium" | "any";
 }
 
 export interface Family {

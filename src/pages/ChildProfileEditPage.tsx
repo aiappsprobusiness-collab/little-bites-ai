@@ -58,7 +58,6 @@ export default function ChildProfileEditPage() {
   const [likesInput, setLikesInput] = useState("");
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [dislikesInput, setDislikesInput] = useState("");
-  const [difficulty, setDifficulty] = useState<string>("easy");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const initRef = useRef(false);
 
@@ -76,7 +75,6 @@ export default function ChildProfileEditPage() {
       setLikesInput("");
       setDislikes([]);
       setDislikesInput("");
-      setDifficulty("easy");
       initRef.current = true;
       return;
     }
@@ -96,8 +94,6 @@ export default function ChildProfileEditPage() {
     setLikesInput("");
     setDislikes((member as MembersRow).dislikes ?? []);
     setDislikesInput("");
-    const d = (member as MembersRow).difficulty?.trim();
-    setDifficulty(d === "medium" || d === "any" ? d : "easy");
   }, [isNew, id, member?.id]);
 
   const allergiesHandlers = {
@@ -145,7 +141,7 @@ export default function ChildProfileEditPage() {
     return Array.from(set).slice(0, max);
   }
   const openPaywallLikesDislikes = () => {
-    setPaywallCustomMessage("Предпочтения (любит / не любит) и сложность блюд — в Premium.");
+    setPaywallCustomMessage("Предпочтения (любит / не любит) — в Premium.");
     setShowPaywall(true);
   };
   const LIKES_GHOST_CHIPS = ["ягоды", "рыба", "овощи"];
@@ -212,8 +208,7 @@ export default function ChildProfileEditPage() {
         birthDate ||
         allergyItems.length > 0 ||
         likes.length > 0 ||
-        dislikes.length > 0 ||
-        difficulty !== "easy"
+        dislikes.length > 0
       );
     }
     if (!member) return false;
@@ -222,8 +217,7 @@ export default function ChildProfileEditPage() {
     const origItems = (member as MembersRow).allergy_items ?? (member.allergies ?? []).map((value, sort_order) => ({ value, is_active: true, sort_order }));
     const origLikes = (member as MembersRow).likes ?? [];
     const origDislikes = (member as MembersRow).dislikes ?? [];
-    const origDiff = ((member as MembersRow).difficulty?.trim() === "medium" || (member as MembersRow).difficulty?.trim() === "any") ? (member as MembersRow).difficulty?.trim() : "easy";
-    if (name.trim() !== origName || birthDate !== origBirth || difficulty !== (origDiff ?? "easy")) return true;
+    if (name.trim() !== origName || birthDate !== origBirth) return true;
     if (allergyItems.length !== origItems.length) return true;
     for (let i = 0; i < allergyItems.length; i++) {
       if (allergyItems[i].value !== origItems[i]?.value || allergyItems[i].is_active !== origItems[i]?.is_active) return true;
@@ -232,7 +226,7 @@ export default function ChildProfileEditPage() {
     const toKey = (a: string[]) => [...a].sort().join(",");
     if (toKey(likes) !== toKey(origLikes) || toKey(dislikes) !== toKey(origDislikes)) return true;
     return false;
-  }, [isNew, member, name, birthDate, allergyItems, likes, dislikes, difficulty]);
+  }, [isNew, member, name, birthDate, allergyItems, likes, dislikes]);
 
   const handleSave = async () => {
     const trimmedName = name.trim();
@@ -260,7 +254,6 @@ export default function ChildProfileEditPage() {
         ...(limits.preferencesEnabled && {
           likes,
           dislikes,
-          difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
         }),
       });
       toast({ title: "Профиль сохранён" });
@@ -292,7 +285,6 @@ export default function ChildProfileEditPage() {
         ...(limits.preferencesEnabled && {
           likes,
           dislikes,
-          difficulty: difficulty === "any" ? "any" : difficulty === "medium" ? "medium" : "easy",
         }),
       });
       toast({ title: "Профиль сохранён" });
@@ -568,35 +560,6 @@ export default function ChildProfileEditPage() {
                       onRemove={dislikesHandlers.remove}
                       placeholder="Например: лук, мясо (запятая или Enter)"
                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-typo-muted font-medium">Сложность блюд</Label>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant={difficulty === "easy" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setDifficulty("easy")}
-                        >
-                          Простые
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={difficulty === "medium" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setDifficulty("medium")}
-                        >
-                          Средние
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={difficulty === "any" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setDifficulty("any")}
-                        >
-                          Любые
-                        </Button>
-                      </div>
                     </div>
                   </>
                 )}

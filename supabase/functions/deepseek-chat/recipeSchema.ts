@@ -224,10 +224,10 @@ function normalizeNutrition(raw: unknown): { kcal_per_serving: number; protein_g
   };
 }
 
-/** Contract: title, description (1–2 sentences, max 170), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (2–3 sentences, max 280), nutrition optional. */
+/** Contract: title, description (2 sentences benefit, max 210), ingredients (max 10), steps (max 10, each ≤200), cookingTime, mealType, servings, chefAdvice (2–3 sentences, max 280), nutrition optional. */
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().max(170, "description: 1–2 sentences, max 170 characters"),
+  description: z.string().max(210, "description: 2 sentences benefit, max 210 characters"),
   cookingTime: z.number().int().min(1).max(240).optional(),
   cookingTimeMinutes: z.number().int().min(1).max(240).optional(),
   ingredients: z.array(IngredientSchema).min(3, "at least 3 ingredients required").max(10),
@@ -397,7 +397,7 @@ export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJso
     const nutritionNorm = normalizeNutrition(p.nutrition);
     const normalized = {
       title: String(p.title).trim(),
-      description: String(p.description ?? "").slice(0, 170),
+      description: String(p.description ?? "").slice(0, 210),
       cookingTimeMinutes: cooking,
       ingredients: p.ingredients.slice(0, 10).map((ing: unknown) => {
         let name: string;

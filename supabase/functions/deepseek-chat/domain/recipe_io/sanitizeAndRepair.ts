@@ -6,8 +6,8 @@
 
 import type { RecipeJson } from "../../recipeSchema.ts";
 
-/** Максимальная длина description (1–2 предложения). */
-export const DESCRIPTION_MAX_LENGTH = 170;
+/** Максимальная длина description (ровно 2 предложения о пользе). */
+export const DESCRIPTION_MAX_LENGTH = 210;
 
 /** Максимальная длина chefAdvice (2–3 коротких предложения). */
 export const CHEF_ADVICE_MAX_LENGTH = 280;
@@ -90,19 +90,58 @@ function trimBadDescriptionEnd(s: string): string {
   return alreadyEnds ? base : base + ".";
 }
 
-/** Безопасные преимущества для fallback (без «хранить» и воды). */
-const DESCRIPTION_ADVANTAGES = [
-  "быстро готовится",
-  "нежная текстура",
-  "сытно",
-  "легко разогреть",
-  "минимум посуды",
-  "ароматные специи",
-  "простой состав",
-  "приятная консистенция",
-  "насыщенный вкус",
-  "готовится в одной форме",
-];
+/** Benefit-based fallback по типу блюда: [предложение 1, предложение 2]. */
+const DESCRIPTION_BENEFIT_BY_TYPE: Record<string, [string, string][]> = {
+  porridge: [
+    ["Овсянка и каши дают медленные углеводы и клетчатку для ровной энергии.", "Мягкая нагрузка на пищеварение и длительная сытость."],
+    ["Каша поддерживает стабильный уровень энергии за счёт медленных углеводов.", "Клетчатка благоприятна для пищеварения и сытости."],
+  ],
+  cottage: [
+    ["Творог и запеканки содержат белок и кальций для костей и сытости.", "Удобны для длительной энергии без лишней тяжести."],
+    ["Белок и кальций в твороге важны для костей и мышц.", "Даёт сытость и поддержку в течение дня."],
+  ],
+  meat: [
+    ["Курица и мясо дают полноценный белок для сытости и поддержки мышц.", "Железо способствует кроветворению и тонусу."],
+    ["Белок и железо из мяса поддерживают мышцы и энергию.", "Сытное блюдо с хорошей усвояемостью."],
+  ],
+  fish: [
+    ["Рыба — источник белка и полезных жиров для мозга и сытости.", "Лёгкая нагрузка на пищеварение при высокой питательности."],
+    ["Белок и омега-жиры в рыбе поддерживают сытость и тонус.", "Удобно для разнообразного и сбалансированного рациона."],
+  ],
+  vegetables: [
+    ["Овощи дают клетчатку и витамин C для пищеварения и иммунитета.", "Низкая калорийность при хорошем объёме и сытости."],
+    ["Цветная капуста и брокколи — клетчатка и витамины для пищеварения.", "Лёгкое и питательное сочетание."],
+  ],
+  pumpkin: [
+    ["Тыква и морковь содержат бета-каротин для зрения и иммунитета.", "Мягкий вкус и комфорт для пищеварения."],
+    ["Бета-каротин в тыкве полезен для кожи и тонуса.", "Клетчатка поддерживает пищеварение."],
+  ],
+  fruit: [
+    ["Яблоко и груша добавляют пектин для пищеварения и мягкую сладость.", "Клетчатка и витамины без лишнего сахара."],
+    ["Пектин во фруктах благоприятен для пищеварения.", "Натуральная сладость и лёгкость."],
+  ],
+  grain: [
+    ["Киноа и гречка дают клетчатку, железо и медленные углеводы.", "Сытость и поддержка энергии надолго."],
+    ["Крупы — источник клетчатки и железа для крови и тонуса.", "Медленные углеводы для ровной энергии."],
+  ],
+  default: [
+    ["Блюдо даёт белок и питательные вещества для сытости.", "Клетчатка и витамины поддерживают пищеварение и энергию."],
+    ["Содержит белок и углеводы для длительной сытости.", "Овощи или крупы добавляют клетчатку и минералы."],
+  ],
+};
+
+function detectDescriptionDishType(title: string, ingredients: string[] = [], mealType?: string): string {
+  const text = [title, ...ingredients].join(" ").toLowerCase();
+  if (/\b(каша|овсянк|пшён|рисовая|гречневые|размазня)\b/.test(text)) return "porridge";
+  if (/\b(творог|запеканк|сырник)\b/.test(text)) return "cottage";
+  if (/\b(куриц|индейк|говядин|свинин|фарш|котлет|фрикадел|тефтел)\b/.test(text)) return "meat";
+  if (/\b(рыб|лосось|треск|минтай|судак)\b/.test(text)) return "fish";
+  if (/\b(тыкв|морковь)\b/.test(text)) return "pumpkin";
+  if (/\b(яблок|груш|персик|абрикос)\b/.test(text)) return "fruit";
+  if (/\b(киноа|гречк|булгур)\b/.test(text)) return "grain";
+  if (/\b(капуст|брокколи|овощ|цукини|кабачок|томат|перец)\b/.test(text)) return "vegetables";
+  return "default";
+}
 
 function simpleHash(str: string): number {
   let h = 0;
@@ -126,12 +165,10 @@ function normalizeTitleKey(title: string): string {
     .trim();
 }
 
-/** Универсальные fallback для description без названия блюда (pool-safe, ≤170). */
+/** Универсальные fallback для description (польза, 2 предложения, ≤210). */
 const DESCRIPTION_POOL_FALLBACKS = [
-  "Нежная текстура, готовится быстро. Минимум посуды.",
-  "Сочно держит форму. Удобно готовить порциями.",
-  "Мягкий вкус и ровная текстура. Без сложных техник.",
-  "Насыщенный вкус, минимум посуды и времени.",
+  "Блюдо даёт белок и полезные жиры для сытости и поддержки энергии. Овощи добавляют клетчатку и витамины для пищеварения.",
+  "Содержит белок и медленные углеводы для длительной сытости. Клетчатка и минералы поддерживают пищеварение и тонус.",
 ];
 
 /**
@@ -155,22 +192,21 @@ export function sanitizeDescriptionForPool(description: string | null | undefine
   return desc.slice(0, DESCRIPTION_MAX_LENGTH);
 }
 
-/** Fallback description без «хранить»: сочное блюдо + одно преимущество. */
-const DESCRIPTION_FALLBACK_TEMPLATE = ": сочное и ароматное блюдо из духовки. Готовится в одной форме — минимум посуды.";
-
 export function buildDescriptionFallback(options: {
-  title: string;
+  title?: string;
   keyIngredient?: string;
   recipeIdSeed?: string;
+  mealType?: string;
+  ingredients?: string[];
 }): string {
   const title = (options.title ?? "").trim() || "Блюдо";
-  const key = (options.keyIngredient ?? "").trim() || "простые ингредиенты";
-  const seed = (options.recipeIdSeed ?? title + key) || "default";
-  const advantage = pickByHash(DESCRIPTION_ADVANTAGES, seed);
-  const out = `${title}: ${key}. ${advantage}.`;
-  if (out.length <= DESCRIPTION_MAX_LENGTH) return out;
-  const short = `${title}${DESCRIPTION_FALLBACK_TEMPLATE}`;
-  return short.length <= DESCRIPTION_MAX_LENGTH ? short : short.slice(0, DESCRIPTION_MAX_LENGTH - 1).trim() + ".";
+  const ingNames = (options.ingredients ?? []).map((i) => (typeof i === "string" ? i : "").trim()).filter(Boolean);
+  const seed = (options.recipeIdSeed ?? title + (ingNames[0] ?? "")).trim() || "default";
+  const dishType = detectDescriptionDishType(title, ingNames, options.mealType);
+  const templates = DESCRIPTION_BENEFIT_BY_TYPE[dishType] ?? DESCRIPTION_BENEFIT_BY_TYPE.default;
+  const pair = templates[simpleHash(seed) % templates.length] ?? templates[0]!;
+  const out = `${pair[0]} ${pair[1]}`.trim();
+  return normalizeSpaces(out).slice(0, DESCRIPTION_MAX_LENGTH);
 }
 
 /**
@@ -179,7 +215,7 @@ export function buildDescriptionFallback(options: {
  */
 export function enforceDescription(
   desc: string | null | undefined,
-  context?: { title?: string; keyIngredient?: string; recipeIdSeed?: string }
+  context?: { title?: string; keyIngredient?: string; recipeIdSeed?: string; mealType?: string; ingredients?: string[] }
 ): string {
   let t = normalizeSpaces(desc ?? "");
   t = stripStorageTail(t);
@@ -188,6 +224,8 @@ export function enforceDescription(
       title: context?.title ?? "",
       keyIngredient: context?.keyIngredient,
       recipeIdSeed: context?.recipeIdSeed,
+      mealType: context?.mealType,
+      ingredients: context?.ingredients,
     });
   }
   if (t.length > DESCRIPTION_MAX_LENGTH) {
@@ -212,6 +250,8 @@ export function enforceDescription(
       title: context?.title ?? "",
       keyIngredient: context?.keyIngredient,
       recipeIdSeed: context?.recipeIdSeed,
+      mealType: context?.mealType,
+      ingredients: context?.ingredients,
     });
   }
   return t.slice(0, DESCRIPTION_MAX_LENGTH);
@@ -245,6 +285,7 @@ const DESCRIPTION_FORBIDDEN_PHRASES = [
   "это блюдо",
   "идеально подходит",
   "приятный вкус",
+  "приятная текстура",
   "универсальный",
   "подходит для всей семьи",
   "сбалансированное блюдо",
@@ -253,6 +294,16 @@ const DESCRIPTION_FORBIDDEN_PHRASES = [
   "насыщенный вкус",
   "универсальное блюдо",
   "в составе",
+  "главный ингредиент",
+  "отличный выбор для разнообразия",
+  "разнообразия рациона",
+  "готовится быстро",
+  "хранится в холодильнике",
+  "можно подавать",
+  "получается ароматным",
+  "сытное, но не тяжёлое",
+  "легко повторить",
+  "подходит для",
 ];
 
 /** Хотя бы один маркер конкретики в chefAdvice (техника, температура, порядок). Нет маркера — считаем общим, используем fallback. */
@@ -449,12 +500,47 @@ function countSentences(text: string): number {
   return matches ? matches.length : (t.length > 0 ? 1 : 0);
 }
 
-/** Проверка качества description для retry: 2 предложения, нет запрещённых фраз. */
-export function passesDescriptionQualityGate(desc: string | null | undefined): boolean {
+/** Нутритивные маркеры: в description должен быть хотя бы один (подстрока). */
+const DESCRIPTION_NUTRITIONAL_MARKERS = [
+  "белок", "клетчатк", "желез", "кальци", "витамин", "бета-каротин",
+  "медленные углеводы", "полезные жиры", "пищевар", "сытост", "энерги",
+  "кости", "мышц", "кроветвор", "пектин", "усвоени",
+];
+
+function hasNutritionalMarker(text: string): boolean {
+  const t = text.toLowerCase();
+  return DESCRIPTION_NUTRITIONAL_MARKERS.some((m) => t.includes(m));
+}
+
+function descriptionStartsWithTitle(desc: string, title: string): boolean {
+  const t = normalizeSpaces(desc);
+  const titleKey = normalizeTitleKey(title);
+  if (!titleKey || t.length < 10) return false;
+  const firstWord = t.split(/\s+/)[0] ?? "";
+  const titleWords = titleKey.split(/\s+/).filter((w) => w.length >= 2);
+  if (titleWords.length > 0 && firstWord.toLowerCase() === titleWords[0]!.toLowerCase()) return true;
+  const descLower = t.toLowerCase().slice(0, 50);
+  return descLower.startsWith(titleKey.slice(0, 15)) || titleWords.some((w) => descLower.startsWith(w));
+}
+
+function lastSentenceComplete(text: string): boolean {
+  const t = normalizeSpaces(text);
+  if (!t.length) return false;
+  return /[.!?…]\s*$/.test(t) && !/\s(и|или|а|в|на|что|котор|для|чтобы)\s*\.?\s*$/i.test(t);
+}
+
+/** Quality gate для description: длина ≤210, ровно 2 предложения, нет запретов, не с title, завершено, есть нутритивный маркер. */
+export function passesDescriptionQualityGate(
+  desc: string | null | undefined,
+  options?: { title?: string }
+): boolean {
   const t = normalizeSpaces(desc ?? "");
-  if (t.length < 20) return false;
-  if (countSentences(t) < 2) return false;
-  return !descriptionFailsQualityGate(t);
+  if (t.length < 50 || t.length > DESCRIPTION_MAX_LENGTH) return false;
+  if (countSentences(t) !== 2) return false;
+  if (descriptionFailsQualityGate(t)) return false;
+  if (options?.title && descriptionStartsWithTitle(t, options.title)) return false;
+  if (!lastSentenceComplete(t)) return false;
+  return hasNutritionalMarker(t);
 }
 
 /** Проверка качества chefAdvice для retry: минимум 2 предложения, нет запрещённых зачинов. */
@@ -514,10 +600,10 @@ export function enforceChefAdvice(
   return t.slice(0, CHEF_ADVICE_MAX_LENGTH);
 }
 
-/** Один короткий вызов LLM для исправления только description (если обрыв). */
+/** Один короткий вызов LLM только для description: польза блюда, 2 предложения, макс. 210. */
 export async function repairDescriptionOnly(current: string, apiKey: string): Promise<string | null> {
-  const sys = "Ты исправляешь только поле description. Верни ТОЛЬКО валидный JSON: {\"description\": \"...\"}. 1–2 коротких предложения, макс. 170 символов, без обрыва. Суть блюда + одно преимущество.";
-  const user = `Текущее описание (обрывается): «${current.slice(0, 200)}». Допиши до 1–2 законченных предложений, не более 170 символов.`;
+  const sys = "Верни ТОЛЬКО JSON: {\"description\": \"...\"}. Ровно 2 коротких предложения, макс. 210 символов. Предложение 1 — основная польза блюда. Предложение 2 — 1–2 нутритивных акцента (белок, клетчатка, железо, кальций, витамин C, бета-каротин, сытость, энергия, пищеварение). Не начинать с названия блюда. Запрещено: «это блюдо», «в составе», «подходит для», «приятная текстура», «разнообразие рациона». Оба предложения закончить точкой.";
+  const user = `Исправь описание: «${current.slice(0, 250)}». Дай 2 законченных предложения о пользе, макс. 210 символов.`;
   try {
     const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",

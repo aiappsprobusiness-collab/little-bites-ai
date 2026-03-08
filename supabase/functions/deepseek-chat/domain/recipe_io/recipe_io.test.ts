@@ -74,7 +74,7 @@ Deno.test("getMinimalRecipe: неизвестный mealType — snack", () => {
 
 // --- enforceDescription / enforceChefAdvice (sanitize guarantees) ---
 
-Deno.test("enforceDescription: результат всегда <= 170 символов", () => {
+Deno.test("enforceDescription: результат всегда <= DESCRIPTION_MAX_LENGTH (210)", () => {
   const long = "Очень длинное описание блюда. ".repeat(20);
   const out = enforceDescription(long, { title: "Блюдо" });
   if (out.length > DESCRIPTION_MAX_LENGTH) {

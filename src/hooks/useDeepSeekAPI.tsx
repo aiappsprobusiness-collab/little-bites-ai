@@ -46,10 +46,8 @@ function toProfile(m: {
   preferences?: string[];
   likes?: string[];
   dislikes?: string[];
-  difficulty?: string | null;
 }): Profile {
   const role = (m.type === 'adult' || m.type === 'family') ? 'adult' : 'child';
-  const diff = m.difficulty as Profile['difficulty'] | undefined;
   return {
     id: m.id,
     role,
@@ -59,7 +57,6 @@ function toProfile(m: {
     preferences: m.preferences ?? [],
     likes: m.likes ?? [],
     dislikes: m.dislikes ?? [],
-    ...(diff && (diff === 'easy' || diff === 'medium' || diff === 'any') && { difficulty: diff }),
   };
 }
 
@@ -161,7 +158,6 @@ export function useDeepSeekAPI() {
         preferences: c.preferences,
         likes: c.likes,
         dislikes: c.dislikes,
-        difficulty: c.difficulty,
       })));
 
       safeLog('AI Context Sent:', {

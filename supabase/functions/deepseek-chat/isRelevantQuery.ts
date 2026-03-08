@@ -1,35 +1,49 @@
 /**
  * Проверка релевантности запроса для чата рецептов.
+ * Принцип: fail-open для food-like, reject только при явно нерелевантном запросе.
+ * Никаких уточняющих ответов — только allow (в генерацию) или reject.
  */
 
 const VOWELS = /[аеёиоуыэюяaeiou]/gi;
 const MIN_VOWEL_RATIO = 0.12;
 
+export type RelevanceResult = {
+  allowed: boolean;
+  reason: string;
+  matchedTerms: string[];
+  matchedPatterns: string[];
+  clearlyNonFood: boolean;
+};
+
+/** Кулинарные термины: продукты, приёмы пищи, действия, блюда */
 const CULINARY_TERMS = [
   "рецепт", "рецепты", "еда", "блюдо", "завтрак", "обед", "ужин", "полдник",
-  "готовить", "приготовить", "приготовь", "сделать", "свари", "курица", "мясо",
-  "рыба", "яйцо", "творог", "овощи", "фрукты", "суп", "каша", "омлет", "салат",
+  "готовить", "приготовить", "приготовь", "сделать", "свари", "запеки", "запечь",
+  "курица", "мясо", "свинина", "говядина", "индейка", "телятина", "баранина",
+  "рыба", "лосось", "треска", "минтай", "селедк", "икра",
+  "яйцо", "яйца", "творог", "молоко", "сыр", "кефир", "сметана", "йогурт",
+  "овощи", "фрукты", "кабачок", "баклажан", "тыква", "морковь", "свекла", "капуста", "помидор", "огурец", "перец", "лук", "чеснок",
+  "картофель", "пюре", "рис", "гречка", "овсянка", "макарон", "лапша", "крупа", "булгур", "киноа",
+  "суп", "каша", "омлет", "салат", "соус", "гриб", "грибы", "сливки", "масло",
   "детское", "ребенку", "вкусно", "ингредиенты", "меню", "перекус",
   "покормить", "чем покормить", "чем кормить", "кормить", "кормление", "продукты",
-  "breakfast", "lunch", "dinner", "recipe", "food", "cook"
+  "котлет", "тефтел", "голубц", "вареник", "блин", "оладь", "сырник", "запеканк", "шарлотк",
+  "борщ", "щи", "рагу", "тушен", "жарен", "паров", "на пару", "в духовке",
+  "breakfast", "lunch", "dinner", "recipe", "food", "cook",
 ];
 
-/** Ключевые слова для экспертных вопросов (только для Premium) */
-const PREMIUM_EXPERT_TERMS = [
-  "польза", "полезно", "витамин", "минерал", "нутриент", "белок", "углевод",
-  "заменить", "вместо", "аллергия", "непереносимость", "можно ли", "хранить",
-  "заморозить", "срок", "рацион", "диета", "здоровье", "совет", "почему",
-  "расскажи", "расскажи про", "что такое", "чем полезен", "чем полезно",
+/** Структурные паттерны запроса блюда: X с Y, X в соусе, из X, приём пищи из X */
+const FOOD_PATTERNS = [
+  " с ", " в соусе", " в соус", " и ", " без ", " на завтрак", " на обед", " на ужин", " на полдник",
+  "что приготовить", "приготовить из", "чем покормить", "блюдо из", "ужин из", "обед из", "завтрак из", "рецепт из", "из чего", "как приготовить",
+  " из курицы", " из мяса", " из рыбы", " из индейки", " из творога", " из тыквы", " из овощей", " из риса", " из картофел", " из кабачк", " из яиц", " из молока", " из грибов",
+  " с курицей", " с мясом", " с рыбой", " с овощами", " с грибами", " с сыром", " с картошкой", " с рисом",
 ];
 
-/** Явный запрос рецепта — полноценный вызов с генерацией рецепта и JSON */
-const RECIPE_REQUEST_TERMS = [
-  "рецепт", "рецепты", "приготовь", "приготовить", "что приготовить", "дай рецепт",
-  "подскажи рецепт", "блюдо из", "из чего приготовить", "как приготовить", "рецепт из",
-  "сделай блюдо", "свари", "запеки", "на завтрак", "на обед", "на ужин", "на полдник",
-  "завтрак", "обед", "ужин", "полдник", "перекус",
-  "что поесть", "что съесть", "что приготовить из", "придумай рецепт",
-  "чем покормить", "чем кормить", "что покормить", "чем накормить",
+/** Явно не про еду — при совпадении и отсутствии food-сигналов отклоняем */
+const NON_FOOD_PATTERNS = [
+  "погод", "курс доллар", "курс валют", "курс евро", "курс рубл", "расписани", "билет", "кинотеатр",
+  "какая погода", "сколько стоит доллар", "когда откроется", "расписание поезд", "погоду в ",
 ];
 
 function checkVowelRatio(text: string): boolean {
@@ -42,55 +56,92 @@ function checkVowelRatio(text: string): boolean {
   return vowelRatio >= MIN_VOWEL_RATIO;
 }
 
-/** Нормализует текст для проверки: убирает концевую пунктуацию, чтобы "чем покормить?" и "чем покормить" матчились одинаково. */
 function normalizeForMatch(text: string): string {
   return text.replace(/[?!.,;:]+$/g, "").trim().toLowerCase();
 }
 
-/** Базовая проверка для FREE: 0 гласных или нет кулинарных слов в короткой фразе — отклоняем. */
-export function isRelevantQuery(text: string): boolean {
-  const trimmed = (text ?? "").trim();
-  if (trimmed.length < 3) return false;
-  if (!checkVowelRatio(trimmed)) return false;
-
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length > 3) return true;
-
-  const lower = normalizeForMatch(trimmed);
-  const hasCulinary = CULINARY_TERMS.some(term => lower.includes(term));
-  if (!hasCulinary) return false;
-  return true;
-}
-
-/** Вопросные паттерны — не считать запросом «название блюда». */
-const QUESTION_PATTERNS = [
-  "как ", "почему ", "что такое", "чем полезен", "чем полезно", "можно ли", "расскажи про", "расскажи о",
-];
-
 /**
- * Проверка для PREMIUM: false = бред (0 гласных или нет кулинарных/экспертных слов), 'soft' = мягкий запрос, true = запрос рецепта.
- * Короткая фраза без вопроса (например «хачапури», «хачапури по аджарски») считается запросом конкретного блюда → true.
+ * Основная проверка: reject только если явно не про еду; при сомнении — allow.
+ * Возвращает структурированный результат для логов.
  */
-export function isRelevantPremiumQuery(text: string): false | "soft" | true {
+export function checkFoodRelevance(text: string): RelevanceResult {
   const trimmed = (text ?? "").trim();
-  if (trimmed.length < 2) return false;
-  if (!checkVowelRatio(trimmed)) return false;
-
   const lower = normalizeForMatch(trimmed);
-  const words = trimmed.split(/\s+/).filter(Boolean);
 
-  // Короткий запрос без «?» и без вопросительных слов — вероятно название блюда → выдаём рецепт
-  if (words.length <= 5 && trimmed.length <= 80 && !trimmed.includes("?")) {
-    const looksLikeQuestion = QUESTION_PATTERNS.some((p) => lower.startsWith(p) || lower.includes(" " + p));
-    if (!looksLikeQuestion) return true;
+  if (trimmed.length < 2) {
+    return {
+      allowed: false,
+      reason: "too_short",
+      matchedTerms: [],
+      matchedPatterns: [],
+      clearlyNonFood: false,
+    };
   }
 
-  const hasCulinary = CULINARY_TERMS.some(term => lower.includes(term));
-  const hasExpert = PREMIUM_EXPERT_TERMS.some(term => lower.includes(term));
-  const hasRecipeRequest = RECIPE_REQUEST_TERMS.some(term => lower.includes(term));
+  if (!checkVowelRatio(trimmed)) {
+    return {
+      allowed: false,
+      reason: "no_vowels",
+      matchedTerms: [],
+      matchedPatterns: [],
+      clearlyNonFood: false,
+    };
+  }
 
-  if (!hasCulinary && !hasExpert) return false;
+  const matchedTerms: string[] = [];
+  const matchedPatterns: string[] = [];
 
-  if (hasRecipeRequest) return true;
-  return "soft";
+  for (const term of CULINARY_TERMS) {
+    if (lower.includes(term)) matchedTerms.push(term);
+  }
+  for (const p of FOOD_PATTERNS) {
+    if (lower.includes(p)) matchedPatterns.push(p);
+  }
+
+  const hasFoodSignal = matchedTerms.length > 0 || matchedPatterns.length > 0;
+
+  const matchedNonFood: string[] = [];
+  for (const p of NON_FOOD_PATTERNS) {
+    if (lower.includes(p)) matchedNonFood.push(p);
+  }
+  const hasNonFoodSignal = matchedNonFood.length > 0;
+
+  if (hasFoodSignal) {
+    return {
+      allowed: true,
+      reason: "food_terms_or_patterns",
+      matchedTerms,
+      matchedPatterns,
+      clearlyNonFood: false,
+    };
+  }
+
+  if (hasNonFoodSignal) {
+    return {
+      allowed: false,
+      reason: "clearly_non_food",
+      matchedTerms: [],
+      matchedPatterns: [],
+      clearlyNonFood: true,
+    };
+  }
+
+  return {
+    allowed: true,
+    reason: "fail_open",
+    matchedTerms: [],
+    matchedPatterns: [],
+    clearlyNonFood: false,
+  };
+}
+
+/** FREE: совместимость с прежним API — только allow/reject по checkFoodRelevance */
+export function isRelevantQuery(text: string): boolean {
+  return checkFoodRelevance(text).allowed;
+}
+
+/** PREMIUM: то же правило, оба пути (true/"soft") ведут в генерацию — возвращаем только true/false */
+export function isRelevantPremiumQuery(text: string): false | "soft" | true {
+  const result = checkFoodRelevance(text);
+  return result.allowed ? true : false;
 }

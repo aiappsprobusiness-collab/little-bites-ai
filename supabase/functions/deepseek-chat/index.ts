@@ -7,7 +7,7 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { isRelevantQuery, isRelevantPremiumQuery } from "./isRelevantQuery.ts";
+import { checkFoodRelevance } from "./isRelevantQuery.ts";
 import {
   NO_ARTICLES_RULE,
   GREETING_STYLE_RULE,
@@ -47,6 +47,7 @@ import {
   retryFixJson,
   buildRecipeDescription,
   buildChefAdviceFallback,
+  buildDescriptionFallback,
   shouldReplaceDescription,
   shouldReplaceChefAdvice,
   isDescriptionIncomplete,
@@ -69,7 +70,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Ограничение длины ответа рецепта (description ≤170, chefAdvice ≤280). */
+/** Ограничение длины ответа рецепта (description ≤210, chefAdvice ≤280). */
 const RECIPE_MAX_TOKENS = 1600;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
@@ -201,7 +202,7 @@ interface ChatRequest {
   memberId?: string;
   /** Данные всех членов семьи — если переданы, запрос в таблицу members не выполняется */
   allMembers?: MemberData[];
-  /** Structured prompt block from GenerationContext (single/family with age, allergies, preferences, difficulty) */
+  /** Structured prompt block from GenerationContext (single/family with age, allergies, preferences) */
   generationContextBlock?: string;
   /** Optional suffix appended to system prompt */
   extraSystemSuffix?: string;
@@ -364,33 +365,32 @@ serve(async (req) => {
         ? [...messages].reverse().find((m: { role: string }) => m.role === "user")?.content ?? ""
         : "";
 
-    let premiumRelevance: false | "soft" | true | undefined = undefined;
+    let relevanceAllowed = true;
 
     if (type === "chat") {
-      const irrelevantStub =
-        `Похоже, этот вопрос не связан с питанием. ${memberName} ждёт полезных рецептов! Пожалуйста, уточни свой кулинарный запрос.`;
+      const relevance = checkFoodRelevance(userMessage);
+      relevanceAllowed = relevance.allowed;
 
-      if (!isPremiumUser) {
-        if (!isRelevantQuery(userMessage)) {
-          return new Response(
-            JSON.stringify({ message: irrelevantStub, recipes: [] }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      } else {
-        premiumRelevance = isRelevantPremiumQuery(userMessage);
-        if (premiumRelevance === false) {
-          return new Response(
-            JSON.stringify({ message: irrelevantStub, recipes: [] }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+      safeLog(JSON.stringify({
+        tag: "FOOD_RELEVANCE",
+        requestId,
+        relevance_result: relevance.allowed ? "allow" : "reject",
+        reason: relevance.reason,
+        matched_terms: relevance.matchedTerms,
+        matched_patterns: relevance.matchedPatterns,
+        clearly_non_food: relevance.clearlyNonFood,
+      }));
+
+      if (!relevanceAllowed) {
+        const rejectMessage = `Этот вопрос не связан с питанием. ${memberName} ждёт полезных рецептов!`;
+        return new Response(
+          JSON.stringify({ message: rejectMessage, recipes: [] }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 
-    // Для Premium: генерируем рецепт и при "soft" (чтобы профили вроде "мама" получали рецепты на общие запросы)
-    const isRecipeChat =
-      type === "chat" && (isPremiumUser ? (premiumRelevance === true || premiumRelevance === "soft") : true);
+    const isRecipeChat = type === "chat" && relevanceAllowed;
     const isRecipeRequest = isRecipeRequestByType || (type === "chat" && isRecipeChat);
 
     const targetIsFamily = targetIsFamilyRaw;
@@ -449,7 +449,7 @@ serve(async (req) => {
               { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
-          const rows = (data ?? []) as Array<{ id?: string; name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; difficulty?: string }>;
+          const rows = (data ?? []) as Array<{ id?: string; name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[] }>;
           allMembers = rows.map((m) => ({
             ...(m.id && { id: m.id }),
             name: m.name,
@@ -458,7 +458,6 @@ serve(async (req) => {
             ...(m.preferences && { preferences: m.preferences }),
             ...(m.likes && { likes: m.likes }),
             ...(m.dislikes && { dislikes: m.dislikes }),
-            ...(m.difficulty && { difficulty: m.difficulty }),
           })) as MemberData[];
         }
       }
@@ -620,8 +619,8 @@ serve(async (req) => {
         })
       : getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
 
-    // Только если рецепт не запрашиваем — даём краткий ответ без рецепта (для soft теперь рецепт генерируем)
-    if (type === "chat" && isPremiumUser && premiumRelevance === "soft" && !isRecipeRequest) {
+    // Раньше для Premium "soft" давали краткий ответ без рецепта; после рефактора relevance только allow/reject — при allow всегда генерируем рецепт, этот блок не используется
+    if (false) {
       systemPrompt = "Ты эксперт по питанию Mom Recipes. Отвечай кратко по вопросу пользователя, без генерации рецепта.";
     }
 
@@ -684,7 +683,7 @@ serve(async (req) => {
 
     safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
 
-      const isExpertSoft = type === "chat" && isPremiumUser && premiumRelevance === "soft";
+      const isExpertSoft = false;
       const maxTokensChat =
         type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
       const promptConfig = {
@@ -827,9 +826,9 @@ serve(async (req) => {
         }));
         if (result.stage === "ok" && result.valid) {
           validated = result.valid;
-          if (DEEPSEEK_API_KEY && (!passesDescriptionQualityGate(validated.description) || !passesChefAdviceQualityGate(validated.chefAdvice ?? null))) {
+          if (DEEPSEEK_API_KEY && (!passesDescriptionQualityGate(validated.description, { title: validated.title }) || !passesChefAdviceQualityGate(validated.chefAdvice ?? null))) {
             parseLog("quality gate failed, one retry", {
-              descOk: passesDescriptionQualityGate(validated.description),
+              descOk: passesDescriptionQualityGate(validated.description, { title: validated.title }),
               adviceOk: passesChefAdviceQualityGate(validated.chefAdvice ?? null),
             });
             try {
@@ -848,7 +847,7 @@ serve(async (req) => {
                 const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
                 if (assistantMessage2) {
                   const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
-                  if (result2.stage === "ok" && result2.valid && passesDescriptionQualityGate(result2.valid.description) && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
+                  if (result2.stage === "ok" && result2.valid && passesDescriptionQualityGate(result2.valid.description, { title: result2.valid.title }) && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
                     validated = result2.valid;
                     assistantMessage = assistantMessage2;
                     parseLog("quality retry succeeded", {});
@@ -948,6 +947,23 @@ serve(async (req) => {
               recipeIdSeed: seed,
             });
           }
+          const ingNamesForDesc = Array.isArray(validated.ingredients)
+            ? validated.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")).filter(Boolean)
+            : [];
+          const recipeIdSeedDesc = (validated.title ?? "") + (ingNamesForDesc[0] ?? "");
+          if ((validated as { description?: string }).description && !passesDescriptionQualityGate((validated as { description?: string }).description, { title: validated.title }) && DEEPSEEK_API_KEY) {
+            const repairedDesc = await repairDescriptionOnly((validated as { description?: string }).description ?? "", DEEPSEEK_API_KEY);
+            if (repairedDesc && passesDescriptionQualityGate(repairedDesc, { title: validated.title })) {
+              (validated as Record<string, unknown>).description = repairedDesc;
+            } else {
+              (validated as Record<string, unknown>).description = buildDescriptionFallback({
+                title: validated.title,
+                mealType: validated.mealType ?? undefined,
+                ingredients: ingNamesForDesc,
+                recipeIdSeed: recipeIdSeedDesc,
+              });
+            }
+          }
           assistantMessage = JSON.stringify(validated);
           responseRecipes = [validated as Record<string, unknown>];
         }
@@ -1024,18 +1040,31 @@ serve(async (req) => {
       const recipeIdSeed = title + (keyIngredient ?? "") + (steps[0] ?? "");
       const descForPool = sanitizeDescriptionForPool(descRaw, title, recipeIdSeed);
       const adviceForPool = sanitizeChefAdviceForPool(adviceRaw, recipeIdSeed);
-      (recipe as Record<string, unknown>).description = enforceDescription(descForPool, { title, keyIngredient, recipeIdSeed });
+      const rawChefAdviceFromModel = (recipe.chefAdvice ?? "").trim();
+      safeLog(JSON.stringify({
+        tag: "RECIPE_RAW_CHEF_ADVICE",
+        requestId,
+        rawChefAdviceLength: rawChefAdviceFromModel.length,
+        rawChefAdvice: rawChefAdviceFromModel.slice(0, 400),
+      }));
+      const ingNamesForEnforce = Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : [];
+      (recipe as Record<string, unknown>).description = enforceDescription(descForPool, { title, keyIngredient, recipeIdSeed, mealType: recipe.mealType ?? undefined, ingredients: ingNamesForEnforce });
       (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceForPool, {
         title,
         ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : undefined,
         steps,
         recipeIdSeed,
       });
+      const finalChefAdvice = (recipe.chefAdvice as string) ?? "";
+      const chefAdviceReplacedWithFallback = finalChefAdvice !== adviceForPool;
+      if (chefAdviceReplacedWithFallback) {
+        safeLog(JSON.stringify({ tag: "CHEF_ADVICE_REPLACED_WITH_FALLBACK", requestId }));
+      }
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
         descriptionLength: (recipe.description as string)?.length,
-        chefAdviceLength: (recipe.chefAdvice as string)?.length ?? 0,
+        chefAdviceLength: finalChefAdvice.length,
       }));
       safeLog(JSON.stringify({ tag: "MEAL_MENTION_SANITIZED", requestId }));
     }

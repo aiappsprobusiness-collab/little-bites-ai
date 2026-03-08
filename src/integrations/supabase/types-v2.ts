@@ -69,7 +69,7 @@ export interface AllergyItemRow {
   sort_order?: number;
 }
 
-// v2: members — family/child/adult profiles. Maps to domain Profile (id, role=type, name, age from age_months, allergies, preferences, difficulty).
+// v2: members — family/child/adult profiles. Maps to domain Profile (id, role=type, name, age from age_months, allergies, preferences). difficulty: legacy DB column, unused in app.
 export interface MembersRow {
   id: string;
   user_id: string;
@@ -86,7 +86,7 @@ export interface MembersRow {
   likes: string[];
   /** What member dislikes / does not eat (hard). Excluded in auto-plan and chat. */
   dislikes: string[];
-  /** Recipe difficulty: easy | medium | any. Null for backward compat. */
+  /** Legacy DB column: easy | medium | any. Unused in app; kept for DB compat. */
   difficulty: string | null;
 }
 export interface MembersInsert {
