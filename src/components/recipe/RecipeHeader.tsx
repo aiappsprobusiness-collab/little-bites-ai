@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { recipeHeaderBg } from "@/theme/recipeTokens";
 import { RecipeNutritionHeader, type RecipeNutritionHeaderSource } from "./RecipeNutritionHeader";
 import { cn } from "@/lib/utils";
@@ -44,10 +43,8 @@ export function RecipeHeader({
       ? "text-typo-body sm:text-typo-title font-medium leading-snug text-foreground"
       : "text-[15px] font-medium leading-snug text-foreground line-clamp-2";
 
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const descriptionText = description?.trim() ?? "";
   const showDescription = descriptionText && (benefitLabel || descriptionText);
-  const clampDescription = !isFull && descriptionText.length > 120 && !descriptionExpanded;
 
   return (
     <header className={cn(recipeHeaderBg, paddingClass, className)}>
@@ -65,23 +62,9 @@ export function RecipeHeader({
           {benefitLabel && (
             <p className="text-[11px] font-medium text-muted-foreground">{benefitLabel}</p>
           )}
-          <p
-            className={cn(
-              "text-xs text-muted-foreground leading-relaxed break-words",
-              clampDescription && "line-clamp-3"
-            )}
-          >
+          <p className="text-xs text-muted-foreground leading-relaxed break-words">
             {descriptionText}
           </p>
-          {descriptionText.length > 120 && (
-            <button
-              type="button"
-              onClick={() => setDescriptionExpanded((e) => !e)}
-              className="text-xs text-primary font-medium mt-0.5 hover:underline"
-            >
-              {descriptionExpanded ? "Свернуть" : "Показать полностью"}
-            </button>
-          )}
         </div>
       )}
     </header>

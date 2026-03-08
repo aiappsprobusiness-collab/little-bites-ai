@@ -33,7 +33,7 @@ export function ChefAdviceCard({
         <p className={titleClass}>{title}</p>
       </CardHeader>
       <CardContent className="py-0 px-4 pb-4 min-w-0">
-        <p className="text-sm text-foreground leading-[1.6] max-h-[6.5em] overflow-y-auto">{bodyTrimmed}</p>
+        <p className="text-sm text-foreground leading-[1.6]">{bodyTrimmed}</p>
       </CardContent>
     </Card>
   );
