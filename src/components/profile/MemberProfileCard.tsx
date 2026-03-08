@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Baby, ChefHat, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { AllergyChip } from "./AllergyChip";
+import { PreferenceChip } from "./PreferenceChip";
 import { normalizeAllergyToken } from "@/utils/allergyAliases";
 
 interface MemberProfileCardProps {
@@ -44,9 +44,9 @@ export function MemberProfileCard({
                 {age}
               </p>
               {allergies.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
+                <div className="flex flex-wrap gap-2 mt-2">
                   {allergies.map((allergy) => (
-                    <AllergyChip key={allergy} label={normalizeAllergyToken(allergy)} className="text-[12px] px-2 py-0.5" />
+                    <PreferenceChip key={allergy} label={normalizeAllergyToken(allergy)} variant="allergy" />
                   ))}
                 </div>
               )}

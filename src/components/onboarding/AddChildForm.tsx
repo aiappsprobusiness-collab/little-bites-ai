@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TagListEditor } from "@/components/ui/tag-list-editor";
 import { Plus, Check, ArrowRight } from "lucide-react";
-import { useMembers } from "@/hooks/useMembers";
+import { useMembers, birthDateToAgeMonths, memberTypeFromAgeMonths } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
@@ -14,11 +14,8 @@ import { trackUsageEvent } from "@/utils/usageEvents";
 import { normalizeAllergyInput } from "@/utils/allergyAliases";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
-import type { MembersRow, MemberTypeV2 } from "@/integrations/supabase/types-v2";
-
-function ageMonthsFromYearsMonths(years: number, months: number): number {
-  return years * 12 + Math.max(0, Math.min(11, months));
-}
+import type { MembersRow } from "@/integrations/supabase/types-v2";
+import { Calendar } from "lucide-react";
 
 function parseTags(s: string): string[] {
   return s
@@ -55,9 +52,7 @@ export function AddChildForm({
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
 
   const [name, setName] = useState("");
-  const [memberType, setMemberType] = useState<MemberTypeV2>("child");
-  const [ageYears, setAgeYears] = useState(0);
-  const [ageMonths, setAgeMonths] = useState(0);
+  const [birthDate, setBirthDate] = useState("");
   const [allergies, setAllergies] = useState<string[]>([]);
   const [allergyInput, setAllergyInput] = useState("");
   const [likes, setLikes] = useState<string[]>([]);
@@ -70,8 +65,6 @@ export function AddChildForm({
   const canAddMore = memberCount < maxMembers;
   const limits = getSubscriptionLimits(subscriptionStatus as "free" | "trial" | "premium");
   const isFreeLimitReached = !hasAccess && memberCount >= limits.maxActiveProfiles;
-
-  const totalAgeMonths = ageMonthsFromYearsMonths(ageYears, ageMonths);
 
   const addToList = (
     setList: React.Dispatch<React.SetStateAction<string[]>>,
@@ -128,9 +121,7 @@ export function AddChildForm({
 
   const resetForm = () => {
     setName("");
-    setMemberType("child");
-    setAgeYears(0);
-    setAgeMonths(0);
+    setBirthDate("");
     setAllergies([]);
     setAllergyInput("");
     setLikes([]);
@@ -151,13 +142,20 @@ export function AddChildForm({
       toast({ variant: "destructive", title: "Введите имя" });
       return;
     }
+    const birthDateTrimmed = birthDate.trim();
+    if (!birthDateTrimmed) {
+      toast({ variant: "destructive", title: "Укажите дату рождения" });
+      return;
+    }
+    const ageMonths = birthDateToAgeMonths(birthDateTrimmed);
+    const type = memberTypeFromAgeMonths(ageMonths);
 
     trackUsageEvent("member_create_start");
     try {
       const newMember = await createMember({
         name: trimmedName,
-        type: memberType,
-        age_months: totalAgeMonths || null,
+        type,
+        age_months: ageMonths || null,
         allergies,
         ...(hasAccess && { likes, dislikes }),
       });
@@ -226,62 +224,32 @@ export function AddChildForm({
       </div>
 
       <div className="space-y-2">
-        <Label className="text-typo-muted font-medium">Тип</Label>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={memberType === "child" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setMemberType("child")}
-          >
-            Ребёнок
-          </Button>
-          <Button
-            type="button"
-            variant={memberType === "adult" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setMemberType("adult")}
-          >
-            Взрослый
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="onboarding-age-years" className="text-typo-muted font-medium">
-            Возраст: годы
-          </Label>
+        <Label htmlFor="onboarding-birth" className="text-typo-muted font-medium">
+          Дата рождения <span className="text-destructive">*</span>
+        </Label>
+        <div className="relative">
           <Input
-            id="onboarding-age-years"
-            type="number"
-            min={0}
-            max={20}
-            value={ageYears === 0 ? "" : ageYears}
-            onChange={(e) => setAgeYears(Math.max(0, parseInt(e.target.value, 10) || 0))}
-            placeholder="0"
-            className="h-11 border-2"
+            id="onboarding-birth"
+            type="date"
+            value={birthDate}
+            onChange={(e) => setBirthDate(e.target.value)}
+            className="h-11 border-2 pl-3 pr-12"
           />
+          <button
+            type="button"
+            onClick={() => document.getElementById("onboarding-birth")?.focus()}
+            className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground"
+            aria-label="Выбрать дату"
+          >
+            <Calendar className="w-5 h-5" />
+          </button>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="onboarding-age-months" className="text-typo-muted font-medium">
-            Месяцы (0–11)
-          </Label>
-          <Input
-            id="onboarding-age-months"
-            type="number"
-            min={0}
-            max={11}
-            value={ageMonths === 0 ? "" : ageMonths}
-            onChange={(e) => setAgeMonths(Math.max(0, Math.min(11, parseInt(e.target.value, 10) || 0)))}
-            placeholder="0"
-            className="h-11 border-2"
-          />
-        </div>
+        <p className="text-typo-caption text-muted-foreground">Возраст считается автоматически</p>
       </div>
 
       <TagListEditor
         label="Аллергии"
+        chipVariant="allergy"
         items={allergies}
         inputValue={allergyInput}
         onInputChange={setAllergyInput}
@@ -289,12 +257,14 @@ export function AddChildForm({
         onEdit={allergiesHandlers.edit}
         onRemove={allergiesHandlers.remove}
         placeholder="Добавить аллергию (запятая или Enter)"
+        helperText="Запятая или Enter."
       />
 
       {hasAccess && (
         <>
           <TagListEditor
             label="Любит"
+            chipVariant="like"
             items={likes}
             inputValue={likesInput}
             onInputChange={setLikesInput}
@@ -302,9 +272,11 @@ export function AddChildForm({
             onEdit={likesHandlers.edit}
             onRemove={likesHandlers.remove}
             placeholder="Например: ягоды, рыба (запятая или Enter)"
+            helperText="Запятая или Enter."
           />
           <TagListEditor
             label="Не любит"
+            chipVariant="dislike"
             items={dislikes}
             inputValue={dislikesInput}
             onInputChange={setDislikesInput}
@@ -312,6 +284,7 @@ export function AddChildForm({
             onEdit={dislikesHandlers.edit}
             onRemove={dislikesHandlers.remove}
             placeholder="Например: лук, мясо (запятая или Enter)"
+            helperText="Запятая или Enter."
           />
         </>
       )}
@@ -320,7 +293,7 @@ export function AddChildForm({
         <Button
           className="w-full h-12 gap-2"
           onClick={handleSave}
-          disabled={isCreating || !name.trim()}
+          disabled={isCreating || !name.trim() || !birthDate.trim()}
         >
           <Check className="h-4 w-4" />
           Сохранить
@@ -330,7 +303,7 @@ export function AddChildForm({
             variant="outline"
             className="w-full h-11 gap-2"
             onClick={handleAddAnother}
-            disabled={isCreating || !name.trim()}
+            disabled={isCreating || !name.trim() || !birthDate.trim()}
           >
             <Plus className="h-4 w-4" />
             Добавить ещё профиль

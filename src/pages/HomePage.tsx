@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
+import { useMembers, birthDateToAgeMonths, memberTypeFromAgeMonths } from "@/hooks/useMembers";
 import { useToast } from "@/hooks/use-toast";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
@@ -50,9 +50,10 @@ export default function HomePage() {
 
     try {
       const ageMonths = birthDateToAgeMonths(newMemberBirthDate);
+      const type = memberTypeFromAgeMonths(ageMonths);
       const newMember = await createMember({
         name: newMemberName.trim(),
-        type: "child",
+        type,
         age_months: ageMonths || null,
         allergies: newMemberAllergies,
       });

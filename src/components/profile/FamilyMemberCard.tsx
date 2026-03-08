@@ -1,13 +1,13 @@
 import { Lock, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AllergyChip } from "./AllergyChip";
+import { PreferenceChip, type PreferenceChipVariant } from "./PreferenceChip";
 
 export type ProfileChipItem = { type: "like" | "dislike" | "allergy"; label: string };
 
-const chipBase = "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] border border-[currentColor]/15";
-const likeChipClass = "bg-primary/[0.06] text-primary border-primary/20";
-const dislikeChipClass = "bg-transparent text-stone-500 border-stone-200/60";
+function chipVariantFromType(type: ProfileChipItem["type"]): PreferenceChipVariant {
+  return type === "allergy" ? "allergy" : type === "like" ? "like" : "dislike";
+}
 
 export interface FamilyMemberCardProps {
   name: string;
@@ -67,22 +67,16 @@ export function FamilyMemberCard({
             </div>
           )}
           {(visibleChips.length > 0 || overflowCount > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-              {visibleChips.map((item, i) =>
-                item.type === "like" ? (
-                  <span key={`${item.type}-${i}-${item.label}`} className={cn(chipBase, likeChipClass)}>
-                    {item.label}
-                  </span>
-                ) : item.type === "dislike" ? (
-                  <span key={`${item.type}-${i}-${item.label}`} className={cn(chipBase, dislikeChipClass)}>
-                    {item.label}
-                  </span>
-                ) : (
-                  <AllergyChip key={`${item.type}-${i}-${item.label}`} label={item.label} />
-                )
-              )}
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              {visibleChips.map((item, i) => (
+                <PreferenceChip
+                  key={`${item.type}-${i}-${item.label}`}
+                  label={item.label}
+                  variant={chipVariantFromType(item.type)}
+                />
+              ))}
               {overflowCount > 0 && (
-                <span className={cn(chipBase, "text-muted-foreground border-border/40 bg-muted/20")}>
+                <span className="inline-flex items-center min-h-[28px] py-0 px-[10px] rounded-[999px] text-[13px] font-medium text-muted-foreground border border-border/40 bg-muted/20">
                   +{overflowCount}
                 </span>
               )}

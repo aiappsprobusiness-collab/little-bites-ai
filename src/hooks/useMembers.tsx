@@ -70,6 +70,22 @@ export function birthDateToAgeMonths(birthDate: string): number {
   return years * 12 + months;
 }
 
+/** Обратное преобразование: возраст в месяцах → дата рождения (YYYY-MM-DD) для поля ввода. */
+export function ageMonthsToBirthDate(ageMonths: number | null): string {
+  if (ageMonths == null || ageMonths < 0) return "";
+  const d = new Date();
+  d.setMonth(d.getMonth() - ageMonths);
+  return d.toISOString().slice(0, 10);
+}
+
+const ADULT_AGE_MONTHS = 216; // 18 лет
+
+/** Тип профиля по возрасту: 18+ → adult, иначе child. Один источник правды с датой рождения. */
+export function memberTypeFromAgeMonths(ageMonths: number | null): "child" | "adult" {
+  if (ageMonths == null || !Number.isFinite(ageMonths)) return "child";
+  return ageMonths >= ADULT_AGE_MONTHS ? "adult" : "child";
+}
+
 export type Member = MembersRow;
 
 export function useMembers() {

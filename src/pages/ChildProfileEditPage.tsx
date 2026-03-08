@@ -15,23 +15,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Calendar, Loader2, Lock, Plus, Trash2, X } from "lucide-react";
-import { useMembers, birthDateToAgeMonths } from "@/hooks/useMembers";
+import { ArrowLeft, Calendar, Loader2, Plus, Trash2 } from "lucide-react";
+import { useMembers, birthDateToAgeMonths, ageMonthsToBirthDate, memberTypeFromAgeMonths } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import { normalizeAllergyToken } from "@/utils/allergyAliases";
+import { PreferenceChip } from "@/components/profile/PreferenceChip";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import type { MembersRow, AllergyItemRow } from "@/integrations/supabase/types-v2";
-
-function ageMonthsToBirthDate(ageMonths: number | null): string {
-  if (ageMonths == null || ageMonths < 0) return "";
-  const d = new Date();
-  d.setMonth(d.getMonth() - ageMonths);
-  return d.toISOString().slice(0, 10);
-}
 
 function parseTags(s: string): string[] {
   return s
@@ -245,9 +239,10 @@ export default function ChildProfileEditPage() {
     }
     try {
       if (isNew) {
+        const type = memberTypeFromAgeMonths(ageMonths);
         const newMember = await createMember({
           name: trimmedName,
-          type: "child",
+          type,
           age_months: ageMonths || null,
           allergy_items: allergyItems.length ? allergyItems : undefined,
           allergies: allergyItems.filter((i) => i.is_active).map((i) => i.value),
@@ -276,9 +271,12 @@ export default function ChildProfileEditPage() {
         return;
       }
       if (!member) return;
+      const derivedType = memberTypeFromAgeMonths(ageMonths);
+      const typeToSave = (member as MembersRow).type === "family" ? "family" : derivedType;
       await updateMember({
         id: member.id,
         name: trimmedName,
+        type: typeToSave,
         age_months: ageMonths || null,
         allergy_items: allergyItems.length ? allergyItems : undefined,
         allergies: allergyItems.filter((i) => i.is_active).map((i) => i.value),
@@ -392,41 +390,21 @@ export default function ChildProfileEditPage() {
 
               {/* Аллергии */}
               <div className="space-y-2">
-                <h2 className="text-typo-title font-semibold text-foreground">Аллергии</h2>
-                <p className="text-typo-caption text-muted-foreground">
-                  Нажмите на чип для редактирования, крестик — удалить
-                </p>
+                <label className="profile-label font-medium text-[#2F3A2E] text-[13px] block">Аллергии</label>
                 {allergyItems.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">
                     {allergyItems.map((item, i) => {
                       const isLocked = !hasAccess && !item.is_active;
                       return (
-                        <span
-                          key={i}
-                          className={`profile-tag-enter ${isLocked ? "bg-amber-50 text-amber-800 cursor-pointer hover:bg-amber-100 inline-flex items-center gap-1.5 rounded-[999px] py-1.5 px-3 text-[13px]" : "profile-pill"}`}
-                          role={isLocked ? "button" : undefined}
-                          tabIndex={isLocked ? 0 : undefined}
-                          onClick={isLocked ? () => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); } : undefined}
-                          onKeyDown={isLocked ? (e) => e.key === "Enter" && (setPaywallCustomMessage("Аллергии и исключения — в Trial"), setShowPaywall(true)) : undefined}
-                        >
-                          <span
-                            className={!isLocked ? "cursor-pointer truncate max-w-[120px]" : "truncate max-w-[120px]"}
-                            onClick={!isLocked ? (e) => { e.stopPropagation(); allergiesHandlers.edit(item.value, i); } : undefined}
-                          >
-                            {item.value}
-                          </span>
-                          {isLocked ? (
-                            <Lock className="w-3.5 h-3.5 shrink-0" />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); allergiesHandlers.remove(i); }}
-                              className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-[#d4e0b8] shrink-0 -mr-0.5"
-                              aria-label="Удалить"
-                            >
-                              <X className="w-3 h-3 text-[#556B2F]" />
-                            </button>
-                          )}
+                        <span key={i} className="profile-tag-enter">
+                          <PreferenceChip
+                            label={item.value}
+                            variant="allergy"
+                            locked={isLocked}
+                            onLockedClick={isLocked ? () => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); } : undefined}
+                            removable={!isLocked}
+                            onRemove={!isLocked ? () => allergiesHandlers.remove(i) : undefined}
+                          />
                         </span>
                       );
                     })}
@@ -448,8 +426,20 @@ export default function ChildProfileEditPage() {
                   </>
                 ) : (
                   <>
-                    <div className="flex gap-2">
-                      <Input
+                    <label
+                      htmlFor="child-allergy-add"
+                      className="flex h-11 items-center gap-3 px-4 rounded-xl border border-[#E5E7EB] bg-white hover:border-[#7A8F4D]/40 transition-colors cursor-text w-full"
+                    >
+                      <button
+                        type="button"
+                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50"
+                        onClick={() => allergyInput.trim() && allergiesHandlers.add(allergyInput)}
+                        disabled={!allergyInput.trim()}
+                        aria-label="Добавить"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                      <input
                         id="child-allergy-add"
                         value={allergyInput}
                         onChange={(e) => setAllergyInput(e.target.value)}
@@ -460,21 +450,10 @@ export default function ChildProfileEditPage() {
                           }
                         }}
                         placeholder="Добавить аллергию (запятая или Enter)"
-                        className="h-11 border-2 flex-1"
+                        className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground"
                       />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-11 w-11 shrink-0"
-                        onClick={() => allergyInput.trim() && allergiesHandlers.add(allergyInput)}
-                        disabled={!allergyInput.trim()}
-                        aria-label="Добавить"
-                      >
-                        <Plus className="w-5 h-5" />
-                      </Button>
-                    </div>
-                    <p className="text-typo-caption text-muted-foreground mt-1.5">
+                    </label>
+                    <p className="text-[13px] text-muted-foreground mt-1.5">
                       {!hasAccess ? "В Free доступна 1 аллергия" : "Запятая или Enter."}
                     </p>
                   </>
@@ -483,7 +462,7 @@ export default function ChildProfileEditPage() {
 
               {/* Предпочтения */}
               <div className="space-y-2">
-                <h2 className="text-typo-title font-semibold text-foreground">Предпочтения</h2>
+                <span className="profile-label font-medium text-[#2F3A2E] text-[13px] block">Предпочтения</span>
                 {isFree ? (
                   <>
                     <button
@@ -495,9 +474,7 @@ export default function ChildProfileEditPage() {
                       <p className="text-typo-caption text-muted-foreground mt-0.5">Помогает точнее подбирать рецепты</p>
                       <div className="flex flex-wrap gap-2 mt-3">
                         {LIKES_GHOST_CHIPS.map((chip) => (
-                          <span key={chip} className="profile-pill" style={{ background: "#EEF3E5", color: "#556B2F" }}>
-                            {chip}
-                          </span>
+                          <PreferenceChip key={chip} label={chip} variant="like" />
                         ))}
                       </div>
                       <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border-2 border-border">
@@ -514,9 +491,7 @@ export default function ChildProfileEditPage() {
                       <p className="text-typo-caption text-muted-foreground mt-0.5">Помогает точнее подбирать рецепты</p>
                       <div className="flex flex-wrap gap-2 mt-3">
                         {DISLIKES_GHOST_CHIPS.map((chip) => (
-                          <span key={chip} className="profile-pill" style={{ background: "#EEF3E5", color: "#556B2F" }}>
-                            {chip}
-                          </span>
+                          <PreferenceChip key={chip} label={chip} variant="dislike" />
                         ))}
                       </div>
                       <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border-2 border-border">
@@ -541,6 +516,7 @@ export default function ChildProfileEditPage() {
                       <TagListEditor
                         id="profile-likes"
                         label="Любит"
+                        chipVariant="like"
                         items={likes}
                         inputValue={likesInput}
                         onInputChange={setLikesInput}
@@ -548,17 +524,20 @@ export default function ChildProfileEditPage() {
                         onEdit={likesHandlers.edit}
                         onRemove={likesHandlers.remove}
                         placeholder="Например: ягоды, рыба (запятая или Enter)"
+                        helperText="Запятая или Enter."
                       />
                       <TagListEditor
                         id="profile-dislikes"
                         label="Не любит"
+                        chipVariant="dislike"
                         items={dislikes}
-                      inputValue={dislikesInput}
-                      onInputChange={setDislikesInput}
-                      onAdd={dislikesHandlers.add}
-                      onEdit={dislikesHandlers.edit}
-                      onRemove={dislikesHandlers.remove}
-                      placeholder="Например: лук, мясо (запятая или Enter)"
+                        inputValue={dislikesInput}
+                        onInputChange={setDislikesInput}
+                        onAdd={dislikesHandlers.add}
+                        onEdit={dislikesHandlers.edit}
+                        onRemove={dislikesHandlers.remove}
+                        placeholder="Например: лук, мясо (запятая или Enter)"
+                        helperText="Запятая или Enter."
                       />
                     </div>
                   </>
