@@ -958,18 +958,30 @@ export default function MealPlanPage() {
                   <ShareIosIcon className="w-4 h-4 shrink-0" />
                   Поделиться днем
                 </Button>
-                {hasAccess && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"
-                    onClick={shareWeekPlan}
-                    disabled={isAnyGenerating || isWeekPlansLoading}
-                  >
-                    <ShareIosIcon className="w-4 h-4 shrink-0" />
-                    Поделиться неделей
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-disabled={isFree}
+                  className={isFree
+                    ? "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-0 shadow-none bg-muted text-muted-foreground hover:bg-muted text-xs font-medium"
+                    : "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"}
+                  disabled={hasAccess && (isAnyGenerating || isWeekPlansLoading)}
+                  onClick={() => {
+                    if (isFree) {
+                      if (FF_WEEK_PAYWALL_PREVIEW) {
+                        setShowWeekPreviewSheet(true);
+                      } else {
+                        setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
+                        setShowPaywall(true);
+                      }
+                      return;
+                    }
+                    shareWeekPlan();
+                  }}
+                >
+                  <ShareIosIcon className="w-4 h-4 shrink-0" />
+                  Поделиться неделей
+                </Button>
               </div>
             </div>
           </motion.div>
