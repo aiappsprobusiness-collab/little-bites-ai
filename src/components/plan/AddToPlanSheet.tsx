@@ -13,6 +13,7 @@ import { useAssignRecipeToPlanSlot, getRollingDayKeys } from "@/hooks/useAssignR
 import { useMealPlans } from "@/hooks/useMealPlans";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRollingStartKey, getRollingEndKey } from "@/utils/dateRange";
+import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { cn } from "@/lib/utils";
 
 const MEAL_TYPES = [
@@ -104,7 +105,15 @@ export function AddToPlanSheet({
     return new Set(dayKeys.filter((d) => !filled.has(d)));
   }, [weekPlans, selectedMealType]);
 
-  const handleAssign = async () => {
+  const isSelectedSlotFilled = useMemo(() => {
+    return (weekPlans ?? []).some(
+      (p) => p.planned_date === selectedDayKey && p.meal_type === selectedMealType
+    );
+  }, [weekPlans, selectedDayKey, selectedMealType]);
+
+  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
+
+  const performAssign = async () => {
     try {
       await assignRecipeToPlanSlot({
         member_id: memberIdForRpc,
@@ -118,6 +127,14 @@ export function AddToPlanSheet({
     } catch (e: unknown) {
       toast({ variant: "destructive", title: "Ошибка", description: (e as Error)?.message ?? "Не удалось добавить в план" });
     }
+  };
+
+  const handleAssign = () => {
+    if (isSelectedSlotFilled) {
+      setReplaceConfirmOpen(true);
+      return;
+    }
+    void performAssign();
   };
 
   return (
@@ -176,12 +193,11 @@ export function AddToPlanSheet({
                     onClick={() => setSelectedDayKey(key)}
                     className={cn(
                       "px-3 py-2 rounded-full text-sm font-medium border transition-colors flex items-center gap-1",
-                      isSelected
-                        ? "bg-primary/10 border-primary/30 text-foreground",
-                      isSelected && isEmptySlot && "ring-1 ring-inset ring-primary-border/50",
+                      isSelected && "bg-primary/10 border-primary/40 text-foreground",
+                      isSelected && isEmptySlot && "ring-1 ring-inset ring-primary-border/60",
                       !isSelected && isEmptySlot &&
-                        "bg-primary-light/50 border-primary-border/70 text-foreground hover:bg-primary-light/70 hover:border-primary-border",
-                      !isSelected && !isEmptySlot && "bg-transparent border-border text-muted-foreground hover:text-foreground"
+                        "border-2 border-primary bg-primary-light text-foreground hover:border-primary/80",
+                      !isSelected && !isEmptySlot && "border border-border bg-transparent text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <Calendar className="w-3.5 h-3.5" />
@@ -229,6 +245,16 @@ export function AddToPlanSheet({
           </Button>
         </div>
       </SheetContent>
+
+      <ConfirmActionModal
+        open={replaceConfirmOpen}
+        onOpenChange={setReplaceConfirmOpen}
+        title="В этот день блюдо уже заполнено. Заменить?"
+        description="Текущее блюдо в выбранном слоте будет заменено на новое."
+        confirmText="Да"
+        cancelText="Нет"
+        onConfirm={performAssign}
+      />
     </Sheet>
   );
 }
