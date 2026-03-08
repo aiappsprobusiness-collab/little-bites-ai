@@ -439,6 +439,19 @@ function isChefAdviceTruncated(advice: string): boolean {
   return true;
 }
 
+/**
+ * Вставляет точку между склеенными предложениями: «творог Слегка» → «творог. Слегка».
+ * Срабатывает, когда после строчной буквы идёт пробел и слово, типично начинающее новое предложение.
+ */
+function fixChefAdviceRunOnSentences(advice: string): string {
+  const t = normalizeSpaces(advice);
+  if (t.length < 20) return t;
+  const sentenceStarters =
+    "Слегка|Подсушите|Добавьте|Подавайте|Дайте|Положите|Затем|Перемешайте|Нарежьте|Выложите|Запекайте|Тушите|Жарьте|Варите|Снимите|Убавьте|Остудите|Разогрейте|Натирайте|Выкладывайте|Готовьте|Обжарьте|Доведите|Оставьте|Смажьте|Не переусердствуйте|Готовые";
+  const re = new RegExp(`([а-яё])\\s+(${sentenceStarters})(?=\\s|$|[.,!?])`, "gi");
+  return t.replace(re, "$1. $2");
+}
+
 /** Обрезает до последнего завершённого предложения и при необходимости добавляет короткое закрывающее (на «Вы»). */
 function fixChefAdviceTruncation(advice: string): string {
   let t = normalizeSpaces(advice);
@@ -569,6 +582,7 @@ export function enforceChefAdvice(
   let t = normalizeSpaces(advice ?? "");
   const seed = (context?.recipeIdSeed ?? (context?.title ?? "") + (context?.ingredients?.[0] ?? "") + (context?.steps?.[0] ?? "")).trim() || "default";
 
+  t = fixChefAdviceRunOnSentences(t);
   t = fixChefAdviceTruncation(t);
 
   if (CHEF_ADVICE_TY_PATTERN.test(t)) {
@@ -586,16 +600,16 @@ export function enforceChefAdvice(
       recipeIdSeed: seed,
     });
   }
-  if (t.length > CHEF_ADVICE_MAX_LENGTH) {
-    t = truncateAtSentenceBoundary(t, CHEF_ADVICE_MAX_LENGTH);
-  }
-  if (t.length < 30 || isGenericChefAdvice(t) || !hasConcreteChefAdviceMarker(t)) {
+  if (t.length < 20) {
     return buildChefAdviceFallback({
       title: context?.title,
       ingredients: context?.ingredients,
       steps: context?.steps,
       recipeIdSeed: seed,
     });
+  }
+  if (t.length > CHEF_ADVICE_MAX_LENGTH) {
+    t = truncateAtSentenceBoundary(t, CHEF_ADVICE_MAX_LENGTH);
   }
   return t.slice(0, CHEF_ADVICE_MAX_LENGTH);
 }
