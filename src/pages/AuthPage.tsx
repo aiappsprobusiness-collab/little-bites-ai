@@ -6,15 +6,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { useA2HSInstall } from "@/hooks/useA2HSInstall";
 import { cn } from "@/lib/utils";
-import { Eye, EyeOff, Loader2, Download } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { trackUsageEvent, hasShareRecipeAttribution } from "@/utils/usageEvents";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
 
@@ -39,23 +37,10 @@ type SignupFormData = z.infer<typeof signupSchema>;
 const AUTH_INPUT_CLASS =
   "rounded-[24px] border border-slate-200/80 bg-white/50 py-4 focus-visible:ring-0 focus-visible:border-primary shadow-none min-h-[52px]";
 
-const VALUE_CARDS = [
-  { icon: "🧸", title: "Для всей семьи", text: "Рецепты, которые объединяют за столом" },
-  { icon: "✨", title: "Здоровье и энергия", text: "Сбалансированное питание без перегруза" },
-  { icon: "🆘", title: "Помощь 24/7", text: "Ответы, когда ребёнку тревожно или плохо" },
-];
-
-function isIOS(): boolean {
-  if (typeof navigator === "undefined") return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator as { platform?: string }).platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showInstallInstructions, setShowInstallInstructions] = useState(false);
   const { signIn, signUp } = useAuth();
-  const { promptInstall, isInstalled, hasA2HSSupport } = useA2HSInstall();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -133,7 +118,7 @@ export default function AuthPage() {
       }}
     >
       <div className="w-full max-w-md mx-auto flex flex-col items-center">
-        {/* Hero — бренд, польза, слоган */}
+        {/* Hero — заголовок и подзаголовок */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -146,62 +131,13 @@ export default function AuthPage() {
             Меню на сегодня за 1 минуту
           </p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Подберём блюда, рецепт и советы — без лишней болтовни.
+            Учитываем возраст, аллергии и продукты,
+            <br />
+            которые ребёнок любит или не ест.
           </p>
         </motion.div>
 
-        {/* Кнопка "Установить" — только на мобильных */}
-        {!isInstalled && hasA2HSSupport && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.08 }}
-            className="md:hidden w-full flex justify-center mb-3"
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground hover:text-foreground text-sm gap-2"
-              onClick={async () => {
-                const result = await promptInstall();
-                if (result === "no-prompt") {
-                  setShowInstallInstructions(true);
-                }
-              }}
-            >
-              <Download className="w-4 h-4" />
-              Установить приложение
-            </Button>
-          </motion.div>
-        )}
-
-        {/* Карточки ценностей — мини-карточки с иконкой сверху */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="w-full space-y-3 sm:space-y-4 mb-5 sm:mb-6"
-        >
-          {VALUE_CARDS.map((card, i) => (
-            <motion.div
-              key={card.title}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.12 + i * 0.05 }}
-              className="rounded-2xl bg-primary-light border border-primary-border px-4 py-3 sm:px-5 sm:py-3.5 shadow-sm"
-            >
-              <div className="flex flex-row items-start gap-3">
-                <span className="text-2xl sm:text-3xl leading-none shrink-0">{card.icon}</span>
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <p className="text-sm font-bold text-foreground leading-snug">{card.title}</p>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{card.text}</p>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-
-        {/* Карточка формы — с тенью и мягкими углами */}
+        {/* Карточка формы */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -209,11 +145,7 @@ export default function AuthPage() {
           className="w-full"
         >
           <Card className="bg-white/90 backdrop-blur-xl border-0 rounded-[28px] sm:rounded-[32px] shadow-xl shadow-slate-200/50">
-            <CardHeader className="text-center pb-5 sm:pb-6 px-4 sm:px-6 pt-6 sm:pt-7">
-              <CardTitle className="text-lg sm:text-xl font-semibold text-foreground/95">Меню на сегодня за 1 минуту</CardTitle>
-              <CardDescription className="text-muted-foreground mt-1.5">Подберём блюда, рецепт и советы — без лишней болтовни.</CardDescription>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 pt-0 pb-5 sm:pb-6">
+            <CardContent className="px-4 sm:px-6 pt-6 sm:pt-7 pb-5 sm:pb-6">
               <Tabs defaultValue={defaultAuthTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11">
                   <TabsTrigger value="login" className="rounded-[16px]">Вход</TabsTrigger>
@@ -377,27 +309,6 @@ export default function AuthPage() {
           </Card>
         </motion.div>
       </div>
-
-      <Dialog open={showInstallInstructions} onOpenChange={setShowInstallInstructions}>
-        <DialogContent className="sm:max-w-sm rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-center">Как установить приложение</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            {isIOS() ? (
-              <>
-                <p className="font-medium text-foreground">iPhone / iPad (Safari):</p>
-                <p>Нажмите <strong>«Поделиться»</strong> (иконка квадрата со стрелкой) → <strong>«На экран „Домой“»</strong></p>
-              </>
-            ) : (
-              <>
-                <p className="font-medium text-foreground">Android (Chrome):</p>
-                <p>Нажмите <strong>«⋮»</strong> (три точки) в меню браузера → <strong>«Установить приложение»</strong></p>
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
