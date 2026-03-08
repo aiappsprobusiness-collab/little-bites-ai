@@ -98,10 +98,7 @@ export function WelcomeRecipeBlock() {
   const displayIngredients = getDisplayIngredients(recipe as RecipeDisplayIngredients);
 
   return (
-    <section className="mb-10" aria-labelledby="welcome-recipe-title">
-      <h2 id="welcome-recipe-title" className="text-lg font-semibold text-foreground mb-3">
-        Пример рецепта из меню
-      </h2>
+    <section className="mb-10">
       <div
         className={cn(
           "relative rounded-2xl overflow-hidden",
