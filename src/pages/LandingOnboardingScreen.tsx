@@ -140,7 +140,21 @@ export default function LandingOnboardingScreen() {
           <WelcomeRecipeBlock />
         </section>
 
-        {/* E) Нижний CTA */}
+        {/* E) Инфо перед CTA */}
+        <section className="mb-6">
+          <div className="rounded-2xl bg-muted/40 border border-border/60 px-4 py-3">
+            <p className="text-sm font-medium text-foreground mb-2">
+              Создадим персональное меню:
+            </p>
+            <ul className="space-y-1 text-sm text-muted-foreground">
+              <li className="flex items-center gap-2">✓ с учётом возраста ребёнка</li>
+              <li className="flex items-center gap-2">✓ с учётом аллергий</li>
+              <li className="flex items-center gap-2">✓ без продуктов, которые ребёнок не ест</li>
+            </ul>
+          </div>
+        </section>
+
+        {/* F) Нижний CTA */}
         <section>
           <Button
             className="w-full rounded-xl h-14 text-base font-semibold"
