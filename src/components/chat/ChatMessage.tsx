@@ -1,4 +1,5 @@
 import { useState, useRef, forwardRef, useMemo, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trash2, ChefHat, Heart, BookOpen, AlertCircle, CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -173,6 +174,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const setShowPaywall = useAppStore((s) => s.setShowPaywall);
     const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
     const { toast } = useToast();
+    const location = useLocation();
+    const planSlotState = (location.state as { fromPlanSlot?: boolean; plannedDate?: string; mealType?: string; memberId?: string } | null) ?? null;
 
     const [ingredientOverrides, setIngredientOverrides] = useState<Record<number, string>>({});
 
@@ -679,8 +682,21 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             onOpenChange={setAddToPlanOpen}
             recipeId={recipeId}
             recipeTitle={effectiveRecipe.title ?? "Рецепт"}
-            mealType={(effectiveRecipe as { mealType?: string }).mealType ?? null}
-            defaultMemberId={chatMemberId}
+            mealType={
+              planSlotState?.fromPlanSlot && planSlotState?.mealType
+                ? planSlotState.mealType
+                : (effectiveRecipe as { mealType?: string }).mealType ?? null
+            }
+            defaultMemberId={
+              planSlotState?.fromPlanSlot && planSlotState?.memberId != null
+                ? planSlotState.memberId
+                : chatMemberId
+            }
+            defaultDayKey={
+              planSlotState?.fromPlanSlot && planSlotState?.plannedDate
+                ? planSlotState.plannedDate
+                : undefined
+            }
             onSuccess={() => toast({ title: "Добавлено в план" })}
           />
         )}

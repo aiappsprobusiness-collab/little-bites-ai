@@ -1077,14 +1077,22 @@ export default function MealPlanPage() {
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {isAdultNoRecipesEmpty ? (
-                  <Button
-                    size="sm"
-                    className="rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-soft"
-                    onClick={() => navigate("/chat")}
-                  >
-                    <Plus className="w-4 h-4 mr-1.5 shrink-0" />
-                    Сгенерировать в чате
-                  </Button>
+                <Button
+                  size="sm"
+                  className="rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-soft"
+                  onClick={() =>
+                    navigate("/chat", {
+                      state: {
+                        fromPlanSlot: true,
+                        plannedDate: selectedDayKey,
+                        memberId: memberIdForPlan ?? undefined,
+                      },
+                    })
+                  }
+                >
+                  <Plus className="w-4 h-4 mr-1.5 shrink-0" />
+                  Сгенерировать в чате
+                </Button>
                 ) : (
                   <Button
                     size="sm"
@@ -1131,7 +1139,15 @@ export default function MealPlanPage() {
                   size="sm"
                   variant="outline"
                   className="rounded-2xl border-primary-border"
-                  onClick={() => navigate("/chat")}
+                  onClick={() =>
+                    navigate("/chat", {
+                      state: {
+                        fromPlanSlot: true,
+                        plannedDate: selectedDayKey,
+                        memberId: memberIdForPlan ?? undefined,
+                      },
+                    })
+                  }
                 >
                   <Plus className="w-4 h-4 mr-1.5 shrink-0" />
                   {isAdultNoRecipesEmpty ? "Сгенерировать в чате" : "Подобрать рецепт"}

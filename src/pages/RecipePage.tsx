@@ -563,8 +563,9 @@ export default function RecipePage() {
           onOpenChange={setAddToPlanOpen}
           recipeId={id}
           recipeTitle={(recipe as { title?: string }).title ?? "Рецепт"}
-          mealType={(recipe as { meal_type?: string }).meal_type ?? null}
+          mealType={fromMealPlan && planMealType ? planMealType : (recipe as { meal_type?: string }).meal_type ?? null}
           defaultMemberId={favoriteMemberId}
+          defaultDayKey={fromMealPlan && plannedDate ? plannedDate : undefined}
           onSuccess={() => toast({ title: "Добавлено в план" })}
         />
       )}
