@@ -40,11 +40,9 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
       .then((reg) => {
         window.__swRegistration = reg;
 
-        const tryActivateUpdate = () => {
+        const notifyUpdateAvailable = () => {
           if (reg.waiting && navigator.serviceWorker.controller) {
-            // SW (sw.js) already calls skipWaiting() in install; tell waiting worker to activate so we get controllerchange → reload
-            reg.waiting.postMessage({ type: "SKIP_WAITING" });
-            window.__skipWaitingTriggered = true;
+            window.dispatchEvent(new Event("sw-update-available"));
           }
         };
 
@@ -52,21 +50,22 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
           const newWorker = reg.installing;
           if (!newWorker) return;
           newWorker.onstatechange = () => {
-            if (newWorker.state === "installed") tryActivateUpdate();
+            if (newWorker.state === "installed") notifyUpdateAvailable();
           };
         };
 
         if (reg.waiting && navigator.serviceWorker.controller) {
-          tryActivateUpdate();
+          notifyUpdateAvailable();
         }
 
         setInterval(() => reg.update(), 60 * 60 * 1000);
       })
       .catch(() => {});
 
-    // After new SW activates, reload to get fresh index.html and assets
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      window.location.reload();
+      if (window.__skipWaitingTriggered) {
+        window.location.reload();
+      }
     });
   });
 }

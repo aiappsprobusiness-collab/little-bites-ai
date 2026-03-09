@@ -1,8 +1,9 @@
 /**
  * Custom Service Worker — PWA (no vite-plugin-pwa).
  * Precache core assets, runtime stale-while-revalidate, offline fallback.
+ * Auth/API/Supabase routes are never intercepted to avoid loops and rate limits.
  */
-const CACHE_VERSION = "mom-recipes-v5";
+const CACHE_VERSION = "mom-recipes-v6";
 const PRECACHE_NAME = CACHE_VERSION + "-precache";
 const RUNTIME_NAME = CACHE_VERSION + "-runtime";
 const OFFLINE_URL = "/offline.html";
@@ -16,12 +17,24 @@ const PRECACHE_ASSETS = [
   "/icon-512-maskable.png",
 ];
 
+// Маршруты, которые SW не перехватывает (ни fetch, ни navigation fallback) — избегаем циклов и флуда auth-запросов
+const BLOCKED_PATH_PREFIXES = [
+  "/auth",
+  "/api",
+  "/functions",
+  "/rest",
+  "/storage",
+];
+function isBlockedPath(pathname) {
+  return BLOCKED_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 // ——— INSTALL ———
+// skipWaiting() только по сообщению SKIP_WAITING (из UI), чтобы не создавать цикл переустановки
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(PRECACHE_NAME).then((cache) => cache.addAll(PRECACHE_ASSETS))
   );
-  self.skipWaiting();
 });
 
 // ——— ACTIVATE ———
@@ -47,11 +60,17 @@ function isNavigationRequest(request) {
 
 function isApiRequest(request) {
   const u = new URL(request.url);
-  return (
-    u.pathname.startsWith("/api") ||
-    /\.supabase\.co$/.test(u.host) ||
-    /functions\.supabase\.co$/.test(u.host)
-  );
+  if (isBlockedPath(u.pathname)) return true;
+  if (u.pathname.startsWith("/api")) return true;
+  if (/\.supabase\.co$/i.test(u.host)) return true;
+  if (/\.supabase\.co\//i.test(request.url)) return true;
+  return false;
+}
+
+/** Запросы к самому SW или manifest — не перехватываем, чтобы браузер всегда получал свежую версию (избегаем цикла обновлений). */
+function isWorkerOrManifestRequest(request) {
+  const u = new URL(request.url);
+  return u.pathname === "/sw.js" || u.pathname === "/manifest.json";
 }
 
 function isImageRequest(request) {
@@ -99,7 +118,7 @@ function staleWhileRevalidate(request, cacheName) {
   );
 }
 
-/** Network first, then cache, then offline page (for navigations). */
+/** Network first, then cache, then offline page (for navigations). Не используется для /auth, /api и т.д. */
 function networkFirstWithOfflineFallback(request) {
   return fetch(request)
     .then((response) => {
@@ -123,13 +142,22 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (isNavigationRequest(request)) {
-    event.respondWith(networkFirstWithOfflineFallback(request));
+  // Браузер должен всегда получать свежий sw.js и manifest.json — не перехватываем (избегаем цикла обновлений SW)
+  if (isWorkerOrManifestRequest(request)) {
     return;
   }
 
-  // IMPORTANT: Never intercept API requests — let browser handle them directly
+  // Auth, API, Supabase: не перехватывать вообще
   if (isApiRequest(request)) {
+    return;
+  }
+
+  if (isNavigationRequest(request)) {
+    const pathname = new URL(request.url).pathname;
+    if (isBlockedPath(pathname)) {
+      return;
+    }
+    event.respondWith(networkFirstWithOfflineFallback(request));
     return;
   }
 
