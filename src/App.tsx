@@ -1,9 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { FamilyProvider } from "@/contexts/FamilyContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -47,6 +47,24 @@ import { captureAttributionFromLocationOnce } from "./utils/usageEvents";
 
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
+
+/** Если в URL есть токены из письма (magic link / confirm), а мы не на /auth/callback — перенаправить туда. */
+function hasAuthParamsInUrl(search: string, hash: string): boolean {
+  const inHash = /access_token|refresh_token|type=recovery/.test(hash || "");
+  const params = new URLSearchParams(search);
+  return inHash || params.has("access_token") || params.has("refresh_token");
+}
+
+function AuthCallbackRedirectGuard({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  useEffect(() => {
+    if (location.pathname === "/auth/callback") return;
+    if (hasAuthParamsInUrl(location.search, location.hash || "")) {
+      window.location.replace(`/auth/callback${location.search}${location.hash}`);
+    }
+  }, [location.pathname, location.search, location.hash]);
+  return <>{children}</>;
+}
 
 /** Обновляет --app-height для мобилки/PWA (адресная строка, клавиатура, ориентация). */
 function AppHeightSync() {
@@ -130,6 +148,7 @@ const App = () => (
           v7_relativeSplatPath: true,
         }}
       >
+        <AuthCallbackRedirectGuard>
         <AuthProvider>
           <AppHeightSync />
           <AttributionCapture />
@@ -286,6 +305,7 @@ const App = () => (
             </Routes>
           </FamilyProvider>
         </AuthProvider>
+        </AuthCallbackRedirectGuard>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
