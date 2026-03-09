@@ -1,0 +1,118 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+
+const POLL_INTERVAL_MS = 300;
+const MAX_WAIT_MS = 5000;
+const FALLBACK_REDIRECT_DELAY_MS = 2000;
+
+function hasAuthParams(): boolean {
+  if (typeof window === "undefined") return false;
+  const hash = window.location.hash || "";
+  const params = new URLSearchParams(window.location.search);
+  return (
+    /access_token|refresh_token|type=recovery/.test(hash) ||
+    params.has("access_token") ||
+    params.has("refresh_token")
+  );
+}
+
+export default function AuthCallbackPage() {
+  const navigate = useNavigate();
+  const [fallback, setFallback] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      const start = Date.now();
+
+      const getSession = () => supabase.auth.getSession().then(({ data }) => data.session);
+
+      let session = await getSession();
+
+      while (!session && !cancelled && Date.now() - start < MAX_WAIT_MS) {
+        if (hasAuthParams()) {
+          await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+          session = await getSession();
+        } else {
+          break;
+        }
+      }
+
+      if (cancelled) return;
+
+      if (!session) {
+        setFallback(true);
+        const timer = setTimeout(() => {
+          navigate("/auth", {
+            replace: true,
+            state: { message: "Не удалось подтвердить вход. Попробуйте ещё раз." },
+          });
+        }, FALLBACK_REDIRECT_DELAY_MS);
+        return () => clearTimeout(timer);
+      }
+
+      // Очищаем URL от токенов
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        url.hash = "";
+        url.search = "";
+        window.history.replaceState({}, "", url.pathname);
+      }
+
+      const userId = session.user.id;
+      const { count, error } = await supabase
+        .from("members")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId);
+
+      if (cancelled) return;
+
+      if (error) {
+        navigate("/meal-plan", { replace: true });
+        return;
+      }
+
+      if (count === 0) {
+        navigate("/profile?openCreateProfile=1", { replace: true });
+      } else {
+        navigate("/meal-plan", { replace: true });
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  if (fallback) {
+    return (
+      <div
+        className="min-h-screen min-h-dvh flex flex-col items-center justify-center gradient-hero px-4"
+        style={{
+          background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F3F6EC 100%)",
+        }}
+      >
+        <p className="text-muted-foreground text-center mb-2">
+          Не удалось подтвердить вход. Попробуйте ещё раз.
+        </p>
+        <p className="text-sm text-muted-foreground">Перенаправление на страницу входа…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="min-h-screen min-h-dvh flex flex-col items-center justify-center gradient-hero px-4"
+      style={{
+        background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F3F6EC 100%)",
+      }}
+    >
+      <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+      <p className="text-muted-foreground">Подтверждаем вход...</p>
+    </div>
+  );
+}

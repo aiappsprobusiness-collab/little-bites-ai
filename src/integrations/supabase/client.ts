@@ -51,7 +51,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: false, // Отключаем для мобильных приложений
+    detectSessionInUrl: true, // Нужно для magic link / email confirmation (Gmail, Telegram webview)
   },
   global: {
     fetch: throttledFetch,

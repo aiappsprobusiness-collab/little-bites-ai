@@ -48,6 +48,14 @@ export default function AuthPage() {
     trackUsageEvent("auth_page_view");
   }, []);
 
+  useEffect(() => {
+    const message = (location.state as { message?: string } | null)?.message;
+    if (message) {
+      toast({ variant: "destructive", title: message });
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, location.pathname, navigate, toast]);
+
   const goToWelcome = () => {
     if (hasShareRecipeAttribution()) {
       trackLandingEvent("share_recipe_cta_click");

@@ -11,7 +11,7 @@ import {
   FileText,
   Lock,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -79,6 +79,7 @@ function formatSubscriptionEndDateWithYear(isoDate: string | null): string {
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const { members, isLoading, formatAge, primaryMemberId, isFreeLocked } = useFamily();
   const {
@@ -110,6 +111,17 @@ export default function ProfilePage() {
       setShowMemberSheet(true);
     }
   }, [isLoading, members.length]);
+
+  // После magic link / email confirmation: открыть модалку «Новый профиль», только если профилей нет
+  useEffect(() => {
+    if (searchParams.get("openCreateProfile") !== "1" || isLoading || members.length > 0) return;
+    setShowMemberSheet(true);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete("openCreateProfile");
+      return next;
+    }, { replace: true });
+  }, [searchParams, isLoading, members.length, setSearchParams]);
 
   const handleDinnerReminderChange = (checked: boolean) => {
     setDinnerReminderEnabledState(checked);

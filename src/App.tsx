@@ -24,6 +24,7 @@ import SosScenarioScreen from "./pages/SosScenarioScreen";
 import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
 import ShareRedirectPage from "./pages/ShareRedirectPage";
 import SharedPlanPage from "./pages/SharedPlanPage";
 import LandingOnboardingScreen from "./pages/LandingOnboardingScreen";
@@ -144,6 +145,8 @@ const App = () => (
             <DinnerReminderBanner />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
+              {/* Публичный маршрут: обрабатывает magic link / email confirmation, сам ждёт session и редиректит; не оборачивать в ProtectedRoute */}
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/welcome" element={<LandingOnboardingScreen />} />
               <Route path="/prelogin" element={<AppPreloginScreen />} />
               <Route path="/r/:shareRef" element={<ShareRedirectPage />} />
