@@ -238,12 +238,12 @@ serve(async (req) => {
     // Supabase client с пробросом Authorization, чтобы auth.getUser() и запросы от имени пользователя (members и т.д.) работали
     const supabase = SUPABASE_URL && SUPABASE_ANON_KEY
       ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-          global: {
-            headers: {
-              Authorization: authHeader ?? "",
-            },
+        global: {
+          headers: {
+            Authorization: authHeader ?? "",
           },
-        })
+        },
+      })
       : null;
 
     if (authHeader && supabase) {
@@ -499,9 +499,9 @@ serve(async (req) => {
     /** В семейном режиме — только non-infant для агрегации аллергий/лайков/дизлайков; иначе все allMembers. */
     let familyMembersForPrompt: MemberData[] | null = null;
     if (targetIsFamily && allMembers.length > 0) {
-      const { membersForPrompt, applyKidFilter: kidFilter } = getFamilyPromptMembers(allMembers as Array<{ age_months?: number | null; allergies?: string[]; dislikes?: string[]; [k: string]: unknown }>);
+      const { membersForPrompt, applyKidFilter: kidFilter } = getFamilyPromptMembers(allMembers as Array<{ age_months?: number | null; allergies?: string[]; dislikes?: string[];[k: string]: unknown }>);
       applyKidFilter = kidFilter;
-      memberDataNorm = buildFamilyMemberDataForChat(membersForPrompt as Array<{ age_months?: number | null; allergies?: string[]; dislikes?: string[]; [k: string]: unknown }>) as MemberData;
+      memberDataNorm = buildFamilyMemberDataForChat(membersForPrompt as Array<{ age_months?: number | null; allergies?: string[]; dislikes?: string[];[k: string]: unknown }>) as MemberData;
       familyMembersForPrompt = membersForPrompt as MemberData[];
     }
 
@@ -569,7 +569,7 @@ serve(async (req) => {
         console.log(JSON.stringify({ tag: "FAMILY_CTX_OVERRIDDEN" }));
       }
       effectiveGenerationContextBlock = buildFamilyGenerationContextBlock({
-        membersForPrompt: allMembersForPrompt as Array<{ name?: string | null; age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null; likes?: string[] | null; [k: string]: unknown }>,
+        membersForPrompt: allMembersForPrompt as Array<{ name?: string | null; age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null; likes?: string[] | null;[k: string]: unknown }>,
         applyKidFilter,
       });
     }
@@ -612,11 +612,11 @@ serve(async (req) => {
         : (reqMealType ?? "");
     let systemPrompt = isRecipeRequest
       ? generateRecipeSystemPromptV3(memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, {
-          mealType: mealTypeForPrompt,
-          maxCookingTime: reqMaxCookingTime,
-          servings,
-          recentTitleKeysLine,
-        })
+        mealType: mealTypeForPrompt,
+        maxCookingTime: reqMaxCookingTime,
+        servings,
+        recentTitleKeysLine,
+      })
       : getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
 
     // Раньше для Premium "soft" давали краткий ответ без рецепта; после рефактора relevance только allow/reject — при allow всегда генерируем рецепт, этот блок не используется
@@ -683,305 +683,305 @@ serve(async (req) => {
 
     safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
 
-      const isExpertSoft = false;
-      const maxTokensChat =
-        type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
-      const promptConfig = {
-        maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : 8192),
-      };
-      const messagesForPayload = isRecipeRequest
-        ? [{ role: "user" as const, content: userMessage }]
-        : messages;
-      const payload = {
-        model: "deepseek-chat",
-        messages: [{ role: "system", content: currentSystemPrompt }, ...messagesForPayload],
-        stream: false,
-        max_tokens: promptConfig.maxTokens,
-        temperature: isRecipeRequest ? 0.4 : 0.7,
-        top_p: 0.8,
-        repetition_penalty: 1.1,
-        ...(isRecipeRequest && { response_format: { type: "json_object" } }),
-      };
+    const isExpertSoft = false;
+    const maxTokensChat =
+      type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
+    const promptConfig = {
+      maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : 8192),
+    };
+    const messagesForPayload = isRecipeRequest
+      ? [{ role: "user" as const, content: userMessage }]
+      : messages;
+    const payload = {
+      model: "deepseek-chat",
+      messages: [{ role: "system", content: currentSystemPrompt }, ...messagesForPayload],
+      stream: false,
+      max_tokens: promptConfig.maxTokens,
+      temperature: isRecipeRequest ? 0.4 : 0.7,
+      top_p: 0.8,
+      repetition_penalty: 1.1,
+      ...(isRecipeRequest && { response_format: { type: "json_object" } }),
+    };
 
-      const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "sos_consultant" ? 30000 : 120000);
-      const timeoutMs = MAIN_LLM_TIMEOUT_MS;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "sos_consultant" ? 30000 : 120000);
+    const timeoutMs = MAIN_LLM_TIMEOUT_MS;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      const tLlmStart = Date.now();
-      safeLog("SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
-      let response: Response;
-      try {
-        response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-      } catch (error) {
-        clearTimeout(timeoutId);
-        safeError("deepseek-chat request error", serializeError(error));
-        if (error instanceof Error && error.name === "AbortError") {
-          logPerf("llm_ttfb", tLlmStart, requestId);
-          logPerf("llm_total", tLlmStart, requestId);
-          logPerf("total_ms", t0, requestId);
-          if (isRecipeRequest) {
-            const minimal = getMinimalRecipe((body as { mealType?: string }).mealType ?? "snack");
-            return new Response(
-              JSON.stringify({
-                message: JSON.stringify(minimal),
-                recipes: [minimal],
-                recipe_id: null,
-                _timeout: true,
-              }),
-              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-          const fallbackMsg = `Request timeout after ${timeoutMs}ms`;
+    const tLlmStart = Date.now();
+    safeLog("SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
+    let response: Response;
+    try {
+      response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      safeError("deepseek-chat request error", serializeError(error));
+      if (error instanceof Error && error.name === "AbortError") {
+        logPerf("llm_ttfb", tLlmStart, requestId);
+        logPerf("llm_total", tLlmStart, requestId);
+        logPerf("total_ms", t0, requestId);
+        if (isRecipeRequest) {
+          const minimal = getMinimalRecipe((body as { mealType?: string }).mealType ?? "snack");
           return new Response(
-            JSON.stringify({ error: "timeout", message: fallbackMsg }),
+            JSON.stringify({
+              message: JSON.stringify(minimal),
+              recipes: [minimal],
+              recipe_id: null,
+              _timeout: true,
+            }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        throw error;
+        const fallbackMsg = `Request timeout after ${timeoutMs}ms`;
+        return new Response(
+          JSON.stringify({ error: "timeout", message: fallbackMsg }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-      const llmTtfbMs = Date.now() - tLlmStart;
-      logPerf("llm_ttfb", tLlmStart, requestId);
+      throw error;
+    }
+    const llmTtfbMs = Date.now() - tLlmStart;
+    logPerf("llm_ttfb", tLlmStart, requestId);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        safeError("DeepSeek API error", { ...serializeError(new Error(`HTTP ${response.status}`)), status: response.status, body: errorText.slice(0, 500) });
-        if (response.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "rate_limit", message: "Превышен лимит запросов DeepSeek. Попробуйте позже." }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        const message = "DeepSeek вернул ошибку. Попробуйте ещё раз.";
+    if (!response.ok) {
+      const errorText = await response.text();
+      safeError("DeepSeek API error", { ...serializeError(new Error(`HTTP ${response.status}`)), status: response.status, body: errorText.slice(0, 500) });
+      if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "api_error", message, status: response.status }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "rate_limit", message: "Превышен лимит запросов DeepSeek. Попробуйте позже." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      const message = "DeepSeek вернул ошибку. Попробуйте ещё раз.";
+      return new Response(
+        JSON.stringify({ error: "api_error", message, status: response.status }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-      const tBodyStart = Date.now();
-      let bodyText: string;
-      try {
-        bodyText = await response.text();
-      } catch (err) {
-        safeWarn("response.text failed", serializeError(err));
-        return new Response(
-          JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const llmBodyMs = Date.now() - tBodyStart;
-      try {
-        data = JSON.parse(bodyText) as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
-      } catch (err) {
-        safeWarn("parse response body failed", serializeError(err));
-        return new Response(
-          JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
-      logPerf("llm_body", tBodyStart, requestId, { response_chars: assistantMessage.length });
-      const llmTotalMs = Date.now() - tLlmStart;
-      logPerf("llm_total", tLlmStart, requestId);
-      if (!assistantMessage) {
-        return new Response(
-          JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    const tBodyStart = Date.now();
+    let bodyText: string;
+    try {
+      bodyText = await response.text();
+    } catch (err) {
+      safeWarn("response.text failed", serializeError(err));
+      return new Response(
+        JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const llmBodyMs = Date.now() - tBodyStart;
+    try {
+      data = JSON.parse(bodyText) as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
+    } catch (err) {
+      safeWarn("parse response body failed", serializeError(err));
+      return new Response(
+        JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
+    logPerf("llm_body", tBodyStart, requestId, { response_chars: assistantMessage.length });
+    const llmTotalMs = Date.now() - tLlmStart;
+    logPerf("llm_total", tLlmStart, requestId);
+    if (!assistantMessage) {
+      return new Response(
+        JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-      if (isRecipeJsonRequest) {
-        const tNormStart = Date.now();
-        const parseLog = (msg: string, meta?: Record<string, unknown>) =>
-          console.log(JSON.stringify({ tag: "RECIPE_PARSE", requestId, ...meta, msg }));
-        let validated: RecipeJson | null = null;
-        let usedFallbackRecipe = false;
-        resetLastRecipeValidationState();
-        const tValidateStart = Date.now();
-        const result = validateRecipe(assistantMessage, parseAndValidateRecipeJsonFromString);
-        logPerf("recipe_validate_ms", tValidateStart, requestId);
-        const parseDiagnostics = getLastRecipeParseDiagnostics();
-        logPerf("recipe_local_repair_ms", Date.now() - parseDiagnostics.localRepairMs, requestId, {
-          local_repair_applied: parseDiagnostics.localRepairApplied ? 1 : 0,
-          repaired_fields_count: parseDiagnostics.repairedFields.length,
-        });
-        safeLog(JSON.stringify({
-          tag: "RECIPE_LOCAL_REPAIR",
-          requestId,
-          applied: parseDiagnostics.localRepairApplied,
-          repairedFields: parseDiagnostics.repairedFields,
-          reason: parseDiagnostics.localRepairReason ?? undefined,
-          rawMealType: parseDiagnostics.rawMealType ?? undefined,
-          normalizedMealType: parseDiagnostics.normalizedMealType ?? undefined,
-        }));
-        if (result.stage === "ok" && result.valid) {
-          validated = result.valid;
-          if (DEEPSEEK_API_KEY && (!passesDescriptionQualityGate(validated.description, { title: validated.title }) || !passesChefAdviceQualityGate(validated.chefAdvice ?? null))) {
-            parseLog("quality gate failed, one retry", {
-              descOk: passesDescriptionQualityGate(validated.description, { title: validated.title }),
-              adviceOk: passesChefAdviceQualityGate(validated.chefAdvice ?? null),
+    if (isRecipeJsonRequest) {
+      const tNormStart = Date.now();
+      const parseLog = (msg: string, meta?: Record<string, unknown>) =>
+        console.log(JSON.stringify({ tag: "RECIPE_PARSE", requestId, ...meta, msg }));
+      let validated: RecipeJson | null = null;
+      let usedFallbackRecipe = false;
+      resetLastRecipeValidationState();
+      const tValidateStart = Date.now();
+      const result = validateRecipe(assistantMessage, parseAndValidateRecipeJsonFromString);
+      logPerf("recipe_validate_ms", tValidateStart, requestId);
+      const parseDiagnostics = getLastRecipeParseDiagnostics();
+      logPerf("recipe_local_repair_ms", Date.now() - parseDiagnostics.localRepairMs, requestId, {
+        local_repair_applied: parseDiagnostics.localRepairApplied ? 1 : 0,
+        repaired_fields_count: parseDiagnostics.repairedFields.length,
+      });
+      safeLog(JSON.stringify({
+        tag: "RECIPE_LOCAL_REPAIR",
+        requestId,
+        applied: parseDiagnostics.localRepairApplied,
+        repairedFields: parseDiagnostics.repairedFields,
+        reason: parseDiagnostics.localRepairReason ?? undefined,
+        rawMealType: parseDiagnostics.rawMealType ?? undefined,
+        normalizedMealType: parseDiagnostics.normalizedMealType ?? undefined,
+      }));
+      if (result.stage === "ok" && result.valid) {
+        validated = result.valid;
+        if (DEEPSEEK_API_KEY && (!passesDescriptionQualityGate(validated.description, { title: validated.title }) || !passesChefAdviceQualityGate(validated.chefAdvice ?? null))) {
+          parseLog("quality gate failed, one retry", {
+            descOk: passesDescriptionQualityGate(validated.description, { title: validated.title }),
+            adviceOk: passesChefAdviceQualityGate(validated.chefAdvice ?? null),
+          });
+          try {
+            const controller2 = new AbortController();
+            const timeoutId2 = setTimeout(() => controller2.abort(), MAIN_LLM_TIMEOUT_MS);
+            const response2 = await fetch("https://api.deepseek.com/v1/chat/completions", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+              signal: controller2.signal,
             });
-            try {
-              const controller2 = new AbortController();
-              const timeoutId2 = setTimeout(() => controller2.abort(), MAIN_LLM_TIMEOUT_MS);
-              const response2 = await fetch("https://api.deepseek.com/v1/chat/completions", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-                signal: controller2.signal,
-              });
-              clearTimeout(timeoutId2);
-              if (response2.ok) {
-                const bodyText2 = await response2.text();
-                const data2 = JSON.parse(bodyText2) as { choices?: Array<{ message?: { content?: string } }> };
-                const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
-                if (assistantMessage2) {
-                  const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
-                  if (result2.stage === "ok" && result2.valid && passesDescriptionQualityGate(result2.valid.description, { title: result2.valid.title }) && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
-                    validated = result2.valid;
-                    assistantMessage = assistantMessage2;
-                    parseLog("quality retry succeeded", {});
-                  }
+            clearTimeout(timeoutId2);
+            if (response2.ok) {
+              const bodyText2 = await response2.text();
+              const data2 = JSON.parse(bodyText2) as { choices?: Array<{ message?: { content?: string } }> };
+              const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
+              if (assistantMessage2) {
+                const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
+                if (result2.stage === "ok" && result2.valid && passesDescriptionQualityGate(result2.valid.description, { title: result2.valid.title }) && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
+                  validated = result2.valid;
+                  assistantMessage = assistantMessage2;
+                  parseLog("quality retry succeeded", {});
                 }
               }
-            } catch (_e) {
-              parseLog("quality retry failed", { keepFirst: true });
             }
+          } catch (_e) {
+            parseLog("quality retry failed", { keepFirst: true });
           }
-        } else {
-          const validationErrorMsg = result.stage === "validate" ? getLastValidationError() : null;
-          const recoveryDecision = decideRecipeRecovery(result.stage, parseDiagnostics);
-          parseLog("first attempt failed", {
-            stage: result.stage,
-            error: (result as { error?: string }).error ?? validationErrorMsg ?? undefined,
-            responseLength: assistantMessage.length,
-            localRepairApplied: parseDiagnostics.localRepairApplied,
-            repairedFields: parseDiagnostics.repairedFields,
-            retryFixJsonInvoked: recoveryDecision.strategy === "llm_retry",
-            retryReason: recoveryDecision.reason,
-          });
-          safeLog(JSON.stringify({
-            tag: "RECIPE_RETRY_DECISION",
+        }
+      } else {
+        const validationErrorMsg = result.stage === "validate" ? getLastValidationError() : null;
+        const recoveryDecision = decideRecipeRecovery(result.stage, parseDiagnostics);
+        parseLog("first attempt failed", {
+          stage: result.stage,
+          error: (result as { error?: string }).error ?? validationErrorMsg ?? undefined,
+          responseLength: assistantMessage.length,
+          localRepairApplied: parseDiagnostics.localRepairApplied,
+          repairedFields: parseDiagnostics.repairedFields,
+          retryFixJsonInvoked: recoveryDecision.strategy === "llm_retry",
+          retryReason: recoveryDecision.reason,
+        });
+        safeLog(JSON.stringify({
+          tag: "RECIPE_RETRY_DECISION",
+          requestId,
+          stage: result.stage,
+          strategy: recoveryDecision.strategy,
+          reason: recoveryDecision.reason,
+          localRepairApplied: parseDiagnostics.localRepairApplied,
+          repairedFields: parseDiagnostics.repairedFields,
+          validationDetails: parseDiagnostics.validationDetails,
+        }));
+        if (recoveryDecision.strategy === "llm_retry" && DEEPSEEK_API_KEY && result.stage !== "ok") {
+          const tRetryFixJsonStart = Date.now();
+          const retryResult = await retryFixJson({
+            apiKey: DEEPSEEK_API_KEY,
+            rawResponse: assistantMessage.slice(0, 3500),
+            validationError: validationErrorMsg ?? (result as { error?: string }).error ?? "unknown",
             requestId,
-            stage: result.stage,
-            strategy: recoveryDecision.strategy,
-            reason: recoveryDecision.reason,
-            localRepairApplied: parseDiagnostics.localRepairApplied,
-            repairedFields: parseDiagnostics.repairedFields,
-            validationDetails: parseDiagnostics.validationDetails,
-          }));
-          if (recoveryDecision.strategy === "llm_retry" && DEEPSEEK_API_KEY && result.stage !== "ok") {
-            const tRetryFixJsonStart = Date.now();
-            const retryResult = await retryFixJson({
-              apiKey: DEEPSEEK_API_KEY,
-              rawResponse: assistantMessage.slice(0, 3500),
-              validationError: validationErrorMsg ?? (result as { error?: string }).error ?? "unknown",
-              requestId,
-              log: parseLog,
-            });
-            logPerf("retry_fix_json_ms", tRetryFixJsonStart, requestId, { success: retryResult.success ? 1 : 0 });
-            if (retryResult.success && retryResult.fixed) {
-              const retryValidated = parseAndValidateRecipeJsonFromString(retryResult.fixed);
-              if (retryValidated) {
-                validated = retryValidated;
-                parseLog("retry succeeded", { retrySuccess: true });
-              } else {
-                parseLog("retry returned invalid JSON, using fallback", { retrySuccess: false });
-                validated = getRecipeOrFallback(assistantMessage);
-                usedFallbackRecipe = true;
-              }
+            log: parseLog,
+          });
+          logPerf("retry_fix_json_ms", tRetryFixJsonStart, requestId, { success: retryResult.success ? 1 : 0 });
+          if (retryResult.success && retryResult.fixed) {
+            const retryValidated = parseAndValidateRecipeJsonFromString(retryResult.fixed);
+            if (retryValidated) {
+              validated = retryValidated;
+              parseLog("retry succeeded", { retrySuccess: true });
             } else {
-              parseLog("retry failed or empty, using fallback", { retrySuccess: false });
+              parseLog("retry returned invalid JSON, using fallback", { retrySuccess: false });
               validated = getRecipeOrFallback(assistantMessage);
               usedFallbackRecipe = true;
             }
-          } else if (recoveryDecision.strategy === "fail_fast") {
-            parseLog("non-retryable validation error", {
-              retryFixJsonInvoked: false,
-              retryReason: recoveryDecision.reason,
-              validationDetails: parseDiagnostics.validationDetails,
-            });
+          } else {
+            parseLog("retry failed or empty, using fallback", { retrySuccess: false });
             validated = getRecipeOrFallback(assistantMessage);
             usedFallbackRecipe = true;
-          } else {
-            validated = getRecipeOrFallback(assistantMessage);
           }
+        } else if (recoveryDecision.strategy === "fail_fast") {
+          parseLog("non-retryable validation error", {
+            retryFixJsonInvoked: false,
+            retryReason: recoveryDecision.reason,
+            validationDetails: parseDiagnostics.validationDetails,
+          });
+          validated = getRecipeOrFallback(assistantMessage);
+          usedFallbackRecipe = true;
+        } else {
+          validated = getRecipeOrFallback(assistantMessage);
         }
-        if (validated) {
-          const tIngredientNormalizeStart = Date.now();
-          if (ingredientsNeedAmountRetry(validated.ingredients)) {
-            applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
-            safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
-          }
-          logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
-          const desc = (validated as { description?: string }).description;
-          const advice = validated.chefAdvice ?? "";
-          if (!desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc)) {
-            const keyIngredient = Array.isArray(validated.ingredients) && validated.ingredients[0] && typeof validated.ingredients[0] === "object" && validated.ingredients[0].name
-              ? String(validated.ingredients[0].name)
-              : undefined;
-            (validated as Record<string, unknown>).description = isDescriptionIncomplete(desc) && DEEPSEEK_API_KEY
-              ? (await repairDescriptionOnly(desc ?? "", DEEPSEEK_API_KEY)) ?? buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient })
-              : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
-          }
-          if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
-            const ingNames = Array.isArray(validated.ingredients)
-              ? validated.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")).filter(Boolean)
-              : [];
-            const stepStrs = Array.isArray(validated.steps) ? validated.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean) : [];
-            const seed = (validated.title ?? "") + (ingNames[0] ?? "") + (stepStrs[0] ?? "");
-            (validated as Record<string, unknown>).chefAdvice = buildChefAdviceFallback({
-              title: validated.title,
-              ingredients: ingNames,
-              steps: stepStrs,
-              recipeIdSeed: seed,
-            });
-          }
-          const ingNamesForDesc = Array.isArray(validated.ingredients)
+      }
+      if (validated) {
+        const tIngredientNormalizeStart = Date.now();
+        if (ingredientsNeedAmountRetry(validated.ingredients)) {
+          applyIngredientsFallbackHeuristic(validated.ingredients as Array<Record<string, unknown> & { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null }>);
+          safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
+        }
+        logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
+        const desc = (validated as { description?: string }).description;
+        const advice = validated.chefAdvice ?? "";
+        if (!desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc)) {
+          const keyIngredient = Array.isArray(validated.ingredients) && validated.ingredients[0] && typeof validated.ingredients[0] === "object" && validated.ingredients[0].name
+            ? String(validated.ingredients[0].name)
+            : undefined;
+          (validated as Record<string, unknown>).description = isDescriptionIncomplete(desc) && DEEPSEEK_API_KEY
+            ? (await repairDescriptionOnly(desc ?? "", DEEPSEEK_API_KEY)) ?? buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient })
+            : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
+        }
+        if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
+          const ingNames = Array.isArray(validated.ingredients)
             ? validated.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")).filter(Boolean)
             : [];
-          const recipeIdSeedDesc = (validated.title ?? "") + (ingNamesForDesc[0] ?? "");
-          if ((validated as { description?: string }).description && !passesDescriptionQualityGate((validated as { description?: string }).description, { title: validated.title }) && DEEPSEEK_API_KEY) {
-            const repairedDesc = await repairDescriptionOnly((validated as { description?: string }).description ?? "", DEEPSEEK_API_KEY);
-            if (repairedDesc && passesDescriptionQualityGate(repairedDesc, { title: validated.title })) {
-              (validated as Record<string, unknown>).description = repairedDesc;
-            } else {
-              (validated as Record<string, unknown>).description = buildDescriptionFallback({
-                title: validated.title,
-                mealType: validated.mealType ?? undefined,
-                ingredients: ingNamesForDesc,
-                recipeIdSeed: recipeIdSeedDesc,
-              });
-            }
+          const stepStrs = Array.isArray(validated.steps) ? validated.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean) : [];
+          const seed = (validated.title ?? "") + (ingNames[0] ?? "") + (stepStrs[0] ?? "");
+          (validated as Record<string, unknown>).chefAdvice = buildChefAdviceFallback({
+            title: validated.title,
+            ingredients: ingNames,
+            steps: stepStrs,
+            recipeIdSeed: seed,
+          });
+        }
+        const ingNamesForDesc = Array.isArray(validated.ingredients)
+          ? validated.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")).filter(Boolean)
+          : [];
+        const recipeIdSeedDesc = (validated.title ?? "") + (ingNamesForDesc[0] ?? "");
+        if ((validated as { description?: string }).description && !passesDescriptionQualityGate((validated as { description?: string }).description, { title: validated.title }) && DEEPSEEK_API_KEY) {
+          const repairedDesc = await repairDescriptionOnly((validated as { description?: string }).description ?? "", DEEPSEEK_API_KEY);
+          if (repairedDesc && passesDescriptionQualityGate(repairedDesc, { title: validated.title })) {
+            (validated as Record<string, unknown>).description = repairedDesc;
+          } else {
+            (validated as Record<string, unknown>).description = buildDescriptionFallback({
+              title: validated.title,
+              mealType: validated.mealType ?? undefined,
+              ingredients: ingNamesForDesc,
+              recipeIdSeed: recipeIdSeedDesc,
+            });
           }
-          assistantMessage = JSON.stringify(validated);
-          responseRecipes = [validated as Record<string, unknown>];
         }
-        if (!validated) {
-          validated = getRecipeOrFallback(assistantMessage);
-          parseLog("using fallback recipe (nutrition may be null)", { responseLength: assistantMessage.length });
-          responseRecipes = [validated as Record<string, unknown>];
-          assistantMessage = JSON.stringify(validated);
-          usedFallbackRecipe = true;
-        }
-        safeLog(JSON.stringify({
-          tag: "RECIPE_VALIDATION_RESULT",
-          requestId,
-          finalValidated: !!validated,
-          usedFallback: usedFallbackRecipe,
-        }));
-        logPerf("normalize_ingredients", tNormStart, requestId);
+        assistantMessage = JSON.stringify(validated);
+        responseRecipes = [validated as Record<string, unknown>];
       }
+      if (!validated) {
+        validated = getRecipeOrFallback(assistantMessage);
+        parseLog("using fallback recipe (nutrition may be null)", { responseLength: assistantMessage.length });
+        responseRecipes = [validated as Record<string, unknown>];
+        assistantMessage = JSON.stringify(validated);
+        usedFallbackRecipe = true;
+      }
+      safeLog(JSON.stringify({
+        tag: "RECIPE_VALIDATION_RESULT",
+        requestId,
+        finalValidated: !!validated,
+        usedFallback: usedFallbackRecipe,
+      }));
+      logPerf("normalize_ingredients", tNormStart, requestId);
+    }
 
     // Учёт по фичам для лимитов Free (Plan/Help не тратят chat_recipe) (Plan/Help не тратят chat_recipe)
     if (userId && supabase) {
@@ -1009,10 +1009,10 @@ serve(async (req) => {
       const totalTokens = usageObj.total_tokens ?? inputTokens + outputTokens;
       const actionType =
         fromPlanReplace ? "plan_replace"
-        : type === "sos_consultant" ? "sos_consultant"
-        : type === "balance_check" ? "balance_check"
-        : (type === "chat" || type === "recipe") ? "chat_recipe"
-        : "other";
+          : type === "sos_consultant" ? "sos_consultant"
+            : type === "balance_check" ? "balance_check"
+              : (type === "chat" || type === "recipe") ? "chat_recipe"
+                : "other";
       // Лог для сравнения input_tokens до/после сокращения промпта (recipe-path V3)
       if (actionType === "chat_recipe") {
         console.log(JSON.stringify({ tag: "CHAT_RECIPE_INPUT_TOKENS", requestId, input_tokens: inputTokens, output_tokens: outputTokens }));
@@ -1102,8 +1102,8 @@ serve(async (req) => {
       }));
       const supabaseUser = SUPABASE_URL && SUPABASE_ANON_KEY && authHeader
         ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            global: { headers: { Authorization: authHeader } },
-          })
+          global: { headers: { Authorization: authHeader } },
+        })
         : null;
       if (supabaseUser) {
         const tDbStart = Date.now();
@@ -1114,9 +1114,9 @@ serve(async (req) => {
             ? (rawSteps.length >= 3
               ? rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 }))
               : [
-                  ...rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 })),
-                  ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг по инструкции.", step_number: rawSteps.length + i + 1 })),
-                ])
+                ...rawSteps.map((step: string, idx: number) => ({ instruction: step, step_number: idx + 1 })),
+                ...Array.from({ length: 3 - rawSteps.length }, (_, i) => ({ instruction: "Шаг по инструкции.", step_number: rawSteps.length + i + 1 })),
+              ])
             : [{ instruction: "Шаг 1", step_number: 1 }, { instruction: "Шаг 2", step_number: 2 }, { instruction: "Шаг 3", step_number: 3 }];
           const rawIngredients = Array.isArray(validatedRecipe.ingredients) ? validatedRecipe.ingredients : [];
           type IngLike = { name?: string; amount?: string; displayText?: string; canonical?: { amount: number; unit: string } | null };
@@ -1139,22 +1139,22 @@ serve(async (req) => {
           const ingredientsPayload = rawIngredients.length >= 3
             ? rawIngredients.map((ing: IngLike, idx: number) => buildOneIngredient(ing, idx))
             : [
-                ...rawIngredients.map((ing: IngLike, idx: number) => buildOneIngredient(ing, idx)),
-                ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({
-                  name: `Ингредиент ${rawIngredients.length + i + 1}`,
-                  amount: null,
-                  display_text: null,
-                  canonical_amount: null,
-                  canonical_unit: null,
-                })),
-              ];
+              ...rawIngredients.map((ing: IngLike, idx: number) => buildOneIngredient(ing, idx)),
+              ...Array.from({ length: 3 - rawIngredients.length }, (_, i) => ({
+                name: `Ингредиент ${rawIngredients.length + i + 1}`,
+                amount: null,
+                display_text: null,
+                canonical_amount: null,
+                canonical_unit: null,
+              })),
+            ];
           const ageRange = AGE_RANGE_BY_CATEGORY[ageCategoryForLog] ?? AGE_RANGE_BY_CATEGORY.adult;
           const minAge = Number.isFinite(ageRange?.min) ? ageRange!.min : 6;
           const maxAge = Number.isFinite(ageRange?.max) ? ageRange!.max : 36;
           const cookingMinutes =
             typeof validatedRecipe.cookingTimeMinutes === "number" ? validatedRecipe.cookingTimeMinutes
-            : typeof (validatedRecipe as { cookingTime?: number }).cookingTime === "number" ? (validatedRecipe as { cookingTime: number }).cookingTime
-            : null;
+              : typeof (validatedRecipe as { cookingTime?: number }).cookingTime === "number" ? (validatedRecipe as { cookingTime: number }).cookingTime
+                : null;
           const n = validatedRecipe.nutrition ?? null;
           const baseTags = (validatedRecipe as { tags?: string[] }).tags ?? [];
           const recipeTags = targetIsFamily ? [...baseTags, "family", ...(applyKidFilter ? ["kid_1_3_safe"] : [])] : baseTags;

@@ -60,31 +60,69 @@ function useChatOpenTrack() {
 
 /** Сменяющиеся надписи во время генерации рецепта (интервал 2.5 с), по аналогии с Планом. Нейтрально по возрасту (дети, подростки, взрослые). */
 const RECIPE_GENERATION_PHRASES = [
-  "Подбираю рецепт под запрос…",
-  "Учитываю аллергии и предпочтения…",
-  "Проверяю ингредиенты…",
-  "Пишу пошаговые шаги…",
-  "Добавляю мини-совет…",
-  "Проверяю баланс блюда…",
-  "Подбираю полезные варианты…",
-  "Формирую рецепт…",
-  "Почти готово…",
-  "Готовлю текст рецепта…",
-  "Учитываю предпочтения…",
-  "Составляю список ингредиентов…",
-  "Пишу шаги приготовления…",
-  "Добавляю советы по подаче…",
-  "Проверяю рецепт…",
-  "Подбираю подходящие продукты…",
-  "Думаю над сочетаниями…",
-  "Пишу понятные шаги…",
-  "Учитываю время приготовления…",
-  "Добавляю полезные советы…",
-  "Составляю рецепт…",
-  "Проверяю состав блюда…",
-  "Составляю сбалансированное меню…",
-  "Пишу рецепт…",
-  "Ещё чуть-чуть…",
+    "Совет: лимонный сок усиливает вкус рыбы.",
+    "Совет: запекание овощей делает их слаще.",
+    "Факт: овсянка надолго сохраняет чувство сытости.",
+    "Совет: чеснок лучше добавлять в конце жарки.",
+    "Совет: соль добавляйте в тесто постепенно, проверяя вкус.",
+    "Факт: куркума не только окрашивает блюдо, но и полезна для пищеварения.",
+    "Совет: мясо маринуйте минимум 30 минут перед жаркой.",
+    "Совет: свежие травы добавляйте за 1-2 минуты до конца готовки.",
+    "Факт: брокколи содержит больше витамина C, чем апельсины.",
+    "Совет: чтобы рис не слипался, промойте его перед варкой.",
+    "Совет: оливковое масло не стоит нагревать выше 180°C.",
+    "Факт: шпинат теряет до 50% витаминов при долгой варке.",
+    "Совет: курицу солите перед жаркой снаружи и внутри.",
+    "Совет: картофель для пюре варите в кожуре — вкуснее.",
+    "Факт: имбирь ускоряет метаболизм и помогает пищеварению.",
+    "Совет: пасту варите на 1 минуту меньше указанного времени.",
+    "Совет: для крем-супа блендерьте горячим, но осторожно.",
+    "Факт: авокадо созревает быстрее рядом с яблоками.",
+    "Совет: сыр тереть перед добавлением в горячее блюдо.",
+    "Совет: зелень рубите ножом, а не блендером — сохранит аромат.",
+    "Факт: кефир помогает размягчить мясо при мариновании.",
+    "Совет: грибы жарьте на сильном огне, чтобы не выделили воду.",
+    "Совет: тесто для пиццы выдерживайте в холодильнике 24 часа.",
+    "Факт: петрушка богата железом и витамином K.",
+    "Совет: лук для супа обжарьте до золотистости — вкуснее.",
+    "Совет: рыбу для жарки обсушивать бумажным полотенцем.",
+    "Факт: йогурт натуральный заменяет сметану в соусах.",
+    "Совет: капусту для салата слегка посолите — станет сочнее.",
+    "Совет: блины смазывайте маслом скалкой, а не кисточкой.",
+    "Факт: кориандр успокаивает желудок и снимает спазмы.",
+    "Совет: свёклу для борща варите целиком — цвет ярче.",
+    "Совет: тесто замешивайте руками, а не миксером.",
+    "Факт: тыква содержит больше бета-каротина, чем морковь.",
+    "Совет: макароны для салата варите до состояния аль денте.",
+    "Совет: уксус добавляйте в конце тушения мяса.",
+    "Факт: базилик улучшает усвоение томатов организмом.",
+    "Совет: фарш для котлет слегка отбивайте о стол.",
+    "Совет: овощи для супа закладывайте по степени твёрдости.",
+    "Факт: кинза богата антиоксидантами и витамином A.",
+    "Совет: сыр для запеканки натрите на мелкой тёрке.",
+    "Совет: мясо для шашлыка нарезайте поперёк волокон.",
+    "Факт: чили содержит капсаицин, ускоряющий обмен веществ.",
+    "Совет: яйца для омлета взбивайте вилкой, а не миксером.",
+    "Совет: супы солите в конце варки — вкус точнее.",
+    "Факт: сельдерей снижает давление и успокаивает нервы.",
+    "Совет: тесто для печенья охлаждайте 30 минут перед выпечкой.",
+    "Совет: рыбу запекайте при 180°C, не выше.",
+    "Факт: розмарин улучшает память и концентрацию.",
+    "Совет: морковь для супа нарежьте соломкой — быстрее свариться."
+  
+];
+
+/** Подсказки в placeholder поля ввода чата (режим рецептов). Ротация каждые 2.5 с, останавливается при вводе. */
+const CHAT_PLACEHOLDER_SUGGESTIONS = [
+  "Блюдо на ужин с витаминами",
+  "Что приготовить из курицы?",
+  "Быстрый ужин за 15 минут",
+  "Рецепт на завтрак с кальцием",
+  "Полезный перекус для ребёнка",
+  "Омега-3 и железо, ужин",
+  "Белковая каша для школьника",
+  "Простой десерт с кальцием без сахара",
+  "Блюдо с креветками и витамином D за 15 минут",
 ];
 
 const HELP_CHAT_STORAGE_KEY = "help_chat_messages_v1";
@@ -160,6 +198,7 @@ export default function ChatPage() {
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [openArticleId, setOpenArticleId] = useState<string | null>(null);
   const [input, setInput] = useState("");
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   /** Пользователь близко к низу (<= NEAR_BOTTOM_THRESHOLD) — автоскролл. Обновляется в onScroll. */
@@ -187,14 +226,19 @@ export default function ChatPage() {
   const [profileChangeStatus, setProfileChangeStatus] = useState<string | null>(null);
   const profileChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /** Индекс фразы при генерации рецепта (смена каждые 1.5 с). */
+  /** Индекс фразы при генерации рецепта (случайная смена каждые 5 с). */
   const [recipeStatusPhraseIndex, setRecipeStatusPhraseIndex] = useState(0);
   useEffect(() => {
     if (!isChatting || mode !== "recipes") return;
-    setRecipeStatusPhraseIndex(0);
+    const len = RECIPE_GENERATION_PHRASES.length;
+    setRecipeStatusPhraseIndex(Math.floor(Math.random() * len));
     const id = setInterval(() => {
-      setRecipeStatusPhraseIndex((i) => (i + 1) % RECIPE_GENERATION_PHRASES.length);
-    }, 2500);
+      setRecipeStatusPhraseIndex((prev) => {
+        if (len <= 1) return prev;
+        const next = Math.floor(Math.random() * len);
+        return next === prev ? (prev + 1) % len : next;
+      });
+    }, 5000);
     return () => clearInterval(id);
   }, [isChatting, mode]);
 
@@ -232,6 +276,15 @@ export default function ChatPage() {
     const t = setTimeout(dismissHelpTooltip, 3000);
     return () => clearTimeout(t);
   }, [showHelpTooltip, mode, dismissHelpTooltip]);
+
+  // Ротация подсказок в placeholder (режим рецептов, поле пустое, не идёт генерация)
+  useEffect(() => {
+    if (mode !== "recipes" || input.trim() !== "" || isChatting) return;
+    const id = setInterval(() => {
+      setPlaceholderIndex((i) => (i + 1) % CHAT_PLACEHOLDER_SUGGESTIONS.length);
+    }, 2500);
+    return () => clearInterval(id);
+  }, [mode, input, isChatting]);
 
   // Очищаем сообщения при смене профиля или списка членов семьи (только в recipes)
   useEffect(() => {
@@ -1227,19 +1280,37 @@ export default function ChatPage() {
         {/* Input: единый стиль, 16px padding, divider */}
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-6 safe-bottom max-w-full overflow-x-hidden">
           <div className="flex w-full items-center gap-2 min-w-0">
-            <Textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                mode === "help"
-                  ? "Например: Сыпь после творога — что делать?"
-                  : "Что приготовить?"
-              }
-              className="min-h-[44px] max-h-[120px] flex-1 min-w-0 resize-none rounded-2xl bg-card border border-border py-3 px-4 text-sm placeholder:text-muted-foreground focus-visible:ring-primary/30"
-              rows={1}
-            />
+            <div className="relative flex-1 min-w-0">
+              {mode === "recipes" && !input.trim() && (
+                <div className="absolute inset-0 flex items-center pointer-events-none rounded-2xl py-3 px-4" aria-hidden>
+                  <AnimatePresence mode="wait">
+                    <motion.span
+                      key={placeholderIndex}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="text-sm text-muted-foreground"
+                    >
+                      {CHAT_PLACEHOLDER_SUGGESTIONS[placeholderIndex]}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+              )}
+              <Textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  mode === "help"
+                    ? "Например: Сыпь после творога — что делать?"
+                    : ""
+                }
+                className="min-h-[44px] max-h-[120px] w-full min-w-0 resize-none rounded-2xl bg-card border border-border py-3 px-4 text-sm placeholder:text-muted-foreground focus-visible:ring-primary/30"
+                rows={1}
+              />
+            </div>
             <div className="flex items-center gap-2 shrink-0 relative">
               {mode === "recipes" && (
                 <div className="relative">
