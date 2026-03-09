@@ -158,8 +158,7 @@ export function WelcomeRecipeBlock() {
               />
             ) : null}
 
-            {/* Показываем минимум первые 2 шага, чтобы блок «Шаги приготовления» был виден без длинного скролла */}
-            <RecipeSteps steps={steps.slice(0, 2)} className="mt-6" />
+            <RecipeSteps steps={steps} className="mt-6" />
           </div>
         </div>
 

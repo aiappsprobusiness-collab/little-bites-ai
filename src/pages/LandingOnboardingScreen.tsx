@@ -118,21 +118,7 @@ export default function LandingOnboardingScreen() {
           ))}
         </section>
 
-        {/* C) Блок персонализации */}
-        <section className="mb-8">
-          <div className="rounded-2xl bg-muted/40 border border-border/60 px-4 py-4">
-            <p className="text-sm font-medium text-foreground mb-2">
-              Меню подбирается автоматически:
-            </p>
-            <ul className="space-y-1 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">✓ с учётом возраста ребёнка</li>
-              <li className="flex items-center gap-2">✓ с учётом аллергий</li>
-              <li className="flex items-center gap-2">✓ с учётом продуктов, которые ребёнок любит или не ест</li>
-            </ul>
-          </div>
-        </section>
-
-        {/* D) Пример блюда из меню */}
+        {/* C) Пример блюда из меню */}
         <section aria-labelledby="welcome-recipe-title">
           <h2 id="welcome-recipe-title" className="text-lg font-semibold text-foreground mb-3">
             Вот пример блюда из меню для ребёнка

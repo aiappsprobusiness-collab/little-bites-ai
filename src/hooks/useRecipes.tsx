@@ -185,7 +185,12 @@ export function useRecipes(childId?: string) {
 
         const r = recipe as { recipe_ingredients?: unknown[]; ingredients?: unknown[]; recipe_steps?: unknown[]; steps?: unknown[] };
         const ingredients = Array.isArray(r.ingredients) ? r.ingredients : Array.isArray(r.recipe_ingredients) ? r.recipe_ingredients : [];
-        const steps = Array.isArray(r.steps) ? r.steps : Array.isArray(r.recipe_steps) ? r.recipe_steps : [];
+        const rawSteps = Array.isArray(r.steps) ? r.steps : Array.isArray(r.recipe_steps) ? r.recipe_steps : [];
+        const steps = [...rawSteps].sort((a, b) => {
+          const na = (a as { step_number?: number }).step_number ?? 0;
+          const nb = (b as { step_number?: number }).step_number ?? 0;
+          return na - nb;
+        });
         const { recipe_ingredients: _ri, recipe_steps: _rs, ingredients: _i, steps: _s, ...rest } = r;
         const out = { ...rest, ingredients, steps } as Recipe & { ingredients: RecipeIngredient[]; steps: RecipeStep[] };
         setCachedRecipe(id, out);
