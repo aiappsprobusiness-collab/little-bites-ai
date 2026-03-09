@@ -440,6 +440,14 @@ function isChefAdviceTruncated(advice: string): boolean {
 }
 
 /**
+ * Убирает лишние точки в середине предложения: «и сразу. перемешайте» → «и сразу перемешайте».
+ * Срабатывает, когда после точки идёт пробел и строчная буква (продолжение фразы, не новое предложение).
+ */
+function fixChefAdviceSpuriousPeriods(advice: string): string {
+  return normalizeSpaces(advice).replace(/\.\s+([a-zа-яё])/g, " $1");
+}
+
+/**
  * Вставляет точку между склеенными предложениями: «творог Слегка» → «творог. Слегка».
  * Срабатывает, когда после строчной буквы идёт пробел и слово, типично начинающее новое предложение.
  */
@@ -582,6 +590,7 @@ export function enforceChefAdvice(
   let t = normalizeSpaces(advice ?? "");
   const seed = (context?.recipeIdSeed ?? (context?.title ?? "") + (context?.ingredients?.[0] ?? "") + (context?.steps?.[0] ?? "")).trim() || "default";
 
+  t = fixChefAdviceSpuriousPeriods(t);
   t = fixChefAdviceRunOnSentences(t);
   t = fixChefAdviceTruncation(t);
 

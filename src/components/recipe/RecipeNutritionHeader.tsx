@@ -85,14 +85,19 @@ export function RecipeNutritionHeader({
           )}
         </div>
       )}
-      {hasMacros && (
-        <p
-          className={cn(macrosSize, "text-muted-foreground/90 leading-snug")}
-          role="paragraph"
-        >
-          {formatMacrosShort({ protein, fat, carbs })}
-        </p>
-      )}
+      {hasMacros && (() => {
+        const full = formatMacrosShort({ protein, fat, carbs });
+        const [label, line] = full.split("\n");
+        return (
+          <div
+            className={cn(macrosSize, "text-muted-foreground/90 leading-snug")}
+            role="paragraph"
+          >
+            <span>{label}</span>
+            {line != null && line.trim() && <span className="block mt-0.5">{line.trim()}</span>}
+          </div>
+        );
+      })()}
     </div>
   );
 }
