@@ -328,19 +328,6 @@ export default function ChildProfileEditPage() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
       }
-      headerRight={
-        <Button
-          className="bg-[#7A8F4D] hover:bg-[#6a7e41] text-white border-0 rounded-[10px] px-[14px] py-2 h-auto font-medium"
-          onClick={handleSave}
-          disabled={isCreating || isUpdating || !hasChanges || !birthDate?.trim()}
-        >
-          {(isCreating || isUpdating) ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            "Сохранить"
-          )}
-        </Button>
-      }
     >
       <div className="profile-edit-page min-h-0 flex-1 overflow-y-auto">
         <div className="px-4 py-4 max-w-lg mx-auto flex flex-col gap-4">
@@ -498,17 +485,6 @@ export default function ChildProfileEditPage() {
                         ✨ Настроить (Premium)
                       </div>
                     </button>
-                    <button
-                      type="button"
-                      onClick={openPaywallLikesDislikes}
-                      className="text-left w-full rounded-xl border-2 border-border bg-background p-4 mt-3 hover:bg-muted/30 transition-colors"
-                    >
-                      <p className="text-typo-muted font-medium">Сложность блюд</p>
-                      <p className="text-typo-caption text-muted-foreground mt-0.5">Простые, средние или любые — в Premium</p>
-                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border-2 border-border">
-                        ✨ Настроить (Premium)
-                      </div>
-                    </button>
                   </>
                 ) : (
                   <>
@@ -544,17 +520,30 @@ export default function ChildProfileEditPage() {
                 )}
               </div>
 
-              {!isNew && member && (
+              <div className="flex flex-col gap-3 pt-1">
                 <Button
-                  variant="ghost"
-                  className="w-full h-11 text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-sm font-medium"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  disabled={isDeleting}
+                  className="w-full h-11 bg-[#7A8F4D] hover:bg-[#6a7e41] text-white border-0 rounded-[10px] font-medium"
+                  onClick={handleSave}
+                  disabled={isCreating || isUpdating || !hasChanges || !birthDate?.trim()}
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Удалить профиль
+                  {(isCreating || isUpdating) ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Сохранить"
+                  )}
                 </Button>
-              )}
+                {!isNew && member && (
+                  <Button
+                    variant="ghost"
+                    className="w-full h-11 text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-sm font-medium"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={isDeleting}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Удалить профиль
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </div>
