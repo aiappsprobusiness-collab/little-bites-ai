@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -25,10 +25,6 @@ const signupSchema = z.object({
   displayName: z.string().min(2, "Имя должно быть минимум 2 символа"),
   email: z.string().email("Введите корректный email"),
   password: z.string().min(6, "Пароль должен быть минимум 6 символов"),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Пароли не совпадают",
-  path: ["confirmPassword"],
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -40,6 +36,8 @@ const AUTH_INPUT_CLASS =
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const signupEmailRef = useRef<HTMLInputElement>(null);
+  const signupPasswordRef = useRef<HTMLInputElement>(null);
   const { signIn, signUp } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -66,7 +64,7 @@ export default function AuthPage() {
 
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { displayName: "", email: "", password: "", confirmPassword: "" },
+    defaultValues: { displayName: "", email: "", password: "" },
   });
 
   const onLogin = async (data: LoginFormData) => {
@@ -101,6 +99,7 @@ export default function AuthPage() {
       } else {
         trackUsageEvent("auth_success");
         toast({ title: "Регистрация успешна!", description: "Проверьте почту для подтверждения аккаунта" });
+        navigate("/profile", { replace: true });
       }
     } catch (err) {
       trackUsageEvent("auth_error", { properties: { message: err instanceof Error ? err.message : "Произошла непредвиденная ошибка" } });
@@ -218,7 +217,18 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel className="text-muted-foreground font-normal">Как к вам обращаться?</FormLabel>
                             <FormControl>
-                              <Input placeholder="Как вас зовут" className={AUTH_INPUT_CLASS} {...field} />
+                              <Input
+                                placeholder="Например, Мария"
+                                className={AUTH_INPUT_CLASS}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    signupEmailRef.current?.focus();
+                                  }
+                                }}
+                                {...field}
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -227,30 +237,60 @@ export default function AuthPage() {
                       <FormField
                         control={signupForm.control}
                         name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
-                            <FormControl>
-                              <Input type="email" placeholder="Введите ваш email" className={AUTH_INPUT_CLASS} {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                        render={({ field }) => {
+                          const { ref: fieldRef, ...rest } = field;
+                          return (
+                            <FormItem>
+                              <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
+                              <FormControl>
+                                <Input
+                                  type="email"
+                                  placeholder="Введите ваш email"
+                                  className={AUTH_INPUT_CLASS}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      signupPasswordRef.current?.focus();
+                                    }
+                                  }}
+                                  ref={(el) => {
+                                    fieldRef(el);
+                                    signupEmailRef.current = el;
+                                  }}
+                                  {...rest}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          );
+                        }}
                       />
                       <FormField
                         control={signupForm.control}
                         name="password"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-muted-foreground font-normal">Пароль</FormLabel>
-                            <FormControl>
-                              <div className="relative">
-                                <Input
-                                  type={showPassword ? "text" : "password"}
-                                  placeholder="Придумайте пароль (от 6 символов)"
-                                  className={cn(AUTH_INPUT_CLASS, "pr-12")}
-                                  {...field}
-                                />
+                        render={({ field }) => {
+                          const { ref: fieldRef, ...rest } = field;
+                          return (
+                            <FormItem>
+                              <FormLabel className="text-muted-foreground font-normal">Пароль (от 6 символов)</FormLabel>
+                              <FormControl>
+                                <div className="relative">
+                                  <Input
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Придумайте пароль"
+                                    className={cn(AUTH_INPUT_CLASS, "pr-12")}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        signupForm.handleSubmit(onSignup)();
+                                      }
+                                    }}
+                                    ref={(el) => {
+                                      fieldRef(el);
+                                      signupPasswordRef.current = el;
+                                    }}
+                                    {...rest}
+                                  />
                                 <button
                                   type="button"
                                   aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
@@ -263,25 +303,8 @@ export default function AuthPage() {
                             </FormControl>
                             <FormMessage />
                           </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={signupForm.control}
-                        name="confirmPassword"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-muted-foreground font-normal">Повторите пароль</FormLabel>
-                            <FormControl>
-                              <Input
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Введите пароль ещё раз"
-                                className={AUTH_INPUT_CLASS}
-                                {...field}
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                          );
+                        }}
                       />
                       <Button
                         type="submit"
@@ -291,6 +314,9 @@ export default function AuthPage() {
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
                         <span>Создать меню</span>
                       </Button>
+                      <p className="text-center text-sm text-muted-foreground mt-2">
+                        Бесплатно. Без карты.
+                      </p>
                     </form>
                   </Form>
                 </TabsContent>

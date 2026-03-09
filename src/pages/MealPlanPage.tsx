@@ -167,6 +167,7 @@ export default function MealPlanPage() {
   const [searchParams] = useSearchParams();
   const [justCreatedMemberId, setJustCreatedMemberIdState] = useState<string | null>(null);
   const [showWeekPreviewSheet, setShowWeekPreviewSheet] = useState(false);
+  const [firstPlanShareBannerDismissed, setFirstPlanShareBannerDismissed] = useState(false);
 
   useEffect(() => {
     const id = consumeJustCreatedMemberId();
@@ -750,6 +751,40 @@ export default function MealPlanPage() {
       <div className="flex flex-col min-h-0 flex-1 px-4 relative overflow-x-hidden touch-pan-y overscroll-x-none max-w-full">
         {/* Content wrapper: один скролл + subtle pattern; горизонтальный скролл/overscroll отключены */}
         <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-x-none">
+          {/* Блок приглашения к шарингу после первой генерации */}
+          {justCreatedMemberId && !firstPlanShareBannerDismissed && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+              className="rounded-2xl bg-card border border-border/70 shadow-[0_1px_6px_-2px_rgba(0,0,0,0.05)] p-4 mb-3 relative"
+            >
+              <button
+                type="button"
+                onClick={() => setFirstPlanShareBannerDismissed(true)}
+                className="absolute top-3 right-3 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
+                aria-label="Закрыть"
+              >
+                <span className="text-lg leading-none">×</span>
+              </button>
+              <p className="text-sm font-medium text-foreground pr-6 mb-1">
+                План готов! 🎉
+              </p>
+              <p className="text-xs text-muted-foreground mb-3">
+                Многие родители делятся такими меню<br />в семейных чатах.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium gap-1.5"
+                onClick={shareDayPlan}
+                disabled={isAnyGenerating}
+              >
+                <ShareIosIcon className="w-4 h-4 shrink-0" />
+                Поделиться меню на день
+              </Button>
+            </motion.div>
+          )}
           {/* 1) Hero: главные CTA сверху, шаринг ниже */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}

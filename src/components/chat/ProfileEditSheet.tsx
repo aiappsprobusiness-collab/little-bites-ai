@@ -62,6 +62,8 @@ interface ProfileEditSheetProps {
   createMode?: boolean;
   onAddNew?: () => void;
   onCreated?: (memberId: string) => void;
+  /** When true, after creating a member we only call onCreated and do not run startFillDay/navigate (parent shows onboarding screen). */
+  skipFillAndRedirectWhenCreated?: boolean;
 }
 
 export function ProfileEditSheet({
@@ -71,6 +73,7 @@ export function ProfileEditSheet({
   createMode = false,
   onAddNew,
   onCreated,
+  skipFillAndRedirectWhenCreated = false,
 }: ProfileEditSheetProps) {
   const FAMILY_LIMIT_MESSAGE =
     "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу";
@@ -207,7 +210,7 @@ export function ProfileEditSheet({
         onOpenChange(false);
         onCreated?.(newMember.id as string);
 
-        if (FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
+        if (!skipFillAndRedirectWhenCreated && FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
           try {
             await startFillDay(newMember.id as string);
             setJustCreatedMemberId(newMember.id as string);
@@ -277,6 +280,11 @@ export function ProfileEditSheet({
           <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать — ${member?.name ?? ""}`}</SheetTitle>
         </SheetHeader>
         <div className="space-y-5 py-4 overflow-y-auto">
+          {isCreate && (
+            <p className="text-sm text-muted-foreground">
+              Добавим профиль ребёнка, чтобы собрать для него меню.
+            </p>
+          )}
           {isCreate && (
             <div className="space-y-2">
               <Label htmlFor="profile-name" className="text-typo-muted font-medium">Имя</Label>

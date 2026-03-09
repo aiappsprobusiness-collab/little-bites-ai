@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { ProfileHeaderCard } from "@/components/profile/ProfileHeaderCard";
 import { FamilyMemberCard } from "@/components/profile/FamilyMemberCard";
+import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
+import { Loader2 } from "lucide-react";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
 
@@ -96,10 +98,31 @@ export default function ProfilePage() {
   const [editName, setEditName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
   const [dinnerReminderEnabled, setDinnerReminderEnabledState] = useState(getDinnerReminderEnabled);
+  const [showGeneratingScreen, setShowGeneratingScreen] = useState(false);
+  const [onboardingMemberId, setOnboardingMemberId] = useState<string | null>(null);
+  const [generatingDone, setGeneratingDone] = useState(false);
+  const onboardingFirstProfileRef = useRef(false);
+
+  useEffect(() => {
+    if (isLoading || members.length > 0) return;
+    if (!onboardingFirstProfileRef.current) {
+      onboardingFirstProfileRef.current = true;
+      setShowMemberSheet(true);
+    }
+  }, [isLoading, members.length]);
 
   const handleDinnerReminderChange = (checked: boolean) => {
     setDinnerReminderEnabledState(checked);
     setDinnerReminderEnabled(checked);
+  };
+
+  const handleMemberCreated = (memberId: string) => {
+    setShowMemberSheet(false);
+    if (onboardingFirstProfileRef.current) {
+      onboardingFirstProfileRef.current = false;
+      setOnboardingMemberId(memberId);
+      setShowGeneratingScreen(true);
+    }
   };
 
   const displayName =
@@ -166,6 +189,55 @@ export default function ProfilePage() {
     }
     navigate("/subscription/manage");
   };
+
+  const MIN_LOADING_SCREEN_MS = 4000;
+
+  useEffect(() => {
+    if (!showGeneratingScreen || !onboardingMemberId) return;
+    let cancelled = false;
+    const startTime = Date.now();
+    (async () => {
+      try {
+        await startFillDay(onboardingMemberId);
+        if (cancelled) return;
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, MIN_LOADING_SCREEN_MS - elapsed);
+        if (remaining > 0) {
+          await new Promise((r) => setTimeout(r, remaining));
+        }
+        if (cancelled) return;
+        setJustCreatedMemberId(onboardingMemberId);
+        setGeneratingDone(true);
+        const t = setTimeout(() => {
+          navigate(getPlanUrlForMember(onboardingMemberId), { replace: true });
+          setShowGeneratingScreen(false);
+          setOnboardingMemberId(null);
+          setGeneratingDone(false);
+        }, 1500);
+        return () => clearTimeout(t);
+      } catch (e) {
+        if (!cancelled) {
+          toast({
+            variant: "destructive",
+            title: "Ошибка",
+            description: "Не удалось подобрать меню. Попробуйте снова на странице План.",
+          });
+          setShowGeneratingScreen(false);
+          setOnboardingMemberId(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showGeneratingScreen, onboardingMemberId, navigate, toast]);
+
+  const GENERATION_STEPS = [
+    "Определяем возраст ребёнка",
+    "Проверяем аллергии",
+    "Подбираем подходящие блюда",
+    "Собираем план питания",
+  ];
 
   if (isLoading) {
     return (
@@ -403,8 +475,42 @@ export default function ProfilePage() {
         onOpenChange={setShowMemberSheet}
         member={null}
         createMode={true}
-        onCreated={() => setShowMemberSheet(false)}
+        onCreated={handleMemberCreated}
+        skipFillAndRedirectWhenCreated={members.length === 0}
       />
+
+      {showGeneratingScreen && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background px-6"
+          aria-live="polite"
+        >
+          <div className="text-center max-w-sm">
+            {generatingDone ? (
+              <p className="text-2xl font-semibold text-foreground">Готово!</p>
+            ) : (
+              <>
+                <h2 className="text-lg font-semibold text-foreground mb-6">
+                  Собираем меню для вашего ребёнка
+                </h2>
+                <ul className="space-y-3 text-left mb-6">
+                  {GENERATION_STEPS.map((step, i) => (
+                    <li key={step} className="flex items-center gap-2 text-sm text-foreground">
+                      <span className="text-primary shrink-0">✓</span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-muted-foreground">
+                  Многие родители делятся такими меню с друзьями
+                </p>
+                <div className="mt-8 flex justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </MobileLayout>
   );
 }
