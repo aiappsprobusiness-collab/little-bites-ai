@@ -160,7 +160,7 @@ export function AddChildForm({
         ...(hasAccess && { likes, dislikes }),
       });
       trackUsageEvent("member_create_success", { properties: { member_id: newMember.id } });
-      toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
+      toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен`, duration: 2000 });
       onSaved(newMember.id);
       resetForm();
 

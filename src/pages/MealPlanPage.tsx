@@ -332,7 +332,7 @@ export default function MealPlanPage() {
         const total = (planJob.progress_total ?? (planGenType === "week" ? 7 : 1)) * 4;
         toast({ description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
       } else {
-        toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов" });
+        toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов", duration: 5000 });
       }
     } else if (planJob.status === "error" && wasRunning) {
       if (planErrorText === "LIMIT_REACHED") {
@@ -457,7 +457,7 @@ export default function MealPlanPage() {
     if (!justCreatedMemberId || planReadyToastShownRef.current) return;
     if (isLoading || isFetching) return;
     planReadyToastShownRef.current = true;
-    setJustCreatedMemberIdState(null);
+    // Не сбрасываем justCreatedMemberId здесь — баннер «Поделиться меню» остаётся до закрытия пользователем
     const t = toast({
       title: "План питания на сегодня готов 🍽",
       description: "Мы подобрали меню на сегодня",
@@ -761,7 +761,10 @@ export default function MealPlanPage() {
             >
               <button
                 type="button"
-                onClick={() => setFirstPlanShareBannerDismissed(true)}
+                onClick={() => {
+                  setFirstPlanShareBannerDismissed(true);
+                  setJustCreatedMemberIdState(null);
+                }}
                 className="absolute top-3 right-3 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
                 aria-label="Закрыть"
               >

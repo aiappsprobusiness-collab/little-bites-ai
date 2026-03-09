@@ -206,7 +206,7 @@ export function ProfileEditSheet({
           allergies,
           ...(isPremium && { likes, dislikes }),
         });
-        toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен` });
+        toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен`, duration: 2000 });
         onOpenChange(false);
         onCreated?.(newMember.id as string);
 
