@@ -10,6 +10,7 @@ import {
   HelpCircle,
   FileText,
   Lock,
+  Download,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,6 +41,8 @@ import { ProfileHeaderCard } from "@/components/profile/ProfileHeaderCard";
 import { FamilyMemberCard } from "@/components/profile/FamilyMemberCard";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import { Loader2 } from "lucide-react";
+import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { isStandalone } from "@/utils/standalone";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
 
@@ -102,7 +105,10 @@ export default function ProfilePage() {
   const [showGeneratingScreen, setShowGeneratingScreen] = useState(false);
   const [onboardingMemberId, setOnboardingMemberId] = useState<string | null>(null);
   const [generatingDone, setGeneratingDone] = useState(false);
+  const [showIosInstallDialog, setShowIosInstallDialog] = useState(false);
   const onboardingFirstProfileRef = useRef(false);
+  const { canInstall, promptInstall, isInstalled, hasInstallOption, isIOSDevice } = usePWAInstall();
+  const showAppSection = !isInstalled && !isStandalone() && hasInstallOption;
 
   useEffect(() => {
     if (isLoading || members.length > 0) return;
@@ -362,6 +368,32 @@ export default function ProfilePage() {
             </div>
           </section>
 
+          {/* Приложение: установка PWA (не показываем в standalone и если уже установлено) */}
+          {showAppSection && (
+            <section className="flex flex-col gap-2">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Приложение
+              </p>
+              <div className="rounded-2xl border border-border/70 bg-card overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (canInstall) {
+                      promptInstall();
+                    } else if (isIOSDevice) {
+                      setShowIosInstallDialog(true);
+                    }
+                  }}
+                  className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm"
+                >
+                  <Download className="h-[18px] w-[18px] text-muted-foreground/80 shrink-0" strokeWidth={2} />
+                  <span className="text-foreground">Установить приложение</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" strokeWidth={2} />
+                </button>
+              </div>
+            </section>
+          )}
+
           {/* Утилиты: одна карточка, строки 48–52px, мелкие иконки и шевроны */}
           <section className="flex flex-col gap-2">
             <div className="rounded-2xl border border-border/70 bg-card overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
@@ -424,6 +456,22 @@ export default function ProfilePage() {
             <Button onClick={handleSaveName} disabled={isSavingName || !editName.trim()}>
               {isSavingName ? "Сохранение…" : "Сохранить"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showIosInstallDialog} onOpenChange={setShowIosInstallDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Установить приложение</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground whitespace-pre-line py-1">
+            Чтобы установить приложение:
+            {"\n"}1. Нажмите кнопку Поделиться в Safari
+            {"\n"}2. Выберите «На экран Домой»
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowIosInstallDialog(false)}>Понятно</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -17,14 +17,14 @@ export function PWAInstall() {
           </div>
           <DialogTitle className="flex items-center justify-center gap-2 text-center">
             <Puzzle className="h-6 w-6 text-primary shrink-0" />
-            Установить Mom Recipes на экран?
+            Установите MomRecipes на экран телефона
           </DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-2 text-center">
-              <p>Установите приложение, чтобы открывать его с иконки и пользоваться офлайн.</p>
+              <p>План и рецепты будут всегда под рукой и откроются как обычное приложение.</p>
               {isIOSDevice && (
                 <p className="text-typo-muted font-semibold text-foreground/90">
-                  На iPhone: нажмите «Поделиться» в Safari → «На экран Домой».
+                  В Safari нажмите Поделиться → На экран Домой
                 </p>
               )}
             </div>
@@ -43,7 +43,7 @@ export function PWAInstall() {
               Установить
             </Button>
           )}
-          <Button variant="ghost" size="sm" onClick={dismissModal} className={canInstall ? "" : "w-full"}>
+          <Button variant="ghost" size="sm" onClick={() => dismissModal()} className={canInstall ? "" : "w-full"}>
             Позже
           </Button>
         </div>

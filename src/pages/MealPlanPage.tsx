@@ -65,6 +65,9 @@ import { consumeJustCreatedMemberId } from "@/services/planFill";
 import { FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
 import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/WeekPreviewPaywallSheet";
 import { createSharedPlan } from "@/services/sharedPlan";
+import { A2HS_EVENT_AFTER_FIRST_PLAN } from "@/hooks/usePWAInstall";
+
+const A2HS_FIRST_PLAN_DISPATCHED_KEY = "a2hs_first_plan_dispatched";
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -333,6 +336,10 @@ export default function MealPlanPage() {
         toast({ description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
       } else {
         toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов", duration: 5000 });
+        if (typeof window !== "undefined" && localStorage.getItem(A2HS_FIRST_PLAN_DISPATCHED_KEY) !== "1") {
+          localStorage.setItem(A2HS_FIRST_PLAN_DISPATCHED_KEY, "1");
+          window.dispatchEvent(new CustomEvent(A2HS_EVENT_AFTER_FIRST_PLAN));
+        }
       }
     } else if (planJob.status === "error" && wasRunning) {
       if (planErrorText === "LIMIT_REACHED") {

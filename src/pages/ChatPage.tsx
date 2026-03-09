@@ -42,6 +42,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { Textarea } from "@/components/ui/textarea";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { Progress } from "@/components/ui/progress";
+import { A2HS_EVENT_AFTER_FIRST_RECIPE } from "@/hooks/usePWAInstall";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
 const CHAT_HELP_TOOLTIP_SEEN_KEY = "chat_help_tooltip_seen";
@@ -906,6 +907,11 @@ export default function ChatPage() {
               : m
           )
         );
+
+        if (typeof window !== "undefined" && localStorage.getItem("a2hs_first_recipe_dispatched") !== "1") {
+          localStorage.setItem("a2hs_first_recipe_dispatched", "1");
+          window.dispatchEvent(new CustomEvent(A2HS_EVENT_AFTER_FIRST_RECIPE));
+        }
 
         try {
           if (!finalValidation.ok && hasRecipeFromApi) {

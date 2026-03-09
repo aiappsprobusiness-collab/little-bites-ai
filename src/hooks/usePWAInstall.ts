@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { isStandalone } from "@/utils/standalone";
 
 export interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -7,13 +9,19 @@ export interface BeforeInstallPromptEvent extends Event {
 }
 
 const STORAGE_KEY_COUNT = "a2hs_attempt_count";
-const STORAGE_KEY_NEXT_TS = "a2hs_next_ts";
+const STORAGE_KEY_NEXT_ELIGIBLE_AT = "a2hs_next_eligible_at";
 const STORAGE_KEY_FOREVER = "a2hs_dismissed_forever";
+const STORAGE_KEY_TRIGGER_SOURCE = "a2hs_trigger_source";
 
-const FIRST_SHOW_DELAY_MS = 30_000;
-const RE_SHOW_2MIN_MS = 2 * 60 * 1000;
-const RE_SHOW_5MIN_MS = 5 * 60 * 1000;
+const DELAY_MIN_MS = 8_000;
+const DELAY_MAX_MS = 15_000;
 const MAX_ATTEMPTS = 3;
+const LATER_1_DAYS = 3;
+const LATER_2_DAYS = 7;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+export const A2HS_EVENT_AFTER_FIRST_PLAN = "a2hs-after-first-plan";
+export const A2HS_EVENT_AFTER_FIRST_RECIPE = "a2hs-after-first-recipe";
 
 function readStoredCount(): number {
   try {
@@ -26,10 +34,10 @@ function readStoredCount(): number {
   }
 }
 
-function readStoredNextTs(): number | null {
+function readStoredNextEligibleAt(): number | null {
   try {
     if (typeof window === "undefined") return null;
-    const s = localStorage.getItem(STORAGE_KEY_NEXT_TS);
+    const s = localStorage.getItem(STORAGE_KEY_NEXT_ELIGIBLE_AT);
     const n = s != null ? parseInt(s, 10) : NaN;
     return Number.isFinite(n) ? n : null;
   } catch {
@@ -46,20 +54,40 @@ function readDismissedForever(): boolean {
   }
 }
 
-function writeStored(count: number, nextTs: number | null, forever: boolean): void {
+function readTriggerSource(): "" | "plan" | "recipe" {
+  try {
+    if (typeof window === "undefined") return "";
+    const s = localStorage.getItem(STORAGE_KEY_TRIGGER_SOURCE);
+    if (s === "plan" || s === "recipe") return s;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStored(count: number, nextEligibleAt: number | null, forever: boolean): void {
   try {
     if (typeof window === "undefined") return;
     localStorage.setItem(STORAGE_KEY_COUNT, String(count));
-    if (nextTs != null) {
-      localStorage.setItem(STORAGE_KEY_NEXT_TS, String(nextTs));
+    if (nextEligibleAt != null) {
+      localStorage.setItem(STORAGE_KEY_NEXT_ELIGIBLE_AT, String(nextEligibleAt));
     } else {
-      localStorage.removeItem(STORAGE_KEY_NEXT_TS);
+      localStorage.removeItem(STORAGE_KEY_NEXT_ELIGIBLE_AT);
     }
     if (forever) {
       localStorage.setItem(STORAGE_KEY_FOREVER, "1");
     } else {
       localStorage.removeItem(STORAGE_KEY_FOREVER);
     }
+  } catch {
+    // ignore
+  }
+}
+
+function setTriggerSource(source: "plan" | "recipe"): void {
+  try {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(STORAGE_KEY_TRIGGER_SOURCE, source);
   } catch {
     // ignore
   }
@@ -83,7 +111,21 @@ function hasA2HSSupport(deferredPrompt: BeforeInstallPromptEvent | null): boolea
   return Boolean(deferredPrompt) || isIOS();
 }
 
+function canShowNow(): boolean {
+  if (readDismissedForever()) return false;
+  const count = readStoredCount();
+  if (count >= MAX_ATTEMPTS) return false;
+  const nextAt = readStoredNextEligibleAt();
+  if (nextAt != null && Date.now() < nextAt) return false;
+  return true;
+}
+
+function randomDelayMs(): number {
+  return DELAY_MIN_MS + Math.floor(Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS + 1));
+}
+
 export function usePWAInstall() {
+  const { user } = useAuth();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(isRunningAsInstalledPWA);
   const [showModal, setShowModal] = useState(false);
@@ -119,49 +161,50 @@ export function usePWAInstall() {
   }, [toast]);
 
   useEffect(() => {
+    if (!user) return;
     if (isInstalled) return;
-    const hasSupport = hasA2HSSupport(deferredPrompt);
-    if (!hasSupport) return;
+    if (isStandalone()) return;
+    if (!hasA2HSSupport(deferredPrompt)) return;
+    if (!canShowNow()) return;
+    if (readTriggerSource() !== "") return;
 
-    const count = readStoredCount();
-    const forever = readDismissedForever();
-    const nextTs = readStoredNextTs();
-    const now = Date.now();
-
-    if (forever || count >= MAX_ATTEMPTS) {
+    const scheduleShow = (trigger: "plan" | "recipe") => {
+      if (readTriggerSource() !== "") return;
+      setTriggerSource(trigger);
+      const delayMs = randomDelayMs();
       if (import.meta.env.DEV) {
-        console.log("[DEBUG] a2hs schedule: dismissed_forever, skipping");
+        console.log("[DEBUG] a2hs scheduled from", trigger, "in", delayMs, "ms");
       }
-      return;
-    }
+      scheduleTimeoutRef.current = setTimeout(() => {
+        scheduleTimeoutRef.current = null;
+        if (!isInstalledRef.current && hasA2HSSupport(deferredPromptRef.current) && canShowNow()) {
+          setShowModal(true);
+        }
+      }, delayMs);
+    };
 
-    let delayMs: number;
-    if (nextTs != null && now < nextTs) {
-      delayMs = nextTs - now;
-      if (import.meta.env.DEV) {
-        console.log("[DEBUG] a2hs schedule count=", count, "nextInMs=", delayMs);
-      }
-    } else {
-      delayMs = count === 0 ? FIRST_SHOW_DELAY_MS : 0;
-      if (import.meta.env.DEV) {
-        console.log("[DEBUG] a2hs schedule count=", count, "nextInMs=", delayMs);
-      }
-    }
+    const onFirstPlan = () => {
+      if (readTriggerSource() !== "") return;
+      scheduleShow("plan");
+    };
 
-    scheduleTimeoutRef.current = setTimeout(() => {
-      scheduleTimeoutRef.current = null;
-      if (!isInstalledRef.current && hasA2HSSupport(deferredPromptRef.current)) {
-        setShowModal(true);
-      }
-    }, delayMs);
+    const onFirstRecipe = () => {
+      if (readTriggerSource() !== "") return;
+      scheduleShow("recipe");
+    };
+
+    window.addEventListener(A2HS_EVENT_AFTER_FIRST_PLAN, onFirstPlan);
+    window.addEventListener(A2HS_EVENT_AFTER_FIRST_RECIPE, onFirstRecipe);
 
     return () => {
+      window.removeEventListener(A2HS_EVENT_AFTER_FIRST_PLAN, onFirstPlan);
+      window.removeEventListener(A2HS_EVENT_AFTER_FIRST_RECIPE, onFirstRecipe);
       if (scheduleTimeoutRef.current) {
         clearTimeout(scheduleTimeoutRef.current);
         scheduleTimeoutRef.current = null;
       }
     };
-  }, [deferredPrompt, isInstalled]);
+  }, [user, deferredPrompt, isInstalled]);
 
   const promptInstall = async () => {
     if (!deferredPrompt) return;
@@ -177,21 +220,21 @@ export function usePWAInstall() {
     const newCount = Math.min(count + 1, MAX_ATTEMPTS);
     const now = Date.now();
 
-    let nextTs: number | null = null;
+    let nextEligibleAt: number | null = null;
     let forever = false;
 
     if (newCount >= MAX_ATTEMPTS) {
       forever = true;
     } else if (newCount === 1) {
-      nextTs = now + RE_SHOW_2MIN_MS;
+      nextEligibleAt = now + LATER_1_DAYS * MS_PER_DAY;
     } else if (newCount === 2) {
-      nextTs = now + RE_SHOW_5MIN_MS;
+      nextEligibleAt = now + LATER_2_DAYS * MS_PER_DAY;
     }
 
-    writeStored(newCount, nextTs, forever);
+    writeStored(newCount, nextEligibleAt, forever);
 
     if (import.meta.env.DEV) {
-      console.log("[DEBUG] a2hs dismissed count=", newCount, forever ? "forever" : "nextTs=" + nextTs);
+      console.log("[DEBUG] a2hs dismissed count=", newCount, forever ? "forever" : "nextEligibleAt=" + nextEligibleAt);
     }
   }, []);
 
@@ -206,6 +249,7 @@ export function usePWAInstall() {
 
   const canInstall = Boolean(deferredPrompt) && !isInstalled;
   const isIOSDevice = isIOS();
+  const hasInstallOption = !isInstalled && (Boolean(deferredPrompt) || isIOSDevice);
 
-  return { canInstall, promptInstall, showModal, dismissModal, isIOSDevice };
+  return { canInstall, promptInstall, showModal, dismissModal, isIOSDevice, isInstalled, hasInstallOption };
 }
