@@ -148,8 +148,8 @@ export default function AuthPage() {
             <CardContent className="px-4 sm:px-6 pt-6 sm:pt-7 pb-5 sm:pb-6">
               <Tabs defaultValue={defaultAuthTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11">
-                  <TabsTrigger value="login" className="rounded-[16px]">Вход</TabsTrigger>
-                  <TabsTrigger value="signup" className="rounded-[16px]">Создать аккаунт</TabsTrigger>
+                  <TabsTrigger value="login" className="rounded-[16px]">Войти</TabsTrigger>
+                  <TabsTrigger value="signup" className="rounded-[16px]">Начать</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="login">
@@ -218,7 +218,7 @@ export default function AuthPage() {
                           <FormItem>
                             <FormLabel className="text-muted-foreground font-normal">Как к вам обращаться?</FormLabel>
                             <FormControl>
-                              <Input placeholder="Например, Мария" className={AUTH_INPUT_CLASS} {...field} />
+                              <Input placeholder="Как вас зовут" className={AUTH_INPUT_CLASS} {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -285,12 +285,11 @@ export default function AuthPage() {
                       />
                       <Button
                         type="submit"
-                        variant="outline"
-                        className="w-full rounded-[24px] h-14 px-6 py-6 font-semibold tracking-wide flex items-center justify-center gap-2 border-2 border-primary-border bg-transparent text-primary hover:bg-primary-light hover:border-primary active:scale-[0.99] transition-all duration-200"
+                        className="w-full rounded-[24px] h-14 px-6 py-6 text-white font-semibold tracking-wide flex items-center justify-center gap-2 shadow-soft hover:opacity-95 active:scale-[0.99] transition-all duration-200 bg-primary"
                         disabled={isLoading}
                       >
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
-                        <span>Начать и собрать меню</span>
+                        <span>Создать меню</span>
                       </Button>
                     </form>
                   </Form>
@@ -302,7 +301,7 @@ export default function AuthPage() {
                   onClick={goToWelcome}
                   className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
                 >
-                  Попробовать пример без регистрации
+                  Посмотреть пример рецепта
                 </button>
               </p>
             </CardContent>

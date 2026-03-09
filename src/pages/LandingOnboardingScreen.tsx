@@ -10,18 +10,18 @@ import { WelcomeRecipeBlock } from "@/components/landing/WelcomeRecipeBlock";
 const BENEFIT_CARDS = [
   {
     emoji: "👶",
-    title: "Ребёнок не ест?",
-    text: "Подскажем блюда, которые дети едят охотнее",
+    title: "Ребёнок отказывается есть?",
+    text: "Подберём блюда, которые дети принимают охотнее.",
   },
   {
     emoji: "🍽",
-    title: "Меню на каждый день",
-    text: "Готовые блюда для всей семьи без отдельной готовки",
+    title: "Меню без лишней готовки",
+    text: "Готовые блюда на день для ребёнка и семьи.",
   },
   {
     emoji: "💬",
-    title: "Можно спросить в любой момент",
-    text: "Аллергии, прикорм, если ребёнок отказывается есть",
+    title: "Учитываем особенности ребёнка",
+    text: "Аллергии, возраст, любимые и нелюбимые продукты.",
   },
 ];
 
@@ -42,7 +42,7 @@ export default function LandingOnboardingScreen() {
 
   const goToFreeCta = () => {
     trackLandingEvent("landing_cta_free_click");
-    navigate("/auth", { replace: true });
+    navigate("/auth", { replace: true, state: { tab: "signup" } });
   };
 
   if (loading) {
@@ -79,21 +79,6 @@ export default function LandingOnboardingScreen() {
           <p className="text-base text-muted-foreground mb-8">
             Меню, рецепты и советы — за 1 минуту
           </p>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <Button
-              className="rounded-xl h-12 px-6 font-semibold"
-              onClick={goToFreeCta}
-            >
-              Получить свой план
-            </Button>
-            <Button
-              variant="outline"
-              className="rounded-xl h-12 px-6 font-semibold border-2 border-primary/30 bg-transparent"
-              onClick={goToAuth}
-            >
-              Войти
-            </Button>
-          </div>
         </section>
 
         {/* B) 3 карточки преимуществ */}
@@ -118,10 +103,27 @@ export default function LandingOnboardingScreen() {
           ))}
         </section>
 
-        {/* C) Пример блюда из меню */}
+        {/* C) CTA row */}
+        <section className="flex flex-col sm:flex-row gap-3 justify-center mb-10">
+          <Button
+            className="rounded-xl h-12 px-6 font-semibold"
+            onClick={goToFreeCta}
+          >
+            Получить свой план
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-xl h-12 px-6 font-semibold border-2 border-primary/30 bg-transparent"
+            onClick={goToAuth}
+          >
+            Войти
+          </Button>
+        </section>
+
+        {/* D) Пример рецепта в приложении */}
         <section aria-labelledby="welcome-recipe-title">
           <h2 id="welcome-recipe-title" className="text-lg font-semibold text-foreground mb-3">
-            Вот пример блюда из меню для ребёнка
+            Как выглядит рецепт в приложении
           </h2>
           <WelcomeRecipeBlock />
         </section>
@@ -146,7 +148,7 @@ export default function LandingOnboardingScreen() {
             className="w-full rounded-xl h-14 text-base font-semibold"
             onClick={goToFreeCta}
           >
-            Получить свой план питания
+            Создать меню для ребёнка
           </Button>
         </section>
       </main>
