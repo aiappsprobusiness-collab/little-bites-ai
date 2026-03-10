@@ -1,0 +1,11 @@
+---
+description: Правила Edge Functions (Supabase)
+alwaysApply: true
+---
+
+# Edge Functions
+
+Edge functions находятся в: **supabase/functions/**
+
+- **index.ts** должен быть thin entrypoint.
+- Бизнес-логика должна выноситься в модули.

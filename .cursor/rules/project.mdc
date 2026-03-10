@@ -1,0 +1,14 @@
+---
+description: Описание проекта Mom Recipes / Little Bites AI
+alwaysApply: true
+---
+
+# Project
+
+**Project:** Mom Recipes / Little Bites AI
+
+- **Backend:** Supabase
+- **Frontend deploy:** GitHub Pages (commit + push)
+- Netlify не используется.
+
+Следовать существующей архитектуре проекта.

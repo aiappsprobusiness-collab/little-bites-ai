@@ -1,0 +1,16 @@
+---
+description: Правила изменения БД (миграции, схема)
+alwaysApply: true
+---
+
+# Database
+
+Любые изменения БД — **только через** `supabase/migrations/`.
+
+Перед изменением читать: **docs/database/DATABASE_SCHEMA.md**
+
+**Нельзя:**
+- менять схему вручную
+- писать SQL вне миграций
+
+**After schema changes:** Update **docs/database/DATABASE_SCHEMA.md** in the same task. Do not leave DATABASE_SCHEMA.md outdated after schema changes.

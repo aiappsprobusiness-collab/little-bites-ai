@@ -1,0 +1,30 @@
+---
+description: Правила документации проекта
+alwaysApply: true
+---
+
+# Documentation
+
+Основная документация находится в: **docs/**
+
+**Структура:**
+- docs/architecture
+- docs/analytics
+- docs/database
+- docs/decisions
+- docs/dev
+
+**Source of truth документы:**
+- docs/architecture/CHAT_HISTORY_SOURCE_OF_TRUTH.md
+- docs/architecture/chat_recipe_generation.md
+- docs/database/DATABASE_SCHEMA.md
+- docs/decisions/MEAL_TYPE_AND_LUNCH_SOUP.md
+- docs/decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md
+
+Эти документы нельзя переписывать без отдельного плана.
+
+**Keep canonical docs in sync:**
+- Source-of-truth documents must stay aligned with implementation.
+- If a task changes behavior covered by a canonical document, update that canonical document in the same changeset.
+- Update only impacted canonical docs, not unrelated documentation.
+- Do not leave canonical docs outdated after changing a covered domain.
