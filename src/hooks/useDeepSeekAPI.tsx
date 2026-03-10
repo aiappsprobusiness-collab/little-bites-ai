@@ -305,53 +305,6 @@ export function useDeepSeekAPI() {
     },
   });
 
-  // Analyze image
-  const analyzeMutation = useMutation({
-    mutationFn: async ({ imageBase64, mimeType }: { imageBase64: string; mimeType: string }) => {
-      if (!canGenerate) {
-        throw new Error('usage_limit_exceeded');
-      }
-
-      const accessToken = await getValidAccessToken();
-      let response: Response;
-      try {
-        response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/deepseek-analyze`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-            ...(SUPABASE_PUBLISHABLE_KEY && { apikey: SUPABASE_PUBLISHABLE_KEY }),
-          },
-          body: JSON.stringify({ imageBase64, mimeType }),
-        });
-      } catch (err) {
-        if (timeoutId) clearTimeout(timeoutId);
-        const isAbort = err instanceof Error && err.name === 'AbortError';
-        if (isAbort && isHelpMode) {
-          throw new Error('HELP_TIMEOUT');
-        }
-        const msg = (err as Error)?.message ?? '';
-        if (msg.includes('HTTP2') || msg.includes('protocol') || msg === 'Failed to fetch') {
-          throw new Error('Соединение прервано. Проверьте интернет и попробуйте ещё раз.');
-        }
-        throw err;
-      }
-      if (timeoutId) clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        if (response.status === 429) {
-          throw new Error('usage_limit_exceeded');
-        }
-        throw new Error(error.message || 'Ошибка анализа');
-      }
-
-      const data = await response.json();
-      await refetchUsage();
-      return data;
-    },
-  });
-
   // Save chat to history (с контекстом: child_id = null для Семья, иначе id члена). Карусель — по контексту, последние 10.
   const CHAT_HISTORY_LIMIT = 10;
   const saveChatMutation = useMutation({
@@ -420,11 +373,8 @@ export function useDeepSeekAPI() {
   return {
     chat: chatMutation.mutateAsync,
     abortChat,
-    analyze: analyzeMutation.mutateAsync,
     saveChat: saveChatMutation.mutateAsync,
     isChatting: chatMutation.isPending,
-    isAnalyzing: analyzeMutation.isPending,
     chatError: chatMutation.error,
-    analyzeError: analyzeMutation.error,
   };
 }

@@ -1,5 +1,7 @@
 # Настройка распознавания речи через Whisper API
 
+> **Устарело.** Edge Function `speech-to-text` удалена из проекта. В приложении используется распознавание через `speechToTextEnhanced` (Web Speech API / нативный Android). Документ оставлен для истории.
+
 ## Что изменилось
 
 Вместо встроенного Web Speech API (который требует доступ к серверам Google) теперь используется **Whisper API от OpenAI** через Supabase Edge Function. Это решение:
