@@ -11,7 +11,7 @@
 - **Миграции**: колонка `recipes.is_soup` (boolean, default false), бэкфилл по title/description/tags; RPC `create_recipe_with_steps` принимает `is_soup` из payload и пишет в `recipes`.
 - **generate-plan**: в пул добавлено поле `is_soup`; для слота **lunch** после фильтра по meal_type добавлен строгий фильтр «только супы» (`is_soup === true` или эвристика `inferDishCategoryKey === "soup"`). При AI-fallback для lunch payload собирается через `canonicalizeRecipePayload` с `contextMealType: "lunch"` → в payload попадает `is_soup: true`.
 - **recipeCanonical** (Edge + клиент): для слота lunch в payload всегда выставляется `is_soup: true` (при создании рецепта для обеда).
-- **Документация**: `docs/MEAL_TYPE_AND_LUNCH_SOUP.md` — источник истины по meal_type/is_soup, пул, assign; сценарии проверки регрессии.
+- **Документация**: `docs/decisions/MEAL_TYPE_AND_LUNCH_SOUP.md` — источник истины по meal_type/is_soup, пул, assign; сценарии проверки регрессии.
 - **Тесты**: `recipeCanonical.test.ts` — lunch ⇒ `is_soup: true`, dinner ⇒ `is_soup: false`, assign не меняет рецепт (описан сценарий в доке; RPC не трогает `recipes`).
 
 ## Важно

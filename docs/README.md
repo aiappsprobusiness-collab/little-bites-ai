@@ -2,6 +2,17 @@
 
 Структура и назначение папок в `docs/`.
 
+## AI entry point
+
+If you are an AI agent working with this repository, read the following documents first:
+
+1. docs/PROJECT_CONTEXT.md
+2. docs/database/DATABASE_SCHEMA.md
+3. docs/architecture/CHAT_HISTORY_SOURCE_OF_TRUTH.md
+4. docs/architecture/chat_recipe_generation.md
+
+These documents provide the core project context and should be used before making assumptions about the architecture.
+
 ---
 
 ## Структура
@@ -9,6 +20,7 @@
 ```
 docs/
   README.md          — этот файл
+  PROJECT_CONTEXT    — обзор того, что важно помнить при работе
   architecture/      — архитектурная документация
   analytics/         — аналитика и метрики
   database/          — схема БД и работа с данными

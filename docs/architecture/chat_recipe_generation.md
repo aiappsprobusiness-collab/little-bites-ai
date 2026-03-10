@@ -166,7 +166,7 @@
 Другие Edge Functions используют _shared так:
 
 - **generate-plan:** safeLogger, allergens (getBlockedTokensFromAllergies), memberAgeContext, familyMode, familyStorageMember, mealJson, plan/familyDinnerFilter.
-- **payment-webhook, create-payment, deepseek-speech-to-text, speech-to-text, deepseek-analyze, generate-recipe-image:** в основном safeLogger.
+- **payment-webhook, create-payment:** в основном safeLogger.
 
 ---
 

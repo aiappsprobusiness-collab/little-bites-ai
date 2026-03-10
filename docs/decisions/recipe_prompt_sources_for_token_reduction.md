@@ -68,7 +68,7 @@ These constants are concatenated into **FREE_RECIPE_TEMPLATE** and **PREMIUM_REC
 **AGE_CONTEXTS** (prompts.ts): used inside `applyPromptTemplate` to fill `{{ageRule}}` from `getAgeCategory(ageMonths)`:
 - infant, toddler, school, adult — each a short paragraph. Inlined into template via `{{ageRule}}`.
 
-**Duplicate / overlapping content** (see also `docs/prompts_shortening_proposal.md`):
+**Duplicate / overlapping content** (see also `docs/decisions/prompts_shortening_proposal.md`):
 - “Only valid JSON, no markdown” appears in RULES_USER_INTENT, RECIPE_STRICT_JSON_CONTRACT, RECIPE_JSON_RULES, RECIPE_ONE_ONLY_RULE.
 - “One recipe / no lists” in RECIPE_JSON_RULES and RECIPE_ONE_ONLY_RULE.
 - description/chefAdvice rules in RECIPE_STRICT_JSON_CONTRACT, RECIPE_JSON_RULES, RECIPE_DESCRIPTION_VARIETY_RULE.
@@ -171,11 +171,11 @@ This is a large block (many lines for multiple members). Either keep it out of t
 ## 14. Summary: where to cut to reach ~1000 input tokens
 
 - **Largest contributors:** §3 (prompts.ts) — STRICT_RULES, RECIPE_STRICT_JSON_CONTRACT, RECIPE_JSON_RULES, RECIPE_DESCRIPTION_VARIETY_RULE, RECIPE_OUTPUT_RULES, RECIPE_ONE_ONLY_RULE, plus [CONTEXT] and ageRule.
-- **Duplication:** Merge “one JSON / no markdown / one recipe” into a single short block; merge description/chefAdvice/ingredients rules into one RECIPE_TASK block (see `docs/prompts_shortening_proposal.md`).
+- **Duplication:** Merge “one JSON / no markdown / one recipe” into a single short block; merge description/chefAdvice/ingredients rules into one RECIPE_TASK block (see `docs/decisions/prompts_shortening_proposal.md`).
 - **Optional:** Shorten STRICT_RULES and SAFETY_RULES; keep one clear “allergies/preferences strict, always output one recipe JSON” line.
 - **Optional:** Shorten AGE_CONTEXTS and getAgeCategoryRules (or merge with SAFETY_RULES) to avoid repeating age rules.
 - **generationContextBlock:** Currently unused in template; if you add it, prefer a short family-context format to avoid a large token increase.
 - **recentTitleKeysLine:** “Не повторять: …” — keep short (e.g. cap number of titles).
 - **Likes lines:** Already short; optional to make even shorter.
 
-Use this file plus `docs/prompts_shortening_proposal.md` for GPT-assisted shortening and token counting.
+Use this file plus `docs/decisions/prompts_shortening_proposal.md` for GPT-assisted shortening and token counting.
