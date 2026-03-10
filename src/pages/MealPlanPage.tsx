@@ -1212,6 +1212,7 @@ export default function MealPlanPage() {
               </div>
             </div>
           ) : (
+            <>
             <div className="mt-3 space-y-4 pb-4">
               {mealTypes.map((slot) => {
                 const plannedMeal = mealsByType[slot.id];
@@ -1490,6 +1491,31 @@ export default function MealPlanPage() {
                 );
               })}
             </div>
+            {/* Карточка «Спросить в чате» — только Free, план уже сгенерирован */}
+            {isFree && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mt-2 mb-4 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[0_1px_4px_-2px_rgba(0,0,0,0.04)]"
+              >
+                <h3 className="text-sm font-semibold text-foreground mb-1">
+                  Не нашли подходящее блюдо?
+                </h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Опишите, что хотите приготовить — подберём рецепт в чате.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-xl border-primary-border/70 text-primary hover:bg-primary/10 text-xs font-medium"
+                  onClick={() => navigate("/chat")}
+                >
+                  Спросить в чате
+                </Button>
+              </motion.div>
+            )}
+            </>
           )}
 
           {hasAnyWeekPlan &&
