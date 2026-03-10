@@ -30,7 +30,7 @@ export function HintBadge({ text, tooltip, className }: HintBadgeProps) {
               <HelpCircle className="w-4 h-4 shrink-0" strokeWidth={2} />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-[260px]">
+          <TooltipContent side="bottom" className="max-w-[260px] text-xs leading-snug">
             {tooltip}
           </TooltipContent>
         </Tooltip>

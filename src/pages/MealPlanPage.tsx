@@ -821,6 +821,10 @@ export default function MealPlanPage() {
                 {members.length > 0 && (
                   <PlanModeHint
                     mode={isFamilySelected(selectedMemberId, members) ? "family" : "member"}
+                    memberAgeMonths={memberDataForPlan?.age_months}
+                    memberAllergies={memberDataForPlan?.allergies}
+                    memberLikes={memberDataForPlan?.likes}
+                    memberDislikes={memberDataForPlan?.dislikes}
                   />
                 )}
                 {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (

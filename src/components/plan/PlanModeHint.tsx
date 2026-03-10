@@ -1,21 +1,39 @@
-import { Info, Users } from "lucide-react";
-import { HintBadge } from "@/components/ui/HintBadge";
+import { HelpCircle, Info, Users } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 export type PlanModeHintMode = "family" | "member";
 
 const FAMILY_TEXT = "Подбираем блюда для всей семьи";
-const MEMBER_TEXT = "Учитываем предпочтения и аллергии профиля";
-const MEMBER_TOOLTIP = "Ограничения профиля применяются при подборе рецептов.";
+const MEMBER_TEXT = "Учитываем все особенности профиля";
 
 export interface PlanModeHintProps {
   mode: PlanModeHintMode;
   className?: string;
+  /** Данные профиля для режима "member" (отображаются в тултипе). */
+  memberAgeMonths?: number | null;
+  memberAllergies?: string[];
+  memberLikes?: string[];
+  memberDislikes?: string[];
+}
+
+const tooltipContentClass = "max-w-[260px] rounded-md px-3 py-1.5 text-xs leading-snug text-popover-foreground";
+const listClass = "mt-1.5 list-disc pl-4 [&>li]:mb-0.5";
+
+function formatAge(ageMonths: number | null | undefined): string {
+  if (ageMonths == null || !Number.isFinite(ageMonths)) return "—";
+  if (ageMonths < 12) return `${ageMonths} мес`;
+  const years = Math.floor(ageMonths / 12);
+  return `${years} ${years === 1 ? "год" : years < 5 ? "года" : "лет"}`;
+}
+
+function formatList(items: string[] | undefined): string {
+  if (!items?.length) return "—";
+  return items.join(", ");
 }
 
 /** Подсказка в hero-блоке Плана: короткий текст и лёгкий popover/tooltip. */
-export function PlanModeHint({ mode, className }: PlanModeHintProps) {
+export function PlanModeHint({ mode, className, memberAgeMonths, memberAllergies, memberLikes, memberDislikes }: PlanModeHintProps) {
   if (mode === "family") {
     return (
       <div className={cn("mt-1.5 max-w-md", className)}>
@@ -32,11 +50,12 @@ export function PlanModeHint({ mode, className }: PlanModeHintProps) {
                 <Info className="h-3.5 w-3.5" />
               </button>
             </PopoverTrigger>
-            <PopoverContent side="bottom" align="start" className="w-72 max-w-[calc(100vw-2rem)] rounded-2xl p-3 text-sm leading-5">
-              <p>Мы учитываем возраст детей:</p>
-              <ul className="mt-2 list-disc space-y-1 pl-4">
+            <PopoverContent side="bottom" align="start" className={tooltipContentClass}>
+              <p>Мы учитываем:</p>
+              <ul className={listClass}>
                 <li>дети до 12 месяцев не участвуют в семейном меню</li>
                 <li>для детей 1–3 лет подбираем более мягкие блюда</li>
+                <li>все особенности членов семьи (аллергии, любит, не любит)</li>
               </ul>
             </PopoverContent>
           </Popover>
@@ -47,7 +66,29 @@ export function PlanModeHint({ mode, className }: PlanModeHintProps) {
 
   return (
     <div className={cn("mt-1.5 max-w-md", className)}>
-      <HintBadge text={MEMBER_TEXT} tooltip={MEMBER_TOOLTIP} />
+      <div className="inline-flex items-center gap-1.5" role="status">
+        <span className="text-xs text-muted-foreground leading-snug">{MEMBER_TEXT}</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center w-5 h-5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
+              aria-label="Подробнее об особенностях профиля"
+            >
+              <HelpCircle className="w-4 h-4 shrink-0" strokeWidth={2} />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="start" className={tooltipContentClass}>
+            <p>Мы учитываем:</p>
+            <ul className={listClass}>
+              <li>Возраст: {formatAge(memberAgeMonths)}</li>
+              <li>Аллергия: {formatList(memberAllergies)}</li>
+              <li>Любит: {formatList(memberLikes)}</li>
+              <li>Не любит: {formatList(memberDislikes)}</li>
+            </ul>
+          </PopoverContent>
+        </Popover>
+      </div>
     </div>
   );
 }
