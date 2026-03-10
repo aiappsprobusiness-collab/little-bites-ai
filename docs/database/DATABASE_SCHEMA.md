@@ -125,6 +125,7 @@ RLS: по `auth.uid() = user_id`. Лимиты Free: 1 член семьи, 1 а
 | visibility          | text                   | public \| private (для user_custom) |
 | servings_base       | integer NOT NULL DEFAULT 1 | Базовое число порций; количества в БД приведены к этому значению (легаси 5, новые 1). |
 | servings_recommended| integer NOT NULL DEFAULT 1 | Рекомендуемое число порций для UX (напр. обед 3, ужин 2, иначе 1). |
+| is_soup             | boolean NOT NULL DEFAULT false | Признак супа; для правила «слот обед = только супы». assign_recipe_to_plan_slot не меняет это поле. |
 | created_at, updated_at | timestamptz         | |
 
 RLS: SELECT — публичные или свои (или private + owner). INSERT/UPDATE/DELETE — владелец по user_id или owner_user_id для user_custom.
@@ -242,6 +243,7 @@ RLS: по user_id.
 | message_type | text             | text \| image \| recipe |
 | recipe_id    | uuid → recipes   | Связь с рецептом, если есть |
 | archived_at  | timestamptz      | Архивирование |
+| meta         | jsonb            | Метаданные ответа: blocked, original_query, suggested_alternatives, intended_dish_hint и др. для follow-up после аллергии/dislikes. |
 | created_at   | timestamptz      | |
 
 RLS: по user_id.
@@ -273,7 +275,7 @@ RLS: по user_id.
 |---------------|------------------|----------|
 | id            | uuid PK          | |
 | user_id       | uuid → auth.users | |
-| action_type   | text NOT NULL    | chat_recipe, weekly_plan, sos_consultant, diet_plan, balance_check, chat |
+| action_type   | text NOT NULL    | chat_recipe, weekly_plan, sos_consultant, diet_plan, balance_check, chat, plan_replace, other |
 | input_tokens   | integer DEFAULT 0 | |
 | output_tokens | integer DEFAULT 0 | |
 | total_tokens  | integer DEFAULT 0 | |
@@ -283,14 +285,20 @@ RLS: по user_id.
 
 ### `public.usage_events`
 
-События по фичам для лимитов Free (например 2/день на фичу). Сутки по UTC.
+События по фичам для лимитов Free (например 2/день на фичу). Сутки по UTC. Для аналитики допускаются анонимные события и любые значения `feature` (CHECK снят).
 
 | Колонка   | Тип              | Описание |
 |-----------|------------------|----------|
 | id        | uuid PK          | |
-| user_id   | uuid → auth.users | |
+| user_id   | uuid → auth.users | NULL для анонимных событий (landing, до регистрации) |
 | member_id | uuid → members   | |
-| feature   | text             | chat_recipe \| plan_refresh \| plan_fill_day \| help |
+| feature   | text             | Лимиты: chat_recipe, plan_fill_day, help. Аналитика: любые (landing_view, share_* и т.д.) |
+| anon_id   | text             | Анонимный id до авторизации (localStorage) |
+| session_id| text             | |
+| page      | text             | pathname |
+| entry_point | text           | share_recipe, share_plan и т.д. |
+| utm_source, utm_medium, utm_campaign, utm_content, utm_term | text | UTM-метки |
+| properties | jsonb NOT NULL DEFAULT '{}' | Доп. данные: paywall_reason, recipe_id, share_ref и т.д. |
 | created_at| timestamptz      | |
 
 ---
@@ -354,13 +362,64 @@ RLS: SELECT — authenticated; запись — service_role.
 | category             | product_category | |
 | is_purchased         | boolean | |
 | recipe_title         | text | |
+| meta                 | jsonb | Источники ингредиентов: source_recipes и др. |
 | created_at           | timestamptz | |
 
 ---
 
 ### `public.subscription_plan_audit`
 
-Аудит изменений плана подписки (для отладки/аналитики).
+Аудит определения плана подписки (почему выбран month/year). Запись только при реальном подтверждении (не при idempotent replay). Без PII/секретов.
+
+| Колонка          | Тип     | Описание |
+|------------------|---------|----------|
+| id               | uuid PK | |
+| created_at       | timestamptz NOT NULL | |
+| user_id          | uuid    | |
+| subscription_id  | uuid    | |
+| order_id         | text    | |
+| payment_id       | text    | |
+| tbank_status     | text    | |
+| amount           | bigint  | |
+| plan_detected    | text NOT NULL | 'month' \| 'year' (CHECK) |
+| source_of_plan   | text NOT NULL | 'Data' \| 'OrderId' \| 'DB' \| 'Amount' (CHECK) |
+| data_keys        | text[]  | |
+| raw_order_id_hint| text    | |
+| note             | text    | |
+
+RLS: только `service_role`.
+
+---
+
+### `public.share_refs`
+
+Короткие ссылки для шаринга рецептов: `/r/:shareRef` → рецепт. share_ref: 8–12 символов base62.
+
+| Колонка    | Тип     | Описание |
+|------------|---------|----------|
+| id         | uuid PK | |
+| share_ref  | text NOT NULL UNIQUE | |
+| recipe_id  | uuid NOT NULL → recipes(id) ON DELETE CASCADE | |
+| created_at | timestamptz NOT NULL | |
+
+RLS: INSERT — authenticated; SELECT — anon, authenticated (редирект по ссылке без авторизации).
+
+---
+
+### `public.shared_plans`
+
+Шаринг плана дня: `/p/:ref`. payload — дата, приёмы пищи (названия, типы).
+
+| Колонка    | Тип     | Описание |
+|------------|---------|----------|
+| id         | uuid PK | |
+| ref        | text NOT NULL UNIQUE | Короткий id 8–10 символов |
+| user_id    | uuid NOT NULL → auth.users ON DELETE CASCADE | |
+| member_id  | uuid → members ON DELETE SET NULL | |
+| payload    | jsonb NOT NULL DEFAULT '{}' | Дата, слоты (breakfast, lunch и т.д.) |
+| created_at | timestamptz NOT NULL | |
+
+RLS: INSERT — только свой user_id; SELECT — anon, authenticated (публичное по ref).
 
 ---
 

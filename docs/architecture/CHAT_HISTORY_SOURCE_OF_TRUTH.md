@@ -10,7 +10,7 @@
 - **Назначение:** одна строка = один обмен (user message + assistant response). `child_id` — контекст чата (null = «Семья», иначе id члена семьи).
 - **RLS:** доступ только по `auth.uid() = user_id`.
 
-Подробнее: [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) (раздел «Чат и логи»).
+Подробнее: [DATABASE_SCHEMA.md](../database/DATABASE_SCHEMA.md) (раздел «Чат и логи»).
 
 ---
 
