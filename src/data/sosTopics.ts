@@ -113,8 +113,8 @@ const TOPICS: SosTopicConfig[] = [
     ],
     icon: AlertCircle,
     action: "sos",
-    requiresPremium: false,
-    requiredTier: "free",
+    requiresPremium: true,
+    requiredTier: "paid",
     chipExamples: [
       "Сыпь после яблока",
       "Покраснели щеки",
@@ -372,6 +372,7 @@ const TOPICS: SosTopicConfig[] = [
     action: "sos",
     prefillText: "Составь дневник питания и дай рекомендации",
     requiresPremium: true,
+    requiredTier: "paid",
     chipExamples: [
       "Ел кабачок — появилась сыпь",
       "После каши болит живот",
@@ -419,8 +420,8 @@ const TOPICS: SosTopicConfig[] = [
     ],
     icon: AlertTriangle,
     action: "sos",
-    requiresPremium: false,
-    requiredTier: "free",
+    requiresPremium: true,
+    requiredTier: "paid",
     chipExamples: [
       "Кровь в стуле",
       "Высокая температура и понос",
@@ -462,15 +463,16 @@ const TOPICS: SosTopicConfig[] = [
   },
 ];
 
+/** Порядок тем: Питание (new_food, food_diary) → Малыш (constipation_diarrhea, spitting_up, food_refusal, urgent_help) → Аллергии → Режим. */
 export const SOS_TOPIC_ORDER: string[] = [
   "new_food",
-  "allergy",
+  "food_diary",
   "constipation_diarrhea",
   "spitting_up",
   "food_refusal",
-  "routine",
-  "food_diary",
   "urgent_help",
+  "allergy",
+  "routine",
 ];
 
 /** Темы блока «Быстрая помощь» — доступны всем. */

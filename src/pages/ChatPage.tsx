@@ -112,7 +112,7 @@ const RECIPE_GENERATION_PHRASES = [
   
 ];
 
-/** Быстрые подсказки над полем ввода (режим рецептов). Показ только при пустом поле. Тап — вставка в поле, без автоотправки. */
+/** Быстрые подсказки над полем ввода (режим рецептов). Показ только при пустом поле и пустой истории чата (нет сообщений). Тап — вставка в поле, без автоотправки. */
 const CHAT_QUICK_SUGGESTIONS = [
   "Завтрак с кальцием",
   "Быстрый ужин",
@@ -1316,7 +1316,7 @@ export default function ChatPage() {
 
         {/* Input: единый стиль, 16px padding, divider */}
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-6 safe-bottom max-w-full overflow-x-hidden">
-          {mode === "recipes" && !input.trim() && (
+          {mode === "recipes" && !input.trim() && messages.length === 0 && (
             <div className="mb-2 flex gap-2 overflow-x-auto overflow-y-hidden min-w-0 scrollbar-none pb-0.5" style={{ WebkitOverflowScrolling: "touch" }}>
               {CHAT_QUICK_SUGGESTIONS.map((phrase) => (
                 <button
