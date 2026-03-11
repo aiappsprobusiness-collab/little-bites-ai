@@ -69,10 +69,10 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
                   e.stopPropagation();
                   onAddToPlan();
                 }}
-                className="h-8 rounded-full px-2.5 flex items-center justify-center gap-1 text-sm text-muted-foreground border border-border hover:bg-muted/50 active:scale-95 transition-all shrink-0"
+                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground border border-border hover:bg-muted/50 active:scale-95 transition-all shrink-0"
+                aria-label="Добавить в план"
               >
-                <CalendarPlus className="h-3.5 w-3.5" />
-                В план
+                <CalendarPlus className="h-4 w-4" />
               </button>
             )}
           </>

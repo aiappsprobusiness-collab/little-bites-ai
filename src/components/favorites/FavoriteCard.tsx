@@ -42,7 +42,7 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
         nutrition={nutrition}
         onClick={onTap}
         actions={
-          <>
+          <div className="flex flex-col items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={(e) => {
@@ -61,13 +61,13 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
                   e.stopPropagation();
                   onAddToPlan();
                 }}
-                className="h-8 rounded-full px-2.5 flex items-center justify-center gap-1 text-sm text-muted-foreground border border-border hover:bg-muted/50 active:scale-95 transition-all shrink-0"
+                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground border border-border hover:bg-muted/50 active:scale-95 transition-all shrink-0"
+                aria-label="Добавить в план"
               >
-                <CalendarPlus className="h-3.5 w-3.5" />
-                В план
+                <CalendarPlus className="h-4 w-4" />
               </button>
             )}
-          </>
+          </div>
         }
       />
     </motion.div>

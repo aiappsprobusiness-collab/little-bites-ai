@@ -48,6 +48,7 @@ export function RecipeHeader({
 
   return (
     <header className={cn(recipeHeaderBg, paddingClass, className)}>
+      {!hideTitle && <h2 className={cn(titleClass, "mb-2")}>{title}</h2>}
       <div className="mb-2">
         <RecipeNutritionHeader
           mealTypeLabel={mealLabel}
@@ -56,7 +57,6 @@ export function RecipeHeader({
           variant="card"
         />
       </div>
-      {!hideTitle && <h2 className={cn(titleClass, "mb-1")}>{title}</h2>}
       {showDescription && (
         <div className="space-y-0.5">
           {benefitLabel && (
