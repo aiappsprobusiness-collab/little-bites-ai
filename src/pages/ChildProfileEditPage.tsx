@@ -434,22 +434,20 @@ export default function ChildProfileEditPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="child-birth" className="text-[13px] font-medium text-muted-foreground">Дата рождения <span className="text-destructive">*</span></Label>
-                    <div className="relative">
+                    <div className="date-input-wrap relative rounded-xl border border-input bg-background">
                       <Input
                         id="child-birth"
                         type="date"
                         value={birthDate}
                         onChange={(e) => setBirthDate(e.target.value)}
-                        className="h-11 border border-input bg-background rounded-xl pl-3 pr-12 text-[15px]"
+                        className="h-11 min-h-0 border-0 bg-transparent rounded-xl pl-3 pr-12 text-[15px] focus-visible:ring-0 focus-visible:ring-offset-0"
                       />
                       <button
                         type="button"
                         onClick={() => document.getElementById("child-birth")?.focus()}
                         className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground"
                         aria-label="Выбрать дату"
-                      >
-                        <Calendar className="w-5 h-5" />
-                      </button>
+                      />
                     </div>
                     <p className="text-[12px] text-muted-foreground">
                       Возраст рассчитывается автоматически по дате рождения

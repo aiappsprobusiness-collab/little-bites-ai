@@ -299,13 +299,13 @@ export function ProfileEditSheet({
           )}
           <div className="space-y-2">
             <Label htmlFor="profile-birth" className="text-typo-muted font-medium">Дата рождения <span className="text-destructive">*</span></Label>
-            <div className="relative">
+            <div className="date-input-wrap relative rounded-xl border-2 border-input bg-background">
               <Input
                 id="profile-birth"
                 type="date"
                 value={birthDate}
                 onChange={(e) => setBirthDate(e.target.value)}
-                className="h-11 border-2 pl-3 pr-12"
+                className="h-11 min-h-0 border-0 bg-transparent rounded-xl pl-3 pr-12 focus-visible:ring-0 focus-visible:ring-offset-0"
               />
               <button
                 type="button"

@@ -393,6 +393,52 @@
   display: none;
 }
 
+/* iOS/Safari: input type=date рендерится с лишней высотой (shadow DOM), из-за чего экран «плавает». */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  max-height: 2.75rem; /* 44px, как h-11 */
+  min-height: 2.5rem;
+  box-sizing: border-box;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+  padding: 0;
+  line-height: 1.25;
+}
+input[type="date"]::-webkit-datetime-edit {
+  display: block;
+  padding: 0;
+  line-height: 1.25;
+  margin-bottom: 0;
+}
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  padding: 0;
+  min-height: 0;
+}
+/* Обёртка для поля даты: фиксированная высота, чтобы на iOS layout не плыл */
+.date-input-wrap {
+  min-height: 2.75rem;
+  max-height: 2.75rem;
+  display: flex;
+  align-items: stretch;
+  position: relative;
+  overflow: hidden;
+  border-radius: inherit;
+}
+.date-input-wrap input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.5rem;
+  max-height: 2.75rem;
+}
+
 /* Help-чат / Consultation Mode: спокойный медицинский формат */
 .consultationCard {
   background: #fff;
