@@ -4,6 +4,11 @@ import { useAuth } from "./useAuth";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { addDays } from "@/utils/dateRange";
 import type { ProductCategory } from "./useShoppingList";
+import {
+  buildShoppingAggregationKey,
+  chooseShoppingDisplayName,
+  type NormalizedUnit,
+} from "@/utils/shopping/normalizeIngredientForShopping";
 
 export interface SourceRecipe {
   id: string;
@@ -25,10 +30,6 @@ export interface AggregatedIngredient {
 type MealsSlot = { recipe_id?: string; title?: string; servings?: number };
 type MealsJson = Record<string, MealsSlot | undefined>;
 
-function normalizeName(name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 /** Категория из БД (в т.ч. fish, fats, spices) → категория для списка продуктов (ProductCategory). */
 function toProductCategory(cat: string | null | undefined): ProductCategory {
   if (cat == null || String(cat).trim() === "") return "other";
@@ -40,10 +41,15 @@ function toProductCategory(cat: string | null | undefined): ProductCategory {
 }
 
 /** Для отображения в списке: г/мл как в карточке рецепта. */
-function toDisplayUnit(canonicalUnit: string | null, fallbackUnit: string | null): string | null {
-  if (canonicalUnit === "g") return "г";
-  if (canonicalUnit === "ml") return "мл";
-  return canonicalUnit ?? fallbackUnit ?? null;
+function toDisplayUnit(aggregationUnit: NormalizedUnit | string | null, fallbackUnit: string | null): string | null {
+  if (aggregationUnit === "g") return "г";
+  if (aggregationUnit === "ml") return "мл";
+  if (aggregationUnit === "kg") return "кг";
+  if (aggregationUnit === "l") return "л";
+  if (aggregationUnit === "pcs") return "шт.";
+  if (aggregationUnit === "tbsp") return "ст.л.";
+  if (aggregationUnit === "tsp") return "ч.л.";
+  return aggregationUnit ?? fallbackUnit ?? null;
 }
 
 /**
@@ -120,19 +126,15 @@ export function usePlanShoppingIngredients(
       }
 
       type AggVal = {
-        name: string;
-        amount: number;
-        unit: string | null;
-        canonicalAmount?: number;
-        canonicalUnit?: string | null;
+        amountSum: number;
+        names: string[];
+        aggregationUnit: NormalizedUnit | string | null;
         category: ProductCategory | null;
         sourceRecipeIds: Set<string>;
       };
-      const aggByKey = new Map<string, AggVal>();
-      const rawByKey = new Map<string, AggVal>();
+      const aggMap = new Map<string, AggVal>();
 
       function addSource(acc: AggVal, recipeId: string) {
-        const title = recipeTitles.get(recipeId) ?? "";
         if (!acc.sourceRecipeIds) acc.sourceRecipeIds = new Set<string>();
         acc.sourceRecipeIds.add(recipeId);
       }
@@ -142,45 +144,32 @@ export function usePlanShoppingIngredients(
         const multiplier = servings / base;
         const ings = ingredientsByRecipe.get(recipe_id) ?? [];
         for (const ing of ings) {
-          const amount = ing.amount != null && Number.isFinite(ing.amount) ? ing.amount * multiplier : null;
-          const canAmount = ing.canonical_amount != null && Number.isFinite(ing.canonical_amount) ? ing.canonical_amount * multiplier : null;
-          const canUnit = ing.canonical_unit === "g" || ing.canonical_unit === "ml" ? ing.canonical_unit : null;
+          const res = buildShoppingAggregationKey(
+            {
+              name: ing.name,
+              amount: ing.amount,
+              unit: ing.unit,
+              canonical_amount: ing.canonical_amount,
+              canonical_unit: ing.canonical_unit,
+            },
+            multiplier
+          );
+          if (res == null) continue;
           const category = toProductCategory(ing.category);
-
-          if (canAmount != null && canUnit) {
-            const key = `${normalizeName(ing.name)}|${canUnit}`;
-            const cur = aggByKey.get(key);
-            if (cur) {
-              cur.canonicalAmount! += canAmount;
-              addSource(cur, recipe_id);
-            } else {
-              const v: AggVal = {
-                name: ing.name.trim(),
-                amount: amount ?? 0,
-                unit: ing.unit,
-                canonicalAmount: canAmount,
-                canonicalUnit: canUnit,
-                category,
-                sourceRecipeIds: new Set([recipe_id]),
-              };
-              aggByKey.set(key, v);
-            }
+          const cur = aggMap.get(res.key);
+          if (cur) {
+            cur.amountSum += res.amountToSum;
+            if (!cur.names.includes(res.originalName)) cur.names.push(res.originalName);
+            if (category !== "other" && cur.category === "other") cur.category = category;
+            addSource(cur, recipe_id);
           } else {
-            const u = ing.unit ?? "";
-            const key = `${normalizeName(ing.name)}|${u}`;
-            const cur = rawByKey.get(key);
-            if (cur) {
-              cur.amount += amount ?? 0;
-              addSource(cur, recipe_id);
-            } else {
-              rawByKey.set(key, {
-                name: ing.name.trim(),
-                amount: amount ?? 0,
-                unit: ing.unit ?? null,
-                category,
-                sourceRecipeIds: new Set([recipe_id]),
-              });
-            }
+            aggMap.set(res.key, {
+              amountSum: res.amountToSum,
+              names: [res.originalName],
+              aggregationUnit: res.aggregationUnit,
+              category,
+              sourceRecipeIds: new Set([recipe_id]),
+            });
           }
         }
       }
@@ -190,29 +179,20 @@ export function usePlanShoppingIngredients(
       }
 
       const result: AggregatedIngredient[] = [];
-      for (const v of aggByKey.values()) {
+      for (const v of aggMap.values()) {
+        if (v.amountSum <= 0) continue;
+        const displayName = chooseShoppingDisplayName(v.names);
+        const nameForUi = displayName ? displayName.charAt(0).toUpperCase() + displayName.slice(1).toLowerCase() : displayName;
+        const rounded = Math.round(v.amountSum * 10) / 10;
         result.push({
-          name: v.name,
-          amount: v.amount || null,
-          unit: v.unit,
-          displayAmount: Math.round((v.canonicalAmount ?? 0) * 10) / 10,
-          displayUnit: toDisplayUnit(v.canonicalUnit ?? null, v.unit),
+          name: nameForUi,
+          amount: v.amountSum,
+          unit: toDisplayUnit(v.aggregationUnit, null),
+          displayAmount: rounded,
+          displayUnit: toDisplayUnit(v.aggregationUnit, null),
           category: v.category,
           source_recipes: toSourceRecipes(v.sourceRecipeIds),
         });
-      }
-      for (const v of rawByKey.values()) {
-        if (v.amount > 0) {
-          result.push({
-            name: v.name,
-            amount: v.amount,
-            unit: v.unit,
-            displayAmount: v.amount,
-            displayUnit: v.unit,
-            category: v.category,
-            source_recipes: toSourceRecipes(v.sourceRecipeIds),
-          });
-        }
       }
       return result;
     },
