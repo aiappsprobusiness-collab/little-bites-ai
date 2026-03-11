@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, startTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Send, Loader2, HelpCircle, MoreVertical, Trash2 } from "lucide-react";
+import { Send, Loader2, Lightbulb, MoreVertical, Trash2 } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { TopBarIconButton } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,6 @@ import { Progress } from "@/components/ui/progress";
 import { A2HS_EVENT_AFTER_FIRST_RECIPE } from "@/hooks/usePWAInstall";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
-const CHAT_HELP_TOOLTIP_SEEN_KEY = "chat_help_tooltip_seen";
 /** Порог (px) от низа скролла: если пользователь в пределах — автоскролл вниз при новых сообщениях. */
 const NEAR_BOTTOM_THRESHOLD = 120;
 
@@ -113,7 +112,15 @@ const RECIPE_GENERATION_PHRASES = [
   
 ];
 
-/** Подсказки в placeholder поля ввода чата (режим рецептов). Ротация каждые 2.5 с, останавливается при вводе. */
+/** Быстрые чипсы над полем ввода в стартовом состоянии (режим рецептов). Тап — вставка в поле. */
+const CHAT_STARTER_CHIPS = [
+  "Завтрак с кальцием",
+  "Без молока",
+  "Быстрый ужин",
+  "Перекус в дорогу",
+];
+
+/** Подсказки в placeholder поля ввода чата (режим рецептов). Ротация каждые 2.5 с, останавливается при вводе. Вторичный способ подсказки. */
 const CHAT_PLACEHOLDER_SUGGESTIONS = [
   "Блюдо на ужин с витаминами",
   "Что приготовить из курицы?",
@@ -255,28 +262,11 @@ export default function ChatPage() {
     }
   }, []);
 
-  const [showHelpTooltip, setShowHelpTooltip] = useState(() =>
-    typeof localStorage !== "undefined" && !localStorage.getItem(CHAT_HELP_TOOLTIP_SEEN_KEY)
-  );
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const helpButtonRef = useRef<HTMLButtonElement>(null);
-  /** Мягкий акцент на кнопке "?" при пустом чате: 2 pulse за сессию. */
+  /** Мягкий акцент на кнопке «Идеи» при пустом чате: 2 pulse за сессию. */
   const [showHintPulseAccent, setShowHintPulseAccent] = useState(false);
   const hintPulseShownRef = useRef(false);
-  const dismissHelpTooltip = useCallback(() => {
-    try {
-      localStorage.setItem(CHAT_HELP_TOOLTIP_SEEN_KEY, "1");
-    } catch {
-      // ignore
-    }
-    setShowHelpTooltip(false);
-  }, []);
-
-  useEffect(() => {
-    if (!showHelpTooltip || mode !== "recipes") return;
-    const t = setTimeout(dismissHelpTooltip, 3000);
-    return () => clearTimeout(t);
-  }, [showHelpTooltip, mode, dismissHelpTooltip]);
 
   // Ротация подсказок в placeholder (режим рецептов, поле пустое, не идёт генерация)
   useEffect(() => {
@@ -1146,15 +1136,6 @@ export default function ChatPage() {
               />
             </div>
             {chatHeaderMeta != null && <div className="mt-0.5">{chatHeaderMeta}</div>}
-            {messages.length === 0 && (
-              <button
-                type="button"
-                onClick={() => setShowHintsModal(true)}
-                className="block text-left mt-1 text-sm text-primary font-medium no-underline cursor-pointer bg-transparent border-0 p-0 hover:opacity-85 active:opacity-70 transition-opacity"
-              >
-                Показать подсказки
-              </button>
-            )}
           </div>
         )}
 
@@ -1187,31 +1168,6 @@ export default function ChatPage() {
 
           {!isLoadingMembers && members.length === 0 && (
             <FamilyOnboarding onComplete={() => { }} />
-          )}
-
-          {mode === "recipes" && showStarter && !hasUserMessage && members.length > 0 && !hintsSeen && quickPrompts.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Начните с подсказки</p>
-              <div
-                className="flex gap-2 overflow-x-auto overflow-y-hidden pb-2 min-w-0 scrollbar-none"
-                style={{ WebkitOverflowScrolling: "touch" }}
-              >
-                {quickPrompts.slice(0, 4).map((phrase) => (
-                  <button
-                    key={phrase}
-                    type="button"
-                    onClick={() => {
-                      setInput(phrase);
-                      markHintsSeen();
-                      textareaRef.current?.focus();
-                    }}
-                    className="shrink-0 rounded-full px-4 py-2 text-sm bg-primary-light border border-primary-border text-foreground hover:bg-primary-light/90 active:scale-[0.98] transition-all"
-                  >
-                    {phrase}
-                  </button>
-                ))}
-              </div>
-            </div>
           )}
 
           {showStarter && !hasUserMessage && members.length > 0 && mode === "help" && (
@@ -1292,6 +1248,32 @@ export default function ChatPage() {
 
         {/* Input: единый стиль, 16px padding, divider */}
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-6 safe-bottom max-w-full overflow-x-hidden">
+          {mode === "recipes" && showStarter && !hasUserMessage && members.length > 0 && (
+            <div className="mb-2 space-y-1.5">
+              <p className="text-xs text-muted-foreground">
+                Подберите блюдо по запросу — например: завтрак с кальцием, ужин без молока
+              </p>
+              <div
+                className="flex gap-2 overflow-x-auto overflow-y-hidden min-w-0 scrollbar-none"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
+                {CHAT_STARTER_CHIPS.map((phrase) => (
+                  <button
+                    key={phrase}
+                    type="button"
+                    onClick={() => {
+                      setInput(phrase);
+                      markHintsSeen();
+                      textareaRef.current?.focus();
+                    }}
+                    className="shrink-0 rounded-full px-3.5 py-2 text-[13px] bg-primary-light border border-primary-border text-foreground hover:bg-primary-light/90 active:scale-[0.98] transition-all"
+                  >
+                    {phrase}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex w-full items-center gap-2 min-w-0">
             <div className="relative flex-1 min-w-0">
               {mode === "recipes" && !input.trim() && (
@@ -1326,37 +1308,16 @@ export default function ChatPage() {
             </div>
             <div className="flex items-center gap-2 shrink-0 relative">
               {mode === "recipes" && (
-                <div className="relative">
-                  <button
-                    ref={helpButtonRef}
-                    type="button"
-                    onClick={() => setShowHintsModal(true)}
-                    title="Подсказки"
-                    className={`h-10 w-10 rounded-full bg-muted border border-border text-muted-foreground flex items-center justify-center hover:bg-muted/80 hover:text-foreground active:scale-95 transition-all ${showHintPulseAccent ? "chat-hint-btn-pulse" : ""}`}
-                  >
-                    <HelpCircle className="w-4 h-4" />
-                  </button>
-                  {showHelpTooltip && (
-                    <>
-                      <div
-                        role="presentation"
-                        className="fixed inset-0 z-[45]"
-                        onClick={dismissHelpTooltip}
-                      />
-                      <div
-                        className="chat-help-tooltip absolute bottom-full right-0 mb-2 px-3 py-2 rounded-[10px] bg-primary-light border border-primary-border/50 text-muted-foreground text-[13px] shadow-[0_2px_8px_rgba(0,0,0,0.06)] z-50 whitespace-nowrap"
-                        style={{ borderBottomLeftRadius: 2 }}
-                      >
-                        Подсказки
-                        <span
-                          className="absolute -bottom-1.5 right-3 w-2.5 h-2.5 bg-primary-light border-r border-b border-primary-border/50 rotate-45"
-                          style={{ right: 14 }}
-                          aria-hidden
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
+                <button
+                  ref={helpButtonRef}
+                  type="button"
+                  onClick={() => setShowHintsModal(true)}
+                  title="Идеи для запроса"
+                  className={`h-10 rounded-full pl-3 pr-3.5 py-2 bg-muted border border-border text-muted-foreground flex items-center justify-center gap-1.5 hover:bg-muted/80 hover:text-foreground active:scale-95 transition-all text-[13px] font-medium ${showHintPulseAccent ? "chat-hint-btn-pulse" : ""}`}
+                >
+                  <Lightbulb className="w-4 h-4 shrink-0" />
+                  <span>Идеи</span>
+                </button>
               )}
               <button
                 type="button"
