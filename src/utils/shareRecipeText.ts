@@ -173,12 +173,21 @@ export function getShareSignature(): { line: string; url: string } {
 }
 
 /**
- * Короткий текст для шаринга рецепта (только название + ссылка).
- * Используется в Telegram и мессенджерах — без полного текста рецепта.
+ * Короткий текст для шаринга рецепта (название + ссылка + ценность).
+ * Используется в Telegram и мессенджерах.
  * Ссылка формата https://momrecipes.online/r/{shareRef}
  */
 export function buildRecipeShareTextShort(recipeTitle: string, shareUrl: string): string {
   const title = (recipeTitle || "Рецепт").trim();
   const url = (shareUrl || BASE_URL).trim();
-  return `🍽 Нам предложили вот такой рецепт\n\n${title}\n\nМожно получить своё меню за 1 минуту:\n${url}`;
+  return [
+    "🍽 Делюсь рецептом из Mom Recipes",
+    "",
+    title,
+    "",
+    "Посмотреть рецепт:",
+    url,
+    "",
+    "В Mom Recipes можно собрать меню для всей семьи с учётом возраста, аллергий и предпочтений.",
+  ].join("\n");
 }

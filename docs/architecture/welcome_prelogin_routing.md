@@ -15,7 +15,7 @@
 ### Изменённые файлы
 - `src/App.tsx` — добавлены маршруты `/welcome`, `/prelogin`, root `/` отдаёт `<RootRedirect />`
 - `src/pages/SharedPlanPage.tsx` — CTA «Получить свой план питания» ведёт на `/auth` с сохранением query; сохранение атрибуции; трекинг share_day_plan_cta_click / share_week_plan_cta_click
-- `src/pages/ShareRedirectPage.tsx` — при not_found редирект на `/welcome` вместо `/`
+- `src/pages/PublicRecipeSharePage.tsx` — публичная страница рецепта по `/r/:shareRef` (вместо редиректа на `/recipe/:id`). При not_found — сообщение и кнопка на `/welcome`.
 - `src/pages/AuthPage.tsx` — событие `auth_page_view` вместо `landing_view`; ссылка «Попробовать пример без регистрации» → `/welcome` с трекингом share_recipe_cta_click при наличии share-атрибуции; поддержка `location.state.tab === 'signup'` для дефолтной вкладки
 - `src/utils/usageEvents.ts` — экспорт `hasShareRecipeAttribution()` для проверки прихода по shared recipe
 
@@ -39,9 +39,11 @@
 - Без длинного маркетингового контента и demo menu.
 
 ### Share pages и CTA
-- **Shared plan (день/неделя)** `/p/:ref`: контент без изменений; CTA «Получить свой план питания» → переход на `/auth` с сохранением текущего `location.search` (attribution). Трекинг: `share_week_plan_cta_click` / `share_day_plan_cta_click`.
-- **Shared recipe** `/r/:shareRef`: логика без изменений (редирект на `/recipe/:id`). Неавторизованный пользователь попадает на `/auth`; ссылка «Попробовать пример без регистрации» ведёт на `/welcome`, при наличии share-атрибуции отправляется `share_recipe_cta_click`.
-- **ShareRedirectPage not_found** → редирект на `/welcome` вместо `/`.
+- **Shared recipe** `/r/:shareRef`: публичная страница конкретного рецепта (без welcome). Пользователь видит рецепт, затем CTA «Собрать меню для своей семьи» → переход на `/auth?mode=signup&entry_point=shared_recipe&share_ref=...&share_type=recipe` (вкладка регистрации). Трекинг: `share_landing_view`, `share_recipe_cta_click`. Рецепт загружается через RPC `get_recipe_by_share_ref`.
+- **Shared plan (день)** `/p/:ref`: публичная страница меню дня; CTA «Собрать свой план» → переход на `/welcome?entry_point=shared_day_plan&share_ref=...&share_type=day_plan`, затем с Welcome → `/auth?mode=signup&...` (вкладка регистрации). Трекинг: `share_day_plan_cta_click`.
+- **Shared plan (неделя)** `/p/:ref`: публичная страница меню недели; CTA «Собрать свой план» → `/welcome?entry_point=shared_week_plan&share_ref=...&share_type=week_plan`, затем Welcome → auth (signup). Трекинг: `share_week_plan_cta_click`.
+- **Welcome** при переходе с day/week plan сохраняет `entry_point`, `share_ref`, `share_type` из URL и передаёт их в `/auth` при клике по CTA.
+- **Recipe share not_found** (невалидный shareRef) → сообщение «Рецепт не найден или ссылка устарела», кнопка «На главную» → `/welcome`.
 
 ---
 
@@ -63,15 +65,15 @@
 
 4. **Shared recipe**
    - Открыть ссылку вида `/r/:shareRef` в браузере без авторизации.
-   - Ожидание: редирект на `/recipe/:id`, затем на `/auth`. На странице входа есть «Попробовать пример без регистрации» → переход на `/welcome`.
+   - Ожидание: отображается публичная страница рецепта; CTA «Собрать меню для своей семьи» → переход на `/auth` с вкладкой «Начать» (регистрация), в URL сохраняются `entry_point=shared_recipe`, `share_ref`, `share_type=recipe`.
 
 5. **Shared day plan**
    - Открыть `/p/:ref` для плана на день (валидный ref).
-   - Ожидание: отображается меню на день; кнопка «Получить свой план питания» ведёт на `/auth` (query сохраняется).
+   - Ожидание: отображается меню на день; кнопка «Собрать свой план» ведёт на `/welcome` с `entry_point=shared_day_plan`, `share_ref`, `share_type=day_plan`; с Welcome кнопка «Получить свой план» ведёт на `/auth` с вкладкой регистрации и теми же параметрами.
 
 6. **Shared week plan**
    - Открыть `/p/:ref` для плана на неделю (валидный ref).
-   - Ожидание: отображается меню на неделю; кнопка «Получить свой план питания» ведёт на `/auth` (query сохраняется).
+   - Ожидание: отображается меню на неделю; кнопка «Собрать свой план» ведёт на `/welcome`, затем на `/auth` (signup) с сохранением контекста.
 
 7. **Атрибуция**
    - Открыть `/welcome?utm_source=telegram&ref=test`.

@@ -25,7 +25,7 @@ import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
-import ShareRedirectPage from "./pages/ShareRedirectPage";
+import PublicRecipeSharePage from "./pages/PublicRecipeSharePage";
 import SharedPlanPage from "./pages/SharedPlanPage";
 import LandingOnboardingScreen from "./pages/LandingOnboardingScreen";
 import AppPreloginScreen from "./pages/AppPreloginScreen";
@@ -168,7 +168,7 @@ const App = () => (
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/welcome" element={<LandingOnboardingScreen />} />
               <Route path="/prelogin" element={<AppPreloginScreen />} />
-              <Route path="/r/:shareRef" element={<ShareRedirectPage />} />
+              <Route path="/r/:shareRef" element={<PublicRecipeSharePage />} />
               <Route path="/p/:ref" element={<SharedPlanPage />} />
               <Route path="/" element={<RootRedirect />} />
               <Route

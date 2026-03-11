@@ -84,8 +84,8 @@
 
 - **Назначение:** короткие ссылки на рецепт (/r/:shareRef) и на план дня (/p/:ref); OG-превью для ботов; атрибуция (share_ref, entry_point, UTM).
 - **Таблицы:** `share_refs` (share_ref, recipe_id), `shared_plans` (ref, user_id, member_id, payload jsonb). Запись share_refs с клиента (saveShareRef в usageEvents).
-- **UI:** ShareRedirectPage (/r/:shareRef), SharedPlanPage (/p/:ref), кнопки «Поделиться» на рецепте и плане.
-- **Edge:** `share-og` (GET ?ref=shareRef → HTML с OG, редирект на /recipe/:id), `share-og-plan` (GET ?ref=ref → OG для плана). track-usage-event для share_landing_view, share_click и др.
+- **UI:** PublicRecipeSharePage (/r/:shareRef), SharedPlanPage (/p/:ref), кнопки «Поделиться» на рецепте и плане.
+- **Edge:** `share-og` (GET ?ref=shareRef → HTML с OG, редирект на /r/:shareRef), `share-og-plan` (GET ?ref=ref → OG для плана). track-usage-event для share_landing_view, share_click и др.
 - **Зависимости:** recipes, meal_plans_v2; usage_events для вирусной аналитики.
 
 ### Analytics / Usage Tracking
@@ -183,7 +183,7 @@
 ### Flow: Share recipe or plan
 
 1. Рецепт: генерация share_ref (или существующий), insert share_refs (saveShareRef); ссылка /r/:shareRef. План: создание shared_plans, ссылка /p/:ref.
-2. Переход по ссылке: ShareRedirectPage (/r) → редирект на /recipe/:id; SharedPlanPage (/p) → отображение плана. OG для ботов: share-og, share-og-plan Edge.
+2. Переход по ссылке: PublicRecipeSharePage (/r) → публичная страница рецепта, CTA → auth (signup); SharedPlanPage (/p) → отображение плана, CTA → welcome → auth. OG для ботов: share-og, share-og-plan Edge.
 3. Атрибуция и события: share_landing_view, share_recipe_cta_click и др. через track-usage-event.
 4. Домены: Sharing, Recipes / Meal Planning, Analytics.
 

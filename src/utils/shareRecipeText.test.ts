@@ -77,13 +77,14 @@ describe("shareRecipeText", () => {
   });
 
   describe("buildRecipeShareTextShort", () => {
-    it("returns only title and link, no full recipe", () => {
+    it("returns recipe share line, title, link and product value", () => {
       const url = "https://momrecipes.online/r/abc123";
       const text = buildRecipeShareTextShort("Омлет с кабачком", url);
-      expect(text).toContain("🍽 Нам предложили вот такой рецепт");
+      expect(text).toContain("🍽 Делюсь рецептом из Mom Recipes");
       expect(text).toContain("Омлет с кабачком");
-      expect(text).toContain("Можно получить своё меню за 1 минуту:");
+      expect(text).toContain("Посмотреть рецепт:");
       expect(text).toContain(url);
+      expect(text).toContain("собрать меню для всей семьи");
       expect(text).not.toContain("Ингредиенты");
       expect(text).not.toContain("Приготовление");
     });

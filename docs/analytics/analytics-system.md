@@ -163,7 +163,7 @@
 
 **Поля:** share_ref (unique), recipe_id.
 
-**Пишется:** с фронта при шаринге рецепта (`saveShareRef` в usageEvents.ts). Читается в ShareRedirectPage и Edge share-og.
+**Пишется:** с фронта при шаринге рецепта (`saveShareRef` в usageEvents.ts). Читается в PublicRecipeSharePage и Edge share-og; RPC get_recipe_by_share_ref для публичной страницы рецепта.
 
 ---
 
@@ -185,7 +185,7 @@
 | auth_success | AuthPage | usage_events | то же | Успешный вход/регистрация |
 | auth_error | AuthPage | usage_events | properties: { message } | Ошибка входа |
 | cta_start_click | AuthPage | usage_events | то же | Клик CTA «Начать» |
-| share_recipe_cta_click | AuthPage, SharedPlanPage | usage_events | то же | Клик «Поделиться рецептом» на лендинге/shared plan |
+| share_recipe_cta_click | PublicRecipeSharePage, landingAnalytics | usage_events | то же | Клик CTA на публичной странице рецепта / лендинге |
 | **Member** |
 | member_create_start | AddChildForm | usage_events | то же | Начало создания члена семьи |
 | member_create_success | AddChildForm | usage_events | properties: { member_id } | Успешное создание |
@@ -216,7 +216,7 @@
 | help_topic_open | SosTiles | usage_events | properties: { topic_id } | Открытие темы помощи |
 | **Share / viral** |
 | share_click | ChatMessage, RecipePage | usage_events | properties: recipe_id, share_ref, channel, source_screen | Клик «Поделиться» (рецепт) |
-| share_landing_view | RecipePage (ep/sr в URL), ShareRedirectPage | usage_events | properties: recipe_id, share_ref, source (short_link) | Просмотр рецепта по share-ссылке |
+| share_landing_view | PublicRecipeSharePage | usage_events | properties: recipe_id, share_ref, source (short_link), share_type | Просмотр публичной страницы рецепта по /r/:shareRef |
 | share_day_plan_cta_click | SharedPlanPage | usage_events | — | Клик шаринга дня плана |
 | share_week_plan_cta_click | SharedPlanPage | usage_events | — | Клик шаринга недели плана |
 | **Favorites** |
@@ -255,9 +255,9 @@
 
 **Как отслеживается:**
 
-1. **Короткая ссылка:** `/r/:shareRef` → ShareRedirectPage ищет в `share_refs` recipe_id, вызывает `setShareAttributionFromShortLink(shareRef)` (localStorage: entry_point=share_recipe, share_ref), затем `trackUsageEvent("share_landing_view", { properties: { share_ref, source: "short_link", recipe_id } })` и редирект на `/recipe/:id`.
+1. **Короткая ссылка:** `/r/:shareRef` → PublicRecipeSharePage загружает рецепт через RPC get_recipe_by_share_ref, вызывает `setShareAttributionFromShortLink(shareRef)` (localStorage: entry_point=share_recipe, share_ref), затем `trackUsageEvent("share_landing_view", { properties: { share_ref, source: "short_link", recipe_id, share_type: "recipe" } })` и отображает публичную страницу рецепта; CTA ведёт на `/auth?mode=signup&entry_point=shared_recipe&share_ref=...&share_type=recipe`.
 2. **Длинная ссылка:** `/recipe/:id?ep=share_recipe&ch=...&sr=...` — на RecipePage при ep/sr вызывается `trackUsageEvent("share_landing_view", { properties: { recipe_id: id } })`.
-3. **Атрибуция:** в `usageEvents.ts` при каждом track из URL парсятся `ep`, `ch`, `sr` и сохраняются в localStorage (captureAttributionFromLocationOnce). При отправке в track-usage-event в usage_events попадают entry_point, utm_*, properties.share_ref, properties.share_channel.
+3. **Атрибуция:** в `usageEvents.ts` из URL парсятся `entry_point`/`ep`, `share_ref`/`sr`, `share_type`, `ch` и сохраняются в localStorage (captureAttributionFromLocationOnce). При отправке в track-usage-event в usage_events попадают entry_point, utm_*, properties.share_ref, properties.share_channel, properties.share_type.
 
 **Воронка share → visit → register → activation:**
 

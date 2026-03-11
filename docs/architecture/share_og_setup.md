@@ -4,8 +4,8 @@
 
 ## Как это устроено
 
-- **Edge Function `share-og`** (Supabase): по `GET ?ref=:shareRef` отдаёт HTML с og:title, og:description, og:image, og:url и делает редирект на `/recipe/:id`.
-- **Фронт (SPA)**: маршрут `/r/:shareRef` (ShareRedirectPage) при открытии в браузере редиректит на `/recipe/:id`.
+- **Edge Function `share-og`** (Supabase): по `GET ?ref=:shareRef` отдаёт HTML с og:title, og:description, og:image, og:url и делает редирект на `/r/:shareRef` (публичная страница рецепта).
+- **Фронт (SPA)**: маршрут `/r/:shareRef` (PublicRecipeSharePage) отображает публичную страницу рецепта без авторизации; авторизованные пользователи редиректятся на `/recipe/:id`.
 
 Если фронт отдаётся как статика (GitHub Pages / GitHub Actions → статический хостинг), то запрос `GET https://momrecipes.online/r/Abc123` от бота получает один и тот же `index.html` для всех путей — без рецепт-специфичных OG. Поэтому нужен **прокси**: запросы на `/r/*` должны отдаваться с сервера, который вернёт ответ Edge Function.
 

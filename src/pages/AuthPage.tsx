@@ -13,7 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { trackUsageEvent, hasShareRecipeAttribution } from "@/utils/usageEvents";
+import { trackUsageEvent, captureAttributionFromLocationOnce } from "@/utils/usageEvents";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
 
 const loginSchema = z.object({
@@ -42,11 +42,18 @@ export default function AuthPage() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const defaultAuthTab = (location.state as { tab?: string } | null)?.tab === "signup" ? "signup" : "login";
+  const searchParams = new URLSearchParams(location.search);
+  const modeSignup = searchParams.get("mode") === "signup" || searchParams.get("tab") === "signup";
+  const stateSignup = (location.state as { tab?: string } | null)?.tab === "signup";
+  const defaultAuthTab = modeSignup || stateSignup ? "signup" : "login";
 
   useEffect(() => {
     trackUsageEvent("auth_page_view");
   }, []);
+
+  useEffect(() => {
+    if (location.search) captureAttributionFromLocationOnce();
+  }, [location.search]);
 
   useEffect(() => {
     const message = (location.state as { message?: string } | null)?.message;
@@ -57,11 +64,6 @@ export default function AuthPage() {
   }, [location.state, location.pathname, navigate, toast]);
 
   const goToWelcome = () => {
-    if (hasShareRecipeAttribution()) {
-      trackLandingEvent("share_recipe_cta_click");
-      navigate("/welcome?source=share_recipe", { replace: true });
-      return;
-    }
     navigate("/welcome", { replace: true });
   };
 
@@ -153,7 +155,7 @@ export default function AuthPage() {
         >
           <Card className="bg-white/90 backdrop-blur-xl border-0 rounded-[28px] sm:rounded-[32px] shadow-xl shadow-slate-200/50">
             <CardContent className="px-4 sm:px-6 pt-6 sm:pt-7 pb-5 sm:pb-6">
-              <Tabs defaultValue={defaultAuthTab} className="w-full">
+              <Tabs key={defaultAuthTab} defaultValue={defaultAuthTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11">
                   <TabsTrigger value="login" className="rounded-[16px]">Войти</TabsTrigger>
                   <TabsTrigger value="signup" className="rounded-[16px]">Начать</TabsTrigger>

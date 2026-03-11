@@ -13,6 +13,7 @@ const LAST_UTM_KEY = "last_touch_utm";
 const LAST_ENTRY_POINT_KEY = "last_touch_entry_point";
 const LAST_SHARE_CHANNEL_KEY = "last_touch_share_channel";
 const LAST_SHARE_REF_KEY = "last_touch_share_ref";
+const LAST_SHARE_TYPE_KEY = "last_touch_share_type";
 const TRACK_EDGE_PATH = "/functions/v1/track-usage-event";
 const COOLDOWN_MS = 60_000;
 const DEDUP_MS = 2_000;
@@ -78,12 +79,13 @@ export function captureAttributionFromLocationOnce(): void {
   const utm_campaign = params.get("utm_campaign") ?? undefined;
   const utm_content = params.get("utm_content") ?? undefined;
   const utm_term = params.get("utm_term") ?? undefined;
-  const ep = params.get("ep") ?? undefined;
+  const ep = params.get("entry_point") ?? params.get("ep") ?? undefined;
   const ch = params.get("ch") ?? undefined;
-  const sr = params.get("sr") ?? undefined;
+  const sr = params.get("share_ref") ?? params.get("sr") ?? undefined;
+  const shareType = params.get("share_type") ?? undefined;
 
   const hasUtm = utm_source ?? utm_medium ?? utm_campaign ?? utm_content ?? utm_term;
-  const hasShare = ep === "share_recipe" || ch || sr;
+  const hasShare = ep === "share_recipe" || ep === "shared_recipe" || ep?.startsWith("shared_") || ch || sr;
 
   if (hasUtm) {
     const utm: StoredUtm = {};
@@ -119,6 +121,18 @@ export function captureAttributionFromLocationOnce(): void {
       /* ignore */
     }
   }
+  if (shareType) {
+    try {
+      localStorage.setItem(LAST_SHARE_TYPE_KEY, shareType);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function getStoredShareType(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage.getItem(LAST_SHARE_TYPE_KEY);
 }
 
 function getStoredUtm(): StoredUtm | null {
@@ -207,12 +221,14 @@ export function trackUsageEvent(
   const utm = getStoredUtm() ?? undefined;
   const shareRef = getStoredShareRef() ?? undefined;
   const shareChannel = getStoredShareChannel() ?? undefined;
+  const shareType = getStoredShareType() ?? undefined;
 
   const properties: Record<string, unknown> = {
     ...(options.properties ?? {}),
   };
   if (shareRef !== undefined) properties.share_ref = shareRef;
   if (shareChannel !== undefined) properties.share_channel = shareChannel;
+  if (shareType !== undefined) properties.share_type = shareType;
 
   const body = {
     feature: feature.trim(),

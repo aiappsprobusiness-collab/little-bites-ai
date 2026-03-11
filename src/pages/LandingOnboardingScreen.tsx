@@ -36,13 +36,28 @@ export default function LandingOnboardingScreen() {
     trackLandingEvent("landing_view");
   }, [user, location.pathname, location.search]);
 
+  const buildAuthParams = (): string => {
+    const params = new URLSearchParams(location.search);
+    const entryPoint = params.get("entry_point");
+    const shareRef = params.get("share_ref");
+    const shareType = params.get("share_type");
+    const next = new URLSearchParams();
+    next.set("mode", "signup");
+    if (entryPoint) next.set("entry_point", entryPoint);
+    if (shareRef) next.set("share_ref", shareRef);
+    if (shareType) next.set("share_type", shareType);
+    return next.toString();
+  };
+
   const goToAuth = () => {
-    navigate("/auth", { replace: true });
+    const search = buildAuthParams();
+    navigate(search ? `/auth?${search}` : "/auth", { replace: true });
   };
 
   const goToFreeCta = () => {
     trackLandingEvent("landing_cta_free_click");
-    navigate("/auth", { replace: true, state: { tab: "signup" } });
+    const search = buildAuthParams();
+    navigate(search ? `/auth?${search}` : "/auth", { replace: true, state: { tab: "signup" } });
   };
 
   if (loading) {

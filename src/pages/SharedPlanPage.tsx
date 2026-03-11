@@ -53,10 +53,13 @@ export default function SharedPlanPage() {
     } else {
       trackLandingEvent("share_day_plan_cta_click");
     }
-    const source = isWeek ? "share_week_plan" : "share_day_plan";
+    const entryPoint = isWeek ? "shared_week_plan" : "shared_day_plan";
+    const shareType = isWeek ? "week_plan" : "day_plan";
     const params = new URLSearchParams(location.search);
-    params.set("source", source);
-    navigate(`/auth?${params.toString()}`, { replace: true });
+    params.set("entry_point", entryPoint);
+    params.set("share_ref", ref ?? "");
+    params.set("share_type", shareType);
+    navigate(`/welcome?${params.toString()}`, { replace: true });
   };
 
   if (status === "loading") {
@@ -122,7 +125,7 @@ export default function SharedPlanPage() {
               onClick={() => handleOpenApp(true)}
             >
               <Sparkles className="w-5 h-5 mr-2 shrink-0" />
-              ✨ Получить свой план питания
+              Собрать свой план
             </Button>
           </div>
         </main>
@@ -166,7 +169,7 @@ export default function SharedPlanPage() {
             onClick={() => handleOpenApp(false)}
           >
             <Sparkles className="w-5 h-5 mr-2 shrink-0" />
-            ✨ Получить свой план питания
+            Собрать свой план
           </Button>
         </div>
       </main>

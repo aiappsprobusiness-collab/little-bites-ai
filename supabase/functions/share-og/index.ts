@@ -73,7 +73,7 @@ serve(async (req) => {
       ? recipe.description.trim().slice(0, 200)
       : "Рецепт из приложения Mom Recipes";
   const canonicalUrl = `${BASE_URL}/r/${encodeURIComponent(ref)}`;
-  const redirectUrl = `${BASE_URL}/recipe/${recipeId}`;
+  const redirectUrl = canonicalUrl;
 
   const ogTitle = escapeHtml(title);
   const ogDesc = escapeHtml(description);

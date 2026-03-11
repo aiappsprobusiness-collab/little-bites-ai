@@ -14,6 +14,7 @@ export interface OnboardingAttribution {
   entry_point?: string;
   ref?: string;
   shareRef?: string;
+  share_type?: string;
   first_landing_path?: string;
   [key: string]: string | undefined;
 }
@@ -34,10 +35,12 @@ function getUtmAndRefFromSearch(search: string): Partial<OnboardingAttribution> 
   if (utm_term) out.term = utm_term;
   const entry_point = get("entry_point") ?? get("ep");
   const ref = get("ref");
-  const shareRef = get("shareRef") ?? get("sr");
+  const shareRef = get("share_ref") ?? get("shareRef") ?? get("sr");
+  const share_type = get("share_type");
   if (entry_point) out.entry_point = entry_point;
   if (ref) out.ref = ref;
   if (shareRef) out.shareRef = shareRef;
+  if (share_type) out.share_type = share_type;
   return out;
 }
 

@@ -9,8 +9,16 @@ import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader";
 import { cn } from "@/lib/utils";
+import type { PublicRecipePayload } from "@/services/publicRecipeShare";
 
 const WELCOME_RECIPE_ID = "4dcaf358-5aea-4806-89c1-ffe02e96d8e3";
+
+export interface WelcomeRecipeBlockProps {
+  /** Передать рецепт для публичной страницы шаринга; иначе загружается демо-рецепт по WELCOME_RECIPE_ID */
+  recipe?: PublicRecipePayload | null;
+  /** Показывать лоадер (для публичной страницы, пока рецепт грузится) */
+  isLoading?: boolean;
+}
 
 function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem[] {
   const items = recipe.ingredients_items;
@@ -46,9 +54,12 @@ function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem
 }
 
 /** Read-only recipe block for welcome: same look as in-app recipe (meal chip, time, calories, BJU, title, description, ingredients, chef advice, steps). Optional max-height + fade. */
-export function WelcomeRecipeBlock() {
+export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingProp }: WelcomeRecipeBlockProps = {}) {
   const { getRecipeById } = useRecipes();
-  const { data: recipe, isLoading, error } = getRecipeById(WELCOME_RECIPE_ID);
+  const { data: recipeFromHook, isLoading: isLoadingHook, error } = getRecipeById(WELCOME_RECIPE_ID);
+
+  const isLoading = recipeProp !== undefined ? isLoadingProp ?? false : isLoadingHook;
+  const recipe = recipeProp !== undefined ? recipeProp : recipeFromHook;
 
   if (isLoading) {
     return (
@@ -58,7 +69,7 @@ export function WelcomeRecipeBlock() {
     );
   }
 
-  if (error || !recipe) {
+  if (recipeProp === null || error || !recipe) {
     return null;
   }
 
