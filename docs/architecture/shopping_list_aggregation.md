@@ -29,11 +29,15 @@
 | **normalizeIngredientUnitForShopping(unit?, canonicalUnit?)** | Единица для ключа: приоритет `canonical_unit` (g/ml); иначе маппинг г/гр/g→g, мл/ml→ml, шт./шт→pcs, ст.л.→tbsp, ч.л.→tsp, кг→kg, л→l. |
 | **buildShoppingAggregationKey(input, multiplier)** | Строит ключ и возвращает `{ key, aggregationUnit, amountToSum, originalName }`. Для tbsp/tsp: только у жидкостей (dairy, other) переводит в мл; у твёрдых/сыпучих (grains, vegetables, fruits, meat) оставляет ст.л./ч.л., чтобы не получать «30 мл» у овсянки/муки. |
 | **chooseShoppingDisplayName(names)** | Для UI: из массива собранных имён выбирает самое короткое после «мягкой» очистки (скобки, проценты). |
-| **toShoppingDisplayUnitAndAmount(aggregationUnit, amount)** | Для UI: количество и единица в удобном виде. Мл, кратные 15, показываются в ст.л. (15 мл = 1 ст.л.); кратные 5, но не 15 — в ч.л. (5 мл = 1 ч.л.); остальные — в мл. Остальные единицы — г, кг, л, шт., ст.л., ч.л. как есть. |
+| **normalizeIngredientDisplayName(name)** | Display-нормализация имени только для отображения: убирает скобки, проценты, слова из DISPLAY_STRIP_WORDS и фразы из DISPLAY_STRIP_PHRASES (по целым словам). Результат с заглавной буквы (Яблоко, Йогурт). Не влияет на ключи агрегации и БД. |
+| **toShoppingDisplayUnitAndAmount(aggregationUnit, amount)** | Для UI: количество и единица. Мл: при amount >= 30 показываются миллилитры; при меньших — ст.л./ч.л. (15→1 ст.л., 5→1 ч.л. и т.д.). Остальные единицы — г, кг, л, шт., ст.л., ч.л. как есть. |
+| **formatAmountForDisplay(amount, unit)** | Дроби для шт.: 0.5→«1/2», 0.25→«1/4», 0.75→«3/4». Используется в ShoppingListView при выводе строки. |
 
 ### Конфиг
 
 - **STRIP_SUFFIXES** — слова, убираемые из имени при построении ключа: спелый, свежая, свежий, свежие, репчатый, репчатая.
+- **DISPLAY_STRIP_WORDS** — слова, убираемые только при отображении имени (сладкое, спелый, детский, натуральный, обогащённый и т.д.). Удаление по целым словам.
+- **DISPLAY_STRIP_PHRASES** — фразы для display (например «с кальцием»).
 - **SPOON_TO_ML** — 1 tbsp = 15 ml, 1 tsp = 5 ml (только для жидкостей при агрегации).
 - **SOLID_CATEGORIES** — vegetables, fruits, meat, grains: для этих категорий ложки не конвертируются в мл (в списке остаются ст.л./ч.л.).
 
@@ -67,7 +71,7 @@
 1. Загрузка слотов плана и рецептов/ингредиентов из Supabase.
 2. Для каждого слота (recipe_id, servings) для каждого ингредиента вызывается **buildShoppingAggregationKey** с множителем порций.
 3. Одна карта по ключу: при совпадении ключа суммируется amountToSum, в массив names добавляется originalName, категория берётся первая не other, объединяются sourceRecipeIds.
-4. Результат: для каждой группы ключа — одна строка с name = capitalize(chooseShoppingDisplayName(names)), displayAmount = округлённая сумма, displayUnit = toDisplayUnit(aggregationUnit) (г, мл, шт. и т.д.).
+4. Результат: для каждой группы ключа — одна строка с name = normalizeIngredientDisplayName(chooseShoppingDisplayName(names)), displayAmount/displayUnit = toShoppingDisplayUnitAndAmount(aggregationUnit, amountSum). В UI списка и в Copy/Share используется display-нормализованное имя (Яблоко, Йогурт, Творог — без «сладкое», «натуральный с кальцием», «детский» и т.д.).
 
 Категории (vegetables, fruits, dairy, meat, grains, other) не меняются: при слиянии сохраняется первая непустая/не other.
 
@@ -85,6 +89,6 @@
 
 **Файл:** `src/utils/shopping/normalizeIngredientForShopping.test.ts`
 
-Покрыты: нормализация имени (суффиксы, проценты, скобки), нормализация единиц (г/мл/шт/ложки), построение ключа и склейка (вода мл+ml, банан+банан спелый, сливки 10%+20%, лук г+г, ложки в мл, картофель г vs шт., canonical ml + unit мл), chooseShoppingDisplayName, SPOON_TO_ML.
+Покрыты: нормализация имени для ключа (суффиксы, проценты, скобки), display-нормализация имени (normalizeIngredientDisplayName), нормализация единиц (г/мл/шт/ложки), построение ключа и склейка (вода мл+ml, банан+банан спелый, сливки 10%+20%, лук г+г, ложки в мл, картофель г vs шт., canonical ml + unit мл), chooseShoppingDisplayName, toShoppingDisplayUnitAndAmount (мл ≥ 30 → мл, иначе ст.л./ч.л.), formatAmountForDisplay, SPOON_TO_ML.
 
 Запуск: `npx vitest run src/utils/shopping/normalizeIngredientForShopping.test.ts`

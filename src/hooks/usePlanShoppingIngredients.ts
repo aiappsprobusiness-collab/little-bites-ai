@@ -7,6 +7,7 @@ import type { ProductCategory } from "./useShoppingList";
 import {
   buildShoppingAggregationKey,
   chooseShoppingDisplayName,
+  normalizeIngredientDisplayName,
   toShoppingDisplayUnitAndAmount,
   type NormalizedUnit,
 } from "@/utils/shopping/normalizeIngredientForShopping";
@@ -172,7 +173,7 @@ export function usePlanShoppingIngredients(
       for (const v of aggMap.values()) {
         if (v.amountSum <= 0) continue;
         const displayName = chooseShoppingDisplayName(v.names);
-        const nameForUi = displayName ? displayName.charAt(0).toUpperCase() + displayName.slice(1).toLowerCase() : displayName;
+        const nameForUi = displayName ? normalizeIngredientDisplayName(displayName) : displayName;
         const { displayAmount, displayUnit } = toShoppingDisplayUnitAndAmount(v.aggregationUnit, v.amountSum);
         result.push({
           name: nameForUi,

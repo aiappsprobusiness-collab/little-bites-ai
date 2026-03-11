@@ -18,7 +18,7 @@ import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { formatShoppingListForCopy, formatShoppingListForShare } from "@/utils/shoppingListTextFormatter";
-import { formatAmountForDisplay } from "@/utils/shopping/normalizeIngredientForShopping";
+import { formatAmountForDisplay, normalizeIngredientDisplayName } from "@/utils/shopping/normalizeIngredientForShopping";
 import { getSharedPlanUrlForRange } from "@/services/sharedPlan";
 import {
   Sheet,
@@ -49,7 +49,7 @@ const CATEGORY_LABEL: Record<ProductCategory, string> = {
 };
 
 function formatItemShort(item: ShoppingListItemRow): string {
-  const name = capitalizeIngredientName(item.name);
+  const name = normalizeIngredientDisplayName(item.name) || capitalizeIngredientName(item.name);
   const a = item.amount != null && item.amount > 0 ? item.amount : null;
   const u = normalizeUnitForDisplay(item.unit);
   const amountStr = a != null ? formatAmountForDisplay(a, item.unit) : "";
@@ -217,7 +217,12 @@ export function ShoppingListView() {
   };
 
   const handleCopy = () => {
-    const itemsForFormat = items.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit, category: i.category }));
+    const itemsForFormat = items.map((i) => ({
+      name: normalizeIngredientDisplayName(i.name) || i.name,
+      amount: i.amount,
+      unit: i.unit,
+      category: i.category,
+    }));
     const text = formatShoppingListForCopy(itemsForFormat, range);
     navigator.clipboard?.writeText(text).then(
       () => toast({ title: "Скопировано" }),
@@ -227,7 +232,12 @@ export function ShoppingListView() {
 
   const handleShare = async () => {
     if (!user?.id) return;
-    const itemsForFormat = items.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit, category: i.category }));
+    const itemsForFormat = items.map((i) => ({
+      name: normalizeIngredientDisplayName(i.name) || i.name,
+      amount: i.amount,
+      unit: i.unit,
+      category: i.category,
+    }));
     try {
       const shareUrl = await getSharedPlanUrlForRange(user.id, memberId, range);
       const title = range === "today" ? "Список продуктов на сегодня" : "Список продуктов на неделю";

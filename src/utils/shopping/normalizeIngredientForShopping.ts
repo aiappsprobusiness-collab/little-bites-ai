@@ -14,6 +14,31 @@ export const STRIP_SUFFIXES = [
   "репчатая",
 ] as const;
 
+/** Слова и фразы для удаления при отображении имени в списке покупок (только UI). Удаление по целым словам/фразам. */
+export const DISPLAY_STRIP_WORDS = [
+  "сладкое",
+  "сладкий",
+  "сладкая",
+  "спелый",
+  "спелая",
+  "свежий",
+  "свежая",
+  "репчатый",
+  "репчатая",
+  "детский",
+  "детское",
+  "детская",
+  "натуральный",
+  "натуральное",
+  "натуральная",
+  "обогащенный",
+  "обогащённый",
+  "обогащённое",
+] as const;
+
+/** Фразы для удаления при display-нормализации (подстрока с пробелами). */
+export const DISPLAY_STRIP_PHRASES = ["с кальцием"] as const;
+
 /**
  * Нормализует имя ингредиента только для ключа агрегации списка покупок.
  * Приведение к lowercase, удаление скобок, процентов жирности, описательных суффиксов.
@@ -243,6 +268,27 @@ export function formatAmountForDisplay(amount: number | null, unit: string | nul
   if (Math.abs(amount - 0.25) < 0.01) return "1/4";
   if (Math.abs(amount - 0.75) < 0.01) return "3/4";
   return String(amount);
+}
+
+/**
+ * Display-нормализация имени для отображения в списке покупок: базовое название без описаний.
+ * Не меняет ключи агрегации и не трогает БД. Удаление по целым словам и фразам из конфига.
+ */
+export function normalizeIngredientDisplayName(name: string): string {
+  if (name == null || typeof name !== "string") return "";
+  let s = name.trim().replace(/\s+/g, " ");
+  s = s.replace(/\s*\([^)]*\)\s*/g, " ").trim();
+  s = s.replace(/\s*\d+(?:[.,]\d+)?\s*%\s*/g, " ").trim();
+  s = s.trim().toLowerCase();
+  for (const phrase of DISPLAY_STRIP_PHRASES) {
+    const re = new RegExp(escapeRegExp(phrase), "gi");
+    s = s.replace(re, " ").trim();
+  }
+  const stripSet = new Set(DISPLAY_STRIP_WORDS.map((w) => w.toLowerCase()));
+  const words = s.split(/\s+/).filter((w) => w.length > 0 && !stripSet.has(w.toLowerCase()));
+  s = words.join(" ").replace(/\s+/g, " ").trim();
+  if (s === "") return name.trim();
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
 /**

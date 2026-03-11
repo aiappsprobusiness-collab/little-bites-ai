@@ -4,10 +4,28 @@ import {
   normalizeIngredientUnitForShopping,
   buildShoppingAggregationKey,
   chooseShoppingDisplayName,
+  normalizeIngredientDisplayName,
   toShoppingDisplayUnitAndAmount,
   STRIP_SUFFIXES,
   SPOON_TO_ML,
 } from "./normalizeIngredientForShopping";
+
+describe("normalizeIngredientDisplayName", () => {
+  it("returns base product name for display", () => {
+    expect(normalizeIngredientDisplayName("Яблоко сладкое")).toBe("Яблоко");
+    expect(normalizeIngredientDisplayName("Банан спелый")).toBe("Банан");
+    expect(normalizeIngredientDisplayName("Лук репчатый")).toBe("Лук");
+    expect(normalizeIngredientDisplayName("Молоко детское")).toBe("Молоко");
+    expect(normalizeIngredientDisplayName("Творог детский")).toBe("Творог");
+    expect(normalizeIngredientDisplayName("Йогурт натуральный с кальцием")).toBe("Йогурт");
+  });
+  it("strips parentheses and percent", () => {
+    expect(normalizeIngredientDisplayName("Сливки 10%")).toBe("Сливки");
+  });
+  it("capitalizes first letter", () => {
+    expect(normalizeIngredientDisplayName("йогурт натуральный")).toBe("Йогурт");
+  });
+});
 
 describe("normalizeIngredientNameForShopping", () => {
   it("lowercases and trims", () => {
@@ -202,10 +220,10 @@ describe("SPOON_TO_ML", () => {
 });
 
 describe("toShoppingDisplayUnitAndAmount", () => {
-  it("ml: 15 → 1 ст.л., 5 → 1 ч.л., 30 → 2 ст.л.", () => {
+  it("ml: 15 → 1 ст.л., 5 → 1 ч.л.; 30+ → мл", () => {
     expect(toShoppingDisplayUnitAndAmount("ml", 15)).toEqual({ displayAmount: 1, displayUnit: "ст.л." });
     expect(toShoppingDisplayUnitAndAmount("ml", 5)).toEqual({ displayAmount: 1, displayUnit: "ч.л." });
-    expect(toShoppingDisplayUnitAndAmount("ml", 30)).toEqual({ displayAmount: 2, displayUnit: "ст.л." });
+    expect(toShoppingDisplayUnitAndAmount("ml", 30)).toEqual({ displayAmount: 30, displayUnit: "мл" });
   });
   it("ml: 10 → 2 ч.л., 25 → 5 ч.л.", () => {
     expect(toShoppingDisplayUnitAndAmount("ml", 10)).toEqual({ displayAmount: 2, displayUnit: "ч.л." });
