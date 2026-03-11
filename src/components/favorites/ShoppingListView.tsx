@@ -1,16 +1,38 @@
-import { useEffect, useMemo, useState } from "react";
-import { Copy, Trash2, ShoppingCart, X, Filter, ChevronDown } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Copy, MoreVertical, Filter, ShoppingCart, X, ChevronDown, ChevronRight, ListPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
-import { useShoppingList, getSourceRecipesFromItem, type ProductCategory, type ShoppingListItemRow, type SourceRecipe } from "@/hooks/useShoppingList";
+import {
+  useShoppingList,
+  getSourceRecipesFromItem,
+  type ProductCategory,
+  type ShoppingListItemRow,
+  type SourceRecipe,
+  type ShoppingListSyncMeta,
+} from "@/hooks/useShoppingList";
 import { usePlanShoppingIngredients } from "@/hooks/usePlanShoppingIngredients";
+import { usePlanSignature } from "@/hooks/usePlanSignature";
 import { useFamily } from "@/contexts/FamilyContext";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
-import { capitalizeIngredientName } from "@/utils/ingredientDisplay";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { capitalizeIngredientName, normalizeUnitForDisplay } from "@/utils/ingredientDisplay";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 
 const CATEGORY_ORDER: ProductCategory[] = ["vegetables", "fruits", "dairy", "meat", "grains", "other"];
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
@@ -22,16 +44,111 @@ const CATEGORY_LABEL: Record<ProductCategory, string> = {
   other: "Прочее",
 };
 
-const OLIVE_ACTIVE = "bg-[#6b7c3d] text-white";
-const CHIP_BASE = "px-3 py-1.5 text-[13px] font-medium rounded-full border transition-colors";
-
 function formatItemLine(item: { name: string; amount: number | null; unit: string | null }): string {
   const name = capitalizeIngredientName(item.name);
   const a = item.amount != null && item.amount > 0 ? item.amount : null;
-  const u = item.unit?.trim();
+  const u = normalizeUnitForDisplay(item.unit);
   if (a != null && u) return `${name} — ${a} ${u}`;
   if (a != null) return `${name} — ${a}`;
   return name;
+}
+
+function formatItemShort(item: ShoppingListItemRow): string {
+  const name = capitalizeIngredientName(item.name);
+  const a = item.amount != null && item.amount > 0 ? item.amount : null;
+  const u = normalizeUnitForDisplay(item.unit);
+  if (a != null && u) return `${name}, ${a} ${u}`;
+  if (a != null) return `${name}, ${a}`;
+  return name;
+}
+
+/** Один пункт списка: чекбокс, название, количество, удалить; по тапу — раскрыть рецепты. */
+function ShoppingListItem({
+  item,
+  onTogglePurchased,
+  onDelete,
+}: {
+  item: ShoppingListItemRow;
+  onTogglePurchased: (itemId: string, is_purchased: boolean) => void;
+  onDelete: (item: ShoppingListItemRow) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const sources = getSourceRecipesFromItem(item);
+  const hasSources = sources.length > 0;
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border border-border bg-card overflow-hidden",
+        item.is_purchased && "opacity-60"
+      )}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-3 px-3 py-2.5 min-h-[48px]",
+          hasSources && "cursor-pointer"
+        )}
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePurchased(item.id, !item.is_purchased);
+          }}
+          className={cn(
+            "w-5 h-5 rounded border shrink-0 flex items-center justify-center transition-colors touch-manipulation",
+            item.is_purchased ? "bg-[#6b7c3d] border-[#6b7c3d]" : "border-border bg-background"
+          )}
+          aria-label={item.is_purchased ? "Отметить не купленным" : "Отметить купленным"}
+        >
+          {item.is_purchased && <span className="text-white text-xs">✓</span>}
+        </button>
+        <button
+          type="button"
+          onClick={() => hasSources && setExpanded((e) => !e)}
+          className={cn(
+            "flex-1 min-w-0 text-left flex items-center gap-2",
+            !hasSources && "cursor-default"
+          )}
+        >
+          <span
+            className={cn(
+              "text-sm flex-1 min-w-0",
+              item.is_purchased && "line-through text-muted-foreground"
+            )}
+          >
+            {formatItemShort(item)}
+          </span>
+          {hasSources && (
+            <span className="shrink-0 text-muted-foreground">
+              {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(item);
+          }}
+          className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 touch-manipulation"
+          aria-label="Удалить из списка"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      {expanded && hasSources && (
+        <div className="px-3 pb-2 pt-0 border-t border-border/50 mt-0 bg-muted/30">
+          <p className="text-xs text-muted-foreground mb-1">Из рецептов:</p>
+          <ul className="text-xs space-y-0.5">
+            {sources.map((r) => (
+              <li key={r.id}>{r.title || "Без названия"}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ShoppingListView() {
@@ -42,6 +159,7 @@ export function ShoppingListView() {
 
   const {
     listId,
+    listMeta,
     items,
     isLoading: listLoading,
     setItemPurchased,
@@ -49,25 +167,33 @@ export function ShoppingListView() {
     replaceItems,
     deleteItem,
     insertItem,
+    removePurchased,
   } = useShoppingList();
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [addProductSheetOpen, setAddProductSheetOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | "all">("all");
   const [selectedRecipeIds, setSelectedRecipeIds] = useState<Set<string>>(new Set());
-  const [searchQuery, setSearchQuery] = useState("");
-  const [recipeSheetOpen, setRecipeSheetOpen] = useState(false);
+  const [filterOnlyUnpurchased, setFilterOnlyUnpurchased] = useState(false);
   const [draftAllRecipes, setDraftAllRecipes] = useState(true);
   const [draftRecipeIds, setDraftRecipeIds] = useState<Set<string>>(new Set());
   const [recipeSearch, setRecipeSearch] = useState("");
 
   const { data: planIngredients, isLoading: planLoading } = usePlanShoppingIngredients(range, memberId);
+  const { data: planSignature } = usePlanSignature(range, memberId);
 
-  // Синхронизация списка с планом при смене дня/недели или профиля (только когда данные плана загружены)
-  useEffect(() => {
+  const syncMetaStored = listMeta as ShoppingListSyncMeta | undefined;
+  const planChanged = useMemo(() => {
+    if (planSignature == null || planSignature === "") return false;
+    if (syncMetaStored?.last_synced_range !== range) return true;
+    const storedMember = syncMetaStored?.last_synced_member_id ?? null;
+    if (storedMember !== (memberId ?? null)) return true;
+    return syncMetaStored?.last_synced_plan_signature !== planSignature;
+  }, [planSignature, syncMetaStored, range, memberId]);
+
+  const handleSyncFromPlan = async () => {
     if (!listId || planIngredients === undefined) return;
-    if (planIngredients.length === 0) {
-      clearList().catch(() => {});
-      return;
-    }
     const payload = planIngredients.map((ing) => ({
       name: ing.name,
       amount: ing.displayAmount ?? ing.amount,
@@ -75,8 +201,23 @@ export function ShoppingListView() {
       category: ing.category,
       source_recipes: ing.source_recipes?.length ? ing.source_recipes : undefined,
     }));
-    replaceItems(payload).catch(() => toast({ variant: "destructive", title: "Не удалось обновить список" }));
-  }, [range, memberId, listId, planIngredients, replaceItems, clearList, toast]);
+    const newSyncMeta: ShoppingListSyncMeta = {
+      last_synced_range: range,
+      last_synced_member_id: memberId ?? null,
+      last_synced_plan_signature: planSignature ?? "",
+      last_synced_at: new Date().toISOString(),
+    };
+    try {
+      if (payload.length === 0) {
+        await replaceItems({ items: [], syncMeta: newSyncMeta });
+      } else {
+        await replaceItems({ items: payload, syncMeta: newSyncMeta });
+      }
+      toast({ title: "Список обновлён из меню" });
+    } catch {
+      toast({ variant: "destructive", title: "Не удалось обновить список" });
+    }
+  };
 
   const handleCopy = () => {
     const lines = filteredItems.map((i) => (i.is_purchased ? `☑ ${formatItemLine(i)}` : `☐ ${formatItemLine(i)}`));
@@ -111,6 +252,12 @@ export function ShoppingListView() {
       .catch(() => toast({ variant: "destructive", title: "Не удалось очистить" }));
   };
 
+  const handleRemovePurchased = () => {
+    removePurchased()
+      .then(() => toast({ title: "Купленные убраны" }))
+      .catch(() => toast({ variant: "destructive", title: "Не удалось убрать" }));
+  };
+
   const loading = listLoading || planLoading;
   const hasPlanData = (planIngredients?.length ?? 0) > 0;
   const emptyState = !loading && items.length === 0;
@@ -124,14 +271,6 @@ export function ShoppingListView() {
     }
     return [...byId.values()];
   }, [items]);
-
-  useEffect(() => {
-    if (recipeSheetOpen) {
-      setDraftAllRecipes(selectedRecipeIds.size === 0);
-      setDraftRecipeIds(new Set(selectedRecipeIds));
-      setRecipeSearch("");
-    }
-  }, [recipeSheetOpen, selectedRecipeIds]);
 
   const filteredItems = useMemo(() => {
     let list = items;
@@ -149,12 +288,15 @@ export function ShoppingListView() {
         return sources.some((s) => selectedRecipeIds.has(s.id));
       });
     }
+    if (filterOnlyUnpurchased) {
+      list = list.filter((i) => !i.is_purchased);
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       list = list.filter((i) => i.name.toLowerCase().includes(q));
     }
     return list;
-  }, [items, selectedCategory, selectedRecipeIds, searchQuery]);
+  }, [items, selectedCategory, selectedRecipeIds, filterOnlyUnpurchased, searchQuery]);
 
   const byCategory = filteredItems.reduce((acc, item) => {
     const raw = item.category ?? "other";
@@ -170,17 +312,19 @@ export function ShoppingListView() {
     return uniqueRecipes.filter((r) => (r.title ?? "").toLowerCase().includes(q));
   }, [uniqueRecipes, recipeSearch]);
 
-  const handleApplyRecipeFilter = () => {
+  const handleApplyFilter = () => {
     if (draftAllRecipes || draftRecipeIds.size === 0) setSelectedRecipeIds(new Set());
     else setSelectedRecipeIds(new Set(draftRecipeIds));
-    setRecipeSheetOpen(false);
+    setFilterSheetOpen(false);
   };
 
-  const handleResetRecipeFilter = () => {
+  const handleResetFilters = () => {
+    setSelectedCategory("all");
     setSelectedRecipeIds(new Set());
+    setFilterOnlyUnpurchased(false);
     setDraftAllRecipes(true);
     setDraftRecipeIds(new Set());
-    setRecipeSheetOpen(false);
+    setFilterSheetOpen(false);
   };
 
   const toggleDraftRecipe = (recipeId: string) => {
@@ -193,11 +337,6 @@ export function ShoppingListView() {
     });
   };
 
-  const setDraftAllRecipesChecked = (checked: boolean) => {
-    setDraftAllRecipes(checked);
-    if (checked) setDraftRecipeIds(new Set());
-  };
-
   const handleDeleteItem = (item: ShoppingListItemRow) => {
     const sources = getSourceRecipesFromItem(item);
     const payload = {
@@ -207,28 +346,35 @@ export function ShoppingListView() {
       category: item.category ?? "other",
       source_recipes: sources.length ? sources : undefined,
     };
-    deleteItem(item.id).then(() => {
-      const t = toast({
-        title: "Удалено",
-        action: (
-          <ToastAction
-            altText="Отменить"
-            onClick={() => {
-              insertItem(payload).catch(() => toast({ variant: "destructive", title: "Не удалось вернуть" }));
-            }}
-          >
-            Отменить
-          </ToastAction>
-        ),
-      });
-      setTimeout(() => t.dismiss(), 4000);
-    }).catch(() => toast({ variant: "destructive", title: "Не удалось удалить" }));
+    deleteItem(item.id)
+      .then(() => {
+        const t = toast({
+          title: "Удалено",
+          action: (
+            <ToastAction
+              altText="Отменить"
+              onClick={() => {
+                insertItem(payload).catch(() => toast({ variant: "destructive", title: "Не удалось вернуть" }));
+              }}
+            >
+              Отменить
+            </ToastAction>
+          ),
+        });
+        setTimeout(() => t.dismiss(), 4000);
+      })
+      .catch(() => toast({ variant: "destructive", title: "Не удалось удалить" }));
   };
+
+  const filterActiveCount = [selectedCategory !== "all", selectedRecipeIds.size > 0, filterOnlyUnpurchased].filter(
+    Boolean
+  ).length;
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-full border border-border overflow-hidden bg-muted/30">
+      {/* Верхний ряд: Сегодня/Неделя + селектор профиля */}
+      <div className="flex items-center gap-2">
+        <div className="flex rounded-full border border-border overflow-hidden bg-muted/30 shrink-0">
           <button
             type="button"
             onClick={() => setRange("today")}
@@ -250,136 +396,198 @@ export function ShoppingListView() {
             Неделя
           </button>
         </div>
-        <MemberSelectorButton className="shrink-0" />
+        <MemberSelectorButton className="shrink-0 ml-auto" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" className="gap-1.5 rounded-full h-9" onClick={handleCopy}>
-          <Copy className="w-3.5 h-3.5" />
-          Скопировать
-        </Button>
-        <Button variant="outline" size="sm" className="gap-1.5 rounded-full h-9" onClick={handleShare}>
-          <ShareIosIcon className="w-3.5 h-3.5" />
-          Поделиться
-        </Button>
-        {items.length > 0 && (
-          <Button variant="outline" size="sm" className="gap-1.5 rounded-full h-9 text-muted-foreground" onClick={handleClear}>
-            <Trash2 className="w-3.5 h-3.5" />
-            Очистить
+      {/* Инфо-блок */}
+      <div className="rounded-lg bg-muted/40 border border-border/50 px-3 py-2 text-sm text-muted-foreground">
+        <p>
+          {range === "today" ? "Список собран из меню на сегодня." : "Список собран из меню на неделю."}
+        </p>
+        <p className="mt-0.5">Можно отмечать купленное и добавлять свои продукты.</p>
+      </div>
+
+      {/* Баннер «Меню изменилось» */}
+      {!loading && planChanged && (
+        <div className="rounded-lg border border-[#6b7c3d]/50 bg-[#6b7c3d]/10 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <p className="text-sm font-medium text-foreground">Меню изменилось</p>
+          <Button
+            size="sm"
+            className="bg-[#6b7c3d] hover:bg-[#5a6b32] text-white shrink-0"
+            onClick={handleSyncFromPlan}
+          >
+            Обновить список
           </Button>
-        )}
-      </div>
-
-      {!loading && items.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSelectedCategory("all")}
-                className={cn(CHIP_BASE, "border-border bg-muted/30", selectedCategory === "all" ? OLIVE_ACTIVE : "text-muted-foreground hover:text-foreground")}
-              >
-                Все
-              </button>
-              {CATEGORY_ORDER.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setSelectedCategory(cat)}
-                  className={cn(CHIP_BASE, "border-border bg-muted/30", selectedCategory === cat ? OLIVE_ACTIVE : "text-muted-foreground hover:text-foreground")}
-                >
-                  {CATEGORY_LABEL[cat]}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-col items-start shrink-0">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "h-9 rounded-full gap-1.5 border-border",
-                  selectedRecipeIds.size > 0 && "border-[#6b7c3d] bg-[#6b7c3d]/10 text-[#6b7c3d] hover:bg-[#6b7c3d]/15"
-                )}
-                onClick={() => setRecipeSheetOpen(true)}
-              >
-                <Filter className="w-3.5 h-3.5" />
-                Рецепты
-                <ChevronDown className="w-3.5 h-3.5" />
-              </Button>
-              <span className="text-[11px] text-muted-foreground mt-0.5">
-                {selectedRecipeIds.size === 0 ? "Все рецепты" : `Выбрано: ${selectedRecipeIds.size}`}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="search"
-              placeholder="Поиск по ингредиентам…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex h-9 w-full max-w-[220px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Поиск по ингредиентам"
-            />
-          </div>
         </div>
       )}
 
-      <Sheet open={recipeSheetOpen} onOpenChange={setRecipeSheetOpen}>
+      {/* Компактный action row: Copy, Share, More */}
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-muted-foreground" onClick={handleCopy}>
+          <Copy className="w-3.5 h-3.5" />
+          <span className="text-xs">Копировать</span>
+        </Button>
+        <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-muted-foreground" onClick={handleShare}>
+          <ShareIosIcon className="w-3.5 h-3.5" />
+          <span className="text-xs">Поделиться</span>
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-auto">
+              <MoreVertical className="w-4 h-4" aria-label="Ещё" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onClick={handleSyncFromPlan}>Обновить из плана</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setAddProductSheetOpen(true)}>
+              <ListPlus className="w-3.5 h-3.5 mr-2" />
+              Добавить продукт вручную
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleRemovePurchased} disabled={!items.some((i) => i.is_purchased)}>
+              Убрать купленные
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleClear} disabled={items.length === 0} className="text-destructive focus:text-destructive">
+              Очистить список
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Поиск + кнопка Фильтр */}
+      {!loading && items.length > 0 && (
+        <div className="flex items-center gap-2">
+          <Input
+            type="search"
+            placeholder="Поиск…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9 flex-1 max-w-[200px] text-sm"
+            aria-label="Поиск по ингредиентам"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn("h-9 gap-1.5", filterActiveCount > 0 && "border-[#6b7c3d]/50 text-[#6b7c3d]")}
+            onClick={() => setFilterSheetOpen(true)}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            Фильтр
+            {filterActiveCount > 0 && <span className="text-xs">({filterActiveCount})</span>}
+          </Button>
+        </div>
+      )}
+
+      {/* Filter sheet */}
+      <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] flex flex-col p-0">
           <SheetHeader className="p-4 pb-2 text-left">
-            <SheetTitle>Фильтр по рецептам</SheetTitle>
-            <SheetDescription>Выберите рецепты, ингредиенты которых показать</SheetDescription>
+            <SheetTitle>Фильтры</SheetTitle>
+            <SheetDescription>Категории, рецепты и только некупленные</SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-hidden flex flex-col min-h-0 px-4">
-            <label className="flex items-center gap-3 py-2 cursor-pointer">
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0 px-4 space-y-4">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Категория</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCategory("all")}
+                  className={cn(
+                    "px-2.5 py-1.5 text-xs font-medium rounded-full border",
+                    selectedCategory === "all" ? "bg-[#6b7c3d] text-white border-[#6b7c3d]" : "border-border bg-muted/30"
+                  )}
+                >
+                  Все
+                </button>
+                {CATEGORY_ORDER.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    className={cn(
+                      "px-2.5 py-1.5 text-xs font-medium rounded-full border",
+                      selectedCategory === cat ? "bg-[#6b7c3d] text-white border-[#6b7c3d]" : "border-border bg-muted/30"
+                    )}
+                  >
+                    {CATEGORY_LABEL[cat]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">Рецепты</p>
+              <input
+                type="search"
+                placeholder="Поиск по рецепту…"
+                value={recipeSearch}
+                onChange={(e) => setRecipeSearch(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm mb-2"
+              />
+              <label className="flex items-center gap-2 py-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draftAllRecipes}
+                  onChange={(e) => {
+                    setDraftAllRecipes(e.target.checked);
+                    if (e.target.checked) setDraftRecipeIds(new Set());
+                  }}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <span className="text-sm">Все рецепты</span>
+              </label>
+              <ul className="max-h-32 overflow-y-auto space-y-0.5 mt-1">
+                {filteredRecipesForSheet.map((r) => (
+                  <li key={r.id}>
+                    <label className="flex items-center gap-2 py-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!draftAllRecipes && draftRecipeIds.has(r.id)}
+                        onChange={() => toggleDraftRecipe(r.id)}
+                        disabled={draftAllRecipes}
+                        className="h-4 w-4 rounded border-border shrink-0"
+                      />
+                      <span className="text-sm truncate">{r.title || "Без названия"}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <label className="flex items-center gap-2 py-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={draftAllRecipes}
-                onChange={(e) => setDraftAllRecipesChecked(e.target.checked)}
+                checked={filterOnlyUnpurchased}
+                onChange={(e) => setFilterOnlyUnpurchased(e.target.checked)}
                 className="h-4 w-4 rounded border-border"
               />
-              <span className="text-sm font-medium">Все рецепты</span>
+              <span className="text-sm">Только некупленные</span>
             </label>
-            <input
-              type="search"
-              placeholder="Поиск по названию рецепта…"
-              value={recipeSearch}
-              onChange={(e) => setRecipeSearch(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mb-2"
-              aria-label="Поиск по рецептам"
-            />
-            <ul className="flex-1 overflow-y-auto space-y-0.5 pb-2 -mx-1">
-              {filteredRecipesForSheet.map((r) => (
-                <li key={r.id}>
-                  <label className="flex items-center gap-3 py-2 px-2 rounded-md hover:bg-muted/50 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={!draftAllRecipes && draftRecipeIds.has(r.id)}
-                      onChange={() => toggleDraftRecipe(r.id)}
-                      disabled={draftAllRecipes}
-                      className="h-4 w-4 rounded border-border shrink-0"
-                    />
-                    <span className="text-sm truncate min-w-0">{r.title || "Без названия"}</span>
-                  </label>
-                </li>
-              ))}
-            </ul>
           </div>
-          <SheetFooter className="p-4 pt-2 border-t gap-2 sm:gap-0">
-            <Button type="button" variant="secondary" onClick={handleResetRecipeFilter}>
-              Сбросить
+          <SheetFooter className="p-4 pt-2 border-t gap-2">
+            <Button variant="secondary" onClick={handleResetFilters}>
+              Сбросить фильтры
             </Button>
-            <Button
-              type="button"
-              className="bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
-              onClick={handleApplyRecipeFilter}
-            >
+            <Button className="bg-[#6b7c3d] hover:bg-[#5a6b32] text-white" onClick={handleApplyFilter}>
               Применить
             </Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {/* Add product sheet */}
+      <AddProductSheet
+        open={addProductSheetOpen}
+        onOpenChange={setAddProductSheetOpen}
+        onAdd={async (fields) => {
+          await insertItem({
+            name: fields.name.trim(),
+            amount: fields.amount ?? null,
+            unit: fields.unit?.trim() || null,
+            category: fields.category ?? "other",
+          });
+          setAddProductSheetOpen(false);
+          toast({ title: "Продукт добавлен" });
+        }}
+        onError={() => toast({ variant: "destructive", title: "Не удалось добавить" })}
+      />
 
       {loading && (
         <div className="py-8 text-center text-sm text-muted-foreground">Загрузка…</div>
@@ -388,9 +596,20 @@ export function ShoppingListView() {
       {emptyState && (
         <div className="rounded-2xl border border-border bg-card shadow-soft p-8 text-center">
           <ShoppingCart className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-          <p className="text-sm text-muted-foreground">
-            {hasPlanData ? "Список пуст. Обновите из плана." : "Добавьте блюда в План — и мы соберём список покупок."}
+          <p className="text-sm text-muted-foreground mb-3">
+            {hasPlanData
+              ? "Нажмите «Обновить из плана» в меню (⋮), чтобы собрать список из меню."
+              : "Добавьте блюда в План — затем соберите список из меню."}
           </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setAddProductSheetOpen(true)}
+          >
+            <ListPlus className="w-3.5 h-3.5" />
+            Добавить продукт вручную
+          </Button>
         </div>
       )}
 
@@ -406,35 +625,12 @@ export function ShoppingListView() {
                 </h3>
                 <ul className="space-y-1.5">
                   {byCategory[cat].map((item) => (
-                    <li
-                      key={item.id}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5",
-                        item.is_purchased && "opacity-60"
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setItemPurchased({ itemId: item.id, is_purchased: !item.is_purchased })}
-                        className={cn(
-                          "w-5 h-5 rounded border shrink-0 flex items-center justify-center transition-colors",
-                          item.is_purchased ? "bg-[#6b7c3d] border-[#6b7c3d]" : "border-border bg-background"
-                        )}
-                        aria-label={item.is_purchased ? "Отметить не купленным" : "Отметить купленным"}
-                      >
-                        {item.is_purchased && <span className="text-white text-xs">✓</span>}
-                      </button>
-                      <span className={cn("text-sm flex-1 min-w-0", item.is_purchased && "line-through text-muted-foreground")}>
-                        {formatItemLine(item)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteItem(item)}
-                        className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 touch-manipulation"
-                        aria-label="Удалить из списка"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                    <li key={item.id}>
+                      <ShoppingListItem
+                        item={item}
+                        onTogglePurchased={(id, is_purchased) => setItemPurchased({ itemId: id, is_purchased })}
+                        onDelete={(it) => handleDeleteItem(it)}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -444,5 +640,110 @@ export function ShoppingListView() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Sheet для ручного добавления продукта. */
+function AddProductSheet({
+  open,
+  onOpenChange,
+  onAdd,
+  onError,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAdd: (fields: { name: string; amount: number | null; unit: string | null; category: ProductCategory }) => Promise<void>;
+  onError: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [amountStr, setAmountStr] = useState("");
+  const [unit, setUnit] = useState("");
+  const [category, setCategory] = useState<ProductCategory | "">("");
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const amount = amountStr.trim() ? parseFloat(amountStr) : null;
+    const num = amount != null && Number.isFinite(amount) ? amount : null;
+    try {
+      await onAdd({
+        name: trimmed,
+        amount: num,
+        unit: unit.trim() || null,
+        category: (category as ProductCategory) || "other",
+      });
+      setName("");
+      setAmountStr("");
+      setUnit("");
+      setCategory("");
+    } catch {
+      onError();
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-2xl">
+        <SheetHeader>
+          <SheetTitle>Добавить продукт</SheetTitle>
+          <SheetDescription>Название обязательно; количество и категория — по желанию.</SheetDescription>
+        </SheetHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Название</label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Например: Молоко"
+              className="w-full"
+              autoFocus
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Количество</label>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                value={amountStr}
+                onChange={(e) => setAmountStr(e.target.value)}
+                placeholder="—"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Единица</label>
+              <Input
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                placeholder="г, мл, шт."
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1.5 block">Категория</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as ProductCategory | "")}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            >
+              <option value="">—</option>
+              {CATEGORY_ORDER.map((c) => (
+                <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>
+              ))}
+            </select>
+          </div>
+          <SheetFooter className="pt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Отмена
+            </Button>
+            <Button type="submit" className="bg-[#6b7c3d] hover:bg-[#5a6b32] text-white" disabled={!name.trim()}>
+              Добавить
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
   );
 }

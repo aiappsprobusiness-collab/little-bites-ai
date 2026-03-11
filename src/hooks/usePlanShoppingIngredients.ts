@@ -29,6 +29,23 @@ function normalizeName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Категория из БД (в т.ч. fish, fats, spices) → категория для списка продуктов (ProductCategory). */
+function toProductCategory(cat: string | null | undefined): ProductCategory {
+  if (cat == null || String(cat).trim() === "") return "other";
+  const c = String(cat).trim().toLowerCase();
+  if (["vegetables", "fruits", "dairy", "meat", "grains", "other"].includes(c)) return c as ProductCategory;
+  if (c === "fish") return "meat";
+  if (c === "fats" || c === "spices") return "other";
+  return "other";
+}
+
+/** Для отображения в списке: г/мл как в карточке рецепта. */
+function toDisplayUnit(canonicalUnit: string | null, fallbackUnit: string | null): string | null {
+  if (canonicalUnit === "g") return "г";
+  if (canonicalUnit === "ml") return "мл";
+  return canonicalUnit ?? fallbackUnit ?? null;
+}
+
 /**
  * Агрегирует ингредиенты из meal_plans_v2 за диапазон с учётом порций слота.
  * Ключ группировки: normalize(name) + unit (или canonical_unit для g/ml).
@@ -128,7 +145,7 @@ export function usePlanShoppingIngredients(
           const amount = ing.amount != null && Number.isFinite(ing.amount) ? ing.amount * multiplier : null;
           const canAmount = ing.canonical_amount != null && Number.isFinite(ing.canonical_amount) ? ing.canonical_amount * multiplier : null;
           const canUnit = ing.canonical_unit === "g" || ing.canonical_unit === "ml" ? ing.canonical_unit : null;
-          const category = (ing.category as ProductCategory) ?? "other";
+          const category = toProductCategory(ing.category);
 
           if (canAmount != null && canUnit) {
             const key = `${normalizeName(ing.name)}|${canUnit}`;
@@ -179,7 +196,7 @@ export function usePlanShoppingIngredients(
           amount: v.amount || null,
           unit: v.unit,
           displayAmount: Math.round((v.canonicalAmount ?? 0) * 10) / 10,
-          displayUnit: v.canonicalUnit ?? null,
+          displayUnit: toDisplayUnit(v.canonicalUnit ?? null, v.unit),
           category: v.category,
           source_recipes: toSourceRecipes(v.sourceRecipeIds),
         });

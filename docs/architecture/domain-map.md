@@ -74,11 +74,11 @@
 
 ### Shopping / Ingredients
 
-- **Назначение:** списки покупок по рецептам (ингредиенты с количеством, категорией). Items связаны с recipe_id, recipe_title.
-- **Таблицы:** `shopping_lists`, `shopping_list_items` (recipe_id, category product_category, meta для source_recipes).
-- **UI:** ShoppingListView, useShoppingList.
+- **Назначение:** списки покупок по рецептам (ингредиенты с количеством, категорией). Items связаны с recipe_id, recipe_title. Синхронизация с планом — только по явному действию пользователя («Обновить список»); в `shopping_lists.meta` хранится состояние последней синхронизации (last_synced_*, plan_signature) для баннера «Меню изменилось».
+- **Таблицы:** `shopping_lists` (в т.ч. meta для sync state), `shopping_list_items` (recipe_id, category product_category, meta для source_recipes).
+- **UI:** ShoppingListView, useShoppingList, usePlanSignature.
 - **Edge/Services:** нет Edge; Supabase client.
-- **Зависимости:** recipes, recipe_ingredients.
+- **Зависимости:** recipes, recipe_ingredients, meal_plans_v2.
 
 ### Sharing / Viral Flow
 

@@ -427,6 +427,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean | null
+          meta: Record<string, unknown> | null
           name: string
           updated_at: string
           user_id: string
@@ -435,6 +436,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          meta?: Record<string, unknown> | null
           name?: string
           updated_at?: string
           user_id: string
@@ -443,6 +445,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          meta?: Record<string, unknown> | null
           name?: string
           updated_at?: string
           user_id?: string

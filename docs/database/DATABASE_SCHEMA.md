@@ -346,13 +346,14 @@ RLS: SELECT — authenticated; запись — service_role.
 
 ### `public.shopping_lists` / `public.shopping_list_items`
 
-Списки покупок. Items связаны с рецептом (recipe_id), есть recipe_title.
+Списки покупок. Items связаны с рецептом (recipe_id), есть recipe_title. Синхронизация с планом — только по явному действию пользователя; в `shopping_lists.meta` хранятся last_synced_range, last_synced_member_id, last_synced_plan_signature, last_synced_at для баннера «Меню изменилось».
 
 | shopping_lists | | |
 |-----------------|---|---|
 | id, user_id     | uuid | |
 | name            | text DEFAULT 'Список покупок' | |
 | is_active       | boolean | |
+| meta            | jsonb | Состояние синхронизации с планом (last_synced_*, см. useShoppingList). |
 | created_at, updated_at | timestamptz | |
 
 | shopping_list_items | | |

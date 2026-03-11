@@ -146,7 +146,7 @@ export default function FavoritesPage() {
             Список продуктов
             {!hasAccess && <Lock className="w-3 h-3 opacity-70" />}
           </button>
-          <MemberSelectorButton className="shrink-0 ml-auto" />
+          {tab !== "shopping_list" && <MemberSelectorButton className="shrink-0 ml-auto" />}
         </div>
 
         {(tab === "favorites" || tab === "my_recipes") && (

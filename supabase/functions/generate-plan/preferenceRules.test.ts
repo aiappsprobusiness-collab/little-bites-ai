@@ -20,6 +20,25 @@ Deno.test("passesPreferenceFilters blocks allergy found only in ingredients", ()
   }
 });
 
+Deno.test("passesPreferenceFilters blocks BKM allergy for recipe with milk and butter", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Пшённая каша с тыквой и сливочным маслом",
+      description: "Полезный завтрак",
+      recipe_ingredients: [
+        { name: "пшённая крупа", display_text: "40 г" },
+        { name: "молоко", display_text: "50 мл" },
+        { name: "сливочное масло", display_text: "5 г" },
+      ],
+    },
+    { allergies: ["БКМ"] },
+  );
+
+  if (allowed) {
+    throw new Error("Expected BKM allergy to block recipe with milk and butter in ingredients");
+  }
+});
+
 Deno.test("passesPreferenceFilters blocks dislike found only in ingredients", () => {
   const allowed = passesPreferenceFilters(
     {
