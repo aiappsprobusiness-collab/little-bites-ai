@@ -13,10 +13,8 @@ import { getTopicById } from "@/constants/sos";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { getPopularQuestionForToday } from "@/features/help/config/popularQuestions";
 import { ChevronRight } from "lucide-react";
-
-/** Вопрос для блока «Сегодня спрашивают» — по тапу открывается chat sheet и отправляется этот prompt. */
-const POPULAR_QUESTION_TODAY = "Ребёнок не хочет есть овощи — что делать?";
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -145,6 +143,9 @@ export default function SosTiles() {
     setInitialMessage(null);
   };
 
+  /** Вопрос дня для карточки «Сегодня спрашивают»: Free видит только free-вопросы. */
+  const popularQuestion = getPopularQuestionForToday({ hasAccess });
+
   return (
     <MobileLayout showNav>
       <div className="flex flex-col min-h-0 flex-1 px-4 pb-4 pt-0 bg-background">
@@ -171,12 +172,12 @@ export default function SosTiles() {
             </p>
             <button
               type="button"
-              onClick={() => handleOpenWithMessage(POPULAR_QUESTION_TODAY)}
+              onClick={() => handleOpenWithMessage(popularQuestion.text)}
               disabled={helpLimitExceeded}
               className="w-full flex items-center gap-3 text-left rounded-xl py-2 -mx-1 px-2 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:opacity-50 disabled:pointer-events-none"
             >
               <span className="flex-1 text-sm font-medium text-foreground leading-snug">
-                {POPULAR_QUESTION_TODAY}
+                {popularQuestion.text}
               </span>
               <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden />
             </button>
