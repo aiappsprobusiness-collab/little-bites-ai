@@ -56,7 +56,7 @@ export default function SharedPlanPage() {
     const source = isWeek ? "share_week_plan" : "share_day_plan";
     const params = new URLSearchParams(location.search);
     params.set("source", source);
-    navigate(`/welcome?${params.toString()}`, { replace: true });
+    navigate(`/auth?${params.toString()}`, { replace: true });
   };
 
   if (status === "loading") {
@@ -75,7 +75,7 @@ export default function SharedPlanPage() {
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">План не найден или ссылка устарела</p>
-          <Button onClick={() => navigate("/welcome", { replace: true })}>Перейти в приложение</Button>
+          <Button onClick={() => navigate("/auth", { replace: true })}>Перейти в приложение</Button>
         </div>
       </div>
     );
@@ -84,7 +84,7 @@ export default function SharedPlanPage() {
   if (isSharedPlanWeek(plan)) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <main className="flex-1 px-4 py-8 max-w-md mx-auto w-full">
+        <main className="flex-1 px-4 py-4 md:py-8 max-w-md mx-auto w-full">
           <h1 className="text-xl font-semibold text-foreground mb-1">Меню на неделю из MomRecipes</h1>
           <p className="text-muted-foreground text-sm mb-0.5">План питания для семьи на 7 дней</p>
           <p className="text-muted-foreground/80 text-xs mb-6">Составлено автоматически за 30 секунд</p>
@@ -107,7 +107,7 @@ export default function SharedPlanPage() {
               </li>
             ))}
           </ul>
-          <div className="mt-10 pt-6 border-t space-y-6">
+          <div className="mt-6 pt-4 border-t space-y-4">
             <div className="rounded-2xl bg-primary/5 border border-primary/10 p-4">
               <p className="font-semibold text-foreground mb-3">Получите своё меню</p>
               <ul className="space-y-2 text-sm text-muted-foreground">
@@ -135,7 +135,7 @@ export default function SharedPlanPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <main className="flex-1 px-4 py-8 max-w-md mx-auto w-full">
+      <main className="flex-1 px-4 py-4 md:py-8 max-w-md mx-auto w-full">
         <h1 className="text-xl font-semibold text-foreground mb-1">Меню на день из MomRecipes</h1>
         <p className="text-muted-foreground text-sm mb-0.5">План питания для семьи</p>
         <p className="text-muted-foreground/80 text-xs mb-4">Составлено автоматически за 30 секунд</p>
@@ -151,7 +151,7 @@ export default function SharedPlanPage() {
             </li>
           ))}
         </ul>
-        <div className="mt-10 pt-6 border-t space-y-6">
+        <div className="mt-6 pt-4 border-t space-y-4">
           <div className="rounded-2xl bg-primary/5 border border-primary/10 p-4">
             <p className="font-semibold text-foreground mb-3">Получите своё меню</p>
             <ul className="space-y-2 text-sm text-muted-foreground">
