@@ -27,13 +27,15 @@
 |--------|------------|
 | **normalizeIngredientNameForShopping(name)** | Имя для ключа агрегации: lowercase, trim, удаление скобок и содержимого, процентов (10%, 20%, 3.2%), описательных суффиксов из конфига (спелый, свежий, репчатый и т.д.). |
 | **normalizeIngredientUnitForShopping(unit?, canonicalUnit?)** | Единица для ключа: приоритет `canonical_unit` (g/ml); иначе маппинг г/гр/g→g, мл/ml→ml, шт./шт→pcs, ст.л.→tbsp, ч.л.→tsp, кг→kg, л→l. |
-| **buildShoppingAggregationKey(input, multiplier)** | Строит ключ и возвращает `{ key, aggregationUnit, amountToSum, originalName }`. Для tbsp/tsp переводит количество в мл (1 tbsp = 15 ml, 1 tsp = 5 ml), ключ тогда `name\|ml`. |
+| **buildShoppingAggregationKey(input, multiplier)** | Строит ключ и возвращает `{ key, aggregationUnit, amountToSum, originalName }`. Для tbsp/tsp: только у жидкостей (dairy, other) переводит в мл; у твёрдых/сыпучих (grains, vegetables, fruits, meat) оставляет ст.л./ч.л., чтобы не получать «30 мл» у овсянки/муки. |
 | **chooseShoppingDisplayName(names)** | Для UI: из массива собранных имён выбирает самое короткое после «мягкой» очистки (скобки, проценты). |
+| **toShoppingDisplayUnitAndAmount(aggregationUnit, amount)** | Для UI: количество и единица в удобном виде. Мл, кратные 15, показываются в ст.л. (15 мл = 1 ст.л.); кратные 5, но не 15 — в ч.л. (5 мл = 1 ч.л.); остальные — в мл. Остальные единицы — г, кг, л, шт., ст.л., ч.л. как есть. |
 
 ### Конфиг
 
 - **STRIP_SUFFIXES** — слова, убираемые из имени при построении ключа: спелый, свежая, свежий, свежие, репчатый, репчатая.
-- **SPOON_TO_ML** — 1 tbsp = 15 ml, 1 tsp = 5 ml (только для агрегации списка).
+- **SPOON_TO_ML** — 1 tbsp = 15 ml, 1 tsp = 5 ml (только для жидкостей при агрегации).
+- **SOLID_CATEGORIES** — vegetables, fruits, meat, grains: для этих категорий ложки не конвертируются в мл (в списке остаются ст.л./ч.л.).
 
 ### Ключ агрегации
 

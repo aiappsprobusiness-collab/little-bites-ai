@@ -7,6 +7,7 @@ import type { ProductCategory } from "./useShoppingList";
 import {
   buildShoppingAggregationKey,
   chooseShoppingDisplayName,
+  toShoppingDisplayUnitAndAmount,
   type NormalizedUnit,
 } from "@/utils/shopping/normalizeIngredientForShopping";
 
@@ -38,18 +39,6 @@ function toProductCategory(cat: string | null | undefined): ProductCategory {
   if (c === "fish") return "meat";
   if (c === "fats" || c === "spices") return "other";
   return "other";
-}
-
-/** Для отображения в списке: г/мл как в карточке рецепта. */
-function toDisplayUnit(aggregationUnit: NormalizedUnit | string | null, fallbackUnit: string | null): string | null {
-  if (aggregationUnit === "g") return "г";
-  if (aggregationUnit === "ml") return "мл";
-  if (aggregationUnit === "kg") return "кг";
-  if (aggregationUnit === "l") return "л";
-  if (aggregationUnit === "pcs") return "шт.";
-  if (aggregationUnit === "tbsp") return "ст.л.";
-  if (aggregationUnit === "tsp") return "ч.л.";
-  return aggregationUnit ?? fallbackUnit ?? null;
 }
 
 /**
@@ -151,6 +140,7 @@ export function usePlanShoppingIngredients(
               unit: ing.unit,
               canonical_amount: ing.canonical_amount,
               canonical_unit: ing.canonical_unit,
+              category: ing.category,
             },
             multiplier
           );
@@ -183,13 +173,13 @@ export function usePlanShoppingIngredients(
         if (v.amountSum <= 0) continue;
         const displayName = chooseShoppingDisplayName(v.names);
         const nameForUi = displayName ? displayName.charAt(0).toUpperCase() + displayName.slice(1).toLowerCase() : displayName;
-        const rounded = Math.round(v.amountSum * 10) / 10;
+        const { displayAmount, displayUnit } = toShoppingDisplayUnitAndAmount(v.aggregationUnit, v.amountSum);
         result.push({
           name: nameForUi,
-          amount: v.amountSum,
-          unit: toDisplayUnit(v.aggregationUnit, null),
-          displayAmount: rounded,
-          displayUnit: toDisplayUnit(v.aggregationUnit, null),
+          amount: displayAmount,
+          unit: displayUnit,
+          displayAmount,
+          displayUnit,
           category: v.category,
           source_recipes: toSourceRecipes(v.sourceRecipeIds),
         });

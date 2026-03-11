@@ -100,12 +100,17 @@ export function normalizeIngredientUnitForShopping(
 /** Коэффициенты перевода ложек в мл (только для агрегации списка покупок). */
 export const SPOON_TO_ML = { tbsp: 15, tsp: 5 } as const;
 
+/** Категории, для которых ложки не переводим в мл (твёрдые/сыпучие). */
+const SOLID_CATEGORIES = new Set(["vegetables", "fruits", "meat", "grains"]);
+
 export interface ShoppingAggregationInput {
   name: string;
   amount: number | null;
   unit: string | null;
   canonical_amount: number | null;
   canonical_unit: string | null;
+  /** Категория из recipe_ingredients: для grains/vegetables/fruits/meat ложки не конвертируем в мл. */
+  category?: string | null;
 }
 
 export interface ShoppingAggregationKeyResult {
@@ -121,14 +126,13 @@ export interface ShoppingAggregationKeyResult {
 
 /**
  * Строит ключ агрегации и возвращает данные для суммирования.
- * tbsp/tsp конвертируются в ml (1 tbsp = 15 ml, 1 tsp = 5 ml).
- * Если canonical_unit g/ml есть — используем его; иначе единица из unit (г/мл → g/ml).
+ * tbsp/tsp → ml только для жидкостей (dairy, other). Для твёрдых/сыпучих (grains, vegetables, fruits, meat) оставляем ст.л./ч.л.
  */
 export function buildShoppingAggregationKey(
   input: ShoppingAggregationInput,
   multiplier: number
 ): ShoppingAggregationKeyResult | null {
-  const { name, amount, unit, canonical_amount, canonical_unit } = input;
+  const { name, amount, unit, canonical_amount, canonical_unit, category } = input;
   const normalizedName = normalizeIngredientNameForShopping(name);
   if (normalizedName === "") return null;
 
@@ -161,8 +165,18 @@ export function buildShoppingAggregationKey(
     };
   }
 
-  // Конвертация ложек в мл для единого ключа
+  // Ложки: для твёрдых/сыпучих (овсянка, мука, овощи и т.д.) не переводим в мл — в БД норма в г, в списке оставляем ст.л./ч.л.
   if (normalizedUnit === "tbsp" || normalizedUnit === "tsp") {
+    const isSolid = category != null && SOLID_CATEGORIES.has(category.trim().toLowerCase());
+    if (isSolid) {
+      if (rawAmount <= 0) return null;
+      return {
+        key: `${normalizedName}|${normalizedUnit}`,
+        aggregationUnit: normalizedUnit,
+        amountToSum: rawAmount,
+        originalName: name.trim(),
+      };
+    }
     const mlPerSpoon = SPOON_TO_ML[normalizedUnit];
     const amountMl = rawAmount * mlPerSpoon;
     if (amountMl <= 0) return null;
@@ -183,6 +197,35 @@ export function buildShoppingAggregationKey(
     amountToSum: amt,
     originalName: name.trim(),
   };
+}
+
+/**
+ * Для отображения в списке покупок: количество и единица в удобном виде.
+ * Мл по возможности показываем в ст.л./ч.л. (15 мл = 1 ст.л., 5 мл = 1 ч.л.),
+ * чтобы не было вопроса «сколько это — 15 мл масла?».
+ */
+export function toShoppingDisplayUnitAndAmount(
+  aggregationUnit: NormalizedUnit | string | null,
+  amount: number
+): { displayAmount: number; displayUnit: string } {
+  const rounded = Math.round(amount * 10) / 10;
+  if (aggregationUnit === "ml" && amount > 0) {
+    if (rounded % 15 === 0) {
+      return { displayAmount: Math.round((rounded / 15) * 10) / 10, displayUnit: "ст.л." };
+    }
+    if (rounded % 5 === 0) {
+      return { displayAmount: Math.round((rounded / 5) * 10) / 10, displayUnit: "ч.л." };
+    }
+    return { displayAmount: rounded, displayUnit: "мл" };
+  }
+  if (aggregationUnit === "g") return { displayAmount: rounded, displayUnit: "г" };
+  if (aggregationUnit === "kg") return { displayAmount: rounded, displayUnit: "кг" };
+  if (aggregationUnit === "l") return { displayAmount: rounded, displayUnit: "л" };
+  if (aggregationUnit === "pcs") return { displayAmount: rounded, displayUnit: "шт." };
+  if (aggregationUnit === "tbsp") return { displayAmount: rounded, displayUnit: "ст.л." };
+  if (aggregationUnit === "tsp") return { displayAmount: rounded, displayUnit: "ч.л." };
+  const u = String(aggregationUnit ?? "").trim();
+  return { displayAmount: rounded, displayUnit: u || "—" };
 }
 
 /**

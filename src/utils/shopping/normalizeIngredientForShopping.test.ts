@@ -4,6 +4,7 @@ import {
   normalizeIngredientUnitForShopping,
   buildShoppingAggregationKey,
   chooseShoppingDisplayName,
+  toShoppingDisplayUnitAndAmount,
   STRIP_SUFFIXES,
   SPOON_TO_ML,
 } from "./normalizeIngredientForShopping";
@@ -119,19 +120,36 @@ describe("buildShoppingAggregationKey", () => {
     expect(r2?.amountToSum).toBe(20);
   });
 
-  it("1 ст.л. + 2 ч.л. одного продукта → both in ml, same key", () => {
+  it("1 ст.л. + 2 ч.л. одного продукта (liquid/other) → both in ml, same key", () => {
     const r1 = buildShoppingAggregationKey(
-      { name: "Укроп", amount: 1, unit: "ст.л.", canonical_amount: null, canonical_unit: null },
+      { name: "Масло", amount: 1, unit: "ст.л.", canonical_amount: null, canonical_unit: null, category: "other" },
       1
     );
     const r2 = buildShoppingAggregationKey(
-      { name: "Укроп", amount: 2, unit: "ч.л.", canonical_amount: null, canonical_unit: null },
+      { name: "Масло", amount: 2, unit: "ч.л.", canonical_amount: null, canonical_unit: null, category: "other" },
       1
     );
-    expect(r1?.key).toBe("укроп|ml");
-    expect(r2?.key).toBe("укроп|ml");
+    expect(r1?.key).toBe("масло|ml");
+    expect(r2?.key).toBe("масло|ml");
     expect(r1?.amountToSum).toBe(15);
     expect(r2?.amountToSum).toBe(10);
+  });
+
+  it("овсяные хлопья grains: ст.л. не конвертируются в мл", () => {
+    const r = buildShoppingAggregationKey(
+      {
+        name: "Овсяные хлопья быстрого приготовления",
+        amount: 2,
+        unit: "ст.л.",
+        canonical_amount: null,
+        canonical_unit: null,
+        category: "grains",
+      },
+      1
+    );
+    expect(r?.key).toBe("овсяные хлопья быстрого приготовления|tbsp");
+    expect(r?.aggregationUnit).toBe("tbsp");
+    expect(r?.amountToSum).toBe(2);
   });
 
   it("Картофель 200 г и Картофель 1 шт. → different keys", () => {
@@ -180,5 +198,24 @@ describe("SPOON_TO_ML", () => {
   it("tbsp=15, tsp=5", () => {
     expect(SPOON_TO_ML.tbsp).toBe(15);
     expect(SPOON_TO_ML.tsp).toBe(5);
+  });
+});
+
+describe("toShoppingDisplayUnitAndAmount", () => {
+  it("ml: 15 → 1 ст.л., 5 → 1 ч.л., 30 → 2 ст.л.", () => {
+    expect(toShoppingDisplayUnitAndAmount("ml", 15)).toEqual({ displayAmount: 1, displayUnit: "ст.л." });
+    expect(toShoppingDisplayUnitAndAmount("ml", 5)).toEqual({ displayAmount: 1, displayUnit: "ч.л." });
+    expect(toShoppingDisplayUnitAndAmount("ml", 30)).toEqual({ displayAmount: 2, displayUnit: "ст.л." });
+  });
+  it("ml: 10 → 2 ч.л., 25 → 5 ч.л.", () => {
+    expect(toShoppingDisplayUnitAndAmount("ml", 10)).toEqual({ displayAmount: 2, displayUnit: "ч.л." });
+    expect(toShoppingDisplayUnitAndAmount("ml", 25)).toEqual({ displayAmount: 5, displayUnit: "ч.л." });
+  });
+  it("ml: некратное 5 остаётся в мл", () => {
+    expect(toShoppingDisplayUnitAndAmount("ml", 17)).toEqual({ displayAmount: 17, displayUnit: "мл" });
+  });
+  it("g → г, pcs → шт.", () => {
+    expect(toShoppingDisplayUnitAndAmount("g", 100)).toEqual({ displayAmount: 100, displayUnit: "г" });
+    expect(toShoppingDisplayUnitAndAmount("pcs", 2)).toEqual({ displayAmount: 2, displayUnit: "шт." });
   });
 });
