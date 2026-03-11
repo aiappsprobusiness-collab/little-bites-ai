@@ -41,6 +41,7 @@ function normalizeMealType(value: string | null | undefined): NormalizedMealType
 type MemberDataPool = { allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; age_months?: number; type?: string | null };
 type RecipeRowPool = {
   id: string; title: string; description: string | null; meal_type?: string | null;
+  is_soup?: boolean | null;
   max_age_months?: number | null; min_age_months?: number | null;
   recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
 };
@@ -48,7 +49,8 @@ type MealSlot = { recipe_id?: string; title?: string; plan_source?: "pool" | "ai
 
 const SANITY_BREAKFAST = ["суп", "борщ", "рагу", "плов"];
 const SANITY_LUNCH = ["сырник", "оладь", "каша", "гранола", "тост"];
-const SANITY_DINNER = ["йогурт", "творог", "печенье", "батончик", "смузи"];
+/** Супы только на обед; в слот ужина супоподобные блюда не ставим. */
+const SANITY_DINNER = ["йогурт", "творог", "печенье", "батончик", "смузи", "суп", "борщ", "щи", "солянк", "рассольник", "окрошк", "гаспачо"];
 const SANITY_SNACK = ["суп", "борщ", "рагу", "плов", "каша", "сырник"];
 function slotSanityCheck(slotType: NormalizedMealType, text: string | null | undefined): boolean {
   if (!text || typeof text !== "string") return true;
@@ -164,6 +166,7 @@ function getResolvedMealType(r: RecipeRowPool): { resolved: NormalizedMealType |
 const DISH_CATEGORY_TOKENS = [
   { token: "каша", key: "porridge" }, { token: "овсян", key: "porridge" }, { token: "гречн", key: "porridge" },
   { token: "суп", key: "soup" }, { token: "борщ", key: "soup" }, { token: "щи", key: "soup" },
+  { token: "солянк", key: "soup" }, { token: "рассольник", key: "soup" }, { token: "окрошк", key: "soup" }, { token: "гаспачо", key: "soup" },
 ];
 function inferDishCategoryKey(title: string | null | undefined, _d?: string | null, _i?: string | null): string {
   const text = (title ?? "").toLowerCase();
@@ -198,6 +201,9 @@ function getCheapFilteredCount(
     const { resolved } = getResolvedMealType(r);
     return resolved != null && resolved === slot;
   });
+  if (slot === "lunch") {
+    filtered = filtered.filter((r) => r.is_soup === true || inferDishCategoryKey(r.title, r.description, null) === "soup");
+  }
   filtered = filtered.filter((r) => passesProfileFilter(r, memberData));
   filtered = filtered.filter((r) => {
     const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
@@ -209,7 +215,7 @@ function getCheapFilteredCount(
 async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _memberId: string | null, limitCandidates: number): Promise<RecipeRowPool[]> {
   const { data: rows, error } = await supabase
     .from("recipes")
-    .select("id, title, description, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)")
+    .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, recipe_ingredients(name, display_text)")
     .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
     .order("created_at", { ascending: false })
     .limit(limitCandidates);
@@ -246,6 +252,10 @@ function pickFromPoolInMemory(
     const { resolved } = getResolvedMealType(r);
     return resolved != null && resolved === slot;
   });
+  /** Обед: только супы (и аналоги). Если подходящего нет — слот остаётся пустым. */
+  if (slot === "lunch") {
+    filtered = filtered.filter((r) => r.is_soup === true || inferDishCategoryKey(r.title, r.description, null) === "soup");
+  }
   filtered = filtered.filter((r) => passesProfileFilter(r, memberData));
   filtered = filtered.filter((r) => {
     const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");

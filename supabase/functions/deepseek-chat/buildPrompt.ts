@@ -7,6 +7,7 @@ import {
   AGE_CONTEXTS,
   AGE_CONTEXTS_SHORT,
   FREE_RECIPE_TEMPLATE,
+  MEAL_SOUP_RULES,
   PREMIUM_RECIPE_TEMPLATE,
   RECIPE_SYSTEM_RULES_V3,
   SOS_PROMPT_TEMPLATE,
@@ -265,6 +266,8 @@ export function generateRecipeSystemPromptV3(
 
 [CONTEXT]
 ${contextLines.join("\n")}
+
+${MEAL_SOUP_RULES.trim()}
 
 ${RECIPE_SYSTEM_RULES_V3.trim()}`;
 }
