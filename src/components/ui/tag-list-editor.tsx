@@ -119,7 +119,14 @@ export function TagListEditor({
             )}
           </div>
         )}
-        <label htmlFor={inputId} className={addRowClass}>
+        <form
+          className={addRowClass}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!readOnly && inputValue.trim()) onAdd(inputValue);
+          }}
+          noValidate
+        >
           <button
             type="button"
             className={addBtnClass}
@@ -134,6 +141,8 @@ export function TagListEditor({
           </button>
           <input
             id={inputId}
+            type="text"
+            autoComplete="off"
             value={inputValue}
             readOnly={readOnly}
             disabled={readOnly}
@@ -145,7 +154,8 @@ export function TagListEditor({
             }}
             onKeyDown={(e) => {
               if (readOnly) return;
-              if (e.key === "Enter" || e.key === ",") {
+              const isEnter = e.key === "Enter" || (e as React.KeyboardEvent<HTMLInputElement>).keyCode === 13;
+              if (isEnter || e.key === ",") {
                 e.preventDefault();
                 onAdd(inputValue);
               }
@@ -153,7 +163,7 @@ export function TagListEditor({
             placeholder={placeholder}
             className={useProfileChips ? profileInputClass : `flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 ${isPill ? "placeholder:text-[#9CA3AF]" : "placeholder:text-muted-foreground"}`}
           />
-        </label>
+        </form>
         {helperText && (
           <p className={useProfileChips ? profileHelperClass : isPill ? "text-[13px] text-[#9CA3AF] mt-1.5" : "text-[10px] text-muted-foreground/50 mt-0.5 truncate"}>{helperText}</p>
         )}
@@ -192,9 +202,18 @@ export function TagListEditor({
           </Badge>
         ))}
       </div>
-      <div className="flex gap-2">
+      <form
+        className="flex gap-2 flex-1 min-w-0"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!readOnly && inputValue.trim()) onAdd(inputValue);
+        }}
+        noValidate
+      >
         <Input
           id={inputId}
+          type="text"
+          autoComplete="off"
           value={inputValue}
           readOnly={readOnly}
           disabled={readOnly}
@@ -206,7 +225,8 @@ export function TagListEditor({
           }}
           onKeyDown={(e) => {
             if (readOnly) return;
-            if (e.key === "Enter" || e.key === ",") {
+            const isEnter = e.key === "Enter" || (e as React.KeyboardEvent<HTMLInputElement>).keyCode === 13;
+            if (isEnter || e.key === ",") {
               e.preventDefault();
               onAdd(inputValue);
             }
@@ -225,7 +245,7 @@ export function TagListEditor({
         >
           <Plus className="w-5 h-5" />
         </Button>
-      </div>
+      </form>
     </div>
   );
 }

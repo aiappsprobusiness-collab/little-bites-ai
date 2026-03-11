@@ -70,20 +70,19 @@ export function useDeepSeekAPI() {
     ? subscriptionStatus
     : 'free';
 
+  /** Токен для Edge: всегда через refreshSession(), чтобы не отправлять истёкший access_token (getSession() отдаёт кэш, в т.ч. просроченный). */
   const getValidAccessToken = async (): Promise<string> => {
-    const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) {
-      safeError('Failed to get auth session for AI request:', sessionError);
-    }
-    const currentToken = currentSession?.access_token ?? session?.access_token;
-    if (currentToken) return currentToken;
-
     const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
     if (refreshError) {
       safeError('Failed to refresh auth session for AI request:', refreshError);
     }
-    const refreshedToken = refreshedSession?.access_token;
-    if (refreshedToken) return refreshedToken;
+    const token = refreshedSession?.access_token;
+    if (token) return token;
+
+    const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) safeError('Failed to get auth session for AI request:', sessionError);
+    const fallbackToken = currentSession?.access_token ?? session?.access_token;
+    if (fallbackToken) return fallbackToken;
 
     throw new Error('Необходима авторизация');
   };

@@ -716,6 +716,7 @@ export default function ChatPage() {
         message?: string;
         recipes?: unknown[];
         recipe_id?: string | null;
+        auth_required_to_save?: boolean;
         blocked?: boolean;
         blocked_by?: "allergy" | "dislike";
         profile_name?: string;
@@ -856,7 +857,7 @@ export default function ChatPage() {
         let savedRecipesCount = 0;
         if (recipeIdForHistory) lastSavedRecipeTitleRef.current = finalRecipe?.title ?? null;
 
-        if (finalValidation.ok && !recipeIdForHistory) {
+        if (finalValidation.ok && !recipeIdForHistory && !response?.auth_required_to_save) {
           const mealType = detectMealType(userMessage.content);
           const SAVE_RECIPE_TIMEOUT_MS = 15_000;
           try {
@@ -914,7 +915,13 @@ export default function ChatPage() {
         }
 
         try {
-          if (!finalValidation.ok && hasRecipeFromApi) {
+          if (response?.auth_required_to_save) {
+            toast({
+              variant: "default",
+              title: "Рецепт готов",
+              description: "Войдите в аккаунт, чтобы сохранять рецепты в список.",
+            });
+          } else if (!finalValidation.ok && hasRecipeFromApi) {
             toast({
               variant: "default",
               title: "Рецепт показан",

@@ -413,9 +413,13 @@ export default function ChildProfileEditPage() {
                   </>
                 ) : (
                   <>
-                    <label
-                      htmlFor="child-allergy-add"
+                    <form
                       className="flex h-11 items-center gap-3 px-4 rounded-xl border border-[#E5E7EB] bg-white hover:border-[#7A8F4D]/40 transition-colors cursor-text w-full"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (allergyInput.trim()) allergiesHandlers.add(allergyInput);
+                      }}
+                      noValidate
                     >
                       <button
                         type="button"
@@ -428,10 +432,13 @@ export default function ChildProfileEditPage() {
                       </button>
                       <input
                         id="child-allergy-add"
+                        type="text"
+                        autoComplete="off"
                         value={allergyInput}
                         onChange={(e) => setAllergyInput(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === ",") {
+                          const isEnter = e.key === "Enter" || (e as React.KeyboardEvent<HTMLInputElement>).keyCode === 13;
+                          if (isEnter || e.key === ",") {
                             e.preventDefault();
                             allergiesHandlers.add(allergyInput);
                           }
@@ -439,7 +446,7 @@ export default function ChildProfileEditPage() {
                         placeholder="Добавить аллергию (запятая или Enter)"
                         className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground"
                       />
-                    </label>
+                    </form>
                     <p className="text-[13px] text-muted-foreground mt-1.5">
                       {!hasAccess ? "В Free доступна 1 аллергия" : "Запятая или Enter."}
                     </p>

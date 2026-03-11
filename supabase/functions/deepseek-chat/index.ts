@@ -1085,14 +1085,13 @@ serve(async (req) => {
     }
 
     let savedRecipeId: string | null = null;
+    let authRequiredToSave = false;
     if (responseRecipes.length > 0 && !fromPlanReplace) {
       if (!userId || !authHeader) {
         safeLog(JSON.stringify({ tag: "auth_failed", step: "save_recipe", requestId }));
-        return new Response(
-          JSON.stringify({ error: "unauthorized", message: "Требуется авторизация для сохранения рецепта." }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+        authRequiredToSave = true;
+        // Не возвращаем 401 — отдаём рецепт в теле, чтобы пользователь увидел результат; сохранение недоступно без авторизации.
+      } else {
       const validatedRecipe = responseRecipes[0] as RecipeJson;
       const chefAdviceToSave: string | null = validatedRecipe.chefAdvice ?? null;
       safeLog(JSON.stringify({
@@ -1222,12 +1221,13 @@ serve(async (req) => {
         }
         logPerf("db_insert", tDbStart, requestId);
       }
+      }
     }
 
     if (type === "sos_consultant") {
       safeLog("[help]", { requestId, durationMs: Date.now() - startedAt, status: "ok" });
     }
-    const responseBody: { message: string; recipes?: Array<Record<string, unknown>>; recipe_id?: string | null; usage?: unknown } = {
+    const responseBody: { message: string; recipes?: Array<Record<string, unknown>>; recipe_id?: string | null; usage?: unknown; auth_required_to_save?: boolean } = {
       message: assistantMessage,
       usage: data.usage,
     };
@@ -1236,6 +1236,9 @@ serve(async (req) => {
     }
     if (savedRecipeId) {
       responseBody.recipe_id = savedRecipeId;
+    }
+    if (authRequiredToSave) {
+      responseBody.auth_required_to_save = true;
     }
     logPerf("total_ms", t0, requestId);
     return new Response(
