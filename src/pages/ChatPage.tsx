@@ -793,13 +793,22 @@ export default function ChatPage() {
           )
         );
         try {
-          await saveChat({
+          const historyId = await saveChat({
             message: userMessage.content,
             response: rawMessage,
             recipeId: null,
             childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
             meta: blockedMeta,
           });
+          if (historyId) {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id === userMessage.id) return { ...m, id: `${historyId}-user` };
+                if (m.id === assistantMessageId) return { ...m, id: `${historyId}-assistant` };
+                return m;
+              })
+            );
+          }
         } catch (e) {
           safeError("Failed to save blocked refusal to chat history:", e);
         }
@@ -924,20 +933,38 @@ export default function ChatPage() {
               description: `${savedRecipesCount} рецепт(ов) добавлено в ваш список`,
             });
           }
-          await saveChat({
+          const historyId = await saveChat({
             message: userMessage.content,
             response: rawMessage,
             recipeId: recipeIdForHistory,
             childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
           });
+          if (historyId) {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id === userMessage.id) return { ...m, id: `${historyId}-user` };
+                if (m.id === assistantMessageId) return { ...m, id: `${historyId}-assistant` };
+                return m;
+              })
+            );
+          }
         } catch (e) {
           safeError("Failed to save recipes from chat:", e);
-          await saveChat({
+          const historyIdFallback = await saveChat({
             message: userMessage.content,
             response: rawMessage,
             recipeId: response?.recipe_id ?? null,
             childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
           });
+          if (historyIdFallback) {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id === userMessage.id) return { ...m, id: `${historyIdFallback}-user` };
+                if (m.id === assistantMessageId) return { ...m, id: `${historyIdFallback}-assistant` };
+                return m;
+              })
+            );
+          }
         }
       }
     } catch (err: any) {
@@ -1010,11 +1037,21 @@ export default function ChatPage() {
     }
   }, [mode, location.state, isLoadingHistory, messages.length, handleSend]);
 
+  /** UUID из БД (chat_history.id). Локальные id вида "user-173..." / "assistant-173..." не являются UUID. */
+  const isChatHistoryId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+
   const handleDeleteMessage = async (messageId: string) => {
     const originalId = messageId.replace(/-user$/, "").replace(/-assistant$/, "");
+    const removeFromState = () => setMessages((prev) => prev.filter((m) => !m.id.startsWith(originalId)));
+
+    if (!isChatHistoryId(originalId)) {
+      removeFromState();
+      toast({ title: "Сообщение удалено" });
+      return;
+    }
     try {
       await deleteMessage(originalId);
-      setMessages((prev) => prev.filter((m) => !m.id.startsWith(originalId)));
+      removeFromState();
       toast({ title: "Сообщение удалено" });
     } catch {
       toast({

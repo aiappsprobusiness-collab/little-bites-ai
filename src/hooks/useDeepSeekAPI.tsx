@@ -329,7 +329,7 @@ export function useDeepSeekAPI() {
 
       const childIdVal = childId ?? null;
 
-      const { error: insertError } = await supabase
+      const { data: inserted, error: insertError } = await supabase
         .from('chat_history')
         .insert({
           user_id: user.id,
@@ -339,7 +339,9 @@ export function useDeepSeekAPI() {
           message_type: messageType,
           recipe_id: recipeId ?? null,
           ...(meta && Object.keys(meta).length > 0 && { meta }),
-        });
+        })
+        .select('id')
+        .single();
 
       if (insertError) {
         safeError('SYNC ERROR:', insertError.message, insertError.details);
@@ -363,6 +365,8 @@ export function useDeepSeekAPI() {
           .in('id', toDelete);
         if (deleteError) safeError('SYNC ERROR (trim history):', deleteError.message, deleteError.details);
       }
+
+      return inserted?.id ?? null;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chat_history'] });
