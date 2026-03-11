@@ -28,3 +28,12 @@ alwaysApply: true
 - If a task changes behavior covered by a canonical document, update that canonical document in the same changeset.
 - Update only impacted canonical docs, not unrelated documentation.
 - Do not leave canonical docs outdated after changing a covered domain.
+
+**Чеклист перед завершением задачи (обязательный):**
+Перед тем как считать задачу выполненной:
+1. Код и тесты готовы.
+2. Перечисли документы в **docs/** (в т.ч. docs/architecture, docs/database, docs/decisions), которые описывают затронутое поведение или домен.
+3. Обнови эти документы в **том же коммите/changeset**, чтобы они соответствовали реализации.
+4. В ответе пользователю явно указать: какие файлы изменены, **какие документы обновлены** (или «документация не затронута», если домен не описан в docs/).
+
+Если не выполнен пункт 2–3 — задача не считается завершённой. На вопрос «внес ли ты правки в архитектурные/важные доки?» ответ должен быть конкретным (какие доки обновлены), а не «забыл» или «не обновил».
