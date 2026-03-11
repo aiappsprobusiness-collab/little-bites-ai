@@ -42,9 +42,9 @@ export interface TopicConsultationSheetProps {
   onPremiumChipTap?: () => void;
   /** Для quick topic: тексты premium-чипов. Fail-safe: не отправлять такие сообщения Free пользователю. */
   premiumChipTexts?: string[];
-  /** При LIMIT_REACHED (help 2/день) — открыть paywall с сообщением о лимите */
-  onLimitReached?: () => void;
-  /** При открытии sheet отправить это сообщение первым (hero input / быстрые чипсы). После отправки вызывается onInitialMessageSent. */
+  /** При LIMIT_REACHED (help 2/день) — открыть paywall; payload.used обновляет счётчик оставшихся запросов. */
+  onLimitReached?: (payload?: { feature: string; limit: number; used: number }) => void;
+  /** При открытии sheet подставить этот текст в поле ввода (hero чипсы / карточка «Сегодня спрашивают» / тема). Без автоотправки — отправка только по кнопке. */
   initialMessage?: string | null;
   onInitialMessageSent?: () => void;
 }
@@ -82,7 +82,8 @@ export function TopicConsultationSheet({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   /** При отправке сообщения считаем, что пользователь у низа; скроллим к ответу только тогда */
   const wasUserAtBottomRef = useRef(false);
-  const initialMessageSentRef = useRef(false);
+  /** Чтобы при сбросе initialMessage родителем не затирать уже подставленный текст */
+  const initialPrefillConsumedRef = useRef(false);
 
   const loadSession = useCallback(() => {
     if (!memberId || !topicKey) return;
@@ -93,11 +94,18 @@ export function TopicConsultationSheet({
   useEffect(() => {
     if (isOpen) {
       loadSession();
-      setInput("");
+      if (initialMessage?.trim()) {
+        setInput(initialMessage);
+        onInitialMessageSent?.();
+        initialPrefillConsumedRef.current = true;
+        inputRef.current?.focus();
+      } else if (!initialPrefillConsumedRef.current) {
+        setInput("");
+      }
     } else {
-      initialMessageSentRef.current = false;
+      initialPrefillConsumedRef.current = false;
     }
-  }, [isOpen, loadSession]);
+  }, [isOpen, initialMessage, loadSession, onInitialMessageSent]);
 
   useEffect(() => {
     if (isOpen && memberId && topicKey) loadSession();
@@ -186,8 +194,9 @@ export function TopicConsultationSheet({
         });
       } catch (err) {
         const msg = (err as { message?: string })?.message;
+        const payload = (err as { payload?: { feature: string; limit: number; used: number } })?.payload;
         if (msg === "LIMIT_REACHED" && onLimitReached) {
-          onLimitReached();
+          onLimitReached(payload);
         }
         const fallbackText =
           msg === "HELP_TIMEOUT"
@@ -204,14 +213,6 @@ export function TopicConsultationSheet({
     },
     [memberId, topicKey, messages, chat, isLocked, hasAccess, premiumChipTexts, onPremiumChipTap, onLimitReached]
   );
-
-  // Открытие с initialMessage (hero / быстрые чипсы): отправить сообщение сразу (эффект после определения sendMessage)
-  useEffect(() => {
-    if (!isOpen || !initialMessage?.trim() || isLocked || initialMessageSentRef.current) return;
-    initialMessageSentRef.current = true;
-    onInitialMessageSent?.();
-    sendMessage(initialMessage);
-  }, [isOpen, initialMessage, isLocked, onInitialMessageSent, sendMessage]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

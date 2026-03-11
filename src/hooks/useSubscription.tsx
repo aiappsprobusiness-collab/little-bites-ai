@@ -165,6 +165,13 @@ export function useSubscription() {
     queryClient.invalidateQueries({ queryKey: ["usage-help-today", user?.id] });
   };
 
+  /** Сразу выставить число использованных help-запросов (при LIMIT_REACHED), чтобы счётчик показал 0 без ожидания refetch. */
+  const setHelpUsedToday = (used: number) => {
+    if (user?.id != null && Number.isFinite(used)) {
+      queryClient.setQueryData(["usage-help-today", user.id], used);
+    }
+  };
+
   const setPlanInitialized = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("User not authenticated");
@@ -311,6 +318,7 @@ export function useSubscription() {
     incrementUsage: incrementUsage.mutateAsync,
     updateSubscriptionStatus: updateSubscriptionStatus.mutateAsync,
     refetchUsage,
+    setHelpUsedToday,
     startPayment: startPayment.mutateAsync,
     isStartingPayment: startPayment.isPending,
     cancelSubscription: cancelSubscription.mutateAsync,

@@ -23,6 +23,7 @@ export default function SosTiles() {
   const subscription = useSubscription();
   const hasAccess = subscription.hasAccess ?? false;
   const refetchUsage = subscription.refetchUsage;
+  const setHelpUsedToday = subscription.setHelpUsedToday;
   const rawHelpRemaining = subscription.helpRemaining;
   const helpRemaining =
     rawHelpRemaining != null && Number.isFinite(rawHelpRemaining) ? rawHelpRemaining : null;
@@ -212,7 +213,11 @@ export default function SosTiles() {
           hasAccess={sheetTopic.key === "quick" ? hasAccess : undefined}
           onPremiumChipTap={sheetTopic.key === "quick" ? openPaywallFromSheet : undefined}
           premiumChipTexts={sheetTopic.key === "quick" ? getPremiumQuickChipTexts() : undefined}
-          onLimitReached={() => {
+          onLimitReached={(payload) => {
+            const used = payload?.feature === "help" && typeof payload?.used === "number"
+              ? payload.used
+              : 2;
+            setHelpUsedToday?.(used);
             refetchUsage?.();
             useAppStore.getState().setPaywallCustomMessage(
               `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("help")}`

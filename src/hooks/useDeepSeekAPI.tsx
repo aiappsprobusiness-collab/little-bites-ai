@@ -227,12 +227,18 @@ export function useDeepSeekAPI() {
         if (response.status === 429) {
           const code = error?.code ?? error?.error;
           if (code === 'LIMIT_REACHED' || error?.error === 'LIMIT_REACHED') {
+            if (isHelpMode) refetchUsage?.();
             const e = new Error('LIMIT_REACHED') as Error & { payload?: { feature: string; limit: number; used: number } };
             if (error?.payload) e.payload = error.payload;
             throw e;
           }
           if (error?.error === 'usage_limit_exceeded') {
             throw new Error('usage_limit_exceeded');
+          }
+          // Для help любой 429 от бэкенда = лимит исчерпан (тело могло не распарситься)
+          if (isHelpMode) {
+            refetchUsage?.();
+            throw new Error('LIMIT_REACHED');
           }
         }
         const msg = error?.message || error?.error || `HTTP ${response.status}`;
