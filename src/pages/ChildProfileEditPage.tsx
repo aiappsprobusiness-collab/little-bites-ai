@@ -53,7 +53,10 @@ export default function ChildProfileEditPage() {
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [dislikesInput, setDislikesInput] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const initRef = useRef(false);
+  const allowNavigationRef = useRef(false);
+  const savedSuccessfullyRef = useRef(false);
 
   const isNew = id === "new";
   const member = !isNew && id ? members.find((m) => m.id === id) : null;
@@ -252,6 +255,8 @@ export default function ChildProfileEditPage() {
         }),
       });
       toast({ title: "Профиль сохранён" });
+        savedSuccessfullyRef.current = true;
+        allowNavigationRef.current = true;
         if (FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
           try {
             await startFillDay(newMember.id);
@@ -286,6 +291,8 @@ export default function ChildProfileEditPage() {
         }),
       });
       toast({ title: "Профиль сохранён" });
+      savedSuccessfullyRef.current = true;
+      allowNavigationRef.current = true;
       navigate("/profile", { replace: true });
     } catch (e: unknown) {
       toast({
@@ -320,17 +327,63 @@ export default function ChildProfileEditPage() {
     }
   }, [isNew, id, members.length, member, navigate]);
 
+  const handleBack = () => {
+    if (allowNavigationRef.current || savedSuccessfullyRef.current) {
+      navigate("/profile", { replace: true });
+      return;
+    }
+    if (hasChanges) {
+      setShowExitConfirm(true);
+      return;
+    }
+    navigate("/profile", { replace: true });
+  };
+
+  const handleExitWithoutSaving = () => {
+    allowNavigationRef.current = true;
+    setShowExitConfirm(false);
+    navigate("/profile", { replace: true });
+  };
+
+  useEffect(() => {
+    if (!hasChanges) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasChanges]);
+
+  const hasPushedStateRef = useRef(false);
+  useEffect(() => {
+    if (!hasChanges) {
+      hasPushedStateRef.current = false;
+      return;
+    }
+    if (hasPushedStateRef.current) return;
+    hasPushedStateRef.current = true;
+    window.history.pushState(null, "", window.location.pathname);
+    const onPopState = () => {
+      if (allowNavigationRef.current || savedSuccessfullyRef.current) return;
+      setShowExitConfirm(true);
+      window.history.pushState(null, "", window.location.pathname);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [hasChanges]);
+
   return (
     <MobileLayout
       title="Профиль"
       headerLeft={
-        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => navigate("/profile")} aria-label="Назад">
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={handleBack} aria-label="Назад">
           <ArrowLeft className="h-5 w-5" />
         </Button>
       }
     >
-      <div className="profile-edit-page min-h-0 flex-1 overflow-y-auto">
-        <div className="px-4 py-4 max-w-lg mx-auto flex flex-col gap-4">
+      <div className="profile-edit-page flex flex-col flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="px-4 py-4 pb-28 max-w-lg mx-auto flex flex-col gap-4">
           {loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -527,33 +580,41 @@ export default function ChildProfileEditPage() {
                 )}
               </div>
 
-              <div className="flex flex-col gap-3 pt-1">
-                <Button
-                  className="w-full py-4 bg-[#7A8F4D] hover:bg-[#6a7e41] hover:opacity-95 active:scale-[0.98] text-white border-0 rounded-xl font-semibold text-base shadow-[0_2px_8px_rgba(122,143,77,0.25)] transition-all duration-200"
-                  onClick={handleSave}
-                  disabled={isCreating || isUpdating || !hasChanges || !birthDate?.trim()}
-                >
-                  {(isCreating || isUpdating) ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Сохранить"
-                  )}
-                </Button>
-                {!isNew && member && (
+              {!isNew && member && (
+                <div className="pt-1">
                   <Button
                     variant="ghost"
-                    className="w-full h-10 mt-4 text-[#6B7280] hover:text-[#9B6B6B] hover:bg-muted/50 text-sm font-medium rounded-xl"
+                    className="w-full h-10 text-[#6B7280] hover:text-[#9B6B6B] hover:bg-muted/50 text-sm font-medium rounded-xl"
                     onClick={() => setShowDeleteConfirm(true)}
                     disabled={isDeleting}
                   >
                     <Trash2 className="h-4 w-4 mr-2 opacity-70" />
                     Удалить профиль
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
+          </div>
         </div>
+
+        {!loading && (
+          <div className="flex-shrink-0 border-t border-border/80 bg-background/95 backdrop-blur-sm shadow-[0_-2px_12px_rgba(0,0,0,0.04)] px-4 pt-3 pb-3">
+            <div className="max-w-lg mx-auto">
+              <Button
+                className="w-full py-4 bg-[#7A8F4D] hover:bg-[#6a7e41] hover:opacity-95 active:scale-[0.98] text-white border-0 rounded-xl font-semibold text-base shadow-[0_2px_8px_rgba(122,143,77,0.25)] transition-all duration-200 disabled:opacity-50"
+                onClick={handleSave}
+                disabled={isCreating || isUpdating || !hasChanges || !birthDate?.trim()}
+              >
+                {(isCreating || isUpdating) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  "Сохранить"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
@@ -571,6 +632,26 @@ export default function ChildProfileEditPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Сохранить изменения перед выходом?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Изменения в профиле не сохранены. Вы можете сохранить их или выйти без сохранения.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowExitConfirm(false)}>Остаться</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleExitWithoutSaving}
+              className="bg-muted text-muted-foreground hover:bg-muted/80"
+            >
+              Выйти без сохранения
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
