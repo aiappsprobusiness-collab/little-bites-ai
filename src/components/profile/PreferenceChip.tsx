@@ -3,29 +3,30 @@ import { X, Lock } from "lucide-react";
 
 export type PreferenceChipVariant = "allergy" | "like" | "dislike";
 
+/** Мягкие цвета для чипов: аллергии — розово-персик, любит — зелёный, не любит — нейтральный/бежевый */
 const variantStyles: Record<
   PreferenceChipVariant,
   { bg: string; text: string; border: string }
 > = {
   allergy: {
-    bg: "#FDE7E7",
-    text: "#B54747",
-    border: "#F6CACA",
+    bg: "#FCE8E4",
+    text: "#B87A6E",
+    border: "#F5D5CF",
   },
   like: {
-    bg: "#EAF4E3",
-    text: "#5E7D32",
-    border: "#D6E7C8",
+    bg: "#E8F3E2",
+    text: "#4A6B2D",
+    border: "#D4E7C8",
   },
   dislike: {
-    bg: "#F4EAD9",
-    text: "#8A6338",
-    border: "#E9D8BC",
+    bg: "#F0EDE8",
+    text: "#7A6F65",
+    border: "#E5E0D8",
   },
 };
 
 const chipBase =
-  "inline-flex items-center gap-1.5 min-h-[28px] py-0 px-[10px] rounded-[999px] text-[13px] font-medium leading-none whitespace-nowrap border cursor-default";
+  "inline-flex items-center gap-1.5 min-h-[26px] py-1 px-2.5 rounded-[10px] text-[13px] font-medium leading-none whitespace-nowrap border cursor-default";
 
 export interface PreferenceChipProps {
   label: string;

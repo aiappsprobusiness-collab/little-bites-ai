@@ -529,7 +529,7 @@ export default function ChildProfileEditPage() {
 
               <div className="flex flex-col gap-3 pt-1">
                 <Button
-                  className="w-full h-11 bg-[#7A8F4D] hover:bg-[#6a7e41] text-white border-0 rounded-[10px] font-medium"
+                  className="w-full py-4 bg-[#7A8F4D] hover:bg-[#6a7e41] hover:opacity-95 active:scale-[0.98] text-white border-0 rounded-xl font-semibold text-base shadow-[0_2px_8px_rgba(122,143,77,0.25)] transition-all duration-200"
                   onClick={handleSave}
                   disabled={isCreating || isUpdating || !hasChanges || !birthDate?.trim()}
                 >
@@ -542,11 +542,11 @@ export default function ChildProfileEditPage() {
                 {!isNew && member && (
                   <Button
                     variant="ghost"
-                    className="w-full h-11 text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-sm font-medium"
+                    className="w-full h-10 mt-4 text-[#6B7280] hover:text-[#9B6B6B] hover:bg-muted/50 text-sm font-medium rounded-xl"
                     onClick={() => setShowDeleteConfirm(true)}
                     disabled={isDeleting}
                   >
-                    <Trash2 className="h-4 w-4 mr-2" />
+                    <Trash2 className="h-4 w-4 mr-2 opacity-70" />
                     Удалить профиль
                   </Button>
                 )}
