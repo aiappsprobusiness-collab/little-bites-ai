@@ -31,8 +31,15 @@ describe("expandAllergyToTokens", () => {
     expect(tokens.some((t) => t === "milk" || t.includes("milk"))).toBe(true);
   });
 
-  it("БКМ tokens do not contain лактоз", () => {
+  it("БКМ tokens do not contain standalone лактоз (lactose sugar), but contain безлактоз/безлактозный for CMPA safety", () => {
     const { tokens } = expandAllergyToTokens("БКМ");
-    expect(tokens.some((t) => t.includes("лактоз"))).toBe(false);
+    expect(tokens).not.toContain("лактоз");
+    expect(tokens.some((t) => t === "безлактоз" || t === "безлактозный")).toBe(true);
+  });
+
+  it("БКМ tokens contain козий/козье for CMPA cross-reactivity", () => {
+    const { tokens } = expandAllergyToTokens("БКМ");
+    expect(tokens).toContain("козий");
+    expect(tokens).toContain("козье");
   });
 });

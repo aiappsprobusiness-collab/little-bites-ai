@@ -1174,11 +1174,11 @@ export default function ChatPage() {
                 </DropdownMenu>
               )}
             </div>
-            <div className="mt-1.5">
-              <ChatModeHint
-                mode={isFamilySelected(selectedMemberId, members) ? "family" : "member"}
-              />
-            </div>
+            {!isFamilySelected(selectedMemberId, members) && (
+              <div className="mt-1.5">
+                <ChatModeHint mode="member" />
+              </div>
+            )}
             {chatHeaderMeta != null && <div className="mt-0.5">{chatHeaderMeta}</div>}
           </div>
         )}
@@ -1187,7 +1187,7 @@ export default function ChatPage() {
         <div
           ref={messagesContainerRef}
           onScroll={handleMessagesScroll}
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-0.5 space-y-3 pb-3"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-0.5 space-y-3 pb-3 px-4"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {/* Статус при смене профиля: 1.5 сек, плавное появление/исчезновение (резерв 20px без сдвига) */}
@@ -1236,7 +1236,7 @@ export default function ChatPage() {
               transition={{ duration: 0.28, ease: "easeOut" }}
               className="flex justify-start"
             >
-              <div className="rounded-2xl p-4 bg-muted/80 border border-border max-w-[85%]">
+              <div className="max-w-[80%] rounded-2xl p-4 bg-card shadow-soft">
                 <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                   {recipesOnboardingContent.kind === "family" ? (
                     recipesOnboardingContent.text
@@ -1316,27 +1316,21 @@ export default function ChatPage() {
         {/* Input: единый стиль, 16px padding, divider */}
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-6 safe-bottom max-w-full overflow-x-hidden">
           {mode === "recipes" && !input.trim() && (
-            <div className="mb-2 space-y-1.5">
-              <p className="text-xs text-muted-foreground">Попробуйте спросить:</p>
-              <div
-                className="flex gap-2 overflow-x-auto overflow-y-hidden min-w-0 scrollbar-none pb-0.5"
-                style={{ WebkitOverflowScrolling: "touch" }}
-              >
-                {CHAT_QUICK_SUGGESTIONS.map((phrase) => (
-                  <button
-                    key={phrase}
-                    type="button"
-                    onClick={() => {
-                      setInput(phrase);
-                      markHintsSeen();
-                      textareaRef.current?.focus();
-                    }}
-                    className="shrink-0 rounded-full px-3.5 py-2 text-[13px] border border-border bg-card text-foreground hover:border-primary/40 hover:bg-primary/[0.06] active:scale-[0.98] transition-all"
-                  >
-                    {phrase}
-                  </button>
-                ))}
-              </div>
+            <div className="mb-2 flex gap-2 overflow-x-auto overflow-y-hidden min-w-0 scrollbar-none pb-0.5" style={{ WebkitOverflowScrolling: "touch" }}>
+              {CHAT_QUICK_SUGGESTIONS.map((phrase) => (
+                <button
+                  key={phrase}
+                  type="button"
+                  onClick={() => {
+                    setInput(phrase);
+                    markHintsSeen();
+                    textareaRef.current?.focus();
+                  }}
+                  className="shrink-0 rounded-full px-3 py-1.5 text-[13px] bg-neutral-100 text-foreground hover:bg-neutral-200/80 active:scale-[0.98] transition-all"
+                >
+                  {phrase}
+                </button>
+              ))}
             </div>
           )}
           <div className="flex w-full items-center gap-2 min-w-0">

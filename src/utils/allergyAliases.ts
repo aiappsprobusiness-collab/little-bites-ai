@@ -18,7 +18,7 @@ export const ALLERGY_ALIASES: AllergyAlias[] = [
     canonical: "белок коровьего молока",
     display: "БКМ",
     aliases: ["бкм", "абкм", "cmpa", "cow milk protein", "milk protein"],
-    tokens: ["молок", "сливк", "йогурт", "сыр", "творог", "кефир", "ряженк", "сметан", "масло сливочн", "казеин", "сыворот", "lactalbum", "casein", "whey", "milk", "dairy", "cheese", "yogurt"],
+    tokens: ["молок", "сливк", "йогурт", "сыр", "творог", "кефир", "ряженк", "сметан", "масло сливочн", "казеин", "сыворот", "lactalbum", "casein", "whey", "milk", "dairy", "cheese", "yogurt", "коз", "козий", "козье", "безлактоз", "безлактозный", "goat", "lactose-free"],
   },
   {
     canonical: "лактоза",

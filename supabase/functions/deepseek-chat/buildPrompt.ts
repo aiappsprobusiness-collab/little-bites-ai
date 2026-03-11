@@ -6,6 +6,7 @@
 import {
   AGE_CONTEXTS,
   AGE_CONTEXTS_SHORT,
+  CMPA_SAFETY_RULE,
   FREE_RECIPE_TEMPLATE,
   MEAL_SOUP_RULES,
   PREMIUM_RECIPE_TEMPLATE,
@@ -268,6 +269,8 @@ export function generateRecipeSystemPromptV3(
 ${contextLines.join("\n")}
 
 ${MEAL_SOUP_RULES.trim()}
+
+${CMPA_SAFETY_RULE.trim()}
 
 ${RECIPE_SYSTEM_RULES_V3.trim()}`;
 }
