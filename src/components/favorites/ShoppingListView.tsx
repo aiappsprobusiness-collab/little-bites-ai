@@ -13,9 +13,12 @@ import {
 import { usePlanShoppingIngredients } from "@/hooks/usePlanShoppingIngredients";
 import { usePlanSignature } from "@/hooks/usePlanSignature";
 import { useFamily } from "@/contexts/FamilyContext";
+import { useAuth } from "@/hooks/useAuth";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import { formatShoppingListForCopy, formatShoppingListForShare } from "@/utils/shoppingListTextFormatter";
+import { getSharedPlanUrlForRange } from "@/services/sharedPlan";
 import {
   Sheet,
   SheetContent,
@@ -43,15 +46,6 @@ const CATEGORY_LABEL: Record<ProductCategory, string> = {
   grains: "Крупы и злаки",
   other: "Прочее",
 };
-
-function formatItemLine(item: { name: string; amount: number | null; unit: string | null }): string {
-  const name = capitalizeIngredientName(item.name);
-  const a = item.amount != null && item.amount > 0 ? item.amount : null;
-  const u = normalizeUnitForDisplay(item.unit);
-  if (a != null && u) return `${name} — ${a} ${u}`;
-  if (a != null) return `${name} — ${a}`;
-  return name;
-}
 
 function formatItemShort(item: ShoppingListItemRow): string {
   const name = capitalizeIngredientName(item.name);
@@ -153,6 +147,7 @@ function ShoppingListItem({
 
 export function ShoppingListView() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const { selectedMemberId } = useFamily();
   const memberId = selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId;
   const [range, setRange] = useState<"today" | "week">("today");
@@ -220,29 +215,32 @@ export function ShoppingListView() {
   };
 
   const handleCopy = () => {
-    const lines = filteredItems.map((i) => (i.is_purchased ? `☑ ${formatItemLine(i)}` : `☐ ${formatItemLine(i)}`));
-    const text = lines.join("\n") || "Список пуст";
+    const itemsForFormat = items.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit, category: i.category }));
+    const text = formatShoppingListForCopy(itemsForFormat, range);
     navigator.clipboard?.writeText(text).then(
       () => toast({ title: "Скопировано" }),
       () => toast({ variant: "destructive", title: "Не удалось скопировать" })
     );
   };
 
-  const handleShare = () => {
-    const lines = filteredItems.map((i) => `• ${formatItemLine(i)}`);
-    const text = `Список покупок\n\n${lines.join("\n")}` || "Список пуст";
-    if (navigator.share) {
-      navigator.share({ title: "Список покупок", text }).then(
-        () => toast({ title: "Поделились" }),
-        (e: unknown) => {
-          if ((e as Error)?.name !== "AbortError") toast({ variant: "destructive", title: "Не удалось поделиться" });
-        }
-      );
-    } else {
-      navigator.clipboard?.writeText(text).then(
-        () => toast({ title: "Скопировано" }),
-        () => toast({ variant: "destructive", title: "Не удалось скопировать" })
-      );
+  const handleShare = async () => {
+    if (!user?.id) return;
+    const itemsForFormat = items.map((i) => ({ name: i.name, amount: i.amount, unit: i.unit, category: i.category }));
+    try {
+      const shareUrl = await getSharedPlanUrlForRange(user.id, memberId, range);
+      const title = range === "today" ? "Список продуктов на сегодня" : "Список продуктов на неделю";
+      const text = formatShoppingListForShare(itemsForFormat, range, shareUrl);
+      if (navigator.share) {
+        await navigator.share({ title, text });
+        toast({ title: "Поделились" });
+      } else {
+        await navigator.clipboard?.writeText(text);
+        toast({ title: "Скопировано" });
+      }
+    } catch (e: unknown) {
+      if ((e as Error)?.name !== "AbortError") {
+        toast({ variant: "destructive", title: "Не удалось поделиться" });
+      }
     }
   };
 
@@ -425,7 +423,7 @@ export function ShoppingListView() {
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-muted-foreground" onClick={handleCopy}>
           <Copy className="w-3.5 h-3.5" />
-          <span className="text-xs">Копировать</span>
+          <span className="text-xs">Копировать список</span>
         </Button>
         <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-muted-foreground" onClick={handleShare}>
           <ShareIosIcon className="w-3.5 h-3.5" />
