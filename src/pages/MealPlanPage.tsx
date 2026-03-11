@@ -145,19 +145,21 @@ const mealTypes = [
   { id: "dinner", label: "Ужин", emoji: "🍽", time: "18:00" },
 ];
 
+/** Месяца в родительном падеже для дат: "11 марта", "9 февраля". */
+const MONTHS_GENITIVE = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
+
 /** Russian date: "Понедельник, 9 февраля" — weekday capitalized, month genitive lowercase */
 function formatDayHeader(date: Date): string {
   const weekday = date.toLocaleDateString("ru-RU", { weekday: "long" });
   const capitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
   const day = date.getDate();
-  const monthsGenitive = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
-  const month = monthsGenitive[date.getMonth()];
+  const month = MONTHS_GENITIVE[date.getMonth()];
   return `${capitalized}, ${day} ${month}`;
 }
 
-/** Короткая дата для карточки: "15 фев" */
+/** Короткая дата: "11 марта" (родительный падеж месяца). */
 function formatShortDate(date: Date): string {
-  return `${date.getDate()} ${date.toLocaleDateString("ru-RU", { month: "short" })}`;
+  return `${date.getDate()} ${MONTHS_GENITIVE[date.getMonth()]}`;
 }
 
 export default function MealPlanPage() {
