@@ -201,8 +201,7 @@ export function buildShoppingAggregationKey(
 
 /**
  * Для отображения в списке покупок: количество и единица в удобном виде.
- * Мл по возможности показываем в ст.л./ч.л. (15 мл = 1 ст.л., 5 мл = 1 ч.л.),
- * чтобы не было вопроса «сколько это — 15 мл масла?».
+ * Мл: при amount >= 30 показываем миллилитры (не переводим в десятки ложек); при меньших — ст.л./ч.л.
  */
 export function toShoppingDisplayUnitAndAmount(
   aggregationUnit: NormalizedUnit | string | null,
@@ -210,6 +209,9 @@ export function toShoppingDisplayUnitAndAmount(
 ): { displayAmount: number; displayUnit: string } {
   const rounded = Math.round(amount * 10) / 10;
   if (aggregationUnit === "ml" && amount > 0) {
+    if (amount >= 30) {
+      return { displayAmount: rounded, displayUnit: "мл" };
+    }
     if (rounded % 15 === 0) {
       return { displayAmount: Math.round((rounded / 15) * 10) / 10, displayUnit: "ст.л." };
     }
@@ -226,6 +228,21 @@ export function toShoppingDisplayUnitAndAmount(
   if (aggregationUnit === "tsp") return { displayAmount: rounded, displayUnit: "ч.л." };
   const u = String(aggregationUnit ?? "").trim();
   return { displayAmount: rounded, displayUnit: u || "—" };
+}
+
+/**
+ * Форматирование количества для отображения: дроби для шт. (0.5 → 1/2, 0.25 → 1/4, 0.75 → 3/4).
+ */
+export function formatAmountForDisplay(amount: number | null, unit: string | null): string {
+  if (amount == null || !Number.isFinite(amount)) return "";
+  const u = (unit ?? "").trim().toLowerCase();
+  if (u !== "шт." && u !== "pcs" && u !== "штука" && u !== "штук") {
+    return String(amount);
+  }
+  if (Math.abs(amount - 0.5) < 0.01) return "1/2";
+  if (Math.abs(amount - 0.25) < 0.01) return "1/4";
+  if (Math.abs(amount - 0.75) < 0.01) return "3/4";
+  return String(amount);
 }
 
 /**

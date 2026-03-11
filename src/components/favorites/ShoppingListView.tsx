@@ -18,6 +18,7 @@ import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { formatShoppingListForCopy, formatShoppingListForShare } from "@/utils/shoppingListTextFormatter";
+import { formatAmountForDisplay } from "@/utils/shopping/normalizeIngredientForShopping";
 import { getSharedPlanUrlForRange } from "@/services/sharedPlan";
 import {
   Sheet,
@@ -51,8 +52,9 @@ function formatItemShort(item: ShoppingListItemRow): string {
   const name = capitalizeIngredientName(item.name);
   const a = item.amount != null && item.amount > 0 ? item.amount : null;
   const u = normalizeUnitForDisplay(item.unit);
-  if (a != null && u) return `${name}, ${a} ${u}`;
-  if (a != null) return `${name}, ${a}`;
+  const amountStr = a != null ? formatAmountForDisplay(a, item.unit) : "";
+  if (a != null && u) return `${name}, ${amountStr} ${u}`;
+  if (a != null) return `${name}, ${amountStr}`;
   return name;
 }
 
