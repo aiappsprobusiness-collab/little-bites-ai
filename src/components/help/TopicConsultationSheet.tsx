@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Send, Loader2, MoreVertical, X } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   Sheet,
   SheetContent,
@@ -23,6 +21,7 @@ import {
   type TopicSessionMessage,
 } from "@/stores/helpTopicSessions";
 import type { HelpChipItem } from "@/data/helpTopicChips";
+import { HelpResponseBlocks } from "@/components/help/HelpResponseBlocks";
 import { cn } from "@/lib/utils";
 
 const MAX_MESSAGES = 12;
@@ -39,6 +38,9 @@ export interface TopicConsultationSheetProps {
   onOpenPremium?: () => void;
   /** При LIMIT_REACHED (help 2/день) — открыть paywall с сообщением о лимите */
   onLimitReached?: () => void;
+  /** При открытии sheet отправить это сообщение первым (hero input / быстрые чипсы). После отправки вызывается onInitialMessageSent. */
+  initialMessage?: string | null;
+  onInitialMessageSent?: () => void;
 }
 
 export function TopicConsultationSheet({
@@ -51,10 +53,16 @@ export function TopicConsultationSheet({
   lockedDescription,
   onOpenPremium,
   onLimitReached,
+  initialMessage,
+  onInitialMessageSent,
 }: TopicConsultationSheetProps) {
   const { selectedMemberId, members } = useFamily();
   const { chat } = useDeepSeekAPI();
-  const memberId = selectedMemberId ?? members[0]?.id ?? "";
+  /** "family" = общий ответ / уточнить о ком речь; иначе id ребёнка для персонального ответа. */
+  const memberId =
+    selectedMemberId === "family" || selectedMemberId == null
+      ? "family"
+      : selectedMemberId || members[0]?.id || "family";
 
   const [messages, setMessages] = useState<TopicSessionMessage[]>([]);
   const [input, setInput] = useState("");
@@ -65,6 +73,7 @@ export function TopicConsultationSheet({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   /** При отправке сообщения считаем, что пользователь у низа; скроллим к ответу только тогда */
   const wasUserAtBottomRef = useRef(false);
+  const initialMessageSentRef = useRef(false);
 
   const loadSession = useCallback(() => {
     if (!memberId || !topicKey) return;
@@ -76,7 +85,8 @@ export function TopicConsultationSheet({
     if (isOpen) {
       loadSession();
       setInput("");
-      // Не фокусируем input при открытии — клавиатура не выезжает, чипсы видны
+    } else {
+      initialMessageSentRef.current = false;
     }
   }, [isOpen, loadSession]);
 
@@ -99,7 +109,7 @@ export function TopicConsultationSheet({
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || !memberId || !topicKey || isLocked) return;
+      if (!trimmed || !topicKey || isLocked) return;
 
       const userMsg: TopicSessionMessage = {
         id: `u-${Date.now()}`,
@@ -173,6 +183,14 @@ export function TopicConsultationSheet({
     },
     [memberId, topicKey, messages, chat, isLocked, onLimitReached]
   );
+
+  // Открытие с initialMessage (hero / быстрые чипсы): отправить сообщение сразу (эффект после определения sendMessage)
+  useEffect(() => {
+    if (!isOpen || !initialMessage?.trim() || isLocked || initialMessageSentRef.current) return;
+    initialMessageSentRef.current = true;
+    onInitialMessageSent?.();
+    sendMessage(initialMessage);
+  }, [isOpen, initialMessage, isLocked, onInitialMessageSent, sendMessage]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -327,11 +345,7 @@ export function TopicConsultationSheet({
                           <p className="break-words whitespace-pre-wrap">{m.content}</p>
                         ) : (
                           <>
-                            <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-foreground text-sm leading-[1.6]">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {m.content}
-                              </ReactMarkdown>
-                            </div>
+                            <HelpResponseBlocks content={m.content ?? ""} />
                             {(m.content === "Ответ занимает больше времени. Попробуйте ещё раз." ||
                               m.content === "Ошибка отправки. Попробуйте ещё раз.") &&
                               index === messages.length - 1 &&

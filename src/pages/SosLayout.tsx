@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { SosProvider } from "@/contexts/SosContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 /**
  * Layout для /sos: хранит историю сообщений по сценариям и рендерит дочерний роут.
@@ -9,7 +10,9 @@ import { SosProvider } from "@/contexts/SosContext";
 export default function SosLayout() {
   return (
     <SosProvider>
-      <Outlet />
+      <ErrorBoundary>
+        <Outlet />
+      </ErrorBoundary>
     </SosProvider>
   );
 }

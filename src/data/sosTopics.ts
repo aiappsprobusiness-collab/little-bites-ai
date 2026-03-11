@@ -526,6 +526,49 @@ export const HELP_CATEGORY_LABELS: Record<HelpTopicCategory, string> = {
   allergy: "Аллергии",
 };
 
+/** Группы для отображения тем на вкладке Help: заголовок секции + список тем. */
+export type HelpTopicGroupId = "feeding" | "baby" | "allergy" | "routine";
+
+export const HELP_TOPIC_GROUP_LABELS: Record<HelpTopicGroupId, string> = {
+  feeding: "Питание",
+  baby: "Малыш",
+  allergy: "Аллергии",
+  routine: "Режим",
+};
+
+const TOPIC_GROUP_MAP: Record<string, HelpTopicGroupId> = {
+  new_food: "feeding",
+  food_diary: "feeding",
+  allergy: "allergy",
+  constipation_diarrhea: "baby",
+  spitting_up: "baby",
+  food_refusal: "baby",
+  urgent_help: "baby",
+  routine: "routine",
+};
+
+export function getTopicGroup(topicId: string): HelpTopicGroupId {
+  return TOPIC_GROUP_MAP[topicId] ?? "baby";
+}
+
+const GROUP_ORDER: HelpTopicGroupId[] = ["feeding", "baby", "allergy", "routine"];
+
+export function getTopicsGroupedBySection(): { groupId: HelpTopicGroupId; title: string; topics: SosTopicConfig[] }[] {
+  const byId = new Map(TOPICS.map((t) => [t.id, t]));
+  const byGroup = new Map<HelpTopicGroupId, string[]>();
+  for (const id of SOS_TOPIC_ORDER) {
+    if (!byId.has(id)) continue;
+    const g = getTopicGroup(id);
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g)!.push(id);
+  }
+  return GROUP_ORDER.map((groupId) => {
+    const ids = byGroup.get(groupId) ?? [];
+    const topics = ids.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];
+    return { groupId, title: HELP_TOPIC_GROUP_LABELS[groupId], topics };
+  }).filter((s) => s.topics.length > 0);
+}
+
 export function getQuickHelpTopics(): SosTopicConfig[] {
   const byId = new Map(TOPICS.map((t) => [t.id, t]));
   return QUICK_HELP_TOPIC_IDS.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];

@@ -69,6 +69,21 @@ export function useSubscription() {
     enabled: !!user && (profileV2 == null || profileV2.status === "free"),
   });
 
+  /** Использовано вопросов к Помощнику (help) сегодня. Нужно для отображения лимита на вкладке Help. */
+  const { data: helpUsedToday } = useQuery({
+    queryKey: ["usage-help-today", user?.id],
+    queryFn: async () => {
+      if (!user) return 0;
+      const { data, error } = await supabase.rpc("get_usage_count_today", {
+        p_user_id: user.id,
+        p_feature: "help",
+      });
+      if (error) throw error;
+      return typeof data === "number" ? data : 0;
+    },
+    enabled: !!user,
+  });
+
   const UNLIMITED_ACCESS_EMAILS = ["alesah007@gmail.com"];
   const hasUnlimitedAccess = user?.email && UNLIMITED_ACCESS_EMAILS.includes(user.email);
 
@@ -119,6 +134,11 @@ export function useSubscription() {
   const canGenerate = hasUnlimitedAccess ? true : hasAccess ? true : !limitExceeded;
   const canSendAi = !limitExceeded;
 
+  const helpDailyLimit = limits.helpDailyLimit ?? (effectiveStatus === "free" ? 2 : null);
+  const helpUsed = helpUsedToday ?? 0;
+  const helpRemaining = helpDailyLimit === null ? null : Math.max(0, helpDailyLimit - helpUsed);
+  const helpLimitExceeded = helpDailyLimit !== null && helpUsed >= helpDailyLimit;
+
   /** Дни до окончания trial (то же значение для UI). */
   const trialDaysRemaining = trialRemainingDays;
 
@@ -142,6 +162,7 @@ export function useSubscription() {
     queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
     queryClient.invalidateQueries({ queryKey: ["subscription-plan", user?.id] });
     queryClient.invalidateQueries({ queryKey: ["usage-chat-recipe-today", user?.id] });
+    queryClient.invalidateQueries({ queryKey: ["usage-help-today", user?.id] });
   };
 
   const setPlanInitialized = useMutation({
@@ -284,6 +305,8 @@ export function useSubscription() {
     aiDailyLimit,
     trialDaysRemaining,
     favoritesLimit,
+    helpRemaining,
+    helpLimitExceeded,
     isLoading: isLoadingProfile,
     incrementUsage: incrementUsage.mutateAsync,
     updateSubscriptionStatus: updateSubscriptionStatus.mutateAsync,

@@ -47,7 +47,7 @@ export function SosTopicGrid({
               </div>
               {locked && (
                 <span className="text-[10px] font-medium text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md shrink-0">
-                  Premium
+                  ⭐ Premium
                 </span>
               )}
               <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden />

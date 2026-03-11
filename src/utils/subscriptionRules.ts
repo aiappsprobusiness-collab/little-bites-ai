@@ -14,6 +14,8 @@ export interface SubscriptionLimitsConfig {
   helpUnlockedBlocks: number;
   /** null = лимит отсутствует (безлимит). number = макс. AI-запросов в день. */
   aiDailyLimit: number | null;
+  /** Лимит вопросов к Помощнику (help) в день. null = безлимит. */
+  helpDailyLimit: number | null;
 }
 
 export const SUBSCRIPTION_LIMITS: {
@@ -27,6 +29,7 @@ export const SUBSCRIPTION_LIMITS: {
     preferencesEnabled: false,
     helpUnlockedBlocks: 3,
     aiDailyLimit: 2,
+    helpDailyLimit: 2,
   },
   paid: {
     maxProfiles: 10,
@@ -35,6 +38,7 @@ export const SUBSCRIPTION_LIMITS: {
     preferencesEnabled: true,
     helpUnlockedBlocks: 8,
     aiDailyLimit: null,
+    helpDailyLimit: null,
   },
 };
 

@@ -7,31 +7,27 @@ import { SosHero } from "@/components/sos/SosHero";
 import { SosTopicGrid } from "@/components/sos/SosTopicGrid";
 import { Paywall } from "@/components/subscription/Paywall";
 import { TopicConsultationSheet } from "@/components/help/TopicConsultationSheet";
-import {
-  getQuickHelpTopics,
-  getRegimeTopics,
-  getTopicCategory,
-  getSosTopicConfig,
-  HELP_CATEGORY_LABELS,
-  type SosTopicConfig,
-  type HelpTopicCategory,
-} from "@/data/sosTopics";
+import { getSosTopicConfig, getTopicsGroupedBySection, type SosTopicConfig } from "@/data/sosTopics";
 import { getChipsForTopic } from "@/data/helpTopicChips";
 import { getTopicById } from "@/constants/sos";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { useAppStore } from "@/store/useAppStore";
-import { cn } from "@/lib/utils";
 import { trackUsageEvent } from "@/utils/usageEvents";
 
 export default function SosTiles() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { selectedMember, members } = useFamily();
-  const { hasAccess } = useSubscription();
+  const subscription = useSubscription();
+  const hasAccess = subscription.hasAccess ?? false;
+  const rawHelpRemaining = subscription.helpRemaining;
+  const helpRemaining =
+    rawHelpRemaining != null && Number.isFinite(rawHelpRemaining) ? rawHelpRemaining : null;
+  const helpLimitExceeded = Boolean(subscription.helpLimitExceeded);
 
   const [paywallOpen, setPaywallOpen] = useState(false);
-  const [topicFilter, setTopicFilter] = useState<HelpTopicCategory>("all");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [initialMessage, setInitialMessage] = useState<string | null>(null);
   const [sheetTopic, setSheetTopic] = useState<{
     key: string;
     title: string;
@@ -40,15 +36,13 @@ export default function SosTiles() {
     lockedDescription?: string;
   } | null>(null);
 
-  const allTopics = useMemo(
-    () => [...getQuickHelpTopics(), ...getRegimeTopics()],
-    []
-  );
-
-  const filteredTopics = useMemo(() => {
-    if (topicFilter === "all") return allTopics;
-    return allTopics.filter((t) => getTopicCategory(t.id) === topicFilter);
-  }, [allTopics, topicFilter]);
+  const groupedSections = useMemo(() => {
+    try {
+      return getTopicsGroupedBySection();
+    } catch {
+      return [];
+    }
+  }, []);
 
   useEffect(() => {
     trackUsageEvent("help_open");
@@ -71,6 +65,7 @@ export default function SosTiles() {
     if (!key) return;
     const topicConfig = getSosTopicConfig(key);
     const topicMeta = getTopicById(key);
+    setInitialMessage(null);
     if (topicConfig) {
       trackUsageEvent("help_topic_open", { properties: { topic_id: topicConfig.id } });
       setSheetTopic({
@@ -100,9 +95,21 @@ export default function SosTiles() {
     main?.scrollTo(0, 0);
   }, []);
 
+  const handleOpenWithMessage = (text: string) => {
+    setSheetTopic({
+      key: "quick",
+      title: "Помощник рядом",
+      chips: getChipsForTopic("quick"),
+      isLocked: false,
+    });
+    setInitialMessage(text);
+    setSheetOpen(true);
+  };
+
   const handleTopicSelect = (topic: SosTopicConfig) => {
     const locked = topic.requiredTier === "paid" && !hasAccess;
     trackUsageEvent("help_topic_open", { properties: { topic_id: topic.id } });
+    setInitialMessage(null);
     setSheetTopic({
       key: topic.id,
       title: topic.title,
@@ -119,51 +126,38 @@ export default function SosTiles() {
 
   const handleCloseSheet = () => {
     setSheetOpen(false);
+    setInitialMessage(null);
   };
 
   return (
     <MobileLayout showNav>
-      <div className="px-4 pb-4 pt-0 bg-background min-h-full">
+      <div className="flex flex-col min-h-0 flex-1 px-4 pb-4 pt-0 bg-background">
         {members.length === 0 && (
-          <p className="text-sm text-muted-foreground text-center py-2 mb-1">
+          <p className="text-sm text-muted-foreground text-center py-2 mb-1 shrink-0">
             Добавьте ребёнка в профиле, чтобы получать рекомендации по темам.
           </p>
         )}
-        <SosHero />
+        <div className="shrink-0 pb-2">
+          <SosHero
+            onOpenWithMessage={handleOpenWithMessage}
+            helpRemaining={helpRemaining}
+            helpLimitExceeded={helpLimitExceeded}
+            disabled={helpLimitExceeded}
+          />
+        </div>
 
-        <div className="mt-3">
-          <section className="space-y-3">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Темы</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Выберите ситуацию</p>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none" style={{ scrollbarWidth: "none" }}>
-              {(["all", "feeding", "routine", "allergy"] as HelpTopicCategory[]).map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setTopicFilter(cat)}
-                  className={cn(
-                    "shrink-0 h-9 px-4 rounded-full text-sm font-semibold border transition-colors duration-200",
-                    topicFilter === cat
-                      ? "bg-primary/10 border-primary/20 text-foreground"
-                      : "bg-transparent border border-border text-muted-foreground hover:text-foreground hover:border-border"
-                  )}
-                >
-                  {HELP_CATEGORY_LABELS[cat]}
-                </button>
-              ))}
-            </div>
-          </section>
-          <div className="pb-24">
-            <SosTopicGrid
-              className="mt-2"
-              topics={filteredTopics}
-              hasAccess={hasAccess}
-              onSelect={handleTopicSelect}
-              onLockedSelect={handleLockedTopic}
-            />
-          </div>
+        <div className="flex-1 min-h-0 overflow-y-auto mt-4 pb-24 space-y-6">
+          {groupedSections.map((section) => (
+            <section key={section.groupId} className="space-y-3">
+              <h2 className="text-base font-semibold text-foreground">{section.title}</h2>
+              <SosTopicGrid
+                topics={section.topics}
+                hasAccess={hasAccess}
+                onSelect={handleTopicSelect}
+                onLockedSelect={handleLockedTopic}
+              />
+            </section>
+          ))}
         </div>
       </div>
 
@@ -183,6 +177,8 @@ export default function SosTiles() {
             );
             setPaywallOpen(true);
           }}
+          initialMessage={initialMessage}
+          onInitialMessageSent={() => setInitialMessage(null)}
         />
       )}
 
