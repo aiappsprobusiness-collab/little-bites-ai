@@ -15,9 +15,20 @@
 
 ---
 
+## Глобальное включение/выключение рекламы
+
+Показ рекламы управляется переменной окружения **`VITE_ENABLE_ADS`**:
+
+- **`VITE_ENABLE_ADS=true`** — реклама работает по описанной ниже логике.
+- **`VITE_ENABLE_ADS=false`** или не задано — реклама не показывается (блок с вызовом `adProvider.show()` не выполняется). Архитектура `RewardedAdProvider` / `StubRewardedAdProvider` сохраняется для быстрого включения позже.
+
+В `.env` в корне проекта можно задать, например: `VITE_ENABLE_ADS=false`.
+
+---
+
 ## Условие показа рекламы
 
-Реклама показывается **только если одновременно**:
+Реклама показывается **только если одновременно** (и при `VITE_ENABLE_ADS=true`):
 
 - **Режим чата** — `mode === "recipes"` (вкладка «Рецепты», не «Помощь маме»).
 - **Пользователь без доступа** — `!hasAccess` (нет trial и не premium).
@@ -28,7 +39,8 @@
 Фрагмент в `ChatPage.tsx`:
 
 ```ts
-if (mode === "recipes" && !hasAccess && usedToday >= 1) {
+const ADS_ENABLED = import.meta.env.VITE_ENABLE_ADS === "true";
+if (ADS_ENABLED && mode === "recipes" && !hasAccess && usedToday >= 1) {
   const adProvider = (await import("@/services/ads/StubRewardedAdProvider").then((m) => m.getRewardedAdProvider()));
   if (adProvider.isAvailable()) {
     try {

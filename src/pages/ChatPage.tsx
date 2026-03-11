@@ -586,7 +586,8 @@ export default function ChatPage() {
       return;
     }
 
-    if (mode === "recipes" && !hasAccess && usedToday >= 1) {
+    const ADS_ENABLED = import.meta.env.VITE_ENABLE_ADS === "true";
+    if (ADS_ENABLED && mode === "recipes" && !hasAccess && usedToday >= 1) {
       const adProvider = (await import("@/services/ads/StubRewardedAdProvider").then((m) => m.getRewardedAdProvider()));
       if (adProvider.isAvailable()) {
         try {
