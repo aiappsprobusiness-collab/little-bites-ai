@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, startTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Send, Loader2, Lightbulb, MoreVertical, Trash2 } from "lucide-react";
+import { Send, Loader2, MoreVertical, Trash2 } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { TopBarIconButton } from "@/components/layout/TopBar";
 import { Button } from "@/components/ui/button";
@@ -112,11 +112,11 @@ const RECIPE_GENERATION_PHRASES = [
   
 ];
 
-/** Быстрые чипсы над полем ввода в стартовом состоянии (режим рецептов). Тап — вставка в поле. */
-const CHAT_STARTER_CHIPS = [
+/** Быстрые подсказки над полем ввода (режим рецептов). Показ только при пустом поле. Тап — вставка в поле, без автоотправки. */
+const CHAT_QUICK_SUGGESTIONS = [
   "Завтрак с кальцием",
-  "Без молока",
   "Быстрый ужин",
+  "Без молока",
   "Перекус в дорогу",
 ];
 
@@ -263,10 +263,6 @@ export default function ChatPage() {
   }, []);
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const helpButtonRef = useRef<HTMLButtonElement>(null);
-  /** Мягкий акцент на кнопке «Идеи» при пустом чате: 2 pulse за сессию. */
-  const [showHintPulseAccent, setShowHintPulseAccent] = useState(false);
-  const hintPulseShownRef = useRef(false);
 
   // Ротация подсказок в placeholder (режим рецептов, поле пустое, не идёт генерация)
   useEffect(() => {
@@ -576,16 +572,6 @@ export default function ChatPage() {
 
   const showStarter = messages.length === 0 && (mode === "help" || !isLoadingHistory);
   const hasUserMessage = messages.some((m) => m.role === "user");
-
-  /** Пустой чат (recipes): один раз за сессию 2 pulse на кнопке "?". Без зависимости от производной константы — только примитивы, чтобы избежать TDZ в prod-бандле. */
-  useEffect(() => {
-    const isEmptyHintState = showStarter && !hasUserMessage && members.length > 0 && mode === "recipes" && (hintsSeen || quickPrompts.length === 0);
-    if (!isEmptyHintState || hintPulseShownRef.current) return;
-    hintPulseShownRef.current = true;
-    setShowHintPulseAccent(true);
-    const t = setTimeout(() => setShowHintPulseAccent(false), 2000);
-    return () => clearTimeout(t);
-  }, [showStarter, hasUserMessage, members.length, mode, hintsSeen, quickPrompts]);
 
   const sendInProgressRef = useRef(false);
   const handleSend = useCallback(async (text?: string) => {
@@ -1137,6 +1123,27 @@ export default function ChatPage() {
     return `Аллергии: ${first}${rest}`;
   }, [mode, selectedMemberId, selectedMember, members]);
 
+  /** Системное onboarding-сообщение в пустом чате (режим рецептов): только UI, не в истории и не в API. */
+  const showRecipesOnboarding =
+    mode === "recipes" &&
+    messages.length === 0 &&
+    !isLoadingHistory &&
+    members.length > 0;
+  const recipesOnboardingContent = useMemo(() => {
+    if (!showRecipesOnboarding) return null;
+    const isFamily = selectedMemberId === "family";
+    if (isFamily) {
+      return {
+        kind: "family" as const,
+        text: "Я помогу подобрать блюда для всей семьи,\nучитывая возраст и особенности питания.\n\nНапишите запрос или выберите подсказку ниже.",
+      };
+    }
+    return {
+      kind: "member" as const,
+      profileName: selectedMember?.name ?? "профиль",
+    };
+  }, [showRecipesOnboarding, selectedMemberId, selectedMember?.name]);
+
   return (
     <MobileLayout showNav>
       <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg overflow-hidden">
@@ -1222,6 +1229,29 @@ export default function ChatPage() {
             </motion.div>
           )}
 
+          {showRecipesOnboarding && recipesOnboardingContent && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.28, ease: "easeOut" }}
+              className="flex justify-start"
+            >
+              <div className="rounded-2xl p-4 bg-muted/80 border border-border max-w-[85%]">
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                  {recipesOnboardingContent.kind === "family" ? (
+                    recipesOnboardingContent.text
+                  ) : (
+                    <>
+                      Я помогу подобрать блюда для профиля <strong>{recipesOnboardingContent.profileName}</strong>, учитывая возраст и особенности питания.
+                      {"\n\n"}
+                      Напишите запрос или выберите подсказку ниже.
+                    </>
+                  )}
+                </p>
+              </div>
+            </motion.div>
+          )}
+
           {mode === "recipes" && isLoadingHistory && (
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -1285,16 +1315,14 @@ export default function ChatPage() {
 
         {/* Input: единый стиль, 16px padding, divider */}
         <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-6 safe-bottom max-w-full overflow-x-hidden">
-          {mode === "recipes" && showStarter && !hasUserMessage && members.length > 0 && (
+          {mode === "recipes" && !input.trim() && (
             <div className="mb-2 space-y-1.5">
-              <p className="text-xs text-muted-foreground">
-                Подберите блюдо по запросу — например: завтрак с кальцием, ужин без молока
-              </p>
+              <p className="text-xs text-muted-foreground">Попробуйте спросить:</p>
               <div
-                className="flex gap-2 overflow-x-auto overflow-y-hidden min-w-0 scrollbar-none"
+                className="flex gap-2 overflow-x-auto overflow-y-hidden min-w-0 scrollbar-none pb-0.5"
                 style={{ WebkitOverflowScrolling: "touch" }}
               >
-                {CHAT_STARTER_CHIPS.map((phrase) => (
+                {CHAT_QUICK_SUGGESTIONS.map((phrase) => (
                   <button
                     key={phrase}
                     type="button"
@@ -1303,7 +1331,7 @@ export default function ChatPage() {
                       markHintsSeen();
                       textareaRef.current?.focus();
                     }}
-                    className="shrink-0 rounded-full px-3.5 py-2 text-[13px] bg-primary-light border border-primary-border text-foreground hover:bg-primary-light/90 active:scale-[0.98] transition-all"
+                    className="shrink-0 rounded-full px-3.5 py-2 text-[13px] border border-border bg-card text-foreground hover:border-primary/40 hover:bg-primary/[0.06] active:scale-[0.98] transition-all"
                   >
                     {phrase}
                   </button>
@@ -1344,18 +1372,6 @@ export default function ChatPage() {
               />
             </div>
             <div className="flex items-center gap-2 shrink-0 relative">
-              {mode === "recipes" && (
-                <button
-                  ref={helpButtonRef}
-                  type="button"
-                  onClick={() => setShowHintsModal(true)}
-                  title="Идеи для запроса"
-                  className={`h-10 rounded-full pl-3 pr-3.5 py-2 bg-muted border border-border text-muted-foreground flex items-center justify-center gap-1.5 hover:bg-muted/80 hover:text-foreground active:scale-95 transition-all text-[13px] font-medium ${showHintPulseAccent ? "chat-hint-btn-pulse" : ""}`}
-                >
-                  <Lightbulb className="w-4 h-4 shrink-0" />
-                  <span>Идеи</span>
-                </button>
-              )}
               <button
                 type="button"
                 disabled={!input.trim() || isChatting}
