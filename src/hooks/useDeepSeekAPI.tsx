@@ -226,9 +226,9 @@ export function useDeepSeekAPI() {
         const error = await response.json().catch(() => ({}));
         if (response.status === 429) {
           const code = error?.code ?? error?.error;
-          if (code === 'LIMIT_REACHED' && error?.payload?.feature) {
+          if (code === 'LIMIT_REACHED' || error?.error === 'LIMIT_REACHED') {
             const e = new Error('LIMIT_REACHED') as Error & { payload?: { feature: string; limit: number; used: number } };
-            e.payload = error.payload;
+            if (error?.payload) e.payload = error.payload;
             throw e;
           }
           if (error?.error === 'usage_limit_exceeded') {

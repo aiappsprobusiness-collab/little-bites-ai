@@ -15,6 +15,10 @@ export interface SosHeroProps {
   helpLimitExceeded?: boolean;
   /** Заблокировать ввод и чипсы при 0 лимите (опционально). */
   disabled?: boolean;
+  /** Есть доступ (Premium/Trial). Для Free при тапе по premium-чипу открывать paywall. */
+  hasAccess?: boolean;
+  /** Вызвать при тапе по premium-чипу у Free пользователя — открыть paywall. */
+  onPremiumChipTap?: () => void;
 }
 
 export function SosHero({
@@ -22,6 +26,8 @@ export function SosHero({
   helpRemaining,
   helpLimitExceeded,
   disabled = false,
+  hasAccess = true,
+  onPremiumChipTap,
 }: SosHeroProps) {
   const [inputValue, setInputValue] = useState("");
 
@@ -33,9 +39,13 @@ export function SosHero({
     setInputValue("");
   };
 
-  const handleChipClick = (text: string) => {
+  const handleChipClick = (chip: (typeof QUICK_HELP_CHIPS)[0]) => {
     if (disabled) return;
-    onOpenWithMessage(text);
+    if (chip.access === "paid" && !hasAccess && onPremiumChipTap) {
+      onPremiumChipTap();
+      return;
+    }
+    onOpenWithMessage(chip.text);
   };
 
   return (
@@ -79,6 +89,10 @@ export function SosHero({
           </Button>
         </div>
 
+        <p className="text-[11px] text-muted-foreground/90 leading-snug">
+          Ответы носят информационный характер и не заменяют консультацию врача.
+        </p>
+
         {helpRemaining != null && Number.isFinite(helpRemaining) && (
           <p
             className={cn(
@@ -93,17 +107,26 @@ export function SosHero({
         )}
 
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 scrollbar-none" style={{ scrollbarWidth: "none" }}>
-          {QUICK_HELP_CHIPS.map((chip) => (
-            <button
-              key={chip.label}
-              type="button"
-              onClick={() => handleChipClick(chip.text)}
-              disabled={disabled}
-              className="shrink-0 px-3 py-2 rounded-full text-[13px] font-medium border border-border bg-background text-foreground hover:bg-muted/30 active:bg-muted/50 transition-colors whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none"
-            >
-              {chip.label}
-            </button>
-          ))}
+          {QUICK_HELP_CHIPS.map((chip) => {
+            const isPremium = chip.access === "paid" && !hasAccess;
+            return (
+              <button
+                key={`${chip.label}-${chip.access ?? "free"}`}
+                type="button"
+                onClick={() => handleChipClick(chip)}
+                disabled={disabled}
+                className={cn(
+                  "shrink-0 px-3 py-2 rounded-full text-[13px] font-medium border transition-colors whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1",
+                  isPremium
+                    ? "border-amber-200 bg-amber-50/80 text-foreground hover:bg-amber-100/80 active:bg-amber-100"
+                    : "border-border bg-background text-foreground hover:bg-muted/30 active:bg-muted/50"
+                )}
+              >
+                {isPremium && <span className="text-[10px] text-amber-600" aria-hidden>⭐</span>}
+                {chip.label}
+              </button>
+            );
+          })}
         </div>
       </form>
     </div>

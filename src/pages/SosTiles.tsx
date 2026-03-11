@@ -8,11 +8,15 @@ import { SosTopicGrid } from "@/components/sos/SosTopicGrid";
 import { Paywall } from "@/components/subscription/Paywall";
 import { TopicConsultationSheet } from "@/components/help/TopicConsultationSheet";
 import { getSosTopicConfig, getTopicsGroupedBySection, type SosTopicConfig } from "@/data/sosTopics";
-import { getChipsForTopic } from "@/data/helpTopicChips";
+import { getChipsForTopic, getPremiumQuickChipTexts, isPremiumQuickChipText } from "@/data/helpTopicChips";
 import { getTopicById } from "@/constants/sos";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { ChevronRight } from "lucide-react";
+
+/** Вопрос для блока «Сегодня спрашивают» — по тапу открывается chat sheet и отправляется этот prompt. */
+const POPULAR_QUESTION_TODAY = "Ребёнок не хочет есть овощи — что делать?";
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -20,6 +24,7 @@ export default function SosTiles() {
   const { selectedMember, members } = useFamily();
   const subscription = useSubscription();
   const hasAccess = subscription.hasAccess ?? false;
+  const refetchUsage = subscription.refetchUsage;
   const rawHelpRemaining = subscription.helpRemaining;
   const helpRemaining =
     rawHelpRemaining != null && Number.isFinite(rawHelpRemaining) ? rawHelpRemaining : null;
@@ -96,6 +101,10 @@ export default function SosTiles() {
   }, []);
 
   const handleOpenWithMessage = (text: string) => {
+    if (!hasAccess && isPremiumQuickChipText(text)) {
+      setPaywallOpen(true);
+      return;
+    }
     setSheetTopic({
       key: "quick",
       title: "Помощник рядом",
@@ -124,6 +133,13 @@ export default function SosTiles() {
     setPaywallOpen(true);
   };
 
+  /** Открыть paywall поверх экрана: сначала закрыть sheet, чтобы paywall был виден. */
+  const openPaywallFromSheet = () => {
+    setSheetOpen(false);
+    setInitialMessage(null);
+    setPaywallOpen(true);
+  };
+
   const handleCloseSheet = () => {
     setSheetOpen(false);
     setInitialMessage(null);
@@ -143,7 +159,28 @@ export default function SosTiles() {
             helpRemaining={helpRemaining}
             helpLimitExceeded={helpLimitExceeded}
             disabled={helpLimitExceeded}
+            hasAccess={hasAccess}
+            onPremiumChipTap={() => setPaywallOpen(true)}
           />
+        </div>
+
+        <div className="shrink-0 mt-3">
+          <div className="rounded-2xl border border-border bg-card shadow-soft p-4">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Сегодня спрашивают
+            </p>
+            <button
+              type="button"
+              onClick={() => handleOpenWithMessage(POPULAR_QUESTION_TODAY)}
+              disabled={helpLimitExceeded}
+              className="w-full flex items-center gap-3 text-left rounded-xl py-2 -mx-1 px-2 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+            >
+              <span className="flex-1 text-sm font-medium text-foreground leading-snug">
+                {POPULAR_QUESTION_TODAY}
+              </span>
+              <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto mt-4 pb-24 space-y-6">
@@ -171,11 +208,15 @@ export default function SosTiles() {
           isLocked={sheetTopic.isLocked}
           lockedDescription={sheetTopic.lockedDescription}
           onOpenPremium={sheetTopic.isLocked ? handleLockedTopic : undefined}
+          hasAccess={sheetTopic.key === "quick" ? hasAccess : undefined}
+          onPremiumChipTap={sheetTopic.key === "quick" ? openPaywallFromSheet : undefined}
+          premiumChipTexts={sheetTopic.key === "quick" ? getPremiumQuickChipTexts() : undefined}
           onLimitReached={() => {
+            refetchUsage?.();
             useAppStore.getState().setPaywallCustomMessage(
               `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("help")}`
             );
-            setPaywallOpen(true);
+            openPaywallFromSheet();
           }}
           initialMessage={initialMessage}
           onInitialMessageSent={() => setInitialMessage(null)}

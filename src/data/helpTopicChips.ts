@@ -6,17 +6,34 @@
 export interface HelpChipItem {
   label: string;
   text: string;
+  /** Для quick chips: free = доступно всем, paid = только Premium/Trial. */
+  access?: "free" | "paid";
 }
 
-/** Чипсы для входа в консультацию без выбора темы (hero + быстрые ситуации). */
-export const QUICK_HELP_CHIPS: HelpChipItem[] = [
-  { label: "🍽 Не хочет есть", text: "Ребёнок не хочет есть. Что делать?" },
-  { label: "🤢 Срыгивания", text: "Срыгивания у ребёнка: норма или проблема? Что делать?" },
-  { label: "⚠️ Аллергия", text: "Аллергия или реакция на продукт — что делать? Сыпь, краснота." },
-  { label: "💩 Стул малыша", text: "Стул малыша: норма или повод волноваться? Частота, консистенция." },
-  { label: "⏰ Режим кормления", text: "График кормления: подходит ли возрасту? Режим и объёмы." },
-  { label: "🥣 Ест только пюре", text: "Ребёнок ест только пюре, отказывается от кусочков. Что делать?" },
+/** Чипсы для входа в консультацию без выбора темы (hero + chat sheet). Порядок: Free, затем Premium. */
+const QUICK_HELP_CHIPS_RAW: HelpChipItem[] = [
+  { label: "Новый продукт", text: "Как безопасно ввести новый продукт?", access: "free" },
+  { label: "Стул малыша", text: "Стул малыша: норма или повод волноваться?", access: "free" },
+  { label: "Не хочет есть", text: "Ребёнок не хочет есть — что делать?", access: "paid" },
+  { label: "Срыгивания", text: "Срыгивания: норма или проблема?", access: "paid" },
+  { label: "Аллергия", text: "Аллергия или реакция — что делать?", access: "paid" },
+  { label: "Режим кормления", text: "График кормления: подходит ли возрасту?", access: "paid" },
+  { label: "Когда срочно к врачу", text: "Когда срочно обращаться к врачу?", access: "paid" },
+  { label: "Дневник питания", text: "Дневник питания: записать и получить совет", access: "paid" },
 ];
+
+export const QUICK_HELP_CHIPS: HelpChipItem[] = [...QUICK_HELP_CHIPS_RAW];
+
+/** Тексты prompt'ов, которые считаются Premium (для quick topic). Fail-safe: не отправлять Free пользователю. */
+export function getPremiumQuickChipTexts(): string[] {
+  return QUICK_HELP_CHIPS_RAW.filter((c) => c.access === "paid").map((c) => c.text);
+}
+
+/** Проверка: является ли текст prompt'ом премиум-чипа (нормализованное сравнение по trim). */
+export function isPremiumQuickChipText(text: string): boolean {
+  const t = text.trim();
+  return QUICK_HELP_CHIPS_RAW.some((c) => c.access === "paid" && c.text.trim() === t);
+}
 
 export const HELP_TOPIC_CHIPS: Record<string, { label: string; text: string }[]> = {
   quick: QUICK_HELP_CHIPS,

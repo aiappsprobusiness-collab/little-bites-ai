@@ -36,6 +36,12 @@ export interface TopicConsultationSheetProps {
   isLocked?: boolean;
   lockedDescription?: string;
   onOpenPremium?: () => void;
+  /** Для quick topic: есть доступ (Premium/Trial). Если false, тап по premium-чипу открывает paywall. */
+  hasAccess?: boolean;
+  /** Для quick topic: вызвать при тапе по premium-чипу у Free пользователя (открыть paywall). */
+  onPremiumChipTap?: () => void;
+  /** Для quick topic: тексты premium-чипов. Fail-safe: не отправлять такие сообщения Free пользователю. */
+  premiumChipTexts?: string[];
   /** При LIMIT_REACHED (help 2/день) — открыть paywall с сообщением о лимите */
   onLimitReached?: () => void;
   /** При открытии sheet отправить это сообщение первым (hero input / быстрые чипсы). После отправки вызывается onInitialMessageSent. */
@@ -52,6 +58,9 @@ export function TopicConsultationSheet({
   isLocked = false,
   lockedDescription,
   onOpenPremium,
+  hasAccess = true,
+  onPremiumChipTap,
+  premiumChipTexts,
   onLimitReached,
   initialMessage,
   onInitialMessageSent,
@@ -110,6 +119,18 @@ export function TopicConsultationSheet({
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || !topicKey || isLocked) return;
+
+      // Fail-safe: quick topic — не отправлять premium prompt Free пользователю
+      if (
+        topicKey === "quick" &&
+        premiumChipTexts?.length &&
+        premiumChipTexts.some((p) => p.trim() === trimmed) &&
+        !hasAccess &&
+        onPremiumChipTap
+      ) {
+        onPremiumChipTap();
+        return;
+      }
 
       const userMsg: TopicSessionMessage = {
         id: `u-${Date.now()}`,
@@ -181,7 +202,7 @@ export function TopicConsultationSheet({
         setIsSending(false);
       }
     },
-    [memberId, topicKey, messages, chat, isLocked, onLimitReached]
+    [memberId, topicKey, messages, chat, isLocked, hasAccess, premiumChipTexts, onPremiumChipTap, onLimitReached]
   );
 
   // Открытие с initialMessage (hero / быстрые чипсы): отправить сообщение сразу (эффект после определения sendMessage)
@@ -202,9 +223,13 @@ export function TopicConsultationSheet({
     setMessages([]);
   };
 
-  /** Чипс вставляет text в input, не отправляет */
+  /** Чипс: premium без доступа → paywall; иначе вставить text в input */
   const handleChipClick = (chip: HelpChipItem) => {
     if (isLocked) return;
+    if (chip.access === "paid" && !hasAccess && onPremiumChipTap) {
+      onPremiumChipTap();
+      return;
+    }
     setInput(chip.text);
     inputRef.current?.focus();
   };
@@ -296,20 +321,33 @@ export function TopicConsultationSheet({
                 Выберите быстрый вопрос или опишите своими словами
               </p>
 
-              {/* Чип-ряд: мягкие pill, тонкая рамка, короткое active */}
+              {/* Чип-ряд: Free сначала, затем Premium (с маркером для Free пользователя) */}
               <div className="shrink-0 px-4 pb-2">
                 <div className="flex gap-2 overflow-x-auto pb-1 flex-nowrap overflow-y-hidden">
-                  {chips.map((chip) => (
-                    <button
-                      key={chip.label}
-                      type="button"
-                      onClick={() => handleChipClick(chip)}
-                      disabled={isSending}
-                      className="shrink-0 px-3 py-2 rounded-full text-[13px] font-medium border border-border/80 bg-background text-foreground hover:bg-muted/30 active:bg-primary/5 active:border-primary/20 transition-colors duration-200 whitespace-nowrap"
-                    >
-                      {chip.label}
-                    </button>
-                  ))}
+                  {[...chips]
+                    .sort((a, b) => (a.access === "free" ? 0 : 1) - (b.access === "free" ? 0 : 1))
+                    .map((chip) => {
+                      const isPremiumLocked = chip.access === "paid" && !hasAccess;
+                      return (
+                        <button
+                          key={chip.text}
+                          type="button"
+                          onClick={() => handleChipClick(chip)}
+                          disabled={isSending}
+                          className={cn(
+                            "shrink-0 px-3 py-2 rounded-full text-[13px] font-medium border transition-colors duration-200 whitespace-nowrap flex items-center gap-1",
+                            isPremiumLocked
+                              ? "border-amber-200 bg-amber-50/80 text-foreground hover:bg-amber-100/80 active:bg-amber-100"
+                              : "border-border/80 bg-background text-foreground hover:bg-muted/30 active:bg-primary/5 active:border-primary/20"
+                          )}
+                        >
+                          {isPremiumLocked && (
+                            <span className="text-[10px] text-amber-600" aria-hidden>⭐</span>
+                          )}
+                          {chip.label}
+                        </button>
+                      );
+                    })}
                 </div>
               </div>
 
