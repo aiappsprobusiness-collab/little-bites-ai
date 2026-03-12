@@ -1,7 +1,6 @@
 import { ingredientDisplayLabel, type IngredientItem } from "@/types/recipe";
 import type { ParsedIngredient } from "@/utils/parseChatRecipes";
 import { capitalizeIngredientName, shortenIngredientName } from "@/utils/ingredientDisplay";
-import { recipeIngredientsSectionTitle } from "@/theme/recipeTokens";
 import { servingsLabel } from "@/utils/servingsLabel";
 import { cn } from "@/lib/utils";
 
@@ -55,27 +54,27 @@ export function RecipeIngredientList({
   className,
 }: RecipeIngredientListProps) {
   const label = servingsLabel(servingsCount);
-  const title = `Ингредиенты (на ${servingsCount} ${label})`;
+  const subtitle = `На ${servingsCount} ${label}`;
 
   if (ingredients.length === 0) {
     return (
       <div className={className}>
-        <p className={cn(recipeIngredientsSectionTitle, "mb-1.5")} aria-hidden>
-          <span className="text-sm opacity-80" aria-hidden>🥣</span>
-          {title}
+        <p className="text-sm font-semibold text-foreground mb-0" aria-hidden>
+          Ингредиенты
         </p>
-        <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+        <p className="text-[11px] text-muted-foreground/80 mt-0.5">{subtitle}</p>
+        <p className="text-xs text-muted-foreground mt-1">{emptyLabel}</p>
       </div>
     );
   }
 
   return (
     <div className={className}>
-      <p className={cn(recipeIngredientsSectionTitle, "mb-2")} aria-hidden>
-        <span className="text-sm opacity-80" aria-hidden>🥣</span>
-        {title}
+      <p className="text-sm font-semibold text-foreground mb-0" aria-hidden>
+        Ингредиенты
       </p>
-      <ul className="space-y-0 divide-y divide-[rgba(0,0,0,0.05)]" aria-label={title}>
+      <p className="text-[11px] text-muted-foreground/80 mt-0.5 mb-2">{subtitle}</p>
+      <ul className="space-y-0 divide-y divide-[rgba(0,0,0,0.05)]" aria-label={`Ингредиенты, ${subtitle}`}>
         {ingredients.map((ing, idx) => {
           const displayText = getDisplayText(ing, overrides[idx] ?? scaledOverrides?.[idx]);
           const { name, amount } = splitNameAndAmount(displayText);

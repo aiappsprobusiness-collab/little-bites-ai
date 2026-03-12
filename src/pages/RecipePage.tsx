@@ -197,22 +197,28 @@ export default function RecipePage() {
 
   const [overrides, setOverrides] = useState<IngredientOverrides>({});
   const [servingsSelected, setServingsSelected] = useState(1);
+  const userHasChangedServingsRef = useRef(false);
 
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
 
-  // Синхронизируем порции: из слота плана (from plan) или из рецепта
+  // Синхронизируем порции: из слота плана (from plan) или из рецепта. Не перезатираем локальный выбор пользователя до завершения сохранения.
   useEffect(() => {
     if (!recipe?.id) return;
     if (fromMealPlan && slotServings != null && slotServings >= 1) {
-      setServingsSelected(slotServings);
+      if (!userHasChangedServingsRef.current) {
+        setServingsSelected(slotServings);
+      } else if (slotServings === servingsSelected) {
+        userHasChangedServingsRef.current = false;
+      }
       return;
     }
+    userHasChangedServingsRef.current = false;
     const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
     const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
     const defaultServings = base >= 4 ? base : recommended;
     setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
-  }, [recipe?.id, fromMealPlan, slotServings]);
+  }, [recipe?.id, fromMealPlan, slotServings, servingsSelected]);
 
   // Сохранение порций слота плана при изменении пользователем (debounce); не сохраняем, если значение совпадает со слотом
   const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -469,7 +475,10 @@ export default function RecipePage() {
           <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
             <motion.button
               type="button"
-              onClick={() => setServingsSelected((s) => Math.max(1, s - 1))}
+              onClick={() => {
+                userHasChangedServingsRef.current = true;
+                setServingsSelected((s) => Math.max(1, s - 1));
+              }}
               whileTap={{ scale: 0.96 }}
               transition={{ duration: 0.1 }}
               className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
@@ -482,7 +491,10 @@ export default function RecipePage() {
             </span>
             <motion.button
               type="button"
-              onClick={() => setServingsSelected((s) => Math.min(20, s + 1))}
+              onClick={() => {
+                userHasChangedServingsRef.current = true;
+                setServingsSelected((s) => Math.min(20, s + 1));
+              }}
               whileTap={{ scale: 0.96 }}
               transition={{ duration: 0.1 }}
               className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"

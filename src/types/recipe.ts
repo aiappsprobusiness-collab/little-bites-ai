@@ -1,3 +1,5 @@
+import { formatIngredientAmountForDisplay, localizeAmountUnitInDisplayText } from "@/utils/formatIngredientAmount";
+
 /** canonical_unit: только g/ml для будущего списка покупок. */
 export type IngredientCanonicalUnit = "g" | "ml";
 
@@ -46,15 +48,24 @@ export function ingredientDisplayLabel(ing: IngredientItem | { name?: string; di
     if (trimmed.length < 3) {
       /* fallback to name + amount + unit if display_text too short */
     } else {
-      if (name && trimmed.toLowerCase().includes(name.toLowerCase())) return trimmed;
-      return name ? `${name} — ${trimmed}` : trimmed;
+      const localized = localizeAmountUnitInDisplayText(trimmed);
+      if (name && localized.toLowerCase().includes(name.toLowerCase())) return localized;
+      return name ? `${name} — ${localized}` : localized;
     }
   }
   const note = (ing as { note?: string }).note;
   if (typeof note === "string" && note.trim()) return name ? `${name} — ${note.trim()}` : note.trim();
   const amt = (ing as { amount?: number | null }).amount;
   const unit = (ing as { unit?: string | null }).unit;
-  const part = [name, amt != null ? String(amt) : "", unit ?? ""].join(" ").trim();
+  if (amt != null && (unit != null && unit !== "")) {
+    const suffix = formatIngredientAmountForDisplay(amt, unit);
+    return name ? `${name} — ${suffix}` : suffix;
+  }
+  if (amt != null) {
+    const suffix = formatIngredientAmountForDisplay(amt, null);
+    return name ? `${name} — ${suffix}` : suffix;
+  }
+  const part = [name, unit ?? ""].filter(Boolean).join(" ").trim();
   if (part) return part;
   return name || "Ингредиент";
 }
@@ -78,15 +89,13 @@ export function scaleIngredientDisplay(
   const unit = (ing as { unit?: string | null }).unit ?? "";
   if (canonical_amount != null && canonical_unit) {
     const scaled = canonical_amount * multiplier;
-    const rounded = Math.round(scaled * 10) / 10;
-    const suffix = `${rounded} ${canonical_unit}`;
+    const suffix = formatIngredientAmountForDisplay(scaled, canonical_unit);
     return name ? `${name} — ${suffix}` : suffix;
   }
   if (amount != null && (unit || canonical_unit)) {
     const scaled = amount * multiplier;
     const u = unit || (canonical_unit ?? "");
-    const rounded = Math.round(scaled * 10) / 10;
-    const suffix = u ? `${rounded} ${u}` : String(rounded);
+    const suffix = u ? formatIngredientAmountForDisplay(scaled, u) : formatIngredientAmountForDisplay(scaled, null);
     return name ? `${name} — ${suffix}` : suffix;
   }
   return ingredientDisplayLabel(ing as IngredientItem);

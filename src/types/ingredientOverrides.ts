@@ -6,6 +6,7 @@
 
 import type { IngredientItem } from "./recipe";
 import { ingredientDisplayLabel, scaleIngredientDisplay } from "./recipe";
+import { formatIngredientAmountForDisplay } from "@/utils/formatIngredientAmount";
 
 export type IngredientOverrideAction = "swap" | "skip" | "reduce";
 
@@ -83,17 +84,19 @@ export function applyIngredientOverrides(
       const canonical_amount = (ing as { canonical_amount?: number }).canonical_amount;
       const canonical_unit = (ing as { canonical_unit?: string }).canonical_unit;
       if (canonical_amount != null && canonical_unit) {
+        const scaledAmount = Math.round(canonical_amount * scale * 10) / 10;
         scaledIng = {
           ...ing,
-          canonical_amount: Math.round(canonical_amount * scale * 10) / 10,
-          display_text: `${name} — ${Math.round(canonical_amount * scale * 10) / 10} ${canonical_unit}`,
+          canonical_amount: scaledAmount,
+          amount: scaledAmount,
+          unit: canonical_unit,
         };
       } else if (amount != null) {
         const scaledAmount = Math.round(amount * scale * 10) / 10;
         scaledIng = {
           ...ing,
           amount: scaledAmount,
-          display_text: unit ? `${name} — ${scaledAmount} ${unit}` : `${name} — ${scaledAmount}`,
+          unit: unit ?? undefined,
         };
       }
     }
@@ -109,7 +112,7 @@ export function applyIngredientOverrides(
       const displayName = to.name ?? ing.name;
       const suffix =
         scaledToAmount != null && (to.canonical_unit ?? to.unit)
-          ? ` — ${scaledToAmount} ${to.canonical_unit ?? to.unit ?? ""}`
+          ? ` — ${formatIngredientAmountForDisplay(scaledToAmount, to.canonical_unit ?? to.unit ?? "")}`
           : "";
       displayItems.push({
         ...scaledIng,
@@ -129,9 +132,9 @@ export function applyIngredientOverrides(
       const reduced = amt != null ? Math.round(amt * ratio * 10) / 10 : undefined;
       const displayText =
         reduced != null && unit
-          ? `${ingWithAmount.name ?? ""} — ${reduced} ${unit}`
+          ? `${ingWithAmount.name ?? ""} — ${formatIngredientAmountForDisplay(reduced, unit)}`
           : reduced != null
-            ? `${ingWithAmount.name ?? ""} — ${reduced}`
+            ? `${ingWithAmount.name ?? ""} — ${formatIngredientAmountForDisplay(reduced, null)}`
             : ingredientDisplayLabel(scaledIng);
       displayItems.push({
         ...scaledIng,
