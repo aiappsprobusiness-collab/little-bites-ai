@@ -1,6 +1,7 @@
 import { ingredientDisplayLabel, type IngredientItem } from "@/types/recipe";
 import type { ParsedIngredient } from "@/utils/parseChatRecipes";
-import { recipeSectionLabel } from "@/theme/recipeTokens";
+import { capitalizeIngredientName, shortenIngredientName } from "@/utils/ingredientDisplay";
+import { recipeIngredientsSectionTitle } from "@/theme/recipeTokens";
 import { servingsLabel } from "@/utils/servingsLabel";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +28,14 @@ function splitNameAndAmount(displayText: string): { name: string; amount: string
   };
 }
 
+/** Сырое имя ингредиента из объекта (name) или из display-строки. */
+function getRawName(item: IngredientDisplayItem, displayText: string): string {
+  if (typeof item === "object" && item !== null && "name" in item && typeof (item as { name: string }).name === "string") {
+    return (item as { name: string }).name.trim();
+  }
+  return splitNameAndAmount(displayText).name;
+}
+
 export interface RecipeIngredientListProps {
   ingredients: IngredientDisplayItem[];
   overrides?: IngredientOverrides;
@@ -45,37 +54,43 @@ export function RecipeIngredientList({
   emptyLabel = "ИИ уточняет состав…",
   className,
 }: RecipeIngredientListProps) {
+  const label = servingsLabel(servingsCount);
+  const title = `Ингредиенты (на ${servingsCount} ${label})`;
+
   if (ingredients.length === 0) {
     return (
       <div className={className}>
-        <p className={cn(recipeSectionLabel, "mb-1.5")}>
-          Ингредиенты (на {servingsCount} {servingsLabel(servingsCount)})
+        <p className={cn(recipeIngredientsSectionTitle, "mb-1.5")} aria-hidden>
+          <span className="text-sm opacity-80" aria-hidden>🥣</span>
+          {title}
         </p>
         <p className="text-xs text-muted-foreground">{emptyLabel}</p>
       </div>
     );
   }
 
-  const label = servingsLabel(servingsCount);
-  const title = `Ингредиенты (на ${servingsCount} ${label})`;
-
   return (
     <div className={className}>
-      <p className={cn(recipeSectionLabel, "mb-2")}>{title}</p>
-      <ul className="space-y-0 divide-y divide-border/60" aria-label={title}>
+      <p className={cn(recipeIngredientsSectionTitle, "mb-2")} aria-hidden>
+        <span className="text-sm opacity-80" aria-hidden>🥣</span>
+        {title}
+      </p>
+      <ul className="space-y-0 divide-y divide-[rgba(0,0,0,0.05)]" aria-label={title}>
         {ingredients.map((ing, idx) => {
           const displayText = getDisplayText(ing, overrides[idx] ?? scaledOverrides?.[idx]);
           const { name, amount } = splitNameAndAmount(displayText);
+          const rawName = getRawName(ing, displayText);
+          const displayName = capitalizeIngredientName(shortenIngredientName(rawName || name)) || "Ингредиент";
           return (
             <li
               key={idx}
-              className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0"
+              className="flex items-start gap-3 py-[15px] first:pt-0 last:pb-0"
             >
               <span className="min-w-0 flex-1 text-sm text-foreground break-words leading-snug">
-                {name || "Ингредиент"}
+                {displayName}
               </span>
               {amount ? (
-                <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+                <span className="shrink-0 text-sm font-medium text-foreground/80 tabular-nums">
                   {amount}
                 </span>
               ) : null}

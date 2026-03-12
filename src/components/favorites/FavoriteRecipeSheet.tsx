@@ -11,7 +11,7 @@ import { getRecipeAudience } from "@/utils/recipeAudience";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { getMealLabel } from "@/data/mealLabels";
 import { RecipeHeader } from "@/components/recipe/RecipeHeader";
-import { IngredientChips } from "@/components/recipe/IngredientChips";
+import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeMetaRow } from "@/components/recipe/RecipeMetaRow";
@@ -103,7 +103,7 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
               description={description || null}
               nutrition={nutrition}
             />
-            <IngredientChips ingredients={ingredients} variant="full" />
+            <RecipeIngredientList ingredients={ingredients} servingsCount={1} />
             <RecipeMetaRow>
               <span className="inline-flex items-center gap-1 rounded-full bg-primary-light border border-primary-border px-2 py-0.5 text-[11px] font-medium text-foreground">
                 {audience.showChildEmoji && <span>👶</span>}

@@ -26,13 +26,13 @@ export function ChefAdviceCard({
 
   return (
     <Card className={cn(cardClass, "flex flex-col overflow-hidden p-0", className)}>
-      <CardHeader className="flex flex-row gap-2 items-center py-3 px-4 pb-1.5">
+      <CardHeader className="flex flex-row gap-2 items-center py-4 px-5 pb-2">
         <span className="text-sm shrink-0 opacity-70" aria-hidden>
           {isChefTip ? "👨‍🍳" : "💡"}
         </span>
         <p className={titleClass}>{title}</p>
       </CardHeader>
-      <CardContent className="py-0 px-4 pb-4 min-w-0">
+      <CardContent className="py-0 px-5 pb-5 min-w-0">
         <p className="text-sm text-foreground leading-[1.6]">{bodyTrimmed}</p>
       </CardContent>
     </Card>

@@ -1,6 +1,7 @@
 import { Lock, RotateCcw } from "lucide-react";
 import { ingredientDisplayLabel, type IngredientItem } from "@/types/recipe";
 import type { ParsedIngredient, IngredientWithSubstitute } from "@/utils/parseChatRecipes";
+import { capitalizeIngredientDisplay } from "@/utils/ingredientDisplay";
 import { recipeIngredientChip, recipeIngredientChipText, recipeSectionLabel } from "@/theme/recipeTokens";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +66,8 @@ export function IngredientChips({
   const extraCount = maxVisible != null && maxVisible > 0 ? Math.max(0, total - maxVisible) : 0;
 
   const renderChip = (ing: IngredientDisplayItem, idx: number) => {
-    const displayText = getDisplayText(ing, overrides[idx] ?? scaledOverrides?.[idx]);
+    const rawText = getDisplayText(ing, overrides[idx] ?? scaledOverrides?.[idx]);
+    const displayText = capitalizeIngredientDisplay(rawText);
     const name = getIngredientName(ing);
     return (
       <div

@@ -1,6 +1,7 @@
 import { recipeCard } from "@/theme/recipeTokens";
 import { RecipeHeader, type RecipeHeaderVariant } from "./RecipeHeader";
 import { IngredientChips, type IngredientDisplayItem } from "./IngredientChips";
+import { RecipeIngredientList } from "./RecipeIngredientList";
 import { ChefAdviceCard } from "./ChefAdviceCard";
 import { RecipeSteps } from "./RecipeSteps";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,8 @@ export interface RecipeCardProps {
   children?: React.ReactNode;
   /** КБЖУ на порцию (мета-строка в шапке + строка БЖУ под шапкой). */
   nutrition?: { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null } | null;
+  /** Количество порций для блока ингредиентов (в списке, не в превью). По умолчанию 1. */
+  servingsCount?: number;
 }
 
 export function RecipeCard({
@@ -60,6 +63,7 @@ export function RecipeCard({
   className,
   children,
   nutrition,
+  servingsCount = 1,
 }: RecipeCardProps) {
   const isPreview = variant === "preview";
   const isFull = variant === "full";
@@ -73,21 +77,28 @@ export function RecipeCard({
   const bodyPadding = isPreview ? "p-3 pt-2" : isFull ? "p-4 pt-3 sm:p-6 sm:pt-4" : "p-3 pt-2";
   const bodySpace = "space-y-3";
 
-  /** Show chips in full/chat; in preview only when showIngredientChips is explicitly true (e.g. not in Favorites/Plan/MyRecipes lists). */
+  /** В превью — чипсы (если showIngredientChips); в chat/full — единый список ингредиентов. */
   const showChips = showIngredientChips ?? !isPreview;
   const maxChips = maxIngredientChips ?? (isPreview ? 3 : undefined);
 
   const innerBody = (
     <>
-      {showChips && (
+      {isPreview && showChips && (
         <IngredientChips
           ingredients={ingredients}
           overrides={ingredientOverrides}
           maxVisible={maxChips}
-          variant={isPreview ? "preview" : "full"}
+          variant="preview"
           hideSectionLabel={isPreview}
           showSubstituteButton={showSubstituteButton}
           onSubstituteClick={onSubstituteClick}
+        />
+      )}
+      {!isPreview && (
+        <RecipeIngredientList
+          ingredients={ingredients}
+          overrides={ingredientOverrides}
+          servingsCount={servingsCount}
         />
       )}
       {hint && isPreview && showHint && (

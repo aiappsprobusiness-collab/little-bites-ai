@@ -29,9 +29,9 @@ export const recipeIngredientChip =
 export const recipeIngredientChipText =
   "text-foreground font-medium text-xs min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis";
 
-/** Блок «Совет от шефа»: премиум callout, больше padding, опциональный акцент */
+/** Блок «Совет от шефа»: тёплый фон #F6F4EC, увеличенный padding */
 export const recipeChefAdviceCard =
-  "rounded-2xl p-5 border border-primary-border/50 bg-primary/[0.05] flex gap-3 items-start border-l-2 border-l-primary/20";
+  "rounded-2xl p-5 border border-primary-border/50 bg-[#F6F4EC] flex gap-3 items-start border-l-2 border-l-primary/20";
 
 /** Мини-совет (free): нейтральный фон */
 export const recipeMiniAdviceCard =
@@ -43,8 +43,11 @@ export const recipeMetaRow = "flex flex-wrap items-center gap-x-4 gap-y-1 text-x
 /** Заголовок секции (Ингредиенты, Шаги) */
 export const recipeSectionLabel = "text-xs font-medium text-muted-foreground uppercase tracking-wide";
 
-/** Нумерация шагов: жирный номер в лёгком круге */
-export const recipeStepNum = "inline-flex shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold items-center justify-center";
+/** Заголовок блока ингредиентов: semibold + иконка */
+export const recipeIngredientsSectionTitle = "text-xs font-semibold text-muted-foreground uppercase tracking-wide inline-flex items-center gap-1.5";
+
+/** Нумерация шагов: круг чуть больше, жирный номер, оливковый фон */
+export const recipeStepNum = "inline-flex shrink-0 w-7 h-7 rounded-full bg-primary/10 text-primary text-sm font-semibold items-center justify-center";
 export const recipeStepText = "text-sm text-foreground leading-[1.6] flex-1 min-w-0 break-words";
 
 /** Чипса КБЖУ: тот же стиль, что и ингредиенты (мягкая, спокойная) */

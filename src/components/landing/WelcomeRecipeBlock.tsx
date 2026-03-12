@@ -4,7 +4,7 @@ import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { getMealLabel } from "@/data/mealLabels";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { recipeHeroCard } from "@/theme/recipeTokens";
-import { IngredientChips } from "@/components/recipe/IngredientChips";
+import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader";
@@ -147,10 +147,10 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
           </div>
 
           <div className="px-4 pb-6 -mt-2">
-            <IngredientChips
+            <RecipeIngredientList
               className="mt-4"
               ingredients={displayIngredients}
-              variant="full"
+              servingsCount={(recipe as { servings_base?: number })?.servings_base ?? 1}
             />
 
             {chefAdvice?.trim() ? (
