@@ -47,7 +47,7 @@ export function SosTopicGrid({
               </div>
               {locked && (
                 <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md shrink-0">
-                  <Star className="w-3 h-3 text-amber-600" aria-hidden />
+                  <Star className="w-3 h-3 text-premium-star shrink-0" aria-hidden />
                   Premium
                 </span>
               )}

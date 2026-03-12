@@ -995,9 +995,7 @@ export default function MealPlanPage() {
                 </Button>
                 <Button
                   size="sm"
-                  className={isFree
-                    ? "h-11 w-full flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-background text-foreground hover:bg-muted/50 shadow-none px-4"
-                    : "h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)] active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150"}
+                  className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
                   disabled={!isFree && isAnyGenerating}
                   onClick={async () => {
                     if (isFree) {
@@ -1048,16 +1046,9 @@ export default function MealPlanPage() {
                     }
                   }}
                 >
-                  <span className="flex items-center gap-2">
-                    <Sparkles className="w-[18px] h-[18px] shrink-0" />
-                    Собрать неделю
-                  </span>
-                  {isFree && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md shrink-0" aria-hidden>
-                      <Star className="w-3 h-3 text-amber-600" />
-                      Premium
-                    </span>
-                  )}
+                  <Sparkles className="w-[18px] h-[18px] shrink-0" />
+                  Собрать неделю
+                  {isFree && <Star className="w-3 h-3 text-premium-star shrink-0" aria-hidden />}
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1074,9 +1065,7 @@ export default function MealPlanPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className={isFree
-                    ? "h-9 w-full flex items-center justify-between gap-1.5 rounded-lg border border-border/70 bg-background text-foreground hover:bg-muted/50 text-xs font-medium shadow-none px-3"
-                    : "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"}
+                  className="h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"
                   disabled={hasAccess && (isAnyGenerating || isWeekPlansLoading)}
                   onClick={() => {
                     if (isFree) {
@@ -1091,16 +1080,9 @@ export default function MealPlanPage() {
                     shareWeekPlan();
                   }}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <ShareIosIcon className="w-4 h-4 shrink-0" />
-                    Поделиться неделей
-                  </span>
-                  {isFree && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded-md shrink-0" aria-hidden>
-                      <Star className="w-3 h-3 text-amber-600" />
-                      Premium
-                    </span>
-                  )}
+                  <ShareIosIcon className="w-4 h-4 shrink-0" />
+                  Поделиться неделей
+                  {isFree && <Star className="w-3 h-3 text-premium-star shrink-0" aria-hidden />}
                 </Button>
               </div>
             </div>
@@ -1204,8 +1186,8 @@ export default function MealPlanPage() {
               </h3>
               <p className="text-plan-secondary text-muted-foreground text-sm mb-3">
                 {isAdultNoRecipesEmpty
-                  ? "Добавьте рецепты для взрослых через Чат (например: «Подбери обед на понедельник») или Избранное."
-                  : "Нажми «Собрать день» или подбери рецепт для нужного приёма пищи."}
+                  ? "Добавьте рецепты для взрослых через Чат (например: «Подберите обед на понедельник») или Избранное."
+                  : "Нажмите «Собрать день» или подберите рецепт для нужного приёма пищи."}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2">
                 {isAdultNoRecipesEmpty ? (

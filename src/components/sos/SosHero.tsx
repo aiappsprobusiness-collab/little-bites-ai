@@ -122,7 +122,7 @@ export function SosHero({
                     : "border-border bg-background text-foreground hover:bg-muted/30 active:bg-muted/50"
                 )}
               >
-                {isPremium && <Star className="w-3 h-3 text-amber-600 shrink-0" aria-hidden />}
+                {isPremium && <Star className="w-3 h-3 text-premium-star shrink-0" aria-hidden />}
                 {chip.label}
               </button>
             );

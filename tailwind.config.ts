@@ -99,6 +99,7 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        "premium-star": "hsl(var(--premium-star))",
       },
       borderRadius: {
         lg: "var(--radius)",

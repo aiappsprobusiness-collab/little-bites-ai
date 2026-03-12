@@ -343,7 +343,7 @@ export function TopicConsultationSheet({
                           )}
                         >
                           {isPremiumLocked && (
-                            <Star className="w-3 h-3 text-amber-600 shrink-0" aria-hidden />
+                            <Star className="w-3 h-3 text-premium-star shrink-0" aria-hidden />
                           )}
                           {chip.label}
                         </button>
