@@ -71,7 +71,7 @@
 1. Загрузка слотов плана и рецептов/ингредиентов из Supabase.
 2. Для каждого слота (recipe_id, servings) для каждого ингредиента вызывается **buildShoppingAggregationKey** с множителем порций.
 3. Одна карта по ключу: при совпадении ключа суммируется amountToSum, в массив names добавляется originalName, категория берётся первая не other, объединяются sourceRecipeIds.
-4. Результат: для каждой группы ключа — одна строка с name = normalizeIngredientDisplayName(chooseShoppingDisplayName(names)), displayAmount/displayUnit = toShoppingDisplayUnitAndAmount(aggregationUnit, amountSum). В UI списка и в Copy/Share используется display-нормализованное имя (Яблоко, Йогурт, Творог — без «сладкое», «натуральный с кальцием», «детский» и т.д.).
+4. Результат: для каждой группы ключа — одна строка с name = normalizeIngredientDisplayName(chooseShoppingDisplayName(names)), displayAmount/displayUnit = toShoppingDisplayUnitAndAmount(aggregationUnit, amountSum). В UI списка и при Copy (копирование в буфер) используется display-нормализованное имя (Яблоко, Йогурт, Творог — без «сладкое», «натуральный с кальцием», «детский» и т.д.). Публичный шаринг списка продуктов отключён; доступно только копирование для личного использования.
 
 Категории (vegetables, fruits, dairy, meat, grains, other) не меняются: при слиянии сохраняется первая непустая/не other.
 

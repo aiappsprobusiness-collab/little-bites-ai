@@ -1,6 +1,6 @@
 /**
- * Форматирование текста списка покупок для Copy и Share.
- * Copy: только список (без ссылок, без CTA). Share: список + ссылка на меню дня/недели.
+ * Форматирование текста списка покупок для Copy (в буфер обмена).
+ * Публичный шаринг списка продуктов убран — только копирование для личного использования.
  */
 
 import { capitalizeIngredientName, normalizeUnitForDisplay } from "@/utils/ingredientDisplay";
@@ -14,16 +14,6 @@ const CATEGORY_LABEL: Record<ProductCategory, string> = {
   meat: "Мясо и рыба",
   grains: "Крупы и злаки",
   other: "Прочее",
-};
-
-/** Эмодзи по категории для Share (если категория неизвестна — маркер •). */
-const CATEGORY_EMOJI: Record<ProductCategory, string> = {
-  vegetables: "🥦",
-  fruits: "🍎",
-  dairy: "🥛",
-  meat: "🍗",
-  grains: "🌾",
-  other: "•",
 };
 
 export interface ShoppingListItemForFormat {
@@ -74,29 +64,4 @@ export function formatShoppingListForCopy(
     lines.push("");
   }
   return lines.join("\n").trimEnd();
-}
-
-/**
- * Текст для Share: заголовок + ингредиенты с эмодзи + «Посмотреть меню:» + url.
- * Без списка блюд, без рекламных фраз.
- */
-export function formatShoppingListForShare(
-  items: ShoppingListItemForFormat[],
-  range: "today" | "week",
-  existingShareUrl: string
-): string {
-  const title = range === "today" ? "Список продуктов на сегодня" : "Список продуктов на неделю";
-  const lines: string[] = [title, ""];
-  if (items.length > 0) {
-    for (const item of items) {
-      const cat = normalizeCategory(item.category);
-      const emoji = CATEGORY_EMOJI[cat];
-      const line = formatItemLine(item);
-      lines.push(emoji === "•" ? `• ${line}` : `${emoji} ${line}`);
-    }
-    lines.push("");
-  }
-  lines.push("Посмотреть меню:");
-  lines.push(existingShareUrl);
-  return lines.join("\n");
 }

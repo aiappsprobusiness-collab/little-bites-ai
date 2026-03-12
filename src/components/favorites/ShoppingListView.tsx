@@ -13,13 +13,10 @@ import {
 import { usePlanShoppingIngredients } from "@/hooks/usePlanShoppingIngredients";
 import { usePlanSignature } from "@/hooks/usePlanSignature";
 import { useFamily } from "@/contexts/FamilyContext";
-import { useAuth } from "@/hooks/useAuth";
-import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { formatShoppingListForCopy, formatShoppingListForShare } from "@/utils/shoppingListTextFormatter";
+import { formatShoppingListForCopy } from "@/utils/shoppingListTextFormatter";
 import { formatAmountForDisplay, normalizeIngredientDisplayName } from "@/utils/shopping/normalizeIngredientForShopping";
-import { getSharedPlanUrlForRange } from "@/services/sharedPlan";
 import {
   Sheet,
   SheetContent,
@@ -149,7 +146,6 @@ function ShoppingListItem({
 
 export function ShoppingListView() {
   const { toast } = useToast();
-  const { user } = useAuth();
   const { selectedMemberId } = useFamily();
   const memberId = selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId;
   const [range, setRange] = useState<"today" | "week">("today");
@@ -228,32 +224,6 @@ export function ShoppingListView() {
       () => toast({ title: "Скопировано" }),
       () => toast({ variant: "destructive", title: "Не удалось скопировать" })
     );
-  };
-
-  const handleShare = async () => {
-    if (!user?.id) return;
-    const itemsForFormat = items.map((i) => ({
-      name: normalizeIngredientDisplayName(i.name) || i.name,
-      amount: i.amount,
-      unit: i.unit,
-      category: i.category,
-    }));
-    try {
-      const shareUrl = await getSharedPlanUrlForRange(user.id, memberId, range);
-      const title = range === "today" ? "Список продуктов на сегодня" : "Список продуктов на неделю";
-      const text = formatShoppingListForShare(itemsForFormat, range, shareUrl);
-      if (navigator.share) {
-        await navigator.share({ title, text });
-        toast({ title: "Поделились" });
-      } else {
-        await navigator.clipboard?.writeText(text);
-        toast({ title: "Скопировано" });
-      }
-    } catch (e: unknown) {
-      if ((e as Error)?.name !== "AbortError") {
-        toast({ variant: "destructive", title: "Не удалось поделиться" });
-      }
-    }
   };
 
   const handleClear = () => {
@@ -431,15 +401,11 @@ export function ShoppingListView() {
         </div>
       )}
 
-      {/* Компактный action row: Copy, Share, More */}
+      {/* Компактный action row: Copy (только для личного использования), More */}
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-muted-foreground" onClick={handleCopy}>
           <Copy className="w-3.5 h-3.5" />
-          <span className="text-xs">Копировать список</span>
-        </Button>
-        <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-muted-foreground" onClick={handleShare}>
-          <ShareIosIcon className="w-3.5 h-3.5" />
-          <span className="text-xs">Поделиться</span>
+          <span className="text-xs">Скопировать список продуктов</span>
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

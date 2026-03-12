@@ -6,12 +6,17 @@ import { Loader2, Sparkles } from "lucide-react";
 import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
 
+const SOCIAL_PROOF_TEXT = "12 000 семей уже используют MomRecipes";
+
 const MEAL_EMOJI: Record<string, string> = {
   breakfast: "🍳",
   lunch: "🍲",
   snack: "🍓",
   dinner: "🥘",
 };
+
+/** На share-странице недели показываем только первые 2 блюда в день + «+ ещё N блюда». */
+const SHARE_WEEK_MEALS_VISIBLE = 2;
 
 function formatDateLabel(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
@@ -88,38 +93,45 @@ export default function SharedPlanPage() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <main className="flex-1 px-4 py-4 md:py-8 max-w-md mx-auto w-full">
-          <h1 className="text-xl font-semibold text-foreground mb-1">Меню на неделю из MomRecipes</h1>
-          <p className="text-muted-foreground text-sm mb-0.5">План питания для семьи на 7 дней</p>
-          <p className="text-muted-foreground/80 text-xs mb-6">Составлено автоматически за 30 секунд</p>
+          <h1 className="text-xl font-semibold text-foreground mb-1">Готовое меню для семьи на неделю</h1>
+          <p className="text-muted-foreground/80 text-xs mb-6">Собрано за 30 секунд</p>
           <ul className="space-y-6 list-none pl-0">
-            {plan.days.map((day) => (
-              <li key={day.date} className="border-b border-border/60 pb-5 last:border-0 last:pb-0">
-                <p className="text-sm font-medium text-foreground mb-2">{day.label}</p>
-                {day.meals.length > 0 ? (
-                  <ul className="space-y-2">
-                    {day.meals.map((m) => (
-                      <li key={m.slot} className="flex gap-2 items-start text-sm">
-                        <span className="shrink-0 text-base" aria-hidden>{MEAL_EMOJI[m.slot] ?? "🍽"}</span>
-                        <span className="text-foreground">{m.title}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-muted-foreground text-sm italic">День пока не заполнен</p>
-                )}
-              </li>
-            ))}
+            {plan.days.map((day) => {
+              const visibleMeals = day.meals.slice(0, SHARE_WEEK_MEALS_VISIBLE);
+              const restCount = day.meals.length - SHARE_WEEK_MEALS_VISIBLE;
+              return (
+                <li key={day.date} className="border-b border-border/60 pb-5 last:border-0 last:pb-0">
+                  <p className="text-sm font-medium text-foreground mb-2">{day.label}</p>
+                  {day.meals.length > 0 ? (
+                    <ul className="space-y-2">
+                      {visibleMeals.map((m) => (
+                        <li key={m.slot} className="flex gap-2 items-start text-sm">
+                          <span className="shrink-0 text-base" aria-hidden>{MEAL_EMOJI[m.slot] ?? "🍽"}</span>
+                          <span className="text-foreground">{m.title}</span>
+                        </li>
+                      ))}
+                      {restCount > 0 && (
+                        <li className="text-sm text-muted-foreground pl-6">+ ещё {restCount} {restCount === 1 ? "блюдо" : restCount < 5 ? "блюда" : "блюд"}</li>
+                      )}
+                    </ul>
+                  ) : (
+                    <p className="text-muted-foreground text-sm italic">День пока не заполнен</p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           <div className="mt-6 pt-4 border-t space-y-4">
             <div className="rounded-2xl bg-primary/5 border border-primary/10 p-4">
-              <p className="font-semibold text-foreground mb-3">Получите своё меню</p>
+              <p className="font-semibold text-foreground mb-3">Соберите меню для своей семьи</p>
               <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex items-center gap-2">✓ за 1 минуту</li>
+                <li className="flex items-center gap-2">✓ за 30 секунд</li>
                 <li className="flex items-center gap-2">✓ учитываем возраст ребёнка</li>
                 <li className="flex items-center gap-2">✓ учитываем аллергии</li>
-                <li className="flex items-center gap-2">✓ запоминаем продукты которые ребёнок не любит</li>
+                <li className="flex items-center gap-2">✓ блюда, которые ребёнок действительно ест</li>
               </ul>
             </div>
+            <p className="text-center text-sm text-muted-foreground">{SOCIAL_PROOF_TEXT}</p>
             <Button
               className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-semibold"
               onClick={() => handleOpenApp(true)}
@@ -139,9 +151,8 @@ export default function SharedPlanPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 px-4 py-4 md:py-8 max-w-md mx-auto w-full">
-        <h1 className="text-xl font-semibold text-foreground mb-1">Меню на день из MomRecipes</h1>
-        <p className="text-muted-foreground text-sm mb-0.5">План питания для семьи</p>
-        <p className="text-muted-foreground/80 text-xs mb-4">Составлено автоматически за 30 секунд</p>
+        <h1 className="text-xl font-semibold text-foreground mb-1">Готовое меню для семьи на день</h1>
+        <p className="text-muted-foreground/80 text-xs mb-4">Собрано за 30 секунд</p>
         <p className="text-muted-foreground text-sm mb-6">{capitalized}</p>
         <ul className="space-y-4">
           {plan.meals.map((m) => (
@@ -156,14 +167,15 @@ export default function SharedPlanPage() {
         </ul>
         <div className="mt-6 pt-4 border-t space-y-4">
           <div className="rounded-2xl bg-primary/5 border border-primary/10 p-4">
-            <p className="font-semibold text-foreground mb-3">Получите своё меню</p>
+            <p className="font-semibold text-foreground mb-3">Соберите меню для своей семьи</p>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">✓ за 1 минуту</li>
+              <li className="flex items-center gap-2">✓ за 30 секунд</li>
               <li className="flex items-center gap-2">✓ учитываем возраст ребёнка</li>
               <li className="flex items-center gap-2">✓ учитываем аллергии</li>
-              <li className="flex items-center gap-2">✓ запоминаем продукты которые ребёнок не любит</li>
+              <li className="flex items-center gap-2">✓ блюда, которые ребёнок действительно ест</li>
             </ul>
           </div>
+          <p className="text-center text-sm text-muted-foreground">{SOCIAL_PROOF_TEXT}</p>
           <Button
             className="w-full rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground h-12 font-semibold"
             onClick={() => handleOpenApp(false)}
