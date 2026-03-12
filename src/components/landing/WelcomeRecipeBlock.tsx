@@ -119,6 +119,10 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
         <div className="overflow-y-auto overscroll-contain flex-1 min-h-0 rounded-2xl border border-border/80 bg-card shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06),0_4px_16px_-6px_rgba(0,0,0,0.04)]">
           <div className={cn(recipeHeroCard, "relative space-y-4 p-6 rounded-2xl")}>
             <div className="space-y-4">
+              <h3 className="text-typo-body sm:text-typo-title font-medium leading-snug text-foreground">
+                {recipeDisplay.title ?? "Рецепт"}
+              </h3>
+
               <RecipeNutritionHeader
                 mealTypeLabel={mealLabel}
                 cookingTimeMinutes={
@@ -127,10 +131,6 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
                 nutrition={recipeNutrition}
                 variant="details"
               />
-
-              <h3 className="text-typo-body sm:text-typo-title font-medium leading-snug text-foreground">
-                {recipeDisplay.title ?? "Рецепт"}
-              </h3>
 
               {benefitLabel && (
                 <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
