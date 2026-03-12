@@ -40,6 +40,7 @@
 | trial_until      | timestamptz            | Окончание триала (3 дня) |
 | trial_used       | boolean DEFAULT false  | Триал уже был использован (повторно нельзя) |
 | plan_initialized  | boolean DEFAULT false | true после первого автозаполнения дня в Plan |
+| active_session_key | text                   | Ключ единственной активной сессии; при новом логине обновляется, старые устройства при проверке разлогиниваются |
 
 RLS: доступ только по `auth.uid() = user_id`. Запись при регистрации — триггер `handle_new_user_v2` на `auth.users`.
 

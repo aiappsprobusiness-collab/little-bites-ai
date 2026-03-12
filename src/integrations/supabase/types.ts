@@ -538,9 +538,9 @@ export type Database = {
         Relationships: []
       }
       profiles_v2: {
-        Row: { id: string; user_id: string; status: string; daily_limit: number; last_reset: string; premium_until: string | null; requests_today: number; trial_until: string | null; trial_used: boolean; trial_started_at: string | null; email: string | null }
-        Insert: { id?: string; user_id: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null }
-        Update: { id?: string; user_id?: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null }
+        Row: { id: string; user_id: string; status: string; daily_limit: number; last_reset: string; premium_until: string | null; requests_today: number; trial_until: string | null; trial_used: boolean; trial_started_at: string | null; email: string | null; active_session_key: string | null }
+        Insert: { id?: string; user_id: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null; active_session_key?: string | null }
+        Update: { id?: string; user_id?: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null; active_session_key?: string | null }
         Relationships: []
       }
       favorites_v2: {

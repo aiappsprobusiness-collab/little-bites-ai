@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { setActiveSessionKeyForUser } from "@/utils/activeSessionKey";
 
 const POLL_INTERVAL_MS = 300;
 const MAX_WAIT_MS = 5000;
@@ -63,6 +64,10 @@ export default function AuthCallbackPage() {
       }
 
       const userId = session.user.id;
+      await setActiveSessionKeyForUser(userId);
+
+      if (cancelled) return;
+
       const { count, error } = await supabase
         .from("members")
         .select("id", { count: "exact", head: true })

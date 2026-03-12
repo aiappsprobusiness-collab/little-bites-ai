@@ -2,6 +2,13 @@ import { useState, useEffect, createContext, useContext, ReactNode, useRef } fro
 import { safeError } from '@/utils/safeLogger';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  setActiveSessionKeyForUser,
+  validateActiveSession,
+  clearStoredSessionKey,
+  setSessionInvalidReason,
+  SESSION_INVALID_REASON_REPLACED,
+} from '@/utils/activeSessionKey';
 
 interface AuthContextType {
   session: Session | null;
@@ -20,38 +27,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
 
+  const checkSessionValid = useRef(async (userId: string) => {
+    const result = await validateActiveSession(userId);
+    if (!result.valid && result.reason === SESSION_INVALID_REASON_REPLACED) {
+      setSessionInvalidReason(SESSION_INVALID_REASON_REPLACED);
+      clearStoredSessionKey();
+      await supabase.auth.signOut();
+    }
+  });
+
   useEffect(() => {
-    // Get initial session FIRST
-    supabase.auth.getSession()
-      .then(({ data: { session }, error }) => {
-        if (error) {
-          safeError('Auth session error:', error);
-        }
+    let cancelled = false;
+
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) safeError('Auth session error:', error);
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+      initializedRef.current = true;
+
+      if (!cancelled && session?.user?.id) {
+        checkSessionValid.current(session.user.id);
+      }
+    }).catch((err) => {
+      safeError('Failed to get auth session:', err);
+      setLoading(false);
+      initializedRef.current = true;
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!initializedRef.current) return;
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
-        initializedRef.current = true;
-      })
-      .catch((error) => {
-        safeError('Failed to get auth session:', error);
-        setLoading(false);
-        initializedRef.current = true;
-      });
-
-    // Set up auth state listener AFTER getting initial session
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        // Only update state after initial session has been loaded
-        // This prevents race condition where listener fires before getSession completes
-        if (initializedRef.current) {
-          setSession(session);
-          setUser(session?.user ?? null);
-          setLoading(false);
+        if (session?.user?.id) {
+          checkSessionValid.current(session.user.id);
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
+        if (!s?.user?.id) return;
+        checkSessionValid.current(s.user.id);
+      });
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
 
   const signUp = async (email: string, password: string, displayName?: string) => {
@@ -106,6 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } as Error
         };
       }
+
+      if (data?.user?.id) {
+        const { error: keyError } = await setActiveSessionKeyForUser(data.user.id);
+        if (keyError) safeError('Failed to set active session key:', keyError);
+      }
       
       return { error: null };
     } catch (err) {
@@ -128,6 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    clearStoredSessionKey();
     await supabase.auth.signOut();
   };
 
