@@ -103,7 +103,7 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
               description={description || null}
               nutrition={nutrition}
             />
-            <RecipeIngredientList ingredients={ingredients} servingsCount={1} />
+            <RecipeIngredientList ingredients={ingredients} servingsCount={1} hideServingsSubtitle />
             <RecipeMetaRow>
               <span className="inline-flex items-center gap-1 rounded-full bg-primary-light border border-primary-border px-2 py-0.5 text-[11px] font-medium text-foreground">
                 {audience.showChildEmoji && <span>👶</span>}

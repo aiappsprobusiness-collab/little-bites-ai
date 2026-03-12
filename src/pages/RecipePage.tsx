@@ -86,6 +86,7 @@ export default function RecipePage() {
   const { data: recipe, isLoading, error } = getRecipeById(id || "");
   const state = location.state as {
     fromMealPlan?: boolean;
+    fromFavorites?: boolean;
     mealTypeLabel?: string;
     memberId?: string;
     plannedDate?: string;
@@ -109,6 +110,7 @@ export default function RecipePage() {
     }
   }, [id, searchParams]);
   const fromMealPlan = state?.fromMealPlan;
+  const fromFavorites = state?.fromFavorites;
   const mealTypeLabel = state?.mealTypeLabel;
   const stateMemberId = state?.memberId ?? null;
   const plannedDate = state?.plannedDate ?? null;
@@ -198,29 +200,48 @@ export default function RecipePage() {
   const [overrides, setOverrides] = useState<IngredientOverrides>({});
   const [servingsSelected, setServingsSelected] = useState(1);
   const userHasChangedServingsRef = useRef(false);
+  const lastSyncedPlanSlotKeyRef = useRef<string | null>(null);
 
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
 
-  // Синхронизируем порции: из слота плана (from plan) или из рецепта. Не перезатираем локальный выбор пользователя до завершения сохранения.
+  // Синхронизируем порции: из Избранного всегда 1; из слота плана — только при первом входе в слот (по ключу дата+приём+профиль). Не перезатираем из refetch.
   useEffect(() => {
     if (!recipe?.id) return;
-    if (fromMealPlan && slotServings != null && slotServings >= 1) {
-      if (!userHasChangedServingsRef.current) {
+    if (fromFavorites) {
+      setServingsSelected(1);
+      lastSyncedPlanSlotKeyRef.current = null;
+      return;
+    }
+    if (!fromMealPlan) {
+      lastSyncedPlanSlotKeyRef.current = null;
+      userHasChangedServingsRef.current = false;
+      const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
+      const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
+      const defaultServings = base >= 4 ? base : recommended;
+      setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
+      return;
+    }
+    const slotKey = plannedDate && planMealType ? `${plannedDate}-${planMealType}-${planMemberId ?? "fam"}` : null;
+    if (slotKey && slotKey !== lastSyncedPlanSlotKeyRef.current) {
+      lastSyncedPlanSlotKeyRef.current = slotKey;
+      userHasChangedServingsRef.current = false;
+      if (slotServings != null && slotServings >= 1) {
         setServingsSelected(slotServings);
-      } else if (slotServings === servingsSelected) {
-        userHasChangedServingsRef.current = false;
+      } else {
+        const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
+        const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
+        const defaultServings = base >= 4 ? base : recommended;
+        setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
       }
       return;
     }
-    userHasChangedServingsRef.current = false;
-    const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
-    const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
-    const defaultServings = base >= 4 ? base : recommended;
-    setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
-  }, [recipe?.id, fromMealPlan, slotServings, servingsSelected]);
+    if (slotKey && slotServings === servingsSelected) {
+      userHasChangedServingsRef.current = false;
+    }
+  }, [recipe?.id, fromFavorites, fromMealPlan, plannedDate, planMealType, planMemberId, slotServings, servingsSelected]);
 
-  // Сохранение порций слота плана при изменении пользователем (debounce); не сохраняем, если значение совпадает со слотом
+  // Сохранение порций слота плана при изменении пользователем (debounce); при уходе со страницы — сохранить сразу
   const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!fromMealPlan || plannedDate == null || planMealType == null || planMemberId === undefined) return;
@@ -239,6 +260,14 @@ export default function RecipePage() {
     }, 400);
     return () => {
       if (servingsSaveRef.current) clearTimeout(servingsSaveRef.current);
+      if (servingsSelected !== slotServings && servingsSelected >= 1) {
+        updateSlotServings({
+          planned_date: plannedDate,
+          member_id: planMemberId ?? null,
+          meal_type: planMealType as "breakfast" | "lunch" | "snack" | "dinner",
+          servings: servingsSelected,
+        }).catch(() => {});
+      }
     };
   }, [fromMealPlan, plannedDate, planMealType, planMemberId, slotServings, servingsSelected, updateSlotServings]);
 
@@ -469,49 +498,52 @@ export default function RecipePage() {
           )}
         </div>
 
-        {/* Порции */}
-        <div className="mt-5">
-          <span className="text-[11px] font-medium text-muted-foreground/90 block">Порции</span>
-          <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
-            <motion.button
-              type="button"
-              onClick={() => {
-                userHasChangedServingsRef.current = true;
-                setServingsSelected((s) => Math.max(1, s - 1));
-              }}
-              whileTap={{ scale: 0.96 }}
-              transition={{ duration: 0.1 }}
-              className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
-              aria-label="Уменьшить порции"
-            >
-              −
-            </motion.button>
-            <span className="min-w-[2.75rem] text-center text-sm font-semibold text-foreground" aria-live="polite">
-              {servingsSelected}
-            </span>
-            <motion.button
-              type="button"
-              onClick={() => {
-                userHasChangedServingsRef.current = true;
-                setServingsSelected((s) => Math.min(20, s + 1));
-              }}
-              whileTap={{ scale: 0.96 }}
-              transition={{ duration: 0.1 }}
-              className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
-              aria-label="Увеличить порции"
-            >
-              +
-            </motion.button>
+        {/* Порции: только не из Избранного (в Избранном порции не показываем) */}
+        {!fromFavorites && (
+          <div className="mt-5">
+            <span className="text-[11px] font-medium text-muted-foreground/90 block">Порции</span>
+            <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
+              <motion.button
+                type="button"
+                onClick={() => {
+                  userHasChangedServingsRef.current = true;
+                  setServingsSelected((s) => Math.max(1, s - 1));
+                }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.1 }}
+                className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
+                aria-label="Уменьшить порции"
+              >
+                −
+              </motion.button>
+              <span className="min-w-[2.75rem] text-center text-sm font-semibold text-foreground" aria-live="polite">
+                {servingsSelected}
+              </span>
+              <motion.button
+                type="button"
+                onClick={() => {
+                  userHasChangedServingsRef.current = true;
+                  setServingsSelected((s) => Math.min(20, s + 1));
+                }}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.1 }}
+                className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
+                aria-label="Увеличить порции"
+              >
+                +
+              </motion.button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Ингредиенты: список с заголовком «на X порций» */}
+        {/* Ингредиенты: список с заголовком «на X порций» (подпись скрыта в Избранном) */}
         <RecipeIngredientList
           className="mt-6"
           ingredients={ingredientsForChips}
           overrides={fromMealPlan ? {} : overrides}
           scaledOverrides={fromMealPlan ? undefined : scaledOverrides}
           servingsCount={servingsSelected}
+          hideServingsSubtitle={fromFavorites}
         />
 
         {chefAdvice?.trim() ? (

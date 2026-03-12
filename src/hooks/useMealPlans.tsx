@@ -397,6 +397,7 @@ export function useMealPlans(
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['plan_signature'] });
     },
   });
 
@@ -514,7 +515,7 @@ export function useMealPlans(
       for (const [planned_date, dayMeals] of byDate) {
         const meals: MealsJson = {};
         for (const m of dayMeals) {
-          meals[m.mealType] = { recipe_id: m.recipeId, title: m.title };
+          meals[m.mealType] = { recipe_id: m.recipeId, title: m.title, servings: 1 };
         }
         rows.push({
           user_id: user.id,

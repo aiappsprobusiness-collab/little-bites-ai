@@ -98,5 +98,19 @@ export function scaleIngredientDisplay(
     const suffix = u ? formatIngredientAmountForDisplay(scaled, u) : formatIngredientAmountForDisplay(scaled, null);
     return name ? `${name} — ${suffix}` : suffix;
   }
+  // Fallback: парсим количество из display_text (например "40 г", "Пшённая крупа — 40 г")
+  if (typeof dt === "string" && dt.trim()) {
+    const sep = " — ";
+    const lastPart = dt.includes(sep) ? dt.split(sep).pop()?.trim() ?? dt : dt.trim();
+    const match = lastPart.match(/(\d+(?:[.,]\d+)?)\s*(\S*)\s*$/);
+    if (match) {
+      const amount = parseFloat(match[1].replace(",", "."));
+      const unitPart = match[2].trim() || null;
+      const scaled = amount * multiplier;
+      const suffix = formatIngredientAmountForDisplay(scaled, unitPart);
+      const namePart = dt.includes(sep) ? dt.slice(0, dt.indexOf(sep)).trim() : name;
+      return namePart ? `${namePart} — ${suffix}` : suffix;
+    }
+  }
   return ingredientDisplayLabel(ing as IngredientItem);
 }

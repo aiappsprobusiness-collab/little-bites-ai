@@ -27,7 +27,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { normalizeTitleKey } from "@/utils/recipePool";
-import { Check, Trash2, MoreVertical, Star } from "lucide-react";
+import { Check, Trash2, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -995,7 +995,9 @@ export default function MealPlanPage() {
                 </Button>
                 <Button
                   size="sm"
-                  className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
+                  className={isFree
+                    ? "h-11 w-full flex items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 text-muted-foreground hover:bg-muted/60 shadow-none"
+                    : `h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
                   disabled={!isFree && isAnyGenerating}
                   onClick={async () => {
                     if (isFree) {
@@ -1048,7 +1050,6 @@ export default function MealPlanPage() {
                 >
                   <Sparkles className="w-[18px] h-[18px] shrink-0" />
                   Собрать неделю
-                  {isFree && <Star className="w-3 h-3 text-premium-star shrink-0" aria-hidden />}
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1065,7 +1066,9 @@ export default function MealPlanPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"
+                  className={isFree
+                    ? "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border bg-muted/40 text-muted-foreground hover:bg-muted/60 text-xs font-medium shadow-none"
+                    : "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"}
                   disabled={hasAccess && (isAnyGenerating || isWeekPlansLoading)}
                   onClick={() => {
                     if (isFree) {
@@ -1082,7 +1085,6 @@ export default function MealPlanPage() {
                 >
                   <ShareIosIcon className="w-4 h-4 shrink-0" />
                   Поделиться неделей
-                  {isFree && <Star className="w-3 h-3 text-premium-star shrink-0" aria-hidden />}
                 </Button>
               </div>
             </div>

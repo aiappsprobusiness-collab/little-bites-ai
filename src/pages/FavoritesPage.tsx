@@ -96,7 +96,7 @@ export default function FavoritesPage() {
   const handleCardTap = (favorite: SavedFavorite) => {
     const recipeId = getRecipeId(favorite);
     if (recipeId) {
-      navigate(`/recipe/${recipeId}`);
+      navigate(`/recipe/${recipeId}`, { state: { fromFavorites: true } });
     }
   };
 

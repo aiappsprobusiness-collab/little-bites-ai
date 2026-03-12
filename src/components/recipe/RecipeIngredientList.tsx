@@ -41,6 +41,8 @@ export interface RecipeIngredientListProps {
   scaledOverrides?: IngredientOverrides;
   /** Текущее количество порций для заголовка */
   servingsCount: number;
+  /** Не показывать подпись «На X порций» (например в карточке рецепта в Избранном) */
+  hideServingsSubtitle?: boolean;
   emptyLabel?: string;
   className?: string;
 }
@@ -50,6 +52,7 @@ export function RecipeIngredientList({
   overrides = {},
   scaledOverrides,
   servingsCount,
+  hideServingsSubtitle = false,
   emptyLabel = "ИИ уточняет состав…",
   className,
 }: RecipeIngredientListProps) {
@@ -62,7 +65,7 @@ export function RecipeIngredientList({
         <p className="text-sm font-semibold text-foreground mb-0" aria-hidden>
           Ингредиенты
         </p>
-        <p className="text-[11px] text-muted-foreground/80 mt-0.5">{subtitle}</p>
+        {!hideServingsSubtitle && <p className="text-[11px] text-muted-foreground/80 mt-0.5">{subtitle}</p>}
         <p className="text-xs text-muted-foreground mt-1">{emptyLabel}</p>
       </div>
     );
@@ -73,8 +76,8 @@ export function RecipeIngredientList({
       <p className="text-sm font-semibold text-foreground mb-0" aria-hidden>
         Ингредиенты
       </p>
-      <p className="text-[11px] text-muted-foreground/80 mt-0.5 mb-2">{subtitle}</p>
-      <ul className="space-y-0 divide-y divide-[rgba(0,0,0,0.05)]" aria-label={`Ингредиенты, ${subtitle}`}>
+      {!hideServingsSubtitle && <p className="text-[11px] text-muted-foreground/80 mt-0.5 mb-2">{subtitle}</p>}
+      <ul className="space-y-0 divide-y divide-[rgba(0,0,0,0.05)]" aria-label={hideServingsSubtitle ? "Ингредиенты" : `Ингредиенты, ${subtitle}`}>
         {ingredients.map((ing, idx) => {
           const displayText = getDisplayText(ing, overrides[idx] ?? scaledOverrides?.[idx]);
           const { name, amount } = splitNameAndAmount(displayText);

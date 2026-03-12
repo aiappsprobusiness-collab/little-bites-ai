@@ -75,29 +75,39 @@ export function applyIngredientOverrides(
       continue; // not pushed to displayItems, so no key added to keysForDisplayItems
     }
 
-    const scale = servingMultiplier / Math.max(1, servingsBase);
+    const scale = servingMultiplier;
     let scaledIng: IngredientItem = { ...ing };
     if (scale !== 1) {
-      const name = ing.name ?? "";
+      const name = (ing.name ?? "").trim();
       const amount = (ing as { amount?: number }).amount;
       const unit = (ing as { unit?: string }).unit;
       const canonical_amount = (ing as { canonical_amount?: number }).canonical_amount;
       const canonical_unit = (ing as { canonical_unit?: string }).canonical_unit;
       if (canonical_amount != null && canonical_unit) {
         const scaledAmount = Math.round(canonical_amount * scale * 10) / 10;
+        const suffix = formatIngredientAmountForDisplay(scaledAmount, canonical_unit);
         scaledIng = {
           ...ing,
           canonical_amount: scaledAmount,
           amount: scaledAmount,
           unit: canonical_unit,
+          display_text: name ? `${name} — ${suffix}` : suffix,
         };
       } else if (amount != null) {
         const scaledAmount = Math.round(amount * scale * 10) / 10;
+        const u = unit ?? "";
+        const suffix = formatIngredientAmountForDisplay(scaledAmount, u || null);
         scaledIng = {
           ...ing,
           amount: scaledAmount,
           unit: unit ?? undefined,
+          display_text: name ? `${name} — ${suffix}` : suffix,
         };
+      } else {
+        const scaledLabel = scaleIngredientDisplay(ing as IngredientItem, scale);
+        if (scaledLabel !== ingredientDisplayLabel(ing as IngredientItem)) {
+          scaledIng = { ...ing, display_text: scaledLabel };
+        }
       }
     }
 
