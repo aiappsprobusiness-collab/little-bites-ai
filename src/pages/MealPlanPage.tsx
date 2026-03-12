@@ -27,7 +27,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { normalizeTitleKey } from "@/utils/recipePool";
-import { Check, Trash2, MoreVertical } from "lucide-react";
+import { Check, Trash2, MoreVertical, Star } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -995,9 +995,8 @@ export default function MealPlanPage() {
                 </Button>
                 <Button
                   size="sm"
-                  aria-disabled={isFree}
                   className={isFree
-                    ? "h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-muted text-muted-foreground hover:bg-muted border-0 shadow-none"
+                    ? "h-11 w-full flex items-center justify-between gap-2 rounded-xl border border-border/70 bg-background text-foreground hover:bg-muted/50 shadow-none px-4"
                     : "h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)] active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all duration-150"}
                   disabled={!isFree && isAnyGenerating}
                   onClick={async () => {
@@ -1049,8 +1048,16 @@ export default function MealPlanPage() {
                     }
                   }}
                 >
-                  <Sparkles className="w-[18px] h-[18px] shrink-0" />
-                  Собрать неделю
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="w-[18px] h-[18px] shrink-0" />
+                    Собрать неделю
+                  </span>
+                  {isFree && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md shrink-0" aria-hidden>
+                      <Star className="w-3 h-3 text-amber-600" />
+                      Premium
+                    </span>
+                  )}
                 </Button>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -1067,9 +1074,8 @@ export default function MealPlanPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  aria-disabled={isFree}
                   className={isFree
-                    ? "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-0 shadow-none bg-muted text-muted-foreground hover:bg-muted text-xs font-medium"
+                    ? "h-9 w-full flex items-center justify-between gap-1.5 rounded-lg border border-border/70 bg-background text-foreground hover:bg-muted/50 text-xs font-medium shadow-none px-3"
                     : "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"}
                   disabled={hasAccess && (isAnyGenerating || isWeekPlansLoading)}
                   onClick={() => {
@@ -1085,8 +1091,16 @@ export default function MealPlanPage() {
                     shareWeekPlan();
                   }}
                 >
-                  <ShareIosIcon className="w-4 h-4 shrink-0" />
-                  Поделиться неделей
+                  <span className="flex items-center gap-1.5">
+                    <ShareIosIcon className="w-4 h-4 shrink-0" />
+                    Поделиться неделей
+                  </span>
+                  {isFree && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded-md shrink-0" aria-hidden>
+                      <Star className="w-3 h-3 text-amber-600" />
+                      Premium
+                    </span>
+                  )}
                 </Button>
               </div>
             </div>

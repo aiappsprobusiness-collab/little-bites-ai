@@ -12,7 +12,8 @@
 |------|------------|
 | `src/pages/SosTiles.tsx` | Страница Help: hero, карточка «Сегодня спрашивают», список тем, sheet и paywall. Вызывает `handleOpenWithMessage(text)`, при лимите — `onLimitReached` (refetch + закрытие sheet + открытие paywall). |
 | `src/components/sos/SosHero.tsx` | Hero: ввод, дисклеймер (без иконки, серый текст), quick chips. Для Free по тапу на premium‑чип вызывается `onPremiumChipTap` (paywall). |
-| `src/components/help/TopicConsultationSheet.tsx` | Нижний sheet с чатом по теме: чипсы (Free сначала, premium с маркером ⭐), input, история, retry. Fail‑safe: при отправке текста из `premiumChipTexts` у Free — не отправлять, открыть paywall. При `LIMIT_REACHED` — показать текст лимита в чате и вызвать `onLimitReached`. |
+| `src/components/sos/SosTopicGrid.tsx` | Сетка карточек тем по секциям: иконка, заголовок, подзаголовок (line-clamp-2), для Premium-тем — бейдж Star + Premium, по клику locked → paywall. |
+| `src/components/help/TopicConsultationSheet.tsx` | Нижний sheet с чатом по теме: чипсы (Free сначала, premium с иконкой Star), input, история, retry. Fail‑safe: при отправке текста из `premiumChipTexts` у Free — не отправлять, открыть paywall. При `LIMIT_REACHED` — показать текст лимита в чате и вызвать `onLimitReached`. |
 | `src/data/helpTopicChips.ts` | Quick chips для topic `"quick"`: список с полями `label`, `text`, `access: "free" \| "paid"`. Порядок: сначала Free, потом Premium. Экспорт: `getPremiumQuickChipTexts()`, `isPremiumQuickChipText(text)` для fail‑safe и перехвата на hero. |
 | `src/features/help/config/popularQuestions.ts` | Пул популярных вопросов для «Сегодня спрашивают»: тип `PopularQuestion` (id, text, category, access). Функция `getPopularQuestionForToday({ hasAccess, date? })`: ротация 1 раз в день по категории дня (Пн=nutrition, Вт=baby, Ср=allergy, Чт/Вс=routine, Пт=nutrition, Сб=baby) и индексу дня в году. Free видит только вопросы с `access: "free"`. |
 | `src/hooks/useDeepSeekAPI.tsx` | Запрос к `deepseek-chat`. При 429 и `code === 'LIMIT_REACHED'` или `error === 'LIMIT_REACHED'` бросает `Error('LIMIT_REACHED')` (payload опционален). При успешном ответе help — вызывает `refetchUsage()`. |
@@ -31,7 +32,7 @@
 ## 3. Quick chips (Hero и chat sheet)
 
 - **Данные:** `helpTopicChips.ts` — массив с `access: "free" \| "paid"`. Free‑чипы: «Новый продукт», «Стул малыша»; остальные — paid.
-- **Hero:** при тапе по чипу: если `access === "paid"` и `!hasAccess` → `onPremiumChipTap()` (paywall), иначе `onOpenWithMessage(chip.text)`. Premium‑чипы для Free отображаются с маркером ⭐ и лёгким amber‑стилем.
+- **Hero:** при тапе по чипу: если `access === "paid"` и `!hasAccess` → `onPremiumChipTap()` (paywall), иначе `onOpenWithMessage(chip.text)`. Premium‑чипы для Free отображаются с иконкой Star (Lucide) и лёгким amber‑стилем.
 - **SosTiles:** при вызове `handleOpenWithMessage(text)` если `!hasAccess && isPremiumQuickChipText(text)` → открыть paywall и не открывать sheet.
 - **TopicConsultationSheet:** при тапе по чипу: если `access === "paid"` и `!hasAccess` → `onPremiumChipTap()`, иначе вставка текста в input. Fail‑safe в `sendMessage`: для topic `"quick"` если текст входит в `premiumChipTexts` и `!hasAccess` → вызвать `onPremiumChipTap()` и не отправлять запрос.
 - **Порядок чипсов:** сначала Free, потом Premium (в данных и при отрисовке в sheet через сортировку).
@@ -43,7 +44,15 @@
 - **Вопрос дня:** `getPopularQuestionForToday({ hasAccess })`. Ротация раз в день, детерминирована по дате; категория по дню недели; внутри категории — по дню года. Free видит только вопросы с `access: "free"`.
 - **Клик:** `handleOpenWithMessage(popularQuestion.text)` — тот же поток, что и для чипсов (при premium‑вопросе у Premium — обычная отправка; у Free в карточке показываются только free‑вопросы).
 - **Лимит:** при `helpLimitExceeded` кнопка карточки `disabled`.
-- **Стиль и место:** без изменений относительно прежней одной константы.
+- **Вёрстка:** компактный блок (padding p-3), заголовок секции и один вопрос; текст вопроса ограничен 2 строками (`line-clamp-2`) с ellipsis.
+
+---
+
+## 4.1. Карточки тем (SosTopicGrid)
+
+- **Файл:** `src/components/sos/SosTopicGrid.tsx`. Список тем по секциям на странице Help.
+- **Premium-темы:** для Free у тем с `requiredTier === "paid"` отображается бейдж «Star + Premium» (иконка Star из Lucide, стиль amber: `text-amber-700 bg-amber-100/80`). По клику — `onLockedSelect()` (paywall).
+- **Вёрстка:** карточки компактные (padding p-3, gap 2.5), заголовок и подзаголовок по 2 строки макс. (`line-clamp-2`), иконка темы 32px, стрелка 16px. Цель — помещать на экран 4–5 карточек.
 
 ---
 

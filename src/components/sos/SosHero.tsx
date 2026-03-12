@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LifeBuoy } from "lucide-react";
+import { LifeBuoy, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
@@ -122,7 +122,7 @@ export function SosHero({
                     : "border-border bg-background text-foreground hover:bg-muted/30 active:bg-muted/50"
                 )}
               >
-                {isPremium && <span className="text-[10px] text-amber-600" aria-hidden>⭐</span>}
+                {isPremium && <Star className="w-3 h-3 text-amber-600 shrink-0" aria-hidden />}
                 {chip.label}
               </button>
             );

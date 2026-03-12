@@ -167,28 +167,28 @@ export default function SosTiles() {
         </div>
 
         <div className="shrink-0 mt-3">
-          <div className="rounded-2xl border border-border bg-card shadow-soft p-4">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+          <div className="rounded-2xl border border-border bg-card shadow-soft p-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
               Сегодня спрашивают
             </p>
             <button
               type="button"
               onClick={() => handleOpenWithMessage(popularQuestion.text)}
               disabled={helpLimitExceeded}
-              className="w-full flex items-center gap-3 text-left rounded-xl py-2 -mx-1 px-2 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+              className="w-full flex items-center gap-2 text-left rounded-xl py-1.5 -mx-0.5 px-1.5 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:opacity-50 disabled:pointer-events-none"
             >
-              <span className="flex-1 text-sm font-medium text-foreground leading-snug">
+              <span className="flex-1 text-sm font-medium text-foreground leading-snug line-clamp-2 text-ellipsis break-words min-w-0">
                 {popularQuestion.text}
               </span>
-              <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" aria-hidden />
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
             </button>
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto mt-4 pb-24 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto mt-3 pb-24 space-y-4">
           {groupedSections.map((section) => (
-            <section key={section.groupId} className="space-y-3">
-              <h2 className="text-base font-semibold text-foreground">{section.title}</h2>
+            <section key={section.groupId} className="space-y-2">
+              <h2 className="text-sm font-semibold text-foreground">{section.title}</h2>
               <SosTopicGrid
                 topics={section.topics}
                 hasAccess={hasAccess}

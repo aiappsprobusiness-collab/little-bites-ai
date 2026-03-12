@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Send, Loader2, MoreVertical, X } from "lucide-react";
+import { Send, Loader2, MoreVertical, X, Star } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -343,7 +343,7 @@ export function TopicConsultationSheet({
                           )}
                         >
                           {isPremiumLocked && (
-                            <span className="text-[10px] text-amber-600" aria-hidden>⭐</span>
+                            <Star className="w-3 h-3 text-amber-600 shrink-0" aria-hidden />
                           )}
                           {chip.label}
                         </button>
