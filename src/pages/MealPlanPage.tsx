@@ -639,7 +639,7 @@ export default function MealPlanPage() {
       const { url } = await createSharedPlan(user.id, memberIdForPlan, { date: selectedDayKey, meals });
       const shareText = "Сегодня готовлю по этому меню для семьи 🍽👇";
       if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "Меню на день", text: `${shareText}\n${url}`, url });
+        await navigator.share({ title: "Меню на день", text: shareText, url });
       } else {
         await navigator.clipboard?.writeText(`${shareText}\n${url}`);
         toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
@@ -670,7 +670,7 @@ export default function MealPlanPage() {
       });
       const shareText = "Нашла готовое меню на неделю для семьи 🍲👇";
       if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "Меню на неделю", text: `${shareText}\n${url}`, url });
+        await navigator.share({ title: "Меню на неделю", text: shareText, url });
       } else {
         await navigator.clipboard?.writeText(`${shareText}\n${url}`);
         toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
