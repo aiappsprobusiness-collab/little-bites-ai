@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ListPlus } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, CalendarPlus, Pencil, Trash2 } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -23,14 +23,14 @@ import {
   getShareRecipeUrl,
 } from "@/utils/usageEvents";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
-import { useShoppingList } from "@/hooks/useShoppingList";
 import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { getMealLabel } from "@/data/mealLabels";
 import { recipeHeroCard } from "@/theme/recipeTokens";
-import { IngredientChips, type IngredientOverrides } from "@/components/recipe/IngredientChips";
+import type { IngredientOverrides } from "@/components/recipe/IngredientChips";
+import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader";
@@ -125,7 +125,6 @@ export default function RecipePage() {
   const slotServings = planSlot?.servings;
 
   const { updateSlotIngredientOverrides, updateSlotServings } = useMealPlans(planMemberId ?? undefined);
-  const { addRecipeIngredients, isAddingToList } = useShoppingList();
 
   const { isFavorite: isFavoriteFn, toggleFavorite } = useFavorites("all");
   const isFavorite = !!id && isFavoriteFn(id, favoriteMemberId);
@@ -354,24 +353,7 @@ export default function RecipePage() {
         {/* Hero card: чуть шире (меньше отступ от краёв на 8px), визуальный акцент */}
         <div className="-mx-2">
           <div className={cn(recipeHeroCard, "relative space-y-4 p-6")}>
-            <motion.button
-              type="button"
-              onClick={handleToggleFavorite}
-              aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
-              whileTap={{ scale: 0.96 }}
-              transition={{ duration: 0.15 }}
-              className={cn(
-                "absolute right-5 top-6 z-10 h-[34px] w-[34px] min-h-[34px] min-w-[34px] rounded-full border bg-background/95 shadow-[0_6px_18px_-10px_rgba(0,0,0,0.3)] backdrop-blur-sm",
-                "flex items-center justify-center touch-manipulation transition-colors duration-150",
-                isFavorite
-                  ? "text-primary border-primary/25 bg-primary/10"
-                  : "text-muted-foreground border-border/80 hover:border-primary/30 hover:bg-primary/[0.06] hover:text-foreground"
-              )}
-            >
-              <Heart className={cn("h-4 w-4 transition-opacity duration-150", isFavorite && "fill-current")} />
-            </motion.button>
-
-            <div className="space-y-4 pr-11">
+            <div className="space-y-4">
               <RecipeNutritionHeader
                 mealTypeLabel={mealLabel}
                 cookingTimeMinutes={typeof cookingTime === "number" ? cookingTime : null}
@@ -392,159 +374,132 @@ export default function RecipePage() {
           </div>
         </div>
 
-        {/* Actions: Hero → 12px; тактильная отдача scale 0.96, 150ms */}
-        <div className="flex flex-wrap items-center gap-3 mt-3">
-          {hasAccess && (
-            <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 rounded-full border-primary-border text-primary hover:bg-primary/10 hover:border-primary/50 h-10 px-3 transition-opacity duration-150"
-                onClick={() => setAddToPlanOpen(true)}
-                aria-label="Добавить в план"
-              >
-                <CalendarPlus className="h-4 w-4 shrink-0" />
-                <span className="text-sm">В план</span>
-              </Button>
-            </motion.div>
-          )}
-          <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 rounded-full border-primary-border text-primary hover:bg-primary/10 hover:border-primary/50 h-10 px-3"
-              onClick={handleShare}
-              aria-label="Поделиться рецептом"
+        {/* Компактная панель действий под названием (как в рецепте из чата) */}
+        <div
+          className="flex flex-row items-center gap-2 mt-3"
+          style={{ touchAction: "manipulation" }}
+        >
+          <motion.button
+            type="button"
+            onClick={handleToggleFavorite}
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className={cn(
+              "h-9 w-9 rounded-full shrink-0 flex items-center justify-center transition-all",
+              isFavorite
+                ? "text-primary bg-primary/10 border border-primary/20 fill-primary"
+                : "text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground"
+            )}
+            aria-label={isFavorite ? "Удалить из избранного" : "В избранное"}
+            title={isFavorite ? "Удалить из избранного" : "В избранное"}
+          >
+            <Heart className={cn("h-4 w-4", isFavorite && "fill-current")} />
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={handleShare}
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all"
+            aria-label="Поделиться"
+            title="Поделиться"
+          >
+            <ShareIosIcon className="h-4 w-4" />
+          </motion.button>
+          {hasAccess ? (
+            <motion.button
+              type="button"
+              onClick={() => setAddToPlanOpen(true)}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all"
+              aria-label="Добавить в план"
+              title="В план"
             >
-              <ShareIosIcon className="h-4 w-4 shrink-0" />
-              <span className="text-sm">Поделиться рецептом</span>
-            </Button>
-          </motion.div>
+              <CalendarPlus className="h-4 w-4" />
+            </motion.button>
+          ) : (
+            <motion.button
+              type="button"
+              onClick={() => {
+                setPaywallCustomMessage("Добавление в план доступно в Premium.");
+                setShowPaywall(true);
+              }}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all"
+              aria-label="В план (Premium)"
+              title="В план (Premium)"
+            >
+              <CalendarPlus className="h-4 w-4" />
+            </motion.button>
+          )}
           {isUserCustom && (
             <>
-              <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 rounded-full border-primary-border/60 text-primary hover:bg-primary/10 h-10 px-3"
-                  onClick={() => setEditSheetOpen(true)}
-                  aria-label="Редактировать"
-                >
-                  <Pencil className="h-4 w-4 shrink-0" />
-                  <span className="text-sm">Изменить</span>
-                </Button>
-              </motion.div>
-              <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5 rounded-full border-destructive/40 text-destructive hover:bg-destructive/10 h-10 px-3"
-                  onClick={() => setDeleteConfirmOpen(true)}
-                  disabled={isDeleting}
-                  aria-label="Удалить рецепт"
-                >
-                  <Trash2 className="h-4 w-4 shrink-0" />
-                  <span className="text-sm">Удалить</span>
-                </Button>
-              </motion.div>
+              <motion.button
+                type="button"
+                onClick={() => setEditSheetOpen(true)}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all"
+                aria-label="Редактировать"
+                title="Изменить"
+              >
+                <Pencil className="h-4 w-4" />
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => setDeleteConfirmOpen(true)}
+                disabled={isDeleting}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all disabled:opacity-50"
+                aria-label="Удалить рецепт"
+                title="Удалить"
+              >
+                <Trash2 className="h-4 w-4" />
+              </motion.button>
             </>
           )}
         </div>
 
-        {/* Порции и кнопка «В список» */}
-        <div className="space-y-2 mt-[18px] flex flex-wrap items-end gap-3">
-          <div>
-            <span className="text-[11px] font-medium text-muted-foreground/90 block">Порции</span>
-            <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
-              <motion.button
-                type="button"
-                onClick={() => setServingsSelected((s) => Math.max(1, s - 1))}
-                whileTap={{ scale: 0.96 }}
-                transition={{ duration: 0.1 }}
-                className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
-                aria-label="Уменьшить порции"
-              >
-                −
-              </motion.button>
-              <span className="min-w-[2.75rem] text-center text-sm font-semibold text-foreground" aria-live="polite">
-                {servingsSelected}
-              </span>
-              <motion.button
-                type="button"
-                onClick={() => setServingsSelected((s) => Math.min(20, s + 1))}
-                whileTap={{ scale: 0.96 }}
-                transition={{ duration: 0.1 }}
-                className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
-                aria-label="Увеличить порции"
-              >
-                +
-              </motion.button>
-            </div>
-          </div>
-          {hasAccess ? (
-            <motion.div whileTap={{ scale: 0.96 }} transition={{ duration: 0.15 }}>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 rounded-full border-[#6b7c3d]/50 text-[#6b7c3d] hover:bg-[#6b7c3d]/10 h-10 px-3"
-                onClick={async () => {
-                  if (!id || !recipe || displayIngredients.length === 0) return;
-                  const mult = servingsSelected / servingsBase;
-                  const ingredients = displayIngredients.map((ing) => {
-                    const ingAny = ing as { name?: string; amount?: number | null; unit?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; category?: string };
-                    const name = (ingAny.name ?? "").trim() || "Ингредиент";
-                    const canAmt = ingAny.canonical_amount != null ? ingAny.canonical_amount * mult : null;
-                    const amt = ingAny.amount != null ? ingAny.amount * mult : null;
-                    const canUnit = ingAny.canonical_unit === "g" || ingAny.canonical_unit === "ml" ? ingAny.canonical_unit : null;
-                    return {
-                      name,
-                      amount: canAmt ?? amt,
-                      unit: canUnit ?? ingAny.unit ?? null,
-                      category: (ingAny.category as "vegetables" | "fruits" | "dairy" | "meat" | "grains" | "other") ?? "other",
-                    };
-                  });
-                  try {
-                    await addRecipeIngredients({
-                      ingredients,
-                      recipeId: id,
-                      recipeTitle: (recipe as { title?: string }).title ?? null,
-                    });
-                    toast({ title: "Добавлено в список" });
-                  } catch {
-                    toast({ variant: "destructive", title: "Не удалось добавить в список" });
-                  }
-                }}
-                disabled={isAddingToList}
-                aria-label="Добавить в список продуктов"
-              >
-                {isAddingToList ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListPlus className="w-3.5 h-3.5" />}
-                <span className="text-sm">В список</span>
-              </Button>
-            </motion.div>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 rounded-full border-border text-muted-foreground h-10 px-3"
-              onClick={() => {
-                setPaywallCustomMessage("Список продуктов доступен в Premium");
-                setShowPaywall(true);
-              }}
-              aria-label="Добавить в список (доступно в Premium)"
+        {/* Порции */}
+        <div className="mt-5">
+          <span className="text-[11px] font-medium text-muted-foreground/90 block">Порции</span>
+          <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
+            <motion.button
+              type="button"
+              onClick={() => setServingsSelected((s) => Math.max(1, s - 1))}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.1 }}
+              className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
+              aria-label="Уменьшить порции"
             >
-              <ListPlus className="w-3.5 h-3.5" />
-              <span className="text-sm">В список</span>
-            </Button>
-          )}
+              −
+            </motion.button>
+            <span className="min-w-[2.75rem] text-center text-sm font-semibold text-foreground" aria-live="polite">
+              {servingsSelected}
+            </span>
+            <motion.button
+              type="button"
+              onClick={() => setServingsSelected((s) => Math.min(20, s + 1))}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.1 }}
+              className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
+              aria-label="Увеличить порции"
+            >
+              +
+            </motion.button>
+          </div>
         </div>
 
-        {/* Ингредиенты: нижние секции — 24px как раньше */}
-        <IngredientChips
+        {/* Ингредиенты: список с заголовком «на X порций» */}
+        <RecipeIngredientList
           className="mt-6"
           ingredients={ingredientsForChips}
           overrides={fromMealPlan ? {} : overrides}
           scaledOverrides={fromMealPlan ? undefined : scaledOverrides}
-          variant="full"
+          servingsCount={servingsSelected}
         />
 
         {chefAdvice?.trim() ? (
