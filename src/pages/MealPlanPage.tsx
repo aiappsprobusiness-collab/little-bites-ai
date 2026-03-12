@@ -15,6 +15,7 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { usePlanGenerationJob, getStoredJobId, setStoredJobId } from "@/hooks/usePlanGenerationJob";
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
@@ -73,6 +74,58 @@ const A2HS_FIRST_PLAN_DISPATCHED_KEY = "a2hs_first_plan_dispatched";
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 function getDayLabel(date: Date): string {
   return weekDays[(date.getDay() + 6) % 7];
+}
+
+const PARTIAL_FILL_TOAST_DURATION_MS = 7000;
+const PARTIAL_FILL_SUBTITLE = "Добавьте блюда из Избранного или создайте новые в чате с помощником.";
+
+function PartialFillToastActions({
+  navigate,
+  dismiss,
+}: {
+  navigate: (path: string, state?: object) => void;
+  dismiss: () => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      <ToastAction
+        altText="Открыть Избранное"
+        onClick={() => {
+          trackUsageEvent("partial_week_toast_favorites_click");
+          dismiss();
+          navigate("/favorites");
+        }}
+      >
+        Избранное
+      </ToastAction>
+      <ToastAction
+        altText="Подобрать в чате"
+        onClick={() => {
+          trackUsageEvent("partial_week_toast_assistant_click");
+          dismiss();
+          navigate("/chat");
+        }}
+      >
+        Подобрать в чате
+      </ToastAction>
+    </div>
+  );
+}
+
+function showPartialFillToast(
+  toast: ReturnType<typeof useToast>["toast"],
+  navigate: (path: string, state?: object) => void,
+  options: { filled?: number; total?: number }
+) {
+  const { filled, total } = options;
+  const title =
+    filled != null && total != null ? `Подобрали ${filled} из ${total} блюд.` : "Подобрали часть блюд.";
+  const r = toast({
+    title,
+    description: PARTIAL_FILL_SUBTITLE,
+    duration: PARTIAL_FILL_TOAST_DURATION_MS,
+  });
+  r.update({ action: <PartialFillToastActions navigate={navigate} dismiss={r.dismiss} /> });
 }
 
 /** Фразы статуса генерации плана (цикл по порядку, без рандома). */
@@ -335,7 +388,7 @@ export default function MealPlanPage() {
       } else if (planJob.error_text?.startsWith("partial:")) {
         const filled = (planJob.progress_done ?? 0) * 4;
         const total = (planJob.progress_total ?? (planGenType === "week" ? 7 : 1)) * 4;
-        toast({ description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+        showPartialFillToast(toast, navigate, { filled, total });
       } else {
         toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов", duration: 5000 });
         if (typeof window !== "undefined" && localStorage.getItem(A2HS_FIRST_PLAN_DISPATCHED_KEY) !== "1") {
@@ -356,7 +409,7 @@ export default function MealPlanPage() {
             : planErrorText ?? "Не удалось сгенерировать план";
       toast({ variant: planErrorText === "cancelled_by_user" ? "default" : "destructive", title: planErrorText === "cancelled_by_user" ? undefined : "Ошибка генерации", description: errDesc });
     }
-  }, [planJob?.id, planJob?.status, planJob?.progress_done, planJob?.created_at, planGenType, planErrorText, queryClient, user?.id, memberIdForPlan, startKey, toast]);
+  }, [planJob?.id, planJob?.status, planJob?.progress_done, planJob?.created_at, planGenType, planErrorText, queryClient, user?.id, memberIdForPlan, startKey, toast, navigate]);
 
   // При заходе на страницу — resume polling если есть сохранённый job
   useEffect(() => {
@@ -911,13 +964,15 @@ export default function MealPlanPage() {
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                       const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                       const total = result.totalSlots ?? 4;
-                      const planReadyT = toast({
-                        title: "Меню на сегодня готово",
-                        description: result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)
-                          ? `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов.`
-                          : `Подобрано: ${filled} из ${total}`,
-                      });
-                      setTimeout(() => planReadyT.dismiss(), 2000);
+                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                        showPartialFillToast(toast, navigate, { filled, total });
+                      } else {
+                        const planReadyT = toast({
+                          title: "Меню на сегодня готово",
+                          description: `Подобрано: ${filled} из ${total}`,
+                        });
+                        setTimeout(() => planReadyT.dismiss(), 2000);
+                      }
                     } catch (e: unknown) {
                       trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
                       const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
@@ -926,7 +981,7 @@ export default function MealPlanPage() {
                       } else if (msg === "member_id_required") {
                         toast({ description: "Выберите профиль ребёнка вверху" });
                       } else if (msg.includes("слишком много времени")) {
-                        toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                        showPartialFillToast(toast, navigate, {});
                       } else {
                         toast({ variant: "destructive", title: "Ошибка", description: msg });
                       }
@@ -974,7 +1029,7 @@ export default function MealPlanPage() {
                       const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                       const total = result.totalSlots ?? 28;
                       if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                        toast({ title: "Заполнить всю неделю", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                        showPartialFillToast(toast, navigate, { filled, total });
                       } else {
                         toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
                       }
@@ -985,7 +1040,7 @@ export default function MealPlanPage() {
                       } else if (msg === "member_id_required") {
                         toast({ description: "Выберите профиль ребёнка вверху" });
                       } else if (msg.includes("слишком много времени")) {
-                        toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                        showPartialFillToast(toast, navigate, {});
                       } else {
                         toast({ variant: "destructive", title: "Ошибка", description: msg });
                       }
@@ -1172,20 +1227,22 @@ export default function MealPlanPage() {
                         await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                         const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                         const total = result.totalSlots ?? 4;
-                        const planReadyT = toast({
-                          title: "Меню на сегодня готово",
-                          description: result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)
-                            ? `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов.`
-                            : `Подобрано: ${filled} из ${total}`,
-                        });
-                        setTimeout(() => planReadyT.dismiss(), 2000);
+                        if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                          showPartialFillToast(toast, navigate, { filled, total });
+                        } else {
+                          const planReadyT = toast({
+                            title: "Меню на сегодня готово",
+                            description: `Подобрано: ${filled} из ${total}`,
+                          });
+                          setTimeout(() => planReadyT.dismiss(), 2000);
+                        }
                       } catch (e: unknown) {
                         trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
                         const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
                         if (msg === "LIMIT_REACHED") {
                           /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
                         } else if (msg.includes("слишком много времени")) {
-                          toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                          showPartialFillToast(toast, navigate, {});
                         } else {
                           toast({ variant: "destructive", title: "Ошибка", description: msg });
                         }
@@ -1440,7 +1497,8 @@ export default function MealPlanPage() {
                                   }, mealPlanMemberId ?? null);
                                   await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                                   toast({
-                                    description: result.pickedSource === "ai" ? "Рецепт подобран (AI)" : "Рецепт подобран из базы",
+                                    description: "Блюдо добавлено в план",
+                                    duration: 2500,
                                   });
                                   if (isPlanDebug()) {
                                     console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: true, reason: result.reason });
@@ -1549,7 +1607,7 @@ export default function MealPlanPage() {
                       const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                       const total = result.totalSlots ?? 4;
                       if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                        toast({ title: "Подобрать рецепты", description: `Заполнено ${filled} из ${total}. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное.` });
+                        showPartialFillToast(toast, navigate, { filled, total });
                       } else {
                         const aiFallback = result.aiFallbackCount ?? 0;
                         const desc = aiFallback > 0
@@ -1564,7 +1622,7 @@ export default function MealPlanPage() {
                       } else if (msg === "member_id_required") {
                         toast({ description: "Выберите профиль ребёнка вверху" });
                       } else if (msg.includes("слишком много времени")) {
-                        toast({ description: "Заполнено частично. В пуле не хватило подходящих рецептов. Добавьте рецепты через Чат или Избранное." });
+                        showPartialFillToast(toast, navigate, {});
                       } else {
                         toast({ variant: "destructive", title: "Ошибка", description: msg });
                       }
