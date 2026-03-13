@@ -1,12 +1,14 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, startTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { Send, Loader2, MoreVertical, Trash2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { TopBarIconButton } from "@/components/layout/TopBar";
-import { Button } from "@/components/ui/button";
 import { Paywall } from "@/components/subscription/Paywall";
 import { ChatMessage } from "@/components/chat/ChatMessage";
+import { ChatEmptyState, EMPTY_STATE_QUICK_SUGGESTIONS } from "@/components/chat/ChatEmptyState";
+import { ChatInputBar } from "@/components/chat/ChatInputBar";
+import { ChatActionsMenu } from "@/components/chat/ChatActionsMenu";
+import { AssistantAboutSheet } from "@/components/chat/AssistantAboutSheet";
 import { FamilyOnboarding } from "@/components/onboarding/FamilyOnboarding";
 import { ArticleReaderModal } from "@/components/articles/ArticleReaderModal";
 import { useArticle } from "@/hooks/useArticles";
@@ -23,12 +25,6 @@ import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { getQuickPromptsForMode } from "@/utils/quickPrompts";
 import { QuickPromptsSheet } from "@/components/chat/QuickPromptsSheet";
 import { formatAllergySummary } from "@/utils/chatHeroUtils";
@@ -39,7 +35,6 @@ import type { LimitReachedFeature } from "@/utils/limitReachedMessages";
 import { getRewrittenQueryIfFollowUp, deriveDishHint } from "@/utils/blockedFollowUp";
 import type { BlockedMeta } from "@/types/chatBlocked";
 import { useAppStore } from "@/store/useAppStore";
-import { Textarea } from "@/components/ui/textarea";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { Progress } from "@/components/ui/progress";
 import { A2HS_EVENT_AFTER_FIRST_RECIPE } from "@/hooks/usePWAInstall";
@@ -110,14 +105,6 @@ const RECIPE_GENERATION_PHRASES = [
     "Факт: розмарин улучшает память и концентрацию.",
     "Совет: морковь для супа нарежьте соломкой — быстрее свариться."
   
-];
-
-/** Быстрые подсказки над полем ввода (режим рецептов). Показ только при пустом поле и пустой истории чата (нет сообщений). Тап — вставка в поле, без автоотправки. */
-const CHAT_QUICK_SUGGESTIONS = [
-  "Завтрак с кальцием",
-  "Быстрый ужин",
-  "Без молока",
-  "Перекус в дорогу",
 ];
 
 /** Подсказки в placeholder поля ввода чата (режим рецептов). Ротация каждые 2.5 с, останавливается при вводе. Вторичный способ подсказки. */
@@ -263,6 +250,8 @@ export default function ChatPage() {
   }, []);
 
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showAboutAssistant, setShowAboutAssistant] = useState(false);
 
   // Ротация подсказок в placeholder (режим рецептов, поле пустое, не идёт генерация)
   useEffect(() => {
@@ -1085,10 +1074,13 @@ export default function ChatPage() {
       : mode !== "help" && isFree && aiDailyLimit !== null
         ? (
           <span className="block">
-            <span className="text-[11px] text-muted-foreground/80">
+            <span className="text-[11px] text-muted-foreground/80 block">
               Сегодня осталось {remaining} из {aiDailyLimit} AI-запросов
             </span>
-            <Progress value={(usedToday / aiDailyLimit) * 100} className="h-1 mt-0.5" />
+            <Progress
+              value={(usedToday / aiDailyLimit) * 100}
+              className="h-[2px] mt-px w-full rounded-full bg-[#E9E9E9]"
+            />
           </span>
         )
         : undefined;
@@ -1124,56 +1116,14 @@ export default function ChatPage() {
     return `Аллергии: ${first}${rest}`;
   }, [mode, selectedMemberId, selectedMember, members]);
 
-  /** Системное onboarding-сообщение в пустом чате (режим рецептов): только UI, не в истории и не в API. */
-  const showRecipesOnboarding =
-    mode === "recipes" &&
-    messages.length === 0 &&
-    !isLoadingHistory &&
-    members.length > 0;
-  const recipesOnboardingContent = useMemo(() => {
-    if (!showRecipesOnboarding) return null;
-    const isFamily = selectedMemberId === "family";
-    if (isFamily) {
-      return {
-        kind: "family" as const,
-        text: "Я помогу подобрать блюда для всей семьи,\nучитывая возраст и особенности питания.\n\nНапишите запрос или выберите подсказку ниже.",
-      };
-    }
-    return {
-      kind: "member" as const,
-      profileName: selectedMember?.name ?? "профиль",
-    };
-  }, [showRecipesOnboarding, selectedMemberId, selectedMember?.name]);
-
   return (
     <MobileLayout showNav>
       <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg overflow-hidden">
-        {/* Sticky hero: только пилюля профиля + надпись по времени суток (как в мессенджере), без полоски */}
-        {mode === "recipes" && members.length > 0 && (
+        {/* Sticky hero: только при наличии сообщений; меню перенесено в нижнюю кнопку ... */}
+        {mode === "recipes" && members.length > 0 && messages.length > 0 && (
           <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-2 pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
-              {mode === "recipes" && members.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <TopBarIconButton aria-label="Меню чата">
-                      <MoreVertical className="w-5 h-5" />
-                    </TopBarIconButton>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" sideOffset={4}>
-                    <DropdownMenuItem
-                      className="text-foreground"
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setShowClearConfirm(true);
-                      }}
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Очистить чат
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </div>
             {!isFamilySelected(selectedMemberId, members) && (
               <div className="mt-1.5">
@@ -1230,27 +1180,21 @@ export default function ChatPage() {
             </motion.div>
           )}
 
-          {showRecipesOnboarding && recipesOnboardingContent && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.28, ease: "easeOut" }}
-              className="flex justify-start"
-            >
-              <div className="max-w-[80%] rounded-2xl p-4 bg-card shadow-soft">
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                  {recipesOnboardingContent.kind === "family" ? (
-                    recipesOnboardingContent.text
-                  ) : (
-                    <>
-                      Я помогу подобрать блюда для профиля <strong>{recipesOnboardingContent.profileName}</strong>, учитывая возраст и особенности питания.
-                      {"\n\n"}
-                      Напишите запрос или выберите подсказку ниже.
-                    </>
-                  )}
-                </p>
-              </div>
-            </motion.div>
+          {/* Пустое состояние чата рецептов: pill профиля, приветственная карточка, подсказки-плашки */}
+          {mode === "recipes" && messages.length === 0 && !isLoadingHistory && members.length > 0 && (
+            <ChatEmptyState
+              profileName={chatProfileName}
+              isFamily={selectedMemberId === "family"}
+              suggestions={EMPTY_STATE_QUICK_SUGGESTIONS}
+              onSuggestionClick={(text) => {
+                setInput(text);
+                markHintsSeen();
+                textareaRef.current?.focus();
+              }}
+              onProfileChange={() => setMessages([])}
+              profileChangeStatus={profileChangeStatus}
+              headerMeta={chatHeaderMeta}
+            />
           )}
 
           {mode === "recipes" && isLoadingHistory && (
@@ -1314,75 +1258,35 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input: единый стиль, 16px padding, divider */}
-        <div className="sticky bottom-0 z-20 shrink-0 border-t border-border bg-background px-4 pt-2 pb-6 safe-bottom max-w-full overflow-x-hidden">
-          {mode === "recipes" && !input.trim() && messages.length === 0 && (
-            <div className="mb-2 flex gap-2 overflow-x-auto overflow-y-hidden min-w-0 scrollbar-none pb-0.5" style={{ WebkitOverflowScrolling: "touch" }}>
-              {CHAT_QUICK_SUGGESTIONS.map((phrase) => (
-                <button
-                  key={phrase}
-                  type="button"
-                  onClick={() => {
-                    setInput(phrase);
-                    markHintsSeen();
-                    textareaRef.current?.focus();
-                  }}
-                  className="shrink-0 rounded-full px-3 py-1.5 text-[13px] bg-neutral-100 text-foreground hover:bg-neutral-200/80 active:scale-[0.98] transition-all"
-                >
-                  {phrase}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex w-full items-center gap-2 min-w-0">
-            <div className="relative flex-1 min-w-0">
-              {mode === "recipes" && !input.trim() && (
-                <div className="absolute inset-0 flex items-center pointer-events-none rounded-2xl py-3 px-4" aria-hidden>
-                  <AnimatePresence mode="wait">
-                    <motion.span
-                      key={placeholderIndex}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="text-sm text-muted-foreground"
-                    >
-                      {CHAT_PLACEHOLDER_SUGGESTIONS[placeholderIndex]}
-                    </motion.span>
-                  </AnimatePresence>
-                </div>
-              )}
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  mode === "help"
-                    ? "Например: Сыпь после творога — что делать?"
-                    : ""
-                }
-                className="min-h-[44px] max-h-[120px] w-full min-w-0 resize-none rounded-2xl bg-card border border-border py-3 px-4 text-sm placeholder:text-muted-foreground focus-visible:ring-primary/30"
-                rows={1}
-              />
-            </div>
-            <div className="flex items-center gap-2 shrink-0 relative">
-              <button
-                type="button"
-                disabled={!input.trim() || isChatting}
-                onClick={() => handleSend()}
-                className="h-11 w-11 shrink-0 rounded-full flex items-center justify-center text-primary-foreground bg-primary hover:opacity-90 active:scale-95 disabled:opacity-50 transition-all"
-              >
-                {isChatting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        {/* Нижняя панель ввода: кнопка ..., pill-инпут, кнопка отправки */}
+        <ChatInputBar
+          ref={textareaRef}
+          value={input}
+          onChange={setInput}
+          onKeyDown={handleKeyDown}
+          onSend={() => handleSend()}
+          onMoreClick={() => setShowActionsMenu(true)}
+          isSending={isChatting}
+          mode={mode}
+          placeholderIndex={placeholderIndex}
+          placeholderSuggestions={CHAT_PLACEHOLDER_SUGGESTIONS}
+          placeholder="Например: Сыпь после творога — что делать?"
+        />
       </div>
+
+      <ChatActionsMenu
+        open={showActionsMenu}
+        onOpenChange={setShowActionsMenu}
+        onNewChat={() => setShowClearConfirm(true)}
+        onAboutAssistant={() => setShowAboutAssistant(true)}
+        onWriteUs={() => {
+          window.location.href = "mailto:momrecipesai@gmail.com";
+        }}
+      />
+      <AssistantAboutSheet
+        open={showAboutAssistant}
+        onOpenChange={setShowAboutAssistant}
+      />
 
       <Paywall
         isOpen={showPaywall}
