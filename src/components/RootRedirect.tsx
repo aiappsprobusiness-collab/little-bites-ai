@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { isStandalone } from "@/utils/standalone";
 import { Loader2 } from "lucide-react";
 
 function hasAuthParamsInUrl(search: string, hash: string): boolean {
@@ -14,9 +13,7 @@ function hasAuthParamsInUrl(search: string, hash: string): boolean {
  * Root "/" — умная маршрутизация:
  * - авторизован → app (meal-plan)
  * - в URL есть токены из письма (magic link / confirm) → /auth/callback (сохраняем hash/query)
- * - не авторизован + standalone PWA → /prelogin
- * - не авторизован + браузер → /welcome
- * Определение standalone только на клиенте после гидрации.
+ * - не авторизован → /auth (страница входа).
  */
 export function RootRedirect() {
   const { user, loading } = useAuth();
@@ -52,9 +49,5 @@ export function RootRedirect() {
     );
   }
 
-  if (isStandalone()) {
-    return <Navigate to="/prelogin" replace />;
-  }
-
-  return <Navigate to="/welcome" replace />;
+  return <Navigate to="/auth" replace />;
 }

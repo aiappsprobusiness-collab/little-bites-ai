@@ -43,10 +43,18 @@ export function MemberSelectorButton({
 
   const [showPicker, setShowPicker] = useState(false);
 
+  /** Показывать «Семья» в выборе только если в аккаунте больше одного профиля ребёнка. */
+  const childMembers = useMemo(() => members.filter((m) => m.type === "child"), [members]);
+  const showFamilyOption = childMembers.length > 1;
+
   const displayName = useMemo(() => {
-    if (selectedMemberId === "family" || !selectedMemberId) return "Семья";
-    return members.find((c) => c.id === selectedMemberId)?.name ?? "Семья";
-  }, [selectedMemberId, members]);
+    if (selectedMemberId !== "family" && selectedMemberId != null) {
+      return members.find((c) => c.id === selectedMemberId)?.name ?? "Семья";
+    }
+    if (showFamilyOption) return "Семья";
+    if (childMembers.length === 1) return childMembers[0].name;
+    return "Семья";
+  }, [selectedMemberId, members, showFamilyOption, childMembers]);
 
   const isLight = variant === "light";
   const pillClasses = isLight
@@ -119,7 +127,7 @@ export function MemberSelectorButton({
             <DialogTitle className="text-typo-title font-semibold">Кому готовим?</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-1 py-2">
-            {!isFree && (
+            {!isFree && showFamilyOption && (
               <button
                 type="button"
                 disabled={disabled}

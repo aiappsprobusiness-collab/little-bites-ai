@@ -196,11 +196,11 @@ export function MealCard({
         onClick={handleClick}
         actions={
           showActionsCompact ? (
-            <>
+            <div className="flex flex-col gap-1 items-stretch">
               {debugSource && (
                 <span
                   className={cn(
-                    "text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0",
+                    "text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 self-start",
                     debugSource === "db" ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"
                   )}
                 >
@@ -244,7 +244,7 @@ export function MealCard({
                   <Trash2 className="h-4 w-4" />
                 </button>
               )}
-            </>
+            </div>
           ) : undefined
         }
         className={className}

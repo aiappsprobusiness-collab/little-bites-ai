@@ -125,22 +125,24 @@ export function RecipeCard({
         className={cn(
           recipeCard,
           "touch-manipulation active:opacity-95 transition-opacity",
+          "bg-primary/[0.06]",
           onClick && "cursor-pointer",
           className
         )}
       >
-        <div className="flex items-start justify-between gap-2 w-full">
+        <div className="flex items-stretch justify-between gap-0 w-full">
           <div className="min-w-0 flex-1">
             <RecipeHeader
               {...headerWithNutrition}
               variant="compact"
+              className="bg-transparent shadow-none rounded-none -mb-px"
             />
             <div className={cn(bodyPadding, bodySpace)}>
               {innerBody}
             </div>
           </div>
           {actions && (
-            <div className="flex shrink-0 items-start gap-1 py-4 pr-4 pl-0" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col shrink-0 items-center gap-1 py-4 pr-4 pl-2" onClick={(e) => e.stopPropagation()}>
               {actions}
             </div>
           )}
