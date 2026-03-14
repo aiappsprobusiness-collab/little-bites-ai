@@ -75,14 +75,14 @@ disableDoubleTapZoom();
 
 createRoot(document.getElementById("root")!).render(<App />);
 
-// Скрытие splash после загрузки
+// Скрытие splash после загрузки (короткая задержка — без двойной задержки с системным splash)
 window.addEventListener("load", () => {
   const splash = document.getElementById("splash-screen");
   if (splash) {
     setTimeout(() => {
       splash.style.opacity = "0";
-      splash.style.transition = "opacity 300ms";
-      setTimeout(() => splash.remove(), 300);
-    }, 800);
+      splash.style.transition = "opacity 250ms ease-out";
+      setTimeout(() => splash.remove(), 250);
+    }, 400);
   }
 });

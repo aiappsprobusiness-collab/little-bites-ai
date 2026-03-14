@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "generate:icons": "node scripts/generate-png-icons.mjs",
+    "generate:maskable-icon": "node scripts/generate-maskable-icon.mjs",
     "generate:capacitor-icons": "npx @capacitor/assets generate",
     "build": "npm run generate:icons && vite build",
     "build:dev": "vite build --mode development",

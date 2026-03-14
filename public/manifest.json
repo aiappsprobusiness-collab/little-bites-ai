@@ -16,7 +16,7 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/mom-recipes-app-icon-512.png",
+      "src": "/icons/mom-recipes-app-icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
