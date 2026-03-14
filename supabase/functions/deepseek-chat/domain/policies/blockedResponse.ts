@@ -56,9 +56,13 @@ export function buildBlockedMessageEdge(
   const items = matchedDisplay.length > 0 ? matchedDisplay.join(", ") : "это";
   let line1: string;
   if (blockedBy === "allergy") {
-    line1 = `У профиля «${profileName}» указана аллергия на: ${items}. Смените профиль или замените аллерген на новый ингредиент.`;
+    const who =
+      !profileName || profileName === "Семья" || /выбранного профиля/i.test(profileName)
+        ? "выбранного профиля"
+        : `профиля «${profileName}»`;
+    line1 = `Внимание: у ${who} аллергия на ${items}. Мы не можем предложить рецепт с этим ингредиентом. Измените запрос или выберите другой профиль.`;
   } else {
-    line1 = `Профиль «${profileName}» не любит: ${items}. Смените профиль или замените аллерген на новый ингредиент.`;
+    line1 = `Профиль «${profileName}» не любит: ${items}. Измените запрос или выберите другой профиль.`;
   }
   const firstAlt = suggestedAlternatives[0] ?? "банан";
   const dishWord = intendedDishHint || "десерт";

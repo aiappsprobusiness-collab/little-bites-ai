@@ -43,9 +43,9 @@ export function MemberSelectorButton({
 
   const [showPicker, setShowPicker] = useState(false);
 
-  /** Показывать «Семья» в выборе только если в аккаунте больше одного профиля ребёнка. */
+  /** Показывать «Семья» в выборе, если в аккаунте больше одного члена (любого типа). Скрываем только для одного профиля (один ребёнок — не показываем вариант «Семья»). */
   const childMembers = useMemo(() => members.filter((m) => m.type === "child"), [members]);
-  const showFamilyOption = childMembers.length > 1;
+  const showFamilyOption = members.length > 1;
 
   const displayName = useMemo(() => {
     if (selectedMemberId !== "family" && selectedMemberId != null) {

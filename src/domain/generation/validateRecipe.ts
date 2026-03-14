@@ -8,6 +8,27 @@ const VEGETARIAN_BANNED = [
   "колбас", "сосиск", "ветчин",
 ];
 
+/**
+ * Текст рецепта только из названия и имён ингредиентов — для проверки аллергий и dislikes.
+ * Не включает description, steps, nutrition, чтобы избежать ложных срабатываний
+ * (например «белок» в описании пользы = нутриент, а не яйцо).
+ */
+function getRecipeTextForConstraintCheck(recipe: Record<string, unknown>): string {
+  const parts: string[] = [];
+  const title = typeof recipe.title === "string" ? recipe.title : "";
+  if (title.trim()) parts.push(title.trim());
+  const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  for (const ing of ings) {
+    if (typeof ing === "string" && ing.trim()) {
+      parts.push(ing.trim());
+    } else if (ing && typeof ing === "object" && "name" in ing && typeof (ing as { name: unknown }).name === "string") {
+      const name = (ing as { name: string }).name.trim();
+      if (name) parts.push(name);
+    }
+  }
+  return parts.join(" ").toLowerCase().replace(/\s+/g, " ");
+}
+
 export function validateRecipe(
   recipe: unknown,
   ctx: GenerationContext
@@ -20,7 +41,7 @@ export function validateRecipe(
   }
 
   const rec = recipe as Record<string, unknown>;
-  const text = JSON.stringify(recipe).toLowerCase();
+  const constraintText = getRecipeTextForConstraintCheck(rec);
 
   const profiles =
     ctx.mode === "family" && ctx.targets?.length
@@ -31,21 +52,22 @@ export function validateRecipe(
 
   for (const p of profiles) {
     const blockedTokens = buildBlockedTokens(p.allergies ?? []);
-    if (blockedTokens.length > 0 && containsAnyToken(text, blockedTokens).hit) {
+    if (blockedTokens.length > 0 && containsAnyToken(constraintText, blockedTokens).hit) {
       const allergyList = (p.allergies ?? []).filter(Boolean).join(", ");
       if (allergyList) errors.push(`Allergy violation: ${allergyList}`);
     }
 
     for (const d of p.dislikes || []) {
-      const token = String(d).toLowerCase().trim();
-      if (token.length >= 2 && text.includes(token)) {
+      const tokens = buildBlockedTokens([d]);
+      if (tokens.length > 0 && containsAnyToken(constraintText, tokens).hit) {
         errors.push(`Dislike violation: ${d}`);
       }
     }
+
     for (const pref of p.preferences || []) {
       const lowered = String(pref).toLowerCase().trim();
       if (lowered.includes("вегетариан") || lowered.includes("vegetarian")) {
-        const hasBanned = VEGETARIAN_BANNED.some((b) => text.includes(b));
+        const hasBanned = VEGETARIAN_BANNED.some((b) => constraintText.includes(b));
         if (hasBanned) {
           errors.push(`Preference violation: ${pref}`);
         }
@@ -53,7 +75,7 @@ export function validateRecipe(
       }
       if (lowered.includes("не") || lowered.includes("без")) {
         const banned = lowered.replace(/не|без/gi, "").trim();
-        if (banned.length > 1 && text.includes(banned)) {
+        if (banned.length > 1 && constraintText.includes(banned)) {
           errors.push(`Preference violation: ${pref}`);
         }
       }
@@ -69,5 +91,8 @@ export function validateRecipe(
     errors.push("Invalid recipe format");
   }
 
+  if (errors.length > 0 && typeof import.meta !== "undefined" && import.meta.env?.DEV) {
+    console.warn("[validateRecipe] Recipe rejected:", errors.join("; "));
+  }
   return { ok: errors.length === 0, errors };
 }

@@ -84,8 +84,7 @@ function findAlternatives(matched: string[]): string[] {
 
 /**
  * Собирает сообщение для пользователя при блокировке.
- * Формат: "У профиля «X» указано: АЛЛЕРГИЯ/НЕ ЛЮБИТ — {items}. Смените профиль или замените аллерген на новый ингредиент."
- * Вторая строка: "Попробуйте заменить на: A, B, C."
+ * Аллергия: понятное объяснение + что делать. Dislike: кратко + альтернативы.
  */
 export function buildBlockedMessage(
   profileName: string,
@@ -93,9 +92,17 @@ export function buildBlockedMessage(
   matched: string[],
   options?: { addAlternatives?: boolean }
 ): string {
-  const label = blockedBy === "allergy" ? "аллергия" : "не любит";
   const items = matched.length > 0 ? matched.join(", ") : "это";
-  const line1 = `У профиля «${profileName}» указано: ${label} — ${items}. Смените профиль или замените аллерген на новый ингредиент.`;
+  let line1: string;
+  if (blockedBy === "allergy") {
+    const who =
+      !profileName || profileName === "Семья" || /выбранного профиля/i.test(profileName)
+        ? "выбранного профиля"
+        : `профиля «${profileName}»`;
+    line1 = `Внимание: у ${who} аллергия на ${items}. Мы не можем предложить рецепт с этим ингредиентом. Измените запрос или выберите другой профиль.`;
+  } else {
+    line1 = `Профиль «${profileName}» не любит: ${items}. Измените запрос или выберите другой профиль.`;
+  }
   if (options?.addAlternatives !== false && matched.length > 0) {
     const alts = findAlternatives(matched);
     const line2 = `Попробуйте заменить на: ${alts.join(", ")}.`;

@@ -41,3 +41,13 @@ Deno.test("findMatchedTokens: strawberry pie matches berries", () => {
     throw new Error('"strawberry pie" should match berry tokens: ' + allergyItem.tokens.join(", "));
   }
 });
+
+Deno.test("findMatchedTokens: ореховый пудинг blocks when allergy is орехи", () => {
+  const set = buildBlockedTokenSet({ allergies: ["орехи"], dislikes: [] });
+  const allergyItem = set.allergyItems.find((item) => item.display === "орехи");
+  if (!allergyItem) throw new Error("allergyItems should contain орехи");
+  const matched = findMatchedTokens("ореховый пудинг", allergyItem.tokens);
+  if (matched.length === 0) {
+    throw new Error('"ореховый пудинг" should match nut tokens (e.g. ореховый), got: ' + allergyItem.tokens.join(", "));
+  }
+});

@@ -14,6 +14,7 @@ import {
   GREETING_STYLE_RULE,
   FAMILY_RECIPE_INSTRUCTION,
   KID_SAFETY_1_3_INSTRUCTION,
+  LIKES_DIVERSITY_RULE,
 } from "./prompts.ts";
 import { getAgeCategory, getAgeCategoryRules } from "./ageCategory.ts";
 import { buildPromptByProfileAndTariff } from "./promptByTariff.ts";
@@ -693,15 +694,21 @@ serve(async (req) => {
       }
     }
 
-    // Likes: для recipe-path — короткая строка "LIKES (soft): …"; для non-recipe — полная (buildLikesLine/buildLikesLineForProfile)
+    // Likes: для recipe-path — короткая строка "LIKES (soft): …"; для non-recipe — полная (buildLikesLine/buildLikesLineForProfile). Правило разнообразия — не залипать на одном продукте.
     const likesForPrompt = memberDataForPrompt?.likes ?? [];
     if ((type === "chat" || type === "recipe") && likesForPrompt.length > 0 && shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type })) {
       if (isRecipeRequest) {
         const joined = likesForPrompt.filter((l) => typeof l === "string" && l.trim()).map((l) => l.trim()).join(", ");
-        if (joined) systemPrompt += "\n\nLIKES (soft): " + joined + ".";
+        if (joined) {
+          systemPrompt += "\n\nLIKES (soft): " + joined + ".";
+          systemPrompt += "\n\n" + LIKES_DIVERSITY_RULE.trim();
+        }
       } else {
         const likesLine = targetIsFamily ? buildLikesLine(likesForPrompt) : buildLikesLineForProfile(memberDataForPrompt?.name ?? "профиль", likesForPrompt);
-        if (likesLine) systemPrompt += "\n\n" + likesLine;
+        if (likesLine) {
+          systemPrompt += "\n\n" + likesLine;
+          systemPrompt += "\n\n" + LIKES_DIVERSITY_RULE.trim();
+        }
       }
     }
 

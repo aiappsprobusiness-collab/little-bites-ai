@@ -18,7 +18,7 @@ export const ALLERGY_ALIASES: AllergyAlias[] = [
     canonical: "белок коровьего молока",
     display: "БКМ",
     aliases: ["бкм", "абкм", "cmpa", "cow milk protein", "milk protein"],
-    tokens: ["молок", "молоко", "сливк", "сливочное", "сливочным", "сливочного", "сливочное масло", "йогурт", "сыр", "творог", "кефир", "ряженк", "сметан", "масло сливочн", "казеин", "сыворот", "lactalbum", "casein", "whey", "milk", "dairy", "cheese", "yogurt", "коз", "козий", "козье", "безлактоз", "безлактозный", "goat", "lactose-free"],
+    tokens: ["молок", "молоко", "молочный", "молочная", "молочное", "сливк", "сливочное", "сливочным", "сливочного", "сливочное масло", "йогурт", "сыр", "творог", "кефир", "ряженк", "сметан", "масло сливочн", "казеин", "сыворот", "lactalbum", "casein", "whey", "milk", "dairy", "cheese", "yogurt", "коз", "козий", "козье", "безлактоз", "безлактозный", "goat", "lactose-free"],
   },
   {
     canonical: "лактоза",
@@ -36,7 +36,7 @@ export const ALLERGY_ALIASES: AllergyAlias[] = [
     canonical: "яйца",
     display: "яйца",
     aliases: ["яйцо", "яйца", "белок яйца", "egg", "egg white"],
-    tokens: ["яйц", "белок", "желтк", "egg", "eggs"],
+    tokens: ["яйц", "яичн", "яичный", "яичная", "яичное", "белок", "желтк", "egg", "eggs"],
   },
   {
     canonical: "рыба",
@@ -54,7 +54,7 @@ export const ALLERGY_ALIASES: AllergyAlias[] = [
     canonical: "орехи",
     display: "орехи",
     aliases: ["орехи", "tree nuts", "nuts", "др"],
-    tokens: ["орех", "миндал", "фундук", "кешью", "фисташк", "грецк", "пекан", "макадам", "кедров", "hazelnut", "almond", "cashew", "pistachio", "walnut", "pecan", "macadamia", "pine nut"],
+    tokens: ["орех", "ореховый", "ореховая", "ореховое", "миндал", "фундук", "кешью", "фисташк", "грецк", "пекан", "макадам", "кедров", "hazelnut", "almond", "cashew", "pistachio", "walnut", "pecan", "macadamia", "pine nut"],
   },
   {
     canonical: "арахис",

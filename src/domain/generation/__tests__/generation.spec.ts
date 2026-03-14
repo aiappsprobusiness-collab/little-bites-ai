@@ -48,6 +48,31 @@ describe("validateRecipe", () => {
     expect(res.errors).toHaveLength(0);
   });
 
+  it("accepts egg-free recipe when allergy is eggs (no false positive from description)", () => {
+    const ctx = {
+      mode: "single" as const,
+      target: {
+        id: "1",
+        name: "Child",
+        role: "child" as const,
+        allergies: ["яйца"],
+        preferences: [],
+      },
+    };
+
+    const recipe = {
+      title: "Овсянка с бананом",
+      description: "Белок даёт сытость и поддержку мышц. Овёс добавляет клетчатку.",
+      ingredients: [{ name: "овсяные хлопья", amount: "50 г" }, { name: "банан", amount: "1 шт." }, { name: "вода", amount: "100 мл" }],
+      steps: ["Сварить овсянку", "Добавить банан"],
+      nutrition: { protein_g_per_serving: 5, kcal_per_serving: 120 },
+    };
+
+    const res = validateRecipe(recipe, ctx);
+    expect(res.ok).toBe(true);
+    expect(res.errors).toHaveLength(0);
+  });
+
   it("rejects recipe with meat when preference is вегетарианское", () => {
     const ctx = {
       mode: "single" as const,
