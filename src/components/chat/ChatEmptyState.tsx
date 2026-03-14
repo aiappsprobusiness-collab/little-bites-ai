@@ -36,6 +36,8 @@ export interface ChatEmptyStateProps {
   profileChangeStatus?: string | null;
   /** Дополнительный контент под pill (например, лимиты). */
   headerMeta?: React.ReactNode;
+  /** Элемент справа в первой строке (например, кнопка меню ⋮). */
+  headerRight?: React.ReactNode;
   /** Класс контейнера. */
   className?: string;
 }
@@ -52,6 +54,7 @@ export function ChatEmptyState({
   onProfileChange,
   profileChangeStatus,
   headerMeta,
+  headerRight,
   className,
 }: ChatEmptyStateProps) {
   const welcomeLine1 = isFamily
@@ -61,13 +64,16 @@ export function ChatEmptyState({
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
-      {/* Верхняя строка: компактная pill профиля */}
-      <div className="shrink-0 flex flex-wrap items-center gap-2">
-        <MemberSelectorButton
-          onProfileChange={onProfileChange}
-          className="shrink-0"
-        />
-        {headerMeta != null && <div className="min-w-0 flex-1">{headerMeta}</div>}
+      {/* Верхняя строка: pill профиля слева, headerRight (меню ⋮) справа */}
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+          <MemberSelectorButton
+            onProfileChange={onProfileChange}
+            className="shrink-0"
+          />
+          {headerMeta != null && <div className="min-w-0 flex-1">{headerMeta}</div>}
+        </div>
+        {headerRight != null && <div className="shrink-0">{headerRight}</div>}
       </div>
       {profileChangeStatus && (
         <motion.span

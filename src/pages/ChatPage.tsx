@@ -23,6 +23,7 @@ import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type
 import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
+import { ChatHeaderMenuButton } from "@/components/chat/ChatHeaderMenuButton";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { getQuickPromptsForMode } from "@/utils/quickPrompts";
 import { QuickPromptsSheet } from "@/components/chat/QuickPromptsSheet";
@@ -1269,11 +1270,35 @@ export default function ChatPage() {
   return (
     <MobileLayout showNav>
       <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg overflow-hidden">
-        {/* Sticky hero: только при наличии сообщений; меню перенесено в нижнюю кнопку ... */}
+        {/* Sticky header в режиме «Помощник»: меню (⋮) справа */}
+        {mode === "help" && (
+          <div className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-2 pb-2 flex justify-end">
+            <ChatHeaderMenuButton
+              open={showActionsMenu}
+              onOpenChange={setShowActionsMenu}
+              onNewChat={() => setShowClearConfirm(true)}
+              onAboutAssistant={() => setShowAboutAssistant(true)}
+              onWriteUs={() => {
+                window.location.href = "mailto:momrecipesai@gmail.com";
+              }}
+            />
+          </div>
+        )}
+
+        {/* Sticky hero: только при наличии сообщений; меню (⋮) справа */}
         {mode === "recipes" && members.length > 0 && messages.length > 0 && (
           <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-2 pb-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
+              <ChatHeaderMenuButton
+                open={showActionsMenu}
+                onOpenChange={setShowActionsMenu}
+                onNewChat={() => setShowClearConfirm(true)}
+                onAboutAssistant={() => setShowAboutAssistant(true)}
+                onWriteUs={() => {
+                  window.location.href = "mailto:momrecipesai@gmail.com";
+                }}
+              />
             </div>
             {!isFamilySelected(selectedMemberId, members) && (
               <div className="mt-1.5">
@@ -1344,6 +1369,17 @@ export default function ChatPage() {
               onProfileChange={() => setMessages([])}
               profileChangeStatus={profileChangeStatus}
               headerMeta={chatHeaderMeta}
+              headerRight={
+                <ChatHeaderMenuButton
+                  open={showActionsMenu}
+                  onOpenChange={setShowActionsMenu}
+                  onNewChat={() => setShowClearConfirm(true)}
+                  onAboutAssistant={() => setShowAboutAssistant(true)}
+                  onWriteUs={() => {
+                    window.location.href = "mailto:momrecipesai@gmail.com";
+                  }}
+                />
+              }
             />
           )}
 
@@ -1421,20 +1457,13 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Нижняя панель ввода: кнопка ..., pill-инпут, кнопка отправки */}
+        {/* Нижняя панель ввода: pill-инпут, кнопка отправки. Меню (⋮) — в хедере вкладки. */}
         <ChatInputBar
           ref={textareaRef}
           value={input}
           onChange={setInput}
           onKeyDown={handleKeyDown}
           onSend={() => handleSend()}
-          actionsMenuOpen={showActionsMenu}
-          onActionsMenuOpenChange={setShowActionsMenu}
-          onNewChat={() => setShowClearConfirm(true)}
-          onAboutAssistant={() => setShowAboutAssistant(true)}
-          onWriteUs={() => {
-            window.location.href = "mailto:momrecipesai@gmail.com";
-          }}
           isSending={isChatting}
           mode={mode}
           placeholderIndex={placeholderIndex}

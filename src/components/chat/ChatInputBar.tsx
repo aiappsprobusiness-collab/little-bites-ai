@@ -1,9 +1,7 @@
 import { forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Loader2, MoreHorizontal } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChatActionsMenu } from "@/components/chat/ChatActionsMenu";
 import { cn } from "@/lib/utils";
 
 export interface ChatInputBarProps {
@@ -11,14 +9,6 @@ export interface ChatInputBarProps {
   onChange: (value: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSend: () => void;
-  /** При использовании actionsMenu* поповер открывается по кнопке «...»; иначе вызывается onMoreClick */
-  onMoreClick?: () => void;
-  /** Показать меню действий в поповере над кнопкой «...» */
-  actionsMenuOpen?: boolean;
-  onActionsMenuOpenChange?: (open: boolean) => void;
-  onNewChat?: () => void;
-  onAboutAssistant?: () => void;
-  onWriteUs?: () => void;
   isSending: boolean;
   /** Режим рецептов: показывать ротирующийся плейсхолдер поверх пустого поля. */
   mode: "recipes" | "help";
@@ -33,8 +23,8 @@ export interface ChatInputBarProps {
 }
 
 /**
- * Нижняя панель ввода чата: кнопка «...» слева, поле ввода (pill) по центру, кнопка отправки справа.
- * Сохраняет ротацию плейсхолдера и все состояния disabled/loading.
+ * Нижняя панель ввода чата: поле ввода (pill) и кнопка отправки.
+ * Кнопка меню (⋮) вынесена в правый верхний угол вкладки «Чат» (ChatPage).
  */
 export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarProps>(
   function ChatInputBar(
@@ -43,12 +33,6 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
       onChange,
       onKeyDown,
       onSend,
-      onMoreClick,
-      actionsMenuOpen,
-      onActionsMenuOpenChange,
-      onNewChat,
-      onAboutAssistant,
-      onWriteUs,
       isSending,
       mode,
       placeholderIndex = 0,
@@ -61,27 +45,6 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
   ) {
     const showPlaceholderOverlay = mode === "recipes" && !value.trim() && placeholderSuggestions.length > 0;
     const currentPlaceholder = placeholderSuggestions[placeholderIndex];
-    const useActionsPopover =
-      onActionsMenuOpenChange != null &&
-      onNewChat != null &&
-      onAboutAssistant != null &&
-      onWriteUs != null;
-
-    const moreButton = (
-      <button
-        type="button"
-        onClick={useActionsPopover ? undefined : onMoreClick}
-        aria-label="Дополнительные действия"
-        aria-expanded={useActionsPopover ? actionsMenuOpen : undefined}
-        className={cn(
-          "h-11 w-11 shrink-0 rounded-full flex items-center justify-center",
-          "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground",
-          "active:scale-95 transition-all"
-        )}
-      >
-        <MoreHorizontal className="w-5 h-5" />
-      </button>
-    );
 
     return (
       <div
@@ -93,34 +56,6 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
         style={{ bottom: "calc(var(--layout-nav-height) - 3rem)" }}
       >
         <div className="flex w-full items-center gap-2 min-w-0">
-          {/* Кнопка ... слева: с поповером меню или только onClick */}
-          {useActionsPopover ? (
-            <Popover open={actionsMenuOpen} onOpenChange={onActionsMenuOpenChange}>
-              <PopoverTrigger asChild>{moreButton}</PopoverTrigger>
-              <PopoverContent
-                side="top"
-                align="start"
-                sideOffset={8}
-                className={cn(
-                  "w-[min(50vw,260px)] p-2 rounded-2xl border border-border bg-card shadow-soft",
-                  "data-[state=open]:animate-in data-[state=closed]:animate-out",
-                  "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-                  "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-                  "data-[side=top]:slide-in-from-bottom-2"
-                )}
-              >
-                <ChatActionsMenu
-                  onClose={() => onActionsMenuOpenChange(false)}
-                  onNewChat={onNewChat}
-                  onAboutAssistant={onAboutAssistant}
-                  onWriteUs={onWriteUs}
-                />
-              </PopoverContent>
-            </Popover>
-          ) : (
-            moreButton
-          )}
-
           {/* Поле ввода (pill/capsule) */}
           <div className="relative flex-1 min-w-0">
             {showPlaceholderOverlay && (
