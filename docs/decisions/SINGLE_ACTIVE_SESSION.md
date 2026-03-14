@@ -19,7 +19,7 @@
 
 ## Где выполняется проверка
 
-- `useAuth`: эффект инициализации (getSession + проверка), подписка на `onAuthStateChange`, обработчик `visibilitychange`. При невалидной сессии: `setSessionInvalidReason`, `clearStoredSessionKey`, `supabase.auth.signOut()`.
+- `useAuth`: эффект инициализации (getSession + проверка), подписка на `onAuthStateChange`, обработчик `visibilitychange`. При невалидной сессии: `setSessionInvalidReason`, `clearStoredSessionKey`, `supabase.auth.signOut({ scope: 'local' })` (локальный выход без запроса global logout, чтобы избежать 403 и зацикливания). Защита от повторных вызовов: `isSigningOutRef`; проверка не запускается, пока идёт выход.
 
 ## UX
 

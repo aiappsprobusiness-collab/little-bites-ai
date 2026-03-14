@@ -26,13 +26,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const initializedRef = useRef(false);
+  /** Защита от повторных вызовов signOut (зацикливание при 403 и т.д.). */
+  const isSigningOutRef = useRef(false);
 
   const checkSessionValid = useRef(async (userId: string) => {
+    if (isSigningOutRef.current) return;
     const result = await validateActiveSession(userId);
     if (!result.valid && result.reason === SESSION_INVALID_REASON_REPLACED) {
-      setSessionInvalidReason(SESSION_INVALID_REASON_REPLACED);
-      clearStoredSessionKey();
-      await supabase.auth.signOut();
+      if (isSigningOutRef.current) return;
+      isSigningOutRef.current = true;
+      try {
+        setSessionInvalidReason(SESSION_INVALID_REASON_REPLACED);
+        clearStoredSessionKey();
+        // Локальный выход без запроса global logout (избегаем 403 и повторных вызовов).
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (err) {
+        safeError('Auth signOut (replaced session):', err);
+      } finally {
+        isSigningOutRef.current = false;
+      }
     }
   });
 
@@ -46,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       initializedRef.current = true;
 
-      if (!cancelled && session?.user?.id) {
+      if (!cancelled && session?.user?.id && !isSigningOutRef.current) {
         checkSessionValid.current(session.user.id);
       }
     }).catch((err) => {
@@ -61,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
-        if (session?.user?.id) {
+        if (session?.user?.id && !isSigningOutRef.current) {
           checkSessionValid.current(session.user.id);
         }
       }
@@ -69,8 +81,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
+      if (isSigningOutRef.current) return;
       supabase.auth.getSession().then(({ data: { session: s } }) => {
-        if (!s?.user?.id) return;
+        if (!s?.user?.id || isSigningOutRef.current) return;
         checkSessionValid.current(s.user.id);
       });
     };
