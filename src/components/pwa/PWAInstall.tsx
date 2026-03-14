@@ -1,12 +1,30 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { usePWAInstall, type A2HSTriggerSource } from "@/hooks/usePWAInstall";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Download, Puzzle } from "lucide-react";
 
+function getInstallPromptDescription(triggerSource: "" | A2HSTriggerSource, hasAccess: boolean): string {
+  const withShoppingList = hasAccess && triggerSource === "week";
+  if (withShoppingList) {
+    return "Меню и список продуктов уже готовы. Добавьте приложение на экран, чтобы всё было под рукой.";
+  }
+  if (triggerSource === "recipe") {
+    return "Добавьте приложение на экран — рецепты будут открываться как обычное приложение.";
+  }
+  if (triggerSource === "day" || triggerSource === "week" || triggerSource === "plan") {
+    return "Добавьте приложение на экран — меню будет всегда под рукой.";
+  }
+  return "Добавьте приложение на экран — рецепты и меню будут открываться как обычное приложение.";
+}
+
 export function PWAInstall() {
-  const { canInstall, promptInstall, showModal, dismissModal, isIOSDevice } = usePWAInstall();
+  const { canInstall, promptInstall, showModal, dismissModal, isIOSDevice, installPromptTriggerSource } = usePWAInstall();
+  const { hasAccess } = useSubscription();
 
   if (!showModal) return null;
+
+  const description = getInstallPromptDescription(installPromptTriggerSource, hasAccess);
 
   return (
     <Dialog open={showModal} onOpenChange={(open) => !open && dismissModal()}>
@@ -21,7 +39,7 @@ export function PWAInstall() {
           </DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-2 text-center">
-              <p>План и рецепты будут всегда под рукой и откроются как обычное приложение.</p>
+              <p>{description}</p>
               {isIOSDevice && (
                 <p className="text-typo-muted font-semibold text-foreground/90">
                   В Safari нажмите Поделиться → На экран Домой

@@ -14,11 +14,11 @@
 | **Захват `beforeinstallprompt`** | `src/main.tsx`: глобальный слушатель при загрузке приложения (строки 21–33). Событие `preventDefault()`, объект сохраняется в `window.__beforeInstallPromptEvent`, диспатчится кастомное событие `a2hs-prompt-available`. Глобальная функция `window.__promptPWAInstall()` вызывает `prompt()` и `userChoice`. |
 | **Deferred prompt** | Дублируется: в `main.tsx` — в `window.__beforeInstallPromptEvent`; в хуке `usePWAInstall` — в состоянии `deferredPrompt` (подписка на `beforeinstallprompt` и на `a2hs-prompt-available` не используется для инициализации из `window`, только на событие). |
 | **Кастомная кнопка/баннер** | Компонент **модального окна** установки: `src/components/pwa/PWAInstall.tsx`. Рендерится в `src/App.tsx` (строка 159) внутри дерева приложения, вне роутов. Отображается только когда `showModal === true` из `usePWAInstall`. Кнопка «Установить» в модалке активна только при `canInstall` (есть `deferredPrompt` и приложение не в standalone). |
-| **Правила показа модалки** | В `src/hooks/usePWAInstall.ts`: модалка показывается **не сразу**, а по событиям `A2HS_EVENT_AFTER_FIRST_PLAN` или `A2HS_EVENT_AFTER_FIRST_RECIPE` с **случайной задержкой 8–15 секунд** (`DELAY_MIN_MS`/`DELAY_MAX_MS`). Условия: авторизован (`user`), не standalone, `hasA2HSSupport(deferredPrompt)` (т.е. есть `deferredPrompt` **или** iOS), `canShowNow()` (не «навсегда» отклонено, счётчик попыток &lt; 3, не в периоде cooldown), и **ни разу ещё не был выбран триггер** (`readTriggerSource() === ""`). |
-| **События-триггеры** | `A2HS_EVENT_AFTER_FIRST_PLAN` — диспатчится один раз при первом успешном завершении генерации плана (`MealPlanPage.tsx`, строки 402–404, флаг в `localStorage`: `a2hs_first_plan_dispatched`). `A2HS_EVENT_AFTER_FIRST_RECIPE` — один раз при первом успешном получении рецепта из чата (`ChatPage.tsx`, строки 1034–1036, флаг `a2hs_first_recipe_dispatched`). |
-| **Ручная кнопка установки** | В **Профиле** (`src/pages/ProfilePage.tsx`): секция «Приложение» с кнопкой «Установить приложение» (строки 372–394). Показывается только при `showAppSection === true`: не установлено, не standalone, `hasInstallOption` (т.е. есть `deferredPrompt` **или** iOS). По клику: при `canInstall` вызывается `promptInstall()`, при только iOS — открывается отдельный диалог с инструкцией «Поделиться → На экран Домой». |
+| **Правила показа модалки** | В `src/hooks/usePWAInstall.ts`: модалка по одному из событий A2HS (см. 1.3) с **задержкой 8–15 сек**. Условия: авторизован, не standalone, `hasA2HSSupport`, `canShowNow()`, триггер ещё не использован (`readTriggerSource() === ""`). Текст в модалке зависит от триггера и Free/Premium (для недели + premium — упоминание списка продуктов). |
+| **События-триггеры** | См. раздел **1.3** (расширенный набор: первый рецепт, 2 рецепта, первый день, первая неделя, плюс legacy FIRST_PLAN). |
+| **Ручная кнопка установки** | В **Профиле** (`src/pages/ProfilePage.tsx`): секция «Приложение» показывается при `!isInstalled && !isStandalone()`. По клику: при `canInstall` — `promptInstall()`; при iOS без prompt — диалог «Поделиться → На экран Домой»; иначе — диалог с инструкцией для Android/других (меню → Установить приложение / Добавить на главный экран). |
 | **Проверка платформы** | `src/hooks/usePWAInstall.ts`: `isIOS()` по `navigator.userAgent` и `navigator.platform`/`maxTouchPoints`; `isRunningAsInstalledPWA()` по `display-mode: standalone` и `navigator.standalone`. То же в `src/utils/standalone.ts` для общих проверок. |
-| **Suppression (localStorage)** | В `usePWAInstall.ts`: `a2hs_attempt_count` (макс. 3), `a2hs_next_eligible_at` (cooldown 3 или 7 дней после 1-го/2-го «Позже»), `a2hs_dismissed_forever` (после 3 отказов или после установки), `a2hs_trigger_source` («plan» | «recipe» после планирования показа). В `useA2HSInstall.ts`: `a2hs_installed` для ручной установки. |
+| **Suppression (localStorage)** | В `usePWAInstall.ts`: `a2hs_attempt_count`, `a2hs_next_eligible_at`, `a2hs_dismissed_forever`, `a2hs_trigger_source` («plan»|«recipe»|«day»|«week»). Счётчик рецептов в `ChatPage`: `a2hs_recipe_success_count`; флаги `a2hs_first_day_dispatched`, `a2hs_first_week_dispatched`, `a2hs_two_recipes_dispatched`. |
 
 **Итог по install flow:**  
 Логика сосредоточена в `main.tsx` (глобальный prompt), `usePWAInstall.ts` (правила, модалка, триггеры), `PWAInstall.tsx` (UI модалки), `ProfilePage.tsx` (ручная кнопка и iOS-инструкция). Хук `useA2HSInstall.ts` в проекте **нигде не используется** (только экспорт).
@@ -37,6 +37,25 @@
 Регистрация и логика «новый worker → toast → Обновить → skipWaiting → reload» реализованы.
 
 **Исправление (после аудита):** В `public/sw.js` константа `CACHE_VERSION` заменена на плейсхолдер `__APP_BUILD_VERSION__`; плагин в `vite.config.ts` при сборке подставляет версию билда (git short hash + timestamp). Таким образом, после каждого production build содержимое `dist/sw.js` меняется, браузер видит новый worker и срабатывает логика обновления.
+
+### 1.3. Обновление install flow (2025-03): ценностные триггеры и fallback
+
+После доработки PWA install UX добавлено:
+
+- **Новые источники триггеров (trigger sources):**
+  - **После 2 успешно полученных рецептов** — в `ChatPage.tsx` ведётся счётчик `a2hs_recipe_success_count` (localStorage); при достижении 2 диспатчится `A2HS_EVENT_AFTER_TWO_RECIPES` (флаг `a2hs_two_recipes_dispatched`).
+  - **После первого успешно собранного дня** — в `MealPlanPage.tsx` при завершении генерации плана на день диспатчится `A2HS_EVENT_AFTER_FIRST_DAY` (флаг `a2hs_first_day_dispatched`).
+  - **После первой успешно собранной недели** — при завершении плана на неделю диспатчится `A2HS_EVENT_AFTER_FIRST_WEEK` (флаг `a2hs_first_week_dispatched`).
+  - Сохранены legacy: `A2HS_EVENT_AFTER_FIRST_RECIPE` (первый рецепт), `A2HS_EVENT_AFTER_FIRST_PLAN` (для обратной совместимости, из MealPlan больше не диспатчится).
+
+- **Тексты install prompt** зависят от триггера и типа подписки (`PWAInstall.tsx` + `useSubscription().hasAccess`):
+  - Free: без упоминания списка продуктов («рецепты и меню» / «меню будет всегда под рукой»).
+  - Premium/Trial + триггер «неделя»: «Меню и список продуктов уже готовы. Добавьте приложение на экран, чтобы всё было под рукой.»
+  - Рецепты: «Добавьте приложение на экран — рецепты будут открываться как обычное приложение.»
+
+- **Ручной fallback в Профиле:** блок «Приложение» показывается всегда при `!isInstalled && !isStandalone()`. Если системный `beforeinstallprompt` недоступен: на iOS — диалог «Поделиться → На экран Домой»; на Android/других — диалог «Меню браузера → Установить приложение / Добавить на главный экран».
+
+- **Антиспам:** прежняя логика suppression/cooldown не менялась; один триггер на сессию (`a2hs_trigger_source`), не показывать в standalone и после установки.
 
 ---
 
@@ -64,10 +83,10 @@
 ## 2.1. Конкретная UX-логика показа установки (по коду)
 
 - **Когда именно должен показываться install prompt (модалка)?**  
-  Не «сразу» и не по таймеру с экрана. Только после **одного из двух** событий: первый успешно сгенерированный план (`MealPlanPage`) или первый успешно полученный рецепт в чате (`ChatPage`). После диспатча события — **случайная задержка 8–15 секунд** (`DELAY_MIN_MS`/`DELAY_MAX_MS` в `usePWAInstall.ts`), затем `setShowModal(true)`.
+  Не «сразу» и не по таймеру. Только после **одного из ценностных событий** (см. разд. 1.3): первый рецепт, 2 рецепта, первый день плана, первая неделя плана (или legacy FIRST_PLAN). После диспатча события — **задержка 8–15 сек**, затем `setShowModal(true)`.
 
 - **Где зашито:**  
-  `src/hooks/usePWAInstall.ts`: эффект с подпиской на `A2HS_EVENT_AFTER_FIRST_PLAN` и `A2HS_EVENT_AFTER_FIRST_RECIPE`, вызов `scheduleShow("plan")` / `scheduleShow("recipe")` с `randomDelayMs()`, внутри таймаута проверка `canShowNow()` и `hasA2HSSupport(deferredPromptRef.current)`.
+  `src/hooks/usePWAInstall.ts`: подписка на события `A2HS_EVENT_AFTER_FIRST_PLAN`, `A2HS_EVENT_AFTER_FIRST_RECIPE`, `A2HS_EVENT_AFTER_TWO_RECIPES`, `A2HS_EVENT_AFTER_FIRST_DAY`, `A2HS_EVENT_AFTER_FIRST_WEEK`; вызов `scheduleShow(trigger)` с задержкой; при показе текст в модалке по `installPromptTriggerSource` и подписке (Free/Premium).
 
 - **Какие флаги отключают показ навсегда или временно:**  
   `a2hs_dismissed_forever === "1"` — навсегда; `a2hs_attempt_count >= 3` — навсегда; `a2hs_next_eligible_at` в будущем — до истечения cooldown (3 или 7 дней); `a2hs_trigger_source !== ""` — триггер уже использован, повторные события не планируют модалку.
@@ -79,7 +98,7 @@
   Модалка планируется и на Android, и на iOS (при `hasA2HSSupport`). Но на Android кнопка «Установить» активна только при `deferredPrompt` (т.е. при срабатывании `beforeinstallprompt`). Если пользователь тестирует на iOS — нативного prompt нет, будет только наша инструкция в модалке и ручная кнопка в профиле.
 
 - **Ручная кнопка «Установить приложение» в профиле:**  
-  Есть в `ProfilePage.tsx`, секция «Приложение». Работает: при `canInstall` вызывается `promptInstall()` (нативный prompt на Android), при только iOS открывается диалог с инструкцией. Но секция видна только при `hasInstallOption`; на Android без `beforeinstallprompt` это false, поэтому блок может не показываться.
+  Секция «Приложение» показывается всегда при не установленном и не standalone. По клику: при наличии deferred prompt — системная установка; на iOS — диалог «Поделиться → На экран Домой»; на Android/других без prompt — диалог с инструкцией (меню браузера → Установить приложение / Добавить на главный экран).
 
 ---
 

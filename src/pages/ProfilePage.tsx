@@ -106,9 +106,10 @@ export default function ProfilePage() {
   const [onboardingMemberId, setOnboardingMemberId] = useState<string | null>(null);
   const [generatingDone, setGeneratingDone] = useState(false);
   const [showIosInstallDialog, setShowIosInstallDialog] = useState(false);
+  const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
   const onboardingFirstProfileRef = useRef(false);
-  const { canInstall, promptInstall, isInstalled, hasInstallOption, isIOSDevice } = usePWAInstall();
-  const showAppSection = !isInstalled && !isStandalone() && hasInstallOption;
+  const { canInstall, promptInstall, isInstalled, isIOSDevice } = usePWAInstall();
+  const showAppSection = !isInstalled && !isStandalone();
 
   useEffect(() => {
     if (isLoading || members.length > 0) return;
@@ -382,6 +383,8 @@ export default function ProfilePage() {
                       promptInstall();
                     } else if (isIOSDevice) {
                       setShowIosInstallDialog(true);
+                    } else {
+                      setShowManualInstallDialog(true);
                     }
                   }}
                   className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm"
@@ -466,12 +469,28 @@ export default function ProfilePage() {
             <DialogTitle>Установить приложение</DialogTitle>
           </DialogHeader>
           <div className="text-sm text-muted-foreground whitespace-pre-line py-1">
-            Чтобы установить приложение:
-            {"\n"}1. Нажмите кнопку Поделиться в Safari
-            {"\n"}2. Выберите «На экран Домой»
+            Поделиться → На экран Домой
+          </div>
+          <div className="text-sm text-muted-foreground">
+            В Safari нажмите кнопку «Поделиться» (квадрат со стрелкой вверх), затем выберите «На экран Домой».
           </div>
           <DialogFooter>
             <Button onClick={() => setShowIosInstallDialog(false)}>Понятно</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showManualInstallDialog} onOpenChange={setShowManualInstallDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Установить приложение</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-muted-foreground space-y-2">
+            <p>Откройте меню браузера (три точки или три полоски) и выберите:</p>
+            <p className="font-medium text-foreground">«Установить приложение» или «Добавить на главный экран»</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowManualInstallDialog(false)}>Понятно</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

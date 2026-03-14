@@ -38,7 +38,7 @@ import type { BlockedMeta } from "@/types/chatBlocked";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { Progress } from "@/components/ui/progress";
-import { A2HS_EVENT_AFTER_FIRST_RECIPE } from "@/hooks/usePWAInstall";
+import { A2HS_EVENT_AFTER_FIRST_RECIPE, A2HS_EVENT_AFTER_TWO_RECIPES } from "@/hooks/usePWAInstall";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
 /** Порог (px) от низа скролла: если пользователь в пределах — автоскролл вниз при новых сообщениях. */
@@ -1032,9 +1032,19 @@ export default function ChatPage() {
           )
         );
 
-        if (typeof window !== "undefined" && localStorage.getItem("a2hs_first_recipe_dispatched") !== "1") {
-          localStorage.setItem("a2hs_first_recipe_dispatched", "1");
-          window.dispatchEvent(new CustomEvent(A2HS_EVENT_AFTER_FIRST_RECIPE));
+        if (typeof window !== "undefined") {
+          if (localStorage.getItem("a2hs_first_recipe_dispatched") !== "1") {
+            localStorage.setItem("a2hs_first_recipe_dispatched", "1");
+            window.dispatchEvent(new CustomEvent(A2HS_EVENT_AFTER_FIRST_RECIPE));
+          }
+          const countKey = "a2hs_recipe_success_count";
+          const prev = parseInt(localStorage.getItem(countKey) ?? "0", 10);
+          const next = Number.isFinite(prev) ? prev + 1 : 1;
+          localStorage.setItem(countKey, String(next));
+          if (next >= 2 && localStorage.getItem("a2hs_two_recipes_dispatched") !== "1") {
+            localStorage.setItem("a2hs_two_recipes_dispatched", "1");
+            window.dispatchEvent(new CustomEvent(A2HS_EVENT_AFTER_TWO_RECIPES));
+          }
         }
 
         try {

@@ -22,6 +22,9 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export const A2HS_EVENT_AFTER_FIRST_PLAN = "a2hs-after-first-plan";
 export const A2HS_EVENT_AFTER_FIRST_RECIPE = "a2hs-after-first-recipe";
+export const A2HS_EVENT_AFTER_TWO_RECIPES = "a2hs-after-two-recipes";
+export const A2HS_EVENT_AFTER_FIRST_DAY = "a2hs-after-first-day";
+export const A2HS_EVENT_AFTER_FIRST_WEEK = "a2hs-after-first-week";
 
 function readStoredCount(): number {
   try {
@@ -54,11 +57,13 @@ function readDismissedForever(): boolean {
   }
 }
 
-function readTriggerSource(): "" | "plan" | "recipe" {
+export type A2HSTriggerSource = "plan" | "recipe" | "day" | "week";
+
+function readTriggerSource(): "" | A2HSTriggerSource {
   try {
     if (typeof window === "undefined") return "";
     const s = localStorage.getItem(STORAGE_KEY_TRIGGER_SOURCE);
-    if (s === "plan" || s === "recipe") return s;
+    if (s === "plan" || s === "recipe" || s === "day" || s === "week") return s;
     return "";
   } catch {
     return "";
@@ -84,7 +89,7 @@ function writeStored(count: number, nextEligibleAt: number | null, forever: bool
   }
 }
 
-function setTriggerSource(source: "plan" | "recipe"): void {
+function setTriggerSource(source: A2HSTriggerSource): void {
   try {
     if (typeof window === "undefined") return;
     localStorage.setItem(STORAGE_KEY_TRIGGER_SOURCE, source);
@@ -168,7 +173,7 @@ export function usePWAInstall() {
     if (!canShowNow()) return;
     if (readTriggerSource() !== "") return;
 
-    const scheduleShow = (trigger: "plan" | "recipe") => {
+    const scheduleShow = (trigger: A2HSTriggerSource) => {
       if (readTriggerSource() !== "") return;
       setTriggerSource(trigger);
       const delayMs = randomDelayMs();
@@ -193,12 +198,33 @@ export function usePWAInstall() {
       scheduleShow("recipe");
     };
 
+    const onTwoRecipes = () => {
+      if (readTriggerSource() !== "") return;
+      scheduleShow("recipe");
+    };
+
+    const onFirstDay = () => {
+      if (readTriggerSource() !== "") return;
+      scheduleShow("day");
+    };
+
+    const onFirstWeek = () => {
+      if (readTriggerSource() !== "") return;
+      scheduleShow("week");
+    };
+
     window.addEventListener(A2HS_EVENT_AFTER_FIRST_PLAN, onFirstPlan);
     window.addEventListener(A2HS_EVENT_AFTER_FIRST_RECIPE, onFirstRecipe);
+    window.addEventListener(A2HS_EVENT_AFTER_TWO_RECIPES, onTwoRecipes);
+    window.addEventListener(A2HS_EVENT_AFTER_FIRST_DAY, onFirstDay);
+    window.addEventListener(A2HS_EVENT_AFTER_FIRST_WEEK, onFirstWeek);
 
     return () => {
       window.removeEventListener(A2HS_EVENT_AFTER_FIRST_PLAN, onFirstPlan);
       window.removeEventListener(A2HS_EVENT_AFTER_FIRST_RECIPE, onFirstRecipe);
+      window.removeEventListener(A2HS_EVENT_AFTER_TWO_RECIPES, onTwoRecipes);
+      window.removeEventListener(A2HS_EVENT_AFTER_FIRST_DAY, onFirstDay);
+      window.removeEventListener(A2HS_EVENT_AFTER_FIRST_WEEK, onFirstWeek);
       if (scheduleTimeoutRef.current) {
         clearTimeout(scheduleTimeoutRef.current);
         scheduleTimeoutRef.current = null;
@@ -250,6 +276,17 @@ export function usePWAInstall() {
   const canInstall = Boolean(deferredPrompt) && !isInstalled;
   const isIOSDevice = isIOS();
   const hasInstallOption = !isInstalled && (Boolean(deferredPrompt) || isIOSDevice);
+  /** Триггер, по которому открыта модалка (для подстановки текста). Пустая строка, если модалка закрыта. */
+  const installPromptTriggerSource = showModal ? readTriggerSource() : "";
 
-  return { canInstall, promptInstall, showModal, dismissModal, isIOSDevice, isInstalled, hasInstallOption };
+  return {
+    canInstall,
+    promptInstall,
+    showModal,
+    dismissModal,
+    isIOSDevice,
+    isInstalled,
+    hasInstallOption,
+    installPromptTriggerSource,
+  };
 }
