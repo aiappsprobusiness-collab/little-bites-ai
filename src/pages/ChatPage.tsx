@@ -1378,8 +1378,8 @@ export default function ChatPage() {
             </motion.div>
           )}
 
-          {/* Загрузка/инициализация чата рецептов: нейтральный placeholder без приветствия и подсказок, без рывка layout */}
-          {mode === "recipes" && messages.length === 0 && (!isChatBootstrapped || isLoadingHistory) && members.length > 0 && (
+          {/* Загрузка/инициализация чата рецептов: нейтральный placeholder, чтобы не было пустого экрана (в т.ч. пока грузятся члены семьи) */}
+          {mode === "recipes" && messages.length === 0 && (!isChatBootstrapped || isLoadingHistory) && (members.length > 0 || isLoadingMembers) && (
             <div className="flex flex-col gap-3 pt-1" aria-busy="true" aria-label="Загрузка чата">
               <div className="h-10 w-3/4 max-w-[200px] rounded-2xl bg-muted/60 animate-pulse" />
               <div className="h-16 w-[85%] max-w-[280px] rounded-2xl bg-muted/50 animate-pulse ml-auto" />
