@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { disableDoubleTapZoom } from "./utils/disableDoubleTapZoom";
 import "./index.css";
+import "./styles/splash.css";
 
 // ——— PWA: beforeinstallprompt ———
 declare global {
@@ -73,3 +74,15 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 disableDoubleTapZoom();
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Скрытие splash после загрузки
+window.addEventListener("load", () => {
+  const splash = document.getElementById("splash-screen");
+  if (splash) {
+    setTimeout(() => {
+      splash.style.opacity = "0";
+      splash.style.transition = "opacity 300ms";
+      setTimeout(() => splash.remove(), 300);
+    }, 800);
+  }
+});

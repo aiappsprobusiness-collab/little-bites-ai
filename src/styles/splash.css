@@ -1,0 +1,20 @@
+#splash-screen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg,#E8F1EC,#CFE5DB);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+#splash-screen img {
+  width: 180px;
+  height: 180px;
+  animation: fadeIn 0.6s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity:0; transform:scale(.9); }
+  to { opacity:1; transform:scale(1); }
+}

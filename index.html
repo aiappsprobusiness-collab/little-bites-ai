@@ -10,18 +10,16 @@
     <title>Mom Recipes — План питания для семьи</title>
     <meta name="description" content="Умное планирование рациона для семьи. Генерация рецептов, план на неделю и удобная корзина покупок." />
     <meta name="author" content="Mom Recipes" />
-    <!-- Главные иконки приложения (тарелка, морковка, брокколи) — те же, что на главном экране -->
-    <link rel="icon" type="image/png" href="/icon-192.png" sizes="192x192" />
+    <!-- Иконки приложения Mom Recipes (PWA, Android, iOS) -->
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/mom-recipes-app-icon-512.png" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#5eb89a" />
-    <!-- PWA / iOS standalone (iOS не поддерживает SVG для apple-touch-icon — используем PNG) -->
+    <meta name="theme-color" content="#6F8F72" />
+    <!-- PWA / iOS standalone -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Mom Recipes" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
-    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 
     <!-- Open Graph: по умолчанию вариант #2 (og-onion). Варианты: og-brain.jpg, og-onion.jpg, og-panic.jpg -->
     <meta property="og:type" content="website" />
@@ -41,6 +39,9 @@
   </head>
 
   <body>
+    <div id="splash-screen">
+      <img src="/splash/splash-screen.png" alt="Mom Recipes" />
+    </div>
     <div id="root"></div>
     <!-- PWA: Service Worker registered in main.tsx (production). Offline fallback: /offline.html -->
     <script type="module" src="/src/main.tsx"></script>
