@@ -14,7 +14,8 @@ import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReach
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { getPopularQuestionForToday } from "@/features/help/config/popularQuestions";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MessageCircleQuestion } from "lucide-react";
+import { IconBadge } from "@/components/ui/IconBadge";
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -167,17 +168,20 @@ export default function SosTiles() {
         </div>
 
         <div className="shrink-0 mt-3">
-          <div className="rounded-2xl border border-border bg-card shadow-soft p-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
-              Сегодня спрашивают
-            </p>
+          <div className="rounded-2xl border border-border bg-card shadow-soft py-[14px] px-4">
+            <div className="flex items-center gap-2 mb-2">
+              <IconBadge icon={MessageCircleQuestion} variant="sage" size="sm" />
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                Сегодня спрашивают
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => handleOpenWithMessage(popularQuestion.text)}
               disabled={helpLimitExceeded}
-              className="w-full flex items-center gap-2 text-left rounded-xl py-1.5 -mx-0.5 px-1.5 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+              className="w-full flex items-center gap-2 text-left rounded-xl py-1.5 -mx-0.5 px-0.5 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:opacity-50 disabled:pointer-events-none"
             >
-              <span className="flex-1 text-sm font-medium text-foreground leading-snug line-clamp-2 text-ellipsis break-words min-w-0">
+              <span className="flex-1 text-base font-medium text-foreground leading-snug line-clamp-2 text-ellipsis break-words min-w-0">
                 {popularQuestion.text}
               </span>
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />

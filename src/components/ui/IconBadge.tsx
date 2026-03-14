@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import { cn } from "@/lib/utils";
 
-/** Варианты tint для плашки: спокойные премиальные оттенки, olive-first. */
+/** Варианты tint для плашки: спокойные премиальные оттенки, olive-first. Иконка заметно темнее фона (~15–20%). */
 export type IconBadgeVariant =
   | "sage"      // питание, оливковый
   | "sand"      // дневник, тёплый беж
@@ -11,25 +11,25 @@ export type IconBadgeVariant =
   | "amber";    // мягкий акцент
 
 const VARIANT_STYLES: Record<IconBadgeVariant, { bg: string; icon: string }> = {
-  sage: { bg: "bg-[#e5ead8]", icon: "text-[#5a6b32]" },
-  sand: { bg: "bg-[#ede8df]", icon: "text-[#7a6b5a]" },
-  apricot: { bg: "bg-[#f8ebe4]", icon: "text-[#a66b4a]" },
-  mint: { bg: "bg-[#e2ebe0]", icon: "text-[#4a6b52]" },
-  blue: { bg: "bg-[#e2eaf2]", icon: "text-[#4a6b82]" },
-  amber: { bg: "bg-[#f2ecd8]", icon: "text-[#7a6b3a]" },
+  sage: { bg: "bg-[#EDF2E7]", icon: "text-[#5E7B3C]" },
+  sand: { bg: "bg-[#ede8df]", icon: "text-[#5c4d3d]" },
+  apricot: { bg: "bg-[#f8ebe4]", icon: "text-[#8a5238]" },
+  mint: { bg: "bg-[#e2ebe0]", icon: "text-[#3a5c42]" },
+  blue: { bg: "bg-[#e2eaf2]", icon: "text-[#3a5c72]" },
+  amber: { bg: "bg-[#f2ecd8]", icon: "text-[#6a5a2a]" },
 };
 
 export interface IconBadgeProps {
-  icon: ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
   variant: IconBadgeVariant;
   className?: string;
-  /** Размер плашки: "md" (36px) по умолчанию, "sm" (32px) для плотных мест. */
+  /** Размер плашки: "md" (36px) по умолчанию, "sm" (32px) для плотных мест. Иконка: 20px (md) / 16px (sm). */
   size?: "sm" | "md";
 }
 
 /**
  * Reusable плашка с тонкой SVG-иконкой: единый визуальный язык для карточек тем и заголовков категорий.
- * Badge ~36px, radius 10–12px, иконка 16–18px по центру.
+ * Badge 36px (md) / 32px (sm), иконка 20px / 16px по центру, strokeWidth 1.8 для выразительности.
  */
 export function IconBadge({ icon: Icon, variant, className, size = "md" }: IconBadgeProps) {
   const { bg, icon: iconColor } = VARIANT_STYLES[variant];
@@ -44,7 +44,10 @@ export function IconBadge({ icon: Icon, variant, className, size = "md" }: IconB
       )}
       aria-hidden
     >
-      <Icon className={cn("shrink-0", isSm ? "w-4 h-4" : "w-[18px] h-[18px]", iconColor)} />
+      <Icon
+        className={cn("shrink-0", isSm ? "w-4 h-4" : "w-5 h-5", iconColor)}
+        strokeWidth={1.8}
+      />
     </span>
   );
 }

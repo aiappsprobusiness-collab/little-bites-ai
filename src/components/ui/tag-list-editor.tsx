@@ -32,10 +32,10 @@ export interface TagListEditorProps {
 const chipBase =
   "inline-flex items-center gap-1.5 h-8 rounded-full px-3 text-[13px] font-normal bg-primary-light/80 text-foreground border-0 cursor-pointer hover:bg-primary-light transition-colors";
 
-const profileLabelClass = "profile-label font-medium text-[#2F3A2E] text-[13px]";
+const profileLabelClass = "text-sm font-medium";
 const profileAddRowClass = "flex h-11 items-center gap-3 px-4 rounded-xl border border-input bg-background hover:border-primary/30 transition-colors cursor-text w-full";
 const profileAddBtnClass = "w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50";
-const profileHelperClass = "text-[12px] text-muted-foreground mt-1.5";
+const profileHelperClass = "text-xs text-muted-foreground mt-1.5";
 const profileInputClass = "flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground";
 
 export function TagListEditor({

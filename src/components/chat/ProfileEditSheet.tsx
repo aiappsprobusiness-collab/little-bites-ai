@@ -120,12 +120,13 @@ export function ProfileEditSheet({
       return;
     }
     if (!member) return;
+    setName(member.name ?? "");
     setBirthDate(ageMonthsToBirthDate(member.age_months ?? null));
     setAllergies((member.allergies ?? []).map(normalizeAllergyToken));
     setAllergyInput("");
     setLikes((member as MembersRow).likes ?? []);
     setLikesInput("");
-      setDislikes((member as MembersRow).dislikes ?? []);
+    setDislikes((member as MembersRow).dislikes ?? []);
     setDislikesInput("");
   }, [open, isCreate, member]);
 
@@ -238,6 +239,7 @@ export function ProfileEditSheet({
     try {
       await updateMember({
         id: member.id,
+        name: name.trim(),
         type: typeToSave,
         age_months: ageMonths || null,
         allergies,
@@ -280,25 +282,23 @@ export function ProfileEditSheet({
           <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать — ${member?.name ?? ""}`}</SheetTitle>
         </SheetHeader>
         <div className="space-y-5 py-4 overflow-y-auto">
-          {isCreate && (
-            <p className="text-sm text-muted-foreground">
-              Добавим профиль ребёнка, чтобы собрать для него меню.
-            </p>
-          )}
-          {isCreate && (
-            <div className="space-y-2">
-              <Label htmlFor="profile-name" className="text-typo-muted font-medium">Имя</Label>
-              <Input
-                id="profile-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Имя ребёнка или взрослого"
-                className="h-11 border-2"
-              />
-            </div>
-          )}
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            {isCreate
+              ? "Добавьте профиль, чтобы мы учитывали особенности питания."
+              : "Измените данные, чтобы рекомендации учитывали особенности питания."}
+          </p>
           <div className="space-y-2">
-            <Label htmlFor="profile-birth" className="text-typo-muted font-medium">Дата рождения <span className="text-destructive">*</span></Label>
+            <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
+            <Input
+              id="profile-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Например: Маша, Папа"
+              className="h-11 border-2"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="profile-birth" className="text-sm font-medium">Дата рождения <span className="text-destructive">*</span></Label>
             <div className="date-input-wrap relative rounded-xl border-2 border-input bg-background">
               <Input
                 id="profile-birth"
@@ -316,7 +316,7 @@ export function ProfileEditSheet({
                 <Calendar className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-typo-caption text-muted-foreground">Возраст считается автоматически</p>
+            <p className="text-xs text-muted-foreground">Возраст рассчитывается автоматически</p>
           </div>
           <TagListEditor
             label="Аллергии"
@@ -327,8 +327,8 @@ export function ProfileEditSheet({
             onAdd={allergiesHandlers.add}
             onEdit={allergiesHandlers.edit}
             onRemove={allergiesHandlers.remove}
-            placeholder="Добавить аллергию (запятая или Enter)"
-            helperText="Запятая или Enter."
+            placeholder="Например: БКМ, орехи"
+            helperText="Введите через запятую или нажмите Enter"
           />
           {isPremium && (
             <>
@@ -341,8 +341,8 @@ export function ProfileEditSheet({
                 onAdd={likesHandlers.add}
                 onEdit={likesHandlers.edit}
                 onRemove={likesHandlers.remove}
-                placeholder="Например: ягоды, рыба (запятая или Enter)"
-                helperText="Запятая или Enter."
+                placeholder="Например: ягоды, рыба"
+                helperText="Введите через запятую или нажмите Enter"
               />
               <TagListEditor
                 label="Не любит"
@@ -353,8 +353,8 @@ export function ProfileEditSheet({
                 onAdd={dislikesHandlers.add}
                 onEdit={dislikesHandlers.edit}
                 onRemove={dislikesHandlers.remove}
-                placeholder="Например: лук, мясо (запятая или Enter)"
-                helperText="Запятая или Enter."
+                placeholder="Например: лук, мясо"
+                helperText="Введите через запятую или нажмите Enter"
               />
             </>
           )}

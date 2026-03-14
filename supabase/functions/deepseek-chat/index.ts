@@ -377,6 +377,7 @@ serve(async (req) => {
           route: "assistant_topic",
           requestId,
           topicKey: assistantTopic.topicKey,
+          matchedBy: assistantTopic.matchedBy ?? undefined,
           matchedTerms: assistantTopic.matchedTerms ?? [],
         }));
         const assistantMessage = "Этот вопрос лучше задать во вкладке «Помощник».";

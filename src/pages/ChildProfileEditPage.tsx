@@ -402,6 +402,11 @@ export default function ChildProfileEditPage() {
                   <p className="text-[13px] text-muted-foreground mt-0.5">
                     {isNew ? "Профиль ребёнка" : "Редактирование профиля"}
                   </p>
+                  <p className="text-sm text-muted-foreground leading-relaxed mt-1.5">
+                    {isNew
+                      ? "Добавьте профиль, чтобы мы учитывали особенности питания."
+                      : "Измените данные, чтобы рекомендации учитывали особенности питания."}
+                  </p>
                   {ageMonths != null && ageMonths >= 0 && birthDate?.trim() && (
                     <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-white/80 border border-border/60 text-[12px] font-medium text-foreground/90">
                       {formatAgeFromMonths(ageMonths)}
@@ -418,22 +423,22 @@ export default function ChildProfileEditPage() {
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-foreground leading-tight">Основная информация</h3>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Имя и дата рождения</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">Имя и дата рождения</p>
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="child-name" className="text-[13px] font-medium text-muted-foreground">Имя</Label>
+                    <Label htmlFor="child-name" className="text-sm font-medium">Имя</Label>
                     <Input
                       id="child-name"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="Имя"
+                      placeholder="Например: Маша, Папа"
                       className="h-11 border border-input bg-background rounded-xl text-[15px] placeholder:text-muted-foreground/70"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="child-birth" className="text-[13px] font-medium text-muted-foreground">Дата рождения <span className="text-destructive">*</span></Label>
+                    <Label htmlFor="child-birth" className="text-sm font-medium">Дата рождения <span className="text-destructive">*</span></Label>
                     <div className="date-input-wrap relative rounded-xl border border-input bg-background">
                       <Input
                         id="child-birth"
@@ -449,8 +454,8 @@ export default function ChildProfileEditPage() {
                         aria-label="Выбрать дату"
                       />
                     </div>
-                    <p className="text-[12px] text-muted-foreground">
-                      Возраст рассчитывается автоматически по дате рождения
+                    <p className="text-xs text-muted-foreground">
+                      Возраст рассчитывается автоматически
                     </p>
                     {ageMonths != null && ageMonths >= 0 && birthDate?.trim() && (
                       <span className="inline-flex items-center mt-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-[12px] font-medium text-primary">
@@ -469,7 +474,7 @@ export default function ChildProfileEditPage() {
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-foreground leading-tight">Пищевые особенности</h3>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">То, что важно учитывать при подборе блюд</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">То, что важно учитывать при подборе блюд</p>
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -502,7 +507,7 @@ export default function ChildProfileEditPage() {
                         <Plus className="w-5 h-5" />
                         Добавить аллергию
                       </button>
-                      <p className="text-[12px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         В Free доступна 1 аллергия
                       </p>
                     </>
@@ -538,12 +543,12 @@ export default function ChildProfileEditPage() {
                               allergiesHandlers.add(allergyInput);
                             }
                           }}
-                          placeholder="Добавить аллергию"
+                          placeholder="Например: БКМ, орехи"
                           className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground/70"
                         />
                       </form>
-                      <p className="text-[12px] text-muted-foreground">
-                        {!hasAccess ? "В Free доступна 1 аллергия" : "Можно вводить через запятую или Enter"}
+                      <p className="text-xs text-muted-foreground">
+                        {!hasAccess ? "В Free доступна 1 аллергия" : "Введите через запятую или нажмите Enter"}
                       </p>
                     </>
                   )}
@@ -558,7 +563,7 @@ export default function ChildProfileEditPage() {
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-foreground leading-tight">Предпочтения</h3>
-                    <p className="text-[12px] text-muted-foreground mt-0.5">Любит и не любит — для точного подбора рецептов</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">Любит и не любит — для точного подбора рецептов</p>
                   </div>
                 </div>
                 {isFree ? (
@@ -608,7 +613,7 @@ export default function ChildProfileEditPage() {
                       onEdit={likesHandlers.edit}
                       onRemove={likesHandlers.remove}
                       placeholder="Например: ягоды, рыба"
-                      helperText="Запятая или Enter"
+                      helperText="Введите через запятую или нажмите Enter"
                     />
                     <TagListEditor
                       id="profile-dislikes"
@@ -621,7 +626,7 @@ export default function ChildProfileEditPage() {
                       onEdit={dislikesHandlers.edit}
                       onRemove={dislikesHandlers.remove}
                       placeholder="Например: лук, мясо"
-                      helperText="Запятая или Enter"
+                      helperText="Введите через запятую или нажмите Enter"
                     />
                   </div>
                 )}

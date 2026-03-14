@@ -617,7 +617,7 @@ export function ShoppingListView() {
               <div key={cat}>
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground tracking-wide mb-2">
                   <IconBadge icon={CATEGORY_ICON[cat]} variant={CATEGORY_BADGE_VARIANT[cat]} size="sm" />
-                  <span>{CATEGORY_LABEL[cat]}</span>
+                  <span className="text-foreground">{CATEGORY_LABEL[cat]}</span>
                 </h3>
                 <ul className="space-y-1.5">
                   {byCategory[cat].map((item) => (
