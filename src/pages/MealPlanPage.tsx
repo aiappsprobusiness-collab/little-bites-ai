@@ -12,6 +12,7 @@ import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
+import { logEmptyOnboardingReason } from "@/utils/authSessionDebug";
 import { usePlanGenerationJob, getStoredJobId, setStoredJobId } from "@/hooks/usePlanGenerationJob";
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
@@ -232,7 +233,7 @@ export default function MealPlanPage() {
   const location = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, authReady } = useAuth();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
   const [searchParams] = useSearchParams();
   const [justCreatedMemberId, setJustCreatedMemberIdState] = useState<string | null>(null);
@@ -762,8 +763,18 @@ export default function MealPlanPage() {
 
   const planDebug = isPlanDebug();
 
-  const showNoProfile = members.length === 0 && !isMembersLoading;
-  const showEmptyFamily = isFamilyMode && members.length === 0 && !isMembersLoading;
+  const showNoProfile = authReady && !!user && !isMembersLoading && members.length === 0;
+  const showEmptyFamily = isFamilyMode && showNoProfile;
+
+  useEffect(() => {
+    if (import.meta.env.DEV && (showNoProfile || showEmptyFamily)) {
+      logEmptyOnboardingReason(showEmptyFamily ? "meal-plan (family)" : "meal-plan", "members empty", {
+        hasUser: !!user,
+        isLoadingMembers: isMembersLoading,
+        membersCount: members.length,
+      });
+    }
+  }, [showNoProfile, showEmptyFamily, user, isMembersLoading, members.length]);
 
   const planViewDayTrackedRef = useRef(false);
   useEffect(() => {
@@ -795,7 +806,7 @@ export default function MealPlanPage() {
     });
   }
 
-  if (isMembersLoading) {
+  if (!authReady || isMembersLoading) {
     return (
       <MobileLayout>
         <div className="flex items-center justify-center min-h-[50vh]">

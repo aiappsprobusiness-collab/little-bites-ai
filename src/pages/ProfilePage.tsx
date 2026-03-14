@@ -80,7 +80,7 @@ function formatSubscriptionEndDateWithYear(isoDate: string | null): string {
 }
 
 export default function ProfilePage() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, authReady } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
@@ -112,23 +112,23 @@ export default function ProfilePage() {
   const showAppSection = !isInstalled && !isStandalone();
 
   useEffect(() => {
-    if (isLoading || members.length > 0) return;
+    if (!authReady || isLoading || members.length > 0) return;
     if (!onboardingFirstProfileRef.current) {
       onboardingFirstProfileRef.current = true;
       setShowMemberSheet(true);
     }
-  }, [isLoading, members.length]);
+  }, [authReady, isLoading, members.length]);
 
   // После magic link / email confirmation: открыть модалку «Новый профиль», только если профилей нет
   useEffect(() => {
-    if (searchParams.get("openCreateProfile") !== "1" || isLoading || members.length > 0) return;
+    if (searchParams.get("openCreateProfile") !== "1" || !authReady || isLoading || members.length > 0) return;
     setShowMemberSheet(true);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("openCreateProfile");
       return next;
     }, { replace: true });
-  }, [searchParams, isLoading, members.length, setSearchParams]);
+  }, [searchParams, authReady, isLoading, members.length, setSearchParams]);
 
   const handleDinnerReminderChange = (checked: boolean) => {
     setDinnerReminderEnabledState(checked);
@@ -179,7 +179,11 @@ export default function ProfilePage() {
   };
 
   const handleLogout = async () => {
-    await signOut();
+    try {
+      await signOut();
+    } catch (_e) {
+      // Локальная сессия уже очищена в signOut; редирект выполняем в любом случае.
+    }
     navigate("/auth", { replace: true });
   };
 

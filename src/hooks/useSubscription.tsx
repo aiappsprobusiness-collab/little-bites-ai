@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { safeLog } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { logMembersProfileLoadStart } from "@/utils/authSessionDebug";
 import { getSubscriptionLimits, isAiDailyLimitExceeded } from "@/utils/subscriptionRules";
 
 /** Единая логика доступа: true если подписка активна (premium/trial) и не истекла. */
@@ -16,13 +17,14 @@ export function hasPremiumAccessFromSubscription(subscription: {
 }
 
 export function useSubscription() {
-  const { user } = useAuth();
+  const { user, authReady } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: profileV2, isLoading: isLoadingProfile } = useQuery({
     queryKey: ["profile-subscription", user?.id],
     queryFn: async () => {
       if (!user) return null;
+      logMembersProfileLoadStart("profile", user.id);
       const { data, error } = await supabase
         .from("profiles_v2")
         .select("status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized")
@@ -39,7 +41,7 @@ export function useSubscription() {
         plan_initialized: boolean;
       } | null;
     },
-    enabled: !!user,
+    enabled: authReady && !!user,
   });
 
   const { data: latestSubscription } = useQuery({
@@ -51,7 +53,7 @@ export function useSubscription() {
       const row = Array.isArray(data) ? data[0] : data;
       return row as { plan: string | null; expires_at: string | null } | null;
     },
-    enabled: !!user,
+    enabled: authReady && !!user,
   });
 
   /** Для free: лимит проверяется по usage_events (фича chat_recipe), а не по profiles_v2.requests_today. */
@@ -66,7 +68,7 @@ export function useSubscription() {
       if (error) throw error;
       return typeof data === "number" ? data : 0;
     },
-    enabled: !!user && (profileV2 == null || profileV2.status === "free"),
+    enabled: authReady && !!user && (profileV2 == null || profileV2.status === "free"),
   });
 
   /** Использовано вопросов к Помощнику (help) сегодня. Нужно для отображения лимита на вкладке Help. */
@@ -81,7 +83,7 @@ export function useSubscription() {
       if (error) throw error;
       return typeof data === "number" ? data : 0;
     },
-    enabled: !!user,
+    enabled: authReady && !!user,
   });
 
   const UNLIMITED_ACCESS_EMAILS = ["alesah007@gmail.com"];

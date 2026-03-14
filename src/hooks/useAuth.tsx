@@ -2,12 +2,17 @@ import { useState, useEffect, createContext, useContext, ReactNode, useRef } fro
 import { safeError } from '@/utils/safeLogger';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { setActiveSessionKeyForUser } from '@/utils/activeSessionKey';
+import { setActiveSessionKeyForUser, clearStoredSessionKey } from '@/utils/activeSessionKey';
+import { clearOnLogout } from '@/utils/authStorageCleanup';
+import { logAuthBootstrap, logAuthSessionResult, logAuthStateChange } from '@/utils/authSessionDebug';
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
+  /** true пока не завершена первая попытка восстановить сессию (getSession). */
   loading: boolean;
+  /** true только после завершения первичного getSession(). Нужно, чтобы не показывать ложный empty state при медленном восстановлении сессии, stale storage и edge cases в Android browser. */
+  authReady: boolean;
   signUp: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -19,17 +24,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  /** Флаг завершения первичного восстановления сессии. До true не обрабатываем onAuthStateChange, чтобы избежать мигания SIGNED_OUT/SIGNED_IN на старте (Android/stale storage). */
   const initializedRef = useRef(false);
-  useEffect(() => {
-    let cancelled = false;
 
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+  useEffect(() => {
+    // Порядок: сначала одна попытка восстановить сессию (getSession), затем подписка на изменения.
+    // authReady станет true только после завершения getSession — тогда можно безопасно показывать user/null и грузить members/profile.
+    const promise = supabase.auth.getSession();
+    promise.then(({ data: { session }, error }) => {
+      logAuthSessionResult('getSession', { session, error });
       if (error) safeError('Auth session error:', error);
+      logAuthBootstrap('getSession', { session, error });
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
       initializedRef.current = true;
-
     }).catch((err) => {
       safeError('Failed to get auth session:', err);
       setLoading(false);
@@ -37,8 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        logAuthStateChange(event, session);
         if (!initializedRef.current) return;
+        logAuthBootstrap('onAuthStateChange', { session, event });
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -46,7 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     return () => {
-      cancelled = true;
       subscription.unsubscribe();
     };
   }, []);
@@ -130,12 +140,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    clearOnLogout();
     clearStoredSessionKey();
-    await supabase.auth.signOut();
+    // scope: 'local' — очистка только на этом устройстве без ожидания ответа сервера,
+    // чтобы кнопка «Выйти» не зависала при проблемах с сетью или в PWA.
+    await supabase.auth.signOut({ scope: 'local' });
   };
 
+  const authReady = !loading;
+
   return (
-    <AuthContext.Provider value={{ session, user, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, user, loading, authReady, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

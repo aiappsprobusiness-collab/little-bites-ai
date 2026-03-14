@@ -14,7 +14,9 @@ import { useArticle } from "@/hooks/useArticles";
 import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { useFamily } from "@/contexts/FamilyContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
+import { logEmptyOnboardingReason } from "@/utils/authSessionDebug";
 import { useToast } from "@/hooks/use-toast";
 import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { buildGenerationContext, validateRecipe } from "@/domain/generation";
@@ -189,6 +191,7 @@ export default function ChatPage() {
   const isConsultationMode = mode === "help";
   const prefillFromQuery = searchParams.get("prefill");
   const { toast } = useToast();
+  const { user, loading: authLoading, authReady } = useAuth();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
   const { canGenerate, canSendAi, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining, aiDailyLimit, hasAccess } = useSubscription();
   const isFree = subscriptionStatus === "free";
@@ -250,6 +253,18 @@ export default function ChatPage() {
     }, 5000);
     return () => clearInterval(id);
   }, [isChatting, mode]);
+
+  // Пустое состояние «создайте ребёнка» — только когда auth готов, user есть, members загружены и список пуст (избегаем ложного empty state на Android при медленном session restore).
+  const showChatOnboarding = authReady && !!user && !isLoadingMembers && members.length === 0;
+  useEffect(() => {
+    if (import.meta.env.DEV && showChatOnboarding) {
+      logEmptyOnboardingReason("chat", "members empty", {
+        hasUser: !!user,
+        isLoadingMembers,
+        membersCount: members.length,
+      });
+    }
+  }, [showChatOnboarding, user, isLoadingMembers, members.length]);
 
   // Показывать блок с советами только после задержки — пока не началась «долгая» генерация рецепта, не показываем
   useEffect(() => {
@@ -1359,8 +1374,16 @@ export default function ChatPage() {
             </div>
           )}
 
-          {!isLoadingMembers && members.length === 0 && (
+          {showChatOnboarding && (
             <FamilyOnboarding onComplete={() => { }} />
+          )}
+
+          {/* Пока auth готов и грузятся members — нейтральный skeleton, без CTA «создайте ребёнка» (избегаем ложного empty state на Android). */}
+          {authReady && !!user && isLoadingMembers && !showChatOnboarding && (
+            <div className="flex flex-col gap-3 pt-1" aria-busy="true" aria-label="Загрузка профилей">
+              <div className="h-24 w-full max-w-[280px] rounded-2xl bg-muted/50 animate-pulse" />
+              <div className="h-16 w-4/5 max-w-[240px] rounded-2xl bg-muted/40 animate-pulse ml-auto" />
+            </div>
           )}
 
           {showStarter && !hasUserMessage && members.length > 0 && mode === "help" && (

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { logMembersProfileLoadStart, logMembersLoadDone } from "@/utils/authSessionDebug";
 import type { MembersRow, MembersInsert, MembersUpdate, AllergyItemRow } from "@/integrations/supabase/types-v2";
 import { ensureStringArray } from "@/utils/typeUtils";
 
@@ -89,20 +90,23 @@ export function memberTypeFromAgeMonths(ageMonths: number | null): "child" | "ad
 export type Member = MembersRow;
 
 export function useMembers() {
-  const { user } = useAuth();
+  const { user, authReady } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: members = [], isLoading, error } = useQuery({
     queryKey: ["members", user?.id],
     queryFn: async (): Promise<MembersRow[]> => {
       if (!user) return [];
+      logMembersProfileLoadStart("members", user.id);
       const { data, error: err } = await supabase
         .from("members")
         .select("*")
         .eq("user_id", user.id)
         .order("name", { ascending: true });
       if (err) throw err;
-      return (data ?? []).map((m) => {
+      const list = data ?? [];
+      logMembersLoadDone(list.length, user.id);
+      return list.map((m) => {
         const row = m as Record<string, unknown>;
         const rawItems = row.allergy_items;
         const items = Array.isArray(rawItems) && rawItems.length > 0
@@ -127,7 +131,7 @@ export function useMembers() {
         } as MembersRow;
       });
     },
-    enabled: !!user,
+    enabled: authReady && !!user,
   });
 
   const createMember = useMutation({

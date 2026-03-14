@@ -41,9 +41,11 @@ import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
 import { FavoritesLimitSheet } from "./components/plan/FavoritesLimitSheet";
 import { DinnerReminderBanner } from "./components/DinnerReminderBanner";
+import { AuthDebugPanel } from "./components/debug/AuthDebugPanel";
 import { useAppStore } from "./store/useAppStore";
 import { useSubscription } from "./hooks/useSubscription";
 import { captureAttributionFromLocationOnce } from "./utils/usageEvents";
+import { logLegacyKeysCleared, logStorageAndSwState } from "./utils/storageDebug";
 
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
@@ -90,14 +92,30 @@ function AttributionCapture() {
   return null;
 }
 
+/** Dev-only: один раз логируем состояние SW и снимок storage (после регистрации SW). */
+function StorageAndSwDebug() {
+  useEffect(() => {
+    if (!import.meta.env.DEV) return null;
+    const t = setTimeout(() => {
+      logStorageAndSwState();
+    }, 800);
+    return () => clearTimeout(t);
+  }, []);
+  return null;
+}
+
 function LegacyCacheClear() {
   useEffect(() => {
+    const removed: string[] = [];
     V1_STORAGE_KEYS.forEach((key) => {
       if (localStorage.getItem(key) !== null) {
         localStorage.removeItem(key);
+        removed.push(key);
       }
     });
-    // console.log("V1 Cache cleared safely");
+    if (import.meta.env.DEV && removed.length > 0) {
+      logLegacyKeysCleared(removed);
+    }
   }, []);
   return null;
 }
@@ -153,6 +171,7 @@ const App = () => (
           <AppHeightSync />
           <AttributionCapture />
           <LegacyCacheClear />
+          <StorageAndSwDebug />
           <FamilyProvider>
             <Toaster />
             <Sonner />
@@ -162,6 +181,7 @@ const App = () => (
             <FavoritesLimitSheet />
             <TrialSoftBanner />
             <DinnerReminderBanner />
+            <AuthDebugPanel />
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
               {/* Публичный маршрут: обрабатывает magic link / email confirmation, сам ждёт session и редиректит; не оборачивать в ProtectedRoute */}

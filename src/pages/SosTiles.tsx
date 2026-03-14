@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { SosHero } from "@/components/sos/SosHero";
@@ -19,7 +20,8 @@ import { ChevronRight } from "lucide-react";
 export default function SosTiles() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { selectedMember, members } = useFamily();
+  const { selectedMember, members, isLoading: isLoadingMembers } = useFamily();
+  const { authReady } = useAuth();
   const subscription = useSubscription();
   const hasAccess = subscription.hasAccess ?? false;
   const refetchUsage = subscription.refetchUsage;
@@ -149,7 +151,7 @@ export default function SosTiles() {
   return (
     <MobileLayout showNav>
       <div className="flex flex-col min-h-0 flex-1 px-4 pb-4 pt-0 bg-background">
-        {members.length === 0 && (
+        {authReady && !isLoadingMembers && members.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-2 mb-1 shrink-0">
             Добавьте ребёнка в профиле, чтобы получать рекомендации по темам.
           </p>
