@@ -430,11 +430,11 @@ export default function ChatPage() {
   // В help-режиме историю рецептов не подгружаем — сообщения только в local state
   useEffect(() => {
     if (mode === "help") return;
-    setIsChatBootstrapped(false);
     if (historyMessages.length === 0) {
       setMessages([]);
       return;
     }
+    setIsChatBootstrapped(false);
     if (Date.now() < skipHistorySyncUntilRef.current) return;
     const recipeIds = [...new Set(historyMessages.map((m: { recipe_id?: string | null }) => m.recipe_id).filter(Boolean))] as string[];
     const isBlockedRefusalResponse = (response: string) => {
@@ -1387,7 +1387,7 @@ export default function ChatPage() {
             </div>
           )}
 
-          {/* Пустое состояние чата рецептов: только после завершения инициализации (isChatBootstrapped) */}
+          {/* Пустое состояние чата рецептов: приветствие и подсказки (показываем после инициализации; при пустой истории не сбрасываем bootstrapped) */}
           {mode === "recipes" && isChatBootstrapped && messages.length === 0 && members.length > 0 && (
             <ChatEmptyState
               profileName={chatProfileName}
