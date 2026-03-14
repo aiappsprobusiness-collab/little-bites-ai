@@ -25,6 +25,7 @@ import { getBenefitLabel } from "@/utils/ageCategory";
 import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
 import { ChatRecipeCard } from "@/components/chat/ChatRecipeCard";
 import { SystemHintCard } from "@/components/chat/SystemHintCard";
+import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import type { SystemHintRoute } from "@/utils/chatRouteFallback";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import {
@@ -669,52 +670,15 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           })()}
         </motion.div>
 
-        {/* Delete confirmation - bottom sheet style */}
-        <AnimatePresence>
-          {showDelete && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-black/40 z-[100]"
-                onClick={() => setShowDelete(false)}
-              />
-              <motion.div
-                initial={{ opacity: 0, y: 100 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 100 }}
-                transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                className="fixed bottom-0 left-0 right-0 z-[101] bg-card rounded-t-3xl p-6 pb-8 shadow-xl"
-              >
-                <div className="w-12 h-1 bg-muted rounded-full mx-auto mb-6" />
-                <div className="flex flex-col items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
-                    <Trash2 className="w-7 h-7 text-destructive" />
-                  </div>
-                  <p className="text-center font-semibold text-typo-title">Удалить сообщение?</p>
-                  <p className="text-center text-typo-muted text-muted-foreground">Это действие нельзя отменить</p>
-                  <div className="flex gap-3 w-full mt-2">
-                    <Button
-                      variant="secondary"
-                      onClick={() => setShowDelete(false)}
-                      className="flex-1 py-3 h-auto rounded-xl"
-                    >
-                      Отмена
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={handleDelete}
-                      className="flex-1 py-3 h-auto rounded-xl"
-                    >
-                      Удалить
-                    </Button>
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+        <ConfirmActionModal
+          open={showDelete}
+          onOpenChange={setShowDelete}
+          title="Удалить сообщение?"
+          description="Это действие нельзя отменить"
+          confirmText="Удалить"
+          cancelText="Отмена"
+          onConfirm={handleDelete}
+        />
 
         {addToPlanOpen && recipeId && isValidRecipeId(recipeId) && effectiveRecipe && (
           <AddToPlanSheet

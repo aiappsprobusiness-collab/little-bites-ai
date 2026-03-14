@@ -124,7 +124,7 @@ export function MemberSelectorButton({
       <Dialog open={showPicker} onOpenChange={handlePickerOpenChange}>
         <DialogContent className="rounded-2xl max-w-[90vw]">
           <DialogHeader>
-            <DialogTitle className="text-typo-title font-semibold">Кому готовим?</DialogTitle>
+            <DialogTitle className="text-typo-title font-semibold">Выберите профиль</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-1 py-2">
             {!isFree && showFamilyOption && (
