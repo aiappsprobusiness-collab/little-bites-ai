@@ -3,7 +3,7 @@
  * Precache core assets, runtime stale-while-revalidate, offline fallback.
  * Auth/API/Supabase routes are never intercepted to avoid loops and rate limits.
  */
-const CACHE_VERSION = "mom-recipes-v6";
+const CACHE_VERSION = "__APP_BUILD_VERSION__";
 const PRECACHE_NAME = CACHE_VERSION + "-precache";
 const RUNTIME_NAME = CACHE_VERSION + "-runtime";
 const OFFLINE_URL = "/offline.html";

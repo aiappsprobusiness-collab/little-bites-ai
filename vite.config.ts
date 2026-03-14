@@ -1,7 +1,42 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { readFileSync, writeFileSync } from "fs";
+import { execSync } from "child_process";
 import { componentTagger } from "lovable-tagger";
+
+const PLACEHOLDER = "__APP_BUILD_VERSION__";
+
+function getBuildVersion(): string {
+  let gitHash = "";
+  try {
+    gitHash = execSync("git rev-parse --short HEAD", { encoding: "utf-8" }).trim();
+  } catch {
+    gitHash = "nobuild";
+  }
+  return `${gitHash}-${Date.now()}`;
+}
+
+/** Подставляет версию билда в sw.js при production build, чтобы браузер видел новый SW после каждого деплоя. */
+function swVersionPlugin() {
+  return {
+    name: "sw-version",
+    apply: "build",
+    writeBundle(options: { dir?: string }) {
+      const outDir = options.dir ?? "dist";
+      const swPath = path.resolve(outDir, "sw.js");
+      try {
+        let content = readFileSync(swPath, "utf-8");
+        if (content.includes(PLACEHOLDER)) {
+          content = content.replace(PLACEHOLDER, getBuildVersion());
+          writeFileSync(swPath, content);
+        }
+      } catch (e) {
+        console.warn("[sw-version] Could not patch sw.js:", e);
+      }
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 // base MUST be "/" for GitHub Pages custom domain (not "./" or "/little-bites-ai/") — avoids black screen and manifest.json returning HTML
@@ -42,7 +77,7 @@ export default defineConfig(({ mode }) => ({
     },
     chunkSizeWarningLimit: 1000,
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [react(), swVersionPlugin(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
