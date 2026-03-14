@@ -74,7 +74,7 @@ export function SosHero({
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Что происходит с ребёнком?"
+            placeholder="Например: ребёнок стал хуже есть"
             className="flex-1 rounded-xl border-border"
             disabled={disabled}
             aria-label="Опишите ситуацию"
@@ -88,9 +88,6 @@ export function SosHero({
             Спросить
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground leading-snug">
-          Например: ребёнок стал хуже есть
-        </p>
         <p className="text-xs text-muted-foreground leading-relaxed">
           Ответы носят информационный характер и не заменяют консультацию врача.
         </p>
