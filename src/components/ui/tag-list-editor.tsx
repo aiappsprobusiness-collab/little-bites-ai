@@ -34,7 +34,7 @@ const chipBase =
 
 const profileLabelClass = "text-sm font-medium";
 const profileAddRowClass = "flex h-11 items-center gap-3 px-4 rounded-xl border border-input bg-background hover:border-primary/30 transition-colors cursor-text w-full";
-const profileAddBtnClass = "w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50";
+const profileAddBtnClass = "w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50";
 const profileHelperClass = "text-xs text-muted-foreground mt-1.5";
 const profileInputClass = "flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground";
 
@@ -67,7 +67,7 @@ export function TagListEditor({
 
   if (unified || useProfileChips) {
     return (
-      <div className="space-y-2">
+      <div className={useProfileChips ? "space-y-1.5" : "space-y-2"}>
         {label ? (
           <Label htmlFor={inputId} className={useProfileChips ? profileLabelClass : isPill ? "profile-label font-medium text-[#2F3A2E]" : "text-sm font-semibold text-foreground"}>
             {label}
@@ -137,7 +137,7 @@ export function TagListEditor({
             disabled={readOnly || !inputValue.trim()}
             aria-label="Добавить"
           >
-            <Plus className={isPill ? "w-4 h-4" : "w-5 h-5"} />
+            <Plus className={useProfileChips ? "w-5 h-5" : isPill ? "w-4 h-4" : "w-5 h-5"} />
           </button>
           <input
             id={inputId}

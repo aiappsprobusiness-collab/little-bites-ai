@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Calendar, Loader2, Plus, Trash2, User, UtensilsCrossed, Heart } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Trash2, User, UtensilsCrossed } from "lucide-react";
 import { useMembers, birthDateToAgeMonths, ageMonthsToBirthDate, memberTypeFromAgeMonths, formatAgeFromMonths } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
@@ -374,7 +374,7 @@ export default function ChildProfileEditPage() {
 
   return (
     <MobileLayout
-      title="Профиль"
+      title=""
       headerLeft={
         <Button variant="ghost" size="icon" className="h-10 w-10" onClick={handleBack} aria-label="Назад">
           <ArrowLeft className="h-5 w-5" />
@@ -383,101 +383,77 @@ export default function ChildProfileEditPage() {
     >
       <div className="profile-edit-page flex flex-col flex-1 min-h-0">
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="px-4 py-5 pb-32 max-w-lg mx-auto flex flex-col gap-8">
+          <div className="px-4 py-4 pb-32 max-w-lg mx-auto flex flex-col gap-6">
           {loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
-              {/* Hero: профильный блок */}
-              <div className="rounded-2xl bg-gradient-to-b from-[#F8F6F1] to-[#F3F0E9] border border-border/60 px-5 py-5 flex items-center gap-4">
-                <div className="w-14 h-14 rounded-full bg-white/90 border border-border/80 shadow-sm flex items-center justify-center shrink-0 text-[#5A6B3D] text-xl font-semibold">
-                  {name.trim() ? (name.trim()[0].toUpperCase()) : <User className="w-7 h-7 text-muted-foreground" />}
+              {/* Hero: компактный блок — [avatar] Имя · возраст */}
+              <div className="rounded-[16px] bg-gradient-to-b from-[#F8F6F1] to-[#F3F0E9] border border-border/60 p-4 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-white/90 border border-border/80 shadow-sm flex items-center justify-center shrink-0 text-[#5A6B3D] text-base font-semibold">
+                  {name.trim() ? (name.trim()[0].toUpperCase()) : <User className="w-5 h-5 text-muted-foreground" />}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-lg font-semibold text-foreground truncate">
+                <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
+                  <span className="text-[15px] font-semibold text-foreground truncate">
                     {name.trim() || "Новый профиль"}
-                  </h2>
-                  <p className="text-[13px] text-muted-foreground mt-0.5">
-                    {isNew ? "Профиль ребёнка" : "Редактирование профиля"}
-                  </p>
-                  <p className="text-sm text-muted-foreground leading-relaxed mt-1.5">
-                    {isNew
-                      ? "Добавьте профиль, чтобы мы учитывали особенности питания."
-                      : "Измените данные, чтобы рекомендации учитывали особенности питания."}
-                  </p>
+                  </span>
                   {ageMonths != null && ageMonths >= 0 && birthDate?.trim() && (
-                    <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-white/80 border border-border/60 text-[12px] font-medium text-foreground/90">
-                      {formatAgeFromMonths(ageMonths)}
-                    </span>
+                    <>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-[13px] text-muted-foreground">
+                        {formatAgeFromMonths(ageMonths)}
+                      </span>
+                    </>
                   )}
                 </div>
               </div>
 
-              {/* Карточка 1 — Основная информация */}
-              <div className="bg-background rounded-2xl p-5 shadow-sm border border-border">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <User className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground leading-tight">Основная информация</h3>
-                    <p className="text-sm text-muted-foreground mt-0.5">Имя и дата рождения</p>
-                  </div>
+              {/* Основная информация: только Имя и Дата рождения */}
+              <div className="bg-background rounded-[16px] p-4 shadow-sm border border-border flex flex-col gap-4">
+                <div className="space-y-[6px]">
+                  <Label htmlFor="child-name" className="text-sm font-medium">Имя</Label>
+                  <Input
+                    id="child-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Например: Маша, Папа"
+                    className="h-11 border border-input bg-background rounded-xl text-[15px] placeholder:text-muted-foreground/70"
+                  />
                 </div>
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="child-name" className="text-sm font-medium">Имя</Label>
+                <div className="space-y-[6px]">
+                  <Label htmlFor="child-birth" className="text-sm font-medium">Дата рождения <span className="text-destructive">*</span></Label>
+                  <div className="date-input-wrap relative rounded-xl border border-input bg-background">
                     <Input
-                      id="child-name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Например: Маша, Папа"
-                      className="h-11 border border-input bg-background rounded-xl text-[15px] placeholder:text-muted-foreground/70"
+                      id="child-birth"
+                      type="date"
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      className="h-11 min-h-0 border-0 bg-transparent rounded-xl pl-3 pr-12 text-[15px] focus-visible:ring-0 focus-visible:ring-offset-0"
                     />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="child-birth" className="text-sm font-medium">Дата рождения <span className="text-destructive">*</span></Label>
-                    <div className="date-input-wrap relative rounded-xl border border-input bg-background">
-                      <Input
-                        id="child-birth"
-                        type="date"
-                        value={birthDate}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                        className="h-11 min-h-0 border-0 bg-transparent rounded-xl pl-3 pr-12 text-[15px] focus-visible:ring-0 focus-visible:ring-offset-0"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => document.getElementById("child-birth")?.focus()}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground"
-                        aria-label="Выбрать дату"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Возраст рассчитывается автоматически
-                    </p>
-                    {ageMonths != null && ageMonths >= 0 && birthDate?.trim() && (
-                      <span className="inline-flex items-center mt-1.5 px-2.5 py-1 rounded-lg bg-primary/10 text-[12px] font-medium text-primary">
-                        {formatAgeFromMonths(ageMonths)}
-                      </span>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById("child-birth")?.focus()}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground"
+                      aria-label="Выбрать дату"
+                    />
                   </div>
                 </div>
               </div>
 
-              {/* Карточка 2 — Пищевые особенности */}
-              <div className="bg-background rounded-2xl p-5 shadow-sm border border-border">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+              {/* Пищевые особенности: аллергии, любит, не любит — один блок */}
+              <div className="bg-background rounded-[16px] p-4 shadow-sm border border-border flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
                     <UtensilsCrossed className="w-4 h-4 text-amber-700/80" />
                   </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground leading-tight">Пищевые особенности</h3>
-                    <p className="text-sm text-muted-foreground mt-0.5">То, что важно учитывать при подборе блюд</p>
-                  </div>
+                  <h3 className="text-base font-semibold text-foreground leading-tight">Пищевые особенности</h3>
                 </div>
-                <div className="space-y-3">
+
+                {/* Аллергии */}
+                <div className="space-y-[6px]">
+                  <Label htmlFor="child-allergy-add" className="text-sm font-medium">Аллергии</Label>
                   {allergyItems.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {allergyItems.map((item, i) => {
@@ -498,141 +474,118 @@ export default function ChildProfileEditPage() {
                     </div>
                   )}
                   {isFree && activeAllergyCount >= 1 ? (
-                    <>
+                    <button
+                      type="button"
+                      onClick={() => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); }}
+                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 font-medium text-sm text-muted-foreground hover:bg-muted/50"
+                    >
+                      <Plus className="w-5 h-5" />
+                      Добавить аллергию
+                    </button>
+                  ) : (
+                    <form
+                      className="flex h-11 items-center gap-3 px-4 rounded-xl border border-input bg-background hover:border-primary/30 transition-colors cursor-text w-full"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (allergyInput.trim()) allergiesHandlers.add(allergyInput);
+                      }}
+                      noValidate
+                    >
                       <button
                         type="button"
-                        onClick={() => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); }}
-                        className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 font-medium text-sm text-muted-foreground hover:bg-muted/50"
+                        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50"
+                        onClick={() => allergyInput.trim() && allergiesHandlers.add(allergyInput)}
+                        disabled={!allergyInput.trim()}
+                        aria-label="Добавить"
                       >
                         <Plus className="w-5 h-5" />
-                        Добавить аллергию
                       </button>
-                      <p className="text-xs text-muted-foreground">
-                        В Free доступна 1 аллергия
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <form
-                        className="flex h-11 items-center gap-3 px-4 rounded-xl border border-input bg-background hover:border-primary/30 transition-colors cursor-text w-full"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (allergyInput.trim()) allergiesHandlers.add(allergyInput);
+                      <input
+                        id="child-allergy-add"
+                        type="text"
+                        autoComplete="off"
+                        value={allergyInput}
+                        onChange={(e) => setAllergyInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          const isEnter = e.key === "Enter" || (e as React.KeyboardEvent<HTMLInputElement>).keyCode === 13;
+                          if (isEnter || e.key === ",") {
+                            e.preventDefault();
+                            allergiesHandlers.add(allergyInput);
+                          }
                         }}
-                        noValidate
-                      >
-                        <button
-                          type="button"
-                          className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50"
-                          onClick={() => allergyInput.trim() && allergiesHandlers.add(allergyInput)}
-                          disabled={!allergyInput.trim()}
-                          aria-label="Добавить"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                        <input
-                          id="child-allergy-add"
-                          type="text"
-                          autoComplete="off"
-                          value={allergyInput}
-                          onChange={(e) => setAllergyInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            const isEnter = e.key === "Enter" || (e as React.KeyboardEvent<HTMLInputElement>).keyCode === 13;
-                            if (isEnter || e.key === ",") {
-                              e.preventDefault();
-                              allergiesHandlers.add(allergyInput);
-                            }
-                          }}
-                          placeholder="Например: БКМ, орехи"
-                          className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground/70"
-                        />
-                      </form>
-                      <p className="text-xs text-muted-foreground">
-                        {!hasAccess ? "В Free доступна 1 аллергия" : "Введите через запятую или нажмите Enter"}
-                      </p>
-                    </>
+                        placeholder="Например: БКМ, орехи"
+                        className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground/70"
+                      />
+                    </form>
                   )}
                 </div>
-              </div>
 
-              {/* Карточка 3 — Предпочтения */}
-              <div className="bg-background rounded-2xl p-5 shadow-sm border border-border">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                    <Heart className="w-4 h-4 text-emerald-700/80" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground leading-tight">Предпочтения</h3>
-                    <p className="text-sm text-muted-foreground mt-0.5">Любит и не любит — для точного подбора рецептов</p>
-                  </div>
-                </div>
+                {/* Любит */}
                 {isFree ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={openPaywallLikesDislikes}
-                      className="text-left w-full rounded-xl border border-border bg-muted/20 p-4 hover:bg-muted/40 transition-colors"
-                    >
-                      <p className="text-sm font-medium text-foreground">Любит</p>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {LIKES_GHOST_CHIPS.map((chip) => (
-                          <PreferenceChip key={chip} label={chip} variant="like" />
-                        ))}
-                      </div>
-                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border border-border text-muted-foreground">
-                        ✨ Настроить (Premium)
-                      </div>
-                    </button>
-                    <div className="h-px bg-border my-4" />
-                    <button
-                      type="button"
-                      onClick={openPaywallLikesDislikes}
-                      className="text-left w-full rounded-xl border border-border bg-muted/20 p-4 hover:bg-muted/40 transition-colors"
-                    >
-                      <p className="text-sm font-medium text-foreground">Не любит</p>
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {DISLIKES_GHOST_CHIPS.map((chip) => (
-                          <PreferenceChip key={chip} label={chip} variant="dislike" />
-                        ))}
-                      </div>
-                      <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border border-border text-muted-foreground">
-                        ✨ Настроить (Premium)
-                      </div>
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    onClick={openPaywallLikesDislikes}
+                    className="text-left w-full rounded-xl border border-border bg-muted/20 p-4 hover:bg-muted/40 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-foreground">Любит</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {LIKES_GHOST_CHIPS.map((chip) => (
+                        <PreferenceChip key={chip} label={chip} variant="like" />
+                      ))}
+                    </div>
+                    <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border border-border text-muted-foreground">
+                      ✨ Настроить (Premium)
+                    </div>
+                  </button>
                 ) : (
-                  <div className="space-y-6">
-                    <TagListEditor
-                      id="profile-likes"
-                      label="Любит"
-                      chipVariant="like"
-                      items={likes}
-                      inputValue={likesInput}
-                      onInputChange={setLikesInput}
-                      onAdd={likesHandlers.add}
-                      onEdit={likesHandlers.edit}
-                      onRemove={likesHandlers.remove}
-                      placeholder="Например: ягоды, рыба"
-                      helperText="Введите через запятую или нажмите Enter"
-                    />
-                    <TagListEditor
-                      id="profile-dislikes"
-                      label="Не любит"
-                      chipVariant="dislike"
-                      items={dislikes}
-                      inputValue={dislikesInput}
-                      onInputChange={setDislikesInput}
-                      onAdd={dislikesHandlers.add}
-                      onEdit={dislikesHandlers.edit}
-                      onRemove={dislikesHandlers.remove}
-                      placeholder="Например: лук, мясо"
-                      helperText="Введите через запятую или нажмите Enter"
-                    />
-                  </div>
+                  <TagListEditor
+                    id="profile-likes"
+                    label="Любит"
+                    chipVariant="like"
+                    items={likes}
+                    inputValue={likesInput}
+                    onInputChange={setLikesInput}
+                    onAdd={likesHandlers.add}
+                    onEdit={likesHandlers.edit}
+                    onRemove={likesHandlers.remove}
+                    placeholder="Например: ягоды, рыба"
+                  />
+                )}
+
+                {/* Не любит */}
+                {isFree ? (
+                  <button
+                    type="button"
+                    onClick={openPaywallLikesDislikes}
+                    className="text-left w-full rounded-xl border border-border bg-muted/20 p-4 hover:bg-muted/40 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-foreground">Не любит</p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {DISLIKES_GHOST_CHIPS.map((chip) => (
+                        <PreferenceChip key={chip} label={chip} variant="dislike" />
+                      ))}
+                    </div>
+                    <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border border-border text-muted-foreground">
+                      ✨ Настроить (Premium)
+                    </div>
+                  </button>
+                ) : (
+                  <TagListEditor
+                    id="profile-dislikes"
+                    label="Не любит"
+                    chipVariant="dislike"
+                    items={dislikes}
+                    inputValue={dislikesInput}
+                    onInputChange={setDislikesInput}
+                    onAdd={dislikesHandlers.add}
+                    onEdit={dislikesHandlers.edit}
+                    onRemove={dislikesHandlers.remove}
+                    placeholder="Например: лук, мясо"
+                  />
                 )}
 
                 {!isNew && member && (
-                  <div className="mt-6 pt-4 border-t border-border/60">
+                  <div className="pt-4 border-t border-border/60">
                     <Button
                       variant="ghost"
                       className="w-full h-10 text-[13px] text-muted-foreground hover:text-[#9B6B6B] hover:bg-muted/40 font-medium rounded-xl"

@@ -26,7 +26,7 @@ const variantStyles: Record<
 };
 
 const chipBase =
-  "inline-flex items-center gap-1.5 min-h-[26px] py-1 px-2.5 rounded-[10px] text-[13px] font-medium leading-none whitespace-nowrap border cursor-default";
+  "inline-flex items-center gap-1.5 h-7 py-[6px] px-[10px] rounded-[10px] text-[13px] font-medium leading-none whitespace-nowrap border cursor-default";
 
 export interface PreferenceChipProps {
   label: string;
