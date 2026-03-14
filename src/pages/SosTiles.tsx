@@ -14,8 +14,7 @@ import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReach
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { getPopularQuestionForToday } from "@/features/help/config/popularQuestions";
-import { ChevronRight, HelpCircle } from "lucide-react";
-import { IconBadge } from "@/components/ui/IconBadge";
+import { ChevronRight } from "lucide-react";
 
 export default function SosTiles() {
   const navigate = useNavigate();
@@ -156,29 +155,7 @@ export default function SosTiles() {
           </p>
         )}
 
-        {/* Главный вход: блок «Сегодня спрашивают» */}
-        <div className="shrink-0 pb-2">
-          <div className="rounded-2xl border border-border bg-card shadow-soft py-[14px] px-4">
-            <div className="flex items-center gap-2 mb-2">
-              <IconBadge icon={HelpCircle} variant="sage" size="sm" />
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Сегодня спрашивают
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => handleOpenWithMessage(popularQuestion.text)}
-              disabled={helpLimitExceeded}
-              className="w-full flex items-center gap-2 text-left rounded-xl py-1.5 -mx-0.5 px-0.5 hover:bg-muted/40 active:bg-muted/60 transition-colors disabled:opacity-50 disabled:pointer-events-none"
-            >
-              <span className="flex-1 text-base font-medium text-foreground leading-snug line-clamp-2 text-ellipsis break-words min-w-0">
-                {popularQuestion.text}
-              </span>
-              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
-            </button>
-          </div>
-        </div>
-
+        {/* 1. Главный вход: блок «Помощник рядом» */}
         <div className="shrink-0 pb-2">
           <SosHero
             onOpenWithMessage={handleOpenWithMessage}
@@ -190,6 +167,27 @@ export default function SosTiles() {
           />
         </div>
 
+        {/* 2. Сегодня спрашивают — компактный, неакцентный блок */}
+        <div className="shrink-0 pb-2">
+          <div className="rounded-xl border border-border/80 bg-muted/20 py-2.5 px-3">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">
+              Сегодня спрашивают
+            </p>
+            <button
+              type="button"
+              onClick={() => handleOpenWithMessage(popularQuestion.text)}
+              disabled={helpLimitExceeded}
+              className="w-full flex items-center gap-2 text-left py-0.5 -mx-0.5 px-0.5 hover:bg-muted/30 active:bg-muted/50 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
+            >
+              <span className="flex-1 text-sm text-foreground/90 leading-snug line-clamp-2 text-ellipsis break-words min-w-0">
+                {popularQuestion.text}
+              </span>
+              <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-hidden />
+            </button>
+          </div>
+        </div>
+
+        {/* 3. Категории / карточки функций */}
         <div className="flex-1 min-h-0 overflow-y-auto mt-3 pb-24 space-y-4">
           {groupedSections.map((section) => (
             <section key={section.groupId} className="space-y-2">
@@ -202,6 +200,10 @@ export default function SosTiles() {
               />
             </section>
           ))}
+          {/* 4. Дисклеймер — в самом низу страницы */}
+          <p className="text-[11px] text-muted-foreground/90 pt-6 pb-2 text-center leading-relaxed">
+            Ответы носят информационный характер и не заменяют консультацию врача.
+          </p>
         </div>
       </div>
 

@@ -39,7 +39,7 @@
 
 - **Назначение:** анализ изображения (холодильник/тарелка) через Lovable AI (Gemini): поиск продуктов на фото, ответ в JSON.
 - **В коде:** вызывается только из **useDeepSeekAPI**: `analyzeMutation` дергает `POST …/deepseek-analyze`. Но **ни один компонент не использует** `analyze` / `isAnalyzing` из `useDeepSeekAPI()`.  
-  - **Дневник питания (Анализ тарелки):** `FoodDiary.tsx` вызывает **deepseek-chat** с `type: "balance_check"` и текстом, не изображением.  
+  - **Наша тарелка (Анализ тарелки):** `FoodDiary.tsx` вызывает **deepseek-chat** с `type: "balance_check"` и текстом, не изображением.  
   - **Сканер (ScanPage):** использует **useDeepSeek().analyzeImage()** → `deepseek.ts` → **deepseek-chat** (vision) или текстовый fallback, не deepseek-analyze.
 - **Последнее изменение в репо:** 2026-02-12.
 

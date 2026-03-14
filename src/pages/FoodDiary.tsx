@@ -86,7 +86,7 @@ export default function FoodDiary() {
 
   return (
     <MobileLayout
-      title="Дневник питания"
+      title="Наша тарелка"
       showNav
       headerLeft={
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Назад">

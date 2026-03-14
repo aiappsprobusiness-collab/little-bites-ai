@@ -14,7 +14,7 @@ export const SOS_TOPICS: {
   { id: "spitting_up", label: "Срыгивание", emoji: "", icon: Droplets },
   { id: "food_refusal", label: "Не хочет есть", emoji: "", icon: UtensilsCrossed },
   { id: "routine", label: "График кормления", emoji: "", icon: Clock },
-  { id: "food_diary", label: "Дневник питания", emoji: "", icon: ClipboardList },
+  { id: "food_diary", label: "Наша тарелка", emoji: "", icon: ClipboardList },
   { id: "urgent_help", label: "Срочная помощь", emoji: "", icon: AlertTriangle },
 ];
 
@@ -108,7 +108,7 @@ export const SOS_TOPIC_CARD_DESCRIPTIONS: Record<string, string> = {
   food_refusal: "Причины и мягкие решения",
   routine: "Подходит ли режим возрасту",
   spitting_up: "Норма или проблема ЖКТ",
-  food_diary: "Запишите кормление и получите рекомендации",
+  food_diary: "Записать и получить совет",
   urgent_help: "Когда нужно срочно обратиться к врачу",
 };
 

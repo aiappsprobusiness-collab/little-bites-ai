@@ -19,7 +19,7 @@ const QUICK_HELP_CHIPS_RAW: HelpChipItem[] = [
   { label: "Аллергия", text: "Аллергия или реакция — что делать?", access: "paid" },
   { label: "Режим кормления", text: "График кормления: подходит ли возрасту?", access: "paid" },
   { label: "Когда срочно к врачу", text: "Когда срочно обращаться к врачу?", access: "paid" },
-  { label: "Дневник питания", text: "Дневник питания: записать и получить совет", access: "paid" },
+  { label: "Наша тарелка", text: "Наша тарелка: записать и получить совет", access: "paid" },
 ];
 
 export const QUICK_HELP_CHIPS: HelpChipItem[] = [...QUICK_HELP_CHIPS_RAW];

@@ -65,7 +65,7 @@ export function SosHero({
             Что происходит с ребёнком?
           </p>
         </div>
-        <MemberSelectorButton variant="light" className="shrink-0" disabled={disabled} />
+        <MemberSelectorButton className="shrink-0" disabled={disabled} />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -88,10 +88,6 @@ export function SosHero({
             Спросить
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          Ответы носят информационный характер и не заменяют консультацию врача.
-        </p>
-
         {helpRemaining != null && Number.isFinite(helpRemaining) && (
           <p
             className={cn(
