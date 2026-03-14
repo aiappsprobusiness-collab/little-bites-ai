@@ -8,6 +8,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { checkFoodRelevance } from "./isRelevantQuery.ts";
+import { detectAssistantTopic } from "./assistantTopicDetect.ts";
 import {
   NO_ARTICLES_RULE,
   GREETING_STYLE_RULE,
@@ -368,6 +369,26 @@ serve(async (req) => {
     let relevanceAllowed = true;
 
     if (type === "chat") {
+      // 1) Сначала проверка темы Помощника: если запрос про прикорм/аллергию/стул и т.д. — мягкий redirect без вызова модели
+      const assistantTopic = detectAssistantTopic(userMessage);
+      if (assistantTopic.matched) {
+        console.log(JSON.stringify({
+          tag: "CHAT_ROUTE",
+          route: "assistant_topic",
+          requestId,
+          topicKey: assistantTopic.topicKey,
+          matchedTerms: assistantTopic.matchedTerms ?? [],
+        }));
+        const assistantMessage = assistantTopic.topicTitle
+          ? `Этот вопрос лучше задать во вкладке «Помощник», в теме «${assistantTopic.topicTitle}». Там можно получить более точный ответ.`
+          : "Этот вопрос лучше задать во вкладке «Помощник». Там есть отдельные темы, где можно получить более точный ответ.";
+        return new Response(
+          JSON.stringify({ message: assistantMessage, recipes: [] }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // 2) Проверка релевантности запроса для рецепта (food relevance)
       const relevance = checkFoodRelevance(userMessage);
       relevanceAllowed = relevance.allowed;
 
@@ -382,12 +403,26 @@ serve(async (req) => {
       }));
 
       if (!relevanceAllowed) {
-        const rejectMessage = `Этот вопрос не связан с питанием. ${memberName} ждёт полезных рецептов!`;
+        console.log(JSON.stringify({
+          tag: "CHAT_ROUTE",
+          route: "irrelevant",
+          requestId,
+          reason: relevance.reason,
+          matched_terms: relevance.matchedTerms,
+          matched_patterns: relevance.matchedPatterns,
+        }));
+        const rejectMessage = "Не удалось распознать рецепт. Попробуйте уточнить запрос. Этот чат помогает подбирать рецепты. Напишите, что хотите приготовить, и я предложу подходящий рецепт.";
         return new Response(
           JSON.stringify({ message: rejectMessage, recipes: [] }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      console.log(JSON.stringify({
+        tag: "CHAT_ROUTE",
+        route: "recipe",
+        requestId,
+      }));
     }
 
     const isRecipeChat = type === "chat" && relevanceAllowed;

@@ -180,9 +180,14 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const [ingredientOverrides, setIngredientOverrides] = useState<Record<number, string>>({});
 
     const effectiveRecipe = forcePlainText ? null : (preParsedRecipe ?? null);
+    /** Редирект в Помощник или нерелевантный ответ — показывать content как есть, не как «ошибку парсинга» */
+    const isRedirectOrIrrelevantContent =
+      role === "assistant" &&
+      (content.includes("Этот чат помогает подбирать рецепты") || content.includes("Этот вопрос лучше задать во вкладке «Помощник»"));
     const isRecipeParseFailure =
       !forcePlainText &&
       role === "assistant" &&
+      !isRedirectOrIrrelevantContent &&
       (expectRecipe === true || (rawContent != null && rawContent.trim().length > 0)) &&
       effectiveRecipe === null;
     /** Ошибку показываем только после завершения стрима; во время генерации — loader, без мигания */

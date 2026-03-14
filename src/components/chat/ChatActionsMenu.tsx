@@ -48,7 +48,7 @@ export function ChatActionsMenu({
         )}
       >
         <Info className="w-4 h-4 shrink-0 text-muted-foreground" />
-        <span className="flex-1">Что умеет Помощник</span>
+        <span className="flex-1">Что умеет помощник</span>
         <ChevronRight className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
       </button>
       <button

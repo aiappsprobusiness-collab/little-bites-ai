@@ -253,17 +253,26 @@ export function useDeepSeekAPI() {
       }
 
       const contentType = response.headers.get('Content-Type') || '';
-      if (contentType.includes('text/event-stream') && response.body) {
+      // Редирект/нерелевантность и др. возвращают JSON без стрима — сразу парсим, не читаем как SSE
+      if (!contentType.includes('text/event-stream')) {
+        const data = await response.json().catch(() => ({}));
+        await refetchUsage();
+        return data as { message?: string; recipes?: unknown[]; recipe_id?: string | null; blocked?: boolean; blockedByAllergy?: boolean; blockedByDislike?: boolean; [k: string]: unknown };
+      }
+      if (response.body) {
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let fullContent = '';
+        let fullBody = '';
         let buffer = '';
         let eventType = '';
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+          const chunk = decoder.decode(value, { stream: true });
+          fullBody += chunk;
+          buffer += chunk;
           const lines = buffer.split('\n');
           buffer = lines.pop() ?? '';
 
@@ -300,13 +309,37 @@ export function useDeepSeekAPI() {
           }
         }
 
+        // Если пришёл JSON без стрима (редирект/нерелевантность), а ответ прочитали как стрим — парсим тело
+        if (fullContent === '' && fullBody.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(fullBody.trim());
+            if (typeof parsed?.message === 'string' && Array.isArray(parsed?.recipes)) {
+              await refetchUsage();
+              return {
+                message: parsed.message,
+                recipes: parsed.recipes,
+                recipe_id: parsed.recipe_id ?? null,
+                ...(parsed.blocked !== undefined && { blocked: parsed.blocked }),
+                ...(parsed.blockedByAllergy !== undefined && { blockedByAllergy: parsed.blockedByAllergy }),
+                ...(parsed.blockedByDislike !== undefined && { blockedByDislike: parsed.blockedByDislike }),
+              };
+            }
+          } catch {
+            // ignore
+          }
+        }
+
         await refetchUsage();
         return { message: fullContent };
       }
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       await refetchUsage();
-      return data;
+      return {
+        message: typeof data?.message === 'string' ? data.message : '',
+        recipes: Array.isArray(data?.recipes) ? data.recipes : [],
+        recipe_id: data?.recipe_id ?? null,
+      };
     },
   });
 

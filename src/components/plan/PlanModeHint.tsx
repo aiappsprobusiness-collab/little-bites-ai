@@ -36,15 +36,15 @@ function formatList(items: string[] | undefined): string {
 export function PlanModeHint({ mode, className, memberAgeMonths, memberAllergies, memberLikes, memberDislikes }: PlanModeHintProps) {
   if (mode === "family") {
     return (
-      <div className={cn("mt-1.5 max-w-md", className)}>
-        <div className="inline-flex items-center gap-2" role="status">
+      <div className={cn("mt-1 w-full min-w-0", className)}>
+        <div className="flex items-center gap-2 w-full min-w-0" role="status">
           <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="text-xs text-foreground/85 leading-snug">{FAMILY_TEXT}</span>
+          <span className="text-xs text-foreground/85 leading-snug flex-1 min-w-0 truncate">{FAMILY_TEXT}</span>
           <Popover>
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="inline-flex items-center justify-center h-5 min-w-5 rounded-full px-1 text-muted-foreground hover:text-foreground hover:bg-muted/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
+                className="inline-flex items-center justify-center h-5 min-w-5 shrink-0 rounded-full px-1 text-muted-foreground hover:text-foreground hover:bg-muted/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
                 aria-label="Подробнее о семейном режиме"
               >
                 <Info className="h-3.5 w-3.5" />
@@ -65,14 +65,14 @@ export function PlanModeHint({ mode, className, memberAgeMonths, memberAllergies
   }
 
   return (
-    <div className={cn("mt-1.5 max-w-md", className)}>
-      <div className="inline-flex items-center gap-1.5" role="status">
-        <span className="text-xs text-muted-foreground leading-snug">{MEMBER_TEXT}</span>
+    <div className={cn("mt-1 w-full min-w-0", className)}>
+      <div className="flex items-center gap-2 w-full min-w-0" role="status">
+        <span className="text-xs text-muted-foreground leading-snug flex-1 min-w-0 truncate">{MEMBER_TEXT}</span>
         <Popover>
           <PopoverTrigger asChild>
             <button
               type="button"
-              className="inline-flex items-center justify-center w-5 h-5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
+              className="inline-flex items-center justify-center w-5 h-5 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 transition-colors"
               aria-label="Подробнее об особенностях профиля"
             >
               <HelpCircle className="w-4 h-4 shrink-0" strokeWidth={2} />

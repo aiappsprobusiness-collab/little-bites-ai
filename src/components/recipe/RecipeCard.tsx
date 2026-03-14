@@ -74,8 +74,8 @@ export function RecipeCard({
   const isChefTip = !!(showChefTip && chefAdvice?.trim());
   const tipTitle = "Совет от шефа";
 
-  const bodyPadding = isPreview ? "p-3 pt-2" : isFull ? "p-4 pt-3 sm:p-6 sm:pt-4" : "p-3 pt-2";
-  const bodySpace = "space-y-3";
+  const bodyPadding = isPreview ? "p-3 pt-2 pb-1" : isFull ? "p-4 pt-3 sm:p-6 sm:pt-4" : "p-3 pt-2";
+  const bodySpace = isPreview ? "space-y-2" : "space-y-3";
 
   /** В превью — чипсы (если showIngredientChips); в chat/full — единый список ингредиентов. */
   const showChips = showIngredientChips ?? !isPreview;
@@ -142,7 +142,7 @@ export function RecipeCard({
             </div>
           </div>
           {actions && (
-            <div className="flex flex-col shrink-0 items-center gap-1 py-4 pr-4 pl-2" onClick={(e) => e.stopPropagation()}>
+            <div className="flex flex-col shrink-0 items-center gap-1 py-2 pr-3 pl-2" onClick={(e) => e.stopPropagation()}>
               {actions}
             </div>
           )}

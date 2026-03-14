@@ -32,6 +32,7 @@ import { isFamilySelected } from "@/utils/planModeUtils";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import type { LimitReachedFeature } from "@/utils/limitReachedMessages";
 import { getRewrittenQueryIfFollowUp, deriveDishHint } from "@/utils/blockedFollowUp";
+import { getRedirectOrIrrelevantMessage } from "@/utils/chatRouteFallback";
 import type { BlockedMeta } from "@/types/chatBlocked";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
@@ -105,6 +106,9 @@ const RECIPE_GENERATION_PHRASES = [
   "Совет: морковь для супа нарежьте соломкой — быстрее свариться."
 
 ];
+
+/** Задержка (мс) перед показом блока с советами при ожидании ответа. Пока не прошло это время, блок не показываем — быстрые ответы (redirect в Помощник, irrelevant) не сопровождаются советами. */
+const RECIPE_TIP_DELAY_MS = 2500;
 
 /** Подсказки в placeholder поля ввода чата (режим рецептов). Ротация каждые 2.5 с, останавливается при вводе. Вторичный способ подсказки. */
 const CHAT_PLACEHOLDER_SUGGESTIONS = [
@@ -222,6 +226,9 @@ export default function ChatPage() {
 
   /** Индекс фразы при генерации рецепта (случайная смена каждые 5 с). */
   const [recipeStatusPhraseIndex, setRecipeStatusPhraseIndex] = useState(0);
+  /** Показывать ли блок с советами во время ожидания: только после задержки, чтобы при быстром ответе (redirect/irrelevant) не показывать. */
+  const [showRecipeGenerationTip, setShowRecipeGenerationTip] = useState(false);
+
   useEffect(() => {
     if (!isChatting || mode !== "recipes") return;
     const len = RECIPE_GENERATION_PHRASES.length;
@@ -234,6 +241,17 @@ export default function ChatPage() {
       });
     }, 5000);
     return () => clearInterval(id);
+  }, [isChatting, mode]);
+
+  // Показывать блок с советами только после задержки — пока не началась «долгая» генерация рецепта, не показываем
+  useEffect(() => {
+    if (!isChatting) {
+      setShowRecipeGenerationTip(false);
+      return;
+    }
+    if (mode !== "recipes") return;
+    const t = setTimeout(() => setShowRecipeGenerationTip(true), RECIPE_TIP_DELAY_MS);
+    return () => clearTimeout(t);
   }, [isChatting, mode]);
 
   const [hintsSeen, setHintsSeen] = useState(() =>
@@ -410,6 +428,14 @@ export default function ChatPage() {
         r.includes("Поэтому рецепт с этим ингредиентом я не предложу");
       return hasBlockedPhrase && (r.includes("аллерги") || r.includes("не любит"));
     };
+    /** Ответ редиректа в Помощник или нерелевантный: не парсить как рецепт при загрузке из истории */
+    const isRedirectOrIrrelevantResponse = (response: string) => {
+      const r = (response ?? "").trim();
+      return (
+        r.includes("Этот чат помогает подбирать рецепты") ||
+        r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
+      );
+    };
     const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>) => {
       const formatted: Message[] = [];
       historyMessages.forEach((msg: { id: string; message?: string; response?: string; created_at: string; recipe_id?: string | null; meta?: BlockedMeta | Record<string, unknown> | null }) => {
@@ -435,6 +461,16 @@ export default function ChatPage() {
               recipeId: undefined,
               isBlockedRefusal: true,
               blockedMeta: blockedMetaFromDb,
+            });
+          } else if (!msg.recipe_id && isRedirectOrIrrelevantResponse(msg.response)) {
+            formatted.push({
+              id: `${msg.id}-assistant`,
+              role: "assistant",
+              content: msg.response,
+              timestamp: new Date(msg.created_at),
+              rawContent: undefined,
+              preParsedRecipe: null,
+              recipeId: undefined,
             });
           } else {
             const dbRecipe = msg.recipe_id ? recipeMap[msg.recipe_id] : null;
@@ -743,7 +779,9 @@ export default function ChatPage() {
       }
 
       const isBlockedResponse = (response?.blocked === true || !!response?.blockedByAllergy || !!response?.blockedByDislike) && !!rawMessage;
-      const finalRecipe = isBlockedResponse ? null : parsed.recipes[0];
+      /** Ответ без рецепта (redirect в Помощник или irrelevant): показываем как обычный текст, не парсим как рецепт */
+      const isRedirectOrIrrelevantResponse = apiRecipes.length === 0 && !!rawMessage;
+      const finalRecipe = isBlockedResponse ? null : (isRedirectOrIrrelevantResponse ? null : parsed.recipes[0]);
       const finalValidation = finalRecipe ? validateRecipe(finalRecipe, generationContext) : { ok: false };
       const hasRecipeFromApi = apiRecipes.length > 0;
       const showRecipe = !!finalRecipe && (finalValidation.ok || hasRecipeFromApi);
@@ -787,6 +825,27 @@ export default function ChatPage() {
         } catch (e) {
           safeError("Failed to save blocked refusal to chat history:", e);
         }
+      } else if (isRedirectOrIrrelevantResponse) {
+        const displayMessage = getRedirectOrIrrelevantMessage(userMessage.content) ?? rawMessage;
+        streamDoneForMessageIdRef.current = assistantMessageId;
+        skipHistorySyncUntilRef.current = Date.now() + 5_000;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: displayMessage, rawContent: undefined, isStreaming: false, preParsedRecipe: null }
+              : m
+          )
+        );
+        try {
+          await saveChat({
+            message: userMessage.content,
+            response: displayMessage,
+            recipeId: null,
+            childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+          });
+        } catch (e) {
+          safeError("Failed to save redirect/irrelevant to chat history:", e);
+        }
       } else if (import.meta.env.DEV && finalRecipe) {
         const recipeFromApi = apiRecipes[0] as Record<string, unknown> | undefined;
         const chefAdvice = (finalRecipe as { chefAdvice?: string }).chefAdvice;
@@ -803,27 +862,50 @@ export default function ChatPage() {
         });
       }
 
-      if (!isBlockedResponse && !finalRecipe) {
-        trackUsageEvent("chat_generate_error", { properties: { message: FAILED_MESSAGE } });
-        streamDoneForMessageIdRef.current = assistantMessageId;
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? {
-                ...m,
-                content: FAILED_MESSAGE,
-                rawContent: rawMessage || undefined,
-                isStreaming: false,
-                preParsedRecipe: null,
-              }
-              : m
-          )
-        );
-        toast({
-          variant: "destructive",
-          title: "Не удалось подобрать рецепт",
-          description: FAILED_MESSAGE,
-        });
+      if (!isBlockedResponse && !finalRecipe && !isRedirectOrIrrelevantResponse) {
+        const fallbackMessage = getRedirectOrIrrelevantMessage(userMessage.content);
+        if (fallbackMessage) {
+          streamDoneForMessageIdRef.current = assistantMessageId;
+          skipHistorySyncUntilRef.current = Date.now() + 5_000;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? { ...m, content: fallbackMessage, rawContent: undefined, isStreaming: false, preParsedRecipe: null }
+                : m
+            )
+          );
+          try {
+            await saveChat({
+              message: userMessage.content,
+              response: fallbackMessage,
+              recipeId: null,
+              childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+            });
+          } catch (e) {
+            safeError("Failed to save fallback redirect/irrelevant to chat history:", e);
+          }
+        } else {
+          trackUsageEvent("chat_generate_error", { properties: { message: FAILED_MESSAGE } });
+          streamDoneForMessageIdRef.current = assistantMessageId;
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? {
+                  ...m,
+                  content: FAILED_MESSAGE,
+                  rawContent: rawMessage || undefined,
+                  isStreaming: false,
+                  preParsedRecipe: null,
+                }
+                : m
+            )
+          );
+          toast({
+            variant: "destructive",
+            title: "Не удалось подобрать рецепт",
+            description: FAILED_MESSAGE,
+          });
+        }
       } else if (finalRecipe && !isBlockedResponse) {
         trackUsageEvent("chat_generate_success");
         // Один setMessages с рецептом и recipeId — без второго обновления после тоста «Рецепты сохранены», чтобы не было моргания
@@ -965,7 +1047,8 @@ export default function ChatPage() {
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
       } else {
-        const fallbackText = "Не удалось распознать рецепт. Попробуйте уточнить запрос.";
+        const redirectOrIrrelevant = getRedirectOrIrrelevantMessage(userMessage.content);
+        const fallbackText = redirectOrIrrelevant ?? "Не удалось распознать рецепт. Попробуйте уточнить запрос.";
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
@@ -973,11 +1056,13 @@ export default function ChatPage() {
               : m
           )
         );
-        toast({
-          variant: "destructive",
-          title: "Ошибка",
-          description: "Не удалось получить ответ. Попробуйте снова.",
-        });
+        if (!redirectOrIrrelevant) {
+          toast({
+            variant: "destructive",
+            title: "Ошибка",
+            description: "Не удалось получить ответ. Попробуйте снова.",
+          });
+        }
       }
     } finally {
       sendInProgressRef.current = false;
@@ -1242,7 +1327,11 @@ export default function ChatPage() {
               >
                 <div className="rounded-2xl p-4 bg-card border border-border shadow-soft max-w-[85%]">
                   <p className="text-sm text-foreground leading-relaxed">
-                    {mode === "help" ? "Думаю…" : RECIPE_GENERATION_PHRASES[recipeStatusPhraseIndex]}
+                    {mode === "help"
+                      ? "Думаю…"
+                      : showRecipeGenerationTip
+                        ? RECIPE_GENERATION_PHRASES[recipeStatusPhraseIndex]
+                        : "Думаю…"}
                   </p>
                   <div className="flex items-center gap-1.5 mt-2" aria-hidden>
                     <span className="chat-thinking-dot" />

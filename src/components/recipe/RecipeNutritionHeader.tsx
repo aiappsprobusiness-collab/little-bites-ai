@@ -61,7 +61,7 @@ export function RecipeNutritionHeader({
   const metaItemClass = "inline-flex items-baseline gap-1.5";
 
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("space-y-1", className)}>
       {hasMeta && (
         <div
           className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 min-w-0"
@@ -94,7 +94,7 @@ export function RecipeNutritionHeader({
             role="paragraph"
           >
             <span>{label}</span>
-            {line != null && line.trim() && <span className="block mt-0.5">{line.trim()}</span>}
+            {line != null && line.trim() && <span className="block mt-px leading-tight">{line.trim()}</span>}
           </div>
         );
       })()}

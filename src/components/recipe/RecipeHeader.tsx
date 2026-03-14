@@ -32,7 +32,7 @@ export function RecipeHeader({
   const isCompact = variant === "compact";
   const isFull = variant === "full";
   const paddingClass = isCompact
-    ? "px-3 pt-3 pb-2"
+    ? "px-3 pt-3 pb-1"
     : isFull
       ? "px-4 pt-5 pb-4 sm:px-6 sm:pt-6 sm:pb-5"
       : "px-4 pt-4 pb-3";
@@ -48,8 +48,8 @@ export function RecipeHeader({
 
   return (
     <header className={cn(recipeHeaderBg, paddingClass, className)}>
-      {!hideTitle && <h2 className={cn(titleClass, "mb-2")}>{title}</h2>}
-      <div className="mb-2">
+      {!hideTitle && <h2 className={cn(titleClass, "mb-1.5")}>{title}</h2>}
+      <div className="mb-1">
         <RecipeNutritionHeader
           mealTypeLabel={mealLabel}
           cookingTimeMinutes={cookingTimeMinutes}
