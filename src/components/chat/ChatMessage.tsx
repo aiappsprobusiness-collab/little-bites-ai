@@ -433,7 +433,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                   ? "relative px-3.5 py-2.5 text-xs bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
                   : role === "assistant" && effectiveRecipe
                     ? "relative p-0 overflow-visible"
-                    : "relative p-3 rounded-2xl bg-card border border-border shadow-soft";
+                    : role === "assistant" && isStreaming
+                      ? "relative py-2 pr-3 pl-1 min-w-0 bg-transparent border-0 shadow-none"
+                      : "relative p-3 rounded-2xl bg-card border border-border shadow-soft";
             return (
               <Wrapper className={wrapperClassName}>
             {role === "assistant" && systemHintType ? (
@@ -568,7 +570,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             ) : (
               <p className="text-typo-muted whitespace-pre-wrap select-none leading-snug break-words">{displayContent}</p>
             )}
-            {!forcePlainText && !systemHintType && (
+            {!forcePlainText && !systemHintType && (role !== "assistant" || !isStreaming) && (
             <p className={`text-xs mt-1.5 ${role === "user" ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
               {timestamp.toLocaleTimeString("ru-RU", {
                 hour: "2-digit",
