@@ -34,6 +34,7 @@
 | blocked | 200 | `blocked: true`, `blocked_by`, `message`, `blocked_items`, `suggested_alternatives`, `original_query` | Запрос содержит аллерген/dislike (кроме «без X»). Модель не вызывается. |
 | ok (рецепт) | 200 | `message`, `recipes`, `recipe_id?` | Успешная генерация. |
 | ok (без рецепта) | 200 | `message`, `recipes: []` | Заглушка, SOS, анализ тарелки. |
+| redirect/irrelevant | 200 | `message`, `recipes: []`, `route: "assistant_topic" \| "irrelevant"`, при assistant_topic — `topicKey`, `topicTitle`, `topicShortTitle` | Маршрутизация: тема Помощника или нерелевантный запрос; фронт рендерит SystemHintCard (короткий текст, «Тема: {topicShortTitle}», кнопка «Перейти в Помощник»). |
 | ошибка | 200/429/500 | `error`, `message` | Лимит, таймаут, API/сервер. |
 
 Примеры: **blocked** — `{"blocked":true,"blocked_by":"allergy","profile_name":"Ребёнок","blocked_items":["орехи"],"suggested_alternatives":[...],"message":"У профиля..."}`. **ok** — `{"message":"{...}","recipes":[{...}],"recipe_id":"uuid"}`. **Лимит** — `{"error":"LIMIT_REACHED","message":"Лимит на сегодня исчерпан.","payload":{"feature":"chat_recipe","limit":2,"used":2}}`.
@@ -89,6 +90,8 @@
 3. **Рецепт** — при `allowed: true` выполняется обычная генерация рецепта. Лог: `CHAT_ROUTE: recipe`.
 
 Принцип: **fail-open** — при сомнении разрешать генерацию рецепта; темы Помощника и нерелевантные запросы отсекаются только по явным ключевым словам/паттернам.
+
+Ответы redirect/irrelevant возвращают в теле JSON поля `route` (`assistant_topic` или `irrelevant`), при `assistant_topic` — `topicKey` и `topicTitle` для перехода во вкладку «Помощник» по сценарию (`/sos?scenario=<topicKey>`). На фронте такие сообщения отображаются карточкой системной подсказки (`SystemHintCard`), без кнопок рецепта (избранное, поделиться, в план).
 
 ### 3.3 Релевантность запроса (Free vs Premium)
 

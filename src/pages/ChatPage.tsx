@@ -32,7 +32,7 @@ import { isFamilySelected } from "@/utils/planModeUtils";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import type { LimitReachedFeature } from "@/utils/limitReachedMessages";
 import { getRewrittenQueryIfFollowUp, deriveDishHint } from "@/utils/blockedFollowUp";
-import { getRedirectOrIrrelevantMessage } from "@/utils/chatRouteFallback";
+import { getRedirectOrIrrelevantMessage, getRedirectOrIrrelevantMeta, type SystemHintRoute } from "@/utils/chatRouteFallback";
 import type { BlockedMeta } from "@/types/chatBlocked";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
@@ -141,6 +141,11 @@ interface Message {
   isBlockedRefusal?: boolean;
   /** Мета для follow-up (то же блюдо с заменой); из Edge или chat_history.meta */
   blockedMeta?: BlockedMeta;
+  /** Системная подсказка: редирект в Помощник или нерелевантный запрос — рендерить SystemHintCard */
+  systemHintType?: SystemHintRoute;
+  topicKey?: string;
+  topicTitle?: string;
+  topicShortTitle?: string;
 }
 
 /** Формат сообщений help-чата в localStorage (timestamp как строка). */
@@ -463,6 +468,10 @@ export default function ChatPage() {
               blockedMeta: blockedMetaFromDb,
             });
           } else if (!msg.recipe_id && isRedirectOrIrrelevantResponse(msg.response)) {
+            const r = (msg.response ?? "").trim();
+            const systemHintType: SystemHintRoute = r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
+              ? "assistant_topic_redirect"
+              : "assistant_irrelevant";
             formatted.push({
               id: `${msg.id}-assistant`,
               role: "assistant",
@@ -471,6 +480,7 @@ export default function ChatPage() {
               rawContent: undefined,
               preParsedRecipe: null,
               recipeId: undefined,
+              systemHintType,
             });
           } else {
             const dbRecipe = msg.recipe_id ? recipeMap[msg.recipe_id] : null;
@@ -826,13 +836,35 @@ export default function ChatPage() {
           safeError("Failed to save blocked refusal to chat history:", e);
         }
       } else if (isRedirectOrIrrelevantResponse) {
-        const displayMessage = getRedirectOrIrrelevantMessage(userMessage.content) ?? rawMessage;
+        const apiRoute = (response as { route?: string })?.route;
+        const apiTopicKey = (response as { topicKey?: string })?.topicKey;
+        const apiTopicTitle = (response as { topicTitle?: string })?.topicTitle;
+        const apiTopicShortTitle = (response as { topicShortTitle?: string })?.topicShortTitle;
+        const fallbackMeta = getRedirectOrIrrelevantMeta(userMessage.content);
+        const displayMessage = rawMessage || fallbackMeta?.message || "";
+        const systemHintType: SystemHintRoute =
+          apiRoute === "assistant_topic" ? "assistant_topic_redirect"
+          : apiRoute === "irrelevant" ? "assistant_irrelevant"
+          : fallbackMeta?.route ?? "assistant_irrelevant";
+        const topicKey = apiTopicKey ?? fallbackMeta?.topicKey;
+        const topicTitle = apiTopicTitle ?? fallbackMeta?.topicTitle;
+        const topicShortTitle = apiTopicShortTitle ?? fallbackMeta?.topicShortTitle;
         streamDoneForMessageIdRef.current = assistantMessageId;
         skipHistorySyncUntilRef.current = Date.now() + 5_000;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
-              ? { ...m, content: displayMessage, rawContent: undefined, isStreaming: false, preParsedRecipe: null }
+              ? {
+                  ...m,
+                  content: displayMessage,
+                  rawContent: undefined,
+                  isStreaming: false,
+                  preParsedRecipe: null,
+                  systemHintType,
+                  topicKey,
+                  topicTitle,
+                  topicShortTitle,
+                }
               : m
           )
         );
@@ -864,20 +896,31 @@ export default function ChatPage() {
 
       if (!isBlockedResponse && !finalRecipe && !isRedirectOrIrrelevantResponse) {
         const fallbackMessage = getRedirectOrIrrelevantMessage(userMessage.content);
-        if (fallbackMessage) {
+        const fallbackMeta = getRedirectOrIrrelevantMeta(userMessage.content);
+        if (fallbackMeta) {
           streamDoneForMessageIdRef.current = assistantMessageId;
           skipHistorySyncUntilRef.current = Date.now() + 5_000;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMessageId
-                ? { ...m, content: fallbackMessage, rawContent: undefined, isStreaming: false, preParsedRecipe: null }
+                ? {
+                    ...m,
+                    content: fallbackMeta.message,
+                    rawContent: undefined,
+                    isStreaming: false,
+                    preParsedRecipe: null,
+                    systemHintType: fallbackMeta.route,
+                    topicKey: fallbackMeta.topicKey,
+                    topicTitle: fallbackMeta.topicTitle,
+                    topicShortTitle: fallbackMeta.topicShortTitle,
+                  }
                 : m
             )
           );
           try {
             await saveChat({
               message: userMessage.content,
-              response: fallbackMessage,
+              response: fallbackMeta.message,
               recipeId: null,
               childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
             });
@@ -1312,6 +1355,15 @@ export default function ChatPage() {
                 forcePlainText={mode === "help"}
                 isConsultationMode={isConsultationMode}
                 isBlockedRefusal={m.isBlockedRefusal}
+                systemHintType={m.systemHintType}
+                topicKey={m.topicKey}
+                topicTitle={m.topicTitle}
+                topicShortTitle={m.topicShortTitle}
+                onOpenAssistant={
+                  mode === "recipes" && m.systemHintType === "assistant_topic_redirect"
+                    ? (topicKey) => navigate("/sos" + (topicKey ? "?scenario=" + encodeURIComponent(topicKey) : ""))
+                    : undefined
+                }
               />
             ))}
           </AnimatePresence>

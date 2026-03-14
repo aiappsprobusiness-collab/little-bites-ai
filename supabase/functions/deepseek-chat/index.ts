@@ -379,11 +379,16 @@ serve(async (req) => {
           topicKey: assistantTopic.topicKey,
           matchedTerms: assistantTopic.matchedTerms ?? [],
         }));
-        const assistantMessage = assistantTopic.topicTitle
-          ? `Этот вопрос лучше задать во вкладке «Помощник», в теме «${assistantTopic.topicTitle}». Там можно получить более точный ответ.`
-          : "Этот вопрос лучше задать во вкладке «Помощник». Там есть отдельные темы, где можно получить более точный ответ.";
+        const assistantMessage = "Этот вопрос лучше задать во вкладке «Помощник».";
         return new Response(
-          JSON.stringify({ message: assistantMessage, recipes: [] }),
+          JSON.stringify({
+            message: assistantMessage,
+            recipes: [],
+            route: "assistant_topic",
+            topicKey: assistantTopic.topicKey,
+            topicTitle: assistantTopic.topicTitle ?? undefined,
+            topicShortTitle: assistantTopic.topicShortTitle ?? undefined,
+          }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -411,9 +416,9 @@ serve(async (req) => {
           matched_terms: relevance.matchedTerms,
           matched_patterns: relevance.matchedPatterns,
         }));
-        const rejectMessage = "Не удалось распознать рецепт. Попробуйте уточнить запрос. Этот чат помогает подбирать рецепты. Напишите, что хотите приготовить, и я предложу подходящий рецепт.";
+        const rejectMessage = "В этом чате мы помогаем подбирать блюда. Попробуйте изменить запрос, и мы предложим подходящий вариант.";
         return new Response(
-          JSON.stringify({ message: rejectMessage, recipes: [] }),
+          JSON.stringify({ message: rejectMessage, recipes: [], route: "irrelevant" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }

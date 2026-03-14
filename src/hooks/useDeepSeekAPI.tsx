@@ -322,6 +322,10 @@ export function useDeepSeekAPI() {
                 ...(parsed.blocked !== undefined && { blocked: parsed.blocked }),
                 ...(parsed.blockedByAllergy !== undefined && { blockedByAllergy: parsed.blockedByAllergy }),
                 ...(parsed.blockedByDislike !== undefined && { blockedByDislike: parsed.blockedByDislike }),
+                ...(parsed.route !== undefined && { route: parsed.route }),
+                ...(parsed.topicKey !== undefined && { topicKey: parsed.topicKey }),
+                ...(parsed.topicTitle !== undefined && { topicTitle: parsed.topicTitle }),
+                ...(parsed.topicShortTitle !== undefined && { topicShortTitle: parsed.topicShortTitle }),
               };
             }
           } catch {

@@ -24,6 +24,8 @@ import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
 import { ChatRecipeCard } from "@/components/chat/ChatRecipeCard";
+import { SystemHintCard } from "@/components/chat/SystemHintCard";
+import type { SystemHintRoute } from "@/utils/chatRouteFallback";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import {
   trackUsageEvent,
@@ -96,6 +98,12 @@ interface ChatMessageProps {
   isConsultationMode?: boolean;
   /** Ответ-отказ по аллергии/dislike: скрываем кнопки лайк, шэринг, в план */
   isBlockedRefusal?: boolean;
+  /** Системная подсказка (редирект в Помощник / нерелевантность) — рендерить SystemHintCard, без кнопок рецепта */
+  systemHintType?: SystemHintRoute;
+  topicKey?: string;
+  topicTitle?: string;
+  topicShortTitle?: string;
+  onOpenAssistant?: (topicKey?: string) => void;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
@@ -161,7 +169,7 @@ function isValidRecipeId(v: string): boolean {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false, systemHintType, topicKey, topicTitle, topicShortTitle, onOpenAssistant }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const [addToPlanOpen, setAddToPlanOpen] = useState(false);
@@ -415,17 +423,42 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         >
           {(() => {
             const isConsultationBubble = role === "assistant" && forcePlainText;
+            const isSystemHint = role === "assistant" && !!systemHintType;
             const Wrapper = isConsultationBubble ? HelpSectionCard : "div";
-            const wrapperClassName = isConsultationBubble
-              ? "rounded-2xl rounded-bl-sm border border-border bg-card shadow-soft p-4"
-              : role === "user"
-                ? "relative px-3.5 py-2.5 text-xs bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
-                : role === "assistant" && effectiveRecipe
-                  ? "relative p-0 overflow-visible"
-                  : "relative p-3 rounded-2xl bg-card border border-border shadow-soft";
+            const wrapperClassName = isSystemHint
+              ? "relative max-w-full"
+              : isConsultationBubble
+                ? "rounded-2xl rounded-bl-sm border border-border bg-card shadow-soft p-4"
+                : role === "user"
+                  ? "relative px-3.5 py-2.5 text-xs bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
+                  : role === "assistant" && effectiveRecipe
+                    ? "relative p-0 overflow-visible"
+                    : "relative p-3 rounded-2xl bg-card border border-border shadow-soft";
             return (
               <Wrapper className={wrapperClassName}>
-            {role === "assistant" && showParseError ? (
+            {role === "assistant" && systemHintType ? (
+              <SystemHintCard
+                text={content}
+                topicKey={topicKey}
+                topicShortTitle={topicShortTitle}
+                onOpenAssistant={onOpenAssistant}
+                actionSlot={
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowDelete(true);
+                    }}
+                    className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all active:scale-95"
+                    title="Удалить"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                }
+                timestamp={timestamp}
+              />
+            ) : role === "assistant" && showParseError ? (
               <div className="text-xs text-muted-foreground space-y-1">
                 <p>Не удалось распознать рецепт. Попробуйте уточнить запрос.</p>
                 {rawContent?.trim() && !rawContent.trim().startsWith("{") && rawContent.length < 500 ? (
@@ -535,7 +568,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             ) : (
               <p className="text-typo-muted whitespace-pre-wrap select-none leading-snug break-words">{displayContent}</p>
             )}
-            {!forcePlainText && (
+            {!forcePlainText && !systemHintType && (
             <p className={`text-xs mt-1.5 ${role === "user" ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
               {timestamp.toLocaleTimeString("ru-RU", {
                 hour: "2-digit",
@@ -543,7 +576,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               })}
             </p>
             )}
-            {role === "assistant" && !isStreaming && !isConsultationMode && (
+            {role === "assistant" && !isStreaming && !isConsultationMode && !systemHintType && (
               <div
                 className="flex flex-row items-center justify-between gap-2 mt-3 pt-3 border-t border-border/50 shrink-0"
                 style={{ touchAction: "manipulation" }}

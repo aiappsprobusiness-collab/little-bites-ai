@@ -6,18 +6,20 @@
 
 export type AssistantTopicDetectResult =
   | { matched: false }
-  | { matched: true; topicKey: string; topicTitle: string; matchedTerms?: string[] };
+  | { matched: true; topicKey: string; topicTitle: string; topicShortTitle: string; matchedTerms?: string[] };
 
-/** Темы вкладки «Помощник» (соответствуют sosTopics в приложении): id, title, keywords. */
+/** Темы вкладки «Помощник» (соответствуют sosTopics в приложении): id, title, shortTitle для карточки чата. */
 const ASSISTANT_TOPICS: Array<{
   topicKey: string;
   topicTitle: string;
+  topicShortTitle: string;
   keywords: string[];
   patterns: RegExp[];
 }> = [
   {
     topicKey: "new_food",
     topicTitle: "Как безопасно ввести новый продукт?",
+    topicShortTitle: "Введение продуктов",
     keywords: [
       "прикорм", "ввести продукт", "вводить продукт", "новый продукт", "как вводить",
       "можно ли давать", "в каком возрасте", "сколько давать в первый раз", "первый прикорм",
@@ -34,6 +36,7 @@ const ASSISTANT_TOPICS: Array<{
   {
     topicKey: "allergy",
     topicTitle: "Аллергия или реакция — что делать?",
+    topicShortTitle: "Аллергия на продукты",
     keywords: [
       "аллергий", "аллергия на", "сыпь на", "сыпь после", "сыпь после продукта",
       "реакция на продукт", "покраснели щеки", "покраснение после", "краснота после",
@@ -49,6 +52,7 @@ const ASSISTANT_TOPICS: Array<{
   {
     topicKey: "constipation_diarrhea",
     topicTitle: "Стул малыша: норма или повод волноваться?",
+    topicShortTitle: "Стул малыша",
     keywords: [
       "стул малыша", "стул ребёнка", "стул ребенка", "запор", "понос", "жидкий стул",
       "зеленый стул", "зелёный стул", "кал", "дефекаци", "жкт", "кишечник",
@@ -64,6 +68,7 @@ const ASSISTANT_TOPICS: Array<{
   {
     topicKey: "spitting_up",
     topicTitle: "Срыгивания: норма или проблема?",
+    topicShortTitle: "Срыгивания",
     keywords: [
       "срыгиван", "срыгивает", "срыгнул", "срыгивание", "срыгивания",
       "фонтаном срыгивает", "обильно срыгивает",
@@ -75,6 +80,7 @@ const ASSISTANT_TOPICS: Array<{
   {
     topicKey: "food_refusal",
     topicTitle: "Ребёнок не хочет есть — что делать?",
+    topicShortTitle: "Ребёнок не ест",
     keywords: [
       "малоежка", "не хочет есть", "отказ от еды", "отказывается от еды",
       "отказывается от прикорма", "не ест", "отказ от прикорма", "ест только пюре",
@@ -90,6 +96,7 @@ const ASSISTANT_TOPICS: Array<{
   {
     topicKey: "routine",
     topicTitle: "График кормления: подходит ли возрасту?",
+    topicShortTitle: "Режим кормления",
     keywords: [
       "режим кормления", "график кормления", "сколько раз кормить", "ночные кормления",
       "приёмы пищи по возрасту", "питание по возрасту", "сколько раз в день кормить",
@@ -104,6 +111,7 @@ const ASSISTANT_TOPICS: Array<{
   {
     topicKey: "food_diary",
     topicTitle: "Дневник питания: записать и получить совет",
+    topicShortTitle: "Дневник питания",
     keywords: [
       "дневник питания", "что ел ребёнок", "что ел ребенок", "записать кормления",
       "разбор рациона", "анализ рациона",
@@ -116,6 +124,7 @@ const ASSISTANT_TOPICS: Array<{
   {
     topicKey: "urgent_help",
     topicTitle: "Когда срочно обращаться к врачу?",
+    topicShortTitle: "Срочная помощь",
     keywords: [
       "срочно к врачу", "когда к врачу", "кровь в стуле", "кровь в рвоте",
       "температура и понос", "вызвать скорую", "срочно обращаться",
@@ -161,6 +170,7 @@ export function detectAssistantTopic(text: string): AssistantTopicDetectResult {
         matched: true,
         topicKey: topic.topicKey,
         topicTitle: topic.topicTitle,
+        topicShortTitle: topic.topicShortTitle,
         matchedTerms: [...new Set(matchedTerms)].slice(0, 10),
       };
     }
