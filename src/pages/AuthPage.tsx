@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { trackUsageEvent, captureAttributionFromLocationOnce } from "@/utils/usageEvents";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
-import { getAndClearSessionInvalidReason, SESSION_INVALID_REASON_REPLACED } from "@/utils/activeSessionKey";
 
 const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
@@ -63,16 +62,6 @@ export default function AuthPage() {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, location.pathname, navigate, toast]);
-
-  useEffect(() => {
-    const reason = getAndClearSessionInvalidReason();
-    if (reason === SESSION_INVALID_REASON_REPLACED) {
-      toast({
-        variant: "destructive",
-        title: "Аккаунт открыт на другом устройстве. Войдите снова.",
-      });
-    }
-  }, [toast]);
 
   const goToWelcome = () => {
     navigate("/welcome", { replace: true });
