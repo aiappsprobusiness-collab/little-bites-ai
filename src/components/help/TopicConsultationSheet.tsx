@@ -26,6 +26,15 @@ import { cn } from "@/lib/utils";
 
 const MAX_MESSAGES = 12;
 
+/** Первые 2–3 абзаца для preview Free-пользователя. */
+function truncateToPreview(content: string, maxParagraphs = 3): string {
+  const safe = (content ?? "").trim();
+  if (!safe) return "";
+  const paragraphs = safe.split(/\n\n+/);
+  const take = Math.min(maxParagraphs, paragraphs.length);
+  return paragraphs.slice(0, take).join("\n\n").trim();
+}
+
 export interface TopicConsultationSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -47,6 +56,8 @@ export interface TopicConsultationSheetProps {
   /** При открытии sheet подставить этот текст в поле ввода (hero чипсы / карточка «Сегодня спрашивают» / тема). Без автоотправки — отправка только по кнопке. */
   initialMessage?: string | null;
   onInitialMessageSent?: () => void;
+  /** Текст вопроса «Сегодня спрашивают», если он premium (для preview у Free). */
+  popularQuestionTextIfPremium?: string | null;
 }
 
 export function TopicConsultationSheet({
@@ -64,6 +75,7 @@ export function TopicConsultationSheet({
   onLimitReached,
   initialMessage,
   onInitialMessageSent,
+  popularQuestionTextIfPremium = null,
 }: TopicConsultationSheetProps) {
   const { selectedMemberId, members } = useFamily();
   const { chat } = useDeepSeekAPI();
@@ -127,18 +139,6 @@ export function TopicConsultationSheet({
     async (text: string) => {
       const trimmed = text.trim();
       if (!trimmed || !topicKey || isLocked) return;
-
-      // Fail-safe: quick topic — не отправлять premium prompt Free пользователю
-      if (
-        topicKey === "quick" &&
-        premiumChipTexts?.length &&
-        premiumChipTexts.some((p) => p.trim() === trimmed) &&
-        !hasAccess &&
-        onPremiumChipTap
-      ) {
-        onPremiumChipTap();
-        return;
-      }
 
       const userMsg: TopicSessionMessage = {
         id: `u-${Date.now()}`,
@@ -363,6 +363,24 @@ export function TopicConsultationSheet({
                       m.role === "assistant" &&
                       index === messages.length - 1 &&
                       m.content.length > 0;
+                    const precedingUserContent = m.role === "assistant" && index > 0
+                      ? (messages[index - 1]?.role === "user" ? messages[index - 1].content?.trim() : "")
+                      : "";
+                    const isPremiumPrompt = Boolean(
+                      topicKey === "quick" &&
+                      precedingUserContent &&
+                      (premiumChipTexts?.some((p) => p.trim() === precedingUserContent) ||
+                        precedingUserContent === popularQuestionTextIfPremium?.trim())
+                    );
+                    const showPreview =
+                      isLastAssistant &&
+                      !hasAccess &&
+                      isPremiumPrompt &&
+                      !["Ответ занимает больше времени. Попробуйте ещё раз.", "Ошибка отправки. Попробуйте ещё раз.", "Не удалось получить ответ."].includes((m.content ?? "").trim());
+                    const displayContent = showPreview
+                      ? truncateToPreview(m.content ?? "")
+                      : (m.content ?? "");
+
                     return (
                       <div
                         key={m.id}
@@ -384,11 +402,27 @@ export function TopicConsultationSheet({
                           <p className="break-words whitespace-pre-wrap">{m.content}</p>
                         ) : (
                           <>
-                            <HelpResponseBlocks content={m.content ?? ""} />
+                            <HelpResponseBlocks content={displayContent} />
+                            {showPreview && onPremiumChipTap && (
+                              <div className="mt-4 pt-3 border-t border-border/60 space-y-3">
+                                <p className="text-[13px] text-muted-foreground leading-snug">
+                                  Продолжение ответа доступно в расширенной консультации.
+                                </p>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="rounded-xl font-medium bg-primary text-primary-foreground"
+                                  onClick={onPremiumChipTap}
+                                >
+                                  Получить полный разбор (Premium)
+                                </Button>
+                              </div>
+                            )}
                             {(m.content === "Ответ занимает больше времени. Попробуйте ещё раз." ||
                               m.content === "Ошибка отправки. Попробуйте ещё раз.") &&
                               index === messages.length - 1 &&
-                              messages.length >= 2 && (
+                              messages.length >= 2 &&
+                              !showPreview && (
                                 <Button
                                   type="button"
                                   variant="outline"

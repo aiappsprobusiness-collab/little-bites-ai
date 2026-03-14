@@ -8,13 +8,13 @@ import { SosTopicGrid } from "@/components/sos/SosTopicGrid";
 import { Paywall } from "@/components/subscription/Paywall";
 import { TopicConsultationSheet } from "@/components/help/TopicConsultationSheet";
 import { getSosTopicConfig, getTopicsGroupedBySection, type SosTopicConfig } from "@/data/sosTopics";
-import { getChipsForTopic, getPremiumQuickChipTexts, isPremiumQuickChipText } from "@/data/helpTopicChips";
+import { getChipsForTopic, getPremiumQuickChipTexts } from "@/data/helpTopicChips";
 import { getTopicById } from "@/constants/sos";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { getPopularQuestionForToday } from "@/features/help/config/popularQuestions";
-import { ChevronRight, MessageCircleQuestion } from "lucide-react";
+import { ChevronRight, HelpCircle } from "lucide-react";
 import { IconBadge } from "@/components/ui/IconBadge";
 
 export default function SosTiles() {
@@ -101,10 +101,6 @@ export default function SosTiles() {
   }, []);
 
   const handleOpenWithMessage = (text: string) => {
-    if (!hasAccess && isPremiumQuickChipText(text)) {
-      setPaywallOpen(true);
-      return;
-    }
     setSheetTopic({
       key: "quick",
       title: "Помощник рядом",
@@ -156,21 +152,12 @@ export default function SosTiles() {
             Добавьте ребёнка в профиле, чтобы получать рекомендации по темам.
           </p>
         )}
-        <div className="shrink-0 pb-2">
-          <SosHero
-            onOpenWithMessage={handleOpenWithMessage}
-            helpRemaining={helpRemaining}
-            helpLimitExceeded={helpLimitExceeded}
-            disabled={helpLimitExceeded}
-            hasAccess={hasAccess}
-            onPremiumChipTap={() => setPaywallOpen(true)}
-          />
-        </div>
 
-        <div className="shrink-0 mt-3">
+        {/* Главный вход: блок «Сегодня спрашивают» */}
+        <div className="shrink-0 pb-2">
           <div className="rounded-2xl border border-border bg-card shadow-soft py-[14px] px-4">
             <div className="flex items-center gap-2 mb-2">
-              <IconBadge icon={MessageCircleQuestion} variant="sage" size="sm" />
+              <IconBadge icon={HelpCircle} variant="sage" size="sm" />
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 Сегодня спрашивают
               </p>
@@ -187,6 +174,17 @@ export default function SosTiles() {
               <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />
             </button>
           </div>
+        </div>
+
+        <div className="shrink-0 pb-2">
+          <SosHero
+            onOpenWithMessage={handleOpenWithMessage}
+            helpRemaining={helpRemaining}
+            helpLimitExceeded={helpLimitExceeded}
+            disabled={helpLimitExceeded}
+            hasAccess={hasAccess}
+            onPremiumChipTap={() => setPaywallOpen(true)}
+          />
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto mt-3 pb-24 space-y-4">
@@ -230,6 +228,9 @@ export default function SosTiles() {
           }}
           initialMessage={initialMessage}
           onInitialMessageSent={() => setInitialMessage(null)}
+          popularQuestionTextIfPremium={
+            !hasAccess && popularQuestion.access === "premium" ? popularQuestion.text : null
+          }
         />
       )}
 

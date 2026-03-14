@@ -10,11 +10,11 @@ export interface HelpChipItem {
   access?: "free" | "paid";
 }
 
-/** Чипсы для входа в консультацию без выбора темы (hero + chat sheet). Порядок: Free, затем Premium. */
+/** Чипсы для входа в консультацию без выбора темы (hero + chat sheet). Порядок по частоте запросов. */
 const QUICK_HELP_CHIPS_RAW: HelpChipItem[] = [
+  { label: "Не хочет есть", text: "Ребёнок не хочет есть — что делать?", access: "paid" },
   { label: "Новый продукт", text: "Как безопасно ввести новый продукт?", access: "free" },
   { label: "Стул малыша", text: "Стул малыша: норма или повод волноваться?", access: "free" },
-  { label: "Не хочет есть", text: "Ребёнок не хочет есть — что делать?", access: "paid" },
   { label: "Срыгивания", text: "Срыгивания: норма или проблема?", access: "paid" },
   { label: "Аллергия", text: "Аллергия или реакция — что делать?", access: "paid" },
   { label: "Режим кормления", text: "График кормления: подходит ли возрасту?", access: "paid" },
