@@ -51,8 +51,9 @@
 ## 4.1. Карточки тем (SosTopicGrid)
 
 - **Файл:** `src/components/sos/SosTopicGrid.tsx`. Список тем по секциям на странице Help.
+- **Иконки:** используется единый компонент **IconBadge** (`src/components/ui/IconBadge.tsx`): скруглённая плашка (~36px, radius 10px) с тонкой SVG-иконкой из **lucide-react**. Иконка и оттенок плашки задаются в `src/data/sosTopics.ts` полями `icon` и `badgeVariant` (sage, sand, apricot, mint, blue, amber). Темы: питание — sage/sand, малыш/здоровье — apricot, аллергия/срочная помощь — blue. Без emoji в карточках.
 - **Premium-темы:** для Free у тем с `requiredTier === "paid"` отображается бейдж «Star + Premium» (иконка Star из Lucide, стиль amber: `text-amber-700 bg-amber-100/80`). По клику — `onLockedSelect()` (paywall).
-- **Вёрстка:** карточки компактные (padding p-3, gap 2.5), заголовок и подзаголовок по 2 строки макс. (`line-clamp-2`), иконка темы 32px, стрелка 16px. Цель — помещать на экран 4–5 карточек.
+- **Вёрстка:** карточки компактные (padding p-3, gap 2.5), заголовок и подзаголовок по 2 строки макс. (`line-clamp-2`), слева IconBadge, стрелка 16px. Цель — помещать на экран 4–5 карточек.
 
 ---
 

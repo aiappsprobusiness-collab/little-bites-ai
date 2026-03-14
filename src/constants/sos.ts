@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Baby, UtensilsCrossed, Apple, AlertCircle, Clock, Droplets, ClipboardList, AlertTriangle } from "lucide-react";
+import { UtensilsCrossed, Carrot, AlertCircle, Clock, Droplets, ClipboardList, AlertTriangle, Activity } from "lucide-react";
 
 /** Порядок: Ввод продукта, Аллергия, Стул, Срыгивание, Не хочет есть, График, Дневник, Срочная помощь. */
 export const SOS_TOPICS: {
@@ -8,9 +8,9 @@ export const SOS_TOPICS: {
   emoji: string;
   icon: ComponentType<{ className?: string }>;
 }[] = [
-  { id: "new_food", label: "Ввод нового продукта", emoji: "", icon: Apple },
+  { id: "new_food", label: "Ввод нового продукта", emoji: "", icon: Carrot },
   { id: "allergy", label: "Аллергия или реакция", emoji: "", icon: AlertCircle },
-  { id: "constipation_diarrhea", label: "Стул малыша", emoji: "", icon: Baby },
+  { id: "constipation_diarrhea", label: "Стул малыша", emoji: "", icon: Activity },
   { id: "spitting_up", label: "Срыгивание", emoji: "", icon: Droplets },
   { id: "food_refusal", label: "Не хочет есть", emoji: "", icon: UtensilsCrossed },
   { id: "routine", label: "График кормления", emoji: "", icon: Clock },

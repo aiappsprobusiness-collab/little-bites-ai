@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import type { SosTopicConfig } from "@/data/sosTopics";
+import { IconBadge } from "@/components/ui/IconBadge";
 import { cn } from "@/lib/utils";
 
 export interface SosRecommendedProps {
@@ -22,7 +23,6 @@ export function SosRecommended({
       <h3 className="text-sm font-semibold text-foreground">Рекомендуем</h3>
       <div className="grid grid-cols-2 gap-3">
         {topics.slice(0, 3).map((topic) => {
-          const Icon = topic.icon;
           const locked = topic.requiredTier === "paid" && !hasAccess;
           return (
             <motion.button
@@ -41,9 +41,7 @@ export function SosRecommended({
                   Premium
                 </span>
               )}
-              <span className="flex items-center justify-center w-10 h-10 rounded-full bg-primary/[0.06] shrink-0">
-                <Icon className="w-5 h-5 text-primary/80" />
-              </span>
+              <IconBadge icon={topic.icon} variant={topic.badgeVariant} size="md" />
               <span className="text-[15px] font-semibold text-foreground leading-snug line-clamp-2">
                 {topic.title}
               </span>

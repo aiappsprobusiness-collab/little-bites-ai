@@ -1,14 +1,15 @@
 import type { ComponentType } from "react";
 import {
-  Baby,
+  Carrot,
   UtensilsCrossed,
-  Apple,
   AlertCircle,
   Clock,
   Droplets,
   ClipboardList,
   AlertTriangle,
+  Activity,
 } from "lucide-react";
+import type { IconBadgeVariant } from "@/components/ui/IconBadge";
 
 export interface SosTopicFaq {
   q: string;
@@ -31,6 +32,8 @@ export interface SosTopicConfig {
   shortSubtitle: string;
   bullets: string[];
   icon: ComponentType<{ className?: string }>;
+  /** Вариант tint для IconBadge (плашка слева у карточки). */
+  badgeVariant: IconBadgeVariant;
   action: "sos" | "chat";
   prefillText?: string;
   requiresPremium: boolean;
@@ -58,7 +61,8 @@ const TOPICS: SosTopicConfig[] = [
       "Признаки готовности к продукту",
       "Когда отложить и когда к врачу",
     ],
-    icon: Apple,
+    icon: Carrot,
+    badgeVariant: "sage",
     action: "sos",
     requiresPremium: false,
     requiredTier: "free",
@@ -112,6 +116,7 @@ const TOPICS: SosTopicConfig[] = [
       "Когда обязательно к врачу",
     ],
     icon: AlertCircle,
+    badgeVariant: "blue",
     action: "sos",
     requiresPremium: true,
     requiredTier: "paid",
@@ -163,7 +168,8 @@ const TOPICS: SosTopicConfig[] = [
       "Когда скорректировать питанием",
       "Красные флаги для визита к врачу",
     ],
-    icon: Baby,
+    icon: Activity,
+    badgeVariant: "apricot",
     action: "sos",
     requiresPremium: false,
     requiredTier: "free",
@@ -216,6 +222,7 @@ const TOPICS: SosTopicConfig[] = [
       "Когда это уже не норма",
     ],
     icon: Droplets,
+    badgeVariant: "apricot",
     action: "sos",
     requiresPremium: true,
     requiredTier: "paid",
@@ -267,6 +274,7 @@ const TOPICS: SosTopicConfig[] = [
       "Когда стоит проверить здоровье",
     ],
     icon: UtensilsCrossed,
+    badgeVariant: "apricot",
     action: "sos",
     requiresPremium: true,
     requiredTier: "paid",
@@ -318,6 +326,7 @@ const TOPICS: SosTopicConfig[] = [
       "Переход на общий стол",
     ],
     icon: Clock,
+    badgeVariant: "sand",
     action: "sos",
     requiresPremium: true,
     requiredTier: "paid",
@@ -369,6 +378,7 @@ const TOPICS: SosTopicConfig[] = [
       "Идеи на следующий день",
     ],
     icon: ClipboardList,
+    badgeVariant: "sand",
     action: "sos",
     prefillText: "Составь дневник питания и дай рекомендации",
     requiresPremium: true,
@@ -419,6 +429,7 @@ const TOPICS: SosTopicConfig[] = [
       "Вялость и отказ от еды и питья",
     ],
     icon: AlertTriangle,
+    badgeVariant: "blue",
     action: "sos",
     requiresPremium: true,
     requiredTier: "paid",

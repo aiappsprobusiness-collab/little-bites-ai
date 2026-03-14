@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import type { SosTopicConfig } from "@/data/sosTopics";
 import { ChevronRight, Star } from "lucide-react";
+import { IconBadge } from "@/components/ui/IconBadge";
 import { cn } from "@/lib/utils";
 
 export interface SosTopicGridProps {
@@ -21,7 +22,6 @@ export function SosTopicGrid({
   return (
     <ul className={cn("flex flex-col gap-2.5", className)} role="list">
       {topics.map((topic) => {
-        const Icon = topic.icon;
         const locked = topic.requiredTier === "paid" && !hasAccess;
         return (
           <li key={topic.id}>
@@ -34,9 +34,7 @@ export function SosTopicGrid({
                 "hover:bg-muted/30 active:bg-muted/50 transition-colors duration-200"
               )}
             >
-              <span className="flex items-center justify-center w-8 h-8 rounded-full bg-muted shrink-0">
-                <Icon className="w-4 h-4 text-primary" />
-              </span>
+              <IconBadge icon={topic.icon} variant={topic.badgeVariant} size="md" />
               <div className="flex-1 min-w-0 py-0.5">
                 <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 break-words">
                   {topic.title}

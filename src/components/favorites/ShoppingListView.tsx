@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Copy, MoreVertical, Filter, ShoppingCart, X, ChevronDown, ChevronRight, ListPlus } from "lucide-react";
+import { Copy, MoreVertical, Filter, ShoppingCart, X, ChevronDown, ChevronRight, ListPlus, Carrot, Apple, Milk, Fish, Wheat, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { IconBadge, type IconBadgeVariant } from "@/components/ui/IconBadge";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import {
   useShoppingList,
@@ -43,6 +44,24 @@ const CATEGORY_LABEL: Record<ProductCategory, string> = {
   meat: "Мясо и рыба",
   grains: "Крупы и злаки",
   other: "Прочее",
+};
+
+/** Иконка и вариант плашки для заголовка категории (premium icon system). */
+const CATEGORY_ICON: Record<ProductCategory, import("react").ComponentType<{ className?: string }>> = {
+  vegetables: Carrot,
+  fruits: Apple,
+  dairy: Milk,
+  meat: Fish,
+  grains: Wheat,
+  other: Package,
+};
+const CATEGORY_BADGE_VARIANT: Record<ProductCategory, IconBadgeVariant> = {
+  vegetables: "sage",
+  fruits: "sage",
+  dairy: "mint",
+  meat: "apricot",
+  grains: "sand",
+  other: "amber",
 };
 
 function formatItemShort(item: ShoppingListItemRow): string {
@@ -596,8 +615,9 @@ export function ShoppingListView() {
           ) : (
             CATEGORY_ORDER.filter((c) => (byCategory[c]?.length ?? 0) > 0).map((cat) => (
               <div key={cat}>
-                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                  {CATEGORY_LABEL[cat]}
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground tracking-wide mb-2">
+                  <IconBadge icon={CATEGORY_ICON[cat]} variant={CATEGORY_BADGE_VARIANT[cat]} size="sm" />
+                  <span>{CATEGORY_LABEL[cat]}</span>
                 </h3>
                 <ul className="space-y-1.5">
                   {byCategory[cat].map((item) => (
