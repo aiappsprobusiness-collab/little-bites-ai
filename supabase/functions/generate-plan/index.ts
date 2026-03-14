@@ -16,6 +16,7 @@ import { getMemberAgeContext, isAdultContext } from "../_shared/memberAgeContext
 import { buildFamilyMemberDataForPlan } from "../_shared/familyMode.ts";
 import { normalizeSlotForWrite } from "../_shared/mealJson.ts";
 import { isFamilyDinnerCandidate } from "../_shared/plan/familyDinnerFilter.ts";
+import { inferPrimaryBase } from "../_shared/primaryBase.ts";
 import { buildLikeTokens, hasLikeMatch, hasLikedTitlesMatch, passesPreferenceFilters, scoreLikeSignal, type LikeMode } from "./preferenceRules.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -226,15 +227,16 @@ async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _m
   return (rows ?? []) as RecipeRowPool[];
 }
 
-/** In-memory only: no await. Filters pool and returns best match for slot (scoring: likes, recency, variety). */
+/** In-memory only: no await. Filters pool and returns best match for slot (scoring: likes, recency, variety, base diversity). */
 function pickFromPoolInMemory(
   pool: RecipeRowPool[],
   mealType: string,
   memberData: MemberDataPool | null,
   excludeRecipeIds: string[],
   excludeTitleKeys: string[],
-  likeMode: LikeMode = "neutral"
-): { id: string; title: string; matchedLike: boolean } | null {
+  likeMode: LikeMode = "neutral",
+  usedBaseCounts?: Record<string, number>
+): { id: string; title: string; matchedLike: boolean; primaryBase: string } | null {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
   const slot = normalizeMealType(mealType) ?? (mealType as NormalizedMealType);
@@ -264,8 +266,10 @@ function pickFromPoolInMemory(
   const likeTokens = buildLikeTokens(memberData);
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
   shuffleArray(filtered);
-  const best = pickBestRecipeForSlot(filtered, { likeTokens, likeMode, recentSignatures });
-  return best ? { id: best.id, title: best.title, matchedLike: hasLikeMatch(best, likeTokens) } : null;
+  const best = pickBestRecipeForSlot(filtered, { likeTokens, likeMode, recentSignatures, usedBaseCounts });
+  if (!best) return null;
+  const primaryBase = inferPrimaryBase(best);
+  return { id: best.id, title: best.title, matchedLike: hasLikeMatch(best, likeTokens), primaryBase };
 }
 
 function normalizeMealsForWrite(meals: Record<string, MealSlot | null | undefined>): Record<string, MealSlot> {
@@ -386,7 +390,12 @@ const TOP_K_SCORE = 80;
 const MIN_FAMILY_DINNER = 5;
 const debugPool = () => typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_POOL") === "true";
 
-// ——— Scoring helpers (likes bonus, recency, variety penalty) ———
+/** Weekly diversity: max uses of same primary base (e.g. cottage cheese, oatmeal) per week. */
+const MAX_BASE_PER_WEEK = 5;
+/** Penalty per slot when base is already at or over cap (diminishing priority). */
+const DIVERSITY_BASE_PENALTY = 6;
+
+// ——— Scoring helpers (likes bonus, recency, variety penalty, base diversity) ———
 const STOP_WORDS = new Set(["и", "в", "на", "с", "по", "для", "из", "к", "о", "у", "без", "от", "до", "the", "and", "with", "for", "from", "with"]);
 /** Signatures from week + last days + body.exclude_title_keys (session); used for variety penalty. */
 function buildRecentSignatureSet(existingTitleKeys: string[]): Set<string> {
@@ -399,7 +408,13 @@ function buildRecentSignatureSet(existingTitleKeys: string[]): Set<string> {
   }
   return out;
 }
-type ScoreRecipeCtx = { likeTokens: string[]; likeMode: LikeMode; recentSignatures: Set<string> };
+type ScoreRecipeCtx = {
+  likeTokens: string[];
+  likeMode: LikeMode;
+  recentSignatures: Set<string>;
+  /** Week only: counts per primary base for diversity penalty. */
+  usedBaseCounts?: Record<string, number>;
+};
 function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecipeCtx): number {
   const likeScore = scoreLikeSignal(r, ctx.likeTokens, ctx.likeMode);
   const recencyScore = Math.max(0, 3 - Math.floor(rankIndex / 20));
@@ -418,7 +433,15 @@ function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecip
     if (overlap >= 2) varietyPenalty = 4;
     else if (overlap === 1) varietyPenalty = 2;
   }
-  return likeScore + recencyScore - varietyPenalty;
+  let baseDiversityPenalty = 0;
+  if (ctx.usedBaseCounts) {
+    const base = inferPrimaryBase(r);
+    const count = ctx.usedBaseCounts[base] ?? 0;
+    if (count >= MAX_BASE_PER_WEEK) {
+      baseDiversityPenalty = (count - MAX_BASE_PER_WEEK + 1) * DIVERSITY_BASE_PENALTY;
+    }
+  }
+  return likeScore + recencyScore - varietyPenalty - baseDiversityPenalty;
 }
 const TOP_K_EXTEND = 120;
 function pickBestRecipeForSlot(candidates: RecipeRowPool[], ctx: ScoreRecipeCtx): RecipeRowPool | null {
@@ -764,6 +787,9 @@ serve(async (req) => {
     let totalDbCount = 0;
     let totalAiCount = 0;
     let lastDayKey: string | null = null;
+    /** Week only: counts per primary base for diversity (cap + penalty). */
+    const usedBaseCounts: Record<string, number> = dayKeys.length > 1 ? {} : ({} as Record<string, number>);
+    const useBaseDiversity = dayKeys.length > 1;
 
     if (jobId) {
       await supabase.from("plan_generation_jobs").update({ status: "running", progress_total: dayKeys.length, progress_done: 0, updated_at: new Date().toISOString() }).eq("id", jobId);
@@ -792,9 +818,10 @@ serve(async (req) => {
         const excludeIdsForSlot = currentSlot?.recipe_id ? [...usedRecipeIds, currentSlot.recipe_id] : usedRecipeIds;
         const excludeTitlesBase = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
         const excludeTitlesForSlot = currentSlot?.title ? [...excludeTitlesBase, normalizeTitleKey(currentSlot.title)] : excludeTitlesBase;
-        let picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode);
+        const baseCountsForSlot = useBaseDiversity ? usedBaseCounts : undefined;
+        let picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot);
         if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
-          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode);
+          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot);
         }
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
@@ -803,6 +830,9 @@ serve(async (req) => {
           usedTitleKeys.push(normalizeTitleKey(picked.title));
           usedTitleKeysByMealType[mealKey]?.add(normalizeTitleKey(picked.title));
           usedCategoriesByMealType[mealKey]?.add(inferDishCategoryKey(picked.title, null, null));
+          if (useBaseDiversity) {
+            usedBaseCounts[picked.primaryBase] = (usedBaseCounts[picked.primaryBase] ?? 0) + 1;
+          }
           totalDbCount++;
         }
       }

@@ -5,7 +5,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildBlockedTokens, containsAnyToken } from "@/utils/allergenTokens";
+import { buildBlockedTokens, containsAnyToken, containsAnyTokenForAllergy } from "@/utils/allergenTokens";
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -114,6 +114,7 @@ type RecipeRow = {
   cooking_time_minutes: number | null;
   source?: string | null;
   meal_type?: string | null;
+  recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
 };
 
 /** Токены аллергенов из allergenTokens (курица→кур/куриц, орехи→орех, молоко→dairy и т.д.). */
@@ -140,13 +141,21 @@ const AGE_RESTRICTED_TOKENS = ["остр", "кофе", "гриб"];
 
 /** Фильтрация кандидата по профилю (аллергии, предпочтения, возраст). */
 export function passesProfileFilter(
-  recipe: { title?: string | null; description?: string | null; tags?: string[] | null },
+  recipe: {
+    title?: string | null;
+    description?: string | null;
+    tags?: string[] | null;
+    recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
+  },
   memberData: MemberDataForPool | null | undefined
 ): { pass: boolean; reason?: string } {
   const allergyTokens = getAllergyTokens(memberData);
   if (allergyTokens.length > 0) {
-    const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" ")].join(" ").toLowerCase();
-    if (containsAnyToken(text, allergyTokens).hit) {
+    const ingredientsText = (recipe.recipe_ingredients ?? [])
+      .map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" "))
+      .join(" ");
+    const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" "), ingredientsText].join(" ").toLowerCase();
+    if (containsAnyTokenForAllergy(text, allergyTokens).hit) {
       if (IS_DEV) console.log("[DEBUG] pool filter: allergy hit", { title: recipe.title, tokens: allergyTokens });
       return { pass: false, reason: "allergy" };
     }
@@ -192,10 +201,15 @@ export async function pickRecipeFromPool(
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
 
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
+  const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
+
+  const selectFields = hasAllergies
+    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, recipe_ingredients(name, display_text)"
+    : "id, title, tags, description, cooking_time_minutes, source, meal_type";
 
   let q = supabase
     .from("recipes")
-    .select("id, title, tags, description, cooking_time_minutes, source, meal_type")
+    .select(selectFields)
     .in("source", ["seed", "manual", "week_ai", "chat_ai"])
     .order("created_at", { ascending: false })
     .limit(limitCandidates);

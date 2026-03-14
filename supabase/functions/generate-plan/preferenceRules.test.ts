@@ -5,6 +5,34 @@ import {
   scoreLikeSignal,
 } from "./preferenceRules.ts";
 
+Deno.test("passesPreferenceFilters blocks nut allergy for recipe with орехами in title", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Тофу с авокадо и орехами",
+      description: "Полезный перекус",
+      recipe_ingredients: [{ name: "тофу" }, { name: "авокадо" }, { name: "орехи" }],
+    },
+    { allergies: ["орехи"] },
+  );
+  if (allowed) {
+    throw new Error("Expected nut allergy to block recipe with орехами in title/ingredients");
+  }
+});
+
+Deno.test("passesPreferenceFilters allows chickpea (нут) when allergy is орехи", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Тыквенно-морковное пюре с нутом",
+      description: "С нутом и специями",
+      recipe_ingredients: [{ name: "нут" }, { name: "тыква" }, { name: "морковь" }],
+    },
+    { allergies: ["орехи"] },
+  );
+  if (!allowed) {
+    throw new Error("Chickpea (нут) must not be blocked by nut allergy");
+  }
+});
+
 Deno.test("passesPreferenceFilters blocks allergy found only in ingredients", () => {
   const allowed = passesPreferenceFilters(
     {

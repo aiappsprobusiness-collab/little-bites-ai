@@ -3,13 +3,16 @@
  */
 
 import { buildBlockedTokensFromAllergies, expandAllergyToTokens } from "@/utils/allergyAliases";
-import { containsAnyToken as containsAnyTokenShared } from "@/shared/allergensDictionary";
+import { containsAnyToken as containsAnyTokenShared, containsAnyTokenForAllergy as containsAnyTokenForAllergyShared } from "@/shared/allergensDictionary";
 
 /** Строит блокирующие токены по списку аллергий (canonical/aliases + fallback). */
 export const buildBlockedTokens = buildBlockedTokensFromAllergies;
 
 /** Совместимость: возвращает { hit, found }. Используйте .hit для boolean. */
 export const containsAnyToken = containsAnyTokenShared;
+
+/** Для строгой блокировки аллергенов в плане: подстрока (орехами → орех), без ложного матча нут/nut. */
+export const containsAnyTokenForAllergy = containsAnyTokenForAllergyShared;
 
 /** Для каждой аллергии — токены. Нужно для сообщения «У профиля X аллергия на: Y». */
 export function getBlockedTokensPerAllergy(

@@ -92,17 +92,21 @@ export function useReplaceMealSlot(
     }): Promise<{ id: string; title: string; fromLegacy?: boolean } | null> => {
       if (!user) return null;
       const slotNorm = normalizeMealType(params.mealType) ?? (params.mealType as "breakfast" | "lunch" | "snack" | "dinner");
+      const hasAllergies = Array.isArray(params.memberData?.allergies) && params.memberData.allergies.length > 0;
+      const selectFields = hasAllergies
+        ? "id, title, tags, description, meal_type, recipe_ingredients(name, display_text)"
+        : "id, title, tags, description, meal_type";
 
       let q = supabase
         .from("recipes")
-        .select("id, title, tags, description, meal_type")
+        .select(selectFields)
         .in("source", ["seed", "manual", "week_ai", "chat_ai"])
         .order("created_at", { ascending: false })
         .limit(80);
       const { data: rows, error } = await q;
       if (error || !rows?.length) return null;
 
-      type Row = { id: string; title: string; tags?: string[] | null; description?: string | null; meal_type?: string | null };
+      type Row = { id: string; title: string; tags?: string[] | null; description?: string | null; meal_type?: string | null; recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null };
       let filtered = rows as Row[];
       filtered = filtered.filter((r) => {
         const recNorm = normalizeMealType(r.meal_type);
