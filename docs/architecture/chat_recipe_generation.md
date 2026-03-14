@@ -91,7 +91,7 @@
 
 Принцип: **fail-open** — при сомнении разрешать генерацию рецепта; темы Помощника и нерелевантные запросы отсекаются только по явным ключевым словам/паттернам.
 
-Ответы redirect/irrelevant возвращают в теле JSON поля `route` (`assistant_topic` или `irrelevant`), при `assistant_topic` — `topicKey` и `topicTitle` для перехода во вкладку «Помощник» по сценарию (`/sos?scenario=<topicKey>`). На фронте такие сообщения отображаются карточкой системной подсказки (`SystemHintCard`), без кнопок рецепта (избранное, поделиться, в план).
+Ответы redirect/irrelevant возвращают в теле JSON поля `route` (`assistant_topic` или `irrelevant`), при `assistant_topic` — `topicKey` и `topicTitle` (и при необходимости `topicShortTitle`) для перехода во вкладку «Помощник» по сценарию (`/sos?scenario=<topicKey>`). На фронте такие сообщения отображаются карточкой системной подсказки (`SystemHintCard`), без кнопок рецепта (избранное, поделиться, в план). Клиент при сохранении в `chat_history` записывает в `meta` поля `systemHintType`, `topicKey`, `topicTitle`, `topicShortTitle`, чтобы после переключения вкладки/remount карточка и кнопка «Перейти в тему» восстанавливались с корректной навигацией в нужную тему.
 
 ### 3.3 Релевантность запроса (Free vs Premium)
 

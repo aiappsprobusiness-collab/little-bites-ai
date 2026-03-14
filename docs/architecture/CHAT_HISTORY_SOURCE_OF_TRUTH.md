@@ -26,7 +26,9 @@
 - `message` — текст пользователя;
 - `response` — текст ответа ассистента (или blocked message);
 - `recipe_id` — если есть сохранённый рецепт (для blocked = null);
-- `meta` — опционально; для blocked-ответов сюда пишется контекст follow-up: `{ blocked: true, original_query, blocked_items, suggested_alternatives, intended_dish_hint }` (см. `BlockedMeta` в `src/types/chatBlocked.ts` и вызов `saveChat` в `ChatPage.tsx`).
+- `meta` — опционально. Два варианта:
+  - **Blocked (follow-up):** `{ blocked: true, original_query, blocked_items, suggested_alternatives, intended_dish_hint }` (см. `BlockedMeta` в `src/types/chatBlocked.ts`).
+  - **Redirect в Помощник:** для ответов «этот вопрос лучше задать во вкладке Помощник» сохраняются `{ systemHintType: "assistant_topic_redirect", topicKey, topicTitle, topicShortTitle }`, чтобы после перезагрузки/переключения вкладки карточка и кнопка «Перейти в тему» восстанавливались с нужной темой и навигацией `/sos?scenario=<topicKey>`.
 
 **Edge-функция `deepseek-chat` в БД не пишет:** она только возвращает JSON (в т.ч. blocked). Запись в `chat_history` выполняет клиент после получения ответа.
 
@@ -40,7 +42,7 @@
 |------|------------|
 | `src/hooks/useChatHistory.tsx` | `useQuery` по ключу `['chat_history', user?.id, selectedMemberId]`: `supabase.from('chat_history').select(CHAT_HISTORY_SELECT).eq('user_id', user.id).is('archived_at', null).order('created_at', { ascending: false }).limit(CHAT_LAST_MESSAGES)`. Фильтр по `child_id` в зависимости от `selectedMemberId` (family vs член). Возвращает массив записей как `messages`. |
 | `src/lib/supabase-constants.ts` | `CHAT_HISTORY_SELECT` — список колонок для select (включая `meta` после миграции). |
-| `src/pages/ChatPage.tsx` | Подписывается на `historyMessages` (из useChatHistory). В `useEffect` форматирует их в локальный state `messages` для рендера (в т.ч. распознаёт blocked по `response`/`meta` и выставляет `isBlockedRefusal`). |
+| `src/pages/ChatPage.tsx` | Подписывается на `historyMessages` (из useChatHistory). В `useEffect` форматирует их в локальный state `messages` для рендера: распознаёт blocked по `response`/`meta` (isBlockedRefusal); для redirect-сообщений восстанавливает из `meta` поля topicKey, topicShortTitle, topicTitle (fallback — getRedirectOrIrrelevantMeta по тексту пользователя), чтобы карточка и кнопка перехода в тему сохранялись после remount. |
 
 Итого: **источник истины для «что показать в чате» — таблица `public.chat_history`**. Клиент загружает последние N записей и отображает их; новые записи добавляются только через клиентский `insert`.
 

@@ -244,7 +244,7 @@ RLS: по user_id.
 | message_type | text             | text \| image \| recipe |
 | recipe_id    | uuid → recipes   | Связь с рецептом, если есть |
 | archived_at  | timestamptz      | Архивирование |
-| meta         | jsonb            | Метаданные ответа: blocked, original_query, suggested_alternatives, intended_dish_hint и др. для follow-up после аллергии/dislikes. |
+| meta         | jsonb            | Метаданные ответа: (1) follow-up после аллергии/dislikes — blocked, original_query, suggested_alternatives, intended_dish_hint; (2) redirect в Помощник — systemHintType, topicKey, topicTitle, topicShortTitle для восстановления карточки и навигации по теме после remount. |
 | created_at   | timestamptz      | |
 
 RLS: по user_id.

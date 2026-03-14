@@ -469,9 +469,17 @@ export default function ChatPage() {
             });
           } else if (!msg.recipe_id && isRedirectOrIrrelevantResponse(msg.response)) {
             const r = (msg.response ?? "").trim();
-            const systemHintType: SystemHintRoute = r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
-              ? "assistant_topic_redirect"
-              : "assistant_irrelevant";
+            const meta = msg.meta && typeof msg.meta === "object" ? (msg.meta as Record<string, unknown>) : undefined;
+            const systemHintType: SystemHintRoute =
+              typeof meta?.systemHintType === "string" && (meta.systemHintType === "assistant_topic_redirect" || meta.systemHintType === "assistant_irrelevant")
+                ? (meta.systemHintType as SystemHintRoute)
+                : r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
+                  ? "assistant_topic_redirect"
+                  : "assistant_irrelevant";
+            const fallbackMeta = getRedirectOrIrrelevantMeta(msg.message ?? "");
+            const topicKey = (typeof meta?.topicKey === "string" ? meta.topicKey : undefined) ?? fallbackMeta?.topicKey;
+            const topicTitle = (typeof meta?.topicTitle === "string" ? meta.topicTitle : undefined) ?? fallbackMeta?.topicTitle;
+            const topicShortTitle = (typeof meta?.topicShortTitle === "string" ? meta.topicShortTitle : undefined) ?? fallbackMeta?.topicShortTitle;
             formatted.push({
               id: `${msg.id}-assistant`,
               role: "assistant",
@@ -481,6 +489,9 @@ export default function ChatPage() {
               preParsedRecipe: null,
               recipeId: undefined,
               systemHintType,
+              topicKey,
+              topicTitle,
+              topicShortTitle,
             });
           } else {
             const dbRecipe = msg.recipe_id ? recipeMap[msg.recipe_id] : null;
@@ -821,7 +832,7 @@ export default function ChatPage() {
             response: rawMessage,
             recipeId: null,
             childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
-            meta: blockedMeta,
+            meta: blockedMeta as unknown as Record<string, unknown>,
           });
           if (historyId) {
             setMessages((prev) =>
@@ -874,6 +885,10 @@ export default function ChatPage() {
             response: displayMessage,
             recipeId: null,
             childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+            meta: {
+              systemHintType,
+              ...(systemHintType === "assistant_topic_redirect" && topicKey != null && { topicKey, topicTitle, topicShortTitle }),
+            },
           });
         } catch (e) {
           safeError("Failed to save redirect/irrelevant to chat history:", e);
@@ -923,6 +938,14 @@ export default function ChatPage() {
               response: fallbackMeta.message,
               recipeId: null,
               childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+              meta: {
+                systemHintType: fallbackMeta.route,
+                ...(fallbackMeta.route === "assistant_topic_redirect" && fallbackMeta.topicKey != null && {
+                  topicKey: fallbackMeta.topicKey,
+                  topicTitle: fallbackMeta.topicTitle,
+                  topicShortTitle: fallbackMeta.topicShortTitle,
+                }),
+              },
             });
           } catch (e) {
             safeError("Failed to save fallback redirect/irrelevant to chat history:", e);

@@ -92,6 +92,9 @@ export default function SosTiles() {
       });
       setSheetOpen(true);
       navigate("/sos", { replace: true });
+    } else {
+      // Неизвестный scenario — открываем вкладку Помощник без темы, убираем param
+      navigate("/sos", { replace: true });
     }
   }, [searchParams, navigate, hasAccess]);
 
