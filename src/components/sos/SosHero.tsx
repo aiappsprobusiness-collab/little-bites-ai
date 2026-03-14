@@ -74,7 +74,7 @@ export function SosHero({
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Ребёнок хуже ест"
+            placeholder="Задайте свой вопрос"
             className="flex-1 rounded-xl border-border text-sm placeholder:text-sm"
             disabled={disabled}
             aria-label="Опишите ситуацию"
