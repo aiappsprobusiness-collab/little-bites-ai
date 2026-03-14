@@ -74,8 +74,8 @@ export function SosHero({
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Например: ребёнок стал хуже есть"
-            className="flex-1 rounded-xl border-border"
+            placeholder="Ребёнок хуже ест"
+            className="flex-1 rounded-xl border-border text-sm placeholder:text-sm"
             disabled={disabled}
             aria-label="Опишите ситуацию"
           />
