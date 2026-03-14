@@ -197,6 +197,8 @@ export default function ChatPage() {
   const { saveRecipesFromChat } = useChatRecipes();
 
   const [messages, setMessages] = useState<Message[]>([]);
+  /** Истина только после того, как локальный messages синхронизирован с historyMessages (пустой или с историей). Не показываем ChatEmptyState пока false. */
+  const [isChatBootstrapped, setIsChatBootstrapped] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [showHintsModal, setShowHintsModal] = useState(false);
   const [badgeVisible, setBadgeVisible] = useState(false);
@@ -292,6 +294,7 @@ export default function ChatPage() {
     const key = `${selectedMemberId ?? "family"}|${memberIds}`;
     if (prevProfileKeyRef.current && prevProfileKeyRef.current !== key) {
       setMessages([]);
+      chatScrollRestoredRef.current = false;
       // Статус-индикатор при смене профиля (1 строка, 1.5 сек)
       const isFamily = selectedMemberId === "family";
       const allergies = isFamily
@@ -418,9 +421,16 @@ export default function ChatPage() {
 
   const memberIdForSave = selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : undefined;
 
+  // Когда история пуста и загрузка завершена — помечаем чат как готовый (показываем empty state)
+  useEffect(() => {
+    if (mode !== "recipes") return;
+    if (historyMessages.length === 0 && !isLoadingHistory) setIsChatBootstrapped(true);
+  }, [mode, historyMessages.length, isLoadingHistory]);
+
   // В help-режиме историю рецептов не подгружаем — сообщения только в local state
   useEffect(() => {
     if (mode === "help") return;
+    setIsChatBootstrapped(false);
     if (historyMessages.length === 0) {
       setMessages([]);
       return;
@@ -515,6 +525,7 @@ export default function ChatPage() {
     };
     if (recipeIds.length === 0) {
       formatWithRecipeMap({});
+      setIsChatBootstrapped(true);
       return;
     }
     supabase
@@ -525,6 +536,7 @@ export default function ChatPage() {
         const recipeMap: Record<string, ParsedRecipe> = {};
         if (error) {
           formatWithRecipeMap({});
+          setIsChatBootstrapped(true);
           return;
         }
         (rows ?? []).forEach((r: {
@@ -565,6 +577,7 @@ export default function ChatPage() {
           };
         });
         formatWithRecipeMap(recipeMap);
+        setIsChatBootstrapped(true);
       });
   }, [mode, historyMessages]);
 
@@ -1160,7 +1173,7 @@ export default function ChatPage() {
       lastAppliedPrefillRef.current = null;
       return;
     }
-    if (isLoadingHistory || messages.length > 0) return;
+    if (!isChatBootstrapped || isLoadingHistory || messages.length > 0) return;
     if (lastAppliedPrefillRef.current === prefillText) return;
     lastAppliedPrefillRef.current = prefillText;
     prefillSentRef.current = true;
@@ -1172,7 +1185,7 @@ export default function ChatPage() {
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [mode, location.state, isLoadingHistory, messages.length, handleSend]);
+  }, [mode, location.state, isChatBootstrapped, isLoadingHistory, messages.length, handleSend]);
 
   /** UUID из БД (chat_history.id). Локальные id вида "user-173..." / "assistant-173..." не являются UUID. */
   const isChatHistoryId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
@@ -1365,8 +1378,17 @@ export default function ChatPage() {
             </motion.div>
           )}
 
-          {/* Пустое состояние чата рецептов: pill профиля, приветственная карточка, подсказки-плашки */}
-          {mode === "recipes" && messages.length === 0 && !isLoadingHistory && members.length > 0 && (
+          {/* Загрузка/инициализация чата рецептов: нейтральный placeholder без приветствия и подсказок, без рывка layout */}
+          {mode === "recipes" && messages.length === 0 && (!isChatBootstrapped || isLoadingHistory) && members.length > 0 && (
+            <div className="flex flex-col gap-3 pt-1" aria-busy="true" aria-label="Загрузка чата">
+              <div className="h-10 w-3/4 max-w-[200px] rounded-2xl bg-muted/60 animate-pulse" />
+              <div className="h-16 w-[85%] max-w-[280px] rounded-2xl bg-muted/50 animate-pulse ml-auto" />
+              <div className="h-12 w-2/3 max-w-[220px] rounded-2xl bg-muted/60 animate-pulse" />
+            </div>
+          )}
+
+          {/* Пустое состояние чата рецептов: только после завершения инициализации (isChatBootstrapped) */}
+          {mode === "recipes" && isChatBootstrapped && messages.length === 0 && members.length > 0 && (
             <ChatEmptyState
               profileName={chatProfileName}
               isFamily={selectedMemberId === "family"}
@@ -1391,12 +1413,6 @@ export default function ChatPage() {
                 />
               }
             />
-          )}
-
-          {mode === "recipes" && isLoadingHistory && (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-            </div>
           )}
 
           <AnimatePresence>
