@@ -2,11 +2,23 @@ import { motion } from "framer-motion";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { cn } from "@/lib/utils";
 
+/**
+ * Фон карточек пустого чата: не белый.
+ * bg-card в теме = 0 0% 100% (белый), поэтому для пустого состояния используем
+ * существующий tinted surface: bg-primary-light + border-primary-border
+ * (tailwind.config: primary.light = var(--color-primary-light), index.css: #F3F6EC;
+ *  primary.border = var(--color-primary-border), index.css: #DCE3C7).
+ * Тот же токен используется в QuickPromptsSheet, MealCard chips, .ingredient-chip.
+ */
+const CHAT_EMPTY_CARD_SURFACE =
+  "relative rounded-2xl bg-primary-light border border-primary-border shadow-soft";
+
 /** Тексты быстрых подсказок для пустого состояния (на «вы», 1–2 строки). */
 export const EMPTY_STATE_QUICK_SUGGESTIONS = [
+  "Приготовить из того, что есть дома:",
   "Подбери завтрак с кальцием",
   "Посоветуй быстрый ужин",
-  "Что приготовить без молока и яиц",
+  "Полезный перекус",
 ] as const;
 
 export interface ChatEmptyStateProps {
@@ -43,8 +55,8 @@ export function ChatEmptyState({
   className,
 }: ChatEmptyStateProps) {
   const welcomeLine1 = isFamily
-    ? "Я помогу подобрать блюда для всей семьи, учитывая возраст и особенности питания."
-    : `Я помогу подобрать блюда для профиля ${profileName}, учитывая возраст и особенности питания.`;
+    ? "Здравствуйте, я — ваш личный помощник Momrecipes! Подберу блюда для всей семьи и учту возраст и особенности питания."
+    : `Здравствуйте, я — ваш личный помощник Momrecipes! Подберу блюда для профиля ${profileName} и учту возраст и особенности питания.`;
   const welcomeLine2 = "Напишите запрос или выберите подсказку ниже.";
 
   return (
@@ -52,14 +64,8 @@ export function ChatEmptyState({
       {/* Верхняя строка: компактная pill профиля */}
       <div className="shrink-0 flex flex-wrap items-center gap-2">
         <MemberSelectorButton
-          variant="light"
           onProfileChange={onProfileChange}
-          className={cn(
-            "!min-h-[36px] !h-9 !px-3 !py-2 !text-sm !font-medium",
-            "bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary)/0.9)]",
-            "border border-[hsl(var(--primary)/0.2)] hover:bg-[hsl(var(--primary)/0.18)]",
-            "max-w-[160px] truncate"
-          )}
+          className="shrink-0"
         />
         {headerMeta != null && <div className="min-w-0 flex-1">{headerMeta}</div>}
       </div>
@@ -74,12 +80,12 @@ export function ChatEmptyState({
         </motion.span>
       )}
 
-      {/* Приветственная карточка — те же стили, что у карточки AI-сообщения (bg-card, border-border, shadow-soft) */}
+      {/* Приветственная карточка — tinted surface (bg-primary-light), не белый */}
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: "easeOut" }}
-        className="rounded-2xl p-[18px] bg-card border border-border shadow-soft max-w-[85%]"
+        className={cn(CHAT_EMPTY_CARD_SURFACE, "p-[18px] max-w-[85%]")}
       >
         <p className="text-[15px] leading-[1.45] text-foreground whitespace-pre-wrap">
           {welcomeLine1}
@@ -88,9 +94,9 @@ export function ChatEmptyState({
         </p>
       </motion.div>
 
-      {/* Крупные подсказки-плашки — те же стили, что chat bubbles (bg-card, border-border, shadow-soft, rounded-2xl) */}
+      {/* Подсказки: размер шрифта ровно как в пузырьке пользователя (12px), баблы крупнее */}
       <div className="flex flex-col gap-3 mt-3">
-        {[...suggestions].slice(0, 3).map((text) => (
+        {[...suggestions].slice(0, 4).map((text) => (
           <motion.button
             key={text}
             type="button"
@@ -99,11 +105,12 @@ export function ChatEmptyState({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
             className={cn(
-              "text-left rounded-2xl px-4 py-3.5 w-full max-w-[85%] self-end",
-              "bg-card border border-border shadow-soft",
-              "text-[15px] font-medium text-foreground leading-snug",
-              "cursor-pointer hover:bg-muted/20 active:scale-[0.98] active:shadow-none",
-              "transition-transform duration-100 min-h-[44px]"
+              "relative rounded-2xl shadow-soft max-w-[85%] self-end text-left",
+              "px-4 py-4 min-h-[48px]",
+              "text-[15px] leading-snug break-words font-normal",
+              "bg-[#607D3B] text-white",
+              "cursor-pointer hover:bg-[#556b33] active:scale-[0.98] active:shadow-none",
+              "transition-[background-color,transform] duration-100"
             )}
           >
             {text}

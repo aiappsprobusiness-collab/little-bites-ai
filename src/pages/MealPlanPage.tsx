@@ -79,6 +79,14 @@ function getDayLabel(date: Date): string {
 const PARTIAL_FILL_TOAST_DURATION_MS = 7000;
 const PARTIAL_FILL_SUBTITLE = "Добавьте блюда из Избранного или создайте новые в чате с помощником.";
 
+/** Сообщение для пользователя при сетевой ошибке (fetch/Edge Function). */
+function planErrorMessage(raw: string, fallback: string): string {
+  if (raw === "Failed to fetch" || (raw && raw.includes("NetworkError"))) {
+    return "Не удалось подключиться к серверу. Проверьте интернет-соединение.";
+  }
+  return raw || fallback;
+}
+
 function PartialFillToastActions({
   navigate,
   dismiss,
@@ -975,7 +983,8 @@ export default function MealPlanPage() {
                       }
                     } catch (e: unknown) {
                       trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
-                      const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
+                      const raw = e instanceof Error ? e.message : "Не удалось заполнить день";
+                      const msg = planErrorMessage(raw, "Не удалось заполнить день");
                       if (msg === "LIMIT_REACHED") {
                         /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
                       } else if (msg === "member_id_required") {
@@ -1033,7 +1042,8 @@ export default function MealPlanPage() {
                         toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
                       }
                     } catch (e: unknown) {
-                      const msg = e instanceof Error ? e.message : "Не удалось заполнить неделю";
+                      const raw = e instanceof Error ? e.message : "Не удалось заполнить неделю";
+                      const msg = planErrorMessage(raw, "Не удалось заполнить неделю");
                       if (msg === "LIMIT_REACHED") {
                         /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
                       } else if (msg === "member_id_required") {
@@ -1236,7 +1246,8 @@ export default function MealPlanPage() {
                         }
                       } catch (e: unknown) {
                         trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
-                        const msg = e instanceof Error ? e.message : "Не удалось заполнить день";
+                        const raw = e instanceof Error ? e.message : "Не удалось заполнить день";
+                        const msg = planErrorMessage(raw, "Не удалось заполнить день");
                         if (msg === "LIMIT_REACHED") {
                           /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
                         } else if (msg.includes("слишком много времени")) {
@@ -1245,8 +1256,8 @@ export default function MealPlanPage() {
                           toast({ variant: "destructive", title: "Ошибка", description: msg });
                         }
                       } finally {
-                        setPoolUpgradeLoading(false);
-                      }
+                          setPoolUpgradeLoading(false);
+                        }
                     }}
                   >
                     <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
@@ -1614,7 +1625,8 @@ export default function MealPlanPage() {
                         toast({ title: "Подобрать рецепты", description: desc });
                       }
                     } catch (e: unknown) {
-                      const msg = e instanceof Error ? e.message : "Не удалось подобрать рецепты";
+                      const raw = e instanceof Error ? e.message : "Не удалось подобрать рецепты";
+                      const msg = planErrorMessage(raw, "Не удалось подобрать рецепты");
                       if (msg === "LIMIT_REACHED") {
                         /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
                       } else if (msg === "member_id_required") {

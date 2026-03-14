@@ -826,36 +826,49 @@ serve(async (req) => {
       }));
       if (result.stage === "ok" && result.valid) {
         validated = result.valid;
-        if (DEEPSEEK_API_KEY && (!passesDescriptionQualityGate(validated.description, { title: validated.title }) || !passesChefAdviceQualityGate(validated.chefAdvice ?? null))) {
-          parseLog("quality gate failed, one retry", {
-            descOk: passesDescriptionQualityGate(validated.description, { title: validated.title }),
-            adviceOk: passesChefAdviceQualityGate(validated.chefAdvice ?? null),
-          });
-          try {
-            const controller2 = new AbortController();
-            const timeoutId2 = setTimeout(() => controller2.abort(), MAIN_LLM_TIMEOUT_MS);
-            const response2 = await fetch("https://api.deepseek.com/v1/chat/completions", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-              signal: controller2.signal,
-            });
-            clearTimeout(timeoutId2);
-            if (response2.ok) {
-              const bodyText2 = await response2.text();
-              const data2 = JSON.parse(bodyText2) as { choices?: Array<{ message?: { content?: string } }> };
-              const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
-              if (assistantMessage2) {
-                const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
-                if (result2.stage === "ok" && result2.valid && passesDescriptionQualityGate(result2.valid.description, { title: result2.valid.title }) && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
-                  validated = result2.valid;
-                  assistantMessage = assistantMessage2;
-                  parseLog("quality retry succeeded", {});
+        const descOk = passesDescriptionQualityGate(validated.description, { title: validated.title });
+        const adviceOk = passesChefAdviceQualityGate(validated.chefAdvice ?? null);
+        if (!descOk || !adviceOk) {
+          parseLog("quality gate failed", { descOk, adviceOk });
+          // Только описание плохое — сначала пробуем починить одним коротким вызовом (без полной перегенерации рецепта).
+          if (!descOk && DEEPSEEK_API_KEY) {
+            const repairedDesc = await repairDescriptionOnly(validated.description ?? "", DEEPSEEK_API_KEY);
+            if (repairedDesc && passesDescriptionQualityGate(repairedDesc, { title: validated.title })) {
+              (validated as Record<string, unknown>).description = repairedDesc;
+              parseLog("description repair succeeded, skip full retry", {});
+            }
+          }
+          // Полный retry только если описание после починки всё ещё не проходит. Плохой совет заменяется fallback'ом ниже.
+          const needFullRetry = !passesDescriptionQualityGate((validated as { description?: string }).description, { title: validated.title });
+          if (needFullRetry && DEEPSEEK_API_KEY) {
+            const tQualityRetryStart = Date.now();
+            try {
+              const controller2 = new AbortController();
+              const timeoutId2 = setTimeout(() => controller2.abort(), MAIN_LLM_TIMEOUT_MS);
+              const response2 = await fetch("https://api.deepseek.com/v1/chat/completions", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+                signal: controller2.signal,
+              });
+              clearTimeout(timeoutId2);
+              if (response2.ok) {
+                const bodyText2 = await response2.text();
+                const data2 = JSON.parse(bodyText2) as { choices?: Array<{ message?: { content?: string } }> };
+                const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
+                if (assistantMessage2) {
+                  const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
+                  if (result2.stage === "ok" && result2.valid && passesDescriptionQualityGate(result2.valid.description, { title: result2.valid.title }) && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
+                    validated = result2.valid;
+                    assistantMessage = assistantMessage2;
+                    parseLog("quality retry succeeded", {});
+                  }
                 }
               }
+            } catch (_e) {
+              parseLog("quality retry failed", { keepFirst: true });
             }
-          } catch (_e) {
-            parseLog("quality retry failed", { keepFirst: true });
+            logPerf("quality_retry_llm_ms", tQualityRetryStart, requestId);
           }
         }
       } else {
