@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Loader2, Plus, Trash2, User, UtensilsCrossed } from "lucide-react";
+import { ArrowLeft, Loader2, Plus, Trash2, UtensilsCrossed } from "lucide-react";
 import { useMembers, birthDateToAgeMonths, ageMonthsToBirthDate, memberTypeFromAgeMonths, formatAgeFromMonths } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
@@ -143,6 +143,13 @@ export default function ChildProfileEditPage() {
   };
   const LIKES_GHOST_CHIPS = ["ягоды", "рыба", "овощи"];
   const DISLIKES_GHOST_CHIPS = ["лук", "печень", "гречка"];
+
+  const ALLERGY_SUGGESTIONS = ["БКМ", "орехи", "яйца", "рыба", "глютен"];
+  const LIKES_SUGGESTIONS = ["ягоды", "банан", "курица", "рыба", "макароны"];
+  const DISLIKES_SUGGESTIONS = ["лук", "грибы", "каша", "рыба", "творог"];
+  const allergyValuesSet = useMemo(() => new Set(allergyItems.map((i) => i.value.toLowerCase())), [allergyItems]);
+  const likesSet = useMemo(() => new Set(likes.map(normalizeChip)), [likes]);
+  const dislikesSet = useMemo(() => new Set(dislikes.map(normalizeChip)), [dislikes]);
   const likesHandlers = {
     add: (raw: string) => {
       if (isFree) {
@@ -257,6 +264,7 @@ export default function ChildProfileEditPage() {
       toast({ title: "Профиль сохранён" });
         savedSuccessfullyRef.current = true;
         allowNavigationRef.current = true;
+        setShowExitConfirm(false);
         if (FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
           try {
             await startFillDay(newMember.id);
@@ -293,6 +301,7 @@ export default function ChildProfileEditPage() {
       toast({ title: "Профиль сохранён" });
       savedSuccessfullyRef.current = true;
       allowNavigationRef.current = true;
+      setShowExitConfirm(false);
       navigate("/profile", { replace: true });
     } catch (e: unknown) {
       toast({
@@ -383,34 +392,14 @@ export default function ChildProfileEditPage() {
     >
       <div className="profile-edit-page flex flex-col flex-1 min-h-0">
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="px-4 py-4 pb-32 max-w-lg mx-auto flex flex-col gap-6">
+          <div className="px-4 pt-2 pb-32 max-w-lg mx-auto flex flex-col gap-6">
           {loading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
-              {/* Hero: компактный блок — [avatar] Имя · возраст */}
-              <div className="rounded-[16px] bg-gradient-to-b from-[#F8F6F1] to-[#F3F0E9] border border-border/60 p-4 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-white/90 border border-border/80 shadow-sm flex items-center justify-center shrink-0 text-[#5A6B3D] text-base font-semibold">
-                  {name.trim() ? (name.trim()[0].toUpperCase()) : <User className="w-5 h-5 text-muted-foreground" />}
-                </div>
-                <div className="min-w-0 flex-1 flex items-center gap-2 flex-wrap">
-                  <span className="text-[15px] font-semibold text-foreground truncate">
-                    {name.trim() || "Новый профиль"}
-                  </span>
-                  {ageMonths != null && ageMonths >= 0 && birthDate?.trim() && (
-                    <>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-[13px] text-muted-foreground">
-                        {formatAgeFromMonths(ageMonths)}
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Основная информация: только Имя и Дата рождения */}
+              {/* Основная информация: Имя и Дата рождения */}
               <div className="bg-background rounded-[16px] p-4 shadow-sm border border-border flex flex-col gap-4">
                 <div className="space-y-[6px]">
                   <Label htmlFor="child-name" className="text-sm font-medium">Имя</Label>
@@ -439,21 +428,32 @@ export default function ChildProfileEditPage() {
                       aria-label="Выбрать дату"
                     />
                   </div>
+                  {ageMonths != null && ageMonths >= 0 && birthDate?.trim() && (
+                    <p className="text-[13px] text-muted-foreground">
+                      Возраст: {formatAgeFromMonths(ageMonths)}
+                    </p>
+                  )}
                 </div>
               </div>
 
-              {/* Пищевые особенности: аллергии, любит, не любит — один блок */}
+              {/* Пищевые особенности: аллергии, любимые продукты, не ест — один блок */}
               <div className="bg-background rounded-[16px] p-4 shadow-sm border border-border flex flex-col gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                    <UtensilsCrossed className="w-4 h-4 text-amber-700/80" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                      <UtensilsCrossed className="w-4 h-4 text-amber-700/80" />
+                    </div>
+                    <h3 className="text-base font-semibold text-foreground leading-tight">Пищевые особенности</h3>
                   </div>
-                  <h3 className="text-base font-semibold text-foreground leading-tight">Пищевые особенности</h3>
+                  <p className="text-[13px] text-muted-foreground mt-1">Мы учитываем это при подборе меню</p>
                 </div>
 
                 {/* Аллергии */}
                 <div className="space-y-[6px]">
-                  <Label htmlFor="child-allergy-add" className="text-sm font-medium">Аллергии</Label>
+                  <Label htmlFor="child-allergy-add" className="text-sm font-medium flex items-center gap-1.5">
+                    <span className="text-[18px] leading-none" aria-hidden>⚠️</span>
+                    Аллергии
+                  </Label>
                   {allergyItems.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {allergyItems.map((item, i) => {
@@ -473,61 +473,72 @@ export default function ChildProfileEditPage() {
                       })}
                     </div>
                   )}
-                  {isFree && activeAllergyCount >= 1 ? (
+                  <form
+                    className="flex h-11 items-center gap-3 px-4 rounded-xl border border-input bg-background hover:border-primary/30 transition-colors cursor-text w-full"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (allergyInput.trim()) allergiesHandlers.add(allergyInput);
+                    }}
+                    noValidate
+                  >
                     <button
                       type="button"
-                      onClick={() => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); }}
-                      className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 font-medium text-sm text-muted-foreground hover:bg-muted/50"
+                      className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50"
+                      onClick={() => allergyInput.trim() && allergiesHandlers.add(allergyInput)}
+                      disabled={!allergyInput.trim() || (isFree && activeAllergyCount >= limits.maxAllergiesPerProfile)}
+                      aria-label="Добавить"
                     >
                       <Plus className="w-5 h-5" />
-                      Добавить аллергию
                     </button>
-                  ) : (
-                    <form
-                      className="flex h-11 items-center gap-3 px-4 rounded-xl border border-input bg-background hover:border-primary/30 transition-colors cursor-text w-full"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (allergyInput.trim()) allergiesHandlers.add(allergyInput);
+                    <input
+                      id="child-allergy-add"
+                      type="text"
+                      autoComplete="off"
+                      value={allergyInput}
+                      onChange={(e) => setAllergyInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        const isEnter = e.key === "Enter" || (e as React.KeyboardEvent<HTMLInputElement>).keyCode === 13;
+                        if (isEnter || e.key === ",") {
+                          e.preventDefault();
+                          allergiesHandlers.add(allergyInput);
+                        }
                       }}
-                      noValidate
-                    >
+                      placeholder="Например: БКМ, орехи"
+                      disabled={isFree && activeAllergyCount >= limits.maxAllergiesPerProfile}
+                      className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground/70 disabled:opacity-60"
+                    />
+                  </form>
+                  {/* Smart suggestions — аллергии */}
+                  <div className="flex flex-wrap gap-2">
+                    {ALLERGY_SUGGESTIONS.filter((s) => !allergyValuesSet.has(normalizeAllergyToken(s).toLowerCase())).map((s) => (
                       <button
+                        key={s}
                         type="button"
-                        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50"
-                        onClick={() => allergyInput.trim() && allergiesHandlers.add(allergyInput)}
-                        disabled={!allergyInput.trim()}
-                        aria-label="Добавить"
+                        onClick={() => allergiesHandlers.add(s)}
+                        className="h-7 rounded-[10px] px-[10px] py-[6px] text-[13px] font-medium border border-border bg-muted/40 text-foreground hover:bg-muted/60 transition-colors"
                       >
-                        <Plus className="w-5 h-5" />
+                        {s}
                       </button>
-                      <input
-                        id="child-allergy-add"
-                        type="text"
-                        autoComplete="off"
-                        value={allergyInput}
-                        onChange={(e) => setAllergyInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          const isEnter = e.key === "Enter" || (e as React.KeyboardEvent<HTMLInputElement>).keyCode === 13;
-                          if (isEnter || e.key === ",") {
-                            e.preventDefault();
-                            allergiesHandlers.add(allergyInput);
-                          }
-                        }}
-                        placeholder="Например: БКМ, орехи"
-                        className="flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground/70"
-                      />
-                    </form>
+                    ))}
+                  </div>
+                  {isFree && (
+                    <p className="text-[13px] text-muted-foreground">
+                      {activeAllergyCount} из {limits.maxAllergiesPerProfile} аллергии
+                    </p>
                   )}
                 </div>
 
-                {/* Любит */}
+                {/* Любимые продукты */}
                 {isFree ? (
                   <button
                     type="button"
                     onClick={openPaywallLikesDislikes}
                     className="text-left w-full rounded-xl border border-border bg-muted/20 p-4 hover:bg-muted/40 transition-colors"
                   >
-                    <p className="text-sm font-medium text-foreground">Любит</p>
+                    <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                      <span className="text-[18px] leading-none" aria-hidden>❤️</span>
+                      Любимые продукты
+                    </p>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {LIKES_GHOST_CHIPS.map((chip) => (
                         <PreferenceChip key={chip} label={chip} variant="like" />
@@ -538,28 +549,48 @@ export default function ChildProfileEditPage() {
                     </div>
                   </button>
                 ) : (
-                  <TagListEditor
-                    id="profile-likes"
-                    label="Любит"
-                    chipVariant="like"
-                    items={likes}
-                    inputValue={likesInput}
-                    onInputChange={setLikesInput}
-                    onAdd={likesHandlers.add}
-                    onEdit={likesHandlers.edit}
-                    onRemove={likesHandlers.remove}
-                    placeholder="Например: ягоды, рыба"
-                  />
+                  <div className="space-y-[6px]">
+                    <Label htmlFor="profile-likes" className="text-sm font-medium flex items-center gap-1.5">
+                      <span className="text-[18px] leading-none" aria-hidden>❤️</span>
+                      Любимые продукты
+                    </Label>
+                    <TagListEditor
+                      id="profile-likes"
+                      chipVariant="like"
+                      items={likes}
+                      inputValue={likesInput}
+                      onInputChange={setLikesInput}
+                      onAdd={likesHandlers.add}
+                      onEdit={likesHandlers.edit}
+                      onRemove={likesHandlers.remove}
+                      placeholder="Например: ягоды, рыба"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {LIKES_SUGGESTIONS.filter((s) => !likesSet.has(normalizeChip(s))).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => likesHandlers.add(s)}
+                          className="h-7 rounded-[10px] px-[10px] py-[6px] text-[13px] font-medium border border-border bg-muted/40 text-foreground hover:bg-muted/60 transition-colors"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
-                {/* Не любит */}
+                {/* Не ест */}
                 {isFree ? (
                   <button
                     type="button"
                     onClick={openPaywallLikesDislikes}
                     className="text-left w-full rounded-xl border border-border bg-muted/20 p-4 hover:bg-muted/40 transition-colors"
                   >
-                    <p className="text-sm font-medium text-foreground">Не любит</p>
+                    <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                      <span className="text-[18px] leading-none" aria-hidden>🚫</span>
+                      Не ест
+                    </p>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {DISLIKES_GHOST_CHIPS.map((chip) => (
                         <PreferenceChip key={chip} label={chip} variant="dislike" />
@@ -570,18 +601,35 @@ export default function ChildProfileEditPage() {
                     </div>
                   </button>
                 ) : (
-                  <TagListEditor
-                    id="profile-dislikes"
-                    label="Не любит"
-                    chipVariant="dislike"
-                    items={dislikes}
-                    inputValue={dislikesInput}
-                    onInputChange={setDislikesInput}
-                    onAdd={dislikesHandlers.add}
-                    onEdit={dislikesHandlers.edit}
-                    onRemove={dislikesHandlers.remove}
-                    placeholder="Например: лук, мясо"
-                  />
+                  <div className="space-y-[6px]">
+                    <Label htmlFor="profile-dislikes" className="text-sm font-medium flex items-center gap-1.5">
+                      <span className="text-[18px] leading-none" aria-hidden>🚫</span>
+                      Не ест
+                    </Label>
+                    <TagListEditor
+                      id="profile-dislikes"
+                      chipVariant="dislike"
+                      items={dislikes}
+                      inputValue={dislikesInput}
+                      onInputChange={setDislikesInput}
+                      onAdd={dislikesHandlers.add}
+                      onEdit={dislikesHandlers.edit}
+                      onRemove={dislikesHandlers.remove}
+                      placeholder="Например: лук, мясо"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      {DISLIKES_SUGGESTIONS.filter((s) => !dislikesSet.has(normalizeChip(s))).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => dislikesHandlers.add(s)}
+                          className="h-7 rounded-[10px] px-[10px] py-[6px] text-[13px] font-medium border border-border bg-muted/40 text-foreground hover:bg-muted/60 transition-colors"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 {!isNew && member && (
@@ -607,12 +655,15 @@ export default function ChildProfileEditPage() {
           <div className="flex-shrink-0 border-t border-border/80 bg-background/98 backdrop-blur-sm shadow-[0_-2px_14px_rgba(0,0,0,0.05)] px-4 pt-4 pb-4">
             <div className="max-w-lg mx-auto">
               <Button
-                className="w-full py-4 bg-[#7A8F4D] hover:bg-[#6a7e41] hover:opacity-95 active:scale-[0.98] text-white border-0 rounded-xl font-semibold text-[15px] shadow-[0_2px_10px_rgba(122,143,77,0.22)] transition-all duration-200 disabled:opacity-50"
+                className="w-full py-4 rounded-xl font-semibold text-[15px] border-0 shadow-[0_2px_10px_rgba(122,143,77,0.22)] transition-all duration-200 bg-[#7A8F4D] text-white hover:bg-[#6a7e41] hover:opacity-95 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#7A8F4D] disabled:hover:opacity-50"
                 onClick={handleSave}
-                disabled={isCreating || isUpdating || !hasChanges || !birthDate?.trim()}
+                disabled={isCreating || isUpdating || !hasChanges}
               >
                 {(isCreating || isUpdating) ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                    <span className="ml-2">Сохраняем...</span>
+                  </>
                 ) : (
                   "Сохранить"
                 )}
@@ -645,18 +696,29 @@ export default function ChildProfileEditPage() {
       <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Сохранить изменения перед выходом?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Изменения в профиле не сохранены. Вы можете сохранить их или выйти без сохранения.
-            </AlertDialogDescription>
+            <AlertDialogTitle>У вас есть несохранённые изменения. Сохранить перед выходом?</AlertDialogTitle>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setShowExitConfirm(false)}>Остаться</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel onClick={() => setShowExitConfirm(false)}>Отмена</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleExitWithoutSaving}
               className="bg-muted text-muted-foreground hover:bg-muted/80"
             >
-              Выйти без сохранения
+              Не сохранять
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => handleSave()}
+              disabled={isCreating || isUpdating}
+              className="bg-[#7A8F4D] hover:bg-[#6a7e41] text-white"
+            >
+              {(isCreating || isUpdating) ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  <span className="ml-2">Сохраняем...</span>
+                </>
+              ) : (
+                "Сохранить"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

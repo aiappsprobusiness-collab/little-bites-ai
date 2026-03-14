@@ -1,4 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -98,6 +100,7 @@ function StatusBlock({
 }
 
 export default function SubscriptionManagePage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -172,7 +175,15 @@ export default function SubscriptionManagePage() {
     "text-sm text-muted-foreground hover:text-foreground transition-colors py-2 block w-full text-center";
 
   return (
-    <MobileLayout title="Управление подпиской" showNav={true}>
+    <MobileLayout
+      title=""
+      headerLeft={
+        <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => navigate("/profile")} aria-label="Назад">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+      }
+      showNav={true}
+    >
       <div className="min-h-full bg-[var(--color-bg-main)] overflow-y-auto">
         <div className="px-4 py-6 pb-24 space-y-6 max-w-md mx-auto">
           <StatusBlock

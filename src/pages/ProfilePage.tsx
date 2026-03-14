@@ -90,8 +90,6 @@ export default function ProfilePage() {
     hasAccess,
     trialUntil,
     expiresAt,
-    cancelSubscription,
-    isCancellingSubscription,
   } = useSubscription();
   const subscriptionLimits = getSubscriptionLimits(subscriptionStatus);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
@@ -285,22 +283,6 @@ export default function ProfilePage() {
             trialUntilFormatted={trialUntil ? formatSubscriptionEndDateWithYear(trialUntil) : null}
             expiresAtFormatted={expiresAt ? formatSubscriptionEndDateWithYear(expiresAt) : null}
             onSubscriptionCta={handleSubscriptionCta}
-            onCancelSubscription={hasAccess ? async () => {
-              try {
-                await cancelSubscription();
-                toast({
-                  title: "Подписка отменена",
-                  description: "Доступ сохранится до конца оплаченного периода.",
-                });
-              } catch {
-                toast({
-                  variant: "destructive",
-                  title: "Не удалось отменить подписку",
-                });
-              }
-            } : undefined}
-            isCancellingSubscription={isCancellingSubscription}
-            canCancel={hasAccess}
           />
 
           {/* Моя семья */}
@@ -319,14 +301,17 @@ export default function ProfilePage() {
                 const memberRow = member as MembersRow;
                 const likesArr = memberRow.likes ?? [];
                 const dislikesArr = memberRow.dislikes ?? [];
-                const allergiesArr = memberRow.allergies ?? [];
+                const allergyLabels =
+                  (memberRow.allergy_items ?? []).length > 0
+                    ? (memberRow.allergy_items ?? []).map((i) => i.value)
+                    : (memberRow.allergies ?? []);
                 const hasPreferences = subscriptionStatus === "trial" || subscriptionStatus === "premium";
                 const isFree = subscriptionStatus === "free";
                 const maxVisible = 4;
                 const allChips: { type: "like" | "dislike" | "allergy"; label: string }[] = [
+                  ...allergyLabels.map((a) => ({ type: "allergy" as const, label: normalizeAllergyToken(a) })),
                   ...(hasPreferences ? likesArr.map((l) => ({ type: "like" as const, label: l })) : []),
                   ...(hasPreferences ? dislikesArr.map((d) => ({ type: "dislike" as const, label: d })) : []),
-                  ...allergiesArr.map((a) => ({ type: "allergy" as const, label: normalizeAllergyToken(a) })),
                 ];
                 const visibleChips = allChips.slice(0, maxVisible);
                 const overflowCount = allChips.length - maxVisible;
