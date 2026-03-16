@@ -119,6 +119,9 @@ export function useDeepSeekAPI() {
       /** Optional max cooking time in minutes. */
       maxCookingTime?: number;
     }) => {
+      if (typeof performance !== 'undefined' && performance.mark) {
+        performance.mark('chat_request_start');
+      }
       if (!canGenerate) {
         throw new Error('usage_limit_exceeded');
       }
@@ -184,6 +187,9 @@ export function useDeepSeekAPI() {
       const timeoutMs = isHelpMode ? HELP_REQUEST_TIMEOUT_MS : RECIPE_REQUEST_TIMEOUT_MS;
       const timeoutId = setTimeout(() => chatAbortRef.current?.abort(), timeoutMs);
       const accessToken = await getValidAccessToken();
+      if (typeof performance !== 'undefined' && performance.mark) {
+        performance.mark('chat_request_sent');
+      }
       let response: Response;
       try {
         response = await fetchWithRetry(`${SUPABASE_URL}/functions/v1/deepseek-chat`, {
@@ -210,6 +216,9 @@ export function useDeepSeekAPI() {
           }),
         });
         clearTimeout(timeoutId);
+        if (typeof performance !== 'undefined' && performance.mark) {
+          performance.mark('chat_response_received');
+        }
       } catch (err) {
         clearTimeout(timeoutId);
         const msg = (err as Error)?.message ?? '';
@@ -257,6 +266,15 @@ export function useDeepSeekAPI() {
       if (!contentType.includes('text/event-stream')) {
         const data = await response.json().catch(() => ({}));
         await refetchUsage();
+        if (typeof performance !== 'undefined' && performance.mark) {
+          performance.mark('chat_recipe_ready');
+          try {
+            const measure = performance.measure('chat_tap_to_recipe', 'chat_request_start', 'chat_recipe_ready');
+            safeLog('LATENCY_AUDIT', { chat_tap_to_recipe_ms: measure.duration });
+          } catch {
+            // ignore if marks were cleared
+          }
+        }
         return data as { message?: string; recipes?: unknown[]; recipe_id?: string | null; blocked?: boolean; blockedByAllergy?: boolean; blockedByDislike?: boolean; [k: string]: unknown };
       }
       if (response.body) {
@@ -288,6 +306,15 @@ export function useDeepSeekAPI() {
                 const parsed = JSON.parse(data);
                 if (eventType === 'done' && (parsed?.recipe_id !== undefined || parsed?.recipes !== undefined)) {
                   await refetchUsage();
+                  if (typeof performance !== 'undefined' && performance.mark) {
+                    performance.mark('chat_recipe_ready');
+                    try {
+                      const measure = performance.measure('chat_tap_to_recipe', 'chat_request_start', 'chat_recipe_ready');
+                      safeLog('LATENCY_AUDIT', { chat_tap_to_recipe_ms: measure.duration });
+                    } catch {
+                      // ignore if marks were cleared
+                    }
+                  }
                   return {
                     message: typeof parsed.message === 'string' ? parsed.message : fullContent,
                     recipes: Array.isArray(parsed.recipes) ? parsed.recipes : [],

@@ -1,5 +1,5 @@
 /**
- * Санитизация и ремонт рецепта: описание (≤170 символов), совет шефа (≤280), минимальный fallback.
+ * Санитизация и ремонт рецепта: описание (composer ≤160), совет шефа (≤260), минимальный fallback.
  * Без дополнительных LLM: trim, нормализация пробелов, усечение по границе предложения, детерминированные fallback.
  * Quality gate: запрещённые фразы, абстрактные зачины — замена на fallback.
  */
@@ -9,8 +9,8 @@ import type { RecipeJson } from "../../recipeSchema.ts";
 /** Максимальная длина description (ровно 2 предложения о пользе). */
 export const DESCRIPTION_MAX_LENGTH = 210;
 
-/** Максимальная длина chefAdvice (2–3 коротких предложения). */
-export const CHEF_ADVICE_MAX_LENGTH = 280;
+/** Максимальная длина chefAdvice (2–3 предложения, Stage 2.2: восстановлен запас для живого совета). */
+export const CHEF_ADVICE_MAX_LENGTH = 260;
 
 /** Минимальная длина description; ниже — подставляем fallback. */
 const DESCRIPTION_MIN_FOR_VALID = 60;
@@ -257,7 +257,7 @@ export function enforceDescription(
   return t.slice(0, DESCRIPTION_MAX_LENGTH);
 }
 
-/** Запрещённые старты: при совпадении совет пересобирается из fallback. */
+/** Запрещённые старты: пафос, нерелевантность (Stage 2.2: «подавайте»/«можно» разрешены — живой тон). */
 const CHEF_ADVICE_FORBIDDEN_STARTS = [
   /^для максимальной\s/i,
   /^для более\s/i,
@@ -269,16 +269,20 @@ const CHEF_ADVICE_FORBIDDEN_STARTS = [
   /^это позволит\s/i,
   /^данное блюдо\s/i,
   /^это блюдо\s/i,
-  /^подавайте\s/i,
-  /^можно\s/i,
   /^рекомендуем\s/i,
   /^совет:\s/i,
-  /^важно\s/i,
+  /^важно\s*[:—]/i,
   /^вкус\s/i,
 ];
 
 /** Кривой штамп — при наличии совет пересобирается. */
 const CHEF_ADVICE_BROKEN_PHRASE = /вкус\s+насыщенного\s+вкуса/i;
+
+/** Только явно пафосные/нерелевантные фразы (Stage 2.2: мягкий guard, не душим «для аромата»/«подавайте тёплым»). */
+const CHEF_ADVICE_RESTAURANT_PHRASES = [
+  /изысканн(ый|ым)\s+соусом/i,
+  /идеально\s+для\s+подачи\s*[.—]?\s*$/i,
+];
 
 /** Фразы в description: при наличии — подставляем fallback. */
 const DESCRIPTION_FORBIDDEN_PHRASES = [
@@ -313,11 +317,16 @@ const CHEF_ADVICE_CONCRETE_MARKERS = [
   /дайте настояться/i, /влажными руками/i, /не перегрей/i, /не перевар/i, /убавь/i, /сними с огня/i,
 ];
 
-/** Проверяет, нужно ли пересобрать совет (запрещённый старт или штамп). */
+function hasRestaurantTone(text: string): boolean {
+  return CHEF_ADVICE_RESTAURANT_PHRASES.some((re) => re.test(text));
+}
+
+/** Проверяет, нужно ли пересобрать совет (запрещённый старт, штамп или ресторанный тон). */
 export function hasForbiddenChefAdviceStart(text: string | null | undefined): boolean {
   const t = normalizeSpaces(text ?? "");
   if (!t.length) return false;
   if (CHEF_ADVICE_BROKEN_PHRASE.test(t)) return true;
+  if (hasRestaurantTone(t)) return true;
   return CHEF_ADVICE_FORBIDDEN_STARTS.some((re) => re.test(t));
 }
 
@@ -355,7 +364,7 @@ function isGenericChefAdvice(text: string): boolean {
   return false;
 }
 
-/** Fallback по типу блюда (каша/пюре, суп, фрикадельки/котлеты, запеканка, оладьи/панкейки). Все ≤280 символов. */
+/** Fallback по типу блюда (каша/пюре, суп, фрикадельки/котлеты, запеканка, оладьи/панкейки). Все ≤260 символов. */
 const CHEF_ADVICE_BY_DISH_TYPE: Record<string, string[]> = {
   porridge: [
     "Добавьте масло в конце — каша станет нежнее. Подавайте тёплой.",
@@ -394,7 +403,7 @@ function detectDishType(title: string, ingredients: string[] = [], steps: string
   return "default";
 }
 
-/** Шаблоны для пула (sanitizeChefAdviceForPool): короткие, ≤280. */
+/** Шаблоны для пула (sanitizeChefAdviceForPool): короткие, ≤260. */
 const POOL_SAFE_CHEF_ADVICE_TEMPLATES: string[] = [
   "Запекайте первые 15 минут при высокой температуре, затем убавьте — корочка и сок внутри.",
   "Дайте блюду 2–3 минуты постоять под крышкой — сочность распределится.",
@@ -571,11 +580,12 @@ export function passesDescriptionQualityGate(
   return hasNutritionalMarker(t);
 }
 
-/** Проверка качества chefAdvice для retry: минимум 2 предложения, нет запрещённых зачинов. */
+/** Stage 2.2: 1–3 предложения, макс. 260, нет запрещённых зачинов и явного мусора. */
 export function passesChefAdviceQualityGate(advice: string | null | undefined): boolean {
   const t = normalizeSpaces(advice ?? "");
-  if (t.length < 30) return false;
-  if (countSentences(t) < 2) return false;
+  if (t.length < 25) return false;
+  if (t.length > CHEF_ADVICE_MAX_LENGTH) return false;
+  if (countSentences(t) < 1) return false;
   return !hasForbiddenChefAdviceStart(t);
 }
 

@@ -235,3 +235,27 @@ export function containsAnyToken(
   }
   return { hit: found.length > 0, found };
 }
+
+/** Chickpea (нут) — не орех; не считать совпадением токен "nut" в слове "нут". */
+const CHICKPEA_CYRILLIC = "\u043d\u0443\u0442"; // нут
+
+/**
+ * For strict allergy blocking in plan: substring match (no word boundary).
+ * So "орехами", "ореховый" are blocked by token "орех".
+ * Excludes false positive: token "nut" must not match Cyrillic "нут" (chickpea).
+ */
+export function containsAnyTokenForAllergy(
+  text: string,
+  tokens: string[]
+): { hit: boolean; found: string[] } {
+  if (!text || tokens.length === 0) return { hit: false, found: [] };
+  const h = (text ?? "").toLowerCase().trim().replace(/\s+/g, " ");
+  const found: string[] = [];
+  for (const t of tokens) {
+    if (t.length < 2) continue;
+    if (!h.includes(t)) continue;
+    if (t === "nut" && h.includes(CHICKPEA_CYRILLIC)) continue;
+    found.push(t);
+  }
+  return { hit: found.length > 0, found };
+}

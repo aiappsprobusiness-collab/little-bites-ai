@@ -87,7 +87,7 @@ Deno.test("enforceDescription: результат всегда <= DESCRIPTION_MA
   }
 });
 
-Deno.test("enforceChefAdvice: результат всегда <= 280 символов", () => {
+Deno.test("enforceChefAdvice: результат всегда <= CHEF_ADVICE_MAX_LENGTH (220)", () => {
   const long = "Совет от шефа: повторяем много раз. ".repeat(15);
   const out = enforceChefAdvice(long, { title: "Суп", recipeIdSeed: "id1" });
   if (out.length > CHEF_ADVICE_MAX_LENGTH) {

@@ -1,11 +1,14 @@
 # Recipe Core & Multilang Refactor Progress
 
 ## Current stage
-- Stage 2 — description composer
+- Stage 2.3 — description path cleanup + anti-context leakage + latency audit
 
 ## Planned stages
 - [x] Stage 1 — locale + trust_level
 - [x] Stage 2 — description composer
+- [x] Stage 2.1 — composer polishing & token reduction
+- [x] Stage 2.2 — chef advice restore + consistency guard
+- [x] Stage 2.3 — description path cleanup + anti-context leakage + latency audit
 - [ ] Stage 3 — recipe_translations
 - [ ] Stage 4 — nutrition_traits + goals
 - [ ] Stage 5 — plan page refactor
@@ -73,6 +76,58 @@
 ## Stage 2: open questions
 - **Промпт:** description из ответа LLM не удалялся; финальное значение всегда от composer. При желании в следующем этапе можно сократить промпт (убрать требование 2 предложений о пользе) и зафиксировать экономию токенов.
 - **Ключевые ингредиенты:** в текущих шаблонах composer не вставляет названия ингредиентов в текст (описание дополняет title, не повторяет его); pickKeyIngredients экспортирован для возможного использования в шаблонах позже.
+
+## Stage 2.1 scope (composer polishing & token reduction)
+- [x] description templates expanded (more per category, semantic axes: texture, serving, home-style, light, family)
+- [x] repetition reduced (more variants, combo-style phrases)
+- [x] fallback-only phrases isolated (generic "Спокойный домашний вариант на каждый день" only in COMPOSER_FALLBACK)
+- [x] chef_advice limited (max 220 chars, 1–2 sentences; CHEF_ADVICE_MAX_LENGTH 280→220)
+- [x] description removed or reduced in prompt (LLM may output ""; prompts shortened)
+- [x] token usage reduced (shorter prompt, no long description requirement)
+- [x] composerVariant logged (category:index)
+
+## Stage 2.1 key files
+- **supabase/functions/_shared/recipeDescriptionComposer.ts** — max 160 chars; ComposeRecipeDescriptionResult { text, variantId }; expanded templates; fallback-only single phrase.
+- **supabase/functions/deepseek-chat/prompts.ts** — RECIPE_STRICT_JSON_CONTRACT, RECIPE_SYSTEM_RULES_V3: description optional/empty; chefAdvice max 220, practical tone.
+- **supabase/functions/deepseek-chat/domain/recipe_io/sanitizeAndRepair.ts** — CHEF_ADVICE_MAX_LENGTH 220; CHEF_ADVICE_RESTAURANT_PHRASES; hasRestaurantTone → fallback.
+- **supabase/functions/deepseek-chat/recipeSchema.ts** — chefAdvice max 220; comment updated.
+- **supabase/functions/deepseek-chat/index.ts** — composeRecipeDescription returns { text, variantId }; log composerVariant.
+
+## Stage 2.1: actual result / open questions
+- Stage 2.1 дал спорный результат по chef_advice: скорость генерации заметно не выросла; качество chef_advice просело (советы менее живые, иногда не по блюду или механические). Stage 2.2 возвращает качество и добавляет consistency guard.
+
+## Stage 2.2 scope (chef advice restore + consistency guard)
+- [x] chef_advice rules softened (max 260, убраны жёсткие запреты «подавайте»/«можно»; RESTAURANT_PHRASES сокращён до явного пафоса)
+- [x] chef_advice quality improved (промпт: живой тон, 2–3 предложения, по блюду; anti-garbage только против нерелевантности/пустых шаблонов)
+- [x] title/ingredients consistency guard added (high-signal ключи: картофель, цветная капуста, брокколи, кабачок, морковь, яблоко, банан, творог, индейка, курица, треска, лосось, гречка, овсянка, рис, тыква, фасоль, сыр, яйцо, томат/помидор)
+- [x] obvious title/ingredients mismatches handled (при отсутствии картофеля в ingredients — безопасная нормализация title, например «картофельное пюре из цветной капусты» → «пюре из цветной капусты»)
+- [x] guard logging added (TITLE_INGREDIENT_CONSISTENCY_GUARD: titleIngredientConsistencyGuardTriggered, consistencyMismatchKeys; titleNormalized при применении suggestedTitle; в RECIPE_SANITIZED — titleIngredientConsistencyGuardTriggered, consistencyMismatchKeys)
+- [x] docs updated (этот progress-файл)
+
+## Stage 2.2 key files
+- **supabase/functions/_shared/titleIngredientConsistencyGuard.ts** — checkTitleIngredientConsistency(title, ingredientNames); high-signal список; suggestTitleFix только для картофеля (убрать прилагательное «картофельное» и т.п.).
+- **supabase/functions/deepseek-chat/domain/recipe_io/sanitizeAndRepair.ts** — CHEF_ADVICE_MAX_LENGTH 260; смягчены FORBIDDEN_STARTS и RESTAURANT_PHRASES; quality gate 1–3 предложения.
+- **supabase/functions/deepseek-chat/recipeSchema.ts** — chefAdvice max 260.
+- **supabase/functions/deepseek-chat/prompts.ts** — chefAdvice 260 симв., 2–3 предложения; живой тон; примеры хорошо/плохо.
+- **supabase/functions/deepseek-chat/index.ts** — вызов checkTitleIngredientConsistency после enforceChefAdvice; применение suggestedTitle при наличии; логирование guard и RECIPE_SANITIZED с полями consistency.
+
+## Stage 2.2: уточнение
+- Stage 2.2 улучшил chef_advice частично; в pool по-прежнему мог протекать request-specific контекст (в дорогу, с собой и т.д.). Stage 2.3 добавляет anti-leak guard и упрощает description path.
+
+## Stage 2.3 scope (description path cleanup + anti-context leakage + latency audit)
+- [x] description removed from critical repair path (descOk не запускает repairDescriptionOnly и не входит в needFullRetry; retry только по adviceOk)
+- [x] description-only repair eliminated (вызов repairDescriptionOnly удалён; при плохом description — только composer в блоке validated)
+- [x] request-context leakage guard added (title, description, chef_advice; фразы: в дорогу, с собой, в контейнер, в школу, в поездку, для дороги и др.)
+- [x] pool-unsafe phrases blocked from saved recipe text (при срабатывании: title — мягкое удаление фразы; description — пересбор composer; chef_advice — fallback)
+- [x] title lexicon guard added (соте → тушёные овощи / тушёное; только безопасные замены)
+- [x] latency audit instrumentation added (backend: validation_done, LATENCY_AUDIT с total_ms и latencyPhase; frontend: performance.mark chat_request_start, chat_request_sent, chat_response_received, chat_recipe_ready; measure chat_tap_to_recipe_ms)
+- [x] docs updated (этот progress-файл)
+
+## Stage 2.3 key files
+- **supabase/functions/deepseek-chat/index.ts** — убран repairDescriptionOnly из горячего пути; quality gate retry только по chef_advice; один блок composer для description в validated; импорт и вызов checkRequestContextLeak, checkTitleLexicon; логи DESCRIPTION_QUALITY_GATE_BYPASSED, REQUEST_CONTEXT_LEAK_GUARD, TITLE_LEXICON_GUARD, RECIPE_SANITIZED (leak/lexicon), logPerf validation_done, LATENCY_AUDIT.
+- **supabase/functions/_shared/requestContextLeakGuard.ts** — checkRequestContextLeak(title, description, chefAdvice); список REQUEST_CONTEXT_PHRASES; suggestedTitle, descriptionUseComposer, chefAdviceUseFallback.
+- **supabase/functions/_shared/titleLexiconGuard.ts** — checkTitleLexicon(title); замены «овощное соте» → «тушёные овощи», «соте» → «тушёное».
+- **src/hooks/useDeepSeekAPI.tsx** — performance.mark: chat_request_start, chat_request_sent, chat_response_received, chat_recipe_ready; performance.measure chat_tap_to_recipe; safeLog LATENCY_AUDIT с chat_tap_to_recipe_ms.
 
 ## Open questions (Stage 1)
 - **Индекс по trust_level:** на Stage 1 не добавлен. Выборка пула фильтрует по source (существующий idx_recipes_pool_user_created) и по trust_level в приложении; при росте объёма можно добавить частичный индекс WHERE source IN (...) AND (trust_level IS NULL OR trust_level <> 'blocked').

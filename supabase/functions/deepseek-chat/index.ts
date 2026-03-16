@@ -51,7 +51,6 @@ import {
   shouldReplaceDescription,
   shouldReplaceChefAdvice,
   isDescriptionIncomplete,
-  repairDescriptionOnly,
   sanitizeRecipeText,
   sanitizeMealMentions,
   getMinimalRecipe,
@@ -63,6 +62,9 @@ import {
   passesChefAdviceQualityGate,
 } from "./domain/recipe_io/index.ts";
 import { composeRecipeDescription } from "../_shared/recipeDescriptionComposer.ts";
+import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsistencyGuard.ts";
+import { checkRequestContextLeak } from "../_shared/requestContextLeakGuard.ts";
+import { checkTitleLexicon } from "../_shared/titleLexiconGuard.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -71,7 +73,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Ограничение длины ответа рецепта (description ≤210, chefAdvice ≤280). */
+/** Ограничение длины ответа рецепта (description ≤160 composer, chefAdvice ≤260). */
 const RECIPE_MAX_TOKENS = 1600;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
@@ -875,48 +877,47 @@ serve(async (req) => {
         validated = result.valid;
         const descOk = passesDescriptionQualityGate(validated.description, { title: validated.title });
         const adviceOk = passesChefAdviceQualityGate(validated.chefAdvice ?? null);
+        if (!descOk) {
+          safeLog(JSON.stringify({
+            tag: "DESCRIPTION_QUALITY_GATE_BYPASSED",
+            requestId,
+            descriptionQualityGateBypassedBecauseComposerOwnsFinalDescription: true,
+          }));
+        }
         if (!descOk || !adviceOk) {
           parseLog("quality gate failed", { descOk, adviceOk });
-          // Только описание плохое — сначала пробуем починить одним коротким вызовом (без полной перегенерации рецепта).
-          if (!descOk && DEEPSEEK_API_KEY) {
-            const repairedDesc = await repairDescriptionOnly(validated.description ?? "", DEEPSEEK_API_KEY);
-            if (repairedDesc && passesDescriptionQualityGate(repairedDesc, { title: validated.title })) {
-              (validated as Record<string, unknown>).description = repairedDesc;
-              parseLog("description repair succeeded, skip full retry", {});
-            }
-          }
-          // Полный retry только если описание после починки всё ещё не проходит. Плохой совет заменяется fallback'ом ниже.
-          const needFullRetry = !passesDescriptionQualityGate((validated as { description?: string }).description, { title: validated.title });
-          if (needFullRetry && DEEPSEEK_API_KEY) {
-            const tQualityRetryStart = Date.now();
-            try {
-              const controller2 = new AbortController();
-              const timeoutId2 = setTimeout(() => controller2.abort(), MAIN_LLM_TIMEOUT_MS);
-              const response2 = await fetch("https://api.deepseek.com/v1/chat/completions", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-                signal: controller2.signal,
-              });
-              clearTimeout(timeoutId2);
-              if (response2.ok) {
-                const bodyText2 = await response2.text();
-                const data2 = JSON.parse(bodyText2) as { choices?: Array<{ message?: { content?: string } }> };
-                const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
-                if (assistantMessage2) {
-                  const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
-                  if (result2.stage === "ok" && result2.valid && passesDescriptionQualityGate(result2.valid.description, { title: result2.valid.title }) && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
-                    validated = result2.valid;
-                    assistantMessage = assistantMessage2;
-                    parseLog("quality retry succeeded", {});
-                  }
+        }
+        // Stage 2.3: retry только из-за chef_advice; description не запускает repair/retry — финальный description задаёт composer.
+        const needFullRetry = !adviceOk;
+        if (needFullRetry && DEEPSEEK_API_KEY) {
+          const tQualityRetryStart = Date.now();
+          try {
+            const controller2 = new AbortController();
+            const timeoutId2 = setTimeout(() => controller2.abort(), MAIN_LLM_TIMEOUT_MS);
+            const response2 = await fetch("https://api.deepseek.com/v1/chat/completions", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+              signal: controller2.signal,
+            });
+            clearTimeout(timeoutId2);
+            if (response2.ok) {
+              const bodyText2 = await response2.text();
+              const data2 = JSON.parse(bodyText2) as { choices?: Array<{ message?: { content?: string } }> };
+              const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
+              if (assistantMessage2) {
+                const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
+                if (result2.stage === "ok" && result2.valid && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
+                  validated = result2.valid;
+                  assistantMessage = assistantMessage2;
+                  parseLog("quality retry succeeded", {});
                 }
               }
-            } catch (_e) {
-              parseLog("quality retry failed", { keepFirst: true });
             }
-            logPerf("quality_retry_llm_ms", tQualityRetryStart, requestId);
+          } catch (_e) {
+            parseLog("quality retry failed", { keepFirst: true });
           }
+          logPerf("quality_retry_llm_ms", tQualityRetryStart, requestId);
         }
       } else {
         const validationErrorMsg = result.stage === "validate" ? getLastValidationError() : null;
@@ -984,14 +985,17 @@ serve(async (req) => {
           safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
         }
         logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
+        // Stage 2.3: composer — источник истины для description; плохой/пустой description не запускает retry, только подстановка composer.
         const desc = (validated as { description?: string }).description;
         const advice = validated.chefAdvice ?? "";
-        if (!desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc)) {
-          (validated as Record<string, unknown>).description = composeRecipeDescription({
+        const descNeedsComposer = !desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc) || !passesDescriptionQualityGate(desc, { title: validated.title });
+        if (descNeedsComposer) {
+          const composed = composeRecipeDescription({
             title: validated.title ?? "",
             mealType: validated.mealType ?? undefined,
             ingredients: validated.ingredients ?? [],
           });
+          (validated as Record<string, unknown>).description = composed.text;
         }
         if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
           const ingNames = Array.isArray(validated.ingredients)
@@ -1004,13 +1008,6 @@ serve(async (req) => {
             ingredients: ingNames,
             steps: stepStrs,
             recipeIdSeed: seed,
-          });
-        }
-        if ((validated as { description?: string }).description && !passesDescriptionQualityGate((validated as { description?: string }).description, { title: validated.title })) {
-          (validated as Record<string, unknown>).description = composeRecipeDescription({
-            title: validated.title ?? "",
-            mealType: validated.mealType ?? undefined,
-            ingredients: validated.ingredients ?? [],
           });
         }
         assistantMessage = JSON.stringify(validated);
@@ -1030,6 +1027,7 @@ serve(async (req) => {
         usedFallback: usedFallbackRecipe,
       }));
       logPerf("normalize_ingredients", tNormStart, requestId);
+      logPerf("validation_done", tValidateStart, requestId);
     }
 
     // Учёт по фичам для лимитов Free (Plan/Help не тратят chat_recipe) (Plan/Help не тратят chat_recipe)
@@ -1097,17 +1095,72 @@ serve(async (req) => {
         rawChefAdvice: rawChefAdviceFromModel.slice(0, 400),
       }));
       const ingNamesForEnforce = Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : [];
-      (recipe as Record<string, unknown>).description = composeRecipeDescription({
+      const composed = composeRecipeDescription({
         title,
         mealType: recipe.mealType ?? undefined,
         ingredients: recipe.ingredients ?? [],
       });
+      (recipe as Record<string, unknown>).description = composed.text;
       (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceForPool, {
         title,
         ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : undefined,
         steps,
         recipeIdSeed,
       });
+      const consistency = checkTitleIngredientConsistency(title, ingNamesForEnforce);
+      if (consistency.triggered) {
+        safeLog(JSON.stringify({
+          tag: "TITLE_INGREDIENT_CONSISTENCY_GUARD",
+          requestId,
+          titleIngredientConsistencyGuardTriggered: true,
+          consistencyMismatchKeys: consistency.mismatchKeys,
+        }));
+        if (consistency.suggestedTitle && consistency.suggestedTitle.trim().length >= 2) {
+          (recipe as Record<string, unknown>).title = consistency.suggestedTitle.trim();
+          safeLog(JSON.stringify({ tag: "TITLE_INGREDIENT_CONSISTENCY_GUARD", requestId, titleNormalized: true }));
+        }
+      }
+      const currentTitle = (recipe.title ?? "") as string;
+      const currentDesc = (recipe.description ?? "") as string;
+      const currentAdvice = (recipe.chefAdvice ?? "") as string;
+      const leak = checkRequestContextLeak(currentTitle, currentDesc, currentAdvice);
+      if (leak.triggered) {
+        safeLog(JSON.stringify({
+          tag: "REQUEST_CONTEXT_LEAK_GUARD",
+          requestId,
+          requestContextLeakGuardTriggered: true,
+          requestContextLeakFields: leak.leakFields,
+        }));
+        if (leak.suggestedTitle && leak.suggestedTitle.trim().length >= 2) {
+          (recipe as Record<string, unknown>).title = leak.suggestedTitle.trim();
+        }
+        if (leak.descriptionUseComposer) {
+          const recomposed = composeRecipeDescription({
+            title: (recipe.title ?? currentTitle) as string,
+            mealType: recipe.mealType ?? undefined,
+            ingredients: recipe.ingredients ?? [],
+          });
+          (recipe as Record<string, unknown>).description = recomposed.text;
+        }
+        if (leak.chefAdviceUseFallback) {
+          (recipe as Record<string, unknown>).chefAdvice = buildChefAdviceFallback({
+            title: recipe.title,
+            ingredients: ingNamesForEnforce,
+            steps,
+            recipeIdSeed,
+          });
+        }
+      }
+      const lexiconResult = checkTitleLexicon((recipe.title ?? "") as string);
+      if (lexiconResult.triggered && lexiconResult.normalizedTitle) {
+        safeLog(JSON.stringify({
+          tag: "TITLE_LEXICON_GUARD",
+          requestId,
+          titleLexiconGuardTriggered: true,
+          titleLexiconNormalized: true,
+        }));
+        (recipe as Record<string, unknown>).title = lexiconResult.normalizedTitle;
+      }
       assistantMessage = JSON.stringify(recipe);
       const finalChefAdvice = (recipe.chefAdvice as string) ?? "";
       const chefAdviceReplacedWithFallback = finalChefAdvice !== adviceForPool;
@@ -1118,8 +1171,15 @@ serve(async (req) => {
         tag: "RECIPE_SANITIZED",
         requestId,
         descriptionSource: "composer",
+        composerVariant: composed.variantId,
         descriptionLength: (recipe.description as string)?.length,
         chefAdviceLength: finalChefAdvice.length,
+        titleIngredientConsistencyGuardTriggered: consistency.triggered,
+        ...(consistency.triggered ? { consistencyMismatchKeys: consistency.mismatchKeys } : {}),
+        requestContextLeakGuardTriggered: leak.triggered,
+        ...(leak.triggered ? { requestContextLeakFields: leak.leakFields } : {}),
+        titleLexiconGuardTriggered: lexiconResult.triggered,
+        titleLexiconNormalized: lexiconResult.triggered && !!lexiconResult.normalizedTitle,
       }));
       safeLog(JSON.stringify({ tag: "MEAL_MENTION_SANITIZED", requestId }));
     }
@@ -1299,6 +1359,7 @@ serve(async (req) => {
       responseBody.auth_required_to_save = true;
     }
     logPerf("total_ms", t0, requestId);
+    safeLog(JSON.stringify({ tag: "LATENCY_AUDIT", requestId, total_ms: Date.now() - t0, latencyPhase: "response_returned" }));
     return new Response(
       JSON.stringify(responseBody),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
