@@ -270,7 +270,7 @@ export function useDeepSeekAPI() {
           performance.mark('chat_recipe_ready');
           try {
             const measure = performance.measure('chat_tap_to_recipe', 'chat_request_start', 'chat_recipe_ready');
-            safeLog('LATENCY_AUDIT', { chat_tap_to_recipe_ms: measure.duration });
+            console.warn('[LATENCY_AUDIT] tap → recipe', { chat_tap_to_recipe_ms: Math.round(measure.duration) });
           } catch {
             // ignore if marks were cleared
           }
@@ -310,7 +310,7 @@ export function useDeepSeekAPI() {
                     performance.mark('chat_recipe_ready');
                     try {
                       const measure = performance.measure('chat_tap_to_recipe', 'chat_request_start', 'chat_recipe_ready');
-                      safeLog('LATENCY_AUDIT', { chat_tap_to_recipe_ms: measure.duration });
+                      console.warn('[LATENCY_AUDIT] tap → recipe', { chat_tap_to_recipe_ms: Math.round(measure.duration) });
                     } catch {
                       // ignore if marks were cleared
                     }

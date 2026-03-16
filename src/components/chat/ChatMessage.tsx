@@ -213,21 +213,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const recipeId = recipeIdProp ?? localRecipeId;
     const isFavorite = !!(recipeId && isValidRecipeId(recipeId) && isFavoriteFn(recipeId, chatMemberId));
 
-    if (import.meta.env.DEV && effectiveRecipe) {
-      const hasChefAdvice = !!(effectiveRecipe.chefAdvice && effectiveRecipe.chefAdvice.trim());
-      console.log("[DEBUG render]", {
-        keyUsed: id,
-        recipeId: recipeId ?? undefined,
-        likedComputed: isFavorite,
-        isPremium,
-        isTrial,
-        showChefTip,
-        hasChefAdvice,
-        chefAdviceLen: effectiveRecipe.chefAdvice?.length ?? 0,
-        recipeKeys: Object.keys(effectiveRecipe),
-      });
-    }
-
     const handleToggleFavorite = async () => {
       if (!effectiveRecipe) return;
       if (isFavorite) {

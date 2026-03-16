@@ -51,7 +51,7 @@ export function useSubscription() {
       const { data, error } = await supabase.rpc("get_my_latest_confirmed_subscription");
       if (error) throw error;
       const row = Array.isArray(data) ? data[0] : data;
-      return row as { plan: string | null; expires_at: string | null } | null;
+      return (row ?? null) as { plan: string | null; expires_at: string | null } | null;
     },
     enabled: authReady && !!user,
   });
@@ -149,16 +149,6 @@ export function useSubscription() {
 
   const isPremium = effectiveStatus === "premium";
   const isTrial = effectiveStatus === "trial";
-
-  if (typeof window !== "undefined" && import.meta.env?.DEV && user && !isLoadingProfile) {
-    safeLog("[useSubscription] статус и доступы", {
-      status,
-      hasTrialAccess,
-      hasPremiumAccess,
-      hasAccess,
-      effectiveStatus,
-    });
-  }
 
   const refetchUsage = () => {
     queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
