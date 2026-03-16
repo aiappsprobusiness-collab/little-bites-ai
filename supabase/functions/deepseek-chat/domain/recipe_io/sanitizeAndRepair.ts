@@ -5,6 +5,7 @@
  */
 
 import type { RecipeJson } from "../../recipeSchema.ts";
+import { textContainsRequestContextLeak } from "../../../_shared/requestContextLeakGuard.ts";
 
 /** Максимальная длина description (ровно 2 предложения о пользе). */
 export const DESCRIPTION_MAX_LENGTH = 210;
@@ -558,6 +559,21 @@ function descriptionStartsWithTitle(desc: string, title: string): boolean {
   if (titleWords.length > 0 && firstWord.toLowerCase() === titleWords[0]!.toLowerCase()) return true;
   const descLower = t.toLowerCase().slice(0, 50);
   return descLower.startsWith(titleKey.slice(0, 15)) || titleWords.some((w) => descLower.startsWith(w));
+}
+
+/** Stage 2.4: description плохой — использовать composer fallback. Правила: пусто, <20, >180, повторяет title, запреты, request-context leakage. */
+export function isDescriptionInvalid(
+  desc: string | null | undefined,
+  options?: { title?: string }
+): boolean {
+  const t = normalizeSpaces(desc ?? "");
+  if (t.length === 0) return true;
+  if (t.length < 20) return true;
+  if (t.length > 180) return true;
+  if (options?.title && descriptionStartsWithTitle(t, options.title)) return true;
+  if (descriptionFailsQualityGate(t)) return true;
+  if (textContainsRequestContextLeak(t)) return true;
+  return false;
 }
 
 function lastSentenceComplete(text: string): boolean {

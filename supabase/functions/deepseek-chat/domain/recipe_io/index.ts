@@ -16,6 +16,7 @@ export {
 
 export {
   isDescriptionIncomplete,
+  isDescriptionInvalid,
   repairDescriptionOnly,
   sanitizeRecipeText,
   sanitizeMealMentions,

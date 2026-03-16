@@ -60,10 +60,11 @@ import {
   sanitizeChefAdviceForPool,
   passesDescriptionQualityGate,
   passesChefAdviceQualityGate,
+  isDescriptionInvalid,
 } from "./domain/recipe_io/index.ts";
 import { composeRecipeDescription } from "../_shared/recipeDescriptionComposer.ts";
 import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsistencyGuard.ts";
-import { checkRequestContextLeak } from "../_shared/requestContextLeakGuard.ts";
+import { checkRequestContextLeak, textContainsRequestContextLeak, cleanStepFromRequestContextLeak } from "../_shared/requestContextLeakGuard.ts";
 import { checkTitleLexicon } from "../_shared/titleLexiconGuard.ts";
 
 const corsHeaders: Record<string, string> = {
@@ -985,11 +986,10 @@ serve(async (req) => {
           safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
         }
         logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
-        // Stage 2.3: composer — источник истины для description; плохой/пустой description не запускает retry, только подстановка composer.
+        // Stage 2.4: LLM description — основной источник; composer только fallback при невалидном description.
         const desc = (validated as { description?: string }).description;
         const advice = validated.chefAdvice ?? "";
-        const descNeedsComposer = !desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc) || !passesDescriptionQualityGate(desc, { title: validated.title });
-        if (descNeedsComposer) {
+        if (isDescriptionInvalid(desc, { title: validated.title })) {
           const composed = composeRecipeDescription({
             title: validated.title ?? "",
             mealType: validated.mealType ?? undefined,
@@ -1095,12 +1095,21 @@ serve(async (req) => {
         rawChefAdvice: rawChefAdviceFromModel.slice(0, 400),
       }));
       const ingNamesForEnforce = Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : [];
-      const composed = composeRecipeDescription({
-        title,
-        mealType: recipe.mealType ?? undefined,
-        ingredients: recipe.ingredients ?? [],
-      });
-      (recipe as Record<string, unknown>).description = composed.text;
+      const descriptionInvalid = isDescriptionInvalid(descRaw, { title });
+      let descriptionSource: "llm" | "composer_fallback" = "llm";
+      let composerVariantForLog: string | undefined;
+      if (descriptionInvalid) {
+        const composed = composeRecipeDescription({
+          title,
+          mealType: recipe.mealType ?? undefined,
+          ingredients: recipe.ingredients ?? [],
+        });
+        (recipe as Record<string, unknown>).description = composed.text;
+        descriptionSource = "composer_fallback";
+        composerVariantForLog = composed.variantId;
+      } else {
+        (recipe as Record<string, unknown>).description = descRaw.slice(0, 160);
+      }
       (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceForPool, {
         title,
         ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : undefined,
@@ -1125,12 +1134,6 @@ serve(async (req) => {
       const currentAdvice = (recipe.chefAdvice ?? "") as string;
       const leak = checkRequestContextLeak(currentTitle, currentDesc, currentAdvice);
       if (leak.triggered) {
-        safeLog(JSON.stringify({
-          tag: "REQUEST_CONTEXT_LEAK_GUARD",
-          requestId,
-          requestContextLeakGuardTriggered: true,
-          requestContextLeakFields: leak.leakFields,
-        }));
         if (leak.suggestedTitle && leak.suggestedTitle.trim().length >= 2) {
           (recipe as Record<string, unknown>).title = leak.suggestedTitle.trim();
         }
@@ -1141,6 +1144,8 @@ serve(async (req) => {
             ingredients: recipe.ingredients ?? [],
           });
           (recipe as Record<string, unknown>).description = recomposed.text;
+          descriptionSource = "composer_fallback";
+          composerVariantForLog = recomposed.variantId;
         }
         if (leak.chefAdviceUseFallback) {
           (recipe as Record<string, unknown>).chefAdvice = buildChefAdviceFallback({
@@ -1150,6 +1155,30 @@ serve(async (req) => {
             recipeIdSeed,
           });
         }
+      }
+      const rawSteps = Array.isArray(recipe.steps) ? recipe.steps : [];
+      let stepsLeakDetected = false;
+      let stepsLeakCount = 0;
+      const cleanedSteps = rawSteps.map((s: unknown) => {
+        const step = typeof s === "string" ? s : "";
+        if (!textContainsRequestContextLeak(step)) return step;
+        stepsLeakDetected = true;
+        stepsLeakCount += 1;
+        return cleanStepFromRequestContextLeak(step);
+      });
+      if (stepsLeakDetected && cleanedSteps.length > 0) {
+        (recipe as Record<string, unknown>).steps = cleanedSteps;
+      }
+      if (leak.triggered || stepsLeakDetected) {
+        safeLog(JSON.stringify({
+          tag: "REQUEST_CONTEXT_LEAK_GUARD",
+          requestId,
+          requestContextLeakGuardTriggered: leak.triggered,
+          ...(leak.triggered ? { requestContextLeakFields: leak.leakFields } : {}),
+          stepsLeakDetected,
+          stepsLeakCleaned: stepsLeakDetected,
+          stepsLeakCount,
+        }));
       }
       const lexiconResult = checkTitleLexicon((recipe.title ?? "") as string);
       if (lexiconResult.triggered && lexiconResult.normalizedTitle) {
@@ -1170,8 +1199,8 @@ serve(async (req) => {
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
-        descriptionSource: "composer",
-        composerVariant: composed.variantId,
+        descriptionSource,
+        composerVariant: composerVariantForLog,
         descriptionLength: (recipe.description as string)?.length,
         chefAdviceLength: finalChefAdvice.length,
         titleIngredientConsistencyGuardTriggered: consistency.triggered,

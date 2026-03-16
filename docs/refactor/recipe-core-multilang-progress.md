@@ -1,7 +1,7 @@
 # Recipe Core & Multilang Refactor Progress
 
 ## Current stage
-- Stage 2.3 — description path cleanup + anti-context leakage + latency audit
+- Stage 2.4.1 — steps leakage guard
 
 ## Planned stages
 - [x] Stage 1 — locale + trust_level
@@ -9,6 +9,7 @@
 - [x] Stage 2.1 — composer polishing & token reduction
 - [x] Stage 2.2 — chef advice restore + consistency guard
 - [x] Stage 2.3 — description path cleanup + anti-context leakage + latency audit
+- [x] Stage 2.4 — description rollback (LLM primary)
 - [ ] Stage 3 — recipe_translations
 - [ ] Stage 4 — nutrition_traits + goals
 - [ ] Stage 5 — plan page refactor
@@ -128,6 +129,30 @@
 - **supabase/functions/_shared/requestContextLeakGuard.ts** — checkRequestContextLeak(title, description, chefAdvice); список REQUEST_CONTEXT_PHRASES; suggestedTitle, descriptionUseComposer, chefAdviceUseFallback.
 - **supabase/functions/_shared/titleLexiconGuard.ts** — checkTitleLexicon(title); замены «овощное соте» → «тушёные овощи», «соте» → «тушёное».
 - **src/hooks/useDeepSeekAPI.tsx** — performance.mark: chat_request_start, chat_request_sent, chat_response_received, chat_recipe_ready; performance.measure chat_tap_to_recipe; safeLog LATENCY_AUDIT с chat_tap_to_recipe_ms.
+
+## Stage 2.4 scope (description rollback — LLM primary)
+- [x] LLM description restored as primary source
+- [x] composer used only as fallback (when isDescriptionInvalid)
+- [x] description validation added (isDescriptionInvalid: пусто, <20, >180, повтор title, запреты, request-context leakage)
+- [x] prompt rules updated (1–2 предложения, макс. 160 симв., не повторять название, не «в дорогу»/«для ребёнка»/«для всей семьи», без мед. обещаний)
+- [x] latency/guards from Stage 2.3 preserved
+
+## Stage 2.4 key files
+- **supabase/functions/deepseek-chat/index.ts** — в validated: только при isDescriptionInvalid(desc) подстановка composer; в response-блоке: descriptionInvalid ? composer : descRaw.slice(0,160); descriptionSource "llm" | "composer_fallback"; при leak.descriptionUseComposer перезапись description и descriptionSource.
+- **supabase/functions/deepseek-chat/domain/recipe_io/sanitizeAndRepair.ts** — isDescriptionInvalid(desc, { title }); импорт textContainsRequestContextLeak из _shared.
+- **supabase/functions/deepseek-chat/domain/recipe_io/index.ts** — экспорт isDescriptionInvalid.
+- **supabase/functions/_shared/requestContextLeakGuard.ts** — textContainsRequestContextLeak(text); фразы «для ребёнка», «для всей семьи» добавлены в REQUEST_CONTEXT_PHRASES.
+- **supabase/functions/deepseek-chat/prompts.ts** — RECIPE_STRICT_JSON_CONTRACT и RECIPE_SYSTEM_RULES_V3: description 1–2 предложения, макс. 160, не повторять title, запреты по контексту и мед. обещаниям.
+
+## Stage 2.4.1 scope (steps leakage guard)
+- [x] request-context leakage guard extended to steps
+- [x] steps cleaned locally without LLM retry (cleanStepFromRequestContextLeak: удаление фраз, fallback «Готово к подаче.» при пустом результате)
+- [x] pool-safe recipe text ensured for steps
+- [x] logs added (REQUEST_CONTEXT_LEAK_GUARD: stepsLeakDetected, stepsLeakCleaned, stepsLeakCount)
+
+## Stage 2.4.1 key files
+- **supabase/functions/_shared/requestContextLeakGuard.ts** — cleanStepFromRequestContextLeak(step); экспорт для использования в index.
+- **supabase/functions/deepseek-chat/index.ts** — после обработки title/description/chefAdvice по leak: итерация по recipe.steps, проверка textContainsRequestContextLeak(step), замена на cleanStepFromRequestContextLeak(step); лог REQUEST_CONTEXT_LEAK_GUARD с stepsLeakDetected, stepsLeakCleaned, stepsLeakCount.
 
 ## Open questions (Stage 1)
 - **Индекс по trust_level:** на Stage 1 не добавлен. Выборка пула фильтрует по source (существующий idx_recipes_pool_user_created) и по trust_level в приложении; при росте объёма можно добавить частичный индекс WHERE source IN (...) AND (trust_level IS NULL OR trust_level <> 'blocked').

@@ -442,6 +442,12 @@ export default function ChatPage() {
     if (historyMessages.length === 0 && !isLoadingHistory) setIsChatBootstrapped(true);
   }, [mode, historyMessages.length, isLoadingHistory]);
 
+  // Стабильная подпись истории, чтобы не перезапускать эффект при новом reference массива (useQuery даёт новый [] при загрузке)
+  const historySignature = useMemo(
+    () => historyMessages.length + "," + historyMessages.map((m: { id?: string }) => m.id ?? "").join(","),
+    [historyMessages]
+  );
+
   // В help-режиме историю рецептов не подгружаем — сообщения только в local state
   useEffect(() => {
     if (mode === "help") return;
@@ -594,7 +600,7 @@ export default function ChatPage() {
         formatWithRecipeMap(recipeMap);
         setIsChatBootstrapped(true);
       });
-  }, [mode, historyMessages]);
+  }, [mode, historySignature]);
 
   const handleMessagesScroll = useCallback(() => {
     const el = messagesContainerRef.current;

@@ -15,6 +15,9 @@ const REQUEST_CONTEXT_PHRASES: string[] = [
   "для дороги",
   "подойдёт в контейнер",
   "удобно в дорогу",
+  "для ребёнка",
+  "для ребенка",
+  "для всей семьи",
 ];
 
 function normalizeForMatch(s: string): string {
@@ -24,6 +27,31 @@ function normalizeForMatch(s: string): string {
 function containsLeakPhrase(text: string): boolean {
   const t = normalizeForMatch(text);
   return REQUEST_CONTEXT_PHRASES.some((phrase) => t.includes(phrase.toLowerCase()));
+}
+
+/** Stage 2.4: проверка одного текста на request-context leakage (для isDescriptionInvalid и др.). */
+export function textContainsRequestContextLeak(text: string): boolean {
+  const t = (text ?? "").trim();
+  return t.length > 0 && containsLeakPhrase(t);
+}
+
+const STEP_LEAK_FALLBACK = "Готово к подаче.";
+
+/** Stage 2.4.1: очистка одного шага от leakage-фраз без LLM. Удаляет фразы; если после очистки шаг пустой или слишком короткий — подставляет нейтральную фразу. */
+export function cleanStepFromRequestContextLeak(step: string): string {
+  const t = (step ?? "").trim();
+  if (!t.length) return STEP_LEAK_FALLBACK;
+  if (!containsLeakPhrase(t)) return t;
+  let out = t;
+  for (const phrase of REQUEST_CONTEXT_PHRASES) {
+    if (normalizeForMatch(out).includes(phrase.toLowerCase())) {
+      out = removePhrase(out, phrase);
+    }
+  }
+  out = out.replace(/\s*,\s*$/g, "").replace(/^\s*,\s*/, "").replace(/\s+/g, " ").trim();
+  if (out.length < 8) return STEP_LEAK_FALLBACK;
+  if (!/[.!?]$/.test(out)) out = out.replace(/\s*[,—:]\s*$/, "") + ".";
+  return out;
 }
 
 /** Удаляет одну фразу из текста (первое вхождение), освобождает двойные пробелы и запятые. */
