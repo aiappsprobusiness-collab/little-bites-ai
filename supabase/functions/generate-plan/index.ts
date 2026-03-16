@@ -218,6 +218,7 @@ async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _m
     .from("recipes")
     .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, recipe_ingredients(name, display_text)")
     .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
+    .or("trust_level.is.null,trust_level.neq.blocked")
     .order("created_at", { ascending: false })
     .limit(limitCandidates);
   if (error) {

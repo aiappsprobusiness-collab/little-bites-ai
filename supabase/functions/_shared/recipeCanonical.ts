@@ -97,6 +97,12 @@ export interface CanonicalizeRecipePayloadInput {
   /** Age range for plan/pool filtering. infant 6–12, toddler 12–60, school 60–216, adult 216–1200. */
   min_age_months?: number | null;
   max_age_months?: number | null;
+  /** Stage 1: locale (e.g. 'ru'). RPC default 'ru' if omitted. */
+  locale?: string | null;
+  /** Stage 1: language of generated content. RPC keeps null if omitted. */
+  source_lang?: string | null;
+  /** Stage 1: trust level for pool. RPC derives from source if omitted. */
+  trust_level?: string | null;
 }
 
 /**
@@ -124,6 +130,9 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     is_soup: rawIsSoup,
     min_age_months: rawMinAge,
     max_age_months: rawMaxAge,
+    locale: rawLocale,
+    source_lang: rawSourceLang,
+    trust_level: rawTrustLevel,
   } = input;
 
   const safeSource = ensurePoolSource(source);
@@ -216,5 +225,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     carbs,
     min_age_months: rawMinAge ?? null,
     max_age_months: rawMaxAge ?? null,
+    ...(rawLocale != null && rawLocale !== "" ? { locale: String(rawLocale).trim() } : {}),
+    ...(rawSourceLang != null && rawSourceLang !== "" ? { source_lang: String(rawSourceLang).trim() } : {}),
+    ...(rawTrustLevel != null && rawTrustLevel !== "" ? { trust_level: String(rawTrustLevel).trim() } : {}),
   };
 }

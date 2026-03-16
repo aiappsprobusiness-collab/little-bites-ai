@@ -47,9 +47,7 @@ import { isExplicitDishRequest, inferMealTypeFromQuery } from "./domain/meal/ind
 import {
   validateRecipe,
   retryFixJson,
-  buildRecipeDescription,
   buildChefAdviceFallback,
-  buildDescriptionFallback,
   shouldReplaceDescription,
   shouldReplaceChefAdvice,
   isDescriptionIncomplete,
@@ -64,6 +62,7 @@ import {
   passesDescriptionQualityGate,
   passesChefAdviceQualityGate,
 } from "./domain/recipe_io/index.ts";
+import { composeRecipeDescription } from "../_shared/recipeDescriptionComposer.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -988,12 +987,11 @@ serve(async (req) => {
         const desc = (validated as { description?: string }).description;
         const advice = validated.chefAdvice ?? "";
         if (!desc || shouldReplaceDescription(desc) || isDescriptionIncomplete(desc)) {
-          const keyIngredient = Array.isArray(validated.ingredients) && validated.ingredients[0] && typeof validated.ingredients[0] === "object" && validated.ingredients[0].name
-            ? String(validated.ingredients[0].name)
-            : undefined;
-          (validated as Record<string, unknown>).description = isDescriptionIncomplete(desc) && DEEPSEEK_API_KEY
-            ? (await repairDescriptionOnly(desc ?? "", DEEPSEEK_API_KEY)) ?? buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient })
-            : buildRecipeDescription({ title: validated.title, userText: userMessage, keyIngredient });
+          (validated as Record<string, unknown>).description = composeRecipeDescription({
+            title: validated.title ?? "",
+            mealType: validated.mealType ?? undefined,
+            ingredients: validated.ingredients ?? [],
+          });
         }
         if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
           const ingNames = Array.isArray(validated.ingredients)
@@ -1008,22 +1006,12 @@ serve(async (req) => {
             recipeIdSeed: seed,
           });
         }
-        const ingNamesForDesc = Array.isArray(validated.ingredients)
-          ? validated.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")).filter(Boolean)
-          : [];
-        const recipeIdSeedDesc = (validated.title ?? "") + (ingNamesForDesc[0] ?? "");
-        if ((validated as { description?: string }).description && !passesDescriptionQualityGate((validated as { description?: string }).description, { title: validated.title }) && DEEPSEEK_API_KEY) {
-          const repairedDesc = await repairDescriptionOnly((validated as { description?: string }).description ?? "", DEEPSEEK_API_KEY);
-          if (repairedDesc && passesDescriptionQualityGate(repairedDesc, { title: validated.title })) {
-            (validated as Record<string, unknown>).description = repairedDesc;
-          } else {
-            (validated as Record<string, unknown>).description = buildDescriptionFallback({
-              title: validated.title,
-              mealType: validated.mealType ?? undefined,
-              ingredients: ingNamesForDesc,
-              recipeIdSeed: recipeIdSeedDesc,
-            });
-          }
+        if ((validated as { description?: string }).description && !passesDescriptionQualityGate((validated as { description?: string }).description, { title: validated.title })) {
+          (validated as Record<string, unknown>).description = composeRecipeDescription({
+            title: validated.title ?? "",
+            mealType: validated.mealType ?? undefined,
+            ingredients: validated.ingredients ?? [],
+          });
         }
         assistantMessage = JSON.stringify(validated);
         responseRecipes = [validated as Record<string, unknown>];
@@ -1109,13 +1097,18 @@ serve(async (req) => {
         rawChefAdvice: rawChefAdviceFromModel.slice(0, 400),
       }));
       const ingNamesForEnforce = Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : [];
-      (recipe as Record<string, unknown>).description = enforceDescription(descForPool, { title, keyIngredient, recipeIdSeed, mealType: recipe.mealType ?? undefined, ingredients: ingNamesForEnforce });
+      (recipe as Record<string, unknown>).description = composeRecipeDescription({
+        title,
+        mealType: recipe.mealType ?? undefined,
+        ingredients: recipe.ingredients ?? [],
+      });
       (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceForPool, {
         title,
         ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : undefined,
         steps,
         recipeIdSeed,
       });
+      assistantMessage = JSON.stringify(recipe);
       const finalChefAdvice = (recipe.chefAdvice as string) ?? "";
       const chefAdviceReplacedWithFallback = finalChefAdvice !== adviceForPool;
       if (chefAdviceReplacedWithFallback) {
@@ -1124,6 +1117,7 @@ serve(async (req) => {
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
+        descriptionSource: "composer",
         descriptionLength: (recipe.description as string)?.length,
         chefAdviceLength: finalChefAdvice.length,
       }));
@@ -1241,6 +1235,9 @@ serve(async (req) => {
             nutrition: n,
             min_age_months: minAge,
             max_age_months: maxAge,
+            locale: "ru",
+            source_lang: null,
+            trust_level: "candidate",
           });
           console.log(JSON.stringify({
             tag: "RECIPE_SAVE_PAYLOAD_DEBUG",
