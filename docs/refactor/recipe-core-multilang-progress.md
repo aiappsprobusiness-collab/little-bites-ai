@@ -1,7 +1,7 @@
 # Recipe Core & Multilang Refactor Progress
 
 ## Current stage
-- Stage 2.5.1 — Feedback Stabilization
+- Stage 2.5.3 — Cold Start Protection
 
 ## Planned stages
 - [x] Stage 1 — locale + trust_level
@@ -13,6 +13,7 @@
 - [x] Stage 2.5 — Recipe Pool & Feedback System (see checklist below)
 - [x] Stage 2.5.1 — Feedback Stabilization (see checklist below)
 - [x] Stage 2.5.2 — Pool Stabilization (see checklist below)
+- [x] Stage 2.5.3 — Cold Start Protection (see checklist below)
 - [ ] Stage 3 — recipe_translations
 - [ ] Stage 4 — nutrition_traits + goals
 - [ ] Stage 5 — plan page refactor
@@ -47,6 +48,15 @@ Checklist:
 - [x] generate-plan priority confirmed
 - [x] locale flow verified
 - [x] docs updated
+
+### Stage 2.5.3 — Cold Start Protection
+
+Checklist:
+- [x] cold start protection implemented
+- [x] block disabled for low-vote recipes
+- [x] future trust degradation documented
+- [x] future plan signal limits documented
+- [x] seed pool strategy documented
 
 ## Stage 1 scope
 - [x] migration added
@@ -203,6 +213,10 @@ Checklist:
 - **supabase/migrations/20260317160000_recipe_trust_safety_score_clamp_stage252.sql** — recompute: явная ветка для trusted (только обновление score, без auto-block); score clamp [-10, 50]; candidate по-прежнему по правилам.
 - **supabase/functions/generate-plan/index.ts** — комментарий к fetchPoolCandidates: blocked исключены, приоритет trusted → starter/seed → candidate, затем score DESC.
 - **docs/operations/recipe-pool-trust-workflow.md** — Trusted safety, Early-stage rule, Launch strategy (RU), clamp в формуле.
+
+## Stage 2.5.3 key files
+- **supabase/migrations/20260317180000_recipe_cold_start_protection_stage253.sql** — recompute: total_votes = likes + dislikes; для candidate блокировка применяется только при total_votes >= 3.
+- **docs/operations/recipe-pool-trust-workflow.md** — cold start в правиле blocked; Seed pool (manual); FUTURE: trust degradation, plan signal limiting.
 
 ## Stage 2.5.2 verification (vote, plan, locale)
 - **Vote:** record_recipe_feedback — повторный тот же голос no-op; toggle удаляет старый и вставляет новый; один пользователь даёт не более одного like или одного dislike на рецепт. Двойной подсчёт исключён.

@@ -318,6 +318,7 @@
 - **Generate-plan:** приоритет trusted → starter/seed → candidate, сортировка по score DESC.
 - **Подготовка пула:** 30–50 сгенерировать, 20–30 trusted; баланс 30% завтрак, 40% обед, 30% ужин; типы курица, рыба, овощи, крупы. Таргет: минимум 25–40 trusted (для теста 15–20).
 - **Операционный документ:** docs/operations/recipe-pool-trust-workflow.md (ручная модерация раз в 2–3 дня, когда trusted/blocked).
+- **Stage 2.5.3:** cold start protection — не переводить candidate в blocked при total_votes (like+dislike) < 3; seed pool подготавливается вручную перед запуском. Trust degradation (trusted → candidate) и ограничение план-сигналов (max per user per day) — будущая работа, не реализованы.
 - Фундамент для дальнейшего ranking и multilang.
 
 ### 9.3 Stage 3 (nutrition_traits, feedback, чистка)
