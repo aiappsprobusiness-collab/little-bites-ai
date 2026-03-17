@@ -372,14 +372,14 @@
 ### 11.1 Миграции (по порядку)
 
 1. **recipe_locale_trust** (Stage 1): добавить в recipes колонки locale (text DEFAULT 'ru'), source_lang (text), trust_level (text CHECK IN ('seed','starter','trusted','candidate','blocked')); backfill locale = 'ru', trust_level по source; индексы при необходимости (trust_level для пула).
-2. **recipe_translations** (Stage 2): создать таблицу recipe_translations (recipe_id, locale, title, description, chef_advice, translation_status, source, created_at, updated_at); UNIQUE(recipe_id, locale); RLS по recipe_id (чтение через рецепт).
-3. **recipe_nutrition_traits** (Stage 3): добавить recipes.nutrition_traits jsonb; расширить create_recipe_with_steps для приёма nutrition_traits.
+2. **recipe_translations** (Stage 2) — **выполнено:** таблица recipe_translations, RPC get_recipe_previews/get_recipe_full с p_locale, fallback на recipes. См. docs/refactor/recipe-core-multilang-progress.md (Stage 3).
+3. **recipe_nutrition_traits** (Stage 3 в плане — после recipe_translations): добавить recipes.nutrition_traits jsonb; расширить create_recipe_with_steps для приёма nutrition_traits.
 
 ### 11.2 RPC
 
 1. **create_recipe_with_steps:** в миграции Stage 1 добавить в INSERT поля locale, source_lang, trust_level из payload (с дефолтами).
-2. **get_recipe_previews:** в Stage 2 добавить опциональный параметр p_locale; при наличии — LEFT JOIN recipe_translations и COALESCE(rt.title, r.title), COALESCE(rt.description, r.description).
-3. **get_recipe_full:** в Stage 2 добавить p_locale; аналогично подставлять title, description, chef_advice из recipe_translations.
+2. **get_recipe_previews:** в Stage 2 добавить опциональный параметр p_locale; при наличии — LEFT JOIN recipe_translations и COALESCE(rt.title, r.title), COALESCE(rt.description, r.description). — **выполнено** (миграция 20260318130000).
+3. **get_recipe_full:** в Stage 2 добавить p_locale; аналогично подставлять title, description, chef_advice из recipe_translations. — **выполнено** (миграция 20260318130000).
 4. Выборка пула в generate-plan и в клиенте: добавить условие по trust_level (не blocked). Это изменение в SQL запросе в Edge и в клиенте (если есть прямой запрос к recipes).
 
 ### 11.3 Edge / модули

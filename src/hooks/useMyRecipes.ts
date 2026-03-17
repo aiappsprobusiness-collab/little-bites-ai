@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { getAppLocale } from "@/utils/appLocale";
 import type { RecipePreview } from "@/types/recipePreview";
 
 export interface MyRecipePreview extends RecipePreview {
@@ -32,12 +33,16 @@ function toPreview(row: {
   };
 }
 
-export function useMyRecipes() {
+/**
+ * @param locale - optional locale for title/description (e.g. 'ru', 'en'). When not set, getAppLocale() is used.
+ */
+export function useMyRecipes(locale?: string | null) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const effectiveLocale = locale ?? getAppLocale();
 
   const { data: list = [], isLoading } = useQuery({
-    queryKey: ["my_recipes", user?.id],
+    queryKey: ["my_recipes", user?.id, effectiveLocale],
     queryFn: async (): Promise<MyRecipePreview[]> => {
       if (!user) return [];
       const { data: recipeRows, error } = await supabase
@@ -50,7 +55,7 @@ export function useMyRecipes() {
       const ids = (recipeRows ?? []).map((r) => r.id).filter(Boolean);
       if (ids.length === 0) return [];
       const [previewsRes, metaRes] = await Promise.all([
-        supabase.rpc("get_recipe_previews", { recipe_ids: ids }),
+        supabase.rpc("get_recipe_previews", { recipe_ids: ids, p_locale: effectiveLocale }),
         supabase.from("recipes").select("id, chef_advice, advice, source, calories, proteins, fats, carbs").in("id", ids),
       ]);
       if (previewsRes.error) throw previewsRes.error;

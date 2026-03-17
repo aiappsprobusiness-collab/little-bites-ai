@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { safeError } from "@/utils/safeLogger";
+import { getAppLocale } from '@/utils/appLocale';
 import { useAuth } from './useAuth';
 import { useAppStore } from '@/store/useAppStore';
 import { trackUsageEvent } from '@/utils/usageEvents';
@@ -44,15 +45,18 @@ export function favoritesKey(params: { userId: string | undefined; filter: Favor
 export interface UseFavoritesOptions {
   /** When false, favorites query is not run (e.g. when another tab is active). Default true. */
   queryEnabled?: boolean;
+  /** Optional locale for recipe title/description (e.g. 'ru', 'en'). When not set, base recipe content is returned. */
+  locale?: string | null;
 }
 
 export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavoritesOptions) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const queryEnabled = options?.queryEnabled !== false;
+  const effectiveLocale = options?.locale ?? getAppLocale();
 
   const { data: favorites = [], isLoading } = useQuery({
-    queryKey: favoritesKey({ userId: user?.id, filter }),
+    queryKey: [...favoritesKey({ userId: user?.id, filter }), effectiveLocale],
     enabled: !!user && queryEnabled,
     queryFn: async () => {
       if (!user) return [];
@@ -91,6 +95,7 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
 
       const { data: previewRows, error: rpcError } = await supabase.rpc('get_recipe_previews', {
         recipe_ids: recipeIds,
+        p_locale: effectiveLocale,
       });
 
       if (rpcError) {

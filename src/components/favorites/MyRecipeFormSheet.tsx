@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useMyRecipes } from "@/hooks/useMyRecipes";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getAppLocale } from "@/utils/appLocale";
 import { cn } from "@/lib/utils";
 
 const MEAL_OPTIONS = [
@@ -85,7 +86,7 @@ export function MyRecipeFormSheet({
       (async () => {
         try {
           const [fullRes, ingRes] = await Promise.all([
-            supabase.rpc("get_recipe_full", { p_recipe_id: recipeId }),
+            supabase.rpc("get_recipe_full", { p_recipe_id: recipeId, p_locale: getAppLocale() }),
             supabase.from("recipe_ingredients").select("name, amount, unit, display_text").eq("recipe_id", recipeId).order("order_index"),
           ]);
           const row = Array.isArray(fullRes.data) ? fullRes.data[0] : fullRes.data;

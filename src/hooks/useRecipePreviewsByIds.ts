@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { getAppLocale } from "@/utils/appLocale";
 import type { RecipePreview } from "@/types/recipePreview";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -42,12 +43,15 @@ function toRecipePreview(row: {
 /**
  * Fetches recipe previews by IDs. Filters to valid UUIDs only (non-UUIDs are skipped).
  * IDs are stabilized (unique + sort) and debounced (80ms) so rapid changes during generation don't trigger many requests.
+ * @param recipeIds - recipe UUIDs
+ * @param locale - optional locale for title/description (e.g. 'ru', 'en'); when not set, getAppLocale() is used
  */
-export function useRecipePreviewsByIds(recipeIds: string[]) {
+export function useRecipePreviewsByIds(recipeIds: string[], locale?: string | null) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const inputKey = useMemo(() => stableIdsKey(recipeIds), [recipeIds]);
   const [debouncedKey, setDebouncedKey] = useState(inputKey);
+  const effectiveLocale = locale ?? getAppLocale();
 
   useEffect(() => {
     if (inputKey === debouncedKey) return;
@@ -62,11 +66,11 @@ export function useRecipePreviewsByIds(recipeIds: string[]) {
   const ids = useMemo(() => (debouncedKey ? debouncedKey.split(",").filter(Boolean) : []), [debouncedKey]);
 
   const query = useQuery({
-    queryKey: ["recipe_previews", user?.id, debouncedKey],
+    queryKey: ["recipe_previews", user?.id, debouncedKey, effectiveLocale],
     queryFn: async (): Promise<Record<string, RecipePreview>> => {
       if (!user || ids.length === 0) return {};
       const [previewsResult, tipsResult] = await Promise.all([
-        supabase.rpc("get_recipe_previews", { recipe_ids: ids }),
+        supabase.rpc("get_recipe_previews", { recipe_ids: ids, p_locale: effectiveLocale }),
         supabase.from("recipes").select("id, chef_advice, advice, source, calories, proteins, fats, carbs").in("id", ids),
       ]);
       const { data: previewRows, error } = previewsResult;

@@ -10,6 +10,7 @@ import { buildPrompt } from '@/domain/generation/buildPrompt';
 import { derivePayloadFromContext } from '@/domain/generation/derivePayloadFromContext';
 import type { Family, Profile } from '@/domain/generation/types';
 import { checkChatRequestAgainstProfile } from '@/utils/chatBlockedCheck';
+import { getAppLocale } from '@/utils/appLocale';
 
 /** Повтор запроса при сетевой/протокольной ошибке (ERR_HTTP2_PROTOCOL_ERROR, Failed to fetch). */
 async function fetchWithRetry(
@@ -213,6 +214,7 @@ export function useDeepSeekAPI() {
             ...(extraSystemSuffix && extraSystemSuffix.trim() && { extraSystemSuffix: extraSystemSuffix.trim() }),
             ...(mealType && { mealType }),
             ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime }),
+            ...((type === 'chat' || type === 'recipe') && { target_locale: getAppLocale() }),
           }),
         });
         clearTimeout(timeoutId);

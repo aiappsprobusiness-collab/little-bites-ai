@@ -8,9 +8,11 @@ import {
   RECIPES_DETAIL_SELECT,
   RECIPES_PAGE_SIZE,
 } from '@/lib/supabase-constants';
-import { getCachedRecipe, setCachedRecipe, invalidateRecipeCache } from '@/utils/recipeCache';
+import { invalidateRecipeCache } from '@/utils/recipeCache';
 import { ensureStringArray } from '@/utils/typeUtils';
 import { canonicalizeRecipePayload } from '@/utils/recipeCanonical';
+import { getAppLocale } from '@/utils/appLocale';
+import { requestRecipeTranslation } from '@/utils/requestRecipeTranslation';
 import mockRecipes from '@/mocks/mockRecipes.json';
 
 type Recipe = Tables<'recipes'>;
@@ -163,37 +165,49 @@ export function useRecipes(childId?: string) {
   });
 
   const getRecipeById = (id: string) => {
+    const locale = getAppLocale();
     return useQuery({
-      queryKey: ['recipes', id],
+      queryKey: ['recipes', id, locale],
       queryFn: async () => {
-        const ttl = 3600000;
-        const cached = getCachedRecipe<Recipe & { ingredients: RecipeIngredient[]; steps: RecipeStep[] }>(id, ttl);
-        if (cached) return cached;
-
         if (IS_DEV) {
           const mock = (mockRecipes as unknown[]).find((r: { id: string }) => r.id === id);
           if (mock) return mock as Recipe & { ingredients: RecipeIngredient[]; steps: RecipeStep[] };
         }
 
-        const { data: recipe, error: recipeError } = await supabase
-          .from('recipes')
-          .select(RECIPES_DETAIL_SELECT)
-          .eq('id', id)
-          .single();
+        const [fullRes, ingRes, servingsRes] = await Promise.all([
+          supabase.rpc('get_recipe_full', { p_recipe_id: id, p_locale: locale }),
+          supabase.from('recipe_ingredients').select('name, amount, unit, substitute, display_text, canonical_amount, canonical_unit').eq('recipe_id', id).order('order_index'),
+          supabase.from('recipes').select('servings_base, servings_recommended').eq('id', id).single(),
+        ]);
 
-        if (recipeError) throw recipeError;
+        if (fullRes.error) throw fullRes.error;
+        const row = Array.isArray(fullRes.data) ? fullRes.data[0] : fullRes.data;
+        if (!row) throw new Error('Recipe not found');
 
-        const r = recipe as { recipe_ingredients?: unknown[]; ingredients?: unknown[]; recipe_steps?: unknown[]; steps?: unknown[] };
-        const ingredients = Array.isArray(r.ingredients) ? r.ingredients : Array.isArray(r.recipe_ingredients) ? r.recipe_ingredients : [];
-        const rawSteps = Array.isArray(r.steps) ? r.steps : Array.isArray(r.recipe_steps) ? r.recipe_steps : [];
-        const steps = [...rawSteps].sort((a, b) => {
-          const na = (a as { step_number?: number }).step_number ?? 0;
-          const nb = (b as { step_number?: number }).step_number ?? 0;
-          return na - nb;
-        });
-        const { recipe_ingredients: _ri, recipe_steps: _rs, ingredients: _i, steps: _s, ...rest } = r;
-        const out = { ...rest, ingredients, steps } as Recipe & { ingredients: RecipeIngredient[]; steps: RecipeStep[] };
-        setCachedRecipe(id, out);
+        const r = row as Record<string, unknown>;
+        const stepsJson = r.steps_json as { instruction?: string; step_number?: number }[] | null | undefined;
+        const rawSteps = Array.isArray(stepsJson) ? stepsJson : [];
+        const steps = [...rawSteps].sort((a, b) => (a.step_number ?? 0) - (b.step_number ?? 0));
+        const ingRows = (ingRes.data ?? []) as { name?: string; amount?: number | null; unit?: string | null; substitute?: string | null; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null }[];
+        const ingredients = ingRows.map((ing) => ({
+          name: ing.name ?? '',
+          amount: ing.amount ?? null,
+          unit: ing.unit ?? null,
+          substitute: ing.substitute ?? null,
+          display_text: ing.display_text ?? null,
+          canonical_amount: ing.canonical_amount ?? null,
+          canonical_unit: ing.canonical_unit ?? null,
+        })) as RecipeIngredient[];
+
+        const servingsRow = servingsRes.data as { servings_base?: number | null; servings_recommended?: number | null } | null;
+        const { steps_json: _sj, ...rest } = r;
+        const out = {
+          ...rest,
+          servings_base: servingsRow?.servings_base ?? 1,
+          servings_recommended: servingsRow?.servings_recommended ?? 1,
+          ingredients,
+          steps,
+        } as Recipe & { ingredients: RecipeIngredient[]; steps: RecipeStep[] };
         return out;
       },
       enabled: !!id,
@@ -267,8 +281,9 @@ export function useRecipes(childId?: string) {
 
       return { id: recipeId, ...normalized, title: normalized.title ?? '' } as Recipe;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['recipes', user?.id] });
+      if (data?.id) requestRecipeTranslation(data.id);
     },
   });
 
@@ -288,8 +303,9 @@ export function useRecipes(childId?: string) {
       invalidateRecipeCache(id);
       return data as Recipe;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['recipes', user?.id] });
+      if (data?.id) queryClient.invalidateQueries({ queryKey: ['recipes', data.id] });
     },
   });
 
@@ -299,8 +315,9 @@ export function useRecipes(childId?: string) {
       if (error) throw error;
       invalidateRecipeCache(id);
     },
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['recipes', user?.id] });
+      queryClient.invalidateQueries({ queryKey: ['recipes', id] });
     },
   });
 

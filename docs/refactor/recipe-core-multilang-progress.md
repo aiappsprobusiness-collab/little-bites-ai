@@ -1,7 +1,9 @@
 # Recipe Core & Multilang Refactor Progress
 
 ## Current stage
-- Stage 2.5.3 — Cold Start Protection
+- Stage 3 — recipe_translations + locale-aware reads (completed)
+
+**После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
 ## Planned stages
 - [x] Stage 1 — locale + trust_level
@@ -14,7 +16,7 @@
 - [x] Stage 2.5.1 — Feedback Stabilization (see checklist below)
 - [x] Stage 2.5.2 — Pool Stabilization (see checklist below)
 - [x] Stage 2.5.3 — Cold Start Protection (see checklist below)
-- [ ] Stage 3 — recipe_translations
+- [x] Stage 3 — recipe_translations + locale-aware reads
 - [ ] Stage 4 — nutrition_traits + goals
 - [ ] Stage 5 — plan page refactor
 
@@ -223,6 +225,103 @@ Checklist:
 - **Plan:** added_to_plan для нового рецепта; replaced_in_plan только для старого (assign_recipe_to_plan_slot и generate-plan). Повторный remove пишет новую строку (история).
 - **Generate-plan:** пул по .or("trust_level.is.null,trust_level.neq.blocked") — blocked не попадают; сортировка trust → score DESC; candidate остаются в пуле.
 - **Locale:** deepseek-chat передаёт locale: 'ru' в create_recipe_with_steps; RPC и таблица recipes — locale NOT NULL DEFAULT 'ru'. Готовность к Stage 3 (multilang) без новых таблиц.
+
+## Stage 3 scope (recipe_translations + locale-aware reads)
+
+Checklist:
+- [x] recipe_translations table added (id, recipe_id, locale, title, description, chef_advice, translation_status, source, created_at, updated_at; UNIQUE(recipe_id, locale); CHECKs; RLS read-only via RPC)
+- [x] get_recipe_previews(recipe_ids, p_locale text DEFAULT NULL) — locale fallback for title/description
+- [x] get_recipe_full(p_recipe_id, p_locale text DEFAULT NULL) — locale fallback for title, description, chef_advice
+- [x] Client hooks accept optional locale (useRecipePreviewsByIds, useFavorites, useMyRecipes); calls without locale unchanged
+- [x] Steps/ingredients translations not implemented (foundation only for title/description/chef_advice)
+- [x] create_recipe_with_steps and save flows not changed
+- [x] docs updated
+
+### Stage 3 key files
+
+- **supabase/migrations/20260318120000_recipe_translations_stage3.sql** — таблица recipe_translations, индекс, триггер updated_at, RLS (без SELECT-политик для клиента).
+- **supabase/migrations/20260318130000_get_recipe_previews_full_locale_stage3.sql** — RPC get_recipe_previews(recipe_ids, p_locale), get_recipe_full(p_recipe_id, p_locale); LEFT JOIN recipe_translations, COALESCE(NULLIF(trim(rt.*), ''), r.*).
+- **src/hooks/useRecipePreviewsByIds.ts** — опциональный параметр locale, передача p_locale в RPC.
+- **src/hooks/useFavorites.tsx** — options.locale, передача p_locale в get_recipe_previews.
+- **src/hooks/useMyRecipes.ts** — опциональный параметр locale, передача p_locale в get_recipe_previews.
+- **src/integrations/supabase/types.ts** — Args с p_locale для get_recipe_full и get_recipe_previews.
+- **docs/database/DATABASE_SCHEMA.md** — описание recipe_translations и обновлённые сигнатуры RPC.
+
+### Stage 3: what was actually changed
+
+1. **recipe_translations:** таблица для переводов по (recipe_id, locale); переводы заполняются отдельно (импорт/админка/автоперевод), backfill не требуется.
+2. **get_recipe_previews:** добавлен p_locale; при p_locale выполняется LEFT JOIN с recipe_translations, title/description = COALESCE(NULLIF(trim(rt.*), ''), r.*); без p_locale поведение как раньше.
+3. **get_recipe_full:** то же для title, description, chef_advice; шаги и ингредиенты без локализации.
+4. **Клиент:** хуки могут принимать locale и передавать p_locale; при вызове без locale всё работает по-старому.
+5. **Create/save flows:** не менялись; контент по умолчанию по-прежнему в recipes.
+
+### Stage 3: review / where to look if something breaks
+
+- **Вызов get_recipe_previews без p_locale** — старое поведение (только recipes).
+- **Вызов get_recipe_full без p_locale** — старое поведение.
+- **С p_locale при отсутствии перевода** — fallback на recipes.title/description/chef_advice.
+- **RecipePage / избранное / план** — после ML-4: getRecipeById загружает через get_recipe_full(id, locale) + recipe_ingredients + servings; превью везде передают p_locale (getAppLocale()). См. блок ML-4 ниже.
+- **Share/public (get_recipe_by_share_ref)** — не менялся; при необходимости p_locale можно добавить позже.
+- **TS/сборка** — типы RPC обновлены (p_locale опционален).
+
+## Rollout roadmap (после Stage 3)
+- Дальнейшие шаги мультиязычности зафиксированы в **docs/refactor/recipe-multilang-rollout-stages.md**: стадии **ML-4 … ML-9** (locale plumbing → translations for new recipes → backfill → steps/ingredients → locale-aware generation → UI i18n). **ML-4 реализован** (см. ниже).
+
+## ML-4 status (Locale plumbing — implemented)
+
+- **Цель:** подключить locale в клиенте так, чтобы переводы реально использовались при чтении.
+- **Источник locale:** единый helper `getAppLocale()` (src/utils/appLocale.ts): `navigator.language` → первый сегмент (например en-US → en), fallback `'ru'`.
+- **Locale-aware reads подключены в:**
+  - превью карточек — useRecipePreviewsByIds (effectiveLocale = locale ?? getAppLocale(), p_locale в RPC);
+  - избранное — useFavorites (effectiveLocale, p_locale в get_recipe_previews);
+  - мои рецепты — useMyRecipes (effectiveLocale, p_locale в get_recipe_previews);
+  - полный рецепт / RecipePage — useRecipes().getRecipeById загружает через get_recipe_full(id, getAppLocale()) + recipe_ingredients + servings_base/servings_recommended (отдельный select); контракт для UI сохранён (title, description, chef_advice, steps, ingredients, servings_base, servings_recommended и др.).
+- **Fallback на recipes.*** сохраняется (RPC и при отсутствии записей в recipe_translations).
+- **Create/save flows** не менялись; запись в recipe_translations не добавлена.
+- **Share/public flow** не менялся: get_recipe_by_share_ref без p_locale.
+
+### ML-4 checklist
+
+- [x] locale source selected (getAppLocale: navigator.language → first segment, fallback ru)
+- [x] previews pass p_locale (useRecipePreviewsByIds)
+- [x] favorites pass p_locale (useFavorites)
+- [x] my recipes pass p_locale (useMyRecipes)
+- [x] full recipe read updated (getRecipeById → get_recipe_full + ingredients + servings)
+- [x] locale-aware query keys (previews, favorites, my recipes, recipes detail по id + locale)
+- [ ] share/public locale-aware read (get_recipe_by_share_ref пока без p_locale)
+- [ ] explicit app language setting (сейчас только navigator.language; настройка в профиле — позже)
+
+## ML-5 status (Translations for new recipes — implemented + hardening + backend coverage)
+
+- **Цель:** после сохранения нового рецепта создавать запись в recipe_translations для целевой локали (если она отличается от базовой), чтобы пользователь с этой локалью видел перевод.
+- **Что переводится:** только title, description, chef_advice. Steps/ingredients не переводятся.
+
+### Create/save paths и триггеры перевода
+
+| Путь | Где сохраняется рецепт | Кто запускает перевод | Где в коде |
+|------|------------------------|------------------------|------------|
+| **Client createRecipe** | Клиент: `create_recipe_with_steps` (RPC) | Клиент: `requestRecipeTranslation(recipeId)` | useRecipes.createRecipe **onSuccess** (единственная точка на клиенте) |
+| **Backend deepseek-chat** | Бэкенд: deepseek-chat вызывает `create_recipe_with_steps`, возвращает `recipe_id` в ответе | Бэкенд: fire-and-forget вызов Edge `translate-recipe` после успешного save | deepseek-chat/index.ts после присвоения `responseBody.recipe_id` |
+
+Сценарии взаимоисключающие: один и тот же рецепт либо сохраняется клиентом (чат/форма без сохранения на бэке, или редактирование), либо бэкендом (чат с авторизацией, рецепт сохранён в deepseek-chat). Двойного триггера для одного рецепта не возникает.
+
+- **Целевая локаль для backend trigger:** клиент передаёт в теле запроса к deepseek-chat опциональное поле `target_locale` (getAppLocale()) при type chat/recipe; бэкенд использует его при вызове translate-recipe. Если не передано — бэкенд использует `'en'`.
+- **Защита от дублей:** (1) Архитектурно: один save path = один trigger. (2) На Edge: RPC `has_recipe_translation(recipe_id, target_locale)` перед LLM; при наличии записи — `status: 'skipped'`, LLM не вызывается.
+- **Логика целевой локали:** getAppLocale() (fallback `'en'`). Перевод создаётся только если target_locale ≠ locale рецепта.
+- **Failure-safe:** основной save не зависит от перевода; ответ пользователю не ждёт завершения перевода. Ошибки перевода логируются (клиент — молча, бэкенд — safeWarn).
+- **Ответ Edge translate-recipe:** HTTP 200, тело `{ ok: true, status: 'created' | 'skipped' | 'error' }`.
+- **Пока не покрыто (вне ML-5):** старые рецепты (ML-6); steps/ingredients; generate-plan не создаёт рецепты — не применимо; мульти-целевые локали; UI i18n.
+- **Где смотреть при поломке:** deepseek-chat (блок после savedRecipeId); translate-recipe Edge; useRecipes.tsx onSuccess; useDeepSeekAPI (target_locale в body).
+
+### ML-5 checklist
+
+- [x] RPC upsert_recipe_translation, has_recipe_translation
+- [x] Edge translate-recipe (failure-safe, status в ответе)
+- [x] Client trigger: только useRecipes.createRecipe onSuccess
+- [x] Backend trigger: deepseek-chat после create_recipe_with_steps (fire-and-forget вызов translate-recipe)
+- [x] Клиент передаёт target_locale в запросе чата (getAppLocale())
+- [x] Дубли исключены: один save path = один trigger; has_recipe_translation на Edge
+- [x] Документация обновлена
 
 ## Open questions (Stage 1)
 - **Индекс по trust_level:** на Stage 1 не добавлен. Выборка пула фильтрует по source (существующий idx_recipes_pool_user_created) и по trust_level в приложении; при росте объёма можно добавить частичный индекс WHERE source IN (...) AND (trust_level IS NULL OR trust_level <> 'blocked').

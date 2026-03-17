@@ -1383,6 +1383,22 @@ serve(async (req) => {
     }
     if (savedRecipeId) {
       responseBody.recipe_id = savedRecipeId;
+      // ML-5: fire-and-forget post-save translation for backend-saved recipes (client does not call createRecipe for this path)
+      if (authHeader && SUPABASE_URL) {
+        const targetLocaleRaw = (body as { target_locale?: string }).target_locale;
+        const targetLocale =
+          typeof targetLocaleRaw === "string" && targetLocaleRaw.trim()
+            ? targetLocaleRaw.trim().toLowerCase().split("-")[0]
+            : "en";
+        const translateUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/translate-recipe`;
+        fetch(translateUrl, {
+          method: "POST",
+          headers: { Authorization: authHeader, "Content-Type": "application/json" },
+          body: JSON.stringify({ recipe_id: savedRecipeId, target_locale: targetLocale }),
+        }).catch((err) => {
+          safeWarn("translate-recipe trigger failed (non-blocking):", serializeError(err));
+        });
+      }
     }
     if (authRequiredToSave) {
       responseBody.auth_required_to_save = true;
