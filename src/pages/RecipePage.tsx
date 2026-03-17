@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, Heart, CalendarPlus, Pencil, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -22,6 +22,7 @@ import {
   saveShareRef,
   getShareRecipeUrl,
 } from "@/utils/usageEvents";
+import { supabase } from "@/integrations/supabase/client";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
@@ -134,6 +135,32 @@ export default function RecipePage() {
   const [addToPlanOpen, setAddToPlanOpen] = useState(false);
   const [editSheetOpen, setEditSheetOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [userVote, setUserVote] = useState<"like" | "dislike" | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    supabase.rpc("get_recipe_my_vote", { p_recipe_id: id }).then(({ data }) => {
+      if (!cancelled && data === "like") setUserVote("like");
+      else if (!cancelled && data === "dislike") setUserVote("dislike");
+      else if (!cancelled) setUserVote(null);
+    }).catch(() => {
+      if (!cancelled) setUserVote(null);
+    });
+    return () => { cancelled = true; };
+  }, [id]);
+
+  const handleRecipeFeedback = async (action: "like" | "dislike") => {
+    if (!id) return;
+    if (userVote === action) return; /* повторный тот же голос — no-op, без API и toast */
+    try {
+      await supabase.rpc("record_recipe_feedback", { p_recipe_id: id, p_action: action });
+      setUserVote(action);
+      toast({ title: action === "like" ? "Спасибо за отзыв" : "Учли" });
+    } catch {
+      toast({ variant: "destructive", title: "Не удалось отправить" });
+    }
+  };
 
   const handleToggleFavorite = async () => {
     if (!id || !recipe) return;
@@ -441,6 +468,42 @@ export default function RecipePage() {
           >
             <ShareIosIcon className="h-4 w-4" />
           </motion.button>
+          {!isUserCustom && (
+            <>
+              <motion.button
+                type="button"
+                onClick={() => handleRecipeFeedback("like")}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className={cn(
+                  "h-9 w-9 rounded-full shrink-0 flex items-center justify-center transition-all border",
+                  userVote === "like"
+                    ? "text-primary bg-primary/10 border-primary/20 fill-primary"
+                    : "text-muted-foreground bg-muted/50 border-border hover:bg-muted hover:text-foreground"
+                )}
+                aria-label={userVote === "like" ? "Нравится (выбрано)" : "Нравится"}
+                title="Нравится"
+              >
+                <ThumbsUp className={cn("h-4 w-4", userVote === "like" && "fill-current")} />
+              </motion.button>
+              <motion.button
+                type="button"
+                onClick={() => handleRecipeFeedback("dislike")}
+                whileTap={{ scale: 0.96 }}
+                transition={{ duration: 0.15 }}
+                className={cn(
+                  "h-9 w-9 rounded-full shrink-0 flex items-center justify-center transition-all border",
+                  userVote === "dislike"
+                    ? "text-destructive bg-destructive/10 border-destructive/20 fill-destructive"
+                    : "text-muted-foreground bg-muted/50 border-border hover:bg-muted hover:text-foreground"
+                )}
+                aria-label={userVote === "dislike" ? "Не нравится (выбрано)" : "Не нравится"}
+                title="Не нравится"
+              >
+                <ThumbsDown className={cn("h-4 w-4", userVote === "dislike" && "fill-current")} />
+              </motion.button>
+            </>
+          )}
           {hasAccess ? (
             <motion.button
               type="button"

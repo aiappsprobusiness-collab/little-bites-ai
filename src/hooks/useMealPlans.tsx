@@ -299,6 +299,11 @@ export function useMealPlans(
       if (fetchError || !row) return;
       const rowData = row as unknown as { meals?: MealsJson };
       const meals = { ...(rowData.meals ?? {}) } as MealsJson;
+      const slot = meals[mealType];
+      const recipeId = slot?.recipe_id;
+      if (recipeId) {
+        await supabase.rpc('record_recipe_feedback', { p_recipe_id: recipeId, p_action: 'removed_from_plan' });
+      }
       delete meals[mealType];
 
       const { error: updateError } = await supabase

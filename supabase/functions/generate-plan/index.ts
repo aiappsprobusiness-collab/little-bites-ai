@@ -45,6 +45,8 @@ type RecipeRowPool = {
   is_soup?: boolean | null;
   max_age_months?: number | null; min_age_months?: number | null;
   recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
+  score?: number | null;
+  trust_level?: string | null;
 };
 type MealSlot = { recipe_id?: string; title?: string; plan_source?: "pool" | "ai" };
 
@@ -213,19 +215,36 @@ function getCheapFilteredCount(
   return filtered.length;
 }
 
+/** Trust order for pool: trusted first, then starter/seed, then candidate. Lower = higher priority. */
+function trustOrder(t: string | null | undefined): number {
+  if (t === "trusted") return 0;
+  if (t === "starter" || t === "seed") return 1;
+  return 2; // candidate, null
+}
+
+/** Pool: blocked excluded; trusted first, then starter/seed, then candidate; within tier by score DESC. */
 async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _memberId: string | null, limitCandidates: number): Promise<RecipeRowPool[]> {
   const { data: rows, error } = await supabase
     .from("recipes")
-    .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, recipe_ingredients(name, display_text)")
+    .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, score, trust_level, recipe_ingredients(name, display_text)")
     .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
     .or("trust_level.is.null,trust_level.neq.blocked")
-    .order("created_at", { ascending: false })
+    .order("score", { ascending: false })
     .limit(limitCandidates);
   if (error) {
     safeWarn("generate-plan fetchPoolCandidates", error.message);
     return [];
   }
-  return (rows ?? []) as RecipeRowPool[];
+  const list = (rows ?? []) as RecipeRowPool[];
+  list.sort((a, b) => {
+    const oa = trustOrder(a.trust_level);
+    const ob = trustOrder(b.trust_level);
+    if (oa !== ob) return oa - ob;
+    const sa = a.score ?? 0;
+    const sb = b.score ?? 0;
+    return sb - sa;
+  });
+  return list;
 }
 
 /** In-memory only: no await. Filters pool and returns best match for slot (scoring: likes, recency, variety, base diversity). */
@@ -573,11 +592,15 @@ serve(async (req) => {
         picked = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys);
       }
       if (picked) {
-        // TODO: when migration + RPC for atomic increment exist, increment recipes.picked_count here only (not in plan fill).
+        const oldRecipeId = currentMeals[mealType]?.recipe_id ?? null;
         const newMeals = { ...currentMeals, [mealType]: { recipe_id: picked.id, title: picked.title, plan_source: "pool" as const } };
         const upsertErr = await upsertMealPlanRow(supabase, userId, effectiveMemberId, dayKey, newMeals);
         if (upsertErr.error) {
           return new Response(JSON.stringify({ error: "replace_failed", reason: "attach_failed" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        await supabase.rpc("record_recipe_feedback", { p_recipe_id: picked.id, p_action: "added_to_plan" });
+        if (oldRecipeId && oldRecipeId !== picked.id) {
+          await supabase.rpc("record_recipe_feedback", { p_recipe_id: oldRecipeId, p_action: "replaced_in_plan" });
         }
         return new Response(JSON.stringify({ pickedSource: "pool", newRecipeId: picked.id, title: picked.title, plan_source: "pool", reason: "pool" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -826,6 +849,11 @@ serve(async (req) => {
         }
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
+          await supabase.rpc("record_recipe_feedback", { p_recipe_id: picked.id, p_action: "added_to_plan" });
+          const oldRecipeId = currentSlot?.recipe_id;
+          if (oldRecipeId && oldRecipeId !== picked.id) {
+            await supabase.rpc("record_recipe_feedback", { p_recipe_id: oldRecipeId, p_action: "replaced_in_plan" });
+          }
           if (picked.matchedLike) dayLikedRecipeCount++;
           usedRecipeIds.push(picked.id);
           usedTitleKeys.push(normalizeTitleKey(picked.title));

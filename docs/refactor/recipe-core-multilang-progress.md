@@ -1,7 +1,7 @@
 # Recipe Core & Multilang Refactor Progress
 
 ## Current stage
-- Stage 2.4.1 — steps leakage guard
+- Stage 2.5.1 — Feedback Stabilization
 
 ## Planned stages
 - [x] Stage 1 — locale + trust_level
@@ -10,9 +10,43 @@
 - [x] Stage 2.2 — chef advice restore + consistency guard
 - [x] Stage 2.3 — description path cleanup + anti-context leakage + latency audit
 - [x] Stage 2.4 — description rollback (LLM primary)
+- [x] Stage 2.5 — Recipe Pool & Feedback System (see checklist below)
+- [x] Stage 2.5.1 — Feedback Stabilization (see checklist below)
+- [x] Stage 2.5.2 — Pool Stabilization (see checklist below)
 - [ ] Stage 3 — recipe_translations
 - [ ] Stage 4 — nutrition_traits + goals
 - [ ] Stage 5 — plan page refactor
+
+### Stage 2.5 — Recipe Pool & Feedback System
+
+Checklist:
+- [x] recipe_feedback table added
+- [x] plan-based signals implemented
+- [x] scoring added
+- [x] trust auto rules added
+- [x] generate-plan uses score
+- [x] operational workflow added
+
+### Stage 2.5.1 — Feedback Stabilization
+
+Checklist:
+- [x] one vote per user implemented
+- [x] vote toggle logic implemented
+- [x] repeated vote ignored
+- [x] UI vote state added
+- [x] scoring formula softened
+- [x] trust thresholds updated
+
+### Stage 2.5.2 — Pool Stabilization
+
+Checklist:
+- [x] trusted safety rule added
+- [x] vote system verified
+- [x] score stability verified
+- [x] plan signals validated
+- [x] generate-plan priority confirmed
+- [x] locale flow verified
+- [x] docs updated
 
 ## Stage 1 scope
 - [x] migration added
@@ -153,6 +187,28 @@
 ## Stage 2.4.1 key files
 - **supabase/functions/_shared/requestContextLeakGuard.ts** — cleanStepFromRequestContextLeak(step); экспорт для использования в index.
 - **supabase/functions/deepseek-chat/index.ts** — после обработки title/description/chefAdvice по leak: итерация по recipe.steps, проверка textContainsRequestContextLeak(step), замена на cleanStepFromRequestContextLeak(step); лог REQUEST_CONTEXT_LEAK_GUARD с stepsLeakDetected, stepsLeakCleaned, stepsLeakCount.
+
+## Stage 2.5 key files
+- **supabase/migrations/20260317120000_recipe_feedback_and_score_stage25.sql** — таблица recipe_feedback; recipes.score; recompute_recipe_score_and_trust; триггер; RLS; record_recipe_feedback; обновлён assign_recipe_to_plan_slot (feedback при добавлении/замене).
+- **supabase/functions/generate-plan/index.ts** — fetchPoolCandidates: select score, trust_level; сортировка trust → score DESC; при replace_slot и при fill дня/недели вызов record_recipe_feedback (added_to_plan, replaced_in_plan).
+- **src/hooks/useMealPlans.tsx** — deleteMealPlan: перед удалением слота вызов record_recipe_feedback(recipe_id, 'removed_from_plan').
+- **src/pages/RecipePage.tsx** — кнопки 👍 / 👎 (like/dislike), вызов record_recipe_feedback для рецептов пула (не user_custom).
+- **docs/operations/recipe-pool-trust-workflow.md** — операционный workflow: trusted/blocked правила, ручная модерация, подготовка пула.
+
+## Stage 2.5.1 key files
+- **supabase/migrations/20260317140000_recipe_feedback_vote_guard_stage251.sql** — get_recipe_my_vote; record_recipe_feedback: один голос на (recipe_id, user_id), повторный тот же голос no-op, toggle like↔dislike; recompute: формула +2*likes −2*dislikes +1*added −0.5*replaced −0.5*removed; trusted score≥8, likes≥2, dislikes≤1; blocked dislikes≥4 or score≤−6; триггер AFTER DELETE для пересчёта.
+- **src/pages/RecipePage.tsx** — userVote state, get_recipe_my_vote при загрузке, повторный тап не вызывает API и не показывает toast, toggle обновляет состояние и кнопки (активное выделение).
+
+## Stage 2.5.2 key files
+- **supabase/migrations/20260317160000_recipe_trust_safety_score_clamp_stage252.sql** — recompute: явная ветка для trusted (только обновление score, без auto-block); score clamp [-10, 50]; candidate по-прежнему по правилам.
+- **supabase/functions/generate-plan/index.ts** — комментарий к fetchPoolCandidates: blocked исключены, приоритет trusted → starter/seed → candidate, затем score DESC.
+- **docs/operations/recipe-pool-trust-workflow.md** — Trusted safety, Early-stage rule, Launch strategy (RU), clamp в формуле.
+
+## Stage 2.5.2 verification (vote, plan, locale)
+- **Vote:** record_recipe_feedback — повторный тот же голос no-op; toggle удаляет старый и вставляет новый; один пользователь даёт не более одного like или одного dislike на рецепт. Двойной подсчёт исключён.
+- **Plan:** added_to_plan для нового рецепта; replaced_in_plan только для старого (assign_recipe_to_plan_slot и generate-plan). Повторный remove пишет новую строку (история).
+- **Generate-plan:** пул по .or("trust_level.is.null,trust_level.neq.blocked") — blocked не попадают; сортировка trust → score DESC; candidate остаются в пуле.
+- **Locale:** deepseek-chat передаёт locale: 'ru' в create_recipe_with_steps; RPC и таблица recipes — locale NOT NULL DEFAULT 'ru'. Готовность к Stage 3 (multilang) без новых таблиц.
 
 ## Open questions (Stage 1)
 - **Индекс по trust_level:** на Stage 1 не добавлен. Выборка пула фильтрует по source (существующий idx_recipes_pool_user_created) и по trust_level в приложении; при росте объёма можно добавить частичный индекс WHERE source IN (...) AND (trust_level IS NULL OR trust_level <> 'blocked').

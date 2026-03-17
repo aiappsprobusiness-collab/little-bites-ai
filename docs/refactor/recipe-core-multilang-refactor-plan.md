@@ -305,6 +305,21 @@
 - Edge: при создании рецепта можно писать дефолтную локаль в recipes; переводы en/es заполнять отдельно (импорт, админка, или автоперевод с флагом auto_generated).
 - UI: передача locale в запросы (из профиля или выбора языка). Fallback: без locale — как сейчас (recipes.title/description).
 
+### 9.2.5 Stage 2.5 — Pool Quality & Feedback Layer
+
+- **Цель:** минимальная система качества пула без события «приготовил».
+- **Сигналы:** like, dislike, added_to_plan, removed_from_plan, replaced_in_plan (таблица recipe_feedback).
+- **Feedback system must prevent vote spam:** один активный голос на (recipe_id, user_id) для like/dislike; повторный тот же голос — no-op; переключение like↔dislike — toggle (удалить старый, вставить новый). План-действия (added_to_plan, removed_from_plan, replaced_in_plan) — слабые сигналы, остаются историей без ограничения «один на пользователя».
+- **Скор (Stage 2.5.1):** +2×likes −2×dislikes +1×added_to_plan −0.5×replaced_in_plan −0.5×removed_from_plan. Plan actions — слабый вес.
+- **Trust auto (консервативные пороги):** candidate → trusted: score ≥ 8, likes ≥ 2, dislikes ≤ 1; candidate → blocked: dislikes ≥ 4 или score ≤ −6. Один пользователь не может «убить» рецепт одним дизлайком.
+- **Trusted safety (Stage 2.5.2):** trusted-рецепты не переходят в blocked автоматически; обновляется только score. Блокировка только вручную (UPDATE trust_level = 'blocked').
+- **Early-stage:** система консервативна; на запуске первична ручная курация пула, feedback — вспомогательный сигнал.
+- **План:** при добавлении в план — added_to_plan; при замене — replaced_in_plan (старый рецепт); при удалении из плана — removed_from_plan.
+- **Generate-plan:** приоритет trusted → starter/seed → candidate, сортировка по score DESC.
+- **Подготовка пула:** 30–50 сгенерировать, 20–30 trusted; баланс 30% завтрак, 40% обед, 30% ужин; типы курица, рыба, овощи, крупы. Таргет: минимум 25–40 trusted (для теста 15–20).
+- **Операционный документ:** docs/operations/recipe-pool-trust-workflow.md (ручная модерация раз в 2–3 дня, когда trusted/blocked).
+- Фундамент для дальнейшего ranking и multilang.
+
 ### 9.3 Stage 3 (nutrition_traits, feedback, чистка)
 
 - Миграции:
