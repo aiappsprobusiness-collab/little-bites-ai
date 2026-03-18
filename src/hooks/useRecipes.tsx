@@ -174,9 +174,8 @@ export function useRecipes(childId?: string) {
           if (mock) return mock as Recipe & { ingredients: RecipeIngredient[]; steps: RecipeStep[] };
         }
 
-        const [fullRes, ingRes, servingsRes] = await Promise.all([
+        const [fullRes, servingsRes] = await Promise.all([
           supabase.rpc('get_recipe_full', { p_recipe_id: id, p_locale: locale }),
-          supabase.from('recipe_ingredients').select('name, amount, unit, substitute, display_text, canonical_amount, canonical_unit').eq('recipe_id', id).order('order_index'),
           supabase.from('recipes').select('servings_base, servings_recommended').eq('id', id).single(),
         ]);
 
@@ -188,7 +187,8 @@ export function useRecipes(childId?: string) {
         const stepsJson = r.steps_json as { instruction?: string; step_number?: number }[] | null | undefined;
         const rawSteps = Array.isArray(stepsJson) ? stepsJson : [];
         const steps = [...rawSteps].sort((a, b) => (a.step_number ?? 0) - (b.step_number ?? 0));
-        const ingRows = (ingRes.data ?? []) as { name?: string; amount?: number | null; unit?: string | null; substitute?: string | null; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null }[];
+        const ingJson = r.ingredients_json as { name?: string; amount?: number | null; unit?: string | null; substitute?: string | null; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null }[] | null | undefined;
+        const ingRows = Array.isArray(ingJson) ? ingJson : [];
         const ingredients = ingRows.map((ing) => ({
           name: ing.name ?? '',
           amount: ing.amount ?? null,
@@ -200,7 +200,7 @@ export function useRecipes(childId?: string) {
         })) as RecipeIngredient[];
 
         const servingsRow = servingsRes.data as { servings_base?: number | null; servings_recommended?: number | null } | null;
-        const { steps_json: _sj, ...rest } = r;
+        const { steps_json: _sj, ingredients_json: _ij, ...rest } = r;
         const out = {
           ...rest,
           servings_base: servingsRow?.servings_base ?? 1,

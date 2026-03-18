@@ -85,12 +85,10 @@ export function MyRecipeFormSheet({
       setEditLoading(true);
       (async () => {
         try {
-          const [fullRes, ingRes] = await Promise.all([
-            supabase.rpc("get_recipe_full", { p_recipe_id: recipeId, p_locale: getAppLocale() }),
-            supabase.from("recipe_ingredients").select("name, amount, unit, display_text").eq("recipe_id", recipeId).order("order_index"),
-          ]);
+          const fullRes = await supabase.rpc("get_recipe_full", { p_recipe_id: recipeId, p_locale: getAppLocale() });
           const row = Array.isArray(fullRes.data) ? fullRes.data[0] : fullRes.data;
-          const ingRows = (ingRes.data ?? []) as { name?: string; amount?: number | null; unit?: string | null; display_text?: string | null }[];
+          const ingJson = (row as { ingredients_json?: { name?: string; amount?: number | null; unit?: string | null }[] })?.ingredients_json;
+          const ingRows = Array.isArray(ingJson) ? ingJson : [];
           if (row) {
             setTitle((row as { title?: string }).title ?? "");
             setDescription((row as { description?: string }).description ?? "");

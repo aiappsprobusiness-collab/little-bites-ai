@@ -275,10 +275,10 @@ Checklist:
   - превью карточек — useRecipePreviewsByIds (effectiveLocale = locale ?? getAppLocale(), p_locale в RPC);
   - избранное — useFavorites (effectiveLocale, p_locale в get_recipe_previews);
   - мои рецепты — useMyRecipes (effectiveLocale, p_locale в get_recipe_previews);
-  - полный рецепт / RecipePage — useRecipes().getRecipeById загружает через get_recipe_full(id, getAppLocale()) + recipe_ingredients + servings_base/servings_recommended (отдельный select); контракт для UI сохранён (title, description, chef_advice, steps, ingredients, servings_base, servings_recommended и др.).
+  - полный рецепт / RecipePage — useRecipes().getRecipeById загружает через get_recipe_full(id, getAppLocale()) (steps_json и ingredients_json уже локализованы в RPC) + servings_base/servings_recommended (отдельный select); контракт для UI сохранён (title, description, chef_advice, steps, ingredients, servings_base, servings_recommended и др.).
 - **Fallback на recipes.*** сохраняется (RPC и при отсутствии записей в recipe_translations).
 - **Create/save flows** не менялись; запись в recipe_translations не добавлена.
-- **Share/public flow** не менялся: get_recipe_by_share_ref без p_locale.
+- **Share/public flow:** ML-7: get_recipe_by_share_ref(p_share_ref, p_locale); клиент передаёт getAppLocale() (publicRecipeShare.ts).
 
 ### ML-4 checklist
 
@@ -286,15 +286,15 @@ Checklist:
 - [x] previews pass p_locale (useRecipePreviewsByIds)
 - [x] favorites pass p_locale (useFavorites)
 - [x] my recipes pass p_locale (useMyRecipes)
-- [x] full recipe read updated (getRecipeById → get_recipe_full + ingredients + servings)
+- [x] full recipe read updated (getRecipeById → get_recipe_full + ingredients_json + servings)
 - [x] locale-aware query keys (previews, favorites, my recipes, recipes detail по id + locale)
-- [ ] share/public locale-aware read (get_recipe_by_share_ref пока без p_locale)
+- [x] share/public locale-aware read (get_recipe_by_share_ref с p_locale)
 - [ ] explicit app language setting (сейчас только navigator.language; настройка в профиле — позже)
 
 ## ML-5 status (Translations for new recipes — completed end-to-end)
 
 - **Цель:** после сохранения нового рецепта создавать запись в recipe_translations для целевой локали (если она отличается от базовой), чтобы пользователь с этой локалью видел перевод.
-- **Что переводится:** только title, description, chef_advice. Steps/ingredients не переводятся.
+- **Что переводится (после ML-7):** title, description, chef_advice (ML-5) + steps.instruction + ingredients name/display_text (ML-7). См. блок ML-7 ниже.
 - **Фактический статус:** ML-5 реально завершён end-to-end. Pipeline создаёт записи в recipe_translations при выполнении условий; новые рецепты после save получают перевод. Root cause проблем при запуске (401 при вызове translate-recipe из deepseek-chat) найден и исправлен: шлюз Supabase проверял JWT при Edge-to-Edge вызове; для translate-recipe задано `verify_jwt = false`, пользовательский контекст передаётся через `__user_jwt` в теле или через заголовок Authorization с клиента.
 
 ### Create/save paths и триггеры перевода
@@ -308,12 +308,12 @@ Checklist:
 
 - **Триггер перевода** работает для обоих путей: client-saved (createRecipe onSuccess → requestRecipeTranslation) и backend-saved (deepseek-chat после create_recipe_with_steps → fire-and-forget translate-recipe).
 - **Целевая локаль для backend trigger:** клиент передаёт в теле запроса к deepseek-chat опциональное поле `target_locale` (getAppLocale()) при type chat/recipe; бэкенд использует его при вызове translate-recipe. Если не передано — бэкенд использует `'en'`.
-- **Когда перевод не выполняется (skipped):** (1) target_locale совпадает с recipes.locale — переводить не нужно. (2) RPC `has_recipe_translation(recipe_id, target_locale)` возвращает true — запись уже есть, повторный вызов LLM не делается.
-- **Защита от дублей:** (1) Архитектурно: один save path = один trigger. (2) На Edge: RPC `has_recipe_translation(recipe_id, target_locale)` перед LLM; при наличии записи — `status: 'skipped'`, LLM не вызывается.
+- **Когда перевод не выполняется (skipped):** (1) target_locale совпадает с recipes.locale — переводить не нужно. (2) RPC `has_recipe_full_locale_pack(recipe_id, target_locale)` возвращает true — полный пакет перевода уже есть (ML-7), повторный вызов LLM не делается.
+- **Защита от дублей:** (1) Архитектурно: один save path = один trigger. (2) На Edge: RPC `has_recipe_full_locale_pack(recipe_id, target_locale)` перед LLM (ML-7); при полном пакете — `status: 'skipped'`, LLM не вызывается.
 - **Логика целевой локали:** getAppLocale() (fallback `'en'`). Перевод создаётся только если target_locale ≠ locale рецепта.
 - **Failure-safe:** основной save не зависит от перевода; ответ пользователю не ждёт завершения перевода. Ошибки перевода логируются (клиент — молча, бэкенд — safeWarn).
-- **Ответ Edge translate-recipe:** HTTP 200, тело `{ ok: true, status: 'created' | 'skipped' | 'error' }`.
-- **Пока не покрыто (вне ML-5):** старые рецепты (ML-6); steps/ingredients; generate-plan не создаёт рецепты — не применимо; мульти-целевые локали; UI i18n.
+- **Ответ Edge translate-recipe:** HTTP 200, тело `{ ok: true, status: 'created' | 'skipped' | 'error'[, translated_steps_count, translated_ingredients_count, skipped_steps_count, skipped_ingredients_count ] }`.
+- **Пока не покрыто (вне ML-5/ML-7):** старые рецепты (ML-6 deferred); generate-plan не создаёт рецепты — не применимо; мульти-целевые локали; UI i18n.
 - **Где смотреть при поломке:** deepseek-chat (блок после savedRecipeId); translate-recipe Edge; useRecipes.tsx onSuccess; useDeepSeekAPI (target_locale в body).
 
 ### ML-5 checklist
@@ -326,16 +326,35 @@ Checklist:
 - [x] Дубли исключены: один save path = один trigger; has_recipe_translation на Edge
 - [x] Документация обновлена
 
-### ML-5 deploy и секреты (обязательно для заполнения recipe_translations)
+### Auto-translation feature flag (RU-only rollout)
 
-Чтобы в `recipe_translations` появлялись записи, нужно:
+Перевод рецептов после save **включён только при явном включении** флагов. Для текущего RU-only rollout автоматический перевод **отключён**.
 
-1. **Задеплоить Edge function `translate-recipe`.** Рекомендуемый способ: `npm run supabase:deploy:chat` (деплоит и deepseek-chat, и translate-recipe). Либо отдельно: `npm run supabase:deploy:translate-recipe`.
-2. **Задать секрет `DEEPSEEK_API_KEY`** для проекта в Supabase: Dashboard → Edge Functions → Secrets (или `supabase secrets set DEEPSEEK_API_KEY=...`). Без этого ключа функция возвращает 200 с `status: 'error'` и запись не создаётся.
+| Где | Переменная | Поведение |
+|-----|------------|-----------|
+| **Фронт** | `VITE_ENABLE_RECIPE_TRANSLATION` | Если не `"true"`, `requestRecipeTranslation` не вызывается (createRecipe onSuccess не запускает перевод). |
+| **Backend (deepseek-chat)** | `ENABLE_RECIPE_TRANSLATION` | Если не `"true"`, fire-and-forget вызов translate-recipe не выполняется. |
+| **Edge (translate-recipe)** | `ENABLE_RECIPE_TRANSLATION` | Если не `"true"`, функция сразу возвращает `status: 'skipped'`. |
 
-**Почему 401 при вызове из deepseek-chat:** шлюз Supabase по умолчанию проверяет JWT в запросе; при вызове Edge-to-Edge это приводило к 401. Для `translate-recipe` в `supabase/config.toml` задано `verify_jwt = false`; пользовательский контекст передаётся в теле запроса полем `__user_jwt` (при вызове из deepseek-chat) или в заголовке Authorization (при вызове из браузера). Отдельный API-ключ для translate-recipe создавать не нужно — используется общий anon key проекта.
+Дополнительно: перевод не запускается, если `target_locale` не передан или пустой (на бэкенде нет дефолта `'en'`); при явной передаче локали и включённом флаге логика ML-5/ML-7 работает как раньше. ML-5/ML-7 готовы к включению при мультилокальном rollout.
 
-**Для работы pipeline необходимы:** задеплоенная Edge function `translate-recipe` и секрет `DEEPSEEK_API_KEY`. Без них записи в recipe_translations не создаются.
+**Где посмотреть и включить/выключить:**
+- **Фронт:** переменная задаётся при сборке. Локально: файл `.env` или `.env.local` в корне проекта, строка `VITE_ENABLE_RECIPE_TRANSLATION=true` (включить) или отсутствие строки / `false` (выключить). После изменения — перезапуск `npm run dev` или пересборка. В проде — переменные окружения в CI/CD (GitHub Actions → Variables/Secrets для шага build).
+- **Edge (Supabase):** Dashboard → ваш проект → **Edge Functions** → **Secrets** (или **Settings** → **Edge Function Secrets**). Секрет `ENABLE_RECIPE_TRANSLATION` со значением `true` — перевод включён; секрет не задан или значение не `true` — отключён. Применяется к вызовам deepseek-chat и translate-recipe.
+
+### Step numbering (ML-7)
+
+**step_number** хранится канонически в **recipe_steps**; **recipe_step_translations** содержит только instruction. get_recipe_full возвращает steps_json с полями id, step_number (из recipe_steps), instruction (локализованный или fallback); шаги отсортированы по step_number ASC.
+
+### ML-5 deploy и секреты (когда перевод включён)
+
+Чтобы в `recipe_translations` (и в step/ingredient translations) появлялись записи, нужно:
+
+1. **Включить флаги:** на фронте `VITE_ENABLE_RECIPE_TRANSLATION=true`; в Supabase Edge Secrets для deepseek-chat и translate-recipe задать `ENABLE_RECIPE_TRANSLATION=true`.
+2. **Задеплоить Edge function `translate-recipe`.** Рекомендуемый способ: `npm run supabase:deploy:chat` или `npm run supabase:deploy:translate-recipe`.
+3. **Задать секрет `DEEPSEEK_API_KEY`** для проекта в Supabase. Без этого ключа при вызове функция возвращает 200 с `status: 'error'`.
+
+**Для текущего RU rollout:** флаги не задавать (или задать `false`) — тогда перевод не вызывается и токены не тратятся.
 
 ### Note: token spend перевода и логирование
 
@@ -343,21 +362,80 @@ Checklist:
 
 **Логирование token usage для перевода:** расход на translation логируется отдельно в `token_usage_log` с `action_type = 'recipe_translation'`. Запись выполняется в **translate-recipe/index.ts** после успешного ответа DeepSeek (только когда LLM реально вызывался; при status `skipped` запись в token_usage_log не создаётся). Пишутся поля: user_id, action_type, input_tokens, output_tokens, total_tokens, created_at. Логирование **best-effort**: при ошибке вставки в token_usage_log перевод не откатывается, запись в recipe_translations считается успешной; ошибка логируется в консоль Edge.
 
-### Future note: ML-6 backfill
+### ML-6 deferred / ML-7 scope
+
+**ML-6 backfill отложен.** Массовый перевод старых рецептов в этой задаче не запускается.
+
+**ML-7 реализован как полноценная локализация steps + ingredients без ML-6 backfill:**
+- **Цель ML-7:** полный рецепт (title, description, chef_advice, steps, ingredients) читается на выбранной локали с обязательным fallback на базовые данные.
+- **Target scope:** только новые рецепты и активные (те, что открываются/сохраняются через текущие flows). Старые рецепты без переводов продолжают работать через fallback; batch translation позже допускается, но не входит в эту задачу.
+- **Таблицы:** recipe_step_translations (recipe_step_id, locale, instruction, translation_status, source); recipe_ingredient_translations (recipe_ingredient_id, locale, name, display_text, translation_status, source). RLS включён; прямой SELECT для anon/authenticated не даётся; доступ только через SECURITY DEFINER RPC.
+- **RPC:** upsert_recipe_step_translation, upsert_recipe_ingredient_translation; has_recipe_steps_translation, has_recipe_ingredients_translation; has_recipe_full_locale_pack. get_recipe_full(p_recipe_id, p_locale) возвращает локализованные steps_json и ingredients_json (fallback на recipe_steps / recipe_ingredients). get_recipe_by_share_ref(p_share_ref, p_locale) — опциональная локаль для публичной страницы шаринга.
+- **Client:** getRecipeById использует только get_recipe_full (ingredients из ingredients_json); отдельный select recipe_ingredients убран. Share flow передаёт p_locale в get_recipe_by_share_ref.
+- **translate-recipe (Edge):** переводит title, description, chef_advice + все steps.instruction + все ingredients name/display_text; пишет recipe_translations, recipe_step_translations, recipe_ingredient_translations. Skip по has_recipe_full_locale_pack; при выключенном `ENABLE_RECIPE_TRANSLATION` или пустом target_locale возвращает skipped. Failure-safe: сбой перевода не ломает save; ответ 200 с status created/skipped/error и опционально translated_steps_count, translated_ingredients_count.
+- **Fallback:** при отсутствии переводов шаги и ингредиенты берутся из recipe_steps и recipe_ingredients; контракт RecipePage не ломается.
+- **Feature-gated:** для RU-only rollout автоматический перевод отключён (см. Auto-translation feature flag выше).
+
+### ML-7 checklist
+
+- [x] recipe_step_translations added
+- [x] recipe_ingredient_translations added
+- [x] upsert/check RPC added (upsert_recipe_step_translation, upsert_recipe_ingredient_translation, has_recipe_steps_translation, has_recipe_ingredients_translation, has_recipe_full_locale_pack)
+- [x] get_recipe_full returns localized steps
+- [x] get_recipe_full returns localized ingredients (ingredients_json)
+- [x] translate-recipe writes steps translations
+- [x] translate-recipe writes ingredient translations
+- [x] fallback preserved for untranslated recipes
+- [x] ML-6 deferred documented
+
+### Translation activation (RU rollout vs future EN)
+
+**Current state (RU rollout):**
+- Translation pipeline fully implemented (ML-7), but disabled via feature flags
+- No automatic translation is performed
+- No token usage for translation
+- Client may still pass `target_locale`, but it does not trigger translation
+
+**Safe default behavior:**
+- Absence of `VITE_ENABLE_RECIPE_TRANSLATION` → frontend translation OFF
+- Absence of `ENABLE_RECIPE_TRANSLATION` → backend translation OFF
+- Translation is executed ONLY if flag value === `"true"`
+- Any other value (undefined / false) = OFF
+
+**Important:**
+- There is NO default fallback like `target_locale = 'en'`
+- Empty or missing `target_locale` results in `skipped`
+- Same-locale translation (e.g. ru → ru) results in `skipped`
+
+### How to enable translation in the future (EN rollout)
+
+To enable automatic translation:
+
+1. **Enable backend flag:** `ENABLE_RECIPE_TRANSLATION=true` (Supabase Edge Secrets)
+2. **(Optional) Enable frontend trigger:** `VITE_ENABLE_RECIPE_TRANSLATION=true`
+3. **Ensure client sends target locale:** `target_locale = getAppLocale()` (e.g. `'en'`)
+4. **Translation will run only if:**
+   - feature flag is enabled
+   - target_locale is non-empty
+   - target_locale differs from source recipe locale
+
+**Notes:**
+- No translation happens without explicit target_locale
+- No translation happens if flags are not enabled
+- Old recipes remain untranslated (ML-6 deferred)
+
+### Future note: ML-6 backfill (когда будем делать)
 
 **Сейчас НЕ запускать** массовый перевод старых рецептов автоматически.
 
-Причины: часть старых рецептов может быть удалена или переработана; качество description и chef_advice в legacy-базе ещё не финальное; переводить всю базу сразу может быть преждевременно и дорого.
-
-**Будущая стратегия ML-6 (когда будем делать backfill):**
+**Будущая стратегия ML-6:**
 1. Сначала cleanup/модерация старой базы.
 2. Исключить blocked, слабые и кривые рецепты.
 3. Переводить батчами только приоритетные: trusted, высокий score, часто в планах/избранном.
 4. Сначала одна целевая локаль (например `en`).
-5. Steps/ingredients пока не переводить.
-6. Batch process должен быть idempotent и cost-aware.
+5. Batch process должен быть idempotent и cost-aware. После ML-7 можно включать и steps/ingredients.
 
-Это именно note / будущая стратегия; реализацию backfill не делать сейчас.
+Реализацию backfill не делать в текущей задаче.
 
 ## Open questions (Stage 1)
 - **Индекс по trust_level:** на Stage 1 не добавлен. Выборка пула фильтрует по source (существующий idx_recipes_pool_user_created) и по trust_level в приложении; при росте объёма можно добавить частичный индекс WHERE source IN (...) AND (trust_level IS NULL OR trust_level <> 'blocked').

@@ -1,9 +1,10 @@
 /**
  * Публичная загрузка рецепта по share_ref для страницы /r/:shareRef.
- * Использует RPC get_recipe_by_share_ref (доступен anon).
+ * Использует RPC get_recipe_by_share_ref (доступен anon). ML-7: передаём p_locale для локализованного контента.
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { getAppLocale } from "@/utils/appLocale";
 
 export interface PublicRecipePayload {
   id: string;
@@ -42,6 +43,7 @@ export async function getRecipeByShareRef(shareRef: string): Promise<PublicRecip
 
   const { data, error } = await supabase.rpc("get_recipe_by_share_ref", {
     p_share_ref: ref,
+    p_locale: getAppLocale(),
   });
 
   if (error || data == null) return null;

@@ -596,6 +596,7 @@ export type Database = {
       delete_user_recipe: { Args: { p_recipe_id: string }; Returns: undefined }
       get_recipe_full: { Args: { p_recipe_id: string; p_locale?: string | null }; Returns: unknown }
       get_recipe_previews: { Args: { recipe_ids: string[]; p_locale?: string | null }; Returns: unknown }
+      get_recipe_by_share_ref: { Args: { p_share_ref: string; p_locale?: string | null }; Returns: unknown }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -1383,13 +1383,14 @@ serve(async (req) => {
     }
     if (savedRecipeId) {
       responseBody.recipe_id = savedRecipeId;
-      // ML-5: fire-and-forget post-save translation for backend-saved recipes (client does not call createRecipe for this path)
-      if (authHeader && SUPABASE_URL) {
-        const targetLocaleRaw = (body as { target_locale?: string }).target_locale;
-        const targetLocale =
-          typeof targetLocaleRaw === "string" && targetLocaleRaw.trim()
-            ? targetLocaleRaw.trim().toLowerCase().split("-")[0]
-            : "en";
+      // ML-5/ML-7: fire-and-forget translation only when ENABLE_RECIPE_TRANSLATION=true and target_locale explicitly passed (no default to 'en' for RU rollout).
+      const enableTranslation = Deno.env.get("ENABLE_RECIPE_TRANSLATION") === "true";
+      const targetLocaleRaw = (body as { target_locale?: string }).target_locale;
+      const targetLocaleExplicit =
+        typeof targetLocaleRaw === "string" && targetLocaleRaw.trim()
+          ? targetLocaleRaw.trim().toLowerCase().split("-")[0]
+          : "";
+      if (enableTranslation && targetLocaleExplicit && authHeader && SUPABASE_URL) {
         const invokeApiKey = SUPABASE_ANON_KEY ?? "";
         const userJwt = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
         safeLog(JSON.stringify({
@@ -1407,7 +1408,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             recipe_id: savedRecipeId,
-            target_locale: targetLocale,
+            target_locale: targetLocaleExplicit,
             __user_jwt: userJwt,
           }),
         }).catch((err) => {

@@ -1,9 +1,9 @@
 /**
- * ML-5: Post-save translation for new recipes.
+ * ML-5 + ML-7: Post-save translation for new recipes.
+ * Translates: title, description, chef_advice (ML-5) + steps.instruction + ingredients name/display_text (ML-7).
  * Request: { recipe_id: uuid, target_locale: string [, __user_jwt: string ] }.
- * __user_jwt: optional; when calling from another Edge (e.g. deepseek-chat), pass user JWT here
- *   because the gateway may not forward Authorization. Otherwise use Authorization header.
- * Fetches recipe (RLS: user must own), translates via DeepSeek, upserts recipe_translations.
+ * Skip: target_locale === recipe.locale OR has_recipe_full_locale_pack (full pack = recipe + steps + ingredients).
+ * ML-7: no batch backfill; targets new/active recipes only; failure-safe.
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -36,10 +36,24 @@ interface RecipeRow {
   locale: string | null;
 }
 
-interface TranslatedFields {
+interface StepRow {
+  id: string;
+  step_number: number;
+  instruction: string | null;
+}
+
+interface IngredientRow {
+  id: string;
+  name: string | null;
+  display_text: string | null;
+}
+
+interface LLMTranslated {
   title?: string;
   description?: string;
   chef_advice?: string;
+  steps?: Array< { id: string; step_number?: number; instruction?: string } >;
+  ingredients?: Array< { id: string; name?: string; display_text?: string } >;
 }
 
 const SUPPORTED_LOCALES = ["ru", "en"];
@@ -78,7 +92,6 @@ serve(async (req) => {
     return jsonResponse({ ok: false, error: "Invalid JSON" }, 400);
   }
 
-  // User JWT: from body (Edge-to-Edge) or from Authorization header (browser)
   const authHeader = req.headers.get("Authorization");
   const userToken = typeof body.__user_jwt === "string" && body.__user_jwt.trim()
     ? body.__user_jwt.trim()
@@ -88,8 +101,16 @@ serve(async (req) => {
     return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
   }
 
+  if (Deno.env.get("ENABLE_RECIPE_TRANSLATION") !== "true") {
+    return jsonResponse({ ok: true, status: "skipped" }, 200);
+  }
+
   const recipeId = typeof body.recipe_id === "string" ? body.recipe_id.trim() : "";
-  const targetLocale = normalizeLocale(typeof body.target_locale === "string" ? body.target_locale : "en");
+  const targetLocaleRaw = typeof body.target_locale === "string" ? body.target_locale.trim() : "";
+  if (!targetLocaleRaw) {
+    return jsonResponse({ ok: true, status: "skipped" }, 200);
+  }
+  const targetLocale = normalizeLocale(targetLocaleRaw);
 
   if (!recipeId) {
     return jsonResponse({ ok: false, error: "recipe_id required" }, 400);
@@ -116,31 +137,52 @@ serve(async (req) => {
       return jsonResponse({ ok: true, status: "skipped" }, 200);
     }
 
-    const { data: hasTranslation } = await supabase.rpc("has_recipe_translation", {
-      p_recipe_id: recipeId,
-      p_locale: targetLocale,
-    });
-    if (hasTranslation === true) {
-      return jsonResponse({ ok: true, status: "skipped" }, 200);
-    }
-
     const sourceLocale = normalizeLocale(row.locale ?? "en");
     if (sourceLocale === targetLocale) {
       return jsonResponse({ ok: true, status: "skipped" }, 200);
     }
 
-    const title = (row.title ?? "").trim();
-    const description = (row.description ?? "").trim();
-    const chefAdvice = (row.chef_advice ?? "").trim();
-    if (!title && !description && !chefAdvice) {
+    const { data: hasFullPack } = await supabase.rpc("has_recipe_full_locale_pack", {
+      p_recipe_id: recipeId,
+      p_locale: targetLocale,
+    });
+    if (hasFullPack === true) {
       return jsonResponse({ ok: true, status: "skipped" }, 200);
     }
 
-    const systemPrompt = `You are a translator. Translate recipe fields from ${sourceLocale} to ${targetLocale}. Reply with ONLY a valid JSON object (no markdown, no extra text) with exactly these keys: "title", "description", "chef_advice". Use empty string for missing or empty source. Preserve meaning and cooking terminology.`;
+    const [stepsRes, ingredientsRes] = await Promise.all([
+      supabase
+        .from("recipe_steps")
+        .select("id, step_number, instruction")
+        .eq("recipe_id", recipeId)
+        .order("step_number"),
+      supabase
+        .from("recipe_ingredients")
+        .select("id, name, display_text")
+        .eq("recipe_id", recipeId)
+        .order("order_index"),
+    ]);
+
+    const steps = (stepsRes.data ?? []) as StepRow[];
+    const ingredients = (ingredientsRes.data ?? []) as IngredientRow[];
+
+    const title = (row.title ?? "").trim();
+    const description = (row.description ?? "").trim();
+    const chefAdvice = (row.chef_advice ?? "").trim();
+    const hasRecipeText = !!(title || description || chefAdvice);
+    const hasSteps = steps.length > 0 && steps.some((s) => (s.instruction ?? "").trim());
+    const hasIngredients = ingredients.length > 0 && ingredients.some((i) => (i.name ?? "").trim() || (i.display_text ?? "").trim());
+    if (!hasRecipeText && !hasSteps && !hasIngredients) {
+      return jsonResponse({ ok: true, status: "skipped" }, 200);
+    }
+
+    const systemPrompt = `You are a translator. Translate from ${sourceLocale} to ${targetLocale}. Reply with ONLY a valid JSON object (no markdown, no extra text). Preserve structure and ids. Keys: "title", "description", "chef_advice" (strings), "steps" (array of { "id", "step_number", "instruction" }), "ingredients" (array of { "id", "name", "display_text" }). Use empty string for missing or empty source. Preserve meaning and cooking terminology.`;
     const userContent = JSON.stringify({
       title: title || "",
       description: description || "",
       chef_advice: chefAdvice || "",
+      steps: steps.map((s) => ({ id: s.id, step_number: s.step_number, instruction: (s.instruction ?? "").trim() })),
+      ingredients: ingredients.map((i) => ({ id: i.id, name: (i.name ?? "").trim(), display_text: (i.display_text ?? "").trim() })),
     });
 
     const llmRes = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -155,7 +197,7 @@ serve(async (req) => {
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
-        max_tokens: 2048,
+        max_tokens: 4096,
         temperature: 0.2,
       }),
     });
@@ -172,17 +214,12 @@ serve(async (req) => {
     };
     const rawContent = (llmJson.choices?.[0]?.message?.content ?? "").trim();
 
-    // Token usage log (best-effort; must not break translation flow)
-    const usage = llmJson.usage;
-    if (usage) {
-      const inputTokens = usage.prompt_tokens ?? 0;
-      const outputTokens = usage.completion_tokens ?? 0;
-      const totalTokens = usage.total_tokens ?? inputTokens + outputTokens;
+    if (llmJson.usage) {
+      const inputTokens = llmJson.usage.prompt_tokens ?? 0;
+      const outputTokens = llmJson.usage.completion_tokens ?? 0;
+      const totalTokens = llmJson.usage.total_tokens ?? inputTokens + outputTokens;
       supabase.auth.getUser(userToken).then(({ data: { user } }) => {
-        if (!user?.id) {
-          console.warn("translate-recipe: token_usage_log skipped, no user_id");
-          return;
-        }
+        if (!user?.id) return;
         supabase
           .from("token_usage_log")
           .insert({
@@ -192,40 +229,91 @@ serve(async (req) => {
             output_tokens: outputTokens,
             total_tokens: totalTokens,
           })
-          .then(({ error }) => {
-            if (error) console.warn("translate-recipe: token_usage_log insert failed", error.message);
-          })
+          .then(({ error }) => { if (error) console.warn("translate-recipe: token_usage_log insert failed", error.message); })
           .catch((err) => console.warn("translate-recipe: token_usage_log error", err));
-      }).catch((err) => console.warn("translate-recipe: getUser for token_usage_log failed", err));
-    } else {
-      console.warn("translate-recipe: no usage in LLM response, token_usage_log skipped");
+      }).catch(() => {});
     }
 
-    let parsed: TranslatedFields = {};
+    let parsed: LLMTranslated = {};
     try {
       const cleaned = rawContent.replace(/^```\w*\n?|\n?```$/g, "").trim();
-      parsed = JSON.parse(cleaned) as TranslatedFields;
+      parsed = JSON.parse(cleaned) as LLMTranslated;
     } catch {
       console.error("translate-recipe: parse LLM response failed", rawContent.slice(0, 200));
       return jsonResponse({ ok: true, status: "error" }, 200);
     }
 
-    const { error: rpcError } = await supabase.rpc("upsert_recipe_translation", {
+    const translatedTitle = typeof parsed.title === "string" ? parsed.title : title;
+    const translatedDescription = typeof parsed.description === "string" ? parsed.description : description;
+    const translatedChefAdvice = typeof parsed.chef_advice === "string" ? parsed.chef_advice : chefAdvice;
+
+    const { error: rpcRecipeError } = await supabase.rpc("upsert_recipe_translation", {
       p_recipe_id: recipeId,
       p_locale: targetLocale,
-      p_title: typeof parsed.title === "string" ? parsed.title : title,
-      p_description: typeof parsed.description === "string" ? parsed.description : description,
-      p_chef_advice: typeof parsed.chef_advice === "string" ? parsed.chef_advice : chefAdvice,
+      p_title: translatedTitle,
+      p_description: translatedDescription,
+      p_chef_advice: translatedChefAdvice,
       p_translation_status: "auto_generated",
       p_source: "ai",
     });
 
-    if (rpcError) {
-      console.error("translate-recipe: upsert_recipe_translation error", rpcError.message, recipeId);
+    if (rpcRecipeError) {
+      console.error("translate-recipe: upsert_recipe_translation error", rpcRecipeError.message, recipeId);
       return jsonResponse({ ok: true, status: "error" }, 200);
     }
 
-    return jsonResponse({ ok: true, status: "created", translated: targetLocale }, 200);
+    let translatedStepsCount = 0;
+    let translatedIngredientsCount = 0;
+    const stepMap = new Map((parsed.steps ?? []).filter((s) => s?.id).map((s) => [s.id, s]));
+    const ingMap = new Map((parsed.ingredients ?? []).filter((i) => i?.id).map((i) => [i.id, i]));
+
+    for (const step of steps) {
+      const t = stepMap.get(step.id);
+      const instruction = typeof t?.instruction === "string" ? t.instruction.trim() : (step.instruction ?? "").trim();
+      if (!instruction) continue;
+      const { error: stepErr } = await supabase.rpc("upsert_recipe_step_translation", {
+        p_recipe_step_id: step.id,
+        p_locale: targetLocale,
+        p_instruction: instruction,
+        p_translation_status: "auto_generated",
+        p_source: "ai",
+      });
+      if (stepErr) {
+        console.warn("translate-recipe: upsert_recipe_step_translation error", stepErr.message, step.id);
+      } else {
+        translatedStepsCount += 1;
+      }
+    }
+
+    for (const ing of ingredients) {
+      const t = ingMap.get(ing.id);
+      const name = typeof t?.name === "string" ? t.name.trim() : (ing.name ?? "").trim();
+      const displayText = typeof t?.display_text === "string" ? t.display_text.trim() : (ing.display_text ?? "").trim();
+      if (!name && !displayText) continue;
+      const { error: ingErr } = await supabase.rpc("upsert_recipe_ingredient_translation", {
+        p_recipe_ingredient_id: ing.id,
+        p_locale: targetLocale,
+        p_name: name || null,
+        p_display_text: displayText || null,
+        p_translation_status: "auto_generated",
+        p_source: "ai",
+      });
+      if (ingErr) {
+        console.warn("translate-recipe: upsert_recipe_ingredient_translation error", ingErr.message, ing.id);
+      } else {
+        translatedIngredientsCount += 1;
+      }
+    }
+
+    return jsonResponse({
+      ok: true,
+      status: "created",
+      translated: targetLocale,
+      translated_steps_count: translatedStepsCount,
+      translated_ingredients_count: translatedIngredientsCount,
+      skipped_steps_count: steps.length - translatedStepsCount,
+      skipped_ingredients_count: ingredients.length - translatedIngredientsCount,
+    }, 200);
   } catch (err) {
     console.error("translate-recipe: unexpected error", err);
     return jsonResponse({ ok: true, status: "error" }, 200);

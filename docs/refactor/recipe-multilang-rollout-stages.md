@@ -23,24 +23,28 @@ Roadmap следующих шагов мультиязычности, опира
 
 ---
 
-## B. Current state (after Stage 3 + ML-4 + ML-5)
+## B. Current state (after Stage 3 + ML-4 + ML-5 + ML-7)
 
-Состояние системы **после завершения ML-5** (translations for new recipes). ML-5 реализован и **работает end-to-end**: новые рецепты после save при выполнении условий создают записи в recipe_translations.
+Состояние системы **после завершения ML-7** (steps + ingredients localization). ML-5 и ML-7 реализованы; **ML-6 backfill отложен**.
 
 | Элемент | Статус |
 |--------|--------|
 | **recipes.locale** | Есть. NOT NULL DEFAULT 'ru'; backfill выполнен. |
 | **recipes.source_lang, trust_level** | Есть (Stage 1). |
 | **recipe_translations** | Таблица есть. Поля: recipe_id, locale, title, description, chef_advice, translation_status, source, created_at, updated_at. UNIQUE(recipe_id, locale). RLS: чтение только через RPC; запись — через RPC upsert_recipe_translation (ML-5). |
-| **RPC p_locale** | get_recipe_previews(recipe_ids, p_locale), get_recipe_full(p_recipe_id, p_locale). Опциональный p_locale, fallback на recipes.* при отсутствии перевода или пустом поле. |
-| **Fallback** | Реализован: COALESCE(NULLIF(trim(rt.*), ''), r.*) в RPC. |
-| **Client** | **ML-4:** getAppLocale() (fallback 'en'). Превью и полный рецепт с p_locale; getRecipeById → get_recipe_full(id, getAppLocale()) + recipe_ingredients + servings. **ML-5:** requestRecipeTranslation только из useRecipes.createRecipe onSuccess. В запросе к deepseek-chat передаётся target_locale (getAppLocale()) для backend trigger. |
-| **Create/save flows** | **ML-5 работает по обоим путям.** (1) **Client-saved:** createRecipe onSuccess → requestRecipeTranslation(recipeId). (2) **Backend-saved:** deepseek-chat после create_recipe_with_steps вызывает translate-recipe (fire-and-forget) с recipe_id, target_locale, __user_jwt. Дубли исключены; Edge: has_recipe_translation → при отсутствии перевода DeepSeek + upsert_recipe_translation. **Токены перевода** тратятся только если target_locale ≠ recipes.locale и перевода ещё нет; при same-locale или при уже существующей записи — status `skipped`, LLM не вызывается. **Для работы:** задеплоенная translate-recipe и секрет DEEPSEEK_API_KEY (см. [recipe-core-multilang-progress.md](./recipe-core-multilang-progress.md) § ML-5 deploy). |
-| **Steps / ingredients** | **Не локализованы.** recipe_steps.instruction, recipe_ingredients.name/display_text — один язык; таблиц переводов для них нет. |
-| **RecipePage** | Полный рецепт загружается через getRecipeById → get_recipe_full(p_recipe_id, getAppLocale()) + отдельный запрос recipe_ingredients и servings_base/servings_recommended; контракт данных для UI сохранён. |
-| **get_recipe_by_share_ref** | Без p_locale; при необходимости можно добавить позже. |
+| **recipe_step_translations** | **ML-7.** Таблица: recipe_step_id, locale, instruction, translation_status, source. RLS без прямого SELECT; доступ через SECURITY DEFINER RPC. |
+| **recipe_ingredient_translations** | **ML-7.** Таблица: recipe_ingredient_id, locale, name, display_text, translation_status, source. RLS без прямого SELECT; доступ через SECURITY DEFINER RPC. |
+| **RPC p_locale** | get_recipe_previews(recipe_ids, p_locale), get_recipe_full(p_recipe_id, p_locale) с локализованными steps_json и ingredients_json; get_recipe_by_share_ref(p_share_ref, p_locale). Fallback на базовые таблицы при отсутствии перевода. |
+| **Fallback** | Реализован везде: recipe_translations, recipe_step_translations, recipe_ingredient_translations. |
+| **Client** | **ML-4:** getAppLocale(). Превью и полный рецепт с p_locale. **ML-7:** getRecipeById → только get_recipe_full (ingredients из ingredients_json) + servings. Share: get_recipe_by_share_ref с p_locale. **ML-5:** requestRecipeTranslation из createRecipe onSuccess только при VITE_ENABLE_RECIPE_TRANSLATION=true; target_locale в deepseek-chat. |
+| **Create/save flows** | Без изменений. Перевод **feature-gated:** при ENABLE_RECIPE_TRANSLATION=true и переданном target_locale вызывается translate-recipe (recipe + steps + ingredients); skip по has_recipe_full_locale_pack. Для **RU-only rollout** флаги не включают — авто-перевод отключён. |
+| **Steps / ingredients** | **ML-7:** локализованы через recipe_step_translations и recipe_ingredient_translations; get_recipe_full возвращает steps_json и ingredients_json с fallback. |
+| **RecipePage** | Полный рецепт через get_recipe_full(id, getAppLocale()) — steps и ingredients уже в ответе RPC; отдельный select servings. |
+| **get_recipe_by_share_ref** | **ML-7:** добавлен опциональный p_locale; клиент передаёт getAppLocale(). |
 
-Итог: пользователь **видит переводы** для новых рецептов при совпадении locale (getAppLocale()); для старых рецептов переводы по-прежнему отсутствуют (стратегия backfill — см. Future note в [recipe-core-multilang-progress.md](./recipe-core-multilang-progress.md)). При отсутствии записи в recipe_translations отображается контент из recipes (fallback). Явной настройки языка в приложении пока нет — используется язык браузера.
+**ML-6 deferred:** массовый backfill старых рецептов не входит в эту задачу. Старые рецепты без переводов отображаются с fallback на базовый язык. Batch translation позже допускается.
+
+**Auto-translation для RU rollout отключён:** перевод после save включается только при явных флагах (VITE_ENABLE_RECIPE_TRANSLATION на фронте, ENABLE_RECIPE_TRANSLATION в Edge). Без них токены не тратятся; pipeline готов к включению при мультилокальном этапе.
 
 ---
 
@@ -69,7 +73,7 @@ Roadmap следующих шагов мультиязычности, опира
 
 **Goal:** Новые рецепты после сохранения получают запись в recipe_translations для целевых локалей (например en, es), чтобы пользователь с соответствующей локалью видел перевод.
 
-**Реализовано и работает:** post-save перевод по обоим путям (client-saved и backend-saved); запись в recipe_translations через Edge translate-recipe + DeepSeek + RPC upsert_recipe_translation. Переводные токены тратятся только когда target_locale ≠ base locale и записи перевода ещё нет; при same-locale или при уже существующем переводе — skipped, LLM не вызывается.
+**Реализовано и работает (при включённых флагах):** post-save перевод по обоим путям (client-saved и backend-saved); запись в recipe_translations через Edge translate-recipe + DeepSeek + RPC upsert_recipe_translation. Переводные токены тратятся только когда включены VITE_ENABLE_RECIPE_TRANSLATION / ENABLE_RECIPE_TRANSLATION, передан target_locale, и target_locale ≠ base locale; при same-locale или при уже существующем переводе — skipped. **Для RU-only rollout** флаги не задают — авто-перевод не выполняется.
 
 **Scope (сделано):**
 - Post-save шаг: после успешного create_recipe_with_steps (или после ответа deepseek-chat) вызов translate-recipe (Edge), запись в recipe_translations title/description/chef_advice.
@@ -82,11 +86,11 @@ Roadmap следующих шагов мультиязычности, опира
 
 ---
 
-### ML-6 — Backfill existing recipes
+### ML-6 — Backfill existing recipes (deferred)
 
 **Goal:** Перевести существующую базу рецептов, чтобы пользователи с локалью en/es видели контент не только для новых рецептов.
 
-**Future note:** Сейчас **не запускать** массовый перевод старых рецептов автоматически. Причины и будущая стратегия (cleanup, приоритизация, одна локаль en, idempotent cost-aware batch) — в [recipe-core-multilang-progress.md](./recipe-core-multilang-progress.md) § Future note: ML-6 backfill.
+**Статус: отложен.** В задаче ML-7 массовый backfill не делается. Старые рецепты без переводов работают через runtime fallback. Будущая стратегия (cleanup, приоритизация, одна локаль en, idempotent cost-aware batch) — в [recipe-core-multilang-progress.md](./recipe-core-multilang-progress.md) § Future note: ML-6 backfill.
 
 **Scope (когда будем делать):**
 - Batch-процесс: выборка рецептов без перевода для целевой локали (или с draft/auto_generated для обновления).
@@ -102,21 +106,36 @@ Roadmap следующих шагов мультиязычности, опира
 
 ---
 
-### ML-7 — Steps & ingredients localization
+### ML-7 — Steps & ingredients localization (implemented)
 
 **Goal:** Полный перевод рецепта: не только title/description/chef_advice, но и шаги и названия ингредиентов.
 
-**Scope:**
-- **Steps:** Выбор стратегии — отдельная таблица recipe_step_translations (recipe_step_id, locale, instruction) или jsonb по локалям в recipe_steps; обновление get_recipe_full (и при необходимости get_recipe_previews) для подстановки steps по locale с fallback.
-- **Ingredients:** Стратегия — ingredient_dictionary + ingredient_translations и/или overlay в recipe_translations (например jsonb с display_names по locale); отображение в RPC и UI с fallback на текущие name/display_text.
+**Реализовано (без ML-6 backfill):**
+- **Steps:** Таблица recipe_step_translations (recipe_step_id, locale, instruction, translation_status, source). get_recipe_full возвращает локализованный steps_json с fallback на recipe_steps.instruction.
+- **Ingredients:** Таблица recipe_ingredient_translations (recipe_ingredient_id, locale, name, display_text, translation_status, source). get_recipe_full возвращает ingredients_json с fallback на recipe_ingredients. Per-recipe overlay, без глобального ingredient_dictionary.
+- **RPC:** upsert_recipe_step_translation, upsert_recipe_ingredient_translation; has_recipe_steps_translation, has_recipe_ingredients_translation, has_recipe_full_locale_pack. translate-recipe (Edge) переводит и записывает steps + ingredients; skip по полному locale pack.
+- **Scope:** только новые и активные рецепты; старые без переводов — runtime fallback. Batch backfill не входит в задачу.
 
-**Out of scope:**
-- Менять контракт создания рецепта (steps/ingredients при создании остаются в одной локали); перевод — отдельный слой.
+**Out of scope (соблюдено):**
+- Контракт создания рецепта не менялся; перевод — отдельный слой.
+- ingredient_dictionary не делается.
 
-**Risks (критично):**
-- Усложнение схемы и RPC; возможны дубли и рассинхрон.
-- recipe_steps и recipe_ingredients используются во многих местах (план, избранное, шаринг); любой сбой fallback может сломать отображение.
-- Рекомендуется: сначала зафиксировать стратегию в docs, потом точечные миграции и RPC, затем клиент.
+### RU-only rollout behavior
+
+- Translation pipeline is implemented but disabled
+- All recipes are stored in base locale (ru)
+- UI uses fallback for non-translated content
+- No translation cost is incurred
+
+### Future EN rollout switch
+
+Translation can be enabled instantly by:
+
+- setting `ENABLE_RECIPE_TRANSLATION=true`
+- optionally enabling frontend trigger
+- ensuring target_locale is passed
+
+No schema or logic changes required.
 
 ---
 
@@ -175,9 +194,9 @@ Roadmap следующих шагов мультиязычности, опира
 
 - **Безопасно:** ML-4 и ML-5 не трогают create_recipe_with_steps по контракту; отказ перевода не ломает save. ML-6 (backfill) — отдельный процесс, можно запускать после ML-5.
 
-- **Рискованно:** ML-7 (steps/ingredients) — много точек использования, сложная схема; делать после стабилизации ML-4–ML-6. ML-8 (generation) зависит от качества модели по языкам. ML-9 (UI i18n) можно вести параллельно с ML-4–ML-5 при наличии ресурсов.
+- **ML-7 выполнен** без ML-6 backfill: полная локализация steps + ingredients, fallback для старых рецептов, translate-recipe расширен. **ML-6 отложен.** ML-8 (generation) зависит от качества модели по языкам. ML-9 (UI i18n) можно вести параллельно при наличии ресурсов.
 
-**Рекомендуемый порядок:** ML-4 → ML-5 → ML-6 → (ML-7 или ML-8 по приоритету продукта) → ML-9, с возможностью параллелить ML-6 и ML-8 или ML-9.
+**Рекомендуемый порядок:** ML-4 → ML-5 → ML-7 (выполнен) → при необходимости ML-6 backfill позже → ML-8 или ML-9.
 
 ---
 
