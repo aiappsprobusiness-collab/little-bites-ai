@@ -316,7 +316,7 @@ RLS: по user_id.
 |---------------|------------------|----------|
 | id            | uuid PK          | |
 | user_id       | uuid → auth.users | |
-| action_type   | text NOT NULL    | chat_recipe, weekly_plan, sos_consultant, diet_plan, balance_check, chat, plan_replace, other |
+| action_type   | text NOT NULL    | chat_recipe, weekly_plan, sos_consultant, diet_plan, balance_check, chat, plan_replace, **recipe_translation** (ML-5: перевод рецепта через Edge translate-recipe), other |
 | input_tokens   | integer DEFAULT 0 | |
 | output_tokens | integer DEFAULT 0 | |
 | total_tokens  | integer DEFAULT 0 | |

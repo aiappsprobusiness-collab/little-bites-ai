@@ -111,9 +111,9 @@
 
 **Схема:** id, user_id, action_type text, input_tokens, output_tokens, total_tokens, created_at.
 
-**Типы действий (action_type):** `chat_recipe`, `plan_replace`, `sos_consultant`, `balance_check`, `other`. (В миграции упомянуты weekly_plan, diet_plan — в коде Edge сейчас не пишутся.)
+**Типы действий (action_type):** `chat_recipe`, `plan_replace`, `sos_consultant`, `balance_check`, `recipe_translation` (ML-5: перевод рецепта через Edge translate-recipe), `other`. (В миграции упомянуты weekly_plan, diet_plan — в коде Edge сейчас не пишутся.)
 
-**Куда пишется:** только из Edge `deepseek-chat` при наличии usage и user_id.
+**Куда пишется:** из Edge `deepseek-chat` при наличии usage и user_id; из Edge `translate-recipe` для action_type `recipe_translation` после успешного вызова LLM (skipped-кейсы не логируются; best-effort, не ломает translation flow).
 
 ---
 

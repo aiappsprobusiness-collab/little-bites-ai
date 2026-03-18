@@ -291,10 +291,11 @@ Checklist:
 - [ ] share/public locale-aware read (get_recipe_by_share_ref пока без p_locale)
 - [ ] explicit app language setting (сейчас только navigator.language; настройка в профиле — позже)
 
-## ML-5 status (Translations for new recipes — implemented + hardening + backend coverage)
+## ML-5 status (Translations for new recipes — completed end-to-end)
 
 - **Цель:** после сохранения нового рецепта создавать запись в recipe_translations для целевой локали (если она отличается от базовой), чтобы пользователь с этой локалью видел перевод.
 - **Что переводится:** только title, description, chef_advice. Steps/ingredients не переводятся.
+- **Фактический статус:** ML-5 реально завершён end-to-end. Pipeline создаёт записи в recipe_translations при выполнении условий; новые рецепты после save получают перевод. Root cause проблем при запуске (401 при вызове translate-recipe из deepseek-chat) найден и исправлен: шлюз Supabase проверял JWT при Edge-to-Edge вызове; для translate-recipe задано `verify_jwt = false`, пользовательский контекст передаётся через `__user_jwt` в теле или через заголовок Authorization с клиента.
 
 ### Create/save paths и триггеры перевода
 
@@ -305,7 +306,9 @@ Checklist:
 
 Сценарии взаимоисключающие: один и тот же рецепт либо сохраняется клиентом (чат/форма без сохранения на бэке, или редактирование), либо бэкендом (чат с авторизацией, рецепт сохранён в deepseek-chat). Двойного триггера для одного рецепта не возникает.
 
+- **Триггер перевода** работает для обоих путей: client-saved (createRecipe onSuccess → requestRecipeTranslation) и backend-saved (deepseek-chat после create_recipe_with_steps → fire-and-forget translate-recipe).
 - **Целевая локаль для backend trigger:** клиент передаёт в теле запроса к deepseek-chat опциональное поле `target_locale` (getAppLocale()) при type chat/recipe; бэкенд использует его при вызове translate-recipe. Если не передано — бэкенд использует `'en'`.
+- **Когда перевод не выполняется (skipped):** (1) target_locale совпадает с recipes.locale — переводить не нужно. (2) RPC `has_recipe_translation(recipe_id, target_locale)` возвращает true — запись уже есть, повторный вызов LLM не делается.
 - **Защита от дублей:** (1) Архитектурно: один save path = один trigger. (2) На Edge: RPC `has_recipe_translation(recipe_id, target_locale)` перед LLM; при наличии записи — `status: 'skipped'`, LLM не вызывается.
 - **Логика целевой локали:** getAppLocale() (fallback `'en'`). Перевод создаётся только если target_locale ≠ locale рецепта.
 - **Failure-safe:** основной save не зависит от перевода; ответ пользователю не ждёт завершения перевода. Ошибки перевода логируются (клиент — молча, бэкенд — safeWarn).
@@ -322,6 +325,39 @@ Checklist:
 - [x] Клиент передаёт target_locale в запросе чата (getAppLocale())
 - [x] Дубли исключены: один save path = один trigger; has_recipe_translation на Edge
 - [x] Документация обновлена
+
+### ML-5 deploy и секреты (обязательно для заполнения recipe_translations)
+
+Чтобы в `recipe_translations` появлялись записи, нужно:
+
+1. **Задеплоить Edge function `translate-recipe`.** Рекомендуемый способ: `npm run supabase:deploy:chat` (деплоит и deepseek-chat, и translate-recipe). Либо отдельно: `npm run supabase:deploy:translate-recipe`.
+2. **Задать секрет `DEEPSEEK_API_KEY`** для проекта в Supabase: Dashboard → Edge Functions → Secrets (или `supabase secrets set DEEPSEEK_API_KEY=...`). Без этого ключа функция возвращает 200 с `status: 'error'` и запись не создаётся.
+
+**Почему 401 при вызове из deepseek-chat:** шлюз Supabase по умолчанию проверяет JWT в запросе; при вызове Edge-to-Edge это приводило к 401. Для `translate-recipe` в `supabase/config.toml` задано `verify_jwt = false`; пользовательский контекст передаётся в теле запроса полем `__user_jwt` (при вызове из deepseek-chat) или в заголовке Authorization (при вызове из браузера). Отдельный API-ключ для translate-recipe создавать не нужно — используется общий anon key проекта.
+
+**Для работы pipeline необходимы:** задеплоенная Edge function `translate-recipe` и секрет `DEEPSEEK_API_KEY`. Без них записи в recipe_translations не создаются.
+
+### Note: token spend перевода и логирование
+
+Перевод новых рецептов — отдельный LLM-вызов через Edge function `translate-recipe` (DeepSeek). Он создаёт дополнительный token spend относительно обычного save. Spend происходит только когда реально нужен перевод: если target_locale = recipes.locale или запись в recipe_translations уже есть, LLM не вызывается (status `skipped`).
+
+**Логирование token usage для перевода:** расход на translation логируется отдельно в `token_usage_log` с `action_type = 'recipe_translation'`. Запись выполняется в **translate-recipe/index.ts** после успешного ответа DeepSeek (только когда LLM реально вызывался; при status `skipped` запись в token_usage_log не создаётся). Пишутся поля: user_id, action_type, input_tokens, output_tokens, total_tokens, created_at. Логирование **best-effort**: при ошибке вставки в token_usage_log перевод не откатывается, запись в recipe_translations считается успешной; ошибка логируется в консоль Edge.
+
+### Future note: ML-6 backfill
+
+**Сейчас НЕ запускать** массовый перевод старых рецептов автоматически.
+
+Причины: часть старых рецептов может быть удалена или переработана; качество description и chef_advice в legacy-базе ещё не финальное; переводить всю базу сразу может быть преждевременно и дорого.
+
+**Будущая стратегия ML-6 (когда будем делать backfill):**
+1. Сначала cleanup/модерация старой базы.
+2. Исключить blocked, слабые и кривые рецепты.
+3. Переводить батчами только приоритетные: trusted, высокий score, часто в планах/избранном.
+4. Сначала одна целевая локаль (например `en`).
+5. Steps/ingredients пока не переводить.
+6. Batch process должен быть idempotent и cost-aware.
+
+Это именно note / будущая стратегия; реализацию backfill не делать сейчас.
 
 ## Open questions (Stage 1)
 - **Индекс по trust_level:** на Stage 1 не добавлен. Выборка пула фильтрует по source (существующий idx_recipes_pool_user_created) и по trust_level в приложении; при росте объёма можно добавить частичный индекс WHERE source IN (...) AND (trust_level IS NULL OR trust_level <> 'blocked').

@@ -25,7 +25,7 @@ Roadmap следующих шагов мультиязычности, опира
 
 ## B. Current state (after Stage 3 + ML-4 + ML-5)
 
-Состояние системы **после внедрения ML-5** (translations for new recipes):
+Состояние системы **после завершения ML-5** (translations for new recipes). ML-5 реализован и **работает end-to-end**: новые рецепты после save при выполнении условий создают записи в recipe_translations.
 
 | Элемент | Статус |
 |--------|--------|
@@ -35,12 +35,12 @@ Roadmap следующих шагов мультиязычности, опира
 | **RPC p_locale** | get_recipe_previews(recipe_ids, p_locale), get_recipe_full(p_recipe_id, p_locale). Опциональный p_locale, fallback на recipes.* при отсутствии перевода или пустом поле. |
 | **Fallback** | Реализован: COALESCE(NULLIF(trim(rt.*), ''), r.*) в RPC. |
 | **Client** | **ML-4:** getAppLocale() (fallback 'en'). Превью и полный рецепт с p_locale; getRecipeById → get_recipe_full(id, getAppLocale()) + recipe_ingredients + servings. **ML-5:** requestRecipeTranslation только из useRecipes.createRecipe onSuccess. В запросе к deepseek-chat передаётся target_locale (getAppLocale()) для backend trigger. |
-| **Create/save flows** | **ML-5 покрыты оба пути:** (1) **Client-saved:** createRecipe onSuccess → requestRecipeTranslation(recipeId). (2) **Backend-saved:** deepseek-chat после create_recipe_with_steps вызывает translate-recipe (fire-and-forget) с recipe_id и target_locale из тела запроса (или 'en'). Дубли исключены: один рецепт сохраняется либо клиентом, либо бэкендом. Edge: has_recipe_translation → при отсутствии перевода DeepSeek + upsert_recipe_translation. Failure-safe. Старые рецепты не трогаются. |
+| **Create/save flows** | **ML-5 работает по обоим путям.** (1) **Client-saved:** createRecipe onSuccess → requestRecipeTranslation(recipeId). (2) **Backend-saved:** deepseek-chat после create_recipe_with_steps вызывает translate-recipe (fire-and-forget) с recipe_id, target_locale, __user_jwt. Дубли исключены; Edge: has_recipe_translation → при отсутствии перевода DeepSeek + upsert_recipe_translation. **Токены перевода** тратятся только если target_locale ≠ recipes.locale и перевода ещё нет; при same-locale или при уже существующей записи — status `skipped`, LLM не вызывается. **Для работы:** задеплоенная translate-recipe и секрет DEEPSEEK_API_KEY (см. [recipe-core-multilang-progress.md](./recipe-core-multilang-progress.md) § ML-5 deploy). |
 | **Steps / ingredients** | **Не локализованы.** recipe_steps.instruction, recipe_ingredients.name/display_text — один язык; таблиц переводов для них нет. |
 | **RecipePage** | Полный рецепт загружается через getRecipeById → get_recipe_full(p_recipe_id, getAppLocale()) + отдельный запрос recipe_ingredients и servings_base/servings_recommended; контракт данных для UI сохранён. |
 | **get_recipe_by_share_ref** | Без p_locale; при необходимости можно добавить позже. |
 
-Итог: пользователь **видит переводы** для новых рецептов при совпадении locale (getAppLocale()); для старых рецептов переводы по-прежнему отсутствуют (ожидается ML-6 backfill). При отсутствии записи в recipe_translations отображается контент из recipes (fallback). Явной настройки языка в приложении пока нет — используется язык браузера.
+Итог: пользователь **видит переводы** для новых рецептов при совпадении locale (getAppLocale()); для старых рецептов переводы по-прежнему отсутствуют (стратегия backfill — см. Future note в [recipe-core-multilang-progress.md](./recipe-core-multilang-progress.md)). При отсутствии записи в recipe_translations отображается контент из recipes (fallback). Явной настройки языка в приложении пока нет — используется язык браузера.
 
 ---
 
@@ -65,20 +65,20 @@ Roadmap следующих шагов мультиязычности, опира
 
 ---
 
-### ML-5 — Translations for new recipes
+### ML-5 — Translations for new recipes (completed end-to-end)
 
 **Goal:** Новые рецепты после сохранения получают запись в recipe_translations для целевых локалей (например en, es), чтобы пользователь с соответствующей локалью видел перевод.
 
-**Scope:**
-- Post-save шаг: после успешного create_recipe_with_steps (или после ответа deepseek-chat) вызывать процесс перевода (отдельный Edge / job / очередь): взять recipe_id, целевые локали, записать в recipe_translations title/description/chef_advice (источник — recipes или внешний перевод).
-- Запись в recipe_translations с translation_status/source (например auto_generated), идемпотентность по (recipe_id, locale).
+**Реализовано и работает:** post-save перевод по обоим путям (client-saved и backend-saved); запись в recipe_translations через Edge translate-recipe + DeepSeek + RPC upsert_recipe_translation. Переводные токены тратятся только когда target_locale ≠ base locale и записи перевода ещё нет; при same-locale или при уже существующем переводе — skipped, LLM не вызывается.
+
+**Scope (сделано):**
+- Post-save шаг: после успешного create_recipe_with_steps (или после ответа deepseek-chat) вызов translate-recipe (Edge), запись в recipe_translations title/description/chef_advice.
+- translation_status/source (auto_generated), идемпотентность по (recipe_id, locale), has_recipe_translation перед LLM.
 - Failure-safe: сбой перевода не откатывает сохранение рецепта; рецепт уже в recipes, пользователь видит контент по fallback.
 
 **Out of scope:**
-- Обработка уже существующих (старых) рецептов.
+- Обработка уже существующих (старых) рецептов (ML-6 backfill — см. future note в recipe-core-multilang-progress.md).
 - Локализация steps/ingredients.
-
-**Risks:** Задержка появления перевода; необходимо определиться с каналом перевода (синхронный вызов vs фоновая задача).
 
 ---
 
@@ -86,9 +86,11 @@ Roadmap следующих шагов мультиязычности, опира
 
 **Goal:** Перевести существующую базу рецептов, чтобы пользователи с локалью en/es видели контент не только для новых рецептов.
 
-**Scope:**
+**Future note:** Сейчас **не запускать** массовый перевод старых рецептов автоматически. Причины и будущая стратегия (cleanup, приоритизация, одна локаль en, idempotent cost-aware batch) — в [recipe-core-multilang-progress.md](./recipe-core-multilang-progress.md) § Future note: ML-6 backfill.
+
+**Scope (когда будем делать):**
 - Batch-процесс: выборка рецептов без перевода для целевой локали (или с draft/auto_generated для обновления).
-- Приоритизация: например trusted / высокий score / часто в планах / недавно созданные.
+- Приоритизация: например trusted / высокий score / часто в планах / недавно созданные; исключить blocked и слабые.
 - Идемпотентность: повторный прогон не ломает уже заполненные recipe_translations (upsert по (recipe_id, locale) с осторожным обновлением).
 - Операционно: скрипты/миграции или отдельный воркер; не блокировать основной save flow.
 

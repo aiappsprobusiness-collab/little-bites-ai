@@ -3,7 +3,7 @@
  * Вызывается после create/save, когда известен recipe_id.
  * Не блокирует UI; ошибки обрабатываются на Edge.
  */
-import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
 import { getAppLocale } from "@/utils/appLocale";
 
 const TRANSLATE_FN = "/functions/v1/translate-recipe";
@@ -12,7 +12,7 @@ export function requestRecipeTranslation(recipeId: string | null | undefined): v
   if (!recipeId || typeof recipeId !== "string" || !recipeId.trim()) return;
 
   const baseUrl = SUPABASE_URL?.replace(/\/$/, "");
-  if (!baseUrl) return;
+  if (!baseUrl || !SUPABASE_PUBLISHABLE_KEY) return;
 
   supabase.auth.getSession().then(({ data: { session } }) => {
     const token = session?.access_token;
@@ -24,6 +24,7 @@ export function requestRecipeTranslation(recipeId: string | null | undefined): v
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
+        apikey: SUPABASE_PUBLISHABLE_KEY ?? "",
       },
       body: JSON.stringify({
         recipe_id: recipeId,

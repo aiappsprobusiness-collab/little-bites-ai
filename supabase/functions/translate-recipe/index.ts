@@ -1,8 +1,9 @@
 /**
  * ML-5: Post-save translation for new recipes.
- * Request: { recipe_id: uuid, target_locale: string }.
- * Fetches recipe (RLS: user must own), translates title/description/chef_advice via DeepSeek,
- * upserts recipe_translations. Failure-safe: errors are logged, response 200.
+ * Request: { recipe_id: uuid, target_locale: string [, __user_jwt: string ] }.
+ * __user_jwt: optional; when calling from another Edge (e.g. deepseek-chat), pass user JWT here
+ *   because the gateway may not forward Authorization. Otherwise use Authorization header.
+ * Fetches recipe (RLS: user must own), translates via DeepSeek, upserts recipe_translations.
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -24,6 +25,7 @@ function jsonResponse(body: unknown, status: number) {
 interface TranslateBody {
   recipe_id?: string;
   target_locale?: string;
+  __user_jwt?: string;
 }
 
 interface RecipeRow {
@@ -56,11 +58,6 @@ serve(async (req) => {
     return jsonResponse({ ok: false, error: "Method not allowed" }, 405);
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader?.startsWith("Bearer ") || !authHeader.slice(7).trim()) {
-    return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
-  }
-
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   const deepseekKey = Deno.env.get("DEEPSEEK_API_KEY");
@@ -81,6 +78,16 @@ serve(async (req) => {
     return jsonResponse({ ok: false, error: "Invalid JSON" }, 400);
   }
 
+  // User JWT: from body (Edge-to-Edge) or from Authorization header (browser)
+  const authHeader = req.headers.get("Authorization");
+  const userToken = typeof body.__user_jwt === "string" && body.__user_jwt.trim()
+    ? body.__user_jwt.trim()
+    : (authHeader?.startsWith("Bearer ") ? authHeader.slice(7).trim() : "");
+  const effectiveAuth = userToken ? `Bearer ${userToken}` : "";
+  if (!effectiveAuth) {
+    return jsonResponse({ ok: false, error: "Unauthorized" }, 401);
+  }
+
   const recipeId = typeof body.recipe_id === "string" ? body.recipe_id.trim() : "";
   const targetLocale = normalizeLocale(typeof body.target_locale === "string" ? body.target_locale : "en");
 
@@ -89,7 +96,7 @@ serve(async (req) => {
   }
 
   const supabase = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
+    global: { headers: { Authorization: effectiveAuth } },
   });
 
   try {
@@ -159,8 +166,41 @@ serve(async (req) => {
       return jsonResponse({ ok: true, status: "error" }, 200);
     }
 
-    const llmJson = (await llmRes.json()) as { choices?: Array<{ message?: { content?: string } }> };
+    const llmJson = (await llmRes.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+    };
     const rawContent = (llmJson.choices?.[0]?.message?.content ?? "").trim();
+
+    // Token usage log (best-effort; must not break translation flow)
+    const usage = llmJson.usage;
+    if (usage) {
+      const inputTokens = usage.prompt_tokens ?? 0;
+      const outputTokens = usage.completion_tokens ?? 0;
+      const totalTokens = usage.total_tokens ?? inputTokens + outputTokens;
+      supabase.auth.getUser(userToken).then(({ data: { user } }) => {
+        if (!user?.id) {
+          console.warn("translate-recipe: token_usage_log skipped, no user_id");
+          return;
+        }
+        supabase
+          .from("token_usage_log")
+          .insert({
+            user_id: user.id,
+            action_type: "recipe_translation",
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            total_tokens: totalTokens,
+          })
+          .then(({ error }) => {
+            if (error) console.warn("translate-recipe: token_usage_log insert failed", error.message);
+          })
+          .catch((err) => console.warn("translate-recipe: token_usage_log error", err));
+      }).catch((err) => console.warn("translate-recipe: getUser for token_usage_log failed", err));
+    } else {
+      console.warn("translate-recipe: no usage in LLM response, token_usage_log skipped");
+    }
+
     let parsed: TranslatedFields = {};
     try {
       const cleaned = rawContent.replace(/^```\w*\n?|\n?```$/g, "").trim();

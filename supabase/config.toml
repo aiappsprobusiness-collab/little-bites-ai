@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.track-usage-event]
 verify_jwt = false
+
+[functions.translate-recipe]
+verify_jwt = false

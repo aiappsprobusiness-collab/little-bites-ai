@@ -23,7 +23,7 @@
     "postinstall": "patch-package",
     "sync:allergens": "node scripts/sync-allergens-dict.mjs",
     "test:edge": "cd supabase/functions && deno test deepseek-chat/domain/policies/policies.test.ts deepseek-chat/domain/family/family.test.ts deepseek-chat/domain/recipe_io/recipe_io.test.ts --allow-read",
-    "supabase:deploy:chat": "npm run sync:allergens && npx supabase functions deploy deepseek-chat",
+    "supabase:deploy:chat": "npm run sync:allergens && npx supabase functions deploy deepseek-chat && npx supabase functions deploy translate-recipe",
     "supabase:deploy:chat:slow": "npm run sync:allergens && node scripts/deploy-function.mjs deepseek-chat",
     "supabase:deploy:track-usage-event": "npx supabase functions deploy track-usage-event",
     "supabase:deploy:share-og": "npx supabase functions deploy share-og",

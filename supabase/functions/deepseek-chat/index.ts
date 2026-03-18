@@ -1390,11 +1390,26 @@ serve(async (req) => {
           typeof targetLocaleRaw === "string" && targetLocaleRaw.trim()
             ? targetLocaleRaw.trim().toLowerCase().split("-")[0]
             : "en";
+        const invokeApiKey = SUPABASE_ANON_KEY ?? "";
+        const userJwt = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
+        safeLog(JSON.stringify({
+          tag: "TRANSLATE_TRIGGER_HEADERS",
+          requestId,
+          hasAuthHeader: !!authHeader,
+          hasApiKey: !!invokeApiKey,
+        }));
         const translateUrl = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1/translate-recipe`;
         fetch(translateUrl, {
           method: "POST",
-          headers: { Authorization: authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify({ recipe_id: savedRecipeId, target_locale: targetLocale }),
+          headers: {
+            "Content-Type": "application/json",
+            apikey: invokeApiKey,
+          },
+          body: JSON.stringify({
+            recipe_id: savedRecipeId,
+            target_locale: targetLocale,
+            __user_jwt: userJwt,
+          }),
         }).catch((err) => {
           safeWarn("translate-recipe trigger failed (non-blocking):", serializeError(err));
         });
