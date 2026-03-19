@@ -551,7 +551,7 @@ export default function ChatPage() {
     }
     supabase
       .from("recipes")
-      .select("id, title, description, cooking_time_minutes, meal_type, chef_advice, advice, calories, proteins, fats, carbs, recipe_ingredients(name, display_text, canonical_amount, canonical_unit), recipe_steps(instruction, step_number)")
+      .select("id, title, description, cooking_time_minutes, meal_type, chef_advice, advice, calories, proteins, fats, carbs, nutrition_goals, recipe_ingredients(name, display_text, canonical_amount, canonical_unit), recipe_steps(instruction, step_number)")
       .in("id", recipeIds)
       .then(({ data: rows, error }) => {
         const recipeMap: Record<string, ParsedRecipe> = {};
@@ -572,6 +572,7 @@ export default function ChatPage() {
           proteins?: number | null;
           fats?: number | null;
           carbs?: number | null;
+          nutrition_goals?: unknown;
           recipe_ingredients?: Array<{ name: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null }>;
           recipe_steps?: Array<{ instruction: string; step_number: number }>;
         }) => {
@@ -581,6 +582,9 @@ export default function ChatPage() {
             display_text: ing.display_text ?? ing.name,
             ...(ing.canonical_amount != null && ing.canonical_unit && { canonical_amount: ing.canonical_amount, canonical_unit: ing.canonical_unit as "g" | "ml" }),
           }));
+          const goalsFromDb = Array.isArray(r.nutrition_goals)
+            ? r.nutrition_goals.filter((g): g is string => typeof g === "string")
+            : undefined;
           recipeMap[r.id] = {
             id: r.id,
             title: r.title ?? "",
@@ -595,6 +599,7 @@ export default function ChatPage() {
             proteins: r.proteins ?? undefined,
             fats: r.fats ?? undefined,
             carbs: r.carbs ?? undefined,
+            ...(goalsFromDb?.length ? { nutrition_goals: goalsFromDb } : {}),
           };
         });
         formatWithRecipeMap(recipeMap);

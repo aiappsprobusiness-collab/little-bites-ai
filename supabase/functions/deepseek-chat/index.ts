@@ -1302,6 +1302,14 @@ serve(async (req) => {
               : typeof (validatedRecipe as { cookingTime?: number }).cookingTime === "number" ? (validatedRecipe as { cookingTime: number }).cookingTime
                 : null;
           const n = validatedRecipe.nutrition ?? null;
+          /** Тот же объект, что мутируется выше (nutrition_goals после inferNutritionGoals). */
+          const nutritionGoalsForSave = (() => {
+            const raw = (validatedRecipe as Record<string, unknown>).nutrition_goals;
+            if (Array.isArray(raw) && raw.every((g) => typeof g === "string")) {
+              return raw as string[];
+            }
+            return inferNutritionGoals(validatedRecipe);
+          })();
           const baseTags = (validatedRecipe as { tags?: string[] }).tags ?? [];
           const recipeTags = targetIsFamily ? [...baseTags, "family", ...(applyKidFilter ? ["kid_1_3_safe"] : [])] : baseTags;
           const payload = canonicalizeRecipePayload({
@@ -1330,7 +1338,7 @@ serve(async (req) => {
             locale: "ru",
             source_lang: null,
             trust_level: "candidate",
-            nutrition_goals: inferredGoals,
+            nutrition_goals: nutritionGoalsForSave,
           });
           console.log(JSON.stringify({
             tag: "RECIPE_SAVE_PAYLOAD_DEBUG",

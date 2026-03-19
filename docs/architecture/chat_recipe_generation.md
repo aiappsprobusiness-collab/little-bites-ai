@@ -192,7 +192,7 @@
 - **buildGenerationContext** (`src/domain/generation/buildGenerationContext.ts`): по activeProfileId и плану (free/trial/premium) возвращает single (один target) или family (targets); Free при выборе «Семья» получает single с первым профилем.
 - **derivePayloadFromContext** (`src/domain/generation/derivePayloadFromContext.ts`): из GenerationContext формирует memberData (name, ageMonths, allergies, likes, dislikes, difficulty), allMembers, targetIsFamily; для семьи объединяет аллергии/dislikes/likes и исключает младенцев <12 мес из целевых профилей.
 - **buildPrompt** (`src/domain/generation/buildPrompt.ts`): по context и membersWithAgeMonths строит текстовый блок «Child:» или «Children:» + блоки по каждому ребёнку (age, allergies, likes, dislikes, difficulty).
-- **parseRecipesFromChat** / **parseRecipesFromApiResponse** (`src/utils/parseChatRecipes.ts`): извлечение JSON рецепта из ответа (code block, regex, баланс скобок), нормализация ингредиентов и шагов, определение mealType по тексту, формирование ParseRecipesFromChatResult (recipes, displayText).
+- **parseRecipesFromChat** / **parseRecipesFromApiResponse** (`src/utils/parseChatRecipes.ts`): извлечение JSON рецепта из ответа (code block, regex, баланс скобок), нормализация ингредиентов и шагов, определение mealType по тексту, формирование ParseRecipesFromChatResult (recipes, displayText). В ParsedRecipe попадают **КБЖУ** с верхнего уровня или из `nutrition` (числа и строковые числа из JSON); поле **`nutrition_goals`** из ответа API/`recipes[]` (или из JSON). Текст `displayText` дополняется строками ккал/БЖУ, если они есть.
 - **validateRecipe** (`src/domain/generation/validateRecipe.ts`): проверка рецепта по аллергиям, dislikes и вегетарианским предпочтениям (VEGETARIAN_BANNED и т.д.) для всех профилей из контекста.
 - **chatBlockedCheck** (`src/utils/chatBlockedCheck.ts`): проверка текста запроса на токены аллергий и dislikes с учётом фраз «без X»; возврат ChatBlockedResponse при совпадении.
 - **allergenTokens** (`src/utils/allergenTokens`): buildBlockedTokens, containsAnyToken, getBlockedTokensPerAllergy — в унисон с Edge (алиасы и словарь аллергенов).
@@ -212,7 +212,7 @@
 **Ответ (успешный рецепт):**
 
 - `message` — строка с JSON рецепта (или текст)
-- `recipes` — массив из одного рецепта (объект с title, description, ingredients, steps, cookingTimeMinutes, mealType, servings, chefAdvice, nutrition и т.д.)
+- `recipes` — массив из одного рецепта (объект с title, description, ingredients, steps, cookingTimeMinutes, mealType, servings, chefAdvice, nutrition, **nutrition_goals** (после Edge — rule-based infer) и т.д.)
 - `recipe_id` — id сохранённого рецепта в БД (если пользователь авторизован и сохранение прошло)
 
 **Ответ (блокировка):**

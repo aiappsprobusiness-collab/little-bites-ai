@@ -87,10 +87,10 @@ export interface CanonicalizeRecipePayloadInput {
   servings?: number | null;
   /** Nutrition per serving (from chat AI). If null, calories/proteins/fats/carbs not written. */
   nutrition?: {
-    kcal_per_serving: number;
-    protein_g_per_serving: number;
-    fat_g_per_serving: number;
-    carbs_g_per_serving: number;
+    kcal_per_serving?: number | string | null;
+    protein_g_per_serving?: number | string | null;
+    fat_g_per_serving?: number | string | null;
+    carbs_g_per_serving?: number | string | null;
   } | null;
   /** Explicit soup flag for create_recipe_with_steps. For lunch slot we set true if not provided. */
   is_soup?: boolean | null;
@@ -193,10 +193,24 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
   /** Lunch slot => only soups; set is_soup for RPC so new recipes get recipes.is_soup = true. Assign to plan does not change recipe. */
   const is_soup = meal_type === "lunch" ? true : (rawIsSoup === true);
 
-  const calories = rawNutrition != null ? Math.round(rawNutrition.kcal_per_serving) : null;
-  const proteins = rawNutrition != null ? rawNutrition.protein_g_per_serving : null;
-  const fats = rawNutrition != null ? rawNutrition.fat_g_per_serving : null;
-  const carbs = rawNutrition != null ? rawNutrition.carbs_g_per_serving : null;
+  const coerceNutritionNumber = (v: unknown): number | null => {
+    if (v == null) return null;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      const t = v.trim().replace(",", ".");
+      if (t === "") return null;
+      const n = Number(t);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  };
+
+  const nObj = rawNutrition != null ? (rawNutrition as Record<string, unknown>) : null;
+  const kcalRaw = nObj != null ? coerceNutritionNumber(nObj.kcal_per_serving) : null;
+  const calories = kcalRaw != null ? Math.round(kcalRaw) : null;
+  const proteins = nObj != null ? coerceNutritionNumber(nObj.protein_g_per_serving) : null;
+  const fats = nObj != null ? coerceNutritionNumber(nObj.fat_g_per_serving) : null;
+  const carbs = nObj != null ? coerceNutritionNumber(nObj.carbs_g_per_serving) : null;
 
   const chefAdviceVal = chef_advice != null && String(chef_advice).trim() !== "" ? String(chef_advice).trim() : null;
   const adviceVal = advice != null && String(advice).trim() !== "" ? String(advice).trim() : null;

@@ -122,6 +122,11 @@ interface Recipe {
   advice?: string;
   familyServing?: string;
   mealType?: MealType;
+  calories?: number | null;
+  proteins?: number | null;
+  fats?: number | null;
+  carbs?: number | null;
+  nutrition_goals?: string[] | null;
 }
 
 /** Чат = child_only: НЕ показываем familyServing (Адаптация для ребёнка/взрослых). */

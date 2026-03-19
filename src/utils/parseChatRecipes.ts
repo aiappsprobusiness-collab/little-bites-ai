@@ -32,6 +32,8 @@ export interface ParsedRecipe {
   proteins?: number | null;
   fats?: number | null;
   carbs?: number | null;
+  /** Stage 4: цели питания (whitelist), с бэка / из JSON ответа. */
+  nutrition_goals?: string[] | null;
 }
 
 /** Проверка: элемент ингредиента — объект с полем name (Premium-формат). */
@@ -51,40 +53,54 @@ export function extractAdvice(obj: Record<string, unknown>): string | undefined 
   return typeof val === "string" && val.trim() ? val.trim() : undefined;
 }
 
+/** Число из JSON модели (иногда приходит строкой). */
+function asFiniteNumberField(v: unknown): number | undefined {
+  if (v == null) return undefined;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const t = v.trim().replace(",", ".");
+    if (t === "") return undefined;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
 function extractNutritionFields(obj: Record<string, unknown>): Pick<ParsedRecipe, "calories" | "proteins" | "fats" | "carbs"> {
   const nutrition = obj.nutrition as {
-    kcal_per_serving?: number;
-    protein_g_per_serving?: number;
-    fat_g_per_serving?: number;
-    carbs_g_per_serving?: number;
+    kcal_per_serving?: unknown;
+    protein_g_per_serving?: unknown;
+    fat_g_per_serving?: unknown;
+    carbs_g_per_serving?: unknown;
   } | undefined;
 
+  const kcalTop = asFiniteNumberField(obj.calories);
+  const kcalNut = nutrition != null ? asFiniteNumberField(nutrition.kcal_per_serving) : undefined;
+  const kcal = kcalTop ?? (kcalNut != null ? Math.round(kcalNut) : undefined);
+
+  const protTop = asFiniteNumberField(obj.proteins);
+  const protNut = nutrition != null ? asFiniteNumberField(nutrition.protein_g_per_serving) : undefined;
+
+  const fatTop = asFiniteNumberField(obj.fats);
+  const fatNut = nutrition != null ? asFiniteNumberField(nutrition.fat_g_per_serving) : undefined;
+
+  const carbTop = asFiniteNumberField(obj.carbs);
+  const carbNut = nutrition != null ? asFiniteNumberField(nutrition.carbs_g_per_serving) : undefined;
+
   return {
-    calories:
-      typeof obj.calories === "number"
-        ? obj.calories
-        : nutrition && typeof nutrition.kcal_per_serving === "number"
-          ? Math.round(nutrition.kcal_per_serving)
-          : undefined,
-    proteins:
-      typeof obj.proteins === "number"
-        ? obj.proteins
-        : nutrition && typeof nutrition.protein_g_per_serving === "number"
-          ? nutrition.protein_g_per_serving
-          : undefined,
-    fats:
-      typeof obj.fats === "number"
-        ? obj.fats
-        : nutrition && typeof nutrition.fat_g_per_serving === "number"
-          ? nutrition.fat_g_per_serving
-          : undefined,
-    carbs:
-      typeof obj.carbs === "number"
-        ? obj.carbs
-        : nutrition && typeof nutrition.carbs_g_per_serving === "number"
-          ? nutrition.carbs_g_per_serving
-          : undefined,
+    calories: kcal,
+    proteins: protTop ?? protNut,
+    fats: fatTop ?? fatNut,
+    carbs: carbTop ?? carbNut,
   };
+}
+
+/** nutrition_goals из ответа API / JSON (camelCase или snake_case). */
+export function extractNutritionGoals(obj: Record<string, unknown>): string[] | undefined {
+  const raw = obj.nutrition_goals ?? obj.nutritionGoals;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out = raw.filter((g): g is string => typeof g === "string").map((g) => g.trim()).filter(Boolean);
+  return out.length ? out : undefined;
 }
 
 /** Текст ингредиента для отображения. Приоритет: display_text > "name — amount" > name. */
@@ -477,7 +493,8 @@ export function parseRecipesFromApiResponse(
       return String(item);
     });
     const steps = Array.isArray(r.steps) ? (r.steps as string[]).map((s) => String(s ?? "").trim()).filter(Boolean) : [];
-    const nutritionFields = extractNutritionFields(r);
+    const nutritionFields = extractNutritionFields(r as Record<string, unknown>);
+    const goals = extractNutritionGoals(r as Record<string, unknown>);
     return {
       title: String(title).trim(),
       description: typeof r.description === "string" ? r.description : undefined,
@@ -488,6 +505,7 @@ export function parseRecipesFromApiResponse(
       chefAdvice: extractChefAdvice(r as Record<string, unknown>),
       advice: typeof r.advice === "string" ? r.advice : undefined,
       ...nutritionFields,
+      ...(goals?.length ? { nutrition_goals: goals } : {}),
     };
   });
   const displayText = recipes.length > 0 ? formatRecipeForDisplay(recipes[0]) : fallbackDisplayText;
@@ -505,6 +523,27 @@ function formatRecipeForDisplay(recipe: ParsedRecipe): string {
   if (recipe.cookingTime != null && recipe.cookingTime > 0) {
     lines.push('');
     lines.push(`⏱️ ${recipe.cookingTime} мин`);
+  }
+  const kcal = recipe.calories;
+  const hasMacros =
+    recipe.proteins != null || recipe.fats != null || recipe.carbs != null;
+  if (kcal != null || hasMacros) {
+    lines.push('');
+    if (kcal != null) {
+      lines.push(`🔥 **${Math.round(kcal)} ккал** на порцию`);
+    }
+    if (hasMacros) {
+      const p = recipe.proteins;
+      const f = recipe.fats;
+      const c = recipe.carbs;
+      const parts: string[] = [];
+      if (p != null) parts.push(`белки ${Math.round(p)} г`);
+      if (f != null) parts.push(`жиры ${Math.round(f)} г`);
+      if (c != null) parts.push(`углеводы ${Math.round(c)} г`);
+      if (parts.length) {
+        lines.push(`В одной порции: ${parts.join(" · ")}`);
+      }
+    }
   }
   if (recipe.ingredients?.length) {
     lines.push('');
@@ -716,6 +755,7 @@ export function parseRecipesFromChat(
             : parsed.steps?.split('\n').filter((s: string) => s.trim()) || [];
           if (ingredients.length > 0 || steps.length > 0) {
             const nutritionFields = extractNutritionFields(parsed as Record<string, unknown>);
+            const goals = extractNutritionGoals(parsed as Record<string, unknown>);
             recipes.push({
               title: title.trim(),
               description: parsed.description || parsed.desc,
@@ -726,6 +766,7 @@ export function parseRecipesFromChat(
               chefAdvice: extractChefAdvice(parsed as Record<string, unknown>),
               advice: typeof parsed.advice === 'string' ? parsed.advice : undefined,
               ...nutritionFields,
+              ...(goals?.length ? { nutrition_goals: goals } : {}),
             });
           }
         }
@@ -759,6 +800,7 @@ export function parseRecipesFromChat(
               : recipe.steps?.split('\n').filter((s: string) => s.trim()) || [];
             if (ingredients.length > 0 || steps.length > 0) {
               const nutritionFields = extractNutritionFields(recipe as Record<string, unknown>);
+              const goals = extractNutritionGoals(recipe as Record<string, unknown>);
               recipes.push({
                 title: title.trim(),
                 description: recipe.description || recipe.desc,
@@ -769,6 +811,7 @@ export function parseRecipesFromChat(
                 chefAdvice: extractChefAdvice(recipe as Record<string, unknown>),
                 advice: typeof recipe.advice === 'string' ? recipe.advice : undefined,
                 ...nutritionFields,
+                ...(goals?.length ? { nutrition_goals: goals } : {}),
               });
             }
           }
