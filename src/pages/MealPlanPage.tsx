@@ -24,6 +24,7 @@ import { PlanModeHint } from "@/components/plan/PlanModeHint";
 import { PlanGoalChipsRow } from "@/components/plan/PlanGoalChipsRow";
 import { isFamilySelected } from "@/utils/planModeUtils";
 import { selectGoalForEdge } from "@/utils/planGoalSelect";
+import { nutritionGoalLabel } from "@/utils/nutritionGoals";
 import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
@@ -822,6 +823,34 @@ export default function MealPlanPage() {
     return acc;
   }, {} as Record<string, typeof dayMealPlans[0] | null>);
 
+  /** Цель плана (не «Баланс») — для подсветки карточек и подсказок. */
+  const planAccentGoalKey = planGoalSelection && planGoalSelection !== "balanced" ? planGoalSelection : null;
+  const { dayHasMatchingGoalRecipe, dayHasAnyFilledRecipe } = useMemo(() => {
+    let anyFilled = false;
+    let anyMatch = false;
+    for (const slot of mealTypes) {
+      const plannedMeal = mealsByType[slot.id];
+      const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
+      const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
+      const hasDish = !!(plannedMeal && recipeId && recipe?.title);
+      if (!hasDish || !recipeId) continue;
+      anyFilled = true;
+      const goals = previews[recipeId]?.nutrition_goals;
+      const arr = Array.isArray(goals) ? goals : [];
+      if (planAccentGoalKey && arr.some((g) => String(g).toLowerCase() === planAccentGoalKey)) {
+        anyMatch = true;
+        break;
+      }
+    }
+    return { dayHasMatchingGoalRecipe: anyMatch, dayHasAnyFilledRecipe: anyFilled };
+  }, [mealTypes, mealsByType, previews, planAccentGoalKey]);
+
+  const showGoalFallbackNote =
+    !!planAccentGoalKey &&
+    dayHasAnyFilledRecipe &&
+    !dayHasMatchingGoalRecipe &&
+    !isLoadingPreviews;
+
   /** Первый пустой слот по порядку завтрак → ужин: PRIMARY empty UI; остальные пустые — SECONDARY (пересчитывается при заполнении). */
   const firstEmptySlotId = useMemo(() => {
     for (const slot of mealTypes) {
@@ -995,11 +1024,21 @@ export default function MealPlanPage() {
                     onLockedGoalClick={() => {
                       useAppStore.getState().setPaywallReason("plan_goal_select");
                       useAppStore.getState().setPaywallCustomMessage(
-                        "Выбор цели питания (кроме «Баланс») доступен в Premium и Trial.",
+                        "Эти блюда подбираются с учётом цели питания. В Premium и Trial можно выбрать фокус подбора (Железо, Фокус и др.).",
                       );
                       useAppStore.getState().setShowPaywall(true);
                     }}
                   />
+                )}
+                {members.length > 0 && planAccentGoalKey && (
+                  <p className="text-sm text-muted-foreground/80 mt-2 whitespace-normal break-words">
+                    Подобрано с акцентом на: {nutritionGoalLabel(planAccentGoalKey)}
+                  </p>
+                )}
+                {members.length > 0 && showGoalFallbackNote && (
+                  <p className="text-xs text-muted-foreground/90 mt-1.5 leading-snug whitespace-normal break-words">
+                    Не нашли точных совпадений — подобрали максимально близкие варианты
+                  </p>
                 )}
                 {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
                   <span className="text-xs text-slate-500">DB: {dayDbCount} | AI: {dayAiCount}</span>
@@ -1429,6 +1468,7 @@ export default function MealPlanPage() {
                         fats={previews[recipeId!]?.fats}
                         carbs={previews[recipeId!]?.carbs}
                         nutritionGoals={previews[recipeId!]?.nutrition_goals ?? []}
+                        planFocusGoal={planGoalSelection}
                         isFavorite={isFavoriteForPlan(recipeId!, memberIdForPlan)}
                         onToggleFavorite={async (rid, next) => {
                           const p = previews[rid];

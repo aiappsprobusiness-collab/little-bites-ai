@@ -8,6 +8,7 @@
 - Stage 4.3 — family-aware scoring in generate-plan (completed)
 - Stage 4.3.1 — plan hint copy + paywall feature line + text wrap (completed)
 - Stage 4.3.2 — goal selector Free vs Premium/Trial (UI + client sanitize `selected_goal`) (completed)
+- Stage 4.3.3 — plan goal impact visible (badges + copy) (completed)
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
@@ -29,7 +30,14 @@
 - [x] Stage 4.3 — family-aware + age-aware + toddler soft-mode scoring (generate-plan only)
 - [x] Stage 4.3.1 — UI copy + layout (PlanModeHint family text/subtext, Paywall first feature; wrap/min-w-0)
 - [x] Stage 4.3.2 — PlanGoalChipsRow: Free только «Баланс»; остальные → paywall; `selectGoalForEdge` + хук `usePlanGenerationJob`
+- [x] Stage 4.3.3 — MealCard: бейдж «Под вашу цель» + короткое пояснение; строка «Подобрано с акцентом…»; при отсутствии совпадений по цели — дисклеймер
 - [ ] Stage 5 — plan page refactor
+
+## Stage 4.3.3 — Goal impact visible (plan UI)
+
+- `nutritionGoalDescriptions.ts` — `getGoalShortDescription(goal)` для подписи под бейджем (balanced — пусто).
+- `MealCard` + `RecipeCard` children: при совпадении `planFocusGoal` с `nutrition_goals` — лёгкое кольцо/фон + бейдж + текст.
+- `MealPlanPage`: сводка под селектором; если в дне есть блюда, но ни одно не содержит выбранную цель — текст про «максимально близкие варианты»; paywall для Free дополнен формулировкой про цель питания.
 
 ## Stage 4.3.2 — Goal selector access (Free vs Premium/Trial)
 

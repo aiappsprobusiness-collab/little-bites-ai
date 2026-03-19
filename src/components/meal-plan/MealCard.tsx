@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
 import { recipeKcalChip } from "@/theme/recipeTokens";
+import { getGoalShortDescription } from "@/utils/nutritionGoalDescriptions";
 
 const MEAL_LABELS: Record<string, { label: string; emoji: string; time: string }> = {
   breakfast: { label: "Завтрак", emoji: "🍽", time: "8:30" },
@@ -74,6 +75,8 @@ export interface MealCardProps {
   carbs?: number | null;
   /** Цели питания (чипы в превью). */
   nutritionGoals?: string[] | null;
+  /** Выбранная в плане цель (не balanced): подсветка, если рецепт её содержит. */
+  planFocusGoal?: string | null;
 }
 
 const CHIP_PLACEHOLDER_COUNT = 3;
@@ -106,6 +109,7 @@ export function MealCard({
   fats: nutritionFats,
   carbs: nutritionCarbs,
   nutritionGoals,
+  planFocusGoal,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -119,6 +123,13 @@ export function MealCard({
   const total = ingredientTotalCount ?? ingredientNames.length;
   const extraCount = total > maxChips ? total - maxChips : 0;
   const showPlaceholderChips = compact && isLoadingPreviews && chips.length === 0 && extraCount === 0;
+
+  const focusKey = planFocusGoal?.trim().toLowerCase() ?? "";
+  const matchesPlanFocus =
+    !!focusKey &&
+    focusKey !== "balanced" &&
+    (nutritionGoals ?? []).some((g) => String(g).toLowerCase() === focusKey);
+  const focusDescription = matchesPlanFocus ? getGoalShortDescription(focusKey) : "";
 
   const handleClick = () => {
     navigate(`/recipe/${recipeId}`, {
@@ -184,77 +195,91 @@ export function MealCard({
 
     return (
       <>
-      <RecipeCard
-        variant="preview"
-        header={{
-          mealLabel: meta.label,
-          cookingTimeMinutes: cookTimeMinutes ?? null,
-          title: recipeTitle,
-        }}
-        ingredients={ingredientNames}
-        showIngredientChips={false}
-        showHint={false}
-        maxIngredientChips={INGREDIENT_CHIPS_MAX_COMPACT}
-        hint={hint ?? null}
-        nutrition={nutrition}
-        nutritionGoals={nutritionGoals ?? []}
-        onClick={handleClick}
-        actions={
-          showActionsCompact ? (
-            <div className="flex flex-col gap-1 items-stretch">
-              {debugSource && (
-                <span
-                  className={cn(
-                    "text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 self-start",
-                    debugSource === "db" ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800"
-                  )}
-                >
-                  {debugSource === "db" ? "DB" : "AI"}
-                </span>
-              )}
-              {onReplace && (
-                <button
-                  type="button"
-                  onClick={handleReplaceClick}
-                  disabled={isReplaceLoading}
-                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-primary bg-primary/10 border border-primary-border hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none"
-                  title={replaceShowsLock ? "Доступно в Premium" : "Заменить"}
-                  aria-label={replaceShowsLock ? "Замена блюда доступна в Premium" : "Заменить блюдо"}
-                >
-                  {isReplaceLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : replaceShowsLock ? (
-                    <Lock className="h-4 w-4" />
-                  ) : (
-                    <motion.span
-                      animate={{ rotate: replaceSpin ? 360 : 0 }}
-                      transition={{ duration: 0.4, ease: "easeInOut" }}
-                    >
-                      <RotateCw className="h-4 w-4" />
-                    </motion.span>
-                  )}
-                </button>
-              )}
-              {onDelete && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border hover:border-destructive/30 active:scale-95 transition-all"
-                  title="Удалить из плана"
-                  aria-label="Удалить блюдо из плана"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              )}
+        <RecipeCard
+          variant="preview"
+          header={{
+            mealLabel: meta.label,
+            cookingTimeMinutes: cookTimeMinutes ?? null,
+            title: recipeTitle,
+          }}
+          ingredients={ingredientNames}
+          showIngredientChips={false}
+          showHint={false}
+          maxIngredientChips={INGREDIENT_CHIPS_MAX_COMPACT}
+          hint={hint ?? null}
+          nutrition={nutrition}
+          nutritionGoals={nutritionGoals ?? []}
+          onClick={handleClick}
+          actions={
+            showActionsCompact ? (
+              <div className="flex flex-col gap-1 items-stretch">
+                {debugSource && (
+                  <span
+                    className={cn(
+                      "text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0 self-start",
+                      debugSource === "db" ? "bg-sky-100 text-sky-800" : "bg-amber-100 text-amber-800",
+                    )}
+                  >
+                    {debugSource === "db" ? "DB" : "AI"}
+                  </span>
+                )}
+                {onReplace && (
+                  <button
+                    type="button"
+                    onClick={handleReplaceClick}
+                    disabled={isReplaceLoading}
+                    className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-primary bg-primary/10 border border-primary-border hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none"
+                    title={replaceShowsLock ? "Доступно в Premium" : "Заменить"}
+                    aria-label={replaceShowsLock ? "Замена блюда доступна в Premium" : "Заменить блюдо"}
+                  >
+                    {isReplaceLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : replaceShowsLock ? (
+                      <Lock className="h-4 w-4" />
+                    ) : (
+                      <motion.span
+                        animate={{ rotate: replaceSpin ? 360 : 0 }}
+                        transition={{ duration: 0.4, ease: "easeInOut" }}
+                      >
+                        <RotateCw className="h-4 w-4" />
+                      </motion.span>
+                    )}
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                    className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border hover:border-destructive/30 active:scale-95 transition-all"
+                    title="Удалить из плана"
+                    aria-label="Удалить блюдо из плана"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ) : undefined
+          }
+          className={cn(
+            className,
+            matchesPlanFocus && "ring-1 ring-emerald-200/70 bg-emerald-50/35",
+          )}
+        >
+          {matchesPlanFocus ? (
+            <div className="mt-1 space-y-1">
+              <div className="text-xs font-medium text-emerald-900/90 bg-emerald-100/90 rounded-md px-2 py-0.5 inline-block">
+                Под вашу цель
+              </div>
+              {focusDescription ? (
+                <p className="text-[11px] text-muted-foreground leading-snug">{focusDescription}</p>
+              ) : null}
             </div>
-          ) : undefined
-        }
-        className={className}
-      />
-    </>
+          ) : null}
+        </RecipeCard>
+      </>
     );
   }
 
