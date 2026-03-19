@@ -19,9 +19,6 @@ export interface PoolExhaustedSheetProps {
   allergies?: string[];
   likes?: string[];
   dislikes?: string[];
-  mealPlansKeyWeek: unknown[];
-  mealPlansKeyDay: unknown[];
-  queryClient: ReturnType<typeof useQueryClient>;
 }
 
 export function PoolExhaustedSheet({
@@ -30,13 +27,6 @@ export function PoolExhaustedSheet({
   selectedDayKey,
   mealType,
   memberId,
-  memberName,
-  allergies = [],
-  likes = [],
-  dislikes = [],
-  mealPlansKeyWeek,
-  mealPlansKeyDay,
-  queryClient,
 }: PoolExhaustedSheetProps) {
   const navigate = useNavigate();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
@@ -44,9 +34,16 @@ export function PoolExhaustedSheet({
   const { hasAccess } = useSubscription();
   const isFree = !hasAccess;
 
+  const planSlotChatState = {
+    fromPlanSlot: true as const,
+    plannedDate: selectedDayKey,
+    mealType,
+    memberId: memberId ?? undefined,
+  };
+
   const handleAddFromFavorites = () => {
     onOpenChange(false);
-    navigate("/favorites");
+    navigate("/favorites", { state: planSlotChatState });
   };
 
   const handleGenerateInChat = () => {
@@ -65,7 +62,13 @@ export function PoolExhaustedSheet({
             ? "Подбери ужин."
             : "Подбери перекус.";
     onOpenChange(false);
-    navigate("/chat", { state: { prefillMessage, prefillOnly: false } });
+    navigate("/chat", {
+      state: {
+        ...planSlotChatState,
+        prefillMessage,
+        prefillOnly: false,
+      },
+    });
   };
 
   return (

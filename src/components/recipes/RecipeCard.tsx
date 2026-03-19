@@ -106,8 +106,7 @@ export function RecipeCard({
         </div>
         <CardContent className={classes.padding}>
           <h3 className={`font-bold ${classes.title} mb-2 line-clamp-2`}>{title}</h3>
-          <NutritionGoalsChips goals={nutritionGoals} className="mb-2" />
-          <div className={`flex items-center gap-3 ${classes.text} text-muted-foreground`}>
+          <div className={`flex items-center gap-3 ${classes.text} text-muted-foreground mb-1.5`}>
             <div className="flex items-center gap-1">
               <Clock className={classes.icon} />
               <span>{cookTime}</span>
@@ -119,6 +118,7 @@ export function RecipeCard({
               </div>
             )}
           </div>
+          <NutritionGoalsChips goals={nutritionGoals} maxVisible={2} className="mb-0" />
         </CardContent>
       </Card>
     </motion.div>

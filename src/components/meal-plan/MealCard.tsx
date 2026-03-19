@@ -72,6 +72,8 @@ export interface MealCardProps {
   proteins?: number | null;
   fats?: number | null;
   carbs?: number | null;
+  /** Цели питания (чипы в превью). */
+  nutritionGoals?: string[] | null;
 }
 
 const CHIP_PLACEHOLDER_COUNT = 3;
@@ -103,6 +105,7 @@ export function MealCard({
   proteins: nutritionProteins,
   fats: nutritionFats,
   carbs: nutritionCarbs,
+  nutritionGoals,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -194,6 +197,7 @@ export function MealCard({
         maxIngredientChips={INGREDIENT_CHIPS_MAX_COMPACT}
         hint={hint ?? null}
         nutrition={nutrition}
+        nutritionGoals={nutritionGoals ?? []}
         onClick={handleClick}
         actions={
           showActionsCompact ? (

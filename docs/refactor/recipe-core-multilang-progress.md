@@ -3,6 +3,7 @@
 ## Current stage
 - Stage 3 — recipe_translations + locale-aware reads (completed)
 - Stage 4 — GOALS SYSTEM (minimal implementation, completed)
+- Stage 4.1 — goals UX + plan integration (completed)
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
@@ -19,7 +20,23 @@
 - [x] Stage 2.5.3 — Cold Start Protection (see checklist below)
 - [x] Stage 3 — recipe_translations + locale-aware reads
 - [x] Stage 4 — goals system (nutrition_goals)
+- [x] Stage 4.1 — goals visible in preview (plan + favorites), plan goal selector, generate-plan `selected_goal`, UI labels via `GOAL_LABELS`
 - [ ] Stage 5 — plan page refactor
+
+## Stage 4.1 — GOALS UX + PLAN INTEGRATION
+
+Цель: цели питания везде понятны пользователю, влияют на подбор плана, без усложнения архитектуры.
+
+Checklist:
+- [x] Единый mapping подписей `GOAL_LABELS` в `src/utils/nutritionGoals.ts` (ключи БД не менялись; поддержаны короткие алиасы для UI).
+- [x] Превью карточек (план, избранное): до 2 чипов целей под блоком времени/КБЖУ (`NutritionGoalsChips` + `maxVisible={2}` в preview).
+- [x] Вкладка план: single-select чипы цели под строкой «Учитываем все особенности профиля»; по умолчанию выбран «Баланс»; повторный клик по активному чипу — сброс (`null`); не multi-select.
+- [x] `generate-plan`: опциональный `selected_goal` (ключ БД); мягкая логика приоритета — сначала кандидаты с этой целью в `nutrition_goals`, иначе с `balanced`, иначе весь отфильтрованный пул; без жёсткого отсечения и без отдельного scoring/ranking-слоя. Обед: по-прежнему приоритет супов (логика lunch не ломалась).
+- [x] RPC `get_recipe_previews` возвращает `nutrition_goals` для превью в плане (миграция). До применения миграции фронт подмешивает `nutrition_goals` из параллельного `select` по `recipes` в `useRecipePreviewsByIds` (как для КБЖУ).
+
+Примечания:
+- Single goal selection only (не multi-select).
+- Simple priority logic (подмножество кандидатов при наличии), не ML и не отдельные таблицы.
 
 ## Stage 4 — GOALS SYSTEM
 

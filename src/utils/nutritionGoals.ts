@@ -11,12 +11,21 @@ export type NutritionGoal = (typeof NUTRITION_GOALS)[number];
 
 const GOAL_SET = new Set<string>(NUTRITION_GOALS);
 
-const GOAL_LABELS: Record<NutritionGoal, string> = {
-  balanced: "Сбалансировано",
+/**
+ * Единый mapping подписей для UI (ключи БД + короткие алиасы).
+ * Ключи в БД не меняются.
+ */
+export const GOAL_LABELS: Record<string, string> = {
+  balance: "Баланс",
+  balanced: "Баланс",
+  iron: "Железо",
   iron_support: "Железо",
-  brain_development: "Развитие мозга",
+  brain: "Фокус",
+  brain_development: "Фокус",
   weight_gain: "Набор веса",
-  gentle_digestion: "Лёгкое пищеварение",
+  digestion: "Легкость",
+  gentle_digestion: "Легкость",
+  energy: "Энергия",
   energy_boost: "Энергия",
 };
 
@@ -35,5 +44,6 @@ export function normalizeNutritionGoals(input: unknown): NutritionGoal[] {
 }
 
 export function nutritionGoalLabel(goal: string): string {
-  return GOAL_LABELS[goal as NutritionGoal] ?? goal;
+  const k = goal.trim().toLowerCase();
+  return GOAL_LABELS[k] ?? goal;
 }

@@ -1193,6 +1193,10 @@ export default function ChatPage() {
       prefillMessage?: string;
       sourceProducts?: string[];
       prefillOnly?: boolean;
+      fromPlanSlot?: boolean;
+      plannedDate?: string;
+      mealType?: string;
+      memberId?: string;
     } | null;
     const prefillText = state?.prefillMessage;
     if (!prefillText) {
@@ -1204,14 +1208,18 @@ export default function ChatPage() {
     lastAppliedPrefillRef.current = prefillText;
     prefillSentRef.current = true;
     setInput(prefillText);
-    window.history.replaceState({}, document.title);
+    const { prefillMessage: _pm, prefillOnly: _po, ...restState } = state ?? {};
+    navigate(".", {
+      replace: true,
+      state: Object.keys(restState).length > 0 ? restState : null,
+    });
     if (!state.prefillOnly) {
       const timer = setTimeout(() => {
         handleSend(prefillText);
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [mode, location.state, isChatBootstrapped, isLoadingHistory, messages.length, handleSend]);
+  }, [mode, location.state, isChatBootstrapped, isLoadingHistory, messages.length, handleSend, navigate]);
 
   /** UUID из БД (chat_history.id). Локальные id вида "user-173..." / "assistant-173..." не являются UUID. */
   const isChatHistoryId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);

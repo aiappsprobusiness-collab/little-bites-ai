@@ -48,6 +48,8 @@ export interface AddToPlanSheetProps {
   defaultMemberId: string | null;
   /** Дефолтный день (YYYY-MM-DD), например при переходе из пустого слота плана. */
   defaultDayKey?: string | null;
+  /** Явная цель из плана: всегда этот день+приём; если слот занят — замена по подтверждению. Иначе день со занятым слотом отбрасывается и открывается не тот день. */
+  targetSlot?: { dayKey: string; mealType: string } | null;
   onSuccess?: () => void;
 }
 
@@ -83,6 +85,7 @@ export function AddToPlanSheet({
   mealType: initialMealType,
   defaultMemberId,
   defaultDayKey,
+  targetSlot,
   onSuccess,
 }: AddToPlanSheetProps) {
   const { members } = useFamily();
@@ -144,6 +147,11 @@ export function AddToPlanSheet({
   useEffect(() => {
     if (!open) return;
     setSelectedMemberId(defaultMemberId ?? null);
+    if (targetSlot && dayKeys.includes(targetSlot.dayKey)) {
+      setSelectedMealType(normMealType(targetSlot.mealType));
+      setSelectedDayKey(targetSlot.dayKey);
+      return;
+    }
     const meal = normMealType(initialMealType);
     setSelectedMealType(meal);
     const filledForMeal = new Set<string>();
@@ -157,15 +165,17 @@ export function AddToPlanSheet({
         ? defaultDayKey
         : null;
     setSelectedDayKey(preferredDay ?? firstAvailable);
-  }, [open, defaultMemberId, defaultDayKey, initialMealType, dayKeys, weekPlans]);
+  }, [open, defaultMemberId, defaultDayKey, initialMealType, dayKeys, weekPlans, targetSlot]);
 
   useEffect(() => {
     if (!open) return;
+    if (targetSlot) return;
     if (selectedDayKey != null && !availableDayKeys.includes(selectedDayKey)) {
       setSelectedDayKey(firstAvailableDayKey ?? null);
     }
   }, [
     open,
+    targetSlot,
     selectedMealType,
     selectedMemberId,
     availableDayKeys,
@@ -205,7 +215,9 @@ export function AddToPlanSheet({
   };
 
   const handleDayClick = (key: string) => {
-    if (daysWithSlotFilled.has(key)) return;
+    if (targetSlot && key !== targetSlot.dayKey) return;
+    const allowFilledTarget = targetSlot && key === targetSlot.dayKey;
+    if (daysWithSlotFilled.has(key) && !allowFilledTarget) return;
     if (filledCountByDay[key] === 4) return;
     setSelectedDayKey(key);
   };
@@ -259,12 +271,14 @@ export function AddToPlanSheet({
                 <button
                   key={m.id}
                   type="button"
+                  disabled={!!targetSlot}
                   onClick={() => setSelectedMealType(m.id)}
                   className={cn(
                     "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                     selectedMealType === m.id
                       ? "bg-primary/10 border-primary/30 text-foreground"
-                      : "bg-transparent border-border text-muted-foreground hover:text-foreground"
+                      : "bg-transparent border-border text-muted-foreground hover:text-foreground",
+                    targetSlot && "opacity-80 cursor-default"
                   )}
                 >
                   {m.label}
@@ -289,16 +303,20 @@ export function AddToPlanSheet({
                 const filledCount = filledCountByDay[key] ?? 0;
                 const slotFilled = daysWithSlotFilled.has(key);
                 const isFull = filledCount === 4;
-                const isAvailable = !slotFilled && !isFull;
+                const isPinnedTargetDay = targetSlot?.dayKey === key;
+                const isAvailable = (!slotFilled || isPinnedTargetDay) && !isFull;
                 const isSelected = selectedDayKey === key;
 
                 let state: "A" | "B" | "C" | "D";
                 if (isFull) state = "C";
-                else if (slotFilled) state = "D";
+                else if (slotFilled && !isPinnedTargetDay) state = "D";
                 else if (filledCount === 0) state = "A";
                 else state = "B";
 
-                const isDisabled = state === "C" || state === "D";
+                const isDisabled =
+                  state === "C" ||
+                  (state === "D" && !isPinnedTargetDay) ||
+                  (!!targetSlot && !isPinnedTargetDay);
 
                 return (
                   <button

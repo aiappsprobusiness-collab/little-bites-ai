@@ -90,6 +90,8 @@ export interface StartPlanGenerationParams {
   start_key?: string;
   /** Явный массив ключей дней для week upgrade (приоритет над start_key). */
   day_keys?: string[];
+  /** Приоритет цели питания при подборе из пула (ключ БД, не balanced). */
+  selected_goal?: string;
   /** Включить debug-логи в Edge (для pool upgrade / run). */
   debug_pool?: boolean;
   /** Включить debug_plan (POOL DIAG / EXCLUDES). Если не задано, подставляется по isDebugPlanEnabled(). */
@@ -171,6 +173,7 @@ export function usePlanGenerationJob(
         }),
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
+        ...(params.selected_goal ? { selected_goal: params.selected_goal } : {}),
       };
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), POOL_UPGRADE_TIMEOUT_MS);
@@ -225,6 +228,7 @@ export function usePlanGenerationJob(
         continueFromDayIndex: jobRow.progress_done ?? 0,
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
+        ...(params.selected_goal ? { selected_goal: params.selected_goal } : {}),
       };
       const res = await invokeGeneratePlan(SUPABASE_URL, token, runBody, {
         label: `continue (attempt ${attempt})`,
@@ -283,6 +287,7 @@ export function usePlanGenerationJob(
         ...(params.type === "day" && params.day_key && { day_key: params.day_key }),
         ...(params.type === "week" && { start_key: params.start_key ?? getRollingStartKey() }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
+        ...(params.selected_goal ? { selected_goal: params.selected_goal } : {}),
       };
       const startRes = await invokeGeneratePlan(SUPABASE_URL, token, startBody, {
         label: "start",
@@ -310,6 +315,7 @@ export function usePlanGenerationJob(
         ...(params.type === "week" && { start_key: params.start_key ?? getRollingStartKey() }),
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
+        ...(params.selected_goal ? { selected_goal: params.selected_goal } : {}),
       };
       const runRes = await invokeGeneratePlan(SUPABASE_URL, token, runBody, {
         label: "run",

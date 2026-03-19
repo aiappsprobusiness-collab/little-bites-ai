@@ -691,6 +691,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 ? planSlotState.plannedDate
                 : undefined
             }
+            targetSlot={
+              planSlotState?.fromPlanSlot && planSlotState?.plannedDate && planSlotState?.mealType
+                ? { dayKey: planSlotState.plannedDate, mealType: planSlotState.mealType }
+                : null
+            }
             onSuccess={() => toast({ title: "Добавлено в план" })}
           />
         )}

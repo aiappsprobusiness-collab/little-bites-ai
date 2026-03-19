@@ -282,7 +282,13 @@ function pickFromPoolInMemory(
   excludeTitleKeys: string[],
   likeMode: LikeMode = "neutral",
   usedBaseCounts?: Record<string, number>,
-  goalHints?: { preferredGoals?: Set<string>; blockedGoals?: Set<string>; requireBalanced?: boolean }
+  goalHints?: {
+    preferredGoals?: Set<string>;
+    blockedGoals?: Set<string>;
+    requireBalanced?: boolean;
+    /** Мягкий приоритет: сначала кандидаты с этой целью, иначе с balanced, иначе весь пул. Не для balanced. */
+    preferGoalFirst?: string;
+  }
 ): { id: string; title: string; matchedLike: boolean; primaryBase: string } | null {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
@@ -310,10 +316,21 @@ function pickFromPoolInMemory(
     const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
     return slotSanityCheck(slot, [r.title ?? "", r.description ?? "", ing].join(" "));
   });
+  let work = filtered;
+  const preferG = goalHints?.preferGoalFirst;
+  if (preferG && GOAL_SET.has(preferG) && preferG !== "balanced") {
+    const withGoal = work.filter((r) => normalizeNutritionGoals(r.nutrition_goals).includes(preferG as NutritionGoal));
+    if (withGoal.length > 0) {
+      work = withGoal;
+    } else {
+      const withBal = work.filter((r) => normalizeNutritionGoals(r.nutrition_goals).includes("balanced"));
+      if (withBal.length > 0) work = withBal;
+    }
+  }
   const likeTokens = buildLikeTokens(memberData);
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
-  shuffleArray(filtered);
-  const best = pickBestRecipeForSlot(filtered, {
+  shuffleArray(work);
+  const best = pickBestRecipeForSlot(work, {
     likeTokens,
     likeMode,
     recentSignatures,
@@ -575,10 +592,17 @@ serve(async (req) => {
       attempt?: number;
       /** Future user preference: prioritize recipes with these nutrition goals. */
       nutrition_goals?: string[];
+      /** Выбранная цель плана (ключ БД); мягкий приоритет при подборе, без жёсткого фильтра. */
+      selected_goal?: string;
     };
     const action = body.action === "run" ? "run" : body.action === "replace_slot" ? "replace_slot" : body.action === "cancel" ? "cancel" : body.action === "start" ? "start" : null;
     const type = body.type === "day" || body.type === "week" ? body.type : "day";
     const userNutritionGoals = normalizeNutritionGoals(body.nutrition_goals ?? []);
+    const rawSelectedGoal = typeof body.selected_goal === "string" ? body.selected_goal.trim().toLowerCase() : "";
+    const selectedGoalToken: NutritionGoal | null =
+      rawSelectedGoal && GOAL_SET.has(rawSelectedGoal) ? (rawSelectedGoal as NutritionGoal) : null;
+    const preferGoalFirst =
+      selectedGoalToken && selectedGoalToken !== "balanced" ? selectedGoalToken : undefined;
     const memberId = body.member_id ?? null;
     const memberData: MemberDataPool | null = body.member_data ?? null;
     /** Для режима «Семья» (member_id == null) храним план в meal_plans_v2 с member_id = null, чтобы фронт читал по member_id IS NULL. */
@@ -931,10 +955,10 @@ serve(async (req) => {
           excludeTitlesForSlot,
           slotLikeMode,
           baseCountsForSlot,
-          { preferredGoals, blockedGoals, requireBalanced }
+          { preferredGoals, blockedGoals, requireBalanced, preferGoalFirst }
         );
         if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
-          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot, { preferredGoals, blockedGoals, requireBalanced });
+          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot, { preferredGoals, blockedGoals, requireBalanced, preferGoalFirst });
         }
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };

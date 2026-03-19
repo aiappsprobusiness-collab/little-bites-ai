@@ -30,3 +30,17 @@ export function applyReplaceSlotToPlanCache(
   queryClient.setQueryData(keys.mealPlansKeyWeek, updater);
   queryClient.setQueryData(keys.mealPlansKeyDay, updater);
 }
+
+/** Убрать слот из кэша планов (после очистки слота в БД: pool exhausted, лимит pool-замен и т.п.). */
+export function applyClearSlotToPlanCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  keys: { mealPlansKeyWeek: unknown[]; mealPlansKeyDay: unknown[] },
+  payload: { dayKey: string; mealType: string }
+) {
+  const updater = (old: Array<{ planned_date: string; meal_type: string }> | undefined) => {
+    if (!old) return old;
+    return old.filter((item) => !(item.planned_date === payload.dayKey && item.meal_type === payload.mealType));
+  };
+  queryClient.setQueryData(keys.mealPlansKeyWeek, updater);
+  queryClient.setQueryData(keys.mealPlansKeyDay, updater);
+}

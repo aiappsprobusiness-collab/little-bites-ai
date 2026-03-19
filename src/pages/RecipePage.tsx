@@ -689,6 +689,11 @@ export default function RecipePage() {
           mealType={fromMealPlan && planMealType ? planMealType : (recipe as { meal_type?: string }).meal_type ?? null}
           defaultMemberId={favoriteMemberId}
           defaultDayKey={fromMealPlan && plannedDate ? plannedDate : undefined}
+          targetSlot={
+            fromMealPlan && plannedDate && planMealType
+              ? { dayKey: plannedDate, mealType: planMealType }
+              : null
+          }
           onSuccess={() => toast({ title: "Добавлено в план" })}
         />
       )}

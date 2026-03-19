@@ -206,6 +206,7 @@ export function useRecipes(childId?: string) {
         const { steps_json: _sj, ingredients_json: _ij, ...rest } = r;
         const out = {
           ...rest,
+          nutrition_goals: ensureStringArray(r.nutrition_goals),
           servings_base: servingsRow?.servings_base ?? 1,
           servings_recommended: servingsRow?.servings_recommended ?? 1,
           ingredients,

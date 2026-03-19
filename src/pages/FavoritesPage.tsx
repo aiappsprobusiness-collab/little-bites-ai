@@ -38,7 +38,22 @@ export default function FavoritesPage() {
   const { hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
-  const stateTab = (location.state as { tab?: FavoritesTab } | null)?.tab;
+  const locationState = location.state as {
+    tab?: FavoritesTab;
+    fromPlanSlot?: boolean;
+    plannedDate?: string;
+    mealType?: string;
+    memberId?: string;
+  } | null;
+  const stateTab = locationState?.tab;
+  const planSlotFromNav =
+    locationState?.fromPlanSlot && locationState.plannedDate && locationState.mealType
+      ? {
+          plannedDate: locationState.plannedDate,
+          mealType: locationState.mealType,
+          memberId: (locationState.memberId ?? null) as string | null,
+        }
+      : null;
   const [tab, setTab] = useState<FavoritesTab>("favorites");
   useEffect(() => {
     if (stateTab === "my_recipes") setTab("my_recipes");
@@ -56,7 +71,13 @@ export default function FavoritesPage() {
   const favoritesFilter = selectedMemberId === null || selectedMemberId === "family" ? "family" : selectedMemberId;
   const { favorites, removeFavorite } = useFavorites(favoritesFilter, { queryEnabled: tab === "favorites" });
   const { myRecipes } = useMyRecipes();
-  const [addToPlanRecipe, setAddToPlanRecipe] = useState<{ id: string; title: string; member_id: string | null } | null>(null);
+  const [addToPlanRecipe, setAddToPlanRecipe] = useState<{
+    id: string;
+    title: string;
+    member_id: string | null;
+    targetDayKey?: string;
+    targetMealType?: string;
+  } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formRecipeId, setFormRecipeId] = useState<string | null>(null);
   const [ingredientFilterTerms, setIngredientFilterTerms] = useState<string[]>([]);
@@ -97,7 +118,20 @@ export default function FavoritesPage() {
     const recipeId = getRecipeId(favorite);
     const preloadedTitle = favorite.recipe?.title ?? undefined;
     if (recipeId) {
-      navigate(`/recipe/${recipeId}`, { state: { fromFavorites: true, preloadedTitle } });
+      navigate(`/recipe/${recipeId}`, {
+        state: {
+          fromFavorites: true,
+          preloadedTitle,
+          ...(planSlotFromNav
+            ? {
+                fromMealPlan: true,
+                plannedDate: planSlotFromNav.plannedDate,
+                mealType: planSlotFromNav.mealType,
+                ...(planSlotFromNav.memberId != null ? { memberId: planSlotFromNav.memberId } : {}),
+              }
+            : {}),
+        },
+      });
     }
   };
 
@@ -210,10 +244,33 @@ export default function FavoritesPage() {
                       index={index}
                       onTap={() =>
                         navigate(`/recipe/${recipe.id}`, {
-                          state: { fromFavorites: true, preloadedTitle: recipe.title ?? undefined },
+                          state: {
+                            fromFavorites: true,
+                            preloadedTitle: recipe.title ?? undefined,
+                            ...(planSlotFromNav
+                              ? {
+                                  fromMealPlan: true,
+                                  plannedDate: planSlotFromNav.plannedDate,
+                                  mealType: planSlotFromNav.mealType,
+                                  ...(planSlotFromNav.memberId != null ? { memberId: planSlotFromNav.memberId } : {}),
+                                }
+                              : {}),
+                          },
                         })
                       }
-                      onAddToPlan={hasAccess ? () => setAddToPlanRecipe({ id: recipe.id, title: recipe.title ?? "", member_id: null }) : undefined}
+                      onAddToPlan={
+                        hasAccess
+                          ? () =>
+                              setAddToPlanRecipe({
+                                id: recipe.id,
+                                title: recipe.title ?? "",
+                                member_id: planSlotFromNav?.memberId ?? null,
+                                ...(planSlotFromNav
+                                  ? { targetDayKey: planSlotFromNav.plannedDate, targetMealType: planSlotFromNav.mealType }
+                                  : {}),
+                              })
+                          : undefined
+                      }
                       onEdit={(e) => { e.stopPropagation(); openEditForm(recipe.id); }}
                       isPremium={hasAccess}
                     />
@@ -267,11 +324,24 @@ export default function FavoritesPage() {
                     members={members}
                     onTap={() => handleCardTap(favorite)}
                     onToggleFavorite={(e) => handleRemove(e, favorite.id)}
-                    onAddToPlan={hasAccess ? () => {
-                      const id = getRecipeId(favorite);
-                      const title = favorite.recipe?.title ?? "";
-                      if (id) setAddToPlanRecipe({ id, title, member_id: favorite.member_id ?? null });
-                    } : undefined}
+                    onAddToPlan={
+                      hasAccess
+                        ? () => {
+                            const id = getRecipeId(favorite);
+                            const title = favorite.recipe?.title ?? "";
+                            if (id) {
+                              setAddToPlanRecipe({
+                                id,
+                                title,
+                                member_id: planSlotFromNav?.memberId ?? favorite.member_id ?? null,
+                                ...(planSlotFromNav
+                                  ? { targetDayKey: planSlotFromNav.plannedDate, targetMealType: planSlotFromNav.mealType }
+                                  : {}),
+                              });
+                            }
+                          }
+                        : undefined
+                    }
                   />
                 ))}
               </div>
@@ -287,6 +357,13 @@ export default function FavoritesPage() {
           recipeId={addToPlanRecipe.id}
           recipeTitle={addToPlanRecipe.title}
           defaultMemberId={addToPlanRecipe.member_id ?? null}
+          defaultDayKey={addToPlanRecipe.targetDayKey}
+          mealType={addToPlanRecipe.targetMealType ?? null}
+          targetSlot={
+            addToPlanRecipe.targetDayKey && addToPlanRecipe.targetMealType
+              ? { dayKey: addToPlanRecipe.targetDayKey, mealType: addToPlanRecipe.targetMealType }
+              : null
+          }
           onSuccess={() => toast({ title: "Добавлено в план" })}
         />
       )}

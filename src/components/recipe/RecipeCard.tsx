@@ -86,6 +86,13 @@ export function RecipeCard({
 
   const innerBody = (
     <>
+      {isPreview && (
+        <NutritionGoalsChips
+          goals={nutritionGoals}
+          maxVisible={2}
+          className="mt-0.5"
+        />
+      )}
       {isPreview && showChips && (
         <IngredientChips
           ingredients={ingredients}
@@ -97,7 +104,9 @@ export function RecipeCard({
           onSubstituteClick={onSubstituteClick}
         />
       )}
-      <NutritionGoalsChips goals={nutritionGoals} className={isPreview ? "mt-0.5" : "mt-1"} />
+      {!isPreview && (
+        <NutritionGoalsChips goals={nutritionGoals} className="mt-1" />
+      )}
       {!isPreview && (
         <RecipeIngredientList
           ingredients={ingredients}

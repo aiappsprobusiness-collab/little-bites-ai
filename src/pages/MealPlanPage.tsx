@@ -21,6 +21,7 @@ import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { PlanModeHint } from "@/components/plan/PlanModeHint";
+import { PlanGoalChipsRow } from "@/components/plan/PlanGoalChipsRow";
 import { isFamilySelected } from "@/utils/planModeUtils";
 import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -39,6 +40,8 @@ import {
 import { getDebugPlanFromStorage, setDebugPlanInStorage } from "@/utils/debugPlan";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
+import { cn } from "@/lib/utils";
+import { recipeCard, recipeMealBadge } from "@/theme/recipeTokens";
 
 /** Включить визуальный debug пула и логи replace_slot: window.__PLAN_DEBUG = true или ?debugPool=1 */
 function isPlanDebug(): boolean {
@@ -58,9 +61,10 @@ function isPerf(): boolean {
  * 2) Fill week (Premium): только POOL. В dev: [FILL] source=POOL only.
  * 3) Replace (↻): Free — paywall; Premium/Trial — pool-first, затем AI. В dev: [REPLACE] source=AI premiumOnly.
  * 4) Edge replace_slot: при Free и пустом пуле возвращает premium_required (без вызова AI).
+ * 5) Занятый слот: до 3 успешных pool-замен подряд (см. POOL_SLOT_REPLACE_MAX); далее или pool_exhausted — очистка слота + PoolExhaustedSheet.
  */
 
-import { applyReplaceSlotToPlanCache } from "@/utils/planCache";
+import { applyReplaceSlotToPlanCache, applyClearSlotToPlanCache } from "@/utils/planCache";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { consumeJustCreatedMemberId } from "@/services/planFill";
@@ -74,6 +78,9 @@ import {
 
 const A2HS_FIRST_DAY_DISPATCHED_KEY = "a2hs_first_day_dispatched";
 const A2HS_FIRST_WEEK_DISPATCHED_KEY = "a2hs_first_week_dispatched";
+
+/** Макс. число успешных pool-замен подряд для занятого слота; после — слот очищается и показывается ручной fallback. */
+const POOL_SLOT_REPLACE_MAX = 3;
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -319,6 +326,10 @@ export default function MealPlanPage() {
   } = usePlanGenerationJob(memberIdForPlan, planGenType);
 
   const [poolUpgradeLoading, setPoolUpgradeLoading] = useState(false);
+  /** По умолчанию «Баланс»; повторный клик по чипу — сброс (null). На generate-plan уходит только если не balanced. */
+  const [planGoalSelection, setPlanGoalSelection] = useState<string | null>("balanced");
+  const selectedGoalForGeneratePlan =
+    planGoalSelection != null && planGoalSelection !== "balanced" ? planGoalSelection : undefined;
   const isAnyGenerating = isPlanGenerating || poolUpgradeLoading || isPlanPartialTimeBudget;
 
   const [statusPhraseIndex, setStatusPhraseIndex] = useState(0);
@@ -334,6 +345,7 @@ export default function MealPlanPage() {
   useEffect(() => {
     setPoolUpgradeLoading(false);
     setReplacingSlotKey(null);
+    setPoolAutoReplaceCountBySlot({});
   }, [mealPlanMemberId]);
 
   const startKey = getRollingStartKey();
@@ -345,6 +357,8 @@ export default function MealPlanPage() {
 
   const [replacingSlotKey, setReplacingSlotKey] = useState<string | null>(null);
   const [poolExhaustedContext, setPoolExhaustedContext] = useState<{ dayKey: string; mealType: string } | null>(null);
+  /** Успешные pool-замены по ключу `${dayKey}_${mealType}` (только занятый слот, кнопка «Заменить» / подбор из пула). */
+  const [poolAutoReplaceCountBySlot, setPoolAutoReplaceCountBySlot] = useState<Record<string, number>>({});
   const [clearConfirm, setClearConfirm] = useState<"day" | "week" | null>(null);
   /** Session-level excludes per day for replace_slot: после каждой замены добавляем recipe_id и titleKey, чтобы не крутить одни и те же рецепты. */
   const [sessionExcludeRecipeIds, setSessionExcludeRecipeIds] = useState<Record<string, string[]>>({});
@@ -526,6 +540,46 @@ export default function MealPlanPage() {
 
   const { data: dayMealPlans = [], isLoading, isFetching } = getMealPlansByDate(selectedDate);
   const { data: rowExistsData } = getMealPlanRowExists(selectedDate);
+
+  const clearSlotAndOpenPoolFallback = useCallback(
+    async (ctx: { dayKey: string; mealType: string; planSlotId: string | null }) => {
+      if (ctx.planSlotId) {
+        try {
+          await deleteMealPlan(ctx.planSlotId);
+          applyClearSlotToPlanCache(queryClient, { mealPlansKeyWeek, mealPlansKeyDay }, { dayKey: ctx.dayKey, mealType: ctx.mealType });
+          await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+        } catch (e: unknown) {
+          toast({
+            variant: "destructive",
+            title: "Ошибка",
+            description: e instanceof Error ? e.message : "Не удалось очистить слот",
+          });
+          return;
+        }
+      }
+      setPoolExhaustedContext({ dayKey: ctx.dayKey, mealType: ctx.mealType });
+    },
+    [deleteMealPlan, queryClient, mealPlansKeyWeek, mealPlansKeyDay, user?.id, toast]
+  );
+
+  useEffect(() => {
+    setPoolAutoReplaceCountBySlot((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const k of Object.keys(next)) {
+        if (!k.startsWith(`${selectedDayKey}_`)) continue;
+        const mealTypeRest = k.slice(selectedDayKey.length + 1);
+        const occupied = dayMealPlans.some(
+          (p) => p.planned_date === selectedDayKey && p.meal_type === mealTypeRest && !!p.recipe_id
+        );
+        if (!occupied) {
+          delete next[k];
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedDayKey, dayMealPlans]);
   /** Единый источник: dayMealPlans (развёрнутые слоты из одной строки). Пустой день только когда загрузка завершена и слотов с recipe_id нет. При refetch после fill не показываем empty. */
   const hasNoDishes = dayMealPlans.filter((p) => p.recipe_id).length === 0;
   const isEmptyDay = !isLoading && !isFetching && hasNoDishes;
@@ -662,6 +716,7 @@ export default function MealPlanPage() {
       member_data: memberDataForPlan,
       day_key: todayKey,
       day_keys: getRollingDayKeys(),
+      ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
     })
       .then(() => {
         setPlanInitialized();
@@ -760,6 +815,18 @@ export default function MealPlanPage() {
     acc[mealType.id] = plan || null;
     return acc;
   }, {} as Record<string, typeof dayMealPlans[0] | null>);
+
+  /** Первый пустой слот по порядку завтрак → ужин: PRIMARY empty UI; остальные пустые — SECONDARY (пересчитывается при заполнении). */
+  const firstEmptySlotId = useMemo(() => {
+    for (const slot of mealTypes) {
+      const plannedMeal = mealsByType[slot.id];
+      const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
+      const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
+      const hasDish = !!(plannedMeal && recipeId && recipe?.title);
+      if (!hasDish) return slot.id;
+    }
+    return null;
+  }, [mealsByType, mealTypes]);
 
   const planDebug = isPlanDebug();
 
@@ -913,6 +980,13 @@ export default function MealPlanPage() {
                     memberDislikes={memberDataForPlan?.dislikes}
                   />
                 )}
+                {members.length > 0 && (
+                  <PlanGoalChipsRow
+                    value={planGoalSelection}
+                    onChange={setPlanGoalSelection}
+                    className="mt-2"
+                  />
+                )}
                 {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
                   <span className="text-xs text-slate-500">DB: {dayDbCount} | AI: {dayAiCount}</span>
                 )}
@@ -990,6 +1064,7 @@ export default function MealPlanPage() {
                         member_data: memberDataForPlan,
                         day_key: selectedDayKey,
                         day_keys: dayKeys,
+                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
                       });
                       trackUsageEvent("plan_fill_day_success");
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
@@ -1054,6 +1129,7 @@ export default function MealPlanPage() {
                         member_data: memberDataForPlan,
                         start_key: getRollingStartKey(),
                         day_keys: getRollingDayKeys(),
+                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
                       });
                       setMutedWeekKeyAndStorage(null);
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
@@ -1207,10 +1283,7 @@ export default function MealPlanPage() {
           {isLoading || isFetching ? (
             <div className="mt-3 space-y-4 pb-4">
               {mealTypes.map((slot) => (
-                <div key={slot.id}>
-                  <p className="text-sm font-medium text-foreground mb-2">{slot.label}</p>
-                  <MealCardSkeleton />
-                </div>
+                <MealCardSkeleton key={slot.id} />
               ))}
             </div>
           ) : isEmptyDay ? (
@@ -1253,7 +1326,14 @@ export default function MealPlanPage() {
                       if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
                       setPoolUpgradeLoading(true);
                       try {
-                        const result = await runPoolUpgrade({ type: "day", member_id: memberIdForPlan, member_data: memberDataForPlan, day_key: selectedDayKey, day_keys: dayKeys });
+                        const result = await runPoolUpgrade({
+                          type: "day",
+                          member_id: memberIdForPlan,
+                          member_data: memberDataForPlan,
+                          day_key: selectedDayKey,
+                          day_keys: dayKeys,
+                          ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
+                        });
                         trackUsageEvent("plan_fill_day_success");
                         await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                         const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
@@ -1314,9 +1394,9 @@ export default function MealPlanPage() {
                 const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
                 const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
                 const hasDish = !!(plannedMeal && recipeId && recipe?.title);
+                const isPrimaryEmpty = !hasDish && firstEmptySlotId === slot.id;
                 return (
                   <div key={slot.id}>
-                    <p className="text-sm font-medium text-foreground mb-2">{slot.label}</p>
                     {hasDish ? (
                       <MealCard
                         mealType={plannedMeal!.meal_type}
@@ -1334,6 +1414,7 @@ export default function MealPlanPage() {
                         proteins={previews[recipeId!]?.proteins}
                         fats={previews[recipeId!]?.fats}
                         carbs={previews[recipeId!]?.carbs}
+                        nutritionGoals={previews[recipeId!]?.nutrition_goals ?? []}
                         isFavorite={isFavoriteForPlan(recipeId!, memberIdForPlan)}
                         onToggleFavorite={async (rid, next) => {
                           const p = previews[rid];
@@ -1367,6 +1448,14 @@ export default function MealPlanPage() {
                           if (import.meta.env.DEV) console.info("[REPLACE] source=AI premiumOnly", { dayKey: selectedDayKey, slot: slot.id });
                           const slotKey = `${selectedDayKey}_${slot.id}`;
                           if (replacingSlotKey != null) return;
+                          if ((poolAutoReplaceCountBySlot[slotKey] ?? 0) >= POOL_SLOT_REPLACE_MAX) {
+                            await clearSlotAndOpenPoolFallback({
+                              dayKey: selectedDayKey,
+                              mealType: slot.id,
+                              planSlotId: plannedMeal.id,
+                            });
+                            return;
+                          }
                           setReplacingSlotKey(slotKey);
                           try {
                             const result = await replaceMealSlotAuto({
@@ -1405,6 +1494,12 @@ export default function MealPlanPage() {
                                 plan_source: result.plan_source,
                               }, mealPlanMemberId ?? null);
                               await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                              if (result.pickedSource === "pool" || result.plan_source === "pool") {
+                                setPoolAutoReplaceCountBySlot((prev) => ({
+                                  ...prev,
+                                  [slotKey]: (prev[slotKey] ?? 0) + 1,
+                                }));
+                              }
                               toast({
                                 description: result.pickedSource === "ai" ? "Подбираем новый вариант…" : "Блюдо заменено",
                               });
@@ -1419,7 +1514,11 @@ export default function MealPlanPage() {
                                 );
                                 setShowPaywall(true);
                               } else if (code === "pool_exhausted") {
-                                setPoolExhaustedContext({ dayKey: selectedDayKey, mealType: slot.id });
+                                await clearSlotAndOpenPoolFallback({
+                                  dayKey: selectedDayKey,
+                                  mealType: slot.id,
+                                  planSlotId: plannedMeal.id,
+                                });
                               } else {
                                 const err = "error" in result ? result.error : "";
                                 if (err === "limit") {
@@ -1467,8 +1566,15 @@ export default function MealPlanPage() {
                         onDelete={hasAccess ? async () => {
                           const planSlotId = plannedMeal.id;
                           if (!planSlotId) return;
+                          const sk = `${selectedDayKey}_${slot.id}`;
                           try {
                             await deleteMealPlan(planSlotId);
+                            setPoolAutoReplaceCountBySlot((prev) => {
+                              if (prev[sk] == null) return prev;
+                              const next = { ...prev };
+                              delete next[sk];
+                              return next;
+                            });
                             queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                             toast({ title: "Блюдо удалено", description: "Убрано из плана на день" });
                           } catch (e: unknown) {
@@ -1479,12 +1585,40 @@ export default function MealPlanPage() {
                     ) : isLoading || isAnyGenerating || replacingSlotKey === `${selectedDayKey}_${slot.id}` ? (
                       <MealCardSkeleton />
                     ) : (
-                      <div className="flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/60 min-h-[48px] justify-center px-4 py-3">
-                        <p className="text-plan-secondary text-muted-foreground">Пока нет блюда</p>
+                      <div
+                        className={cn(
+                          recipeCard,
+                          "flex flex-col items-start justify-center gap-3 px-3 pt-3 pb-4 min-h-[88px] touch-manipulation",
+                          isPrimaryEmpty
+                            ? "bg-primary/[0.06]"
+                            : "bg-muted/50 border-border/60 shadow-none"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            recipeMealBadge,
+                            !isPrimaryEmpty && "opacity-90"
+                          )}
+                        >
+                          {slot.label}
+                        </span>
+                        <p
+                          className={cn(
+                            "text-sm font-semibold leading-snug",
+                            isPrimaryEmpty ? "text-foreground" : "text-muted-foreground"
+                          )}
+                        >
+                          Блюдо не выбрано
+                        </p>
                         {!isAnyGenerating && (
                           <button
                             type="button"
-                            className="text-typo-caption text-primary hover:opacity-80 font-medium w-fit"
+                            className={cn(
+                              "text-sm font-medium underline underline-offset-2 text-left w-fit min-h-[44px] py-1 -my-1 transition-colors active:scale-95",
+                              isPrimaryEmpty
+                                ? "text-primary hover:text-primary/80 active:text-primary/70"
+                                : "text-primary/75 hover:text-primary active:text-primary/85"
+                            )}
                             onClick={async () => {
                               if (replacingSlotKey != null) return;
                               if (isFree) {
@@ -1543,7 +1677,11 @@ export default function MealPlanPage() {
                                     );
                                     setShowPaywall(true);
                                   } else if (code === "pool_exhausted") {
-                                    setPoolExhaustedContext({ dayKey: selectedDayKey, mealType: slot.id });
+                                    await clearSlotAndOpenPoolFallback({
+                                      dayKey: selectedDayKey,
+                                      mealType: slot.id,
+                                      planSlotId: null,
+                                    });
                                   } else {
                                     const err = "error" in result ? result.error : "";
                                     if (err === "limit") {
@@ -1634,6 +1772,7 @@ export default function MealPlanPage() {
                         member_data: memberDataForPlan,
                         day_key: formatLocalDate(rollingDates[6]),
                         day_keys: dayKeys,
+                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
                       });
                       queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                       const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
@@ -1690,9 +1829,6 @@ export default function MealPlanPage() {
         allergies={memberDataForPlan?.allergies}
         likes={memberDataForPlan?.likes}
         dislikes={memberDataForPlan?.dislikes}
-        mealPlansKeyWeek={mealPlansKeyWeek}
-        mealPlansKeyDay={mealPlansKeyDay}
-        queryClient={queryClient}
       />
 
       <ConfirmActionModal

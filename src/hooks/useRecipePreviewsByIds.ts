@@ -16,6 +16,11 @@ function stableIdsKey(recipeIds: string[]): string {
   return [...new Set(recipeIds)].filter(isValidUUID).sort().join(",");
 }
 
+function nutritionGoalsFromRpc(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((g): g is string => typeof g === "string");
+}
+
 function toRecipePreview(row: {
   id: string;
   title: string | null;
@@ -26,6 +31,7 @@ function toRecipePreview(row: {
   ingredient_names: string[] | null;
   ingredient_total_count: number | null;
   is_favorite?: boolean | null;
+  nutrition_goals?: unknown;
 }): RecipePreview {
   return {
     id: row.id,
@@ -37,6 +43,7 @@ function toRecipePreview(row: {
     minAgeMonths: row.min_age_months ?? null,
     maxAgeMonths: row.max_age_months ?? null,
     isFavorite: !!row.is_favorite,
+    nutrition_goals: nutritionGoalsFromRpc(row.nutrition_goals),
   };
 }
 
@@ -71,7 +78,10 @@ export function useRecipePreviewsByIds(recipeIds: string[], locale?: string | nu
       if (!user || ids.length === 0) return {};
       const [previewsResult, tipsResult] = await Promise.all([
         supabase.rpc("get_recipe_previews", { recipe_ids: ids, p_locale: effectiveLocale }),
-        supabase.from("recipes").select("id, chef_advice, advice, source, calories, proteins, fats, carbs").in("id", ids),
+        supabase
+          .from("recipes")
+          .select("id, chef_advice, advice, source, calories, proteins, fats, carbs, nutrition_goals")
+          .in("id", ids),
       ]);
       const { data: previewRows, error } = previewsResult;
       if (error) throw error;
@@ -84,6 +94,7 @@ export function useRecipePreviewsByIds(recipeIds: string[], locale?: string | nu
         proteins?: number | null;
         fats?: number | null;
         carbs?: number | null;
+        nutrition_goals?: unknown;
       }>;
       const tipsMap = new Map(
         tipsRows.map((r) => [
@@ -96,6 +107,7 @@ export function useRecipePreviewsByIds(recipeIds: string[], locale?: string | nu
             proteins: r.proteins ?? null,
             fats: r.fats ?? null,
             carbs: r.carbs ?? null,
+            nutrition_goals: r.nutrition_goals,
           },
         ])
       );
@@ -109,11 +121,16 @@ export function useRecipePreviewsByIds(recipeIds: string[], locale?: string | nu
         ingredient_names: string[] | null;
         ingredient_total_count: number | null;
         is_favorite?: boolean | null;
+        nutrition_goals?: unknown;
       }>;
       const map: Record<string, RecipePreview> = {};
       rows.forEach((r) => {
         const preview = toRecipePreview(r);
         const tips = tipsMap.get(r.id);
+        const goalsFromRpc = nutritionGoalsFromRpc(r.nutrition_goals);
+        const goalsFromTable = tips ? nutritionGoalsFromRpc(tips.nutrition_goals) : [];
+        /** Пока RPC без колонки (миграция не применена), цели только из recipes. */
+        preview.nutrition_goals = goalsFromRpc.length > 0 ? goalsFromRpc : goalsFromTable;
         if (tips) {
           preview.chefAdvice = tips.chefAdvice;
           preview.advice = tips.advice;
