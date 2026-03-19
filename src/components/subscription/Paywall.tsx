@@ -17,7 +17,7 @@ interface PaywallProps {
 }
 
 const FEATURES = [
-  "План питания на 7 дней",
+  "Меню, адаптированное под вашего ребёнка",
   "Замена любого блюда",
   "До 10 профилей детей",
   "Несколько аллергий на профиль",
@@ -118,8 +118,8 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
 
             {/* Custom message (upsell из онбординга или при лимитах) */}
             {paywallCustomMessage && (
-              <div className="mb-4 p-4 rounded-xl bg-primary/10 border border-primary/20">
-                <p className="text-typo-muted font-semibold text-foreground text-center leading-relaxed">
+              <div className="mb-4 p-4 rounded-xl bg-primary/10 border border-primary/20 min-w-0">
+                <p className="text-typo-muted font-semibold text-foreground text-center leading-relaxed text-wrap whitespace-normal break-words">
                   {paywallCustomMessage}
                 </p>
               </div>
@@ -137,25 +137,25 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
               <h2 className="text-typo-title font-semibold mb-2 text-foreground">
                 Продолжить без ограничений
               </h2>
-              <p className="text-muted-foreground text-typo-muted leading-relaxed">
+              <p className="text-muted-foreground text-typo-muted leading-relaxed text-wrap whitespace-normal break-words">
                 Открыть неделю, замены, чат и «Помощь маме» — чтобы меню собиралось само.
               </p>
             </div>
 
             {/* Features — чекмарки, тёплый тон */}
-            <div className="space-y-3 mb-6">
+            <div className="space-y-3 mb-6 min-w-0">
               {FEATURES.map((text, index) => (
                 <motion.div
                   key={text}
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.05 * index }}
-                  className="flex items-center gap-3 text-typo-muted"
+                  className="flex items-start gap-3 text-typo-muted min-w-0"
                 >
-                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
                     <Check className="w-3 h-3 text-primary" />
                   </div>
-                  <span className="text-foreground">{text}</span>
+                  <span className="text-foreground min-w-0 flex-1 text-wrap whitespace-normal break-words">{text}</span>
                 </motion.div>
               ))}
             </div>

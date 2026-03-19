@@ -5,6 +5,8 @@
 - Stage 4 — GOALS SYSTEM (minimal implementation, completed)
 - Stage 4.1 — goals UX + plan integration (completed)
 - Stage 4.2 — smart goal prioritization in generate-plan (completed)
+- Stage 4.3 — family-aware scoring in generate-plan (completed)
+- Stage 4.3.1 — plan hint copy + paywall feature line + text wrap (completed)
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
@@ -23,7 +25,26 @@
 - [x] Stage 4 — goals system (nutrition_goals)
 - [x] Stage 4.1 — goals visible in preview (plan + favorites), plan goal selector, generate-plan `selected_goal`, UI labels via `GOAL_LABELS`
 - [x] Stage 4.2 — generate-plan scoring + diversity (no pool narrowing; lunch/soup unchanged)
+- [x] Stage 4.3 — family-aware + age-aware + toddler soft-mode scoring (generate-plan only)
+- [x] Stage 4.3.1 — UI copy + layout (PlanModeHint family text/subtext, Paywall first feature; wrap/min-w-0)
 - [ ] Stage 5 — plan page refactor
+
+## Stage 4.3.1 — Plan hint + paywall copy (UI only)
+
+- `PlanModeHint` (семейный режим): основной текст «✨ Умное меню…», подзаголовок «Без лишних настроек…», переносы (`whitespace-normal break-words`), без `truncate`; режим одного профиля — перенос без обрезки.
+- `Paywall`: первый пункт списка преимуществ — «Меню, адаптированное под вашего ребёнка»; кастомное сообщение и список — перенос строк, без обрезки.
+
+## Stage 4.3 — Family-aware scoring
+
+**DONE** (логика только в `supabase/functions/generate-plan/index.ts`; схема БД и UI не менялись).
+
+- **Исключение младенцев младше 1 года** из возрастного бонуса (`age_months` < 12): на `age_bonus` не влияют; фильтры пула и правила infant/toddler из существующего кода не отключались.
+- **Toddler soft-mode:** при `hasToddler` (любой член с `age_months` < 36) — мягкий бонус к рецептам с `gentle_digestion` / `balanced` (cap +2), без фильтрации пула.
+- **Возрастные бонусы** по группам (только участники с возрастом ≥12 мес): toddler 12–35 мес, child 36–119 мес, adult ≥120 мес; сумма по членам семьи, cap +3 на рецепт.
+- **Агрегация семьи:** флаги и eligible-члены из списка `members` (семья — все строки; одиночный профиль — один член).
+- **Скоринг:** `final_score = base_score + goal_bonus + age_bonus + soft_bonus`; при равенстве — приоритет goal → age → soft.
+
+Лог: `CHAT_PLAN_FAMILY_DEBUG` (`hasInfant`, `hasToddler`, `members_count`, `age_groups_distribution`, `avg_age`, `total_age_bonus`, `total_soft_bonus`).
 
 ## Stage 4.2 — SMART GOAL PRIORITIZATION (GENERATE-PLAN)
 
