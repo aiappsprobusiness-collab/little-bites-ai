@@ -66,6 +66,7 @@ import { composeRecipeDescription } from "../_shared/recipeDescriptionComposer.t
 import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsistencyGuard.ts";
 import { checkRequestContextLeak, textContainsRequestContextLeak, cleanStepFromRequestContextLeak } from "../_shared/requestContextLeakGuard.ts";
 import { checkTitleLexicon } from "../_shared/titleLexiconGuard.ts";
+import { inferNutritionGoals } from "../_shared/recipeGoals.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -1077,6 +1078,8 @@ serve(async (req) => {
 
     if (responseRecipes.length > 0) {
       const recipe = responseRecipes[0] as RecipeJson;
+      const inferredGoals = inferNutritionGoals(recipe);
+      (recipe as Record<string, unknown>).nutrition_goals = inferredGoals;
       const descRaw = sanitizeMealMentions(sanitizeRecipeText(recipe.description ?? ""));
       const adviceRaw = sanitizeMealMentions(sanitizeRecipeText(recipe.chefAdvice ?? ""));
       const title = (recipe.title ?? "").trim();
@@ -1327,6 +1330,7 @@ serve(async (req) => {
             locale: "ru",
             source_lang: null,
             trust_level: "candidate",
+            nutrition_goals: inferredGoals,
           });
           console.log(JSON.stringify({
             tag: "RECIPE_SAVE_PAYLOAD_DEBUG",

@@ -6,6 +6,7 @@ import type { RecipePreview } from "@/types/recipePreview";
 
 export interface MyRecipePreview extends RecipePreview {
   source?: string | null;
+  nutrition_goals?: string[] | null;
 }
 
 function toPreview(row: {
@@ -56,7 +57,7 @@ export function useMyRecipes(locale?: string | null) {
       if (ids.length === 0) return [];
       const [previewsRes, metaRes] = await Promise.all([
         supabase.rpc("get_recipe_previews", { recipe_ids: ids, p_locale: effectiveLocale }),
-        supabase.from("recipes").select("id, chef_advice, advice, source, calories, proteins, fats, carbs").in("id", ids),
+        supabase.from("recipes").select("id, chef_advice, advice, source, calories, proteins, fats, carbs, nutrition_goals").in("id", ids),
       ]);
       if (previewsRes.error) throw previewsRes.error;
       const metaMap = new Map(
@@ -69,6 +70,7 @@ export function useMyRecipes(locale?: string | null) {
           proteins?: number | null;
           fats?: number | null;
           carbs?: number | null;
+          nutrition_goals?: unknown;
         }[]).map((r) => [
           r.id,
           {
@@ -79,6 +81,9 @@ export function useMyRecipes(locale?: string | null) {
             proteins: r.proteins ?? null,
             fats: r.fats ?? null,
             carbs: r.carbs ?? null,
+            nutrition_goals: Array.isArray(r.nutrition_goals)
+              ? r.nutrition_goals.filter((g): g is string => typeof g === "string")
+              : [],
           },
         ])
       );
@@ -104,6 +109,7 @@ export function useMyRecipes(locale?: string | null) {
           preview.proteins = meta.proteins ?? undefined;
           preview.fats = meta.fats ?? undefined;
           preview.carbs = meta.carbs ?? undefined;
+          preview.nutrition_goals = meta.nutrition_goals ?? [];
         }
         return preview;
       });

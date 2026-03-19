@@ -44,11 +44,37 @@ type RecipeRowPool = {
   id: string; title: string; description: string | null; meal_type?: string | null;
   is_soup?: boolean | null;
   max_age_months?: number | null; min_age_months?: number | null;
+  nutrition_goals?: unknown;
   recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
   score?: number | null;
   trust_level?: string | null;
 };
 type MealSlot = { recipe_id?: string; title?: string; plan_source?: "pool" | "ai" };
+
+const ALLOWED_NUTRITION_GOALS = [
+  "balanced",
+  "iron_support",
+  "brain_development",
+  "weight_gain",
+  "gentle_digestion",
+  "energy_boost",
+] as const;
+type NutritionGoal = (typeof ALLOWED_NUTRITION_GOALS)[number];
+const GOAL_SET = new Set<string>(ALLOWED_NUTRITION_GOALS);
+
+function normalizeNutritionGoals(input: unknown): NutritionGoal[] {
+  if (!Array.isArray(input)) return [];
+  const out: NutritionGoal[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (typeof raw !== "string") continue;
+    const key = raw.trim().toLowerCase();
+    if (!GOAL_SET.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(key as NutritionGoal);
+  }
+  return out;
+}
 
 const SANITY_BREAKFAST = ["суп", "борщ", "рагу", "плов"];
 const SANITY_LUNCH = ["сырник", "оладь", "каша", "гранола", "тост"];
@@ -226,7 +252,7 @@ function trustOrder(t: string | null | undefined): number {
 async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _memberId: string | null, limitCandidates: number): Promise<RecipeRowPool[]> {
   const { data: rows, error } = await supabase
     .from("recipes")
-    .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, score, trust_level, recipe_ingredients(name, display_text)")
+    .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, recipe_ingredients(name, display_text)")
     .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
     .or("trust_level.is.null,trust_level.neq.blocked")
     .order("score", { ascending: false })
@@ -255,7 +281,8 @@ function pickFromPoolInMemory(
   excludeRecipeIds: string[],
   excludeTitleKeys: string[],
   likeMode: LikeMode = "neutral",
-  usedBaseCounts?: Record<string, number>
+  usedBaseCounts?: Record<string, number>,
+  goalHints?: { preferredGoals?: Set<string>; blockedGoals?: Set<string>; requireBalanced?: boolean }
 ): { id: string; title: string; matchedLike: boolean; primaryBase: string } | null {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
@@ -286,7 +313,15 @@ function pickFromPoolInMemory(
   const likeTokens = buildLikeTokens(memberData);
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
   shuffleArray(filtered);
-  const best = pickBestRecipeForSlot(filtered, { likeTokens, likeMode, recentSignatures, usedBaseCounts });
+  const best = pickBestRecipeForSlot(filtered, {
+    likeTokens,
+    likeMode,
+    recentSignatures,
+    usedBaseCounts,
+    preferredGoals: goalHints?.preferredGoals,
+    blockedGoals: goalHints?.blockedGoals,
+    requireBalanced: goalHints?.requireBalanced,
+  });
   if (!best) return null;
   const primaryBase = inferPrimaryBase(best);
   return { id: best.id, title: best.title, matchedLike: hasLikeMatch(best, likeTokens), primaryBase };
@@ -434,6 +469,9 @@ type ScoreRecipeCtx = {
   recentSignatures: Set<string>;
   /** Week only: counts per primary base for diversity penalty. */
   usedBaseCounts?: Record<string, number>;
+  preferredGoals?: Set<string>;
+  blockedGoals?: Set<string>;
+  requireBalanced?: boolean;
 };
 function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecipeCtx): number {
   const likeScore = scoreLikeSignal(r, ctx.likeTokens, ctx.likeMode);
@@ -461,7 +499,12 @@ function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecip
       baseDiversityPenalty = (count - MAX_BASE_PER_WEEK + 1) * DIVERSITY_BASE_PENALTY;
     }
   }
-  return likeScore + recencyScore - varietyPenalty - baseDiversityPenalty;
+  const goals = normalizeNutritionGoals(r.nutrition_goals);
+  let goalsScore = 0;
+  if (ctx.requireBalanced) goalsScore += goals.includes("balanced") ? 10 : -4;
+  if (ctx.preferredGoals && goals.some((g) => ctx.preferredGoals!.has(g))) goalsScore += 4;
+  if (ctx.blockedGoals && goals.some((g) => ctx.blockedGoals!.has(g))) goalsScore -= 3;
+  return likeScore + recencyScore - varietyPenalty - baseDiversityPenalty + goalsScore;
 }
 const TOP_K_EXTEND = 120;
 function pickBestRecipeForSlot(candidates: RecipeRowPool[], ctx: ScoreRecipeCtx): RecipeRowPool | null {
@@ -530,9 +573,12 @@ serve(async (req) => {
       exclude_title_keys?: string[];
       /** 1 = first try (may return retry_suggested); 2 = second try → then show PoolExhaustedSheet. Default 1. */
       attempt?: number;
+      /** Future user preference: prioritize recipes with these nutrition goals. */
+      nutrition_goals?: string[];
     };
     const action = body.action === "run" ? "run" : body.action === "replace_slot" ? "replace_slot" : body.action === "cancel" ? "cancel" : body.action === "start" ? "start" : null;
     const type = body.type === "day" || body.type === "week" ? body.type : "day";
+    const userNutritionGoals = normalizeNutritionGoals(body.nutrition_goals ?? []);
     const memberId = body.member_id ?? null;
     const memberData: MemberDataPool | null = body.member_data ?? null;
     /** Для режима «Семья» (member_id == null) храним план в meal_plans_v2 с member_id = null, чтобы фронт читал по member_id IS NULL. */
@@ -587,9 +633,14 @@ serve(async (req) => {
       const pool = await fetchPoolCandidates(supabase, userId, effectiveMemberId, POOL_LIMIT_ONE_DAY);
       const poolForReplace =
         memberId == null && mealType === "dinner" ? pool.filter((r) => isFamilyDinnerCandidate(r)) : pool;
-      let picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys);
+      const replaceGoalHints = {
+        preferredGoals: userNutritionGoals.length > 0 ? new Set<string>(userNutritionGoals) : undefined,
+        blockedGoals: undefined,
+        requireBalanced: false,
+      };
+      let picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, "neutral", undefined, replaceGoalHints);
       if (!picked && memberId == null && mealType === "dinner" && poolForReplace.length < MIN_FAMILY_DINNER) {
-        picked = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys);
+        picked = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, "neutral", undefined, replaceGoalHints);
       }
       if (picked) {
         const oldRecipeId = currentMeals[mealType]?.recipe_id ?? null;
@@ -755,8 +806,8 @@ serve(async (req) => {
 
     let usedRecipeIds: string[] = [];
     let usedTitleKeys: string[] = [];
-    let usedTitleKeysByMealType: Record<string, Set<string>> = {};
-    let usedCategoriesByMealType: Record<string, Set<string>> = {};
+    const usedTitleKeysByMealType: Record<string, Set<string>> = {};
+    const usedCategoriesByMealType: Record<string, Set<string>> = {};
     // "Любит" — мягкий сигнал: максимум один явный like-match в день и не чаще, чем примерно раз в 2-3 дня.
     const likeTokens = buildLikeTokens(effectiveMemberData);
     const recentLikedDayWindow: boolean[] = [];
@@ -809,11 +860,12 @@ serve(async (req) => {
     }
 
     let totalDbCount = 0;
-    let totalAiCount = 0;
+    const totalAiCount = 0;
     let lastDayKey: string | null = null;
     /** Week only: counts per primary base for diversity (cap + penalty). */
     const usedBaseCounts: Record<string, number> = dayKeys.length > 1 ? {} : ({} as Record<string, number>);
     const useBaseDiversity = dayKeys.length > 1;
+    const weekGoalCounts: Record<string, number> = {};
 
     if (jobId) {
       await supabase.from("plan_generation_jobs").update({ status: "running", progress_total: dayKeys.length, progress_done: 0, updated_at: new Date().toISOString() }).eq("id", jobId);
@@ -823,6 +875,7 @@ serve(async (req) => {
       const dayKey = dayKeys[i];
       lastDayKey = dayKey;
       let dayLikedRecipeCount = 0;
+      const dayGoalCounts: Record<string, number> = {};
       if (jobId && !isSingleDay) {
         await supabase.from("plan_generation_jobs").update({ progress_done: i, last_day_key: dayKey, updated_at: new Date().toISOString() }).eq("id", jobId);
       }
@@ -843,9 +896,45 @@ serve(async (req) => {
         const excludeTitlesBase = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
         const excludeTitlesForSlot = currentSlot?.title ? [...excludeTitlesBase, normalizeTitleKey(currentSlot.title)] : excludeTitlesBase;
         const baseCountsForSlot = useBaseDiversity ? usedBaseCounts : undefined;
-        let picked = pickFromPoolInMemory(poolForSlot, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot);
+        const nonBalancedGoals = ALLOWED_NUTRITION_GOALS.filter((g) => g !== "balanced");
+        let leastUsedGoal: NutritionGoal | null = null;
+        let leastCount = Number.MAX_SAFE_INTEGER;
+        for (const g of nonBalancedGoals) {
+          if (dayGoalCounts[g] != null && dayGoalCounts[g] > 0) continue;
+          const c = weekGoalCounts[g] ?? 0;
+          if (c < leastCount) {
+            leastCount = c;
+            leastUsedGoal = g;
+          }
+        }
+        const preferredGoals = new Set<string>();
+        if (userNutritionGoals.length > 0) {
+          for (const g of userNutritionGoals) preferredGoals.add(g);
+        }
+        if ((dayGoalCounts["balanced"] ?? 0) === 0) preferredGoals.add("balanced");
+        if (leastUsedGoal) preferredGoals.add(leastUsedGoal);
+        const blockedGoals = new Set<string>();
+        if ((dayGoalCounts["balanced"] ?? 0) >= 1) blockedGoals.add("balanced");
+        const dayExtraGoalCount = Object.entries(dayGoalCounts).filter(([g, c]) => g !== "balanced" && c > 0).length;
+        if (dayExtraGoalCount >= 1) {
+          for (const g of nonBalancedGoals) {
+            if ((dayGoalCounts[g] ?? 0) > 0) blockedGoals.add(g);
+          }
+        }
+        const slotsLeft = MEAL_KEYS.length - (Object.keys(newMeals).length);
+        const requireBalanced = (dayGoalCounts["balanced"] ?? 0) === 0 && slotsLeft <= 2;
+        let picked = pickFromPoolInMemory(
+          poolForSlot,
+          mealKey,
+          effectiveMemberData,
+          excludeIdsForSlot,
+          excludeTitlesForSlot,
+          slotLikeMode,
+          baseCountsForSlot,
+          { preferredGoals, blockedGoals, requireBalanced }
+        );
         if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
-          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot);
+          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot, { preferredGoals, blockedGoals, requireBalanced });
         }
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
@@ -861,6 +950,18 @@ serve(async (req) => {
           usedCategoriesByMealType[mealKey]?.add(inferDishCategoryKey(picked.title, null, null));
           if (useBaseDiversity) {
             usedBaseCounts[picked.primaryBase] = (usedBaseCounts[picked.primaryBase] ?? 0) + 1;
+          }
+          const pickedGoals = normalizeNutritionGoals(
+            poolCandidates.find((r) => r.id === picked!.id)?.nutrition_goals
+          );
+          if (pickedGoals.length === 0) {
+            dayGoalCounts.balanced = (dayGoalCounts.balanced ?? 0) + 1;
+            weekGoalCounts.balanced = (weekGoalCounts.balanced ?? 0) + 1;
+          } else {
+            for (const g of pickedGoals) {
+              dayGoalCounts[g] = (dayGoalCounts[g] ?? 0) + 1;
+              weekGoalCounts[g] = (weekGoalCounts[g] ?? 0) + 1;
+            }
           }
           totalDbCount++;
         }

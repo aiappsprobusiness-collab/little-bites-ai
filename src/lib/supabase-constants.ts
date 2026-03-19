@@ -5,7 +5,7 @@
 
 /** Колонки для списков рецептов (без embed). image_url удалён из таблицы recipes. */
 export const RECIPES_LIST_SELECT =
-  'id, title, created_at, cooking_time_minutes, tags, child_id, member_id, description, rating';
+  'id, title, created_at, cooking_time_minutes, tags, child_id, member_id, description, rating, nutrition_goals';
 
 /**
  * Select для одного рецепта с ингредиентами и шагами (без лимита по количеству).

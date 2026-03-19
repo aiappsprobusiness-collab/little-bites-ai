@@ -40,6 +40,7 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
         showHint={false}
         hint={vm.hint}
         nutrition={nutrition}
+        nutritionGoals={(favorite.recipe as { nutrition_goals?: string[] | null }).nutrition_goals ?? []}
         onClick={onTap}
         actions={
           <div className="flex flex-col items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>

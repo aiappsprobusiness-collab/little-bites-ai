@@ -15,6 +15,7 @@ export type StoredRecipe = RecipeSuggestion & {
   member_id?: string | null;
   ingredientNames?: string[];
   ingredientTotalCount?: number;
+  nutrition_goals?: string[] | null;
 };
 
 export type FavoritesFilter = 'all' | 'family' | string;
@@ -122,7 +123,7 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
 
       const { data: recipeMetaRows } = await supabase
         .from('recipes')
-        .select('id, member_id, chef_advice, advice, meal_type, calories, proteins, fats, carbs')
+        .select('id, member_id, chef_advice, advice, meal_type, calories, proteins, fats, carbs, nutrition_goals')
         .in('id', recipeIds);
       const memberIdByRecipeId = new Map<string, string | null>();
       const chefAdviceByRecipeId = new Map<string, string | null>();
@@ -132,6 +133,7 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
         string,
         { calories: number | null; proteins: number | null; fats: number | null; carbs: number | null }
       >();
+      const nutritionGoalsByRecipeId = new Map<string, string[]>();
       for (const row of (recipeMetaRows ?? []) as {
         id: string;
         member_id: string | null;
@@ -142,6 +144,7 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
         proteins?: number | null;
         fats?: number | null;
         carbs?: number | null;
+        nutrition_goals?: unknown;
       }[]) {
         memberIdByRecipeId.set(row.id, row.member_id ?? null);
         chefAdviceByRecipeId.set(row.id, row.chef_advice ?? null);
@@ -153,6 +156,10 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
           fats: row.fats ?? null,
           carbs: row.carbs ?? null,
         });
+        nutritionGoalsByRecipeId.set(
+          row.id,
+          Array.isArray(row.nutrition_goals) ? row.nutrition_goals.filter((g): g is string => typeof g === 'string') : []
+        );
       }
 
       return list.map((f) => {
@@ -192,6 +199,7 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
           (recipe as StoredRecipe & { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).fats = nutrition.fats;
           (recipe as StoredRecipe & { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).carbs = nutrition.carbs;
         }
+        (recipe as StoredRecipe & { nutrition_goals?: string[] }).nutrition_goals = nutritionGoalsByRecipeId.get(f.recipe_id) ?? [];
         return {
           id: f.id,
           recipe,

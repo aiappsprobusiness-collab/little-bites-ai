@@ -43,6 +43,7 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
         showIngredientChips={false}
         showHint={false}
         nutrition={nutrition}
+        nutritionGoals={(recipe as { nutrition_goals?: string[] | null }).nutrition_goals ?? []}
         onClick={onTap}
         actions={
           <>

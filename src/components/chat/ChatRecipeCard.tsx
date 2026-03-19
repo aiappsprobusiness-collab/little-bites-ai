@@ -16,6 +16,7 @@ export interface ChatRecipeCardRecipe {
   proteins?: number | null;
   fats?: number | null;
   carbs?: number | null;
+  nutrition_goals?: string[] | null;
 }
 
 export interface ChatRecipeCardProps {
@@ -64,6 +65,7 @@ export function ChatRecipeCard({
       showChefTip={showChefTip}
       steps={recipe.steps}
       nutrition={nutrition}
+      nutritionGoals={recipe.nutrition_goals ?? []}
     />
   );
 }

@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Star, Clock } from "lucide-react";
 import { RecipePlaceholder } from "./RecipePlaceholder";
+import { NutritionGoalsChips } from "@/components/recipe/NutritionGoalsChips";
 
 interface RecipeCardProps {
   id: string;
@@ -14,6 +15,7 @@ interface RecipeCardProps {
   isFavorite?: boolean;
   onClick?: () => void;
   size?: 'small' | 'medium' | 'large';
+  nutritionGoals?: string[] | null;
 }
 
 // Check if image URL is valid (not placeholder or empty)
@@ -34,6 +36,7 @@ export function RecipeCard({
   isFavorite,
   onClick,
   size = 'medium',
+  nutritionGoals = [],
 }: RecipeCardProps) {
   const hasValidImage = isValidImageUrl(image);
 
@@ -103,6 +106,7 @@ export function RecipeCard({
         </div>
         <CardContent className={classes.padding}>
           <h3 className={`font-bold ${classes.title} mb-2 line-clamp-2`}>{title}</h3>
+          <NutritionGoalsChips goals={nutritionGoals} className="mb-2" />
           <div className={`flex items-center gap-3 ${classes.text} text-muted-foreground`}>
             <div className="flex items-center gap-1">
               <Clock className={classes.icon} />

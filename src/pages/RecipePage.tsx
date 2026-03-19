@@ -35,6 +35,7 @@ import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader";
+import { NutritionGoalsChips } from "@/components/recipe/NutritionGoalsChips";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { cn } from "@/lib/utils";
 import {
@@ -422,6 +423,7 @@ export default function RecipePage() {
     source?: string | null;
     servings_base?: number | null;
     servings_recommended?: number | null;
+    nutrition_goals?: string[] | null;
   };
   const isUserCustom = recipeDisplay.source === "user_custom";
   const steps = recipeDisplay.steps ?? [];
@@ -432,6 +434,7 @@ export default function RecipePage() {
   const mealLabel = getMealLabel(mealType);
   const minAgeMonths = recipeDisplay.min_age_months;
   const description = recipeDisplay.description;
+  const nutritionGoals = recipeDisplay.nutrition_goals ?? [];
 
   const handleDeleteRecipe = async () => {
     if (!id) return;
@@ -486,6 +489,7 @@ export default function RecipePage() {
                   <span>{benefitLabel}</span>
                 </p>
               )}
+              <NutritionGoalsChips goals={nutritionGoals} />
               {description?.trim() && (
                 <p className="text-sm text-muted-foreground leading-[1.6]">{description.trim()}</p>
               )}

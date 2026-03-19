@@ -304,6 +304,7 @@ export type Database = {
           proteins: number | null
           rating: number | null
           source_products: string[] | null
+          nutrition_goals: Json
           tags: string[] | null
           times_cooked: number | null
           title: string
@@ -328,6 +329,7 @@ export type Database = {
           proteins?: number | null
           rating?: number | null
           source_products?: string[] | null
+          nutrition_goals?: Json
           tags?: string[] | null
           times_cooked?: number | null
           title: string
@@ -352,6 +354,7 @@ export type Database = {
           proteins?: number | null
           rating?: number | null
           source_products?: string[] | null
+          nutrition_goals?: Json
           tags?: string[] | null
           times_cooked?: number | null
           title?: string

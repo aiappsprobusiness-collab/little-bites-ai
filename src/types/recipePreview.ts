@@ -19,4 +19,5 @@ export type RecipePreview = {
   proteins?: number | null;
   fats?: number | null;
   carbs?: number | null;
+  nutrition_goals?: string[] | null;
 };

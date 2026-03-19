@@ -2,6 +2,7 @@
 
 ## Current stage
 - Stage 3 — recipe_translations + locale-aware reads (completed)
+- Stage 4 — GOALS SYSTEM (minimal implementation, completed)
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
@@ -17,8 +18,25 @@
 - [x] Stage 2.5.2 — Pool Stabilization (see checklist below)
 - [x] Stage 2.5.3 — Cold Start Protection (see checklist below)
 - [x] Stage 3 — recipe_translations + locale-aware reads
-- [ ] Stage 4 — nutrition_traits + goals
+- [x] Stage 4 — goals system (nutrition_goals)
 - [ ] Stage 5 — plan page refactor
+
+## Stage 4 — GOALS SYSTEM
+
+Checklist:
+- [x] `recipes.nutrition_goals` added (jsonb, whitelist check, default `[]`)
+- [x] rule-based inference implemented (`inferNutritionGoals`)
+- [x] goals saved via `create_recipe_with_steps`
+- [x] goals shown in UI (recipe card/page/favorites)
+- [x] generate-plan uses goals (daily balanced + weekly distribution + optional user-goal priority)
+- [x] minimal approach kept (no admin panel, no complex scoring)
+
+### Stage 4 notes
+
+- No admin panel.
+- No ML/AI goals classifier (rule-based only).
+- No complex scoring system (small goal bonuses/penalties only).
+- No separate goals tables.
 
 ### Stage 2.5 — Recipe Pool & Feedback System
 

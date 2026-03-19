@@ -17,7 +17,7 @@
 
 - **Edge (generate-plan):**
   - `fetchPoolCandidates(supabase, userId, memberId, limit)` — только выборка рецептов из БД (source in seed/starter/manual/week_ai/chat_ai), без фильтра по аллергиям.
-  - `pickFromPool(...)` — все фильтры: exclude ids/titleKeys, mainIngredient, mealType, breakfast no-soup, lunch soup-only, sanity, **profile (аллергии, предпочтения, возраст)**. Аллергии применяются в `passesProfileFilter` → `checkAllergyWithDetail` по полям рецепта: title, description, recipe_ingredients (name, display_text). Не по `recipe_ingredients.category`.
+  - `pickFromPool(...)` — все фильтры: exclude ids/titleKeys, mainIngredient, mealType, breakfast no-soup, lunch soup-only, sanity, **profile (аллергии, предпочтения, возраст)**, goals-hints. Аллергии применяются в `passesProfileFilter` → `checkAllergyWithDetail` по полям рецепта: title, description, recipe_ingredients (name, display_text). Не по `recipe_ingredients.category`.
 - **Клиент:** `src/utils/recipePool.ts` — `pickRecipeFromPool` и `passesProfileFilter` используются при подборе рецептов по кнопке «Подобрать рецепты» (weekly generation). Логика аллергий там совпадает по смыслу с Edge (токены из allergies + dairy expansion), но без единого словаря (курица/орехи и т.д.) — только tokenize(allergy) и молоко.
 
 **Разрыв (до исправления):** для «курица» токенизация даёт слово «курица»; в названии «Суп с курицей и овощами» подстрока «курица» не входит в «курицей», поэтому рецепт не отфильтровывался. Нужен единый словарь расширенных токенов (кур, куриц, chicken и т.д.) и использование его и в плане, и в чате.
@@ -44,3 +44,15 @@
 - Реализация (TODO): счётчик на уровне генерации дня/недели (usedPreferenceLikeCount), при вызове pickFromPool передавать cap = ceil(0.25 * totalSlots); в скоринге давать бонус рецептам с preferenceLikeToken только пока count < cap, иначе не бонусовать (или штрафовать), чтобы не превышать ~25%.
 
 **См. также:** полное описание подбора рецептов для плана (день/неделя): аллергии, любит/не любит, возраст, режим «Семья» — [docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md](../architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md).
+
+## 8. Goals в generate-plan (Stage 4)
+
+- Источник: `recipes.nutrition_goals` (jsonb array; whitelist).
+- Правила дня:
+  - минимум 1 рецепт с goal `balanced`;
+  - желательно 1 дополнительный goal (iron_support/brain_development/weight_gain/gentle_digestion/energy_boost);
+  - обед остаётся soup-first (как раньше).
+- Правила недели:
+  - goal-группы распределяются, чтобы не повторять одну и ту же постоянно;
+  - при наличии `nutrition_goals` в запросе (future user goal) приоритет смещается к рецептам с этими goals.
+- Реализация intentionally simple: небольшие бонусы/штрафы в in-memory выборе кандидата, без отдельной системы сложного scoring.

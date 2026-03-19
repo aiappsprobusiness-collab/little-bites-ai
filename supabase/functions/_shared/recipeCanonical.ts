@@ -103,6 +103,8 @@ export interface CanonicalizeRecipePayloadInput {
   source_lang?: string | null;
   /** Stage 1: trust level for pool. RPC derives from source if omitted. */
   trust_level?: string | null;
+  /** Stage 4: fixed nutrition goals list. */
+  nutrition_goals?: string[] | null;
 }
 
 /**
@@ -133,6 +135,7 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     locale: rawLocale,
     source_lang: rawSourceLang,
     trust_level: rawTrustLevel,
+    nutrition_goals: rawNutritionGoals,
   } = input;
 
   const safeSource = ensurePoolSource(source);
@@ -202,6 +205,10 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
   const finalChefAdvice = chefAdviceVal ?? (needsAdvice ? "Подавайте тёплым." : null);
   const finalAdvice = adviceVal ?? null;
 
+  const nutrition_goals = Array.isArray(rawNutritionGoals)
+    ? [...new Set(rawNutritionGoals.filter((g) => typeof g === "string").map((g) => g.trim().toLowerCase()).filter(Boolean))]
+    : [];
+
   return {
     user_id,
     member_id: member_id ?? null,
@@ -228,5 +235,6 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     ...(rawLocale != null && rawLocale !== "" ? { locale: String(rawLocale).trim() } : {}),
     ...(rawSourceLang != null && rawSourceLang !== "" ? { source_lang: String(rawSourceLang).trim() } : {}),
     ...(rawTrustLevel != null && rawTrustLevel !== "" ? { trust_level: String(rawTrustLevel).trim() } : {}),
+    nutrition_goals,
   };
 }

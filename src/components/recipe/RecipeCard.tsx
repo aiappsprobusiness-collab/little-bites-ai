@@ -4,6 +4,7 @@ import { IngredientChips, type IngredientDisplayItem } from "./IngredientChips";
 import { RecipeIngredientList } from "./RecipeIngredientList";
 import { ChefAdviceCard } from "./ChefAdviceCard";
 import { RecipeSteps } from "./RecipeSteps";
+import { NutritionGoalsChips } from "./NutritionGoalsChips";
 import { cn } from "@/lib/utils";
 
 export type RecipeCardVariant = "preview" | "chat" | "full";
@@ -39,6 +40,7 @@ export interface RecipeCardProps {
   children?: React.ReactNode;
   /** КБЖУ на порцию (мета-строка в шапке + строка БЖУ под шапкой). */
   nutrition?: { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null } | null;
+  nutritionGoals?: unknown;
   /** Количество порций для блока ингредиентов (в списке, не в превью). По умолчанию 1. */
   servingsCount?: number;
 }
@@ -63,6 +65,7 @@ export function RecipeCard({
   className,
   children,
   nutrition,
+  nutritionGoals,
   servingsCount = 1,
 }: RecipeCardProps) {
   const isPreview = variant === "preview";
@@ -94,6 +97,7 @@ export function RecipeCard({
           onSubstituteClick={onSubstituteClick}
         />
       )}
+      <NutritionGoalsChips goals={nutritionGoals} className={isPreview ? "mt-0.5" : "mt-1"} />
       {!isPreview && (
         <RecipeIngredientList
           ingredients={ingredients}

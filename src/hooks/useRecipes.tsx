@@ -64,6 +64,9 @@ function normalizeRecipePayload<T extends Record<string, unknown>>(payload: T): 
   if ('source_products' in out && out.source_products !== undefined) {
     (out as Record<string, unknown>).source_products = ensureStringArray(out.source_products);
   }
+  if ('nutrition_goals' in out && out.nutrition_goals !== undefined) {
+    (out as Record<string, unknown>).nutrition_goals = ensureStringArray(out.nutrition_goals);
+  }
   if ('child_id' in out) {
     const cid = out.child_id;
     (out as Record<string, unknown>).child_id = cid != null && isValidUUID(cid) ? cid : null;
@@ -273,6 +276,9 @@ export function useRecipes(childId?: string) {
           category: (ing as Record<string, unknown>).category ?? 'other',
         })),
         sourceTag: source === 'week_ai' ? 'week_ai' : 'chat',
+        nutrition_goals: Array.isArray((normalized as Record<string, unknown>).nutrition_goals)
+          ? ((normalized as Record<string, unknown>).nutrition_goals as unknown[]).filter((g): g is string => typeof g === 'string')
+          : [],
       });
 
       const { data: recipeId, error: rpcError } = await supabase.rpc('create_recipe_with_steps', { payload: rpcPayload });

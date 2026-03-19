@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { SavedFavorite } from "@/hooks/useFavorites";
+import { normalizeNutritionGoals, nutritionGoalLabel } from "@/utils/nutritionGoals";
 
 export interface MealTypeOption {
   id: string;
@@ -46,6 +47,11 @@ export function AddMealDialog({
   onAddFromFavorite,
   isLoading,
 }: AddMealDialogProps) {
+  const goalsLabel = (goals: unknown): string => {
+    const normalized = normalizeNutritionGoals(goals).slice(0, 2);
+    if (normalized.length === 0) return "";
+    return normalized.map((g) => nutritionGoalLabel(g)).join(", ");
+  };
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>("");
   const [selectedFavoriteId, setSelectedFavoriteId] = useState<string>("");
   // Используем selectedMealType напрямую, с fallback на первый тип (Завтрак)
@@ -141,7 +147,7 @@ export function AddMealDialog({
                       </div>
                       {recipes.map((recipe, idx) => (
                         <SelectItem key={`saved-${recipe.id}-${idx}`} value={recipe.id}>
-                          {recipe.title}
+                          {recipe.title}{goalsLabel(recipe.nutrition_goals) ? ` • ${goalsLabel(recipe.nutrition_goals)}` : ""}
                         </SelectItem>
                       ))}
                     </>
@@ -155,7 +161,7 @@ export function AddMealDialog({
                       </div>
                       {favorites.map((favorite, idx) => (
                         <SelectItem key={`favorite-${favorite.id}-${idx}`} value={`favorite_${favorite.id}`}>
-                          {favorite.recipe.title}
+                          {favorite.recipe.title}{goalsLabel((favorite.recipe as { nutrition_goals?: unknown }).nutrition_goals) ? ` • ${goalsLabel((favorite.recipe as { nutrition_goals?: unknown }).nutrition_goals)}` : ""}
                         </SelectItem>
                       ))}
                     </>
@@ -169,7 +175,7 @@ export function AddMealDialog({
                       </div>
                       {filteredChatRecipes.map((recipe, idx) => (
                         <SelectItem key={`chat-${recipe.id}-${idx}`} value={recipe.id}>
-                          {recipe.title}
+                          {recipe.title}{goalsLabel(recipe.nutrition_goals) ? ` • ${goalsLabel(recipe.nutrition_goals)}` : ""}
                         </SelectItem>
                       ))}
                     </>

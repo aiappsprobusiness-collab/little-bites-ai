@@ -111,6 +111,8 @@ export interface CanonicalizeRecipePayloadInput {
   sourceTag?: SourceTag;
   /** Явный признак супа для RPC (слот обед = только супы). При meal_type lunch по умолчанию true. */
   is_soup?: boolean | null;
+  /** Stage 4 goals list. */
+  nutrition_goals?: string[] | null;
 }
 
 /**
@@ -138,6 +140,7 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     steps: rawSteps,
     ingredients: rawIngredients,
     sourceTag: explicitSourceTag,
+    nutrition_goals: rawNutritionGoals,
   } = input;
 
   const meal_type = resolveMealType({ mealType, tags: rawTags, contextMealType });
@@ -187,6 +190,10 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
 
   const is_soup = meal_type === "lunch" ? true : (input.is_soup === true);
 
+  const nutrition_goals = Array.isArray(rawNutritionGoals)
+    ? [...new Set(rawNutritionGoals.filter((g) => typeof g === "string").map((g) => g.trim().toLowerCase()).filter(Boolean))]
+    : [];
+
   return {
     user_id,
     member_id: member_id ?? null,
@@ -206,5 +213,6 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     steps: stepsPayload,
     ingredients: ingredientsPayload,
     is_soup,
+    nutrition_goals,
   };
 }
