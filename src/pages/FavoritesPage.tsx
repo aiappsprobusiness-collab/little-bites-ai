@@ -95,8 +95,9 @@ export default function FavoritesPage() {
 
   const handleCardTap = (favorite: SavedFavorite) => {
     const recipeId = getRecipeId(favorite);
+    const preloadedTitle = favorite.recipe?.title ?? undefined;
     if (recipeId) {
-      navigate(`/recipe/${recipeId}`, { state: { fromFavorites: true } });
+      navigate(`/recipe/${recipeId}`, { state: { fromFavorites: true, preloadedTitle } });
     }
   };
 
@@ -207,7 +208,11 @@ export default function FavoritesPage() {
                       key={recipe.id}
                       recipe={recipe}
                       index={index}
-                      onTap={() => navigate(`/recipe/${recipe.id}`)}
+                      onTap={() =>
+                        navigate(`/recipe/${recipe.id}`, {
+                          state: { fromFavorites: true, preloadedTitle: recipe.title ?? undefined },
+                        })
+                      }
                       onAddToPlan={hasAccess ? () => setAddToPlanRecipe({ id: recipe.id, title: recipe.title ?? "", member_id: null }) : undefined}
                       onEdit={(e) => { e.stopPropagation(); openEditForm(recipe.id); }}
                       isPremium={hasAccess}

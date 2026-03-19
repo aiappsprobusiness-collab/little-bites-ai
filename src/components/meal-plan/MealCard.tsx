@@ -121,6 +121,7 @@ export function MealCard({
     navigate(`/recipe/${recipeId}`, {
       state: {
         fromMealPlan: true,
+        preloadedTitle: recipeTitle,
         mealTypeLabel: mealTypeLabel ?? meta.label,
         plannedDate: plannedDate ?? undefined,
         mealType,

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { Loader2, ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -47,6 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /** Привести рецепт к списку IngredientItem: приоритет ingredients_items, иначе нормализация ingredients. */
 function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem[] {
@@ -88,11 +89,16 @@ export default function RecipePage() {
   const state = location.state as {
     fromMealPlan?: boolean;
     fromFavorites?: boolean;
+    preloadedTitle?: string;
     mealTypeLabel?: string;
     memberId?: string;
     plannedDate?: string;
     mealType?: string;
   } | null;
+  const preloadedTitle = state?.preloadedTitle?.trim() || null;
+  const recipeTitle = (recipe as { title?: string } | undefined)?.title?.trim() || null;
+  const headerTitle = preloadedTitle ?? recipeTitle ?? "Рецепт";
+  const isInitialLoading = isLoading && !recipe && !error;
 
   useEffect(() => {
     if (import.meta.env.DEV && searchParams.get("debugIngredients") === "1" && id && recipe) {
@@ -331,11 +337,62 @@ export default function RecipePage() {
     </motion.button>
   );
 
-  if (isLoading) {
+  if (isInitialLoading) {
     return (
-      <MobileLayout title="Рецепт" headerLeft={backButton}>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      <MobileLayout
+        title={headerTitle}
+        headerNoBlur
+        headerWrapTitle
+        headerClassName="layout-header-recipe border-b border-border/30"
+        mainClassName="recipe-page-main"
+        headerLeft={backButton}
+      >
+        <div className="px-4 pb-6 max-w-[100%] mx-auto overflow-x-hidden">
+          <div className="-mx-2">
+            <div className={cn(recipeHeroCard, "relative space-y-4 p-6")}>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Skeleton className="h-5 w-24 rounded-full" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-row items-center gap-2 mt-3">
+            {Array.from({ length: 5 }).map((_, idx) => (
+              <Skeleton key={idx} className="h-9 w-9 rounded-full" />
+            ))}
+          </div>
+
+          {!fromFavorites && (
+            <div className="mt-5">
+              <Skeleton className="h-3 w-14 mb-2" />
+              <div className="inline-flex items-center rounded-[999px] border border-primary-border/60 overflow-hidden px-2 py-1 gap-3">
+                <Skeleton className="h-8 w-8 rounded-full" />
+                <Skeleton className="h-5 w-8" />
+                <Skeleton className="h-8 w-8 rounded-full" />
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6">
+            <Skeleton className="h-4 w-40 mb-3" />
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, idx) => (
+                <Skeleton key={idx} className="h-4 w-full" />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            <Skeleton className="h-5 w-36" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-11/12" />
+            <Skeleton className="h-4 w-10/12" />
+          </div>
         </div>
       </MobileLayout>
     );
@@ -404,7 +461,7 @@ export default function RecipePage() {
 
   return (
     <MobileLayout
-      title={recipe.title ?? "Рецепт"}
+      title={headerTitle}
       headerNoBlur
       headerWrapTitle
       headerClassName="layout-header-recipe border-b border-border/30"
