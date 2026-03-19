@@ -23,6 +23,7 @@ import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { PlanModeHint } from "@/components/plan/PlanModeHint";
 import { PlanGoalChipsRow } from "@/components/plan/PlanGoalChipsRow";
 import { isFamilySelected } from "@/utils/planModeUtils";
+import { selectGoalForEdge } from "@/utils/planGoalSelect";
 import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
@@ -326,10 +327,15 @@ export default function MealPlanPage() {
   } = usePlanGenerationJob(memberIdForPlan, planGenType);
 
   const [poolUpgradeLoading, setPoolUpgradeLoading] = useState(false);
-  /** По умолчанию «Баланс»; повторный клик по чипу — сброс (null). На generate-plan уходит только если не balanced. */
+  /** По умолчанию «Баланс»; повторный клик по чипу — сброс (null). Free: на Edge уходит только без selected_goal (см. selectGoalForEdge). */
   const [planGoalSelection, setPlanGoalSelection] = useState<string | null>("balanced");
-  const selectedGoalForGeneratePlan =
-    planGoalSelection != null && planGoalSelection !== "balanced" ? planGoalSelection : undefined;
+  const selectedGoalForGeneratePlan = selectGoalForEdge(hasAccess, planGoalSelection);
+
+  useEffect(() => {
+    if (!hasAccess && planGoalSelection != null && planGoalSelection !== "balanced") {
+      setPlanGoalSelection("balanced");
+    }
+  }, [hasAccess, planGoalSelection]);
   const isAnyGenerating = isPlanGenerating || poolUpgradeLoading || isPlanPartialTimeBudget;
 
   const [statusPhraseIndex, setStatusPhraseIndex] = useState(0);
@@ -985,6 +991,14 @@ export default function MealPlanPage() {
                     value={planGoalSelection}
                     onChange={setPlanGoalSelection}
                     className="mt-2"
+                    hasPremiumAccess={hasAccess}
+                    onLockedGoalClick={() => {
+                      useAppStore.getState().setPaywallReason("plan_goal_select");
+                      useAppStore.getState().setPaywallCustomMessage(
+                        "Выбор цели питания (кроме «Баланс») доступен в Premium и Trial.",
+                      );
+                      useAppStore.getState().setShowPaywall(true);
+                    }}
                   />
                 )}
                 {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (

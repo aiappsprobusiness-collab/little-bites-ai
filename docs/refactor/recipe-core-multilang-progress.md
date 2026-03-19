@@ -7,6 +7,7 @@
 - Stage 4.2 — smart goal prioritization in generate-plan (completed)
 - Stage 4.3 — family-aware scoring in generate-plan (completed)
 - Stage 4.3.1 — plan hint copy + paywall feature line + text wrap (completed)
+- Stage 4.3.2 — goal selector Free vs Premium/Trial (UI + client sanitize `selected_goal`) (completed)
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
@@ -27,7 +28,15 @@
 - [x] Stage 4.2 — generate-plan scoring + diversity (no pool narrowing; lunch/soup unchanged)
 - [x] Stage 4.3 — family-aware + age-aware + toddler soft-mode scoring (generate-plan only)
 - [x] Stage 4.3.1 — UI copy + layout (PlanModeHint family text/subtext, Paywall first feature; wrap/min-w-0)
+- [x] Stage 4.3.2 — PlanGoalChipsRow: Free только «Баланс»; остальные → paywall; `selectGoalForEdge` + хук `usePlanGenerationJob`
 - [ ] Stage 5 — plan page refactor
+
+## Stage 4.3.2 — Goal selector access (Free vs Premium/Trial)
+
+- `PlanGoalChipsRow`: при `!hasAccess` не-«Баланс» чипы с пониженной непрозрачностью, клик открывает paywall; 🔒 у подписи; `balanced` как раньше.
+- `selectGoalForEdge(hasAccess, selection)` в `planGoalSelect.ts` — в Edge не уходит `selected_goal` для Free.
+- `MealPlanPage`: `selectedGoalForGeneratePlan` через `selectGoalForEdge`; при потере доступа сброс выбора на «Баланс».
+- `usePlanGenerationJob`: повторная санитизация `params.selected_goal` через `selectGoalForEdge(hasAccess, …)` во всех телах запросов.
 
 ## Stage 4.3.1 — Plan hint + paywall copy (UI only)
 

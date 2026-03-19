@@ -8,6 +8,8 @@ import { isDebugPlanEnabled, isGeneratePlanDebugEnabled } from "@/utils/debugPla
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
 import { useAppStore } from "@/store/useAppStore";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
+import { selectGoalForEdge } from "@/utils/planGoalSelect";
+import { useSubscription } from "./useSubscription";
 
 export type PlanGenerationType = "day" | "week";
 
@@ -119,6 +121,7 @@ export function usePlanGenerationJob(
   options?: { enabled?: boolean }
 ) {
   const { user, session } = useAuth();
+  const { hasAccess } = useSubscription();
   const queryClient = useQueryClient();
   const enabled = options?.enabled !== false && !!user?.id;
   const continueAttemptsRef = useRef(0);
@@ -160,6 +163,7 @@ export function usePlanGenerationJob(
         console.log("[generate-plan] member_id=null (профиль «Семья»)", { type: params.type });
       }
       const token = await getValidAccessToken();
+      const goalForEdge = selectGoalForEdge(hasAccess, params.selected_goal);
       const body: Record<string, unknown> = {
         mode: "upgrade",
         type: params.type,
@@ -173,7 +177,7 @@ export function usePlanGenerationJob(
         }),
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
-        ...(params.selected_goal ? { selected_goal: params.selected_goal } : {}),
+        ...(goalForEdge ? { selected_goal: goalForEdge } : {}),
       };
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), POOL_UPGRADE_TIMEOUT_MS);
@@ -208,7 +212,7 @@ export function usePlanGenerationJob(
         throw e;
       }
     },
-    [user?.id, getValidAccessToken]
+    [user?.id, getValidAccessToken, hasAccess]
   );
 
   const continueGeneration = useCallback(
@@ -218,6 +222,7 @@ export function usePlanGenerationJob(
       if (!params) return;
       const attempt = continueAttemptsRef.current;
       const token = await getValidAccessToken();
+      const goalForEdgeContinue = selectGoalForEdge(hasAccess, params.selected_goal);
       const runBody: Record<string, unknown> = {
         action: "run",
         job_id: jobRow.id,
@@ -228,7 +233,7 @@ export function usePlanGenerationJob(
         continueFromDayIndex: jobRow.progress_done ?? 0,
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
-        ...(params.selected_goal ? { selected_goal: params.selected_goal } : {}),
+        ...(goalForEdgeContinue ? { selected_goal: goalForEdgeContinue } : {}),
       };
       const res = await invokeGeneratePlan(SUPABASE_URL, token, runBody, {
         label: `continue (attempt ${attempt})`,
@@ -249,7 +254,7 @@ export function usePlanGenerationJob(
         refetchJob();
       }
     },
-    [user?.id, getValidAccessToken, refetchJob]
+    [user?.id, getValidAccessToken, refetchJob, hasAccess]
   );
 
   useEffect(() => {
@@ -279,6 +284,7 @@ export function usePlanGenerationJob(
       const token = await getValidAccessToken();
       const weekStartDayKey = params.type === "week" ? (params.start_key ?? getRollingStartKey()) : undefined;
 
+      const goalForEdgeStart = selectGoalForEdge(hasAccess, params.selected_goal);
       const startBody: Record<string, unknown> = {
         action: "start",
         type: params.type,
@@ -287,7 +293,7 @@ export function usePlanGenerationJob(
         ...(params.type === "day" && params.day_key && { day_key: params.day_key }),
         ...(params.type === "week" && { start_key: params.start_key ?? getRollingStartKey() }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
-        ...(params.selected_goal ? { selected_goal: params.selected_goal } : {}),
+        ...(goalForEdgeStart ? { selected_goal: goalForEdgeStart } : {}),
       };
       const startRes = await invokeGeneratePlan(SUPABASE_URL, token, startBody, {
         label: "start",
@@ -305,6 +311,7 @@ export function usePlanGenerationJob(
 
       const startKey = params.type === "week" ? (params.start_key ?? getRollingStartKey()) : params.day_key ?? "";
       if (user?.id && startKey) setStoredJobId(user.id, params.member_id, startKey, jobId);
+      const goalForEdgeRun = selectGoalForEdge(hasAccess, params.selected_goal);
       const runBody: Record<string, unknown> = {
         action: "run",
         job_id: jobId,
@@ -315,7 +322,7 @@ export function usePlanGenerationJob(
         ...(params.type === "week" && { start_key: params.start_key ?? getRollingStartKey() }),
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
-        ...(params.selected_goal ? { selected_goal: params.selected_goal } : {}),
+        ...(goalForEdgeRun ? { selected_goal: goalForEdgeRun } : {}),
       };
       const runRes = await invokeGeneratePlan(SUPABASE_URL, token, runBody, {
         label: "run",
@@ -332,7 +339,7 @@ export function usePlanGenerationJob(
         }
       }
     },
-    [user?.id, getValidAccessToken, refetchJob]
+    [user?.id, getValidAccessToken, refetchJob, hasAccess]
   );
 
   const cancelJob = useCallback(
