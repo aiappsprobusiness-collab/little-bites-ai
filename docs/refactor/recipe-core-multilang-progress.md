@@ -4,6 +4,7 @@
 - Stage 3 — recipe_translations + locale-aware reads (completed)
 - Stage 4 — GOALS SYSTEM (minimal implementation, completed)
 - Stage 4.1 — goals UX + plan integration (completed)
+- Stage 4.2 — smart goal prioritization in generate-plan (completed)
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
@@ -21,7 +22,19 @@
 - [x] Stage 3 — recipe_translations + locale-aware reads
 - [x] Stage 4 — goals system (nutrition_goals)
 - [x] Stage 4.1 — goals visible in preview (plan + favorites), plan goal selector, generate-plan `selected_goal`, UI labels via `GOAL_LABELS`
+- [x] Stage 4.2 — generate-plan scoring + diversity (no pool narrowing; lunch/soup unchanged)
 - [ ] Stage 5 — plan page refactor
+
+## Stage 4.2 — SMART GOAL PRIORITIZATION (GENERATE-PLAN)
+
+Цель: выбор цели в плане заметно влияет на подбор, без жёстких фильтров и пустых слотов.
+
+Checklist (в `supabase/functions/generate-plan/index.ts`):
+- [x] Вместо сужения пула `preferGoalFirst` — **скоринг**: `final_score = base_score + goal_bonus` (base = `scoreRecipeForSlot`, без удаления).
+- [x] При `selected_goal` (не `balanced`): +2 если в рецепте есть эта цель; иначе +1 если есть `balanced`; иначе 0; мягкое разнообразие: если цель `g` уже встретилась **≥2** раза в этом дне — **−2** к `goal_bonus` за каждую такую цель в составе рецепта.
+- [x] Кандидаты сортируются по `final_score` по убыванию, берётся лучший; порядок фильтров: аллергии/профиль → meal-type и **обед = супы** → скоринг.
+- [x] Лог `CHAT_PLAN_GOAL_DEBUG` (при заданном `selected_goal`): `selected_goal`, `count_selected_goal` / `count_balanced` в пуле, `total_candidates`, `day_usage_selected`.
+- [x] Без изменений схемы БД, RPC, UI, `nutritionGoals.ts`.
 
 ## Stage 4.1 — GOALS UX + PLAN INTEGRATION
 
@@ -31,7 +44,7 @@ Checklist:
 - [x] Единый mapping подписей `GOAL_LABELS` в `src/utils/nutritionGoals.ts` (ключи БД не менялись; поддержаны короткие алиасы для UI).
 - [x] Превью карточек (план, избранное): до 2 чипов целей под блоком времени/КБЖУ (`NutritionGoalsChips` + `maxVisible={2}` в preview).
 - [x] Вкладка план: single-select чипы цели под строкой «Учитываем все особенности профиля»; по умолчанию выбран «Баланс»; повторный клик по активному чипу — сброс (`null`); не multi-select.
-- [x] `generate-plan`: опциональный `selected_goal` (ключ БД); мягкая логика приоритета — сначала кандидаты с этой целью в `nutrition_goals`, иначе с `balanced`, иначе весь отфильтрованный пул; без жёсткого отсечения и без отдельного scoring/ranking-слоя. Обед: по-прежнему приоритет супов (логика lunch не ломалась).
+- [x] `generate-plan`: опциональный `selected_goal` (ключ БД). **Stage 4.2:** скоринг и разнообразие по дню (см. Stage 4.2); ранее — сужение пула; заменено на бонус к скору. Обед: по-прежнему только супы (фильтр до скоринга).
 - [x] RPC `get_recipe_previews` возвращает `nutrition_goals` для превью в плане (миграция). До применения миграции фронт подмешивает `nutrition_goals` из параллельного `select` по `recipes` в `useRecipePreviewsByIds` (как для КБЖУ).
 
 Примечания:

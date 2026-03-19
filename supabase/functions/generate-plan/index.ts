@@ -286,8 +286,10 @@ function pickFromPoolInMemory(
     preferredGoals?: Set<string>;
     blockedGoals?: Set<string>;
     requireBalanced?: boolean;
-    /** Мягкий приоритет: сначала кандидаты с этой целью, иначе с balanced, иначе весь пул. Не для balanced. */
-    preferGoalFirst?: string;
+    /** Stage 4.2: ключ цели из плана (не balanced) — бонус к скору, без сужения пула. */
+    selectedGoalForScoring?: string;
+    /** Stage 4.2: сколько раз цель уже встретилась в приёмах пищи этого дня (мягкий анти-повтор). */
+    dayGoalUsage?: Record<string, number>;
   }
 ): { id: string; title: string; matchedLike: boolean; primaryBase: string } | null {
   const excludeSet = new Set(excludeRecipeIds);
@@ -316,21 +318,28 @@ function pickFromPoolInMemory(
     const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
     return slotSanityCheck(slot, [r.title ?? "", r.description ?? "", ing].join(" "));
   });
-  let work = filtered;
-  const preferG = goalHints?.preferGoalFirst;
-  if (preferG && GOAL_SET.has(preferG) && preferG !== "balanced") {
-    const withGoal = work.filter((r) => normalizeNutritionGoals(r.nutrition_goals).includes(preferG as NutritionGoal));
-    if (withGoal.length > 0) {
-      work = withGoal;
-    } else {
-      const withBal = work.filter((r) => normalizeNutritionGoals(r.nutrition_goals).includes("balanced"));
-      if (withBal.length > 0) work = withBal;
-    }
-  }
+  const work = filtered;
   const likeTokens = buildLikeTokens(memberData);
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
-  shuffleArray(work);
-  const best = pickBestRecipeForSlot(work, {
+  const selectedGoal = goalHints?.selectedGoalForScoring;
+  const dayGoalUsage = goalHints?.dayGoalUsage;
+  if (selectedGoal) {
+    let poolCountSel = 0;
+    let poolCountBal = 0;
+    for (const r of work) {
+      const g = normalizeNutritionGoals(r.nutrition_goals);
+      if (g.includes(selectedGoal as NutritionGoal)) poolCountSel++;
+      if (g.includes("balanced")) poolCountBal++;
+    }
+    safeLog("CHAT_PLAN_GOAL_DEBUG", {
+      selected_goal: selectedGoal,
+      count_selected_goal: poolCountSel,
+      count_balanced: poolCountBal,
+      total_candidates: work.length,
+      day_usage_selected: dayGoalUsage?.[selectedGoal] ?? 0,
+    });
+  }
+  const ctx: ScoreRecipeCtx = {
     likeTokens,
     likeMode,
     recentSignatures,
@@ -338,7 +347,8 @@ function pickFromPoolInMemory(
     preferredGoals: goalHints?.preferredGoals,
     blockedGoals: goalHints?.blockedGoals,
     requireBalanced: goalHints?.requireBalanced,
-  });
+  };
+  const best = pickBestRecipeForSlotWithGoalScoring(work, ctx, selectedGoal, dayGoalUsage);
   if (!best) return null;
   const primaryBase = inferPrimaryBase(best);
   return { id: best.id, title: best.title, matchedLike: hasLikeMatch(best, likeTokens), primaryBase };
@@ -456,8 +466,6 @@ const SUPABASE_TIMEOUT_MS = 8000;
 const POOL_LIMIT_ONE_DAY = 120;
 /** Week plan: need at least 7 per meal type (breakfast/lunch/snack/dinner); family dinner filter and meal-type inference reduce effective pool — use larger fetch. */
 const POOL_LIMIT_WEEK = 280;
-/** Top-K candidates to score (rest filtered but not scored). */
-const TOP_K_SCORE = 80;
 /** Min candidates for family dinner before we fall back to pool without family-dinner filter. */
 const MIN_FAMILY_DINNER = 5;
 const debugPool = () => typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_POOL") === "true";
@@ -490,6 +498,29 @@ type ScoreRecipeCtx = {
   blockedGoals?: Set<string>;
   requireBalanced?: boolean;
 };
+
+/** Stage 4.2: bonus on top of base score; soft diversity when a goal already appears 2+ times this day. */
+function computeGoalPriorityBonus(
+  goals: NutritionGoal[],
+  selectedGoal: string | undefined,
+  dayGoalUsage: Record<string, number> | undefined,
+): number {
+  const usage = dayGoalUsage ?? {};
+  let bonus = 0;
+  const sel = selectedGoal && GOAL_SET.has(selectedGoal) && selectedGoal !== "balanced" ? selectedGoal : undefined;
+  if (sel && goals.includes(sel as NutritionGoal)) {
+    bonus += 2;
+  } else if (goals.includes("balanced")) {
+    bonus += 1;
+  }
+  for (const g of goals) {
+    if ((usage[g] ?? 0) >= 2) {
+      bonus -= 2;
+    }
+  }
+  return bonus;
+}
+
 function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecipeCtx): number {
   const likeScore = scoreLikeSignal(r, ctx.likeTokens, ctx.likeMode);
   const recencyScore = Math.max(0, 3 - Math.floor(rankIndex / 20));
@@ -523,33 +554,28 @@ function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecip
   if (ctx.blockedGoals && goals.some((g) => ctx.blockedGoals!.has(g))) goalsScore -= 3;
   return likeScore + recencyScore - varietyPenalty - baseDiversityPenalty + goalsScore;
 }
-const TOP_K_EXTEND = 120;
-function pickBestRecipeForSlot(candidates: RecipeRowPool[], ctx: ScoreRecipeCtx): RecipeRowPool | null {
+/** Stage 4.2: base score + goal bonus, sort DESC by final_score, pick top (pool never empty here). */
+function pickBestRecipeForSlotWithGoalScoring(
+  candidates: RecipeRowPool[],
+  ctx: ScoreRecipeCtx,
+  selectedGoal: string | undefined,
+  dayGoalUsage: Record<string, number> | undefined,
+): RecipeRowPool | null {
   if (candidates.length === 0) return null;
-  const firstWindow = candidates.slice(0, TOP_K_SCORE);
-  let best = firstWindow[0];
-  let bestScore = scoreRecipeForSlot(firstWindow[0], 0, ctx);
-  let bestIndex = 0;
-  for (let i = 1; i < firstWindow.length; i++) {
-    const s = scoreRecipeForSlot(firstWindow[i], i, ctx);
-    if (s > bestScore || (s === bestScore && i < bestIndex)) {
-      bestScore = s;
-      best = firstWindow[i];
-      bestIndex = i;
-    }
-  }
-  if (bestScore <= 0 && candidates.length > TOP_K_SCORE) {
-    const secondWindow = candidates.slice(0, TOP_K_EXTEND);
-    for (let i = TOP_K_SCORE; i < secondWindow.length; i++) {
-      const s = scoreRecipeForSlot(secondWindow[i], i, ctx);
-      if (s > bestScore || (s === bestScore && i < bestIndex)) {
-        bestScore = s;
-        best = secondWindow[i];
-        bestIndex = i;
-      }
-    }
-  }
-  return best;
+  shuffleArray(candidates);
+  const sel = selectedGoal && GOAL_SET.has(selectedGoal) && selectedGoal !== "balanced" ? selectedGoal : undefined;
+
+  const scored = candidates.map((r, rankIndex) => {
+    const base = scoreRecipeForSlot(r, rankIndex, ctx);
+    const goals = normalizeNutritionGoals(r.nutrition_goals);
+    const goalBonus = computeGoalPriorityBonus(goals, sel, dayGoalUsage);
+    return { r, finalScore: base + goalBonus };
+  });
+  scored.sort((a, b) => {
+    if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+    return a.r.id < b.r.id ? -1 : 1;
+  });
+  return scored[0]!.r;
 }
 
 serve(async (req) => {
@@ -601,7 +627,7 @@ serve(async (req) => {
     const rawSelectedGoal = typeof body.selected_goal === "string" ? body.selected_goal.trim().toLowerCase() : "";
     const selectedGoalToken: NutritionGoal | null =
       rawSelectedGoal && GOAL_SET.has(rawSelectedGoal) ? (rawSelectedGoal as NutritionGoal) : null;
-    const preferGoalFirst =
+    const selectedGoalForScoring =
       selectedGoalToken && selectedGoalToken !== "balanced" ? selectedGoalToken : undefined;
     const memberId = body.member_id ?? null;
     const memberData: MemberDataPool | null = body.member_data ?? null;
@@ -955,10 +981,22 @@ serve(async (req) => {
           excludeTitlesForSlot,
           slotLikeMode,
           baseCountsForSlot,
-          { preferredGoals, blockedGoals, requireBalanced, preferGoalFirst }
+          {
+            preferredGoals,
+            blockedGoals,
+            requireBalanced,
+            selectedGoalForScoring,
+            dayGoalUsage: { ...dayGoalCounts },
+          }
         );
         if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
-          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot, { preferredGoals, blockedGoals, requireBalanced, preferGoalFirst });
+          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot, {
+            preferredGoals,
+            blockedGoals,
+            requireBalanced,
+            selectedGoalForScoring,
+            dayGoalUsage: { ...dayGoalCounts },
+          });
         }
         if (picked) {
           newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
