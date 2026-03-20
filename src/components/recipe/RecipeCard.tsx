@@ -89,7 +89,7 @@ export function RecipeCard({
       {isPreview && (
         <NutritionGoalsChips
           goals={nutritionGoals}
-          maxVisible={2}
+          maxVisible={3}
           className="mt-0.5"
         />
       )}

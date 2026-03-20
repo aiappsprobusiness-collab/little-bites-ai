@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
 import { recipeKcalChip } from "@/theme/recipeTokens";
-import { getGoalShortDescription } from "@/utils/nutritionGoalDescriptions";
 
 const MEAL_LABELS: Record<string, { label: string; emoji: string; time: string }> = {
   breakfast: { label: "Завтрак", emoji: "🍽", time: "8:30" },
@@ -75,8 +74,6 @@ export interface MealCardProps {
   carbs?: number | null;
   /** Цели питания (чипы в превью). */
   nutritionGoals?: string[] | null;
-  /** Выбранная в плане цель (не balanced): подсветка, если рецепт её содержит. */
-  planFocusGoal?: string | null;
 }
 
 const CHIP_PLACEHOLDER_COUNT = 3;
@@ -109,7 +106,6 @@ export function MealCard({
   fats: nutritionFats,
   carbs: nutritionCarbs,
   nutritionGoals,
-  planFocusGoal,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -123,13 +119,6 @@ export function MealCard({
   const total = ingredientTotalCount ?? ingredientNames.length;
   const extraCount = total > maxChips ? total - maxChips : 0;
   const showPlaceholderChips = compact && isLoadingPreviews && chips.length === 0 && extraCount === 0;
-
-  const focusKey = planFocusGoal?.trim().toLowerCase() ?? "";
-  const matchesPlanFocus =
-    !!focusKey &&
-    focusKey !== "balanced" &&
-    (nutritionGoals ?? []).some((g) => String(g).toLowerCase() === focusKey);
-  const focusDescription = matchesPlanFocus ? getGoalShortDescription(focusKey) : "";
 
   const handleClick = () => {
     navigate(`/recipe/${recipeId}`, {
@@ -263,22 +252,8 @@ export function MealCard({
               </div>
             ) : undefined
           }
-          className={cn(
-            className,
-            matchesPlanFocus && "ring-1 ring-emerald-200/70 bg-emerald-50/35",
-          )}
-        >
-          {matchesPlanFocus ? (
-            <div className="mt-1 space-y-1">
-              <div className="text-xs font-medium text-emerald-900/90 bg-emerald-100/90 rounded-md px-2 py-0.5 inline-block">
-                Под вашу цель
-              </div>
-              {focusDescription ? (
-                <p className="text-[11px] text-muted-foreground leading-snug">{focusDescription}</p>
-              ) : null}
-            </div>
-          ) : null}
-        </RecipeCard>
+          className={className}
+        />
       </>
     );
   }

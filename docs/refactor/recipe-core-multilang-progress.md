@@ -9,6 +9,8 @@
 - Stage 4.3.1 — plan hint copy + paywall feature line + text wrap (completed)
 - Stage 4.3.2 — goal selector Free vs Premium/Trial (UI + client sanitize `selected_goal`) (completed)
 - Stage 4.3.3 — plan goal impact visible (badges + copy) (completed)
+- Stage 4.3.4 — goals UI cleanup (minimal chips + no extra copy on cards) (completed)
+- Stage 4.3.5 — goal chips subtle transition + tap feedback (CSS only) (completed)
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
@@ -31,13 +33,23 @@
 - [x] Stage 4.3.1 — UI copy + layout (PlanModeHint family text/subtext, Paywall first feature; wrap/min-w-0)
 - [x] Stage 4.3.2 — PlanGoalChipsRow: Free только «Баланс»; остальные → paywall; `selectGoalForEdge` + хук `usePlanGenerationJob`
 - [x] Stage 4.3.3 — MealCard: бейдж «Под вашу цель» + короткое пояснение; строка «Подобрано с акцентом…»; при отсутствии совпадений по цели — дисклеймер
+- [x] Stage 4.3.4 — goals UI cleanup: `PlanGoalChipsRow` свёртка до 3 + «…»; убраны сводка «Подобрано с акцентом…» и бейджи/пояснения на карточках плана
+- [x] Stage 4.3.5 — `PlanGoalChipsRow`: плавные переходы состояния + лёгкий `active:scale-[0.98]`; у locked чипов без press-scale
 - [ ] Stage 5 — plan page refactor
 
-## Stage 4.3.3 — Goal impact visible (plan UI)
+## Stage 4.3.5 — Goal chips motion (subtle)
 
-- `nutritionGoalDescriptions.ts` — `getGoalShortDescription(goal)` для подписи под бейджем (balanced — пусто).
-- `MealCard` + `RecipeCard` children: при совпадении `planFocusGoal` с `nutrition_goals` — лёгкое кольцо/фон + бейдж + текст.
-- `MealPlanPage`: сводка под селектором; если в дне есть блюда, но ни одно не содержит выбранную цель — текст про «максимально близкие варианты»; paywall для Free дополнен формулировкой про цель питания.
+- `PlanGoalChipsRow`: Tailwind `transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out`; выбранный чип — чуть плотнее фон, лёгкая тень; все интерактивные чипы с фиксированным `border-2` (без layout shift). Framer Motion не используется.
+
+## Stage 4.3.4 — Goals UI cleanup (plan)
+
+- `MealPlanPage`: строка «Подобрано с акцентом на…» удалена; дисклеймер «Не нашли точных совпадений…» тоже убран (Stage 4.3.4 follow-up).
+- `PlanGoalChipsRow`: до трёх чипов в свёрнутом виде + «…» (разворот полного списка); при выборе цели не из первых трёх она показывается в свёртке; selected = заливка + более жёсткая рамка, unselected = outline, низкий контраст; без лишней рамки вокруг ряда.
+- `MealCard` / `RecipeCard` preview: только чипы целей (`NutritionGoalsChips`, до 3 в превью); без бейджа «Под вашу цель» и без `getGoalShortDescription` под карточкой.
+
+## Stage 4.3.3 — Goal impact visible (plan UI) — superseded by 4.3.4 for copy density
+
+Ранее: бейдж «Под вашу цель», `getGoalShortDescription`, строка «Подобрано с акцентом…». В 4.3.4 убрано для спокойного UI; логика подбора и скоринга не менялась.
 
 ## Stage 4.3.2 — Goal selector access (Free vs Premium/Trial)
 

@@ -62,6 +62,124 @@ const ALLOWED_NUTRITION_GOALS = [
 type NutritionGoal = (typeof ALLOWED_NUTRITION_GOALS)[number];
 const GOAL_SET = new Set<string>(ALLOWED_NUTRITION_GOALS);
 
+/** Stage 4.3: family flags + age/soft scoring (no pool narrowing). */
+type FamilyScoringContext = {
+  hasInfant: boolean;
+  hasToddler: boolean;
+  hasMembers: boolean;
+  /** any(member.age < 3): age_months < 36 */
+  softMode: boolean;
+  /** age_months ≥ 12 only; infants excluded from age_bonus */
+  eligibleMembers: { ageMonths: number }[];
+  ageGroupsDistribution: Record<string, number>;
+  /** average age in years (members with known age_months only) */
+  avgAgeYears: number | null;
+  membersCount: number;
+};
+
+function buildFamilyScoringContext(
+  memberRows: Array<{ age_months?: number | null }>,
+): FamilyScoringContext {
+  const membersCount = memberRows.length;
+  const hasMembers = membersCount > 0;
+  const dist: Record<string, number> = {
+    infant_lt_1y: 0,
+    toddler_1_3y: 0,
+    child_3_10y: 0,
+    adult_10p: 0,
+    unknown: 0,
+  };
+  let hasInfant = false;
+  let hasToddler = false;
+  const eligibleMembers: { ageMonths: number }[] = [];
+  let sumMonthsForAvg = 0;
+  let nKnownAge = 0;
+
+  for (const row of memberRows) {
+    const raw = row.age_months;
+    if (raw == null || !Number.isFinite(Number(raw))) {
+      dist.unknown++;
+      continue;
+    }
+    const ageMonths = Math.max(0, Math.round(Number(raw)));
+    sumMonthsForAvg += ageMonths;
+    nKnownAge++;
+    if (ageMonths < 12) {
+      hasInfant = true;
+      dist.infant_lt_1y++;
+    } else {
+      eligibleMembers.push({ ageMonths });
+    }
+    if (ageMonths < 36) hasToddler = true;
+    if (ageMonths >= 12 && ageMonths < 36) dist.toddler_1_3y++;
+    else if (ageMonths >= 36 && ageMonths < 120) dist.child_3_10y++;
+    else if (ageMonths >= 120) dist.adult_10p++;
+  }
+
+  const avgAgeYears = nKnownAge > 0 ? sumMonthsForAvg / nKnownAge / 12 : null;
+
+  return {
+    hasInfant,
+    hasToddler,
+    hasMembers,
+    softMode: hasToddler,
+    eligibleMembers,
+    ageGroupsDistribution: dist,
+    avgAgeYears,
+    membersCount,
+  };
+}
+
+/** Age buckets for scoring: only members with age ≥ 12 months (1y). */
+function ageScoringBucket(ageMonths: number): "toddler" | "child" | "adult" | null {
+  if (ageMonths < 12) return null;
+  if (ageMonths < 36) return "toddler";
+  if (ageMonths < 120) return "child";
+  return "adult";
+}
+
+function ageGoalContribution(bucket: "toddler" | "child" | "adult", goal: NutritionGoal): number {
+  if (bucket === "toddler") {
+    if (goal === "iron_support") return 2;
+    if (goal === "gentle_digestion") return 1;
+    return 0;
+  }
+  if (bucket === "child") {
+    if (goal === "balanced") return 2;
+    if (goal === "iron_support") return 1;
+    return 0;
+  }
+  if (goal === "balanced") return 2;
+  if (goal === "energy_boost") return 1;
+  return 0;
+}
+
+const AGE_BONUS_CAP = 3;
+const SOFT_BONUS_CAP = 2;
+
+/** Stage 4.3: sum across eligible members and recipe goals, cap +3 */
+function computeAgeBonusForRecipe(goals: NutritionGoal[], eligibleMembers: { ageMonths: number }[]): number {
+  if (eligibleMembers.length === 0 || goals.length === 0) return 0;
+  let sum = 0;
+  for (const m of eligibleMembers) {
+    const bucket = ageScoringBucket(m.ageMonths);
+    if (!bucket) continue;
+    for (const g of goals) {
+      sum += ageGoalContribution(bucket, g);
+    }
+  }
+  return Math.min(AGE_BONUS_CAP, sum);
+}
+
+/** Stage 4.3: toddler soft-mode only; gentle_digestion +2, balanced +1, cap +2 */
+function computeSoftBonusForRecipe(goals: NutritionGoal[], softMode: boolean): number {
+  if (!softMode) return 0;
+  let s = 0;
+  if (goals.includes("gentle_digestion")) s += 2;
+  if (goals.includes("balanced")) s += 1;
+  return Math.min(SOFT_BONUS_CAP, s);
+}
+
 function normalizeNutritionGoals(input: unknown): NutritionGoal[] {
   if (!Array.isArray(input)) return [];
   const out: NutritionGoal[] = [];
@@ -290,8 +408,18 @@ function pickFromPoolInMemory(
     selectedGoalForScoring?: string;
     /** Stage 4.2: сколько раз цель уже встретилась в приёмах пищи этого дня (мягкий анти-повтор). */
     dayGoalUsage?: Record<string, number>;
+    /** Stage 4.3: возраст/семья/soft-mode — только скоринг. */
+    familyScoring?: FamilyScoringContext | null;
   }
-): { id: string; title: string; matchedLike: boolean; primaryBase: string } | null {
+): {
+  id: string;
+  title: string;
+  matchedLike: boolean;
+  primaryBase: string;
+  goalBonus: number;
+  ageBonus: number;
+  softBonus: number;
+} | null {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
   const slot = normalizeMealType(mealType) ?? (mealType as NormalizedMealType);
@@ -323,6 +451,10 @@ function pickFromPoolInMemory(
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
   const selectedGoal = goalHints?.selectedGoalForScoring;
   const dayGoalUsage = goalHints?.dayGoalUsage;
+  const familyScoring = goalHints?.familyScoring ?? null;
+  if (familyScoring?.hasInfant && debugPool()) {
+    safeLog("CHAT_PLAN_FAMILY_INFANT_PRESENT", { hasInfant: true });
+  }
   if (selectedGoal) {
     let poolCountSel = 0;
     let poolCountBal = 0;
@@ -348,10 +480,19 @@ function pickFromPoolInMemory(
     blockedGoals: goalHints?.blockedGoals,
     requireBalanced: goalHints?.requireBalanced,
   };
-  const best = pickBestRecipeForSlotWithGoalScoring(work, ctx, selectedGoal, dayGoalUsage);
-  if (!best) return null;
+  const scoredPick = pickBestRecipeForSlotWithGoalScoring(work, ctx, selectedGoal, dayGoalUsage, familyScoring);
+  if (!scoredPick) return null;
+  const { r: best, goalBonus, ageBonus, softBonus } = scoredPick;
   const primaryBase = inferPrimaryBase(best);
-  return { id: best.id, title: best.title, matchedLike: hasLikeMatch(best, likeTokens), primaryBase };
+  return {
+    id: best.id,
+    title: best.title,
+    matchedLike: hasLikeMatch(best, likeTokens),
+    primaryBase,
+    goalBonus,
+    ageBonus,
+    softBonus,
+  };
 }
 
 function normalizeMealsForWrite(meals: Record<string, MealSlot | null | undefined>): Record<string, MealSlot> {
@@ -370,6 +511,11 @@ async function upsertMealPlanRow(
   dayKey: string,
   meals: Record<string, MealSlot | null | undefined>
 ): Promise<{ error?: string }> {
+  /** Явный `null` — удалить ключ из meals (очистить слот при частичном подборе). */
+  const keysToDelete: string[] = [];
+  for (const [k, v] of Object.entries(meals)) {
+    if (v === null) keysToDelete.push(k);
+  }
   const normalized = normalizeMealsForWrite(meals);
   let q = supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey);
   if (memberId == null) q = q.is("member_id", null);
@@ -377,6 +523,7 @@ async function upsertMealPlanRow(
   const { data: existing } = await q.maybeSingle();
   const current = (existing as { meals?: Record<string, unknown> } | null)?.meals ?? {};
   const merged = { ...current };
+  for (const k of keysToDelete) delete merged[k];
   for (const [k, v] of Object.entries(normalized)) merged[k] = v;
   if ((existing as { id?: string } | null)?.id) {
     const { error: updateErr } = await supabase.from("meal_plans_v2").update({ meals: merged }).eq("id", (existing as { id: string }).id);
@@ -554,28 +701,38 @@ function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecip
   if (ctx.blockedGoals && goals.some((g) => ctx.blockedGoals!.has(g))) goalsScore -= 3;
   return likeScore + recencyScore - varietyPenalty - baseDiversityPenalty + goalsScore;
 }
-/** Stage 4.2: base score + goal bonus, sort DESC by final_score, pick top (pool never empty here). */
+/** Stage 4.2 + 4.3: base + goal + age + soft; tie-break goal > age > soft. */
 function pickBestRecipeForSlotWithGoalScoring(
   candidates: RecipeRowPool[],
   ctx: ScoreRecipeCtx,
   selectedGoal: string | undefined,
   dayGoalUsage: Record<string, number> | undefined,
-): RecipeRowPool | null {
+  familyScoring: FamilyScoringContext | null | undefined,
+): { r: RecipeRowPool; goalBonus: number; ageBonus: number; softBonus: number } | null {
   if (candidates.length === 0) return null;
   shuffleArray(candidates);
   const sel = selectedGoal && GOAL_SET.has(selectedGoal) && selectedGoal !== "balanced" ? selectedGoal : undefined;
+  const eligible = familyScoring?.eligibleMembers ?? [];
+  const softMode = familyScoring?.softMode === true;
 
   const scored = candidates.map((r, rankIndex) => {
     const base = scoreRecipeForSlot(r, rankIndex, ctx);
     const goals = normalizeNutritionGoals(r.nutrition_goals);
     const goalBonus = computeGoalPriorityBonus(goals, sel, dayGoalUsage);
-    return { r, finalScore: base + goalBonus };
+    const ageBonus = computeAgeBonusForRecipe(goals, eligible);
+    const softBonus = computeSoftBonusForRecipe(goals, softMode);
+    const finalScore = base + goalBonus + ageBonus + softBonus;
+    return { r, finalScore, goalBonus, ageBonus, softBonus };
   });
   scored.sort((a, b) => {
     if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+    if (b.goalBonus !== a.goalBonus) return b.goalBonus - a.goalBonus;
+    if (b.ageBonus !== a.ageBonus) return b.ageBonus - a.ageBonus;
+    if (b.softBonus !== a.softBonus) return b.softBonus - a.softBonus;
     return a.r.id < b.r.id ? -1 : 1;
   });
-  return scored[0]!.r;
+  const top = scored[0]!;
+  return { r: top.r, goalBonus: top.goalBonus, ageBonus: top.ageBonus, softBonus: top.softBonus };
 }
 
 serve(async (req) => {
@@ -656,10 +813,12 @@ serve(async (req) => {
         return new Response(JSON.stringify({ error: "missing_day_key_or_meal_type" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       let replaceMemberData: MemberDataPool | null = memberData;
+      let replaceMembersForScoring: Array<{ age_months?: number | null }> = [];
       if (memberId == null) {
         const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, likes, dislikes").eq("user_id", userId);
         const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
         replaceMemberData = buildFamilyMemberDataForPlan(membersList);
+        replaceMembersForScoring = membersList;
       } else {
         const { data: memberRow } = await supabase.from("members").select("age_months, allergies, likes, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
         const m = memberRow as { age_months?: number | null; allergies?: string[] | null; likes?: string[] | null; dislikes?: string[] | null } | null;
@@ -671,8 +830,12 @@ serve(async (req) => {
             likes: Array.isArray(m.likes) && m.likes.length > 0 ? m.likes : (memberData?.likes ?? []),
             dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
           };
+          replaceMembersForScoring = [{ age_months: m.age_months ?? memberData?.age_months ?? null }];
+        } else if (memberData?.age_months != null) {
+          replaceMembersForScoring = [{ age_months: memberData.age_months }];
         }
       }
+      const replaceFamilyScoring = buildFamilyScoringContext(replaceMembersForScoring);
       const { data: existingRow } = await supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey).is("member_id", effectiveMemberId).maybeSingle();
       const currentMeals = (existingRow as { meals?: Record<string, { recipe_id?: string; title?: string }> } | null)?.meals ?? {};
       const dateKeys = [dayKey, ...getLastNDaysKeys(dayKey, 6)];
@@ -687,6 +850,9 @@ serve(async (req) => {
         preferredGoals: userNutritionGoals.length > 0 ? new Set<string>(userNutritionGoals) : undefined,
         blockedGoals: undefined,
         requireBalanced: false,
+        selectedGoalForScoring,
+        dayGoalUsage: {},
+        familyScoring: replaceFamilyScoring,
       };
       let picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, "neutral", undefined, replaceGoalHints);
       if (!picked && memberId == null && mealType === "dinner" && poolForReplace.length < MIN_FAMILY_DINNER) {
@@ -790,9 +956,11 @@ serve(async (req) => {
     const poolCandidates = await fetchPoolCandidates(supabase, userId, effectiveMemberId, poolLimit);
 
     let effectiveMemberData: MemberDataPool | null = memberData;
+    let membersForScoring: Array<{ age_months?: number | null }> = [];
     if (memberId == null) {
       const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, likes, dislikes").eq("user_id", userId);
       const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
+      membersForScoring = membersList;
       effectiveMemberData = buildFamilyMemberDataForPlan(membersList);
       safeLog("family_mode", { members_count: membersList.length });
     } else {
@@ -806,8 +974,12 @@ serve(async (req) => {
           likes: Array.isArray(m.likes) && m.likes.length > 0 ? m.likes : (memberData?.likes ?? []),
           dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
         };
+        membersForScoring = [{ age_months: m.age_months ?? memberData?.age_months ?? null }];
+      } else if (memberData?.age_months != null) {
+        membersForScoring = [{ age_months: memberData.age_months }];
       }
     }
+    const familyScoringCtx = buildFamilyScoringContext(membersForScoring);
 
     const isAdultPlan = isAdultContext(effectiveMemberData);
     const poolSuitableCount = isAdultPlan ? poolCandidates.filter((r) => r.max_age_months == null || r.max_age_months > 12).length : poolCandidates.length;
@@ -911,6 +1083,8 @@ serve(async (req) => {
 
     let totalDbCount = 0;
     const totalAiCount = 0;
+    let totalAgeBonusSum = 0;
+    let totalSoftBonusSum = 0;
     let lastDayKey: string | null = null;
     /** Week only: counts per primary base for diversity (cap + penalty). */
     const usedBaseCounts: Record<string, number> = dayKeys.length > 1 ? {} : ({} as Record<string, number>);
@@ -931,7 +1105,7 @@ serve(async (req) => {
       }
       const { data: existingRow } = await supabase.from("meal_plans_v2").select("id, meals").eq("user_id", userId).eq("planned_date", dayKey).is("member_id", effectiveMemberId).maybeSingle();
       const currentMeals = (existingRow as { meals?: Record<string, MealSlot> } | null)?.meals ?? {};
-      const newMeals = { ...currentMeals } as Record<string, MealSlot>;
+      const newMeals: Record<string, MealSlot | null | undefined> = { ...currentMeals };
 
       for (const mealKey of MEAL_KEYS) {
         const poolForSlot =
@@ -987,6 +1161,7 @@ serve(async (req) => {
             requireBalanced,
             selectedGoalForScoring,
             dayGoalUsage: { ...dayGoalCounts },
+            familyScoring: familyScoringCtx,
           }
         );
         if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
@@ -996,6 +1171,7 @@ serve(async (req) => {
             requireBalanced,
             selectedGoalForScoring,
             dayGoalUsage: { ...dayGoalCounts },
+            familyScoring: familyScoringCtx,
           });
         }
         if (picked) {
@@ -1006,6 +1182,8 @@ serve(async (req) => {
             await supabase.rpc("record_recipe_feedback", { p_recipe_id: oldRecipeId, p_action: "replaced_in_plan" });
           }
           if (picked.matchedLike) dayLikedRecipeCount++;
+          totalAgeBonusSum += picked.ageBonus;
+          totalSoftBonusSum += picked.softBonus;
           usedRecipeIds.push(picked.id);
           usedTitleKeys.push(normalizeTitleKey(picked.title));
           usedTitleKeysByMealType[mealKey]?.add(normalizeTitleKey(picked.title));
@@ -1026,6 +1204,9 @@ serve(async (req) => {
             }
           }
           totalDbCount++;
+        } else {
+          /** Не смогли подобрать из пула — очищаем слот, иначе остаётся старый рецепт и расходится с filledSlotsCount. */
+          newMeals[mealKey] = null;
         }
       }
 
@@ -1036,6 +1217,16 @@ serve(async (req) => {
         while (recentLikedDayWindow.length > 2) recentLikedDayWindow.shift();
       }
     }
+
+    safeLog("CHAT_PLAN_FAMILY_DEBUG", {
+      hasInfant: familyScoringCtx.hasInfant,
+      hasToddler: familyScoringCtx.hasToddler,
+      members_count: familyScoringCtx.membersCount,
+      age_groups_distribution: familyScoringCtx.ageGroupsDistribution,
+      avg_age: familyScoringCtx.avgAgeYears,
+      total_age_bonus: totalAgeBonusSum,
+      total_soft_bonus: totalSoftBonusSum,
+    });
 
     if (!isPremiumOrTrial) {
       await supabase.from("usage_events").insert({ user_id: userId, member_id: effectiveMemberId, feature: "plan_fill_day" });
