@@ -226,7 +226,7 @@ function normalizeNutrition(raw: unknown): { kcal_per_serving: number; protein_g
 
 /**
  * Contract: title, description (LLM + pickCanonicalDescription на Edge для chat_ai), …
- * description: Zod max 210 = `DESCRIPTION_MAX_LENGTH` (sanitizeAndRepair); минимальная приемлемая длина для канона LLM — `DESCRIPTION_QUALITY_MIN_LENGTH` (38) и правила предложений в `passesDescriptionQualityGate` (тот же модуль).
+ * description: Zod max 210 = `DESCRIPTION_MAX_LENGTH` (sanitizeAndRepair); минимальная приемлемая длина для канона LLM — `DESCRIPTION_QUALITY_MIN_LENGTH` (38), правила предложений и мягкий title-anchoring в `passesDescriptionQualityGate` (тот же модуль).
  * chefAdvice: Zod max 220; финально `enforceChefAdvice` укладывает в `CHEF_ADVICE_MAX_LENGTH` (160).
  */
 export const RecipeJsonSchema = z.object({

@@ -27,6 +27,12 @@ export const DESCRIPTION_QUALITY_MIN_LENGTH = 38;
  */
 export const DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH = 45;
 
+/**
+ * Минимум «сильных» токенов из title, при котором включается semantic anchoring (fail-open ниже порога).
+ * 3+ снижает ложные срабатывания на коротких названиях («Овсянка с изюмом» + описание про кашу).
+ */
+export const DESCRIPTION_TITLE_ANCHOR_MIN_STRONG_TOKENS = 3;
+
 /** Минимальная длина description; ниже — подставляем fallback. */
 const DESCRIPTION_MIN_FOR_VALID = 60;
 
@@ -522,6 +528,78 @@ function hasNutritionalMarker(text: string): boolean {
   return DESCRIPTION_NUTRITIONAL_MARKERS.some((m) => t.includes(m));
 }
 
+/** Служебные и слишком общие слова title — не считаются «сильными» для anchoring. */
+const DESCRIPTION_TITLE_ANCHOR_STOP_WORDS = new Set([
+  "а", "без", "в", "во", "для", "до", "за", "и", "из", "к", "ко", "ли", "на", "над", "не", "ни", "но", "о", "об", "от",
+  "по", "под", "при", "про", "с", "со", "у", "через", "что", "как", "же", "или", "да", "это", "тот", "та", "те",
+  "мой", "твой", "наш", "ваш", "его", "её", "их",
+]);
+
+/** Не несут идентичности блюда (тип приёма пищи / шаблон). */
+const DESCRIPTION_TITLE_ANCHOR_WEAK_MEAL_WORDS = new Set([
+  "блюдо", "рецепт", "ужин", "обед", "завтрак", "перекус", "ланч", "суп", "салат", "закуска", "десерт", "гарнир",
+  "второе", "основное", "порция", "порции", "меню", "тарелка",
+]);
+
+/** Кухня / общий стиль — не считаем к порогу «3 сильных» (описание может не повторять «тайский»). */
+const DESCRIPTION_TITLE_ANCHOR_WEAK_CUISINE_WORDS = new Set([
+  "тайский", "итальянский", "французский", "китайский", "японский", "мексиканский", "индийский", "русский", "украинский",
+  "домашний", "классический", "традиционный", "авторский",
+]);
+
+function isWeakOrStopTitleToken(w: string): boolean {
+  const x = w.toLowerCase();
+  if (x.length < 2) return true;
+  if (DESCRIPTION_TITLE_ANCHOR_STOP_WORDS.has(x)) return true;
+  if (DESCRIPTION_TITLE_ANCHOR_WEAK_MEAL_WORDS.has(x)) return true;
+  if (DESCRIPTION_TITLE_ANCHOR_WEAK_CUISINE_WORDS.has(x)) return true;
+  if (/^\d+$/.test(x)) return true;
+  return false;
+}
+
+/**
+ * Сильные токены названия для мягкой привязки description к блюду.
+ */
+export function extractStrongTitleTokensForDescriptionAnchoring(title: string): string[] {
+  const key = normalizeTitleKey(title);
+  if (!key) return [];
+  const words = key.split(/\s+/).filter(Boolean);
+  const out: string[] = [];
+  for (const w of words) {
+    if (isWeakOrStopTitleToken(w)) continue;
+    out.push(w);
+  }
+  return out;
+}
+
+function tokenAnchorsInNormalizedText(token: string, corpusWords: string[]): boolean {
+  if (!token) return false;
+  if (corpusWords.includes(token)) return true;
+  if (token.length < 4) {
+    return false;
+  }
+  const prefix = token.slice(0, 4);
+  for (const w of corpusWords) {
+    if (w.startsWith(prefix)) return true;
+    if (w.length >= 4 && token.startsWith(w.slice(0, 4))) return true;
+  }
+  return false;
+}
+
+/**
+ * Есть ли в description минимальная привязка к сильным словам title (мягко, fail-open при <3 токенов).
+ */
+export function descriptionPassesTitleAnchoringHeuristic(desc: string, title: string | undefined): boolean {
+  const tit = (title ?? "").trim();
+  if (!tit) return true;
+  const strong = extractStrongTitleTokensForDescriptionAnchoring(tit);
+  if (strong.length < DESCRIPTION_TITLE_ANCHOR_MIN_STRONG_TOKENS) return true;
+  const corpusNorm = normalizeTitleKey(desc);
+  if (!corpusNorm) return false;
+  const corpusWords = corpusNorm.split(/\s+/).filter(Boolean);
+  return strong.some((tok) => tokenAnchorsInNormalizedText(tok, corpusWords));
+}
+
 function descriptionStartsWithTitle(desc: string, title: string): boolean {
   const t = normalizeSpaces(desc);
   const titleKey = normalizeTitleKey(title);
@@ -570,7 +648,9 @@ export function passesDescriptionQualityGate(
   if (descriptionFailsQualityGate(t)) return false;
   if (options?.title && descriptionStartsWithTitle(t, options.title)) return false;
   if (!lastSentenceComplete(t)) return false;
-  return hasNutritionalMarker(t);
+  if (!hasNutritionalMarker(t)) return false;
+  if (options?.title && !descriptionPassesTitleAnchoringHeuristic(t, options.title)) return false;
+  return true;
 }
 
 /** Почему LLM description не принят (дет. fallback). */
@@ -593,6 +673,9 @@ export function explainCanonicalDescriptionRejection(
   if (options?.title && descriptionStartsWithTitle(t, options.title)) return "repeats_title_or_starts_like_title";
   if (!lastSentenceComplete(t)) return "incomplete_final_sentence";
   if (!hasNutritionalMarker(t)) return "missing_nutritional_marker";
+  if (options?.title && !descriptionPassesTitleAnchoringHeuristic(t, options.title)) {
+    return "missing_title_anchoring";
+  }
   return "unknown";
 }
 
