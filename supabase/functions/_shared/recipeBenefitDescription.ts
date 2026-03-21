@@ -43,6 +43,11 @@ export type BuildRecipeBenefitDescriptionInput = {
    */
   stableKey?: string | null;
   goals?: string[] | null;
+  /**
+   * Название блюда — добавляет энтропию к сиду, чтобы при одинаковых целях
+   * разные рецепты реже получали один и тот же текст (и не сталкивались независимые mod-8 по слотам).
+   */
+  title?: string | null;
 };
 
 /**
@@ -99,11 +104,53 @@ function fnv1a32(str: string): number {
   return h >>> 0;
 }
 
-function pickFrom<T>(arr: readonly T[], seed: string): T {
-  if (arr.length === 0) return "" as T;
-  const idx = fnv1a32(seed) % arr.length;
-  return arr[idx]!;
+/** Нормализация названия для сида (длина ограничена). */
+export function normalizeBenefitTitleForSeed(title?: string | null): string {
+  const t = (title ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (t.length <= 160) return t;
+  return t.slice(0, 160);
 }
+
+/**
+ * Последовательный генератор индексов из одного сида (xorshift32).
+ * Устраняет независимые коллизии `fnv(seed|slot) % 8` для разных UUID при тех же целях.
+ */
+function createSeededPicker(seedBase: string): (max: number) => number {
+  let state = fnv1a32(seedBase);
+  if (state === 0) state = 0x9e3779b9;
+  return (max: number) => {
+    if (max <= 0) return 0;
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) % max;
+  };
+}
+
+function pickByPicker<T>(arr: readonly T[], next: (max: number) => number): T {
+  if (arr.length === 0) return "" as T;
+  return arr[next(arr.length)]!;
+}
+
+/**
+ * Независимый выбор по слоту: отдельный xorshift-стрим на `seedBase + suffix`,
+ * чтобы интро / клаузы / хвост не коррелировали одним и тем же mod-8.
+ */
+function pickFromSlot<T>(arr: readonly T[], seedBase: string, slotSuffix: string): T {
+  return pickByPicker(arr, createSeededPicker(`${seedBase}${slotSuffix}`));
+}
+
+/** Короткие завершающие хвосты после основной мысли (тире, чтобы не путать с запятыми внутри клауз). */
+const ENDING_POOL: readonly string[] = [
+  " — хорошо для обычных дней.",
+  " — спокойно по сытости.",
+  " — легко вписывается в меню недели.",
+  " — удобно для насыщённых дней.",
+  " — без лишней тяжести в ощущениях.",
+  " — остаётся понятным выбором.",
+  " — удобно сочетать с другими приёмами пищи.",
+  " — хорошо ложится в домашний ритм.",
+];
 
 const FALLBACK: readonly string[] = [
   "Хороший повседневный вариант: сытно, спокойно и без лишней нагрузки.",
@@ -149,6 +196,18 @@ const GENERIC_NUTRI_OPENER: readonly string[] = [
   "Такой формат блюда ",
 ];
 
+/** Формат C (single-goal без balanced): короткая вводная + предикат из GOAL_CLAUSES + хвост. */
+const SINGLE_SOFT_PREFIX: readonly string[] = [
+  "По сути это ",
+  "По смыслу для рациона это ",
+  "Если смотреть на цель — ",
+  "С практической стороны это ",
+  "Для меню это ",
+  "В повседневном формате это ",
+  "Если коротко — ",
+  "В таком составе это ",
+];
+
 const GOAL_CLAUSES: Record<NutritionGoal, readonly string[]> = {
   balanced: [
     "помогает держать рацион более ровным",
@@ -165,7 +224,7 @@ const GOAL_CLAUSES: Record<NutritionGoal, readonly string[]> = {
     "хорошо подходит для дней, когда нужно сосредоточиться",
     "помогает поддерживать внимание и концентрацию",
     "подходит для моментов, когда важна собранность",
-    "хороший вариант, когда впереди много дел, требующих сосредоточенности",
+    "хорошо подходит в дни, когда впереди много дел, требующих сосредоточенности",
     "помогает сделать питание более полезным для умственной активности",
     "подходит для дней учёбы или напряжённой работы",
     "поддерживает более ровное самочувствие при умственной нагрузке",
@@ -287,26 +346,47 @@ export function buildRecipeBenefitDescription(
   input: BuildRecipeBenefitDescriptionInput
 ): string {
   const normalizedGoals = normalizeNutritionGoals(input.goals);
-  const seedBase = `${input.recipeId?.trim() || input.stableKey?.trim() || "na"}|${normalizedGoals.join(",")}`;
+  const primary = input.recipeId?.trim() || input.stableKey?.trim() || "na";
+  const titleSeed = normalizeBenefitTitleForSeed(input.title);
+  const seedBase = `${primary}|${normalizedGoals.join(",")}|${titleSeed}`;
   const { hasBalanced, accents } = pickPriorityAccentGoals(normalizedGoals);
 
   let out: string;
 
   if (accents.length === 0) {
     out = hasBalanced
-      ? pickFrom(BALANCED_ONLY, `${seedBase}|balOnly`)
-      : pickFrom(FALLBACK, `${seedBase}|fb`);
+      ? pickFromSlot(BALANCED_ONLY, seedBase, "|acc0|bal")
+      : pickFromSlot(FALLBACK, seedBase, "|acc0|fb");
     return clampBenefitLength(out);
   }
 
   if (accents.length === 1) {
     const g = accents[0]!;
     if (hasBalanced) {
-      const intro = pickFrom(BALANCED_INTRO, `${seedBase}|intro`);
-      const clause = pickFrom(GOAL_CLAUSES[g], `${seedBase}|cl`);
-      out = `${intro}${clause}.`;
+      const intro = pickFromSlot(BALANCED_INTRO, seedBase, "|b1|intro");
+      const clause = pickFromSlot(GOAL_CLAUSES[g], seedBase, `|b1|cl|${g}`);
+      const ending = pickFromSlot(ENDING_POOL, seedBase, "|b1|end");
+      out = `${intro}${clause}${ending}`;
     } else {
-      out = pickFrom(SINGLE_FULL[g], `${seedBase}|single`);
+      /**
+       * Формат A: готовая строка из SINGLE_FULL.
+       * Формат B: GENERIC_NUTRI_OPENER + клауза + ENDING.
+       * Формат C: SINGLE_SOFT_PREFIX + клауза + ENDING.
+       */
+      const singleFmt = fnv1a32(`${seedBase}|sgfmt|${g}`) % 3;
+      if (singleFmt === 0) {
+        out = pickFromSlot(SINGLE_FULL[g], seedBase, `|sg|full|${g}`);
+      } else if (singleFmt === 1) {
+        const opener = pickFromSlot(GENERIC_NUTRI_OPENER, seedBase, `|sg|op|${g}`);
+        const clause = pickFromSlot(GOAL_CLAUSES[g], seedBase, `|sg|cl|${g}`);
+        const ending = pickFromSlot(ENDING_POOL, seedBase, `|sg|end|${g}`);
+        out = `${opener}${clause}${ending}`;
+      } else {
+        const soft = pickFromSlot(SINGLE_SOFT_PREFIX, seedBase, `|sg|soft|${g}`);
+        const clause = pickFromSlot(GOAL_CLAUSES[g], seedBase, `|sg|f2cl|${g}`);
+        const ending = pickFromSlot(ENDING_POOL, seedBase, `|sg|f2e|${g}`);
+        out = `${soft}${clause}${ending}`;
+      }
     }
     return clampBenefitLength(out);
   }
@@ -314,15 +394,17 @@ export function buildRecipeBenefitDescription(
   const g1 = accents[0]!;
   const g2 = accents[1]!;
   if (hasBalanced) {
-    const intro = pickFrom(BALANCED_INTRO, `${seedBase}|intro`);
-    const c1 = pickFrom(GOAL_CLAUSES[g1], `${seedBase}|c1`);
-    const c2 = pickFrom(GOAL_CLAUSES[g2], `${seedBase}|c2`);
-    out = `${intro}${c1} и ${c2}.`;
+    const intro = pickFromSlot(BALANCED_INTRO, seedBase, "|b2|intro");
+    const c1 = pickFromSlot(GOAL_CLAUSES[g1], seedBase, `|b2|c1|${g1}`);
+    const c2 = pickFromSlot(GOAL_CLAUSES[g2], seedBase, `|b2|c2|${g2}`);
+    const ending = pickFromSlot(ENDING_POOL, seedBase, "|b2|end");
+    out = `${intro}${c1}, и ${c2}${ending}`;
   } else {
-    const opener = pickFrom(GENERIC_NUTRI_OPENER, `${seedBase}|op`);
-    const c1 = pickFrom(GOAL_CLAUSES[g1], `${seedBase}|c1`);
-    const c2 = pickFrom(GOAL_CLAUSES[g2], `${seedBase}|c2`);
-    out = `${opener}${c1} и ${c2}.`;
+    const opener = pickFromSlot(GENERIC_NUTRI_OPENER, seedBase, "|o2|op");
+    const c1 = pickFromSlot(GOAL_CLAUSES[g1], seedBase, `|o2|c1|${g1}`);
+    const c2 = pickFromSlot(GOAL_CLAUSES[g2], seedBase, `|o2|c2|${g2}`);
+    const ending = pickFromSlot(ENDING_POOL, seedBase, "|o2|end");
+    out = `${opener}${c1}, и ${c2}${ending}`;
   }
 
   return clampBenefitLength(out);
