@@ -224,7 +224,7 @@ function normalizeNutrition(raw: unknown): { kcal_per_serving: number; protein_g
   };
 }
 
-/** Contract: title, description (optional/short; composer fills), ingredients, steps, cookingTime, mealType, servings, chefAdvice (max 220), nutrition optional. */
+/** Contract: title, description (LLM + pickCanonicalDescription на Edge для chat_ai), ingredients, steps, cookingTime, mealType, servings, chefAdvice (max 220, optional null), nutrition optional. */
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(210, "description: 2 sentences benefit, max 210 characters"),
@@ -431,7 +431,7 @@ export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJso
         .filter((s) => s.length > 0)
         .slice(0, 10),
       chefAdvice: (p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText) != null
-        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 220)
+        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 200)
         : null,
       mealType: normalizedMealType ?? collapsedMealType ?? undefined,
       servings,

@@ -60,9 +60,10 @@ import {
   passesDescriptionQualityGate,
   passesChefAdviceQualityGate,
   isChefAdviceDebugEnabled,
+  isChatDescriptionDebugEnabled,
+  pickCanonicalDescription,
   prepareChefAdvicePipeline,
-  hasForbiddenChefAdviceStart,
-  isChefAdviceLowValue,
+  explainChefAdviceRejectionWhenNull,
 } from "./domain/recipe_io/index.ts";
 import { buildRecipeBenefitDescription } from "../_shared/recipeBenefitDescription.ts";
 import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsistencyGuard.ts";
@@ -77,7 +78,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Ограничение длины ответа рецепта (chefAdvice в JSON ≤220; description в БД — benefit-builder, не лимит LLM). */
+/** Ограничение длины ответа рецепта (chefAdvice ≤220; description канон LLM-first ≤210 при gate, иначе benefit). */
 const RECIPE_MAX_TOKENS = 1600;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
@@ -890,6 +891,9 @@ serve(async (req) => {
       );
     }
 
+    /** true если первый LLM-ответ валиден, но chefAdvice не прошёл gate — полный retry больше не делаем. */
+    let recipeQualityRetrySkippedDueToBadChefAdvice = false;
+
     if (isRecipeJsonRequest) {
       const tNormStart = Date.now();
       const parseLog = (msg: string, meta?: Record<string, unknown>) =>
@@ -932,61 +936,19 @@ serve(async (req) => {
         });
         if (!descOk) {
           safeLog(JSON.stringify({
-            tag: "DESCRIPTION_QUALITY_GATE_BYPASSED",
+            tag: "DESCRIPTION_QUALITY_GATE_RAW_LLM",
             requestId,
-            descriptionQualityGateBypassedBecauseComposerOwnsFinalDescription: true,
+            rawLlmDescriptionFailsGate: true,
+            note: "Финальный канон после санитайзеров: pickCanonicalDescription (LLM или benefit fallback)",
           }));
         }
+        if (!adviceOk) {
+          recipeQualityRetrySkippedDueToBadChefAdvice = true;
+        }
         if (!descOk || !adviceOk) {
-          parseLog("quality gate failed", { descOk, adviceOk });
+          parseLog("quality gate (full LLM retry не вызывается из-за chef_advice)", { descOk, adviceOk });
         }
-        // Stage 2.3: retry только из-за chef_advice; description не запускает repair/retry — финальный description задаёт composer.
-        const needFullRetry = !adviceOk;
-        if (needFullRetry && DEEPSEEK_API_KEY) {
-          const tQualityRetryStart = Date.now();
-          try {
-            const controller2 = new AbortController();
-            const timeoutId2 = setTimeout(() => controller2.abort(), MAIN_LLM_TIMEOUT_MS);
-            const response2 = await fetch("https://api.deepseek.com/v1/chat/completions", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${DEEPSEEK_API_KEY}`, "Content-Type": "application/json" },
-              body: JSON.stringify(payload),
-              signal: controller2.signal,
-            });
-            clearTimeout(timeoutId2);
-            if (response2.ok) {
-              const bodyText2 = await response2.text();
-              const data2 = JSON.parse(bodyText2) as { choices?: Array<{ message?: { content?: string } }> };
-              const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
-              if (assistantMessage2) {
-                const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
-                const ing2 = Array.isArray(result2.valid.ingredients)
-                  ? result2.valid.ingredients.map((i) =>
-                    (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")
-                  ).filter(Boolean)
-                  : [];
-                const st2 = Array.isArray(result2.valid.steps)
-                  ? result2.valid.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean)
-                  : [];
-                if (
-                  result2.stage === "ok" && result2.valid &&
-                  passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null, {
-                    title: result2.valid.title,
-                    ingredients: ing2,
-                    steps: st2,
-                  })
-                ) {
-                  validated = result2.valid;
-                  assistantMessage = assistantMessage2;
-                  parseLog("quality retry succeeded", {});
-                }
-              }
-            }
-          } catch (_e) {
-            parseLog("quality retry failed", { keepFirst: true });
-          }
-          logPerf("quality_retry_llm_ms", tQualityRetryStart, requestId);
-        }
+        // Слабый chef_advice не инициирует второй вызов модели — совет режется в enforceChefAdvice → null.
       } else {
         const validationErrorMsg = result.stage === "validate" ? getLastValidationError() : null;
         const recoveryDecision = decideRecipeRecovery(result.stage, parseDiagnostics);
@@ -1053,7 +1015,7 @@ serve(async (req) => {
           safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
         }
         logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
-        // Финальный recipes.description задаётся benefit-builder (см. блок RECIPE_SANITIZED); LLM description не пишем в БД.
+        // Канонический recipes.description — pickCanonicalDescription в RECIPE_SANITIZED (LLM-first или benefit fallback).
         // chef_advice: без детерминированных заглушек — финальное значение задаётся в RECIPE_SANITIZED (enforceChefAdvice → null при слабом совете).
         assistantMessage = JSON.stringify(validated);
         responseRecipes = [validated as Record<string, unknown>];
@@ -1120,8 +1082,12 @@ serve(async (req) => {
       });
     }
 
+    /** Канонический текст для `recipes.description` (ответ чата и payload RPC совпадают). */
+    let canonicalDbDescriptionForPersist: string | null = null;
+
     if (responseRecipes.length > 0) {
       const recipe = responseRecipes[0] as RecipeJson;
+      const rawLlmDescriptionForDebug = String((recipe.description ?? "")).trim();
       const inferredGoals = inferNutritionGoals(recipe);
       (recipe as Record<string, unknown>).nutrition_goals = inferredGoals;
       const adviceRaw = sanitizeMealMentions(sanitizeRecipeText(recipe.chefAdvice ?? ""));
@@ -1148,33 +1114,6 @@ serve(async (req) => {
         recipeIdSeed,
       });
       (recipe as Record<string, unknown>).chefAdvice = enforcedChefAdvice;
-      if (isChefAdviceDebugEnabled()) {
-        let rejectionReason: string | undefined;
-        if (enforcedChefAdvice == null) {
-          if (!String(adviceForPool ?? "").trim()) {
-            rejectionReason = "empty_after_pool_sanitize";
-          } else if (hasForbiddenChefAdviceStart(normalizedChefAdvice)) {
-            rejectionReason = "forbidden_start_or_broken_phrase";
-          } else {
-            const low = isChefAdviceLowValue(normalizedChefAdvice, {
-              title,
-              ingredientNames: ingNamesForEnforce,
-              stepTexts: steps,
-            });
-            rejectionReason = low.lowValue ? low.reason : "unknown";
-          }
-        }
-        console.log(JSON.stringify({
-          tag: "CHEF_ADVICE_DEBUG",
-          requestId,
-          recipeTitle: title,
-          raw_chef_advice: rawChefAdviceFromModel,
-          normalized_chef_advice: normalizedChefAdvice,
-          accepted: enforcedChefAdvice != null,
-          rejection_reason: rejectionReason,
-          advice_source: enforcedChefAdvice != null ? "llm" : "null_after_guard",
-        }));
-      }
       const consistency = checkTitleIngredientConsistency(title, ingNamesForEnforce);
       if (consistency.triggered) {
         safeLog(JSON.stringify({
@@ -1234,23 +1173,92 @@ serve(async (req) => {
         }));
         (recipe as Record<string, unknown>).title = lexiconResult.normalizedTitle;
       }
+      const clearedAdviceByLeak =
+        leak.triggered && leak.chefAdviceUseFallback && enforcedChefAdvice != null;
+      const finalChefAdviceForLog = (recipe.chefAdvice as string | null) ?? null;
+      if (isChefAdviceDebugEnabled()) {
+        const accepted =
+          finalChefAdviceForLog != null && String(finalChefAdviceForLog).trim() !== "";
+        const rejectionReason = accepted
+          ? null
+          : explainChefAdviceRejectionWhenNull({
+            rawModel: rawChefAdviceFromModel,
+            poolSanitized: adviceForPool,
+            preparedNormalized: normalizedChefAdvice,
+            clearedByRequestContextLeak: clearedAdviceByLeak,
+            title: (recipe.title ?? "").trim(),
+            ingredients: Array.isArray(recipe.ingredients)
+              ? recipe.ingredients.map((i) =>
+                (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")
+              ).filter(Boolean)
+              : [],
+            steps: Array.isArray(recipe.steps)
+              ? recipe.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean)
+              : [],
+          });
+        console.log(JSON.stringify({
+          tag: "CHEF_ADVICE_DEBUG",
+          request_id: requestId,
+          raw_chef_advice: rawChefAdviceFromModel,
+          normalized_chef_advice: normalizedChefAdvice,
+          accepted,
+          rejection_reason: rejectionReason,
+          final_chef_advice: accepted ? String(finalChefAdviceForLog).trim() : null,
+          retry_skipped_due_to_advice_failure: recipeQualityRetrySkippedDueToBadChefAdvice,
+        }));
+      }
       const finalTitleForBenefit = ((recipe.title ?? "") as string).trim();
-      const canonicalRecipeDescription = buildRecipeBenefitDescription({
+      const deterministicBenefitDescription = buildRecipeBenefitDescription({
         stableKey: `${requestId}:${finalTitleForBenefit}`,
         goals: inferredGoals,
         title: finalTitleForBenefit,
       });
-      (recipe as Record<string, unknown>).description = canonicalRecipeDescription;
+      const canonicalPick = pickCanonicalDescription({
+        sanitizedLlmDescription: currentDesc,
+        title: finalTitleForBenefit,
+        deterministicFallback: deterministicBenefitDescription,
+      });
+      canonicalDbDescriptionForPersist = canonicalPick.description;
+      (recipe as Record<string, unknown>).description = canonicalPick.description;
       assistantMessage = JSON.stringify(recipe);
+      if (isChatDescriptionDebugEnabled()) {
+        console.log(JSON.stringify({
+          tag: "CHAT_DESCRIPTION_DEBUG",
+          request_id: requestId,
+          raw_llm_description: rawLlmDescriptionForDebug,
+          llm_description_accepted: canonicalPick.source === "llm",
+          rejection_reason: canonicalPick.rejectionReason,
+          final_description_source: canonicalPick.source,
+          final_description: canonicalPick.description,
+        }));
+      }
       const finalChefAdvice = (recipe.chefAdvice as string | null) ?? null;
       const finalChefAdviceStr = finalChefAdvice != null && String(finalChefAdvice).trim() !== "" ? String(finalChefAdvice).trim() : "";
       if (adviceForPool.trim() && !finalChefAdviceStr) {
-        safeLog(JSON.stringify({ tag: "CHEF_ADVICE_REJECTED_NULL_AFTER_GUARD", requestId }));
+        safeLog(JSON.stringify({
+          tag: "CHEF_ADVICE_REJECTED_NULL_AFTER_GUARD",
+          requestId,
+          rejection_reason: explainChefAdviceRejectionWhenNull({
+            rawModel: rawChefAdviceFromModel,
+            poolSanitized: adviceForPool,
+            preparedNormalized: normalizedChefAdvice,
+            clearedByRequestContextLeak: clearedAdviceByLeak,
+            title: (recipe.title ?? "").trim(),
+            ingredients: Array.isArray(recipe.ingredients)
+              ? recipe.ingredients.map((i) =>
+                (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")
+              ).filter(Boolean)
+              : [],
+            steps: Array.isArray(recipe.steps)
+              ? recipe.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean)
+              : [],
+          }),
+        }));
       }
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
-        descriptionSource: "benefit_builder",
+        canonicalDescriptionSource: canonicalPick.source,
         descriptionLength: (recipe.description as string)?.length,
         chefAdviceLength: finalChefAdviceStr.length,
         titleIngredientConsistencyGuardTriggered: consistency.triggered,
@@ -1367,7 +1375,7 @@ serve(async (req) => {
             mealType: validatedRecipe.mealType ?? null,
             tags: recipeTags.length > 0 ? recipeTags : null,
             title: validatedRecipe.title ?? "Рецепт",
-            description: validatedRecipe.description ?? null,
+            description: canonicalDbDescriptionForPersist ?? validatedRecipe.description ?? null,
             cooking_time_minutes: cookingMinutes,
             calories: n?.kcal_per_serving != null ? Math.round(n.kcal_per_serving) : null,
             proteins: n?.protein_g_per_serving ?? null,
@@ -1421,22 +1429,7 @@ serve(async (req) => {
           savedRecipeId = recipeId ?? null;
           if (savedRecipeId) {
             safeLog(JSON.stringify({ tag: "RECIPE_SAVED", recipeIdSuffix: savedRecipeId.slice(-6), requestId }));
-            const saveTitle = String((validatedRecipe.title ?? "").trim() || "Рецепт");
-            const descriptionForDb = buildRecipeBenefitDescription({
-              recipeId: savedRecipeId,
-              goals: nutritionGoalsForSave,
-              title: saveTitle,
-            });
-            const { error: descUpdErr } = await supabaseUser.from("recipes").update({ description: descriptionForDb }).eq(
-              "id",
-              savedRecipeId,
-            );
-            if (descUpdErr) safeWarn("recipe description (benefit) update failed", serializeError(descUpdErr));
-            const recipeOut = responseRecipes[0] as Record<string, unknown> | undefined;
-            if (recipeOut) {
-              recipeOut.description = descriptionForDb;
-              assistantMessage = JSON.stringify(recipeOut);
-            }
+            // description уже в payload и в ответе — pickCanonicalDescription (LLM-first или benefit); не перезаписывать benefit-builder после insert.
           }
         } catch (err) {
           safeWarn("Failed to save recipe to DB, continuing without recipe_id:", serializeError(err));

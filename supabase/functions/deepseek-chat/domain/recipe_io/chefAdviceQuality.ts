@@ -2,7 +2,8 @@
  * Quality gate для chef_advice: краткий практический совет или null (без заглушек).
  */
 
-export const CHEF_ADVICE_MAX_LENGTH = 220;
+/** Выровнено с промптом CHEF_ADVICE_RULES (~140) + небольшой запас после нормализации. */
+export const CHEF_ADVICE_MAX_LENGTH = 160;
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();
 
@@ -33,7 +34,7 @@ export function normalizeChefAdviceText(raw: string): string {
     if (deduped.some((d) => d.toLowerCase() === key)) continue;
     deduped.push(x.endsWith(".") || x.endsWith("?") ? x : x + ".");
   }
-  let out = deduped.slice(0, 2).join(" ");
+  let out = deduped.slice(0, 1).join(" ");
   out = norm(out.replace(/\s*\.\s*\./g, "."));
   if (out && !/[.?!…]$/.test(out)) {
     out = out.replace(/[,;:—-]+\s*$/, "").trim();
@@ -78,6 +79,9 @@ function truncateAtSentenceBoundary(text: string, maxLen: number): string {
 /** Известные низкоценные шаблоны (подстроки / regex). */
 const LOW_VALUE_SUBSTRINGS = [
   "подавайте сразу",
+  "подавайте сразу же",
+  "добавьте зелень",
+  "посыпьте зеленью",
   "пока блюдо тёплое",
   "пока блюдо теплое",
   "чтобы осталось сочн",
@@ -99,20 +103,15 @@ const LOW_VALUE_SUBSTRINGS = [
   "храните в холодильнике",
 ];
 
-const LOW_VALUE_REGEX = [
-  /подавайте\s+горячим/i,
-  /подавайте\s+тёплым\s*\.?\s*$/i,
-  /подавайте\s+теплым\s*\.?\s*$/i,
-  /^не\s+переваривайте/i,
-  /^не\s+пересушивайте/i,
-  /приятного\s+аппетита/i,
-];
+/** Только явный мусор; «подавайте тёплым»/«не пересушивайте» в длинной фразе с температурой не режем здесь. */
+const LOW_VALUE_REGEX = [/приятного\s+аппетита/i];
 
 /** Слишком общие начала целой фразы. */
 const GENERIC_START_REGEX = [
   /^попробуйте\s+и\s+скорректируйте/i,
   /^соль\s+и\s+специи\s+по\s+вкусу/i,
   /^добавьте\s+соль\s+по\s+вкусу/i,
+  /^для лучшего вкуса\b/i,
 ];
 
 function wordTokens(text: string, minLen: number): string[] {
@@ -124,16 +123,18 @@ function wordTokens(text: string, minLen: number): string[] {
     .filter((w) => w.length >= minLen);
 }
 
+const GENERIC_SERVING_ONLY = /^(подавайте|подать)\s+(горячим|тёплым|теплым|холодным)\s*\.?\s*$/i;
+
 /** Пересечение с названием/ингредиентами — слабая привязка к рецепту. */
 function hasRecipeAnchoring(advice: string, title: string, ingredientNames: string[]): boolean {
   const adv = advice.toLowerCase();
-  const titleWords = wordTokens(title, 4);
+  const titleWords = wordTokens(title, 3);
   for (const w of titleWords) {
-    if (adv.includes(w)) return true;
+    if (w.length >= 3 && adv.includes(w)) return true;
   }
   for (const ing of ingredientNames.slice(0, 6)) {
-    for (const w of wordTokens(ing, 4)) {
-      if (w.length >= 4 && adv.includes(w)) return true;
+    for (const w of wordTokens(ing, 3)) {
+      if (w.length >= 3 && adv.includes(w)) return true;
     }
   }
   return false;
@@ -145,7 +146,7 @@ function hasConcreteCue(advice: string): boolean {
   if (/\d+\s*–\s*\d+\s*мин|\d+\s*минут|\d+\s*мин\b|\d+\s*сек/i.test(t)) return true;
   if (/\b\d{1,2}\s*:\s*\d{2}\b/.test(t)) return false;
   const cues =
-    /обжар|запек|туш|варк|блендер|взбив|взбейте|температур|огн|духовк|сковород|кипен|бульон|корочк|тесто\s+на|фарш|творог|рис\s|гречк|кабач|тыкв|брокколи|фрикадел|котлет|сметан|сливк|крахмал|желатин|марин|насто|остуд|остыть|перемеш|вмеш|в конце заклад|до золотист|под крышк|сняти(е|я)\s+с\s+огня|убавьте|умеренн/i;
+    /обжар|запек|туш|варк|блендер|взбив|взбейте|температур|огн|духовк|сковород|кипен|бульон|корочк|тесто\s+на|фарш|творог|рис\s|гречк|кабач|тыкв|брокколи|фрикадел|котлет|сметан|сливк|крахмал|желатин|марин|насто|остуд|остыть|перемеш|вмеш|в конце заклад|до золотист|под крышк|сняти(е|я)\s+с\s+огня|убавьте|умеренн|нарежьте|порцион|решётк|противн|разогрейте|охладите|взбивайте|минут|часов|часа|час\b|секунд|разомн|раздав|измельч|подавл|толк|пюрир|разбав|густ|текстур/i;
   return cues.test(t);
 }
 
@@ -157,7 +158,7 @@ function isMostlyGenericWording(advice: string): boolean {
   const letters = (without.match(/[а-яёa-z]/gi) ?? []).length;
   const total = (t.match(/[а-яёa-z]/gi) ?? []).length;
   if (total < 15) return true;
-  return letters < total * 0.45;
+  return letters < total * 0.4;
 }
 
 export type ChefAdviceLowValueResult = { lowValue: true; reason: string } | { lowValue: false };
@@ -171,12 +172,15 @@ export function isChefAdviceLowValue(
 ): ChefAdviceLowValueResult {
   const t = norm(advice);
   if (!t.length) return { lowValue: true, reason: "empty" };
+  if (GENERIC_SERVING_ONLY.test(t.trim())) {
+    return { lowValue: true, reason: "generic_serving_only" };
+  }
   if (t.length < 28) return { lowValue: true, reason: "too_short" };
   if (t.length > CHEF_ADVICE_MAX_LENGTH) return { lowValue: true, reason: "too_long_after_norm" };
 
   const sents = splitSentencesRu(t);
   if (sents.length === 0) return { lowValue: true, reason: "no_sentence" };
-  if (sents.length > 2) return { lowValue: true, reason: "too_many_sentences" };
+  if (sents.length > 1) return { lowValue: true, reason: "too_many_sentences" };
 
   const lower = t.toLowerCase();
   const title = ctx?.title ?? "";
@@ -184,7 +188,11 @@ export function isChefAdviceLowValue(
   const anchoredEarly = hasRecipeAnchoring(t, title, ings);
   const concreteEarly = hasConcreteCue(t);
 
-  if (/\bне\s+пережаривай(те)?\b/i.test(t) || /\bне\s+переваривай(те)?\b/i.test(t)) {
+  if (
+    /\bне\s+пережаривай(те)?\b/i.test(t) ||
+    /\bне\s+переваривай(те)?\b/i.test(t) ||
+    /\bне\s+пересушивай(те)?\b/i.test(t)
+  ) {
     if (t.length < 88 || (!anchoredEarly && !concreteEarly)) {
       return { lowValue: true, reason: "generic_overcook_warning" };
     }
@@ -228,7 +236,7 @@ export function isChefAdviceLowValue(
         maxOverlap = Math.max(maxOverlap, Math.min(60, sc.length));
       }
     }
-    if (maxOverlap > 0 && compact.length <= maxOverlap + 25) {
+    if (maxOverlap > 0 && compact.length <= maxOverlap + 36) {
       return { lowValue: true, reason: "paraphrases_steps" };
     }
   }

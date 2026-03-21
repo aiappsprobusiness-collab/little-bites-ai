@@ -7,7 +7,7 @@ import {
   isChefAdviceLowValue,
   normalizeChefAdviceText,
 } from "./chefAdviceQuality.ts";
-import { enforceChefAdvice } from "./sanitizeAndRepair.ts";
+import { enforceChefAdvice, hasForbiddenChefAdviceStart } from "./sanitizeAndRepair.ts";
 
 const ctx = {
   title: "Котлеты из кабачка",
@@ -15,12 +15,18 @@ const ctx = {
   stepTexts: ["Натрите кабачок.", "Смешайте с фаршем.", "Обжарьте."],
 };
 
-Deno.test("normalizeChefAdviceText: trim, no exclamation, max two sentences, length cap", () => {
+const soupBeansCtx = {
+  title: "Суп с фасолью",
+  ingredientNames: ["Фасоль", "Морковь", "Лук"],
+  stepTexts: ["Замочите фасоль.", "Варите до мягкости.", "Добавьте овощи."],
+};
+
+Deno.test("normalizeChefAdviceText: trim, no exclamation, одно предложение, length cap", () => {
   const raw = "  Жарьте на среднем огне!!!  Второе предложение. Третье лишнее. ";
   const out = normalizeChefAdviceText(raw);
   if (out.includes("!")) throw new Error("Expected no !");
   const sentences = out.split(/(?<=[.!?])\s+/).filter(Boolean);
-  if (sentences.length > 2) throw new Error(`Expected at most 2 sentences, got ${sentences.length}: ${out}`);
+  if (sentences.length > 1) throw new Error(`Expected one sentence, got ${sentences.length}: ${out}`);
   if (out.length > CHEF_ADVICE_MAX_LENGTH) {
     throw new Error(`Expected length <= ${CHEF_ADVICE_MAX_LENGTH}, got ${out.length}`);
   }
@@ -39,6 +45,12 @@ Deno.test("isChefAdviceLowValue: generic serving line fails", () => {
   if (!r.lowValue) throw new Error("Expected generic serving advice to fail");
 });
 
+Deno.test("isChefAdviceLowValue: «добавьте зелень» fails", () => {
+  const bad = "Перед подачей добавьте зелень — так ярче по виду.";
+  const r = isChefAdviceLowValue(bad, ctx);
+  if (!r.lowValue) throw new Error("Expected add-greens fluff to fail");
+});
+
 Deno.test("isChefAdviceLowValue: empty fails", () => {
   const r = isChefAdviceLowValue("   ", ctx);
   if (!r.lowValue || r.reason !== "empty") throw new Error(`Expected empty, got ${JSON.stringify(r)}`);
@@ -47,6 +59,60 @@ Deno.test("isChefAdviceLowValue: empty fails", () => {
 Deno.test("isChefAdviceLowValue: short fails", () => {
   const r = isChefAdviceLowValue("Коротко.", ctx);
   if (!r.lowValue) throw new Error("Expected too_short");
+});
+
+Deno.test("enforceChefAdvice: generic «подавайте сразу» → null (без второго LLM в index)", () => {
+  const out = enforceChefAdvice("Подавайте сразу, пока тёплое.", {
+    title: ctx.title,
+    ingredients: ctx.ingredientNames,
+    steps: ctx.stepTexts,
+  });
+  if (out != null) throw new Error(`Expected null for generic advice, got: ${out}`);
+});
+
+Deno.test("hasForbiddenChefAdviceStart: «Для более…» — template forbidden (см. CHEF_ADVICE_RULES)", () => {
+  const line =
+    "Для более насыщенного вкуса слегка разомните часть фасоли прямо в супе — это сделает текстуру гуще без добавления сливок.";
+  if (!hasForbiddenChefAdviceStart(line)) {
+    throw new Error("Expected «Для более…» at start to be forbidden");
+  }
+});
+
+Deno.test("enforceChefAdvice: инсайт с фасолью без вводного «Для более» проходит", () => {
+  const line =
+    "Слегка разомните часть фасоли прямо в супе — бульон станет гуще без добавления сливок.";
+  const out = enforceChefAdvice(line, {
+    title: soupBeansCtx.title,
+    ingredients: soupBeansCtx.ingredientNames,
+    steps: soupBeansCtx.stepTexts,
+  });
+  if (out == null || !out.includes("фасол")) {
+    throw new Error(`Expected non-null advice mentioning beans, got: ${out}`);
+  }
+});
+
+Deno.test("enforceChefAdvice: «Для более…» без якоря и без техники — null", () => {
+  const out = enforceChefAdvice(
+    "Для более гармоничного впечатления подайте блюдо с душой и хорошим настроением.",
+    { title: "Салат", ingredients: ["Огурец", "Помидор", "Лук"], steps: ["Нарежьте.", "Смешайте.", "Заправьте."] },
+  );
+  if (out != null) {
+    throw new Error(`Expected null for generic «Для более» without anchor/cue, got: ${out}`);
+  }
+});
+
+Deno.test("isChefAdviceLowValue: «Не пересушивайте» с температурой и длиной проходит (не режем regex'ом «с начала строки»)", () => {
+  const good =
+    "Не пересушивайте фрикадельки при 180°C: снимайте со сковороды, пока середина слегка розовая.";
+  const r = isChefAdviceLowValue(good, ctx);
+  if (r.lowValue) throw new Error(`Expected pass, got ${r.reason}`);
+});
+
+Deno.test("isChefAdviceLowValue: одна фраза «Подавайте горячим.» — generic_serving_only", () => {
+  const r = isChefAdviceLowValue("Подавайте горячим.", ctx);
+  if (!r.lowValue || r.reason !== "generic_serving_only") {
+    throw new Error(`Expected generic_serving_only, got ${JSON.stringify(r)}`);
+  }
 });
 
 Deno.test("enforceChefAdvice: very long concrete advice is truncated to max length", () => {

@@ -28,12 +28,18 @@ export {
   buildDescriptionFallback,
   buildChefAdviceFallback,
   hasForbiddenChefAdviceStart,
+  getChefAdviceForbiddenStartKind,
+  type ChefAdviceForbiddenStartKind,
   sanitizeDescriptionForPool,
   sanitizeChefAdviceForPool,
   passesDescriptionQualityGate,
   passesChefAdviceQualityGate,
   prepareChefAdvicePipeline,
   isChefAdviceDebugEnabled,
+  pickCanonicalDescription,
+  explainCanonicalDescriptionRejection,
+  explainChefAdviceRejectionWhenNull,
 } from "./sanitizeAndRepair.ts";
 
 export { isChefAdviceLowValue } from "./chefAdviceQuality.ts";
+export { isChatDescriptionDebugEnabled } from "./chatDescriptionDebug.ts";

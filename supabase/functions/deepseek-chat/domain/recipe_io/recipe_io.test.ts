@@ -3,7 +3,7 @@
  * Запуск: из supabase/functions: deno test deepseek-chat/domain/recipe_io/recipe_io.test.ts --allow-read
  */
 import { validateRecipe } from "./index.ts";
-import { parseAndValidateRecipeJsonFromString } from "../../recipeSchema.ts";
+import { parseAndValidateRecipeJsonFromString, decideRecipeRecovery } from "../../recipeSchema.ts";
 import {
   sanitizeRecipeText,
   sanitizeMealMentions,
@@ -17,6 +17,9 @@ import {
   sanitizeChefAdviceForPool,
   DESCRIPTION_MAX_LENGTH,
   CHEF_ADVICE_MAX_LENGTH,
+  pickCanonicalDescription,
+  passesDescriptionQualityGate,
+  passesChefAdviceQualityGate,
 } from "./index.ts";
 
 Deno.test("validateRecipe: валидный JSON рецепт проходит", () => {
@@ -257,5 +260,102 @@ Deno.test("enforceChefAdvice: «Для максимальной сочности
   const out = enforceChefAdvice(bad, { title: "Курица", ingredients: ["Курица"], steps: ["Запекайте."] });
   if (out != null) {
     throw new Error(`Expected null, got: ${out}`);
+  }
+});
+
+Deno.test("pickCanonicalDescription: хороший LLM → source llm, тот же текст что пойдёт в БД и в чат", () => {
+  const fallback = "Детерминированный benefit для БД.";
+  const llm =
+    "Мягкие котлеты с травами хорошо держат форму на сковороде. Белок индейки и клетчатка овощей дают сытость без тяжести.";
+  const pick = pickCanonicalDescription({
+    sanitizedLlmDescription: llm,
+    title: "Котлеты из индейки с кабачком",
+    deterministicFallback: fallback,
+  });
+  if (pick.source !== "llm" || pick.rejectionReason != null) {
+    throw new Error(`Expected llm, got ${pick.source} ${pick.rejectionReason}`);
+  }
+  if (pick.description !== llm) {
+    throw new Error(`Expected LLM text preserved, got: ${pick.description}`);
+  }
+});
+
+Deno.test("pickCanonicalDescription: штамп «отличный вариант» → deterministic_fallback", () => {
+  const fallback = "Канон для БД.";
+  const llm =
+    "Отличный вариант на ужин. Белок и клетчатка поддерживают сытость и энергию.";
+  const pick = pickCanonicalDescription({
+    sanitizedLlmDescription: llm,
+    title: "Рагу",
+    deterministicFallback: fallback,
+  });
+  if (pick.source !== "deterministic_fallback" || pick.description !== fallback) {
+    throw new Error(`Expected fallback, got: ${JSON.stringify(pick)}`);
+  }
+});
+
+Deno.test("pickCanonicalDescription: утечка «в дорогу» → deterministic_fallback", () => {
+  const fallback = "Канон для БД.";
+  const llm =
+    "Удобно сложить в контейнер в дорогу. Белок и медленные углеводы дадут энергию.";
+  const pick = pickCanonicalDescription({
+    sanitizedLlmDescription: llm,
+    title: "Сэндвич",
+    deterministicFallback: fallback,
+  });
+  if (pick.source !== "deterministic_fallback" || pick.rejectionReason !== "request_context_leak") {
+    throw new Error(`Expected leak rejection, got: ${JSON.stringify(pick)}`);
+  }
+});
+
+Deno.test("passesDescriptionQualityGate: одно предложение с маркером допускается", () => {
+  const one =
+    "Густой борщ с говядиной согревает и сытит: белок мяса и клетчатка овощей поддерживают энергию на несколько часов.";
+  if (!passesDescriptionQualityGate(one, { title: "Борщ с говядиной" })) {
+    throw new Error("Expected single-sentence description to pass gate");
+  }
+});
+
+Deno.test("decideRecipeRecovery: при stage ok стратегия none — плохой chef_advice не требует второго полного LLM", () => {
+  const d = decideRecipeRecovery("ok", null);
+  if (d.strategy !== "none") {
+    throw new Error(`Expected strategy none for ok stage, got ${d.strategy}`);
+  }
+});
+
+Deno.test("passesChefAdviceQualityGate: конкретный совет проходит", () => {
+  const ok = passesChefAdviceQualityGate(
+    "Кабачок отожмите перед смешиванием с фаршем — масса не будет расползаться на сковороде.",
+    {
+      title: "Котлеты из кабачка",
+      ingredients: ["Кабачок", "Фарш", "Лук"],
+      steps: ["Натрите кабачок.", "Смешайте с фаршем.", "Обжарьте."],
+    },
+  );
+  if (!ok) throw new Error("Expected chef advice gate pass");
+});
+
+Deno.test("passesChefAdviceQualityGate: только «Подавайте горячим.» не проходит", () => {
+  const ok = passesChefAdviceQualityGate("Подавайте горячим.", {
+    title: "Суп",
+    ingredients: ["Вода", "Картофель", "Морковь"],
+    steps: ["Нарежьте овощи.", "Варите до готовности.", "Посолите."],
+  });
+  if (ok) throw new Error("Expected chef advice gate reject");
+});
+
+Deno.test("pickCanonicalDescription: одна строка для JSON ответа и для payload description (нет split чат/БД)", () => {
+  const fallback = "Benefit fallback для RPC.";
+  const llm =
+    "Нежные котлеты с травами держат форму на сковороде. Белок индейки и клетчатка овощей дают сытость без тяжести.";
+  const pick = pickCanonicalDescription({
+    sanitizedLlmDescription: llm,
+    title: "Котлеты из индейки с кабачком",
+    deterministicFallback: fallback,
+  });
+  const asInMessageJson = pick.description;
+  const asInRpcPayload = pick.description;
+  if (asInMessageJson !== asInRpcPayload) {
+    throw new Error("Chat and DB description paths must use the same final string");
   }
 });

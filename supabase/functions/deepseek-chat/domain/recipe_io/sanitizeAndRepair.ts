@@ -261,15 +261,15 @@ export function enforceDescription(
   return t.slice(0, DESCRIPTION_MAX_LENGTH);
 }
 
-/** Запрещённые старты: пафос, нерелевантность (Stage 2.2: «подавайте»/«можно» разрешены — живой тон). */
+/** Запрещённые старты: пафос, вводные «Для более/Чтобы…», нерелевантность. */
 const CHEF_ADVICE_FORBIDDEN_STARTS = [
   /^для максимальной\s/i,
-  /^для более\s/i,
+  /^для более\b/i,
+  /^для лучшего\b/i,
   /^для получения\s/i,
+  /^чтобы\b/i,
   /^если хотите\s/i,
   /^вы можете\s/i,
-  /^чтобы сделать\s/i,
-  /^чтобы блюдо получилось\s/i,
   /^это позволит\s/i,
   /^данное блюдо\s/i,
   /^это блюдо\s/i,
@@ -292,6 +292,7 @@ const CHEF_ADVICE_RESTAURANT_PHRASES = [
 const DESCRIPTION_FORBIDDEN_PHRASES = [
   "это блюдо",
   "идеально подходит",
+  "идеально сочетается",
   "приятный вкус",
   "приятная текстура",
   "универсальный",
@@ -304,6 +305,8 @@ const DESCRIPTION_FORBIDDEN_PHRASES = [
   "в составе",
   "главный ингредиент",
   "отличный выбор для разнообразия",
+  "отличный вариант",
+  "полезное и вкусное блюдо",
   "разнообразия рациона",
   "готовится быстро",
   "хранится в холодильнике",
@@ -312,19 +315,30 @@ const DESCRIPTION_FORBIDDEN_PHRASES = [
   "сытное, но не тяжёлое",
   "легко повторить",
   "подходит для",
+  "лечит",
+  "излечивает",
+  "вылечит",
 ];
 
 function hasRestaurantTone(text: string): boolean {
   return CHEF_ADVICE_RESTAURANT_PHRASES.some((re) => re.test(text));
 }
 
+export type ChefAdviceForbiddenStartKind = "broken_phrase" | "restaurant_tone" | "template_start";
+
+/** Детализация запрещённого старта (для логов CHEF_ADVICE_DEBUG). */
+export function getChefAdviceForbiddenStartKind(text: string | null | undefined): ChefAdviceForbiddenStartKind | null {
+  const t = normalizeSpaces(text ?? "");
+  if (!t.length) return null;
+  if (CHEF_ADVICE_BROKEN_PHRASE.test(t)) return "broken_phrase";
+  if (hasRestaurantTone(t)) return "restaurant_tone";
+  if (CHEF_ADVICE_FORBIDDEN_STARTS.some((re) => re.test(t))) return "template_start";
+  return null;
+}
+
 /** Проверяет, нужно ли отклонить совет (запрещённый старт, штамп или ресторанный тон). */
 export function hasForbiddenChefAdviceStart(text: string | null | undefined): boolean {
-  const t = normalizeSpaces(text ?? "");
-  if (!t.length) return false;
-  if (CHEF_ADVICE_BROKEN_PHRASE.test(t)) return true;
-  if (hasRestaurantTone(t)) return true;
-  return CHEF_ADVICE_FORBIDDEN_STARTS.some((re) => re.test(t));
+  return getChefAdviceForbiddenStartKind(text) != null;
 }
 
 /** Проверка quality gate для description: запрещённые фразы или штампы. */
@@ -492,6 +506,7 @@ const DESCRIPTION_NUTRITIONAL_MARKERS = [
   "белок", "клетчатк", "желез", "кальци", "витамин", "бета-каротин",
   "медленные углеводы", "полезные жиры", "пищевар", "сытост", "энерги",
   "кости", "мышц", "кроветвор", "пектин", "усвоени",
+  "омега", "минерал", "микроэлемент", "полезн", "аминокислот",
 ];
 
 function hasNutritionalMarker(text: string): boolean {
@@ -531,18 +546,74 @@ function lastSentenceComplete(text: string): boolean {
   return /[.!?…]\s*$/.test(t) && !/\s(и|или|а|в|на|что|котор|для|чтобы)\s*\.?\s*$/i.test(t);
 }
 
-/** Quality gate для description: длина ≤210, ровно 2 предложения, нет запретов, не с title, завершено, есть нутритивный маркер. */
+/** Quality gate для LLM description → канон БД / ответ: 1–2 предложения, длина, без штампов/leak, нутритивный маркер. */
 export function passesDescriptionQualityGate(
   desc: string | null | undefined,
   options?: { title?: string }
 ): boolean {
   const t = normalizeSpaces(desc ?? "");
-  if (t.length < 50 || t.length > DESCRIPTION_MAX_LENGTH) return false;
-  if (countSentences(t) !== 2) return false;
+  const sc = countSentences(t);
+  if (t.length < 38 || t.length > DESCRIPTION_MAX_LENGTH) return false;
+  if (sc < 1 || sc > 2) return false;
+  if (sc === 2 && t.length < 45) return false;
   if (descriptionFailsQualityGate(t)) return false;
   if (options?.title && descriptionStartsWithTitle(t, options.title)) return false;
   if (!lastSentenceComplete(t)) return false;
   return hasNutritionalMarker(t);
+}
+
+/** Почему LLM description не принят (дет. fallback). */
+export function explainCanonicalDescriptionRejection(
+  desc: string | null | undefined,
+  options?: { title?: string },
+): string {
+  const t = normalizeSpaces(desc ?? "");
+  if (!t.trim()) return "empty";
+  if (textContainsRequestContextLeak(t)) return "request_context_leak";
+  const sc = countSentences(t);
+  if (t.length < 38 || t.length > DESCRIPTION_MAX_LENGTH) return "length_out_of_range";
+  if (sc < 1 || sc > 2) return "sentence_count_not_one_or_two";
+  if (sc === 2 && t.length < 45) return "too_short_for_two_sentences";
+  if (descriptionFailsQualityGate(t)) return "forbidden_phrase_or_stamp";
+  if (options?.title && descriptionStartsWithTitle(t, options.title)) return "repeats_title_or_starts_like_title";
+  if (!lastSentenceComplete(t)) return "incomplete_final_sentence";
+  if (!hasNutritionalMarker(t)) return "missing_nutritional_marker";
+  return "unknown";
+}
+
+export type CanonicalDescriptionSource = "llm" | "deterministic_fallback";
+
+/**
+ * Канонический description для БД и ответа чата: LLM после санитайзеров, если gate + anti-leak; иначе buildRecipeBenefitDescription.
+ */
+export function pickCanonicalDescription(options: {
+  sanitizedLlmDescription: string;
+  title: string;
+  deterministicFallback: string;
+}): {
+  description: string;
+  source: CanonicalDescriptionSource;
+  rejectionReason: string | null;
+} {
+  const fallback = options.deterministicFallback;
+  const t = normalizeSpaces(options.sanitizedLlmDescription);
+  if (
+    t.length > 0 &&
+    !textContainsRequestContextLeak(t) &&
+    passesDescriptionQualityGate(t, { title: options.title })
+  ) {
+    return {
+      description: t.slice(0, DESCRIPTION_MAX_LENGTH),
+      source: "llm",
+      rejectionReason: null,
+    };
+  }
+  const reason = explainCanonicalDescriptionRejection(t, { title: options.title });
+  return {
+    description: fallback,
+    source: "deterministic_fallback",
+    rejectionReason: reason,
+  };
 }
 
 /**
@@ -598,6 +669,54 @@ export function enforceChefAdvice(
     out = out.slice(0, CHEF_ADVICE_MAX_LENGTH);
   }
   return out.trim() || null;
+}
+
+/**
+ * Причина null в UI/БД после всего пайплайна (в т.ч. leak guard). Для CHEF_ADVICE_DEBUG.
+ */
+export function explainChefAdviceRejectionWhenNull(options: {
+  rawModel: string;
+  poolSanitized: string;
+  preparedNormalized: string;
+  clearedByRequestContextLeak: boolean;
+  title: string;
+  ingredients: string[];
+  steps: string[];
+}): string {
+  if (options.clearedByRequestContextLeak) return "request_context_leak";
+  const pool = String(options.poolSanitized ?? "").trim();
+  if (!pool.length) {
+    return !String(options.rawModel ?? "").trim() ? "empty_from_model" : "empty_after_pool_sanitize";
+  }
+  const prep = String(options.preparedNormalized ?? "").trim();
+  if (!prep.length) return "empty_after_prepare";
+  const forbidden = getChefAdviceForbiddenStartKind(prep);
+  if (forbidden) {
+    if (forbidden === "broken_phrase") return "forbidden_start:broken_phrase";
+    if (forbidden === "restaurant_tone") return "forbidden_start:restaurant_tone";
+    return "forbidden_start:template";
+  }
+  const low = isChefAdviceLowValue(prep, {
+    title: options.title,
+    ingredientNames: options.ingredients,
+    stepTexts: options.steps,
+  });
+  if (low.lowValue) {
+    if (low.reason === "no_recipe_anchor_no_concrete_cue") {
+      return "missing_anchor:no_recipe_anchor_no_concrete_cue";
+    }
+    if (
+      low.reason === "mostly_filler_words" ||
+      low.reason.startsWith("generic_") ||
+      low.reason.startsWith("generic_substring:") ||
+      low.reason.startsWith("generic_regex:") ||
+      low.reason.startsWith("generic_start:")
+    ) {
+      return `too_generic:${low.reason}`;
+    }
+    return `low_value:${low.reason}`;
+  }
+  return "unknown";
 }
 
 /** Один короткий вызов LLM только для description: польза блюда, 2 предложения, макс. 210. */
