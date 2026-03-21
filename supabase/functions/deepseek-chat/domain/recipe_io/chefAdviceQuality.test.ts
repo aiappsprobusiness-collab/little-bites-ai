@@ -70,11 +70,24 @@ Deno.test("enforceChefAdvice: generic «подавайте сразу» → null
   if (out != null) throw new Error(`Expected null for generic advice, got: ${out}`);
 });
 
-Deno.test("hasForbiddenChefAdviceStart: «Для более…» — template forbidden (см. CHEF_ADVICE_RULES)", () => {
+Deno.test("hasForbiddenChefAdviceStart: «Для более…» с конкретикой — не template_start", () => {
   const line =
     "Для более насыщенного вкуса слегка разомните часть фасоли прямо в супе — это сделает текстуру гуще без добавления сливок.";
-  if (!hasForbiddenChefAdviceStart(line)) {
-    throw new Error("Expected «Для более…» at start to be forbidden");
+  if (hasForbiddenChefAdviceStart(line)) {
+    throw new Error("Expected concrete «Для более…» advice not to hit forbidden-start");
+  }
+});
+
+Deno.test("enforceChefAdvice: «Для более… фасоль в супе» проходит (intro + якорь + действие + эффект)", () => {
+  const line =
+    "Для более насыщенного вкуса слегка разомните часть фасоли прямо в супе — это сделает текстуру гуще без добавления сливок.";
+  const out = enforceChefAdvice(line, {
+    title: soupBeansCtx.title,
+    ingredients: soupBeansCtx.ingredientNames,
+    steps: soupBeansCtx.stepTexts,
+  });
+  if (out == null || !out.includes("фасол")) {
+    throw new Error(`Expected non-null advice mentioning beans, got: ${out}`);
   }
 });
 
@@ -99,6 +112,18 @@ Deno.test("enforceChefAdvice: «Для более…» без якоря и бе
   if (out != null) {
     throw new Error(`Expected null for generic «Для более» without anchor/cue, got: ${out}`);
   }
+});
+
+Deno.test("isChefAdviceLowValue: «Для лучшего вкуса добавьте специи» — intro без эффекта/якоря", () => {
+  const bad = "Для лучшего вкуса добавьте специи.";
+  const r = isChefAdviceLowValue(bad, ctx);
+  if (!r.lowValue) throw new Error("Expected generic spices line to fail");
+});
+
+Deno.test("isChefAdviceLowValue: «Чтобы блюдо… готовьте аккуратно» — нет конкретной планки", () => {
+  const bad = "Чтобы блюдо получилось вкуснее, готовьте аккуратно.";
+  const r = isChefAdviceLowValue(bad, ctx);
+  if (!r.lowValue) throw new Error("Expected vague «чтобы… аккуратно» to fail");
 });
 
 Deno.test("isChefAdviceLowValue: «Не пересушивайте» с температурой и длиной проходит (не режем regex'ом «с начала строки»)", () => {

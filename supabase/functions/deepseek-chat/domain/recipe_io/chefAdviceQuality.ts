@@ -106,12 +106,11 @@ const LOW_VALUE_SUBSTRINGS = [
 /** Только явный мусор; «подавайте тёплым»/«не пересушивайте» в длинной фразе с температурой не режем здесь. */
 const LOW_VALUE_REGEX = [/приятного\s+аппетита/i];
 
-/** Слишком общие начала целой фразы. */
+/** Слишком общие начала целой фразы (без условных «Для более/Чтобы» — там отдельная планка якоря+действия+эффекта). */
 const GENERIC_START_REGEX = [
   /^попробуйте\s+и\s+скорректируйте/i,
   /^соль\s+и\s+специи\s+по\s+вкусу/i,
   /^добавьте\s+соль\s+по\s+вкусу/i,
-  /^для лучшего вкуса\b/i,
 ];
 
 function wordTokens(text: string, minLen: number): string[] {
@@ -138,6 +137,24 @@ function hasRecipeAnchoring(advice: string, title: string, ingredientNames: stri
     }
   }
   return false;
+}
+
+/** Вводные конструкции: без жёсткого бана — нужен якорь к рецепту + конкретное действие + ощутимый эффект. */
+const CHEF_ADVICE_INTRO_START = /^(для более|для лучшего|чтобы)\b/i;
+
+function hasChefAdviceConcreteAction(t: string): boolean {
+  if (/готовьте\s+(?:аккуратно|медленно|осторожно)\b/i.test(t)) return false;
+  if (/готовьте\s+(?:на|при|до|в\s|под|около|\d)/i.test(t)) return true;
+  return /разомн|обжарьте|обжар|добавьте|снимайте|снимите|отожмите|отожми|нарежьте|вмеш|перемеш|взбейте|взбивайте|тушите|туш\b|варите|запекайте|запек|измельч|пюрир|слегка\s+разомн|укипят|убавьте|разогрейте|охладите|помеш|держите|смешайте|смешай\b|взболтайте|слейте|процедите|смажьте|полейте|выложите|переложите|подержите|дождитесь|не\s+пережар|не\s+пересуш|не\s+перевар|сбрызн|обдайте|залейте|влейте|всыпьте|вбейте|подавите|раздавите|прожарьте|прожар/i.test(
+    t,
+  );
+}
+
+function hasChefAdviceConcreteEffect(t: string): boolean {
+  const x = t.toLowerCase();
+  return /гуще|густ|сочн|ярче|ярее|выразит|раскро|усилит|уберёт|уберет|не располз|хруст|нежн|мягч|кислин|текстур|аромат\s+(?:станет|ярче|ярее)|легче\s+нарез|проще\s+нарез|золотист|розов|однородн|пышн|воздушн|хрустящ|кремов|шелковист|не развал|не разойд|бульон|соус\s+(?:загуст|свяж)|без\s+добавления|сделает|станет|останется|не\s+размокн|не\s+развал/i.test(
+    x,
+  );
 }
 
 function hasConcreteCue(advice: string): boolean {
@@ -211,6 +228,15 @@ export function isChefAdviceLowValue(
   for (const re of GENERIC_START_REGEX) {
     if (re.test(t)) {
       return { lowValue: true, reason: `generic_start:${re.source.slice(0, 40)}` };
+    }
+  }
+
+  if (CHEF_ADVICE_INTRO_START.test(t)) {
+    const introAnchored = hasRecipeAnchoring(t, title, ings);
+    const introAction = hasChefAdviceConcreteAction(t);
+    const introEffect = hasChefAdviceConcreteEffect(t);
+    if (!introAnchored || !introAction || !introEffect) {
+      return { lowValue: true, reason: "intro_start_without_concrete_bar" };
     }
   }
 
