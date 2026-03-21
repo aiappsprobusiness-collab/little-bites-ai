@@ -64,12 +64,16 @@ function ChatRecipeCard({
     chatMessageId: chatMessageId ?? null,
     title: recipe.title ?? "",
   });
-  const benefitDescription = buildRecipeBenefitDescription({
+  const benefitFallbackDescription = buildRecipeBenefitDescription({
     recipeId: benefitSeed.recipeId,
     stableKey: benefitSeed.stableKey ?? null,
     goals: recipe.nutrition_goals ?? [],
     title: recipe.title ?? "",
   });
+  /** Edge уже отдаёт финальный канон (LLM или benefit через pickCanonical) — совпадает с БД; не перетирать локальным builder. */
+  const canonicalFromApi = (recipe.description ?? "").trim();
+  const headerDescription =
+    canonicalFromApi.length > 0 ? canonicalFromApi : benefitFallbackDescription;
 
   return (
     <RecipeCard
@@ -79,7 +83,7 @@ function ChatRecipeCard({
         cookingTimeMinutes: recipe.cookingTime ?? null,
         title: recipe.title,
         benefitLabel,
-        description: benefitDescription,
+        description: headerDescription,
       }}
       ingredients={recipe.ingredients ?? []}
       ingredientOverrides={ingredientOverrides}

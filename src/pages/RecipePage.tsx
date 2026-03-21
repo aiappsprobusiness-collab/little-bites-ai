@@ -496,8 +496,8 @@ export default function RecipePage() {
                   <span>{benefitLabel}</span>
                 </p>
               )}
-              <NutritionGoalsChips goals={nutritionGoals} />
               <p className="text-sm text-muted-foreground leading-[1.6]">{benefitDescription}</p>
+              <NutritionGoalsChips goals={nutritionGoals} className="mt-1" />
             </div>
           </div>
         </div>

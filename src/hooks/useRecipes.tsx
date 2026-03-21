@@ -239,7 +239,8 @@ export function useRecipes(childId?: string) {
       steps?: Omit<RecipeStep, 'id' | 'recipe_id'>[];
       source?: 'week_ai' | 'chat_ai' | 'starter' | 'seed' | 'manual';
       /**
-       * Канонический recipes.description = buildRecipeBenefitDescription (как блок «польза» в UI).
+       * Для week_ai/starter/seed: после RPC подставляется buildRecipeBenefitDescription.
+       * Для chat_ai: description берётся из переданного recipe (как с Edge — LLM-first или fallback), без перезаписи benefit-builder.
        * Не используется для source === 'manual' (свободный текст из формы).
        */
       canonicalBenefitPersist?: {
@@ -289,7 +290,7 @@ export function useRecipes(childId?: string) {
         (normalized as Record<string, unknown>).nutrition_goals = nutritionGoalsForBenefit;
       }
 
-      if (source !== 'manual') {
+      if (source !== 'manual' && source !== 'chat_ai') {
         const seed = resolveBenefitDescriptionSeed({
           recipeId: null,
           chatMessageId: canonicalBenefitPersist?.chatMessageId ?? null,
@@ -338,7 +339,7 @@ export function useRecipes(childId?: string) {
       if (rpcError) throw rpcError;
       if (!recipeId) throw new Error('create_recipe_with_steps returned no id');
 
-      if (source !== 'manual') {
+      if (source !== 'manual' && source !== 'chat_ai') {
         const postDesc = buildRecipeBenefitDescription({
           recipeId,
           goals: nutritionGoalsForBenefit,

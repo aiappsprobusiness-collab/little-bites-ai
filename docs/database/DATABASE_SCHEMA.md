@@ -108,7 +108,7 @@ RLS: по `auth.uid() = user_id`. Лимиты Free: 1 член семьи, 1 а
 | child_id            | uuid → members         | Легаси, дублирует member_id |
 | member_id           | uuid → members         | Для кого рецепт (опционально) |
 | title               | text NOT NULL          | |
-| description         | text                   | **Канонический короткий текст «пользы»** для карточек/API: детерминированная строка из `buildRecipeBenefitDescription` (`supabase/functions/_shared/recipeBenefitDescription.ts`) — **только** `nutrition_goals` + стабильный seed (`recipe.id` / `stableKey`), **без** ветвления по профилю (child/adult/family). После склейки длина ограничивается (~**220** символов, константа `BENEFIT_DESCRIPTION_MAX_LENGTH`). Заголовок блока в UI («Польза для ребёнка» и т.д.) задаётся отдельно (`getBenefitLabel`). Не заполняется из финального LLM-поля `description` в пайплайне чата/сохранения; у рецептов `source = manual` / `user_custom` может оставаться произвольный текст из формы. |
+| description         | text                   | **Канонический короткий текст для карточек и API.** Для **`source = chat_ai`** (пайплайн Edge `deepseek-chat`): **LLM-first** — текст из поля `description` ответа модели после санитайзеров, если проходит quality gate (`pickCanonicalDescription`, `passesDescriptionQualityGate`: 1–2 предложения, примерно **38–210** симв., нутритивный маркер, без штампов/leak); иначе fallback — детерминированная строка из `buildRecipeBenefitDescription` (`nutrition_goals` + seed, до ~**220** симв., `BENEFIT_DESCRIPTION_MAX_LENGTH`). Строка в **`message` (JSON)** и **`recipes[0].description`** ответа совпадает с **`recipes.description`** в БД. Для **`week_ai` / starter / seed** и при клиентском `createRecipe` для не-`chat_ai` по-прежнему может задаваться benefit-builder. Заголовок блока пользы в UI (`getBenefitLabel`) задаётся отдельно там, где блок показывается; **в превью слотов вкладки «План» (день) этот текст и подпись не выводятся** — только КБЖУ и чипсы целей (`nutrition_goals`). У **`manual` / `user_custom`** — произвольный текст из формы. |
 | image_url           | text                   | |
 | cooking_time_minutes| integer                | |
 | cooking_time        | integer                | Дубликат в минутах |
@@ -124,7 +124,7 @@ RLS: по `auth.uid() = user_id`. Лимиты Free: 1 член семьи, 1 а
 | meal_type           | text                   | breakfast \| lunch \| snack \| dinner |
 | nutrition_goals     | jsonb NOT NULL DEFAULT '[]' | Goals для UI/плана: ключи balanced, iron_support, brain_development, weight_gain, gentle_digestion, energy_boost (CHECK whitelist). Человекочитаемые подписи только на клиенте: `GOAL_LABELS` в `src/utils/nutritionGoals.ts`. |
 | steps               | jsonb DEFAULT '[]'     | Шаги (альтернатива recipe_steps) |
-| chef_advice         | text                   | Совет шефа (LLM + quality gate в deepseek-chat); может быть NULL. Для `user_custom` опционально. |
+| chef_advice         | text                   | Совет шефа (LLM + quality gate в deepseek-chat, first-pass; **без** второго полного LLM-вызова рецепта при отклонении совета); может быть NULL. Для `user_custom` опционально. |
 | advice              | text                   | Альтернативный короткий совет; может быть NULL. Для `chat_ai` / `week_ai` / `manual` триггер `recipes_validate_not_empty` требует только непустой `description`, не требует ни `chef_advice`, ни `advice`. |
 | generation_context  | jsonb                  | Контекст генерации |
 | allergens           | text[]                 | |

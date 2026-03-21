@@ -6,9 +6,6 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
 import { recipeKcalChip } from "@/theme/recipeTokens";
-import { getBenefitLabel } from "@/utils/ageCategory";
-import { buildRecipeBenefitDescription } from "@/utils/recipeBenefitDescription";
-import type { MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
 const MEAL_LABELS: Record<string, { label: string; emoji: string; time: string }> = {
   breakfast: { label: "Завтрак", emoji: "🍽", time: "8:30" },
@@ -77,15 +74,6 @@ export interface MealCardProps {
   carbs?: number | null;
   /** Цели питания (чипы в превью). */
   nutritionGoals?: string[] | null;
-  /**
-   * Контекст профиля для блока «польза» в compact-превью плана.
-   * Без этого объекта подпись пользы в шапке превью не показывается.
-   */
-  planBenefitContext?: {
-    selectedMemberId: string | null;
-    ageMonths?: number | null;
-    memberType?: MemberTypeV2 | "family" | null;
-  };
 }
 
 const CHIP_PLACEHOLDER_COUNT = 3;
@@ -118,7 +106,6 @@ export function MealCard({
   fats: nutritionFats,
   carbs: nutritionCarbs,
   nutritionGoals,
-  planBenefitContext,
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
@@ -195,17 +182,6 @@ export function MealCard({
           }
         : null;
 
-    const benefitLabel =
-      planBenefitContext != null ? getBenefitLabel(planBenefitContext.ageMonths) : null;
-    const benefitDescription =
-      planBenefitContext != null
-        ? buildRecipeBenefitDescription({
-            recipeId,
-            goals: nutritionGoals ?? [],
-            title: recipeTitle,
-          })
-        : null;
-
     return (
       <>
         <RecipeCard
@@ -214,8 +190,6 @@ export function MealCard({
             mealLabel: meta.label,
             cookingTimeMinutes: cookTimeMinutes ?? null,
             title: recipeTitle,
-            benefitLabel,
-            description: benefitDescription,
           }}
           ingredients={ingredientNames}
           showIngredientChips={false}
