@@ -1030,6 +1030,7 @@ export default function ChatPage() {
                 memberId: memberIdForSave,
                 mealType,
                 parsedResult: parsed,
+                assistantMessageId: assistantMessageId,
               }),
               new Promise<{ savedRecipes?: Array<{ id: string; title?: string }> }>((_, reject) =>
                 setTimeout(() => reject(new Error("SAVE_TIMEOUT")), SAVE_RECIPE_TIMEOUT_MS)

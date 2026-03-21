@@ -10,10 +10,7 @@ import type { SavedFavorite } from "@/hooks/useFavorites";
 import type { MemberTypeV2 } from "@/integrations/supabase/types-v2";
 import { getRecipeAudience } from "@/utils/recipeAudience";
 import { getBenefitLabel } from "@/utils/ageCategory";
-import {
-  buildRecipeBenefitDescription,
-  resolveBenefitProfileContext,
-} from "@/utils/recipeBenefitDescription";
+import { buildRecipeBenefitDescription } from "@/utils/recipeBenefitDescription";
 import { getMealLabel } from "@/data/mealLabels";
 import { RecipeHeader } from "@/components/recipe/RecipeHeader";
 import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
@@ -70,15 +67,9 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
   const mealLabel = getMealLabel((recipe as { mealType?: string })?.mealType) ?? null;
   const linkedMember = favorite.member_id != null ? members.find((m) => m.id === favorite.member_id) : undefined;
   const ageMonths = linkedMember?.age_months ?? undefined;
-  const benefitProfileContext = resolveBenefitProfileContext({
-    selectedMemberId: favorite.member_id != null ? favorite.member_id : "family",
-    ageMonths,
-    memberType: linkedMember?.type ?? null,
-  });
   const benefitDescription = buildRecipeBenefitDescription({
     recipeId: recipeIdForBenefit,
     goals: nutritionGoals,
-    context: benefitProfileContext,
   });
   const chefAdvice = (recipe as { chefAdvice?: string }).chefAdvice;
   const advice = (recipe as { advice?: string }).advice;

@@ -67,7 +67,7 @@
 ### Meal Planning
 
 - **Назначение:** план питания на день/неделю по слотам (breakfast, lunch, snack, dinner). Одна запись на (user, member, date) в meal_plans_v2; слоты в JSONB meals. Автозаполнение через Edge generate-plan (пул + AI fallback).
-- **Таблицы:** `meal_plans_v2` (user_id, member_id, planned_date, meals jsonb) — основной SoT. `meal_plans` — классический по-слотовый формат, используется вместе с v2 (см. Legacy). RPC assign_recipe_to_plan_slot обновляет только meal_plans_v2.meals.
+- **Таблицы:** `meal_plans_v2` (user_id, member_id, planned_date, meals jsonb) — единственный SoT плана в production. RPC assign_recipe_to_plan_slot обновляет только `meal_plans_v2.meals`.
 - **UI:** MealPlanPage, useMealPlans, useAssignRecipeToPlanSlot, usePlanGenerationJob, invokeGeneratePlan.
 - **Edge:** `generate-plan` (start, run, cancel): plan_generation_jobs (insert/update), usage_events (plan_fill_day для free), запись в meal_plans_v2, создание рецептов через create_recipe_with_steps при AI fallback.
 - **Зависимости:** members, recipe pool, profiles_v2 (лимит plan_fill_day), MEAL_TYPE_AND_LUNCH_SOUP (lunch = супы, assign не меняет recipes).
@@ -121,7 +121,7 @@
 |--------|-----------------|---------------------------|
 | Subscription state | `profiles_v2.status`, `profiles_v2.premium_until`, `subscriptions` (подтверждённые платежи) | requests_today, last_reset — сброс по суткам |
 | Family constraints | `members` (allergy_items, allergies, likes, dislikes, preferences, age_months) | allergy_items предпочтительнее allergies (legacy text[]) |
-| Plan (день/неделя) | `meal_plans_v2` (одна строка на user, member, date; слоты в meals) | `meal_plans` — классический по-слотовый, используется вместе с v2; UI может экспандить v2 в «ряды» по слотам |
+| Plan (день/неделя) | `meal_plans_v2` (одна строка на user, member, date; слоты в meals) | UI экспандит `meals` в плоские «ряды» по слотам для отображения |
 | Recipe data | `recipes` + `recipe_steps` + `recipe_ingredients` | recipes.child_id — legacy, дублирует member_id; recipe_data в favorites_v2 — кэш/legacy; steps также в recipes.steps (jsonb) |
 | Chat «что показать» | `chat_history` (пишет только клиент после ответа Edge) | Edge deepseek-chat только читает chat_history для anti-duplicate |
 | Free limits | `usage_events` + RPC get_usage_count_today | Сутки по UTC |
@@ -196,7 +196,7 @@
 - **Free limits:** фичи chat_recipe, plan_fill_day, help — 2/день; учёт через get_usage_count_today и запись в usage_events с Edge (и с клиента для части событий). Сутки UTC.
 - **Analytics:** единая точка с фронта — track-usage-event; Edge пишут usage_events, token_usage_log, plate_logs, plan_generation_jobs, subscription_plan_audit. Нет внешней аналитической системы.
 - **RLS:** доступ к данным по auth.uid(); subscriptions и subscription_plan_audit — service_role. share_refs/shared_plans — SELECT для anon по ref.
-- **Legacy compatibility:** см. Known Legacy; при изменениях не ломать обратную совместимость с child_id, meal_plans, recipe_data.
+- **Legacy compatibility:** см. Known Legacy; при изменениях не ломать обратную совместимость с child_id, recipe_data.
 - **Async generation jobs:** plan_generation_jobs для прогресса «Заполнить день/неделю»; отмена через action cancel.
 - **AI token usage:** token_usage_log пишется из deepseek-chat (action_type: chat_recipe, plan_replace, sos_consultant, balance_check, other).
 
@@ -204,16 +204,15 @@
 
 ## Known Legacy / Dual Systems
 
-### meal_plans vs meal_plans_v2
+### План питания: только meal_plans_v2
 
-- **Старое:** meal_plans — одна строка на слот (child_id, recipe_id, planned_date, meal_type). Используется вместе с v2 (типы, RPC могут ссылаться).
-- **Новое:** meal_plans_v2 — одна строка на (user_id, member_id, planned_date), слоты в jsonb meals. Основной SoT для UI и assign_recipe_to_plan_slot.
-- **Предпочтительно:** все новые изменения по плану — meal_plans_v2. UI читает/пишет meal_plans_v2; useMealPlans экспандит в «ряды» по слотам для совместимости с отображением.
-- **Риск:** дублирование логики или записей при любом использовании meal_plans для новых фич.
+- **Production:** одна строка на (user_id, member_id, planned_date), слоты в JSONB `meals`. SoT для UI, generate-plan и `assign_recipe_to_plan_slot`.
+- **Исторически:** таблица `meal_plans` (одна строка на слот) **удалена из production** и не используется; см. `docs/database/DATABASE_SCHEMA.md` → Legacy / Removed tables.
+- **UI:** useMealPlans разворачивает `meals` в плоские ряды по слотам для отображения.
 
 ### child_id vs member_id
 
-- **Старое:** child_id в recipes, chat_history, meal_plans (и др.).
+- **Старое:** child_id в recipes, chat_history (и др.).
 - **Новое:** member_id в members, favorites_v2, meal_plans_v2, plan_generation_jobs и т.д. В recipes есть и child_id (legacy), и member_id.
 - **Предпочтительно:** везде использовать member_id для привязки к члену семьи. child_id не удалён из схемы для обратной совместимости.
 - **Риск:** рассинхронизация, если код пишет в один идентификатор, а читает из другого; в chat_history клиент передаёт child_id (семантика та же — контекст чата).
@@ -248,7 +247,7 @@
 ## Architectural Risks
 
 - **Дублирование source of truth:** subscription state должен обновляться только через payment-webhook и согласованные RPC (start_trial и т.д.). Chat history пишет только клиент.
-- **Legacy-поля:** child_id, meal_plans, allergies, recipe_data, cooking_time — при изменениях не предполагать их отсутствие; не плодить новые дубликаты.
+- **Legacy-поля:** child_id, allergies, recipe_data, cooking_time — при изменениях не предполагать их отсутствие; не плодить новые дубликаты.
 - **Высокая связность:** Members → Chat + Plan + Pool; изменение формата аллергий или возраста затрагивает deepseek-chat, generate-plan, клиент (buildPrompt, recipePool, useDeepSeekAPI). Единый словарь аллергенов/токенов (_shared/allergyAliases, blockedTokens; клиент allergenTokens).
 - **Критичность Edge:** deepseek-chat и generate-plan — ядро продукта; падение или несовместимость контракта ломает чат и план. Лимиты и тариф проверяются и на Edge.
 - **Free/premium:** ошибка в проверке status/trial/premium_until может открыть премиум-фичи или сломать лимиты. Проверки на клиенте и на Edge должны совпадать по смыслу.

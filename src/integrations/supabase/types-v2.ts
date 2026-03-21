@@ -134,7 +134,7 @@ export interface FavoritesV2Update {
   recipe_data?: Json;
 }
 
-// v2: meal_plans — planned_date (date), meals (jsonb); member_id FK members
+// v2: meal_plans_v2 — planned_date (date), meals (jsonb); member_id FK members
 export interface MealPlansV2Row {
   id: string;
   user_id: string;

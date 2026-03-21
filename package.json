@@ -32,6 +32,7 @@
     "scripts:create-test-users": "node scripts/create-test-users.mjs",
     "debug:plan": "node scripts/collect-plan-debug-logs.mjs --mode week --debug",
     "check:migrations": "node scripts/check-migrations-immutable.mjs",
+    "check:db-docs": "node scripts/check-db-docs-consistency.mjs",
     "resize:og-onion": "node scripts/resize-og-onion.mjs"
   },
   "dependencies": {
@@ -119,6 +120,7 @@
     "jsdom": "^20.0.3",
     "lovable-tagger": "^1.1.13",
     "patch-package": "^8.0.1",
+    "pg": "^8.14.1",
     "postcss": "^8.5.6",
     "sharp": "^0.34.5",
     "supabase": "^2.72.8",

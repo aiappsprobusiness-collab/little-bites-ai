@@ -260,6 +260,7 @@ export function useReplaceMealSlot(
       if (!jsonStr) throw new Error("Нет рецепта в ответе");
       const parsed = JSON.parse(jsonStr) as { title?: string; ingredients?: unknown[]; steps?: unknown[] };
       const recipe = await createRecipe({
+        source: "chat_ai",
         recipe: {
           title: parsed.title ?? "Рецепт",
           description: "",

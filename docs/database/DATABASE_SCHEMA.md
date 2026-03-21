@@ -6,6 +6,11 @@
 
 **СУБД:** Supabase (PostgreSQL). Миграции в `supabase/migrations/`.
 
+## Schema consistency note
+
+This documentation reflects the actual production schema.  
+If a table is not present in `information_schema`, it must **not** be described here as an active table. Removed tables are listed only under [Legacy / Removed tables](#legacy--removed-tables).
+
 ---
 
 ## Оглавление
@@ -103,7 +108,7 @@ RLS: по `auth.uid() = user_id`. Лимиты Free: 1 член семьи, 1 а
 | child_id            | uuid → members         | Легаси, дублирует member_id |
 | member_id           | uuid → members         | Для кого рецепт (опционально) |
 | title               | text NOT NULL          | |
-| description         | text                   | |
+| description         | text                   | **Канонический короткий текст «пользы»** для карточек/API: детерминированная строка из `buildRecipeBenefitDescription` (`supabase/functions/_shared/recipeBenefitDescription.ts`) — **только** `nutrition_goals` + стабильный seed (`recipe.id` / `stableKey`), **без** ветвления по профилю (child/adult/family). После склейки длина ограничивается (~**220** символов, константа `BENEFIT_DESCRIPTION_MAX_LENGTH`). Заголовок блока в UI («Польза для ребёнка» и т.д.) задаётся отдельно (`getBenefitLabel`). Не заполняется из финального LLM-поля `description` в пайплайне чата/сохранения; у рецептов `source = manual` / `user_custom` может оставаться произвольный текст из формы. |
 | image_url           | text                   | |
 | cooking_time_minutes| integer                | |
 | cooking_time        | integer                | Дубликат в минутах |
@@ -290,22 +295,13 @@ RLS: по user_id.
 
 ---
 
-### `public.meal_plans`
+## Legacy / Removed tables
 
-Классический план: одна строка = один слот (дата + meal_type + recipe_id). Используется вместе с meal_plans_v2.
+Таблицы ниже **отсутствуют в production**; приложение и Edge используют только **`meal_plans_v2`**. В старых миграциях могут оставаться идемпотентные проверки `information_schema` для окружений, где таблица когда-то существовала.
 
-| Колонка      | Тип              | Описание |
-|--------------|------------------|----------|
-| id           | uuid PK          | |
-| user_id      | uuid → auth.users | |
-| child_id     | uuid → members   | |
-| recipe_id    | uuid → recipes   | |
-| planned_date | date NOT NULL    | |
-| meal_type    | meal_type        | breakfast, lunch, dinner, snack |
-| is_completed | boolean DEFAULT false | |
-| created_at, updated_at | timestamptz | |
-
-RLS: по user_id.
+| Таблица        | Статус |
+|----------------|--------|
+| `meal_plans`   | Удалена; заменена на `meal_plans_v2` (одна строка на день, слоты в JSONB `meals`). |
 
 ---
 

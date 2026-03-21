@@ -21,7 +21,7 @@ export interface MealSlotJson {
 /** V2: one row per day; meals = { breakfast?: MealSlotJson, ... } */
 type MealsJson = Record<string, MealSlotJson | undefined>;
 
-/** Expanded item for UI compatibility: one "row" per meal slot (like old meal_plans). */
+/** Expanded item for UI: one "row" per meal slot (денормализация из meal_plans_v2.meals). */
 export interface MealPlanItemV2 {
   id: string;
   planned_date: string;

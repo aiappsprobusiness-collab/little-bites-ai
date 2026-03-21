@@ -17,6 +17,8 @@
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, затем **Stage 4.4** (культурно-осознанное ранжирование общего пула в `generate-plan`), **Stage 5** = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
+> **Актуальность архивных подпунктов Stage 2.x:** ниже по тексту исторические чеклисты про `recipeDescriptionComposer` и `descriptionSource: "composer"` отражают прошлую реализацию. **Сейчас** финальный `recipes.description` и санитизированное поле в ответе чата задаются **`buildRecipeBenefitDescription`** (см. обновлённый § Stage 4.3.6).
+
 ## Planned stages
 - [x] Stage 1 — locale + trust_level
 - [x] Stage 2 — description composer
@@ -38,21 +40,27 @@
 - [x] Stage 4.3.3 — MealCard: бейдж «Под вашу цель» + короткое пояснение; строка «Подобрано с акцентом…»; при отсутствии совпадений по цели — дисклеймер
 - [x] Stage 4.3.4 — goals UI cleanup: `PlanGoalChipsRow` свёртка до 3 + «…»; убраны сводка «Подобрано с акцентом…» и бейджи/пояснения на карточках плана
 - [x] Stage 4.3.5 — `PlanGoalChipsRow`: плавные переходы состояния + лёгкий `active:scale-[0.98]`; у locked чипов без press-scale
-- [x] Stage 4.3.6 — UI-level deterministic benefit text: `buildRecipeBenefitDescription` + `resolveBenefitProfileContext` (`src/utils/recipeBenefitDescription.ts`); источник текста под заголовком «Польза…» / «Почему это полезно» — `nutrition_goals` + контекст профиля (child / adult / family tone); заголовки и whitelist целей без изменений; `recipes.description` и LLM pipeline не трогались
+- [x] Stage 4.3.6 — deterministic benefit text: единый модуль `supabase/functions/_shared/recipeBenefitDescription.ts` (реэкспорт в `src/utils/recipeBenefitDescription.ts`); **канонический `recipes.description` в БД** = тот же builder (не LLM / не `recipeDescriptionComposer`); текст пользы **универсальный** (только `nutrition_goals` + seed), **без** child/adult/family в пулах; контекстным остаётся только **заголовок** блока (`getBenefitLabel` по возрасту/профилю)
 - [ ] Stage 4.4 — Cultural / Cuisine-aware Pool Ranking (metadata + soft scoring in generate-plan; see section below)
 - [ ] Stage 5 — plan page refactor
 
-## Stage 4.3.6 — Deterministic benefit description (UI-only)
+## Stage 4.3.6 — Deterministic benefit description (UI + БД)
 
-**Статус:** завершено.
+**Статус:** завершено; **расширено:** `recipes.description` синхронизирован с benefit-builder.
 
-**Не путать с** глобальным description composer / rollback Stage 2.4: это **отдельный UX-слой** только для блока «польза» (подпись под заголовком из `getBenefitLabel`).
+**Не путать с** устаревшим глобальным `recipeDescriptionComposer` (meal/ingredient/title): для канонического описания в проде он **не** используется; LLM может по-прежнему возвращать поле `description` в JSON для схемы/эвристик, но **финальное значение в БД и в ответе Edge после санитизации** задаётся только `buildRecipeBenefitDescription`.
 
-- **Где:** страница рецепта (`RecipePage`), карточка в чате (`ChatRecipeCard` / `RecipeHeader`), превью слота в дневном плане (`MealCard` compact + `RecipeCard` preview), по желанию — `FavoriteRecipeSheet`, welcome-блок.
-- **Вход:** нормализованные `nutrition_goals` (те же ключи БД), контекст тона из выбранного профиля (`family` / возраст → child | adult), стабильный seed (`recipe.id` или `stableKey` в чате до сохранения).
-- **Детерминизм:** выбор вариантов из пулов через FNV-1a hash от `recipeId|context|goals` (без `Math.random` на рендере).
-- **Приоритет акцентов:** до двух целей по порядку `brain_development` → `iron_support` → `energy_boost` → `gentle_digestion` → `weight_gain`; `balanced` чаще как база во вводной части, не как отдельный «хвост»-список.
-- **Fallback:** при пустых / нераспознанных целях — нейтральные фразы по контексту (тоже детерминированно).
+- **Где (UI):** страница рецепта (`RecipePage`), карточка в чате (`ChatRecipeCard` / `RecipeHeader`), превью слота в дневном плане (`MealCard` compact + `RecipeCard` preview), `FavoriteRecipeSheet`, welcome-блок.
+- **Где (persist):** `createRecipe` в `useRecipes.tsx` (после RPC — `UPDATE recipes.description` с seed по `recipe.id`), `deepseek-chat` при автосохранении рецепта (после `create_recipe_with_steps` — такой же update). Исключение: `source === 'manual'` — описание из формы, benefit-builder не перезаписывает.
+- **Вход (текст пользы):** только `nutrition_goals` (или `inferNutritionGoals` по тексту рецепта на Edge/клиенте) + стабильный seed: **после сохранения** — `recipe.id`; до сохранения в чате — `resolveBenefitDescriptionSeed` (`chatMessageId:title` или `title:title`, см. `ChatRecipeCard`). **Профиль child/adult/family в текст не входит** — удалены отдельные пулы и `resolveBenefitProfileContext` для description.
+- **Контекст только в UI:** подпись над блоком («Польза для ребёнка» / «Почему это полезно» и т.д.) — `getBenefitLabel` и возраст/профиль там, где уже было. **Расхождение seed до сохранения:** в JSON ответа Edge stableKey = `` `${requestId}:${title}` ``, в карточке чата — `assistantMessageId:title`, пока нет `recipe_id`; после сохранения БД и UI согласованы по `recipe.id`.
+- **Детерминизм:** FNV-1a от `recipeId|goals` или `stableKey|goals` (до появления id).
+- **Приоритет акцентов / fallback:** без изменений (см. `pickPriorityAccentGoals` в модуле).
+- **Sync (implementation):** пулы фраз живут в `_shared/recipeBenefitDescription.ts` (тёплый бытовой тон, без канцелярита; обновляются целиком при смене копирайта); максимальная длина текста после склейки — **220** символов (`BENEFIT_DESCRIPTION_MAX_LENGTH`); фронт импортирует реэкспорт из `src/utils/recipeBenefitDescription.ts`.
+
+### Follow-up: `chef_advice` (аудит, без реализации в этой задаче)
+
+Текущий пайплайн смешивает сырой вывод модели, эвристики `sanitizeChefAdviceForPool` / `enforceChefAdvice` и заготовки `buildChefAdviceFallback`; качество часто «шумное» (повторы, обрывки, несогласованность с шагами). Отдельная задача: сузить контракт, убрать дубли с блоком пользы или ввести детерминированный слой по аналогии с description — **в этом changeset не делалось**.
 
 ## Stage 4.4 — Cultural / Cuisine-aware Pool Ranking
 

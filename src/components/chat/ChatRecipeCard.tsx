@@ -4,7 +4,7 @@ import { getMealLabel } from "@/data/mealLabels";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
 import {
   buildRecipeBenefitDescription,
-  resolveBenefitProfileContext,
+  resolveBenefitDescriptionSeed,
 } from "@/utils/recipeBenefitDescription";
 
 export interface ChatRecipeCardRecipe {
@@ -37,10 +37,9 @@ export interface ChatRecipeCardProps {
   onSubstituteClick: (idx: number, ing: ParsedIngredient) => void;
 }
 
-export function ChatRecipeCard({
+function ChatRecipeCard({
   recipe,
   ageMonths,
-  selectedProfileId = null,
   chatMessageId,
   savedRecipeId = null,
   showChefTip,
@@ -60,21 +59,15 @@ export function ChatRecipeCard({
         : null;
 
   const benefitLabel = getBenefitLabel(ageMonths);
-  const benefitContext = resolveBenefitProfileContext({
-    selectedMemberId: selectedProfileId,
-    ageMonths,
+  const benefitSeed = resolveBenefitDescriptionSeed({
+    recipeId: savedRecipeId,
+    chatMessageId: chatMessageId ?? null,
+    title: recipe.title ?? "",
   });
   const benefitDescription = buildRecipeBenefitDescription({
-    recipeId: savedRecipeId,
-    stableKey: savedRecipeId?.trim()
-      ? undefined
-      : chatMessageId && recipe.title
-        ? `${chatMessageId}:${recipe.title}`
-        : recipe.title
-          ? `title:${recipe.title}`
-          : "chat",
+    recipeId: benefitSeed.recipeId,
+    stableKey: benefitSeed.stableKey ?? null,
     goals: recipe.nutrition_goals ?? [],
-    context: benefitContext,
   });
 
   return (
@@ -100,3 +93,6 @@ export function ChatRecipeCard({
     />
   );
 }
+
+export { ChatRecipeCard };
+export default ChatRecipeCard;

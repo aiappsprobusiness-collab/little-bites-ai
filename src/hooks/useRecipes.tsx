@@ -13,6 +13,11 @@ import { ensureStringArray } from '@/utils/typeUtils';
 import { canonicalizeRecipePayload } from '@/utils/recipeCanonical';
 import { getAppLocale } from '@/utils/appLocale';
 import { requestRecipeTranslation } from '@/utils/requestRecipeTranslation';
+import {
+  buildRecipeBenefitDescription,
+  resolveBenefitDescriptionSeed,
+} from '@/utils/recipeBenefitDescription';
+import { inferNutritionGoals } from '@/utils/inferNutritionGoals';
 import mockRecipes from '@/mocks/mockRecipes.json';
 
 type Recipe = Tables<'recipes'>;
@@ -227,11 +232,21 @@ export function useRecipes(childId?: string) {
       ingredients = [],
       steps = [],
       source = 'chat_ai',
+      canonicalBenefitPersist,
     }: {
       recipe: Omit<RecipeInsert, 'user_id'>;
       ingredients?: Omit<RecipeIngredient, 'id' | 'recipe_id'>[];
       steps?: Omit<RecipeStep, 'id' | 'recipe_id'>[];
       source?: 'week_ai' | 'chat_ai' | 'starter' | 'seed' | 'manual';
+      /**
+       * Канонический recipes.description = buildRecipeBenefitDescription (как блок «польза» в UI).
+       * Не используется для source === 'manual' (свободный текст из формы).
+       */
+      canonicalBenefitPersist?: {
+        /** Как у ChatRecipeCard до появления recipe.id */
+        chatMessageId?: string | null;
+        nutritionGoals?: string[] | null;
+      };
     }) => {
       if (!user) throw new Error('User not authenticated');
       if (!isValidUUID(user.id)) throw new Error('Invalid user_id');
@@ -252,6 +267,42 @@ export function useRecipes(childId?: string) {
           ? ingredients
           : [...ingredients, ...Array.from({ length: MIN_INGREDIENTS - ingredients.length }, (_, i) => ({ name: `Ингредиент ${ingredients.length + i + 1}`, order_index: ingredients.length + i }))];
 
+      const titleStr = (normalized.title as string) ?? 'Рецепт';
+
+      let nutritionGoalsForBenefit: string[] = [];
+      if (source !== 'manual') {
+        if (canonicalBenefitPersist?.nutritionGoals != null && canonicalBenefitPersist.nutritionGoals.length > 0) {
+          nutritionGoalsForBenefit = canonicalBenefitPersist.nutritionGoals;
+        } else if (Array.isArray((normalized as Record<string, unknown>).nutrition_goals) && ((normalized as Record<string, unknown>).nutrition_goals as unknown[]).length > 0) {
+          nutritionGoalsForBenefit = ((normalized as Record<string, unknown>).nutrition_goals as unknown[]).filter((g): g is string => typeof g === 'string');
+        } else {
+          nutritionGoalsForBenefit = inferNutritionGoals({
+            title: titleStr,
+            description: String((normalized as Record<string, unknown>).description ?? ''),
+            ingredients: ingredientsPadded.map((ing) => ({
+              name: ing.name,
+              display_text: (ing as Record<string, unknown>).display_text ?? null,
+            })),
+            steps: stepsPadded.map((s) => s.instruction ?? ''),
+          });
+        }
+        (normalized as Record<string, unknown>).nutrition_goals = nutritionGoalsForBenefit;
+      }
+
+      if (source !== 'manual') {
+        const seed = resolveBenefitDescriptionSeed({
+          recipeId: null,
+          chatMessageId: canonicalBenefitPersist?.chatMessageId ?? null,
+          title: titleStr,
+        });
+        const preDesc = buildRecipeBenefitDescription({
+          recipeId: seed.recipeId,
+          stableKey: seed.stableKey ?? null,
+          goals: nutritionGoalsForBenefit,
+        });
+        (normalized as Record<string, unknown>).description = preDesc;
+      }
+
       const rpcPayload = canonicalizeRecipePayload({
         user_id: user.id,
         member_id: (normalized as Record<string, unknown>).member_id ?? null,
@@ -259,7 +310,7 @@ export function useRecipes(childId?: string) {
         source,
         mealType: (normalized as Record<string, unknown>).meal_type ?? null,
         tags: (normalized as Record<string, unknown>).tags ?? null,
-        title: (normalized.title as string) ?? 'Рецепт',
+        title: titleStr,
         description: (normalized.description as string) ?? null,
         cooking_time_minutes: (normalized as Record<string, unknown>).cooking_time_minutes ?? null,
         chef_advice: (normalized as Record<string, unknown>).chef_advice ?? null,
@@ -285,6 +336,16 @@ export function useRecipes(childId?: string) {
       const { data: recipeId, error: rpcError } = await supabase.rpc('create_recipe_with_steps', { payload: rpcPayload });
       if (rpcError) throw rpcError;
       if (!recipeId) throw new Error('create_recipe_with_steps returned no id');
+
+      if (source !== 'manual') {
+        const postDesc = buildRecipeBenefitDescription({
+          recipeId,
+          goals: nutritionGoalsForBenefit,
+        });
+        const { error: benefitDescErr } = await supabase.from('recipes').update({ description: postDesc }).eq('id', recipeId);
+        if (benefitDescErr) safeWarn('recipes: canonical benefit description update failed', benefitDescErr);
+        (normalized as Record<string, unknown>).description = postDesc;
+      }
 
       return { id: recipeId, ...normalized, title: normalized.title ?? '' } as Recipe;
     },

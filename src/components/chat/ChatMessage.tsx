@@ -23,7 +23,7 @@ import { HelpSectionCard, HelpWarningCard } from "@/components/help-ui";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
-import { ChatRecipeCard } from "@/components/chat/ChatRecipeCard";
+import ChatRecipeCard from "@/components/chat/ChatRecipeCard";
 import { SystemHintCard } from "@/components/chat/SystemHintCard";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import type { SystemHintRoute } from "@/utils/chatRouteFallback";
@@ -253,9 +253,14 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               : null;
           const newRecipe = await createRecipe({
             source: "chat_ai",
+            canonicalBenefitPersist: {
+              chatMessageId: id,
+              nutritionGoals: (effectiveRecipe as { nutrition_goals?: string[] | null }).nutrition_goals ?? null,
+            },
             recipe: {
               title: effectiveRecipe.title,
-              description: effectiveRecipe.description || "Рецепт предложен AI ассистентом",
+              description: "",
+              nutrition_goals: (effectiveRecipe as { nutrition_goals?: string[] | null }).nutrition_goals ?? [],
               cooking_time_minutes: Number.isFinite(cookingMinutes) ? cookingMinutes : null,
               calories: (effectiveRecipe as { calories?: number | null }).calories ?? null,
               proteins: (effectiveRecipe as { proteins?: number | null }).proteins ?? null,

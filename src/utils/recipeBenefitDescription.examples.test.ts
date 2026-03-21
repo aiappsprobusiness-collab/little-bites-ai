@@ -21,7 +21,6 @@ describe("recipeBenefitDescription — примеры для реального 
     const input = {
       recipeId: DEMO_RECIPE_UUID,
       goals: ["balanced", "brain_development", "iron_support"],
-      context: "child" as const,
     };
     expect(buildRecipeBenefitDescription(input)).toBe(
       buildRecipeBenefitDescription(input)
@@ -33,38 +32,36 @@ describe("recipeBenefitDescription — примеры для реального 
       buildRecipeBenefitDescription({
         recipeId: DEMO_RECIPE_UUID,
         goals: ["balanced", "brain_development", "iron_support"],
-        context: "child",
       })
     ).toBe(
-      "Питательное блюдо на каждый день, которое поддерживает внимание в спокойном темпе и делает рацион более насыщенным по железу."
+      "Ровный по питательности вариант, который подходит для дней учёбы или напряжённой работы и помогает усилить железосодержащую часть рациона."
     );
 
     expect(
       buildRecipeBenefitDescription({
         recipeId: DEMO_RECIPE_UUID,
         goals: ["balanced", "energy_boost"],
-        context: "adult",
       })
     ).toBe(
-      "Удобный для повседневного рациона вариант, который поддерживает стабильную энергию."
+      "Ровный по питательности вариант, который может помочь сделать день более ровным по силам и сытости."
     );
 
     expect(
       buildRecipeBenefitDescription({
         recipeId: DEMO_RECIPE_UUID,
         goals: ["gentle_digestion", "balanced"],
-        context: "family",
       })
     ).toBe(
-      "Сбалансированное блюдо для обычных дней, которое мягко подходит для повседневного меню."
+      "Хороший вариант для повседневного меню, который поддерживает более спокойный и комфортный формат питания."
     );
 
     expect(
       buildRecipeBenefitDescription({
         recipeId: DEMO_RECIPE_UUID,
         goals: ["weight_gain"],
-        context: "child",
       })
-    ).toBe("Сытное и питательное блюдо без ощущения тяжести.");
+    ).toBe(
+      "Уместный вариант для меню с акцентом на набор веса или на дополнительную питательность."
+    );
   });
 });

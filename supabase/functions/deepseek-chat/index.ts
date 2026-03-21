@@ -48,21 +48,16 @@ import {
   validateRecipe,
   retryFixJson,
   buildChefAdviceFallback,
-  shouldReplaceDescription,
   shouldReplaceChefAdvice,
-  isDescriptionIncomplete,
   sanitizeRecipeText,
   sanitizeMealMentions,
   getMinimalRecipe,
-  enforceDescription,
   enforceChefAdvice,
-  sanitizeDescriptionForPool,
   sanitizeChefAdviceForPool,
   passesDescriptionQualityGate,
   passesChefAdviceQualityGate,
-  isDescriptionInvalid,
 } from "./domain/recipe_io/index.ts";
-import { composeRecipeDescription } from "../_shared/recipeDescriptionComposer.ts";
+import { buildRecipeBenefitDescription } from "../_shared/recipeBenefitDescription.ts";
 import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsistencyGuard.ts";
 import { checkRequestContextLeak, textContainsRequestContextLeak, cleanStepFromRequestContextLeak } from "../_shared/requestContextLeakGuard.ts";
 import { checkTitleLexicon } from "../_shared/titleLexiconGuard.ts";
@@ -75,7 +70,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Ограничение длины ответа рецепта (description ≤160 composer, chefAdvice ≤260). */
+/** Ограничение длины ответа рецепта (chefAdvice ≤260; description в БД — benefit-builder, не лимит LLM). */
 const RECIPE_MAX_TOKENS = 1600;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
@@ -987,17 +982,8 @@ serve(async (req) => {
           safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
         }
         logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
-        // Stage 2.4: LLM description — основной источник; composer только fallback при невалидном description.
-        const desc = (validated as { description?: string }).description;
+        // Финальный recipes.description задаётся benefit-builder (см. блок RECIPE_SANITIZED); LLM description не пишем в БД.
         const advice = validated.chefAdvice ?? "";
-        if (isDescriptionInvalid(desc, { title: validated.title })) {
-          const composed = composeRecipeDescription({
-            title: validated.title ?? "",
-            mealType: validated.mealType ?? undefined,
-            ingredients: validated.ingredients ?? [],
-          });
-          (validated as Record<string, unknown>).description = composed.text;
-        }
         if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
           const ingNames = Array.isArray(validated.ingredients)
             ? validated.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")).filter(Boolean)
@@ -1080,7 +1066,6 @@ serve(async (req) => {
       const recipe = responseRecipes[0] as RecipeJson;
       const inferredGoals = inferNutritionGoals(recipe);
       (recipe as Record<string, unknown>).nutrition_goals = inferredGoals;
-      const descRaw = sanitizeMealMentions(sanitizeRecipeText(recipe.description ?? ""));
       const adviceRaw = sanitizeMealMentions(sanitizeRecipeText(recipe.chefAdvice ?? ""));
       const title = (recipe.title ?? "").trim();
       const keyIngredient = Array.isArray(recipe.ingredients) && recipe.ingredients[0] && typeof recipe.ingredients[0] === "object" && (recipe.ingredients[0] as { name?: string }).name
@@ -1088,7 +1073,6 @@ serve(async (req) => {
         : undefined;
       const steps = Array.isArray(recipe.steps) ? recipe.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean) : [];
       const recipeIdSeed = title + (keyIngredient ?? "") + (steps[0] ?? "");
-      const descForPool = sanitizeDescriptionForPool(descRaw, title, recipeIdSeed);
       const adviceForPool = sanitizeChefAdviceForPool(adviceRaw, recipeIdSeed);
       const rawChefAdviceFromModel = (recipe.chefAdvice ?? "").trim();
       safeLog(JSON.stringify({
@@ -1098,21 +1082,6 @@ serve(async (req) => {
         rawChefAdvice: rawChefAdviceFromModel.slice(0, 400),
       }));
       const ingNamesForEnforce = Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : [];
-      const descriptionInvalid = isDescriptionInvalid(descRaw, { title });
-      let descriptionSource: "llm" | "composer_fallback" = "llm";
-      let composerVariantForLog: string | undefined;
-      if (descriptionInvalid) {
-        const composed = composeRecipeDescription({
-          title,
-          mealType: recipe.mealType ?? undefined,
-          ingredients: recipe.ingredients ?? [],
-        });
-        (recipe as Record<string, unknown>).description = composed.text;
-        descriptionSource = "composer_fallback";
-        composerVariantForLog = composed.variantId;
-      } else {
-        (recipe as Record<string, unknown>).description = descRaw.slice(0, 160);
-      }
       (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceForPool, {
         title,
         ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : undefined,
@@ -1133,22 +1102,12 @@ serve(async (req) => {
         }
       }
       const currentTitle = (recipe.title ?? "") as string;
-      const currentDesc = (recipe.description ?? "") as string;
+      const currentDesc = sanitizeMealMentions(sanitizeRecipeText(recipe.description ?? ""));
       const currentAdvice = (recipe.chefAdvice ?? "") as string;
       const leak = checkRequestContextLeak(currentTitle, currentDesc, currentAdvice);
       if (leak.triggered) {
         if (leak.suggestedTitle && leak.suggestedTitle.trim().length >= 2) {
           (recipe as Record<string, unknown>).title = leak.suggestedTitle.trim();
-        }
-        if (leak.descriptionUseComposer) {
-          const recomposed = composeRecipeDescription({
-            title: (recipe.title ?? currentTitle) as string,
-            mealType: recipe.mealType ?? undefined,
-            ingredients: recipe.ingredients ?? [],
-          });
-          (recipe as Record<string, unknown>).description = recomposed.text;
-          descriptionSource = "composer_fallback";
-          composerVariantForLog = recomposed.variantId;
         }
         if (leak.chefAdviceUseFallback) {
           (recipe as Record<string, unknown>).chefAdvice = buildChefAdviceFallback({
@@ -1193,6 +1152,12 @@ serve(async (req) => {
         }));
         (recipe as Record<string, unknown>).title = lexiconResult.normalizedTitle;
       }
+      const finalTitleForBenefit = ((recipe.title ?? "") as string).trim();
+      const canonicalRecipeDescription = buildRecipeBenefitDescription({
+        stableKey: `${requestId}:${finalTitleForBenefit}`,
+        goals: inferredGoals,
+      });
+      (recipe as Record<string, unknown>).description = canonicalRecipeDescription;
       assistantMessage = JSON.stringify(recipe);
       const finalChefAdvice = (recipe.chefAdvice as string) ?? "";
       const chefAdviceReplacedWithFallback = finalChefAdvice !== adviceForPool;
@@ -1202,8 +1167,7 @@ serve(async (req) => {
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
-        descriptionSource,
-        composerVariant: composerVariantForLog,
+        descriptionSource: "benefit_builder",
         descriptionLength: (recipe.description as string)?.length,
         chefAdviceLength: finalChefAdvice.length,
         titleIngredientConsistencyGuardTriggered: consistency.triggered,
@@ -1374,6 +1338,20 @@ serve(async (req) => {
           savedRecipeId = recipeId ?? null;
           if (savedRecipeId) {
             safeLog(JSON.stringify({ tag: "RECIPE_SAVED", recipeIdSuffix: savedRecipeId.slice(-6), requestId }));
+            const descriptionForDb = buildRecipeBenefitDescription({
+              recipeId: savedRecipeId,
+              goals: nutritionGoalsForSave,
+            });
+            const { error: descUpdErr } = await supabaseUser.from("recipes").update({ description: descriptionForDb }).eq(
+              "id",
+              savedRecipeId,
+            );
+            if (descUpdErr) safeWarn("recipe description (benefit) update failed", serializeError(descUpdErr));
+            const recipeOut = responseRecipes[0] as Record<string, unknown> | undefined;
+            if (recipeOut) {
+              recipeOut.description = descriptionForDb;
+              assistantMessage = JSON.stringify(recipeOut);
+            }
           }
         } catch (err) {
           safeWarn("Failed to save recipe to DB, continuing without recipe_id:", serializeError(err));

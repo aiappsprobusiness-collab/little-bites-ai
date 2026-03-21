@@ -45,7 +45,7 @@ Before modifying meal plan logic:
 **Never change:**
 
 - recipes.meal_type or recipes.is_soup inside assign_recipe_to_plan_slot (RPC must not update recipes table)
-- plan source of truth (meal_plans_v2); do not move SoT to meal_plans or another store without a full migration plan
+- plan source of truth (meal_plans_v2); do not move SoT to another store without a full migration plan
 
 ---
 

@@ -18,7 +18,6 @@
 | **members** | Профили семьи, allergies, likes, dislikes, preferences | Тексты аллергий/лайков — в интерфейсе пользователя | Язык интерфейса ≠ кухня; предпочтения по продуктам лучше хранить нормализованно (см. allergy_items). |
 | **favorites_v2** | user_id, recipe_id, member_id, recipe_data (legacy) | recipe_data — кэш, может содержать title/description | Избыточный кэш; основной источник — recipes по recipe_id. |
 | **meal_plans_v2** | planned_date, meals (jsonb: breakfast/lunch/snack/dinner) | В слоте: recipe_id, title, servings | title в слоте — денормализация для отображения; при смене локали нужно будет подставлять перевод или оставить fallback на recipes.title. |
-| **meal_plans** | Классический слот: recipe_id, planned_date, meal_type | — | Legacy; используется вместе с v2. |
 | **chat_history** | message, response, recipe_id, meta | message/response — язык пользователя | Не блокирует мультиязычность рецептов; рецепт хранится в recipes. |
 | **usage_events** | feature, user_id, properties | — | Язык-агностичен. |
 | **token_usage_log** | action_type, tokens | — | Язык-агностичен. |
@@ -59,7 +58,7 @@
 - **RecipeCard, FamilyDashboard** — recipe.title, recipe?.title.
 - **Shopping list** — recipe_title в слоте и в shopping_list_items.
 
-**Синхронизация (Stage 4.3.6):** глобальный pipeline `recipe.description` (LLM, `create_recipe_with_steps`, поле в БД) **не менялся**. Для блока «польза» под заголовком из `getBenefitLabel` на карточке/странице/превью плана введён **отдельный UI-слой** `buildRecipeBenefitDescription` (`nutrition_goals` + тон child/adult/family). Это **не** замена канонического `recipes.description` и **не** возврат глобального description composer в Edge.
+**Синхронизация (Stage 4.3.6, обновлено):** канонический **`recipes.description`** и тело блока «пользы» под заголовком строятся **одним** модулем `buildRecipeBenefitDescription` (`nutrition_goals` + seed, **без** child/adult/family в тексте). Заголовок блока остаётся контекстным через `getBenefitLabel`. LLM-поле `description` в JSON не задаёт финальное значение в БД; `recipeDescriptionComposer` для этого пути не используется. Подробности — в `docs/refactor/recipe-core-multilang-progress.md` (§ 4.3.6).
 
 Обратная совместимость: пока UI читает title/description из рецепта (напрямую или через RPC), новые переводы должны либо подставляться в те же поля через view/RPC с учётом locale, либо дублироваться в recipes на переходный период (см. раздел 9).
 

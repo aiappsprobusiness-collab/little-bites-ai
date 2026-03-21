@@ -7,10 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
 import { recipeKcalChip } from "@/theme/recipeTokens";
 import { getBenefitLabel } from "@/utils/ageCategory";
-import {
-  buildRecipeBenefitDescription,
-  resolveBenefitProfileContext,
-} from "@/utils/recipeBenefitDescription";
+import { buildRecipeBenefitDescription } from "@/utils/recipeBenefitDescription";
 import type { MemberTypeV2 } from "@/integrations/supabase/types-v2";
 
 const MEAL_LABELS: Record<string, { label: string; emoji: string; time: string }> = {
@@ -205,11 +202,6 @@ export function MealCard({
         ? buildRecipeBenefitDescription({
             recipeId,
             goals: nutritionGoals ?? [],
-            context: resolveBenefitProfileContext({
-              selectedMemberId: planBenefitContext.selectedMemberId,
-              ageMonths: planBenefitContext.ageMonths,
-              memberType: planBenefitContext.memberType,
-            }),
           })
         : null;
 

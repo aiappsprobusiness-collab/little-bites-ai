@@ -1,5 +1,28 @@
 # Developer notes (Mom Recipes / Little Bites AI)
 
+## Сверка `DATABASE_SCHEMA.md` с реальной БД
+
+Локальная проверка: таблицы `public.*` из `information_schema` сравниваются с заголовками `### \`public.*\`` в `docs/database/DATABASE_SCHEMA.md` (активные разделы; блок **Legacy / Removed** в заголовках не участвует).
+
+**Запуск:**
+
+```bash
+npm run check:db-docs
+```
+
+**Переменные окружения** (в `.env` или `.env.local`, не коммитить):
+
+- `DATABASE_URL` **или** `SUPABASE_DB_URL` — **URI прямого подключения к Postgres** (Supabase Dashboard → *Project Settings* → *Database* → *Connection string* → URI). Это не `SUPABASE_ANON_KEY` / service role: нужен именно connection string к БД.
+
+**Когда имеет смысл запускать:**
+
+- после миграций, которые добавляют/переименовывают таблицы в `public`;
+- перед релизом / деплоем, если менялась схема — чтобы документация не отставала от production.
+
+При рассинхроне скрипт завершается с кодом **1** и печатает списки «есть в БД, нет в доке» и «есть в доке, нет в БД». Без URI к БД — код **2** и подсказка в консоли.
+
+---
+
 ## Таблицы, ссылающиеся на recipes (по миграциям)
 
 | Таблица | Связь с recipes |
@@ -8,7 +31,6 @@
 | **public.meal_plans_v2** | JSONB `meals`: в слотах хранятся `recipe_id` |
 | **public.chat_history** | колонка `recipe_id` (может быть NULL) |
 | **public.share_refs** | колонка `recipe_id` (FK, ON DELETE CASCADE) |
-| **public.meal_plans** | колонка `recipe_id` (FK); таблица может отсутствовать |
 | **public.shopping_list_items** | колонка `recipe_id`; таблица может отсутствовать |
 | **public.recipe_ingredients** | колонка `recipe_id` (FK) |
 | **public.recipe_steps** | колонка `recipe_id` (FK) |
@@ -88,13 +110,12 @@ npx supabase db push --include-all
 | **favorites_v2** | колонка `recipe_id` | `DELETE` строк, где recipe_id в списке purge |
 | **chat_history** | колонка `recipe_id` | `UPDATE recipe_id = NULL` для purge |
 | **share_refs** | колонка `recipe_id` | `DELETE` строк по purge |
-| **meal_plans** | колонка `recipe_id` | `DELETE` по purge (только если таблица есть) |
 | **shopping_list_items** | колонка `recipe_id` | `DELETE` по purge (только если таблица есть) |
 | **recipe_steps** | колонка `recipe_id` | `DELETE` по purge |
 | **recipe_ingredients** | колонка `recipe_id` | `DELETE` по purge |
 | **recipes** | — | `DELETE` по purge |
 
-Существование `meal_plans` и `shopping_list_items` проверяется через `information_schema`; при отсутствии таблиц шаг пропускается.
+Существование `shopping_list_items` проверяется через `information_schema`; при отсутствии таблицы шаг пропускается.
 
 ### Проверка после миграции (SQL)
 

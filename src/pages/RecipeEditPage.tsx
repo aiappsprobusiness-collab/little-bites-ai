@@ -179,6 +179,7 @@ export default function RecipeEditPage() {
         });
       } else {
         await createRecipe({
+          source: 'manual',
           recipe: recipeData,
           ingredients: ingredientsData,
           steps: stepsData,

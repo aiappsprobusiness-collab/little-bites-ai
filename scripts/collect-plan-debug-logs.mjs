@@ -7,7 +7,7 @@
  *   TEST_USER_EMAIL, TEST_USER_PASSWORD (или HARNESS_TOKEN)
  *
  * Опционально для логов: SUPABASE_ACCESS_TOKEN (PAT от dashboard → account tokens)
- *   Без него — fallback: job + meal_plans snapshot, инструкция в консоль.
+ *   Без него — fallback: job + meal_plans_v2 snapshot, инструкция в консоль.
  *
  * npm run debug:plan
  * node scripts/collect-plan-debug-logs.mjs --mode week --debug

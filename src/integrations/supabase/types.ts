@@ -113,57 +113,6 @@ export type Database = {
         }
         Relationships: []
       }
-      meal_plans: {
-        Row: {
-          child_id: string | null
-          created_at: string
-          id: string
-          is_completed: boolean | null
-          meal_type: Database["public"]["Enums"]["meal_type"]
-          planned_date: string
-          recipe_id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          child_id?: string | null
-          created_at?: string
-          id?: string
-          is_completed?: boolean | null
-          meal_type: Database["public"]["Enums"]["meal_type"]
-          planned_date: string
-          recipe_id: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          child_id?: string | null
-          created_at?: string
-          id?: string
-          is_completed?: boolean | null
-          meal_type?: Database["public"]["Enums"]["meal_type"]
-          planned_date?: string
-          recipe_id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "meal_plans_child_id_fkey"
-            columns: ["child_id"]
-            isOneToOne: false
-            referencedRelation: "children"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "meal_plans_recipe_id_fkey"
-            columns: ["recipe_id"]
-            isOneToOne: false
-            referencedRelation: "recipes"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           avatar_url: string | null

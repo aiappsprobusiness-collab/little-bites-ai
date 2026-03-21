@@ -3,10 +3,7 @@ import { useRecipes } from "@/hooks/useRecipes";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { getMealLabel } from "@/data/mealLabels";
 import { getBenefitLabel } from "@/utils/ageCategory";
-import {
-  buildRecipeBenefitDescription,
-  resolveBenefitProfileContext,
-} from "@/utils/recipeBenefitDescription";
+import { buildRecipeBenefitDescription } from "@/utils/recipeBenefitDescription";
 import { recipeHeroCard } from "@/theme/recipeTokens";
 import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
@@ -93,15 +90,10 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
   const minAgeMonths = recipeDisplay.min_age_months;
   const nutritionGoals = recipeDisplay.nutrition_goals ?? [];
   const benefitLabel = getBenefitLabel(minAgeMonths ?? undefined);
-  const welcomeBenefitContext = resolveBenefitProfileContext({
-    selectedMemberId: null,
-    ageMonths: minAgeMonths,
-  });
   const benefitDescription = buildRecipeBenefitDescription({
     recipeId: (recipe as { id?: string }).id ?? null,
     stableKey: recipeDisplay.title ? `welcome:${recipeDisplay.title}` : "welcome",
     goals: nutritionGoals,
-    context: welcomeBenefitContext,
   });
   const steps = recipeDisplay.steps ?? [];
   const chefAdvice =

@@ -90,6 +90,7 @@ export function useChatRecipes() {
       memberId,
       mealType,
       parsedResult: parsedResultIn,
+      assistantMessageId,
     }: {
       userMessage: string;
       aiResponse: string;
@@ -97,6 +98,8 @@ export function useChatRecipes() {
       mealType?: 'breakfast' | 'lunch' | 'snack' | 'dinner';
       /** Предраспарсенный результат — чат может сразу показать displayText, без повторного парсинга */
       parsedResult?: ParseRecipesFromChatResult;
+      /** Как ChatRecipeCard: стабильный seed до появления recipe.id */
+      assistantMessageId?: string;
     }): Promise<{ savedRecipes: Recipe[]; displayText: string }> => {
       if (!user) throw new Error('User not authenticated');
 
@@ -187,9 +190,14 @@ export function useChatRecipes() {
 
           const newRecipe = await createRecipe({
             source: 'chat_ai',
+            canonicalBenefitPersist: {
+              chatMessageId: assistantMessageId ?? null,
+              nutritionGoals: parsedRecipe.nutrition_goals ?? null,
+            },
             recipe: {
               title: parsedRecipe.title,
-              description: parsedRecipe.description || 'Рецепт предложен AI ассистентом',
+              description: '',
+              nutrition_goals: parsedRecipe.nutrition_goals ?? [],
               cooking_time_minutes: Number.isFinite(cookingMinutes) ? cookingMinutes : null,
               calories: parsedRecipe.calories ?? null,
               proteins: parsedRecipe.proteins ?? null,

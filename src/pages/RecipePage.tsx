@@ -30,7 +30,6 @@ import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import {
   buildRecipeBenefitDescription,
-  resolveBenefitProfileContext,
 } from "@/utils/recipeBenefitDescription";
 import { getMealLabel } from "@/data/mealLabels";
 import { recipeHeroCard } from "@/theme/recipeTokens";
@@ -452,15 +451,9 @@ export default function RecipePage() {
   };
 
   const benefitLabel = getBenefitLabel(selectedMember?.age_months ?? undefined);
-  const benefitProfileContext = resolveBenefitProfileContext({
-    selectedMemberId,
-    ageMonths: selectedMember?.age_months,
-    memberType: selectedMember?.type ?? null,
-  });
   const benefitDescription = buildRecipeBenefitDescription({
     recipeId: id ?? null,
     goals: nutritionGoals,
-    context: benefitProfileContext,
   });
   const recipeNutrition =
     (recipe as { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).calories != null ||
