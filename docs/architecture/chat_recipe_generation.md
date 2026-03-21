@@ -132,7 +132,7 @@
 ## 6. «Любит» (likes) и «Не любит» (dislikes)
 
 - **Dislikes:** трактуются как жёсткое ограничение: в рецепте не должно быть этих продуктов. Участвуют в блокировке запроса (если в тексте запроса есть продукт из dislikes — ответ «заблокировано», с подсказками). В промпте передаются как «Dislikes (STRICT)».
-- **Likes:** мягкое предпочтение. В режиме «Семья» в части запросов (~20%, детерминированно по requestId + userId + дата) в промпт добавляется строка «ПРИОРИТЕТ ЛАЙКОВ СЕМЬИ» через `shouldFavorLikes` и `buildLikesLine` (_shared/likesFavoring.ts). Один профиль — likes тоже могут попадать в контекст как предпочтения (через `preferences`/likes в шаблоне). Чтобы не залипать на одном продукте, при добавлении likes в промпт также подставляется **LIKES_DIVERSITY_RULE** (prompts.ts): не использовать один и тот же любимый продукт как основу подряд, чередовать основные ингредиенты и белки.
+- **Likes:** мягкий сигнал, **не** обязательный ингредиент и **не** часть компактного `[CONTEXT]` в **generateRecipeSystemPromptV3** (`buildPrompt.ts`): в recipe-path список likes туда не подставляется, чтобы модель не воспринимала его как must-use на каждой генерации. Сборка — в **deepseek-chat/index.ts**: `shouldFavorLikes` (~20%, детерминированно по requestId + userId + дата) и при срабатывании — блок `buildRecipeSoftLikesPromptBlock` + **LIKES_DIVERSITY_RULE** (`_shared/chatLikesSignal.ts`, `prompts.ts`). Если в **последних 3** нормализованных названиях чат-рецептов уже есть совпадение с like (подстрока/склонения через `likeMatchesTitleKey`), положительный сигнал про likes **не** добавляется, вместо этого в промпт попадает явный анти-повтор (`buildLikesAntiRepeatPromptLine`). Порядок title keys совпадает с хронологией `chat_history` (после выборки рецептов). Non-recipe path: при favor-roll — смягчённые `buildLikesLine` / `buildLikesLineForProfile` (`likesFavoring.ts`). Шаблоны Free/Premium по-прежнему подставляют **{{preferences}}** (likes или preferences) для текстового чата без JSON-рецепта. Диагностика: env **CHAT_LIKES_DEBUG=true** — JSON-лог `CHAT_LIKES_DEBUG` (request_id, member_type, likes, флаги сигнала/анти-повтора, reason, недавние title keys).
 
 Предпочтения (preferences), включая «вегетарианское», «без молочного» и т.п., подставляются в шаблон и интерпретируются в `STRICT_RULES` (prompts.ts): семантически как запреты (не использовать мясо/рыбу, молочное и т.д.).
 
@@ -155,7 +155,7 @@
 
 ## 9. Anti-duplicate и сохранение рецепта
 
-- **Не повторять недавние рецепты:** Edge запрашивает за последние 14 дней `recipe_id` из `chat_history` по user_id и (в режиме «Семья») по storageMemberId, затем названия рецептов из `recipes`, нормализует их в `titleKey` и формирует строку «Не повторять: …» в промпт (`recentTitleKeysLine`). На клиенте при повторной попытке (если рецепт совпал с последним сохранённым по title) может добавляться `extraSystemSuffix` с просьбой сгенерировать другой рецепт.
+- **Не повторять недавние рецепты:** Edge запрашивает за последние 14 дней `recipe_id` из `chat_history` по user_id и (в режиме «Семья») по storageMemberId, затем названия рецептов из `recipes`, нормализует их в `titleKey` и формирует строку «Не повторять: …» в промпт (`recentTitleKeysLine`). Список ключей упорядочен по времени сообщений в чате (не порядку ответа SQL `.in()`). Тот же упорядоченный список используется для **анти-доминирования likes** (см. §6). На клиенте при повторной попытке (если рецепт совпал с последним сохранённым по title) может добавляться `extraSystemSuffix` с просьбой сгенерировать другой рецепт.
 - **Сохранение в БД:** при успешном ответе и авторизации Edge вызывает RPC `create_recipe_with_steps` с payload, собранным через `canonicalizeRecipePayload` (_shared/recipeCanonical.ts): теги `chat`, `chat_<mealType>`, в режиме «Семья» — `family` и при kid-safety — `kid_1_3_safe`; `min_age_months` / `max_age_months` из `AGE_RANGE_BY_CATEGORY`. Перед сохранением rule-based модуль `inferNutritionGoals` рассчитывает `nutrition_goals` (до 2–3 значений из фиксированного whitelist), и они пишутся в `recipes.nutrition_goals`. Для записи в `recipes`, `usage_events`, `chat_history` в режиме «Семья» используется `member_id` от `resolveFamilyStorageMemberId` (старший член ≥ 12 мес из таблицы `members`), иначе — выбранный member_id.
 
 ---
@@ -173,7 +173,8 @@
 | `familyMode.ts` | getFamilyPromptMembers (исключение младенцев <12 мес, флаг applyKidFilter), buildFamilyMemberDataForChat (объединённые аллергии/dislikes/likes, возраст «взрослый»). |
 | `familyStorageResolver.ts` | resolveFamilyStorageMemberId — member_id для записи в режиме «Семья» (из БД, старший ≥ 12 мес). |
 | `memberConstraints.ts` | getFamilyContextPromptLine, getFamilyContextPromptLineEmpty — строки для шаблона «общий стол». |
-| `likesFavoring.ts` | shouldFavorLikes (≈20% запросов), buildLikesLine — приоритет лайков в промпте. |
+| `likesFavoring.ts` | shouldFavorLikes (≈20% запросов), buildLikesLine / buildLikesLineForProfile — мягкий текст для non-recipe path. |
+| `chatLikesSignal.ts` | detectRepeatedLikesInRecentTitles, likeMatchesTitleKey, buildRecipeSoftLikesPromptBlock, buildLikesAntiRepeatPromptLine — recipe-path likes + анти-повтор по недавним title. |
 | `familyContextBlock.ts` | buildFamilyGenerationContextBlock — server-truth блок контекста для режима «Семья» (без младенцев, без «Children:»/«safe for ALL»). |
 | `logging.ts` | serializeError для логов. |
 | `allergens.ts` | getBlockedTokensFromAllergies (через allergyAliases) — токены для блокировки по аллергиям; используется в blockedTokens. |

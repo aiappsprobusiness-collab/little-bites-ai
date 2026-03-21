@@ -237,16 +237,13 @@ export function generateRecipeSystemPromptV3(
 
   const allergiesSet = new Set<string>();
   const dislikesSet = new Set<string>();
-  const likesSet = new Set<string>();
   const members = targetIsFamily && allMembers.length > 0 ? allMembers : (primaryMember ? [primaryMember] : []);
   members.forEach((m) => {
     m.allergies?.forEach((a) => allergiesSet.add(a));
     (m as MemberData).dislikes?.forEach((d) => d?.trim() && dislikesSet.add(d.trim()));
-    m.likes?.forEach((l) => l?.trim() && likesSet.add(l.trim()));
   });
   const allergiesExclude = allergiesSet.size > 0 ? `ИСКЛЮЧИТЬ (аллергия): ${Array.from(allergiesSet).join(", ")}.` : "";
   const dislikesLine = dislikesSet.size > 0 ? `ИСКЛЮЧИТЬ (не любят): ${Array.from(dislikesSet).join(", ")}.` : "";
-  const likesLine = likesSet.size > 0 ? `SOFT likes: ${Array.from(likesSet).join(", ")}.` : "";
 
   const mealType = options?.mealType?.trim() ?? "";
   const maxCookingTime = options?.maxCookingTime != null && Number.isFinite(options.maxCookingTime) ? String(options.maxCookingTime) : "";
@@ -259,7 +256,6 @@ export function generateRecipeSystemPromptV3(
     allergiesExclude,
     dislikesLine,
   ].filter(Boolean);
-  if (likesLine) contextLines.push(likesLine);
   contextLines.push(`mealType: ${mealType || "—"}. Макс. мин: ${maxCookingTime || "—"}. Порций: ${servings}.`);
   if (recentLine) contextLines.push(recentLine);
 

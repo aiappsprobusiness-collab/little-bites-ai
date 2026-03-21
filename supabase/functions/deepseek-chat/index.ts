@@ -43,12 +43,15 @@ import {
   buildLikesLine,
   buildLikesLineForProfile,
 } from "./domain/family/index.ts";
+import {
+  buildLikesAntiRepeatPromptLine,
+  buildRecipeSoftLikesPromptBlock,
+  detectRepeatedLikesInRecentTitles,
+} from "../_shared/chatLikesSignal.ts";
 import { isExplicitDishRequest, inferMealTypeFromQuery } from "./domain/meal/index.ts";
 import {
   validateRecipe,
   retryFixJson,
-  buildChefAdviceFallback,
-  shouldReplaceChefAdvice,
   sanitizeRecipeText,
   sanitizeMealMentions,
   getMinimalRecipe,
@@ -56,6 +59,10 @@ import {
   sanitizeChefAdviceForPool,
   passesDescriptionQualityGate,
   passesChefAdviceQualityGate,
+  isChefAdviceDebugEnabled,
+  prepareChefAdvicePipeline,
+  hasForbiddenChefAdviceStart,
+  isChefAdviceLowValue,
 } from "./domain/recipe_io/index.ts";
 import { buildRecipeBenefitDescription } from "../_shared/recipeBenefitDescription.ts";
 import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsistencyGuard.ts";
@@ -70,7 +77,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Ограничение длины ответа рецепта (chefAdvice ≤260; description в БД — benefit-builder, не лимит LLM). */
+/** Ограничение длины ответа рецепта (chefAdvice в JSON ≤220; description в БД — benefit-builder, не лимит LLM). */
 const RECIPE_MAX_TOKENS = 1600;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
@@ -168,10 +175,15 @@ async function fetchRecentTitleKeys(
     const recipeIds = (rows ?? []).map((r: { recipe_id?: string }) => r?.recipe_id).filter(Boolean) as string[];
     if (recipeIds.length === 0) return [];
     const { data: recipes } = await supabase.from("recipes").select("id, title").in("id", recipeIds);
+    const byId = new Map<string, { title?: string }>();
+    for (const r of recipes ?? []) {
+      const id = (r as { id?: string }).id;
+      if (id) byId.set(id, r as { title?: string });
+    }
     const seen = new Set<string>();
     const titleKeys: string[] = [];
-    for (const r of recipes ?? []) {
-      const t = (r as { title?: string }).title;
+    for (const id of recipeIds) {
+      const t = byId.get(id)?.title;
       if (t && typeof t === "string") {
         const key = normalizeTitleKey(t);
         if (key && !seen.has(key)) {
@@ -692,20 +704,52 @@ serve(async (req) => {
       }
     }
 
-    // Likes: для recipe-path — короткая строка "LIKES (soft): …"; для non-recipe — полная (buildLikesLine/buildLikesLineForProfile). Правило разнообразия — не залипать на одном продукте.
-    const likesForPrompt = memberDataForPrompt?.likes ?? [];
-    if ((type === "chat" || type === "recipe") && likesForPrompt.length > 0 && shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type })) {
-      if (isRecipeRequest) {
-        const joined = likesForPrompt.filter((l) => typeof l === "string" && l.trim()).map((l) => l.trim()).join(", ");
-        if (joined) {
-          systemPrompt += "\n\nLIKES (soft): " + joined + ".";
-          systemPrompt += "\n\n" + LIKES_DIVERSITY_RULE.trim();
+    // Likes: в recipe-path не в V3 — только здесь: ~20% favor-roll + анти-повтор по недавним title keys (_shared/chatLikesSignal).
+    const likesDebug = Deno.env.get("CHAT_LIKES_DEBUG") === "true";
+    if (type === "chat" || type === "recipe") {
+      const likesForPrompt = (memberDataForPrompt?.likes ?? []).filter((l) => typeof l === "string" && l.trim()).map((l) => l.trim());
+      const favorRoll = shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type });
+      const { repeatedLikes, windowTitles } = detectRepeatedLikesInRecentTitles(likesForPrompt, recentTitleKeys, { window: 3 });
+      const applyPositiveLikes = likesForPrompt.length > 0 && favorRoll && repeatedLikes.length === 0;
+      const applyAntiRepeatLikes = isRecipeRequest && likesForPrompt.length > 0 && repeatedLikes.length > 0;
+
+      if (likesDebug) {
+        let reasonDbg = "no_likes_in_profile";
+        if (likesForPrompt.length > 0) {
+          if (!favorRoll) reasonDbg = "favor_roll_false";
+          else if (repeatedLikes.length > 0) reasonDbg = "liked_ingredient_recent_window";
+          else reasonDbg = "favor_roll_true_no_recent_repeat";
         }
-      } else {
-        const likesLine = targetIsFamily ? buildLikesLine(likesForPrompt) : buildLikesLineForProfile(memberDataForPrompt?.name ?? "профиль", likesForPrompt);
-        if (likesLine) {
-          systemPrompt += "\n\n" + likesLine;
+        console.log(JSON.stringify({
+          tag: "CHAT_LIKES_DEBUG",
+          request_id: requestId,
+          member_type: targetIsFamily ? "family" : "single",
+          likes: likesForPrompt,
+          likes_signal_positive_applied: applyPositiveLikes,
+          likes_anti_repeat_applied: applyAntiRepeatLikes,
+          reason: reasonDbg,
+          recent_title_keys_used: recentTitleKeys.slice(0, 8),
+          antirepeat_window_titles: windowTitles,
+          liked_ingredient_repeat_detected: repeatedLikes.length > 0,
+          repeated_likes: repeatedLikes,
+        }));
+      }
+
+      if (applyAntiRepeatLikes) {
+        const line = buildLikesAntiRepeatPromptLine(repeatedLikes);
+        if (line) systemPrompt += "\n\n" + line;
+      }
+      if (applyPositiveLikes) {
+        const joined = likesForPrompt.join(", ");
+        if (isRecipeRequest) {
+          systemPrompt += "\n\n" + buildRecipeSoftLikesPromptBlock(joined, targetIsFamily);
           systemPrompt += "\n\n" + LIKES_DIVERSITY_RULE.trim();
+        } else {
+          const likesLine = targetIsFamily ? buildLikesLine(likesForPrompt) : buildLikesLineForProfile(memberDataForPrompt?.name ?? "профиль", likesForPrompt);
+          if (likesLine) {
+            systemPrompt += "\n\n" + likesLine;
+            systemPrompt += "\n\n" + LIKES_DIVERSITY_RULE.trim();
+          }
         }
       }
     }
@@ -872,8 +916,20 @@ serve(async (req) => {
       }));
       if (result.stage === "ok" && result.valid) {
         validated = result.valid;
+        const ingNamesGate = Array.isArray(validated.ingredients)
+          ? validated.ingredients.map((i) =>
+            (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")
+          ).filter(Boolean)
+          : [];
+        const stepStrsGate = Array.isArray(validated.steps)
+          ? validated.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean)
+          : [];
         const descOk = passesDescriptionQualityGate(validated.description, { title: validated.title });
-        const adviceOk = passesChefAdviceQualityGate(validated.chefAdvice ?? null);
+        const adviceOk = passesChefAdviceQualityGate(validated.chefAdvice ?? null, {
+          title: validated.title,
+          ingredients: ingNamesGate,
+          steps: stepStrsGate,
+        });
         if (!descOk) {
           safeLog(JSON.stringify({
             tag: "DESCRIPTION_QUALITY_GATE_BYPASSED",
@@ -904,7 +960,22 @@ serve(async (req) => {
               const assistantMessage2 = (data2.choices?.[0]?.message?.content ?? "").trim();
               if (assistantMessage2) {
                 const result2 = validateRecipe(assistantMessage2, parseAndValidateRecipeJsonFromString);
-                if (result2.stage === "ok" && result2.valid && passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null)) {
+                const ing2 = Array.isArray(result2.valid.ingredients)
+                  ? result2.valid.ingredients.map((i) =>
+                    (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")
+                  ).filter(Boolean)
+                  : [];
+                const st2 = Array.isArray(result2.valid.steps)
+                  ? result2.valid.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean)
+                  : [];
+                if (
+                  result2.stage === "ok" && result2.valid &&
+                  passesChefAdviceQualityGate(result2.valid.chefAdvice ?? null, {
+                    title: result2.valid.title,
+                    ingredients: ing2,
+                    steps: st2,
+                  })
+                ) {
                   validated = result2.valid;
                   assistantMessage = assistantMessage2;
                   parseLog("quality retry succeeded", {});
@@ -983,20 +1054,7 @@ serve(async (req) => {
         }
         logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
         // Финальный recipes.description задаётся benefit-builder (см. блок RECIPE_SANITIZED); LLM description не пишем в БД.
-        const advice = validated.chefAdvice ?? "";
-        if (!advice.trim() || shouldReplaceChefAdvice(advice)) {
-          const ingNames = Array.isArray(validated.ingredients)
-            ? validated.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name?: string }).name) : "")).filter(Boolean)
-            : [];
-          const stepStrs = Array.isArray(validated.steps) ? validated.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean) : [];
-          const seed = (validated.title ?? "") + (ingNames[0] ?? "") + (stepStrs[0] ?? "");
-          (validated as Record<string, unknown>).chefAdvice = buildChefAdviceFallback({
-            title: validated.title,
-            ingredients: ingNames,
-            steps: stepStrs,
-            recipeIdSeed: seed,
-          });
-        }
+        // chef_advice: без детерминированных заглушек — финальное значение задаётся в RECIPE_SANITIZED (enforceChefAdvice → null при слабом совете).
         assistantMessage = JSON.stringify(validated);
         responseRecipes = [validated as Record<string, unknown>];
       }
@@ -1073,7 +1131,7 @@ serve(async (req) => {
         : undefined;
       const steps = Array.isArray(recipe.steps) ? recipe.steps.map((s) => (typeof s === "string" ? s : "").trim()).filter(Boolean) : [];
       const recipeIdSeed = title + (keyIngredient ?? "") + (steps[0] ?? "");
-      const adviceForPool = sanitizeChefAdviceForPool(adviceRaw, recipeIdSeed);
+      const adviceForPool = sanitizeChefAdviceForPool(adviceRaw);
       const rawChefAdviceFromModel = (recipe.chefAdvice ?? "").trim();
       safeLog(JSON.stringify({
         tag: "RECIPE_RAW_CHEF_ADVICE",
@@ -1082,12 +1140,41 @@ serve(async (req) => {
         rawChefAdvice: rawChefAdviceFromModel.slice(0, 400),
       }));
       const ingNamesForEnforce = Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : [];
-      (recipe as Record<string, unknown>).chefAdvice = enforceChefAdvice(adviceForPool, {
+      const normalizedChefAdvice = prepareChefAdvicePipeline(adviceForPool);
+      const enforcedChefAdvice = enforceChefAdvice(adviceForPool, {
         title,
-        ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients.map((i) => (i && typeof i === "object" && "name" in i ? String((i as { name: string }).name) : "")).filter(Boolean) : undefined,
+        ingredients: ingNamesForEnforce,
         steps,
         recipeIdSeed,
       });
+      (recipe as Record<string, unknown>).chefAdvice = enforcedChefAdvice;
+      if (isChefAdviceDebugEnabled()) {
+        let rejectionReason: string | undefined;
+        if (enforcedChefAdvice == null) {
+          if (!String(adviceForPool ?? "").trim()) {
+            rejectionReason = "empty_after_pool_sanitize";
+          } else if (hasForbiddenChefAdviceStart(normalizedChefAdvice)) {
+            rejectionReason = "forbidden_start_or_broken_phrase";
+          } else {
+            const low = isChefAdviceLowValue(normalizedChefAdvice, {
+              title,
+              ingredientNames: ingNamesForEnforce,
+              stepTexts: steps,
+            });
+            rejectionReason = low.lowValue ? low.reason : "unknown";
+          }
+        }
+        console.log(JSON.stringify({
+          tag: "CHEF_ADVICE_DEBUG",
+          requestId,
+          recipeTitle: title,
+          raw_chef_advice: rawChefAdviceFromModel,
+          normalized_chef_advice: normalizedChefAdvice,
+          accepted: enforcedChefAdvice != null,
+          rejection_reason: rejectionReason,
+          advice_source: enforcedChefAdvice != null ? "llm" : "null_after_guard",
+        }));
+      }
       const consistency = checkTitleIngredientConsistency(title, ingNamesForEnforce);
       if (consistency.triggered) {
         safeLog(JSON.stringify({
@@ -1110,12 +1197,7 @@ serve(async (req) => {
           (recipe as Record<string, unknown>).title = leak.suggestedTitle.trim();
         }
         if (leak.chefAdviceUseFallback) {
-          (recipe as Record<string, unknown>).chefAdvice = buildChefAdviceFallback({
-            title: recipe.title,
-            ingredients: ingNamesForEnforce,
-            steps,
-            recipeIdSeed,
-          });
+          (recipe as Record<string, unknown>).chefAdvice = null;
         }
       }
       const rawSteps = Array.isArray(recipe.steps) ? recipe.steps : [];
@@ -1156,20 +1238,21 @@ serve(async (req) => {
       const canonicalRecipeDescription = buildRecipeBenefitDescription({
         stableKey: `${requestId}:${finalTitleForBenefit}`,
         goals: inferredGoals,
+        title: finalTitleForBenefit,
       });
       (recipe as Record<string, unknown>).description = canonicalRecipeDescription;
       assistantMessage = JSON.stringify(recipe);
-      const finalChefAdvice = (recipe.chefAdvice as string) ?? "";
-      const chefAdviceReplacedWithFallback = finalChefAdvice !== adviceForPool;
-      if (chefAdviceReplacedWithFallback) {
-        safeLog(JSON.stringify({ tag: "CHEF_ADVICE_REPLACED_WITH_FALLBACK", requestId }));
+      const finalChefAdvice = (recipe.chefAdvice as string | null) ?? null;
+      const finalChefAdviceStr = finalChefAdvice != null && String(finalChefAdvice).trim() !== "" ? String(finalChefAdvice).trim() : "";
+      if (adviceForPool.trim() && !finalChefAdviceStr) {
+        safeLog(JSON.stringify({ tag: "CHEF_ADVICE_REJECTED_NULL_AFTER_GUARD", requestId }));
       }
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
         descriptionSource: "benefit_builder",
         descriptionLength: (recipe.description as string)?.length,
-        chefAdviceLength: finalChefAdvice.length,
+        chefAdviceLength: finalChefAdviceStr.length,
         titleIngredientConsistencyGuardTriggered: consistency.triggered,
         ...(consistency.triggered ? { consistencyMismatchKeys: consistency.mismatchKeys } : {}),
         requestContextLeakGuardTriggered: leak.triggered,
@@ -1338,9 +1421,11 @@ serve(async (req) => {
           savedRecipeId = recipeId ?? null;
           if (savedRecipeId) {
             safeLog(JSON.stringify({ tag: "RECIPE_SAVED", recipeIdSuffix: savedRecipeId.slice(-6), requestId }));
+            const saveTitle = String((validatedRecipe.title ?? "").trim() || "Рецепт");
             const descriptionForDb = buildRecipeBenefitDescription({
               recipeId: savedRecipeId,
               goals: nutritionGoalsForSave,
+              title: saveTitle,
             });
             const { error: descUpdErr } = await supabaseUser.from("recipes").update({ description: descriptionForDb }).eq(
               "id",
