@@ -11,8 +11,11 @@
 - Stage 4.3.3 — plan goal impact visible (badges + copy) (completed)
 - Stage 4.3.4 — goals UI cleanup (minimal chips + no extra copy on cards) (completed)
 - Stage 4.3.5 — goal chips subtle transition + tap feedback (CSS only) (completed)
+- Stage 4.3.6 — deterministic benefit description block (UI-only) (completed)
+- **Current / next:** Stage 4.4 (4.4.1 done) → **Stage 4.4.2** — generate-plan cultural relevance scoring
+- **Pending after 4.4:** Stage 5 — plan page refactor
 
-**После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, Stage 5 = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
+**После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, затем **Stage 4.4** (культурно-осознанное ранжирование общего пула в `generate-plan`), **Stage 5** = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
 
 ## Planned stages
 - [x] Stage 1 — locale + trust_level
@@ -35,7 +38,116 @@
 - [x] Stage 4.3.3 — MealCard: бейдж «Под вашу цель» + короткое пояснение; строка «Подобрано с акцентом…»; при отсутствии совпадений по цели — дисклеймер
 - [x] Stage 4.3.4 — goals UI cleanup: `PlanGoalChipsRow` свёртка до 3 + «…»; убраны сводка «Подобрано с акцентом…» и бейджи/пояснения на карточках плана
 - [x] Stage 4.3.5 — `PlanGoalChipsRow`: плавные переходы состояния + лёгкий `active:scale-[0.98]`; у locked чипов без press-scale
+- [x] Stage 4.3.6 — UI-level deterministic benefit text: `buildRecipeBenefitDescription` + `resolveBenefitProfileContext` (`src/utils/recipeBenefitDescription.ts`); источник текста под заголовком «Польза…» / «Почему это полезно» — `nutrition_goals` + контекст профиля (child / adult / family tone); заголовки и whitelist целей без изменений; `recipes.description` и LLM pipeline не трогались
+- [ ] Stage 4.4 — Cultural / Cuisine-aware Pool Ranking (metadata + soft scoring in generate-plan; see section below)
 - [ ] Stage 5 — plan page refactor
+
+## Stage 4.3.6 — Deterministic benefit description (UI-only)
+
+**Статус:** завершено.
+
+**Не путать с** глобальным description composer / rollback Stage 2.4: это **отдельный UX-слой** только для блока «польза» (подпись под заголовком из `getBenefitLabel`).
+
+- **Где:** страница рецепта (`RecipePage`), карточка в чате (`ChatRecipeCard` / `RecipeHeader`), превью слота в дневном плане (`MealCard` compact + `RecipeCard` preview), по желанию — `FavoriteRecipeSheet`, welcome-блок.
+- **Вход:** нормализованные `nutrition_goals` (те же ключи БД), контекст тона из выбранного профиля (`family` / возраст → child | adult), стабильный seed (`recipe.id` или `stableKey` в чате до сохранения).
+- **Детерминизм:** выбор вариантов из пулов через FNV-1a hash от `recipeId|context|goals` (без `Math.random` на рендере).
+- **Приоритет акцентов:** до двух целей по порядку `brain_development` → `iron_support` → `energy_boost` → `gentle_digestion` → `weight_gain`; `balanced` чаще как база во вводной части, не как отдельный «хвост»-список.
+- **Fallback:** при пустых / нераспознанных целях — нейтральные фразы по контексту (тоже детерминированно).
+
+## Stage 4.4 — Cultural / Cuisine-aware Pool Ranking
+
+**Статус:** в работе — **Stage 4.4.1 завершён** (метаданные + эвристика при save); **4.4.2–4.4.4** впереди. **Не является частью multilang rollout** — это слой **pool / ranking architecture** для общего пула рецептов.
+
+### Проблема: cultural pollution shared pool
+
+Когда пользователи одной языковой/культурной группы массово генерируют узкоспецифичные рецепты, эти рецепты накапливаются в **общем** пуле и из-за сигналов доверия/скора начинают **без причины** чаще попадать в day/week plan **другим** пользователям — даже если для них блюдо воспринимается как «чужое» или нишевое. Этап **не** про запрет кухонь и **не** про привязку языка к кухне.
+
+### Разделение понятий: language ≠ cuisine; locale ≠ proxy для cuisine
+
+- **Язык контента / locale** (`recipes.locale`, `recipe_translations`, UI locale) — про **какой текст** показывать. Это **не** сигнал «какая кухня у пользователя».
+- **Кухня / регион / «знакомость»** — отдельные **культурные** метаданные рецепта для **мягкого** ранжирования в подборе плана.
+- **Нельзя** использовать `locale` как proxy для cuisine: пользователь с `ru` UI может хотеть привычную международную кухню и наоборот.
+
+### Принципы первого прохода (MVP)
+
+- **Лёгкие метаданные:** хранить на рецепте компактные поля (или совместимый путь `metadata` / `tags`, если так быстрее и чище), **без** тяжёлой нормализованной таксономии на первом шаге.
+- **Никаких жёстких фильтров по кухням** в пуле: исключения по культуре **не** вводим; только **скоринг**.
+- **Никакой LLM-классификации в рантайме** плана и **никаких дополнительных токенов** на определение familiarity при генерации меню.
+- **Интеграция:** только **scoring** внутри `generate-plan` (переупорядочивание внутри групп доверия), **без** отдельного UI на первом проходе.
+- **Цель этапа:** уменьшить **доминирование** культурно далёких рецептов в общем ранжировании, **не** устранять разнообразие и **не** блокировать рецепты полностью.
+
+### Целевая минимальная модель данных (первый проход)
+
+На `recipes` (или эквивалентный jsonb/metadata, если выберем это для скорости):
+
+| Поле | Назначение |
+|------|------------|
+| **cuisine** | Грубая метка кухни (строка / короткий enum-текст без отдельной таблицы справочников на MVP). |
+| **region** | Опционально: регион/школа внутри кухни или «широкий» географический якорь (без нормализации). |
+| **familiarity** | Одна из: `classic` \| `adapted` \| `specific` — прикладная шкала для ranking (см. ниже). |
+
+Позже допускается вынесение в нормализованные таблицы; **в Stage 4.4** — не требуется.
+
+### Familiarity (MVP): типы и интерпретация
+
+Используем **прикладную** шкалу для ранжирования (не «modern/experimental»):
+
+| Значение | Смысл |
+|----------|--------|
+| **classic** | Массово понятный, привычный рецепт для широкой аудитории; повседневные знакомые ингредиенты и подача. |
+| **adapted** | Культурно окрашенный рецепт, но уже понятный и приемлемый для широкой аудитории; может иногда попадать в общий план без ощущения «это чужое/нишевое». |
+| **specific** | Явно культурно/регионально специфичный рецепт; **не должен доминировать** в shared pool ranking для широкой аудитории без дополнительных сигналов (профиль «хочу эту кухню», ручной промоут и т.д. — будущее). |
+
+### Как задаётся familiarity на первом проходе (safe-first, без LLM в рантайме)
+
+- Значение выставляется **эвристически** при **создании/сохранении** рецепта и/или в **отдельном backfill/normalization** job позже — **не** при каждом `generate-plan`.
+- **Правила (ориентир):**
+  - Нет `cuisine` или значение вроде **neutral / common / local-default** → чаще **`classic`**.
+  - Известная, широко знакомая кухня, но **не** дефолтная для основной аудитории продукта → **`adapted`**.
+  - Узкая/этнически специфичная кухня → **`specific`**.
+  - Данных недостаточно → **safe default: `adapted`** (нейтральный для скоринга: не бустим как «универсальную классику», но и не наказываем как «узкую специфику»; снижает риск ложных `classic` и резких перекосов).
+
+### Семантика scoring для будущей реализации (`generate-plan`)
+
+- **Приоритет доверия сохраняется:** порядок групп **trusted → starter/seed → candidate** (как сейчас задумано в пуле); культурные сигналы **не** пересекают границы групп доверия.
+- **Внутри одной trust-группы** культурные сигналы только **переупорядочивают** кандидатов.
+- **classic** — небольшой **boost**.
+- **adapted** — **нейтрально** или очень малый boost (согласовать константы при реализации).
+- **specific** — **мягкий штраф** (soft penalty), **не** exclusion из пула.
+- **Несовпадение cuisine** с ожидаемым профилем (когда появится явный сигнал пользователя) **не** блокирует рецепт полностью; до появления профиля — штраф/буст только по familiarity, без «жёсткого» mismatch по locale.
+- **Задача:** уменьшить доминирование культурно далёких рецептов, **сохранить** разнообразие.
+
+### Open questions / risks (Stage 4.4)
+
+- **Перепутать locale и cuisine** — приведёт к неверным штрафам и дискриминации по языку UI.
+- **Слишком жёсткий penalty для `specific`** — вытеснит легитимное разнообразие; держим **soft** penalty.
+- **Переусложнить taxonomy** раньше времени — сопротивляемся отдельным нормализованным таблицам на MVP.
+- **Шумные эвристики на старте** — много `adapted` по умолчанию и итерации по спискам кухонь; логирование для валидации.
+- **Почему не жёсткая сегментация по language:** язык — про отображение текста; общий пул **мультиязычный**; сегментация по language ломает продукт и смешивает задачи i18n и кухни.
+
+### Checklist
+
+- [x] **Stage 4.4.1** — recipe cultural metadata foundation (колонки `cuisine`/`region`/`familiarity`; CHECK; `infer_cultural_familiarity` в БД; TS `inferCulturalFamiliarity` + `create_recipe_with_steps`; каноникализация Edge + `src/utils`; без backfill старых строк; без UI)
+- [ ] **Stage 4.4.2** — generate-plan cultural relevance scoring (внутри trust groups; boost/penalty по familiarity)
+- [ ] **Stage 4.4.3** — logging and validation (метрики, сэмплы, сравнение до/после)
+- [ ] **Stage 4.4.4** — финальный sync docs при закрытии Stage 4.4 (при необходимости — доп. архитектурные заметки)
+
+### Stage 4.4.1 — Cultural metadata foundation (completed)
+
+- **Миграция:** `supabase/migrations/20260321100000_recipe_cultural_metadata_stage441.sql` — `recipes.cuisine`, `recipes.region`, `recipes.familiarity` (nullable), `recipes_familiarity_check`; функция `public.infer_cultural_familiarity(text)`; обновлён `create_recipe_with_steps` (payload: опциональные `cuisine`, `region`, `familiarity`; при отсутствии `familiarity` — вывод из `infer_cultural_familiarity(cuisine)`).
+- **TS (детерминированно, зеркало SQL):** `supabase/functions/_shared/inferCulturalFamiliarity.ts`, `src/utils/inferCulturalFamiliarity.ts`.
+- **Каноникализация:** `supabase/functions/_shared/recipeCanonical.ts`, `src/utils/recipeCanonical.ts` — опциональные поля; всегда передаётся вычисленный `familiarity` (явный или через `inferCulturalFamiliarity`); `cuisine`/`region` только если заданы.
+- **Типы:** `src/integrations/supabase/types.ts` — поля на `recipes`.
+- **Документация:** `docs/database/DATABASE_SCHEMA.md` — колонки и RPC.
+- **Не сделано намеренно:** backfill, UI, scoring в `generate-plan`.
+
+---
+
+## Next implementation prompt (рекомендация для Stage 4.4.2)
+
+В `supabase/functions/generate-plan/index.ts`: при выборе из пула учитывать `recipes.familiarity` (и при необходимости `cuisine`) только как **мягкий** reorder внутри trust-групп; не ломать trust → score; лог для валидации. Константы boost/penalty согласовать с разделом «Семантика scoring» выше.
+
+---
 
 ## Stage 4.3.5 — Goal chips motion (subtle)
 

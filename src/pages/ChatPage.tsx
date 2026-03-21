@@ -1478,6 +1478,7 @@ export default function ChatPage() {
                 memberId={selectedMember?.id}
                 memberName={selectedMember?.name}
                 ageMonths={selectedMember?.age_months ?? undefined}
+                selectedProfileId={selectedMemberId}
                 onOpenArticle={setOpenArticleId}
                 forcePlainText={mode === "help"}
                 isConsultationMode={isConsultationMode}

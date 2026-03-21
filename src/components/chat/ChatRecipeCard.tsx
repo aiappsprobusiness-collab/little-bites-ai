@@ -2,6 +2,10 @@ import type { ParsedIngredient } from "@/utils/parseChatRecipes";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { getMealLabel } from "@/data/mealLabels";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
+import {
+  buildRecipeBenefitDescription,
+  resolveBenefitProfileContext,
+} from "@/utils/recipeBenefitDescription";
 
 export interface ChatRecipeCardRecipe {
   title: string;
@@ -22,6 +26,12 @@ export interface ChatRecipeCardRecipe {
 export interface ChatRecipeCardProps {
   recipe: ChatRecipeCardRecipe;
   ageMonths?: number | null;
+  /** Выбранный профиль в чате: id члена или "family" (из FamilyContext). */
+  selectedProfileId?: string | null;
+  /** Стабильный ключ до появления recipe.id в БД (например id сообщения). */
+  chatMessageId?: string;
+  /** UUID после сохранения рецепта — для детерминированного текста пользы. */
+  savedRecipeId?: string | null;
   showChefTip: boolean;
   ingredientOverrides: Record<number, string>;
   onSubstituteClick: (idx: number, ing: ParsedIngredient) => void;
@@ -30,6 +40,9 @@ export interface ChatRecipeCardProps {
 export function ChatRecipeCard({
   recipe,
   ageMonths,
+  selectedProfileId = null,
+  chatMessageId,
+  savedRecipeId = null,
   showChefTip,
   ingredientOverrides,
   onSubstituteClick,
@@ -44,7 +57,25 @@ export function ChatRecipeCard({
           fats: recipe.fats ?? null,
           carbs: recipe.carbs ?? null,
         }
-      : null;
+        : null;
+
+  const benefitLabel = getBenefitLabel(ageMonths);
+  const benefitContext = resolveBenefitProfileContext({
+    selectedMemberId: selectedProfileId,
+    ageMonths,
+  });
+  const benefitDescription = buildRecipeBenefitDescription({
+    recipeId: savedRecipeId,
+    stableKey: savedRecipeId?.trim()
+      ? undefined
+      : chatMessageId && recipe.title
+        ? `${chatMessageId}:${recipe.title}`
+        : recipe.title
+          ? `title:${recipe.title}`
+          : "chat",
+    goals: recipe.nutrition_goals ?? [],
+    context: benefitContext,
+  });
 
   return (
     <RecipeCard
@@ -53,8 +84,8 @@ export function ChatRecipeCard({
         mealLabel,
         cookingTimeMinutes: recipe.cookingTime ?? null,
         title: recipe.title,
-        benefitLabel: recipe.description ? getBenefitLabel(ageMonths) : null,
-        description: recipe.description ?? null,
+        benefitLabel,
+        description: benefitDescription,
       }}
       ingredients={recipe.ingredients ?? []}
       ingredientOverrides={ingredientOverrides}

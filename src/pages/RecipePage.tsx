@@ -28,6 +28,10 @@ import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
+import {
+  buildRecipeBenefitDescription,
+  resolveBenefitProfileContext,
+} from "@/utils/recipeBenefitDescription";
 import { getMealLabel } from "@/data/mealLabels";
 import { recipeHeroCard } from "@/theme/recipeTokens";
 import type { IngredientOverrides } from "@/components/recipe/IngredientChips";
@@ -433,7 +437,6 @@ export default function RecipePage() {
   const mealType = (recipeDisplay as { meal_type?: string | null }).meal_type ?? null;
   const mealLabel = getMealLabel(mealType);
   const minAgeMonths = recipeDisplay.min_age_months;
-  const description = recipeDisplay.description;
   const nutritionGoals = recipeDisplay.nutrition_goals ?? [];
 
   const handleDeleteRecipe = async () => {
@@ -448,7 +451,17 @@ export default function RecipePage() {
     }
   };
 
-  const benefitLabel = description?.trim() ? getBenefitLabel(selectedMember?.age_months ?? undefined) : null;
+  const benefitLabel = getBenefitLabel(selectedMember?.age_months ?? undefined);
+  const benefitProfileContext = resolveBenefitProfileContext({
+    selectedMemberId,
+    ageMonths: selectedMember?.age_months,
+    memberType: selectedMember?.type ?? null,
+  });
+  const benefitDescription = buildRecipeBenefitDescription({
+    recipeId: id ?? null,
+    goals: nutritionGoals,
+    context: benefitProfileContext,
+  });
   const recipeNutrition =
     (recipe as { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).calories != null ||
     (recipe as { proteins?: number | null }).proteins != null ||
@@ -490,9 +503,7 @@ export default function RecipePage() {
                 </p>
               )}
               <NutritionGoalsChips goals={nutritionGoals} />
-              {description?.trim() && (
-                <p className="text-sm text-muted-foreground leading-[1.6]">{description.trim()}</p>
-              )}
+              <p className="text-sm text-muted-foreground leading-[1.6]">{benefitDescription}</p>
             </div>
           </div>
         </div>

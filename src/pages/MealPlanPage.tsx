@@ -11,6 +11,7 @@ import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/hooks/useAuth";
+import type { MemberTypeV2 } from "@/integrations/supabase/types-v2";
 import { useFamily } from "@/contexts/FamilyContext";
 import { logEmptyOnboardingReason } from "@/utils/authSessionDebug";
 import { usePlanGenerationJob, getStoredJobId, setStoredJobId } from "@/hooks/usePlanGenerationJob";
@@ -995,7 +996,7 @@ export default function MealPlanPage() {
                     onLockedGoalClick={() => {
                       useAppStore.getState().setPaywallReason("plan_goal_select");
                       useAppStore.getState().setPaywallCustomMessage(
-                        "Эти блюда подбираются с учётом цели питания. В Premium и Trial можно выбрать фокус подбора (Железо, Фокус и др.).",
+                        "Эти блюда подбираются с учётом цели питания. В Premium и Trial можно выбрать фокус подбора (Железо, Внимание и др.).",
                       );
                       useAppStore.getState().setShowPaywall(true);
                     }}
@@ -1429,6 +1430,11 @@ export default function MealPlanPage() {
                         fats={previews[recipeId!]?.fats}
                         carbs={previews[recipeId!]?.carbs}
                         nutritionGoals={previews[recipeId!]?.nutrition_goals ?? []}
+                        planBenefitContext={{
+                          selectedMemberId,
+                          ageMonths: isFamilyMode ? undefined : (memberDataForPlan as { age_months?: number | null })?.age_months,
+                          memberType: isFamilyMode ? "family" : ((memberDataForPlan as { type?: MemberTypeV2 })?.type ?? null),
+                        }}
                         isFavorite={isFavoriteForPlan(recipeId!, memberIdForPlan)}
                         onToggleFavorite={async (rid, next) => {
                           const p = previews[rid];

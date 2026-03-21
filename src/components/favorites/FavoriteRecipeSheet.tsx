@@ -7,8 +7,13 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ParsedIngredient } from "@/utils/parseChatRecipes";
 import type { SavedFavorite } from "@/hooks/useFavorites";
+import type { MemberTypeV2 } from "@/integrations/supabase/types-v2";
 import { getRecipeAudience } from "@/utils/recipeAudience";
 import { getBenefitLabel } from "@/utils/ageCategory";
+import {
+  buildRecipeBenefitDescription,
+  resolveBenefitProfileContext,
+} from "@/utils/recipeBenefitDescription";
 import { getMealLabel } from "@/data/mealLabels";
 import { RecipeHeader } from "@/components/recipe/RecipeHeader";
 import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
@@ -47,7 +52,7 @@ interface FavoriteRecipeSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isPremium?: boolean;
-  members: Array<{ id: string; age_months?: number | null }>;
+  members: Array<{ id: string; age_months?: number | null; type?: MemberTypeV2 }>;
 }
 
 export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = false, members }: FavoriteRecipeSheetProps) {
@@ -56,15 +61,25 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
   const audience = getRecipeAudience(favorite.recipe, members);
   const recipe = favorite.recipe;
   const title = typeof recipe?.title === "string" ? recipe.title.trim() : "Рецепт";
-  const description = typeof recipe?.description === "string" ? recipe.description.trim() : "";
+  const recipeIdForBenefit = (favorite as { _recipeId?: string })._recipeId ?? (recipe as { id?: string })?.id ?? null;
+  const nutritionGoals = (recipe as { nutrition_goals?: string[] | null }).nutrition_goals ?? [];
   const cookingTime = recipe?.cookingTime ?? (recipe as { cooking_time?: number })?.cooking_time;
   const numTime = typeof cookingTime === "number" ? cookingTime : typeof cookingTime === "string" ? parseInt(String(cookingTime), 10) : undefined;
   const ingredients = normalizeIngredients(recipe?.ingredients);
   const steps = normalizeSteps(recipe?.steps);
   const mealLabel = getMealLabel((recipe as { mealType?: string })?.mealType) ?? null;
-  const ageMonths = favorite.member_id != null
-    ? members.find((m) => m.id === favorite.member_id)?.age_months ?? undefined
-    : undefined;
+  const linkedMember = favorite.member_id != null ? members.find((m) => m.id === favorite.member_id) : undefined;
+  const ageMonths = linkedMember?.age_months ?? undefined;
+  const benefitProfileContext = resolveBenefitProfileContext({
+    selectedMemberId: favorite.member_id != null ? favorite.member_id : "family",
+    ageMonths,
+    memberType: linkedMember?.type ?? null,
+  });
+  const benefitDescription = buildRecipeBenefitDescription({
+    recipeId: recipeIdForBenefit,
+    goals: nutritionGoals,
+    context: benefitProfileContext,
+  });
   const chefAdvice = (recipe as { chefAdvice?: string }).chefAdvice;
   const advice = (recipe as { advice?: string }).advice;
   const tip = (isPremium && chefAdvice?.trim()) ? chefAdvice.trim() : (advice?.trim() ?? chefAdvice?.trim());
@@ -99,8 +114,8 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
               mealLabel={mealLabel}
               cookingTimeMinutes={numTime ?? null}
               title={title}
-              benefitLabel={description ? getBenefitLabel(ageMonths) : null}
-              description={description || null}
+              benefitLabel={getBenefitLabel(ageMonths)}
+              description={benefitDescription}
               nutrition={nutrition}
             />
             <RecipeIngredientList ingredients={ingredients} servingsCount={1} hideServingsSubtitle />

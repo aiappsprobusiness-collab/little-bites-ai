@@ -85,6 +85,8 @@ interface ChatMessageProps {
   memberName?: string;
   /** Возраст выбранного члена (мес.) для подписи «Польза»: ребёнок / взрослый / нейтрально */
   ageMonths?: number | null;
+  /** Профиль в карусели: id члена или "family" — тон текста блока пользы */
+  selectedProfileId?: string | null;
   /** При клике на ссылку «Читать статью» в ответе ИИ (база знаний) */
   onOpenArticle?: (articleId: string) => void;
   /** Уже распарсенный рецепт (из parseRecipesFromChat), чтобы не показывать «Данные повреждены» при расхождении парсеров */
@@ -175,7 +177,7 @@ function isValidRecipeId(v: string): boolean {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, onOpenArticle, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false, systemHintType, topicKey, topicTitle, topicShortTitle, onOpenAssistant }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, selectedProfileId, onOpenArticle, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false, systemHintType, topicKey, topicTitle, topicShortTitle, onOpenAssistant }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const [addToPlanOpen, setAddToPlanOpen] = useState(false);
@@ -463,6 +465,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 <ChatRecipeCard
                   recipe={effectiveRecipe}
                   ageMonths={ageMonths}
+                  selectedProfileId={selectedProfileId ?? null}
+                  chatMessageId={id}
+                  savedRecipeId={recipeId}
                   showChefTip={showChefTip}
                   ingredientOverrides={ingredientOverrides}
                   onSubstituteClick={() => {

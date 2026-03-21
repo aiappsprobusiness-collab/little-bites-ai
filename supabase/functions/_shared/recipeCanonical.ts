@@ -3,6 +3,8 @@
  * Те же правила, что и в src/utils/recipeCanonical.ts: meal_type, tags, source в POOL_SOURCES.
  */
 
+import { inferCulturalFamiliarity } from "./inferCulturalFamiliarity.ts";
+
 export const POOL_SOURCES = ["seed", "starter", "manual", "week_ai", "chat_ai"] as const;
 type PoolSource = (typeof POOL_SOURCES)[number];
 
@@ -105,6 +107,12 @@ export interface CanonicalizeRecipePayloadInput {
   trust_level?: string | null;
   /** Stage 4: fixed nutrition goals list. */
   nutrition_goals?: string[] | null;
+  /** Stage 4.4: cuisine slug (not locale). Optional; RPC infers familiarity if omitted. */
+  cuisine?: string | null;
+  /** Stage 4.4: optional regional hint. */
+  region?: string | null;
+  /** Stage 4.4: classic | adapted | specific; if omitted, derived via inferCulturalFamiliarity(cuisine). */
+  familiarity?: string | null;
 }
 
 /**
@@ -136,6 +144,9 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     source_lang: rawSourceLang,
     trust_level: rawTrustLevel,
     nutrition_goals: rawNutritionGoals,
+    cuisine: rawCuisine,
+    region: rawRegion,
+    familiarity: rawFamiliarity,
   } = input;
 
   const safeSource = ensurePoolSource(source);
@@ -223,6 +234,16 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     ? [...new Set(rawNutritionGoals.filter((g) => typeof g === "string").map((g) => g.trim().toLowerCase()).filter(Boolean))]
     : [];
 
+  const cuisineTrim =
+    rawCuisine != null && String(rawCuisine).trim() !== "" ? String(rawCuisine).trim() : undefined;
+  const regionTrim =
+    rawRegion != null && String(rawRegion).trim() !== "" ? String(rawRegion).trim() : undefined;
+  const familiarityExplicit =
+    rawFamiliarity != null && String(rawFamiliarity).trim() !== ""
+      ? String(rawFamiliarity).trim()
+      : null;
+  const familiarityResolved = familiarityExplicit ?? inferCulturalFamiliarity(cuisineTrim ?? null);
+
   return {
     user_id,
     member_id: member_id ?? null,
@@ -250,5 +271,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     ...(rawSourceLang != null && rawSourceLang !== "" ? { source_lang: String(rawSourceLang).trim() } : {}),
     ...(rawTrustLevel != null && rawTrustLevel !== "" ? { trust_level: String(rawTrustLevel).trim() } : {}),
     nutrition_goals,
+    ...(cuisineTrim != null ? { cuisine: cuisineTrim } : {}),
+    ...(regionTrim != null ? { region: regionTrim } : {}),
+    familiarity: familiarityResolved,
   };
 }

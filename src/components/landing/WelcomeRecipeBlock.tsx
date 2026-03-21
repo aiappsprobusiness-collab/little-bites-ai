@@ -3,6 +3,10 @@ import { useRecipes } from "@/hooks/useRecipes";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { getMealLabel } from "@/data/mealLabels";
 import { getBenefitLabel } from "@/utils/ageCategory";
+import {
+  buildRecipeBenefitDescription,
+  resolveBenefitProfileContext,
+} from "@/utils/recipeBenefitDescription";
 import { recipeHeroCard } from "@/theme/recipeTokens";
 import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
@@ -81,13 +85,24 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
     advice?: string | null;
     cooking_time_minutes?: number | null;
     min_age_months?: number | null;
+    nutrition_goals?: string[] | null;
   };
   const mealType = (recipeDisplay as { meal_type?: string | null }).meal_type ?? null;
   const mealLabel = getMealLabel(mealType);
   const cookingTime = recipeDisplay.cooking_time_minutes;
-  const description = recipeDisplay.description;
   const minAgeMonths = recipeDisplay.min_age_months;
-  const benefitLabel = description?.trim() ? getBenefitLabel(minAgeMonths ?? undefined) : null;
+  const nutritionGoals = recipeDisplay.nutrition_goals ?? [];
+  const benefitLabel = getBenefitLabel(minAgeMonths ?? undefined);
+  const welcomeBenefitContext = resolveBenefitProfileContext({
+    selectedMemberId: null,
+    ageMonths: minAgeMonths,
+  });
+  const benefitDescription = buildRecipeBenefitDescription({
+    recipeId: (recipe as { id?: string }).id ?? null,
+    stableKey: recipeDisplay.title ? `welcome:${recipeDisplay.title}` : "welcome",
+    goals: nutritionGoals,
+    context: welcomeBenefitContext,
+  });
   const steps = recipeDisplay.steps ?? [];
   const chefAdvice =
     recipeDisplay.chefAdvice ?? (recipeDisplay as { chef_advice?: string | null }).chef_advice;
@@ -138,11 +153,9 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
                   <span>{benefitLabel}</span>
                 </p>
               )}
-              {description?.trim() && (
-                <p className="text-sm text-muted-foreground leading-[1.6]">
-                  {description.trim()}
-                </p>
-              )}
+              <p className="text-sm text-muted-foreground leading-[1.6]">
+                {benefitDescription}
+              </p>
             </div>
           </div>
 

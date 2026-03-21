@@ -293,7 +293,9 @@ export type Database = {
           member_id: string | null
           cooking_time_minutes: number | null
           created_at: string
+          cuisine: string | null
           description: string | null
+          familiarity: string | null
           fats: number | null
           id: string
           is_favorite: boolean | null
@@ -303,6 +305,7 @@ export type Database = {
           min_age_months: number | null
           proteins: number | null
           rating: number | null
+          region: string | null
           source_products: string[] | null
           nutrition_goals: Json
           tags: string[] | null
@@ -318,7 +321,9 @@ export type Database = {
           member_id?: string | null
           cooking_time_minutes?: number | null
           created_at?: string
+          cuisine?: string | null
           description?: string | null
+          familiarity?: string | null
           fats?: number | null
           id?: string
           is_favorite?: boolean | null
@@ -328,6 +333,7 @@ export type Database = {
           min_age_months?: number | null
           proteins?: number | null
           rating?: number | null
+          region?: string | null
           source_products?: string[] | null
           nutrition_goals?: Json
           tags?: string[] | null
@@ -343,7 +349,9 @@ export type Database = {
           member_id?: string | null
           cooking_time_minutes?: number | null
           created_at?: string
+          cuisine?: string | null
           description?: string | null
+          familiarity?: string | null
           fats?: number | null
           id?: string
           is_favorite?: boolean | null
@@ -353,6 +361,7 @@ export type Database = {
           min_age_months?: number | null
           proteins?: number | null
           rating?: number | null
+          region?: string | null
           source_products?: string[] | null
           nutrition_goals?: Json
           tags?: string[] | null
