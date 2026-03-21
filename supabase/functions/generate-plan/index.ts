@@ -17,7 +17,23 @@ import { buildFamilyMemberDataForPlan } from "../_shared/familyMode.ts";
 import { normalizeSlotForWrite } from "../_shared/mealJson.ts";
 import { isFamilyDinnerCandidate } from "../_shared/plan/familyDinnerFilter.ts";
 import { inferPrimaryBase } from "../_shared/primaryBase.ts";
-import { buildLikeTokens, hasLikeMatch, hasLikedTitlesMatch, passesPreferenceFilters, scoreLikeSignal, type LikeMode } from "./preferenceRules.ts";
+import { passesPreferenceFilters } from "./preferenceRules.ts";
+import {
+  type CulturalFamiliarityCountKey,
+  computeCulturalFamiliarityBonus,
+  countCulturalFamiliarityInRecipes,
+  culturalFamiliarityCountKey,
+} from "./culturalPlanScoring.ts";
+import {
+  type CulturalPickComparison,
+  type CulturalSummaryAccumulator,
+  accumulateCulturalSummary,
+  buildCulturalPickComparison,
+  compareScoredForSlot,
+  createEmptyCulturalSummaryAccumulator,
+  finalizeCulturalSummary,
+  type ScoredCandidateRow,
+} from "./culturalPlanDebug.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +64,10 @@ type RecipeRowPool = {
   recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
   score?: number | null;
   trust_level?: string | null;
+  /** Stage 4.4: культурные метаданные (scoring только familiarity на MVP). */
+  cuisine?: string | null;
+  region?: string | null;
+  familiarity?: string | null;
 };
 type MealSlot = { recipe_id?: string; title?: string; plan_source?: "pool" | "ai" };
 
@@ -370,7 +390,7 @@ function trustOrder(t: string | null | undefined): number {
 async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _memberId: string | null, limitCandidates: number): Promise<RecipeRowPool[]> {
   const { data: rows, error } = await supabase
     .from("recipes")
-    .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, recipe_ingredients(name, display_text)")
+    .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text)")
     .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
     .or("trust_level.is.null,trust_level.neq.blocked")
     .order("score", { ascending: false })
@@ -391,14 +411,13 @@ async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _m
   return list;
 }
 
-/** In-memory only: no await. Filters pool and returns best match for slot (scoring: likes, recency, variety, base diversity). */
+/** In-memory only: no await. Filters pool and returns best match for slot (scoring: recency, variety, base diversity, goals; likes не участвуют). */
 function pickFromPoolInMemory(
   pool: RecipeRowPool[],
   mealType: string,
   memberData: MemberDataPool | null,
   excludeRecipeIds: string[],
   excludeTitleKeys: string[],
-  likeMode: LikeMode = "neutral",
   usedBaseCounts?: Record<string, number>,
   goalHints?: {
     preferredGoals?: Set<string>;
@@ -410,15 +429,19 @@ function pickFromPoolInMemory(
     dayGoalUsage?: Record<string, number>;
     /** Stage 4.3: возраст/семья/soft-mode — только скоринг. */
     familyScoring?: FamilyScoringContext | null;
+    /** Stage 4.4.2: day_key / request_id для CHAT_PLAN_CULTURAL_DEBUG. */
+    planPickDebug?: { day_key?: string; request_id?: string };
+    /** Stage 4.4.3: накопление CHAT_PLAN_CULTURAL_SUMMARY (только при CHAT_PLAN_CULTURAL_DEBUG). */
+    culturalSummaryAccumulator?: CulturalSummaryAccumulator | null;
   }
 ): {
   id: string;
   title: string;
-  matchedLike: boolean;
   primaryBase: string;
   goalBonus: number;
   ageBonus: number;
   softBonus: number;
+  culturalFamiliarityKey: CulturalFamiliarityCountKey;
 } | null {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
@@ -447,7 +470,6 @@ function pickFromPoolInMemory(
     return slotSanityCheck(slot, [r.title ?? "", r.description ?? "", ing].join(" "));
   });
   const work = filtered;
-  const likeTokens = buildLikeTokens(memberData);
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
   const selectedGoal = goalHints?.selectedGoalForScoring;
   const dayGoalUsage = goalHints?.dayGoalUsage;
@@ -472,26 +494,96 @@ function pickFromPoolInMemory(
     });
   }
   const ctx: ScoreRecipeCtx = {
-    likeTokens,
-    likeMode,
     recentSignatures,
     usedBaseCounts,
     preferredGoals: goalHints?.preferredGoals,
     blockedGoals: goalHints?.blockedGoals,
     requireBalanced: goalHints?.requireBalanced,
   };
-  const scoredPick = pickBestRecipeForSlotWithGoalScoring(work, ctx, selectedGoal, dayGoalUsage, familyScoring);
+  const includeCulturalComparison = debugCulturalPlan();
+  const scoredPick = pickBestRecipeForSlotWithGoalScoring(
+    work,
+    ctx,
+    selectedGoal,
+    dayGoalUsage,
+    familyScoring,
+    { includeCulturalComparison },
+  );
   if (!scoredPick) return null;
-  const { r: best, goalBonus, ageBonus, softBonus } = scoredPick;
+  const {
+    r: best,
+    goalBonus,
+    ageBonus,
+    softBonus,
+    culturalBonus,
+    baseScore,
+    finalBeforeCultural,
+    finalScoreAfterCultural,
+    culturalComparison,
+  } = scoredPick;
   const primaryBase = inferPrimaryBase(best);
+  const poolFamiliarityCounts = countCulturalFamiliarityInRecipes(work);
+  const winnerKey = culturalFamiliarityCountKey(best.familiarity);
+  if (debugCulturalPlan()) {
+    safeLog("CHAT_PLAN_CULTURAL_DEBUG", {
+      kind: "pick",
+      request_id: goalHints?.planPickDebug?.request_id,
+      day_key: goalHints?.planPickDebug?.day_key,
+      meal_slot: slot,
+      selected_goal: selectedGoal ?? null,
+      trust_level: best.trust_level ?? null,
+      familiarity: best.familiarity ?? null,
+      cuisine: best.cuisine ?? null,
+      region: best.region ?? null,
+      base_score: baseScore,
+      cultural_bonus: culturalBonus,
+      final_score_before_cultural: finalBeforeCultural,
+      final_score_after_cultural: finalScoreAfterCultural,
+      pool_familiarity_counts: poolFamiliarityCounts,
+      winner_familiarity_key: winnerKey,
+      changed_by_cultural: culturalComparison?.changed_by_cultural ?? null,
+    });
+    if (culturalComparison) {
+      safeLog("CHAT_PLAN_CULTURAL_SAMPLE", {
+        request_id: goalHints?.planPickDebug?.request_id ?? null,
+        day_key: goalHints?.planPickDebug?.day_key ?? null,
+        meal_slot: slot,
+        selected_goal: selectedGoal ?? null,
+        pool_size: work.length,
+        trust_level: best.trust_level ?? null,
+        winner_without_cultural: {
+          id: culturalComparison.winner_without_cultural.id,
+          title: culturalComparison.winner_without_cultural.title,
+          familiarity: culturalComparison.winner_without_cultural.familiarity,
+          trust_level: culturalComparison.winner_without_cultural.trust_level,
+          final_before_cultural: culturalComparison.winner_without_cultural.final_before_cultural,
+        },
+        winner_with_cultural: {
+          id: culturalComparison.winner_with_cultural.id,
+          title: culturalComparison.winner_with_cultural.title,
+          familiarity: culturalComparison.winner_with_cultural.familiarity,
+          trust_level: culturalComparison.winner_with_cultural.trust_level,
+          final_after_cultural: culturalComparison.winner_with_cultural.final_after_cultural,
+        },
+        changed_by_cultural: culturalComparison.changed_by_cultural,
+        score_delta_for_winner: culturalComparison.score_delta_for_winner,
+        top_candidates_before_cultural: culturalComparison.top_candidates_before_cultural,
+        top_candidates_after_cultural: culturalComparison.top_candidates_after_cultural,
+      });
+    }
+    const acc = goalHints?.culturalSummaryAccumulator;
+    if (culturalComparison && acc) {
+      accumulateCulturalSummary(acc, culturalComparison, poolFamiliarityCounts, culturalBonus);
+    }
+  }
   return {
     id: best.id,
     title: best.title,
-    matchedLike: hasLikeMatch(best, likeTokens),
     primaryBase,
     goalBonus,
     ageBonus,
     softBonus,
+    culturalFamiliarityKey: winnerKey,
   };
 }
 
@@ -568,26 +660,6 @@ async function fetchTitleKeysByMealTypeFromPlans(supabase: SupabaseClient, userI
   }
   return out;
 }
-async function fetchMealTitlesByDateFromPlans(supabase: SupabaseClient, userId: string, memberId: string | null, dateKeys: string[]): Promise<Record<string, string[]>> {
-  const out: Record<string, string[]> = {};
-  if (dateKeys.length === 0) return out;
-  let q = supabase.from("meal_plans_v2").select("planned_date, meals").eq("user_id", userId).in("planned_date", dateKeys);
-  if (memberId == null) q = q.is("member_id", null);
-  else q = q.eq("member_id", memberId);
-  const { data: rows } = await q;
-  for (const row of rows ?? []) {
-    const dayKey = (row as { planned_date?: string }).planned_date;
-    if (!dayKey) continue;
-    const meals = (row as { meals?: Record<string, { title?: string }> }).meals ?? {};
-    const titles: string[] = [];
-    for (const mealKey of MEAL_KEYS) {
-      const title = meals[mealKey]?.title;
-      if (title) titles.push(title);
-    }
-    out[dayKey] = titles;
-  }
-  return out;
-}
 async function fetchCategoriesByMealTypeFromPlans(supabase: SupabaseClient, userId: string, memberId: string | null, dateKeys: string[]): Promise<Record<string, Set<string>>> {
   const out: Record<string, Set<string>> = {};
   for (const k of MEAL_KEYS) out[k] = new Set<string>();
@@ -616,13 +688,15 @@ const POOL_LIMIT_WEEK = 280;
 /** Min candidates for family dinner before we fall back to pool without family-dinner filter. */
 const MIN_FAMILY_DINNER = 5;
 const debugPool = () => typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_POOL") === "true";
+/** Stage 4.4.2: подробные логи familiarity / cultural bonus (Supabase secrets / env function). */
+const debugCulturalPlan = () => typeof Deno !== "undefined" && Deno.env?.get?.("CHAT_PLAN_CULTURAL_DEBUG") === "true";
 
 /** Weekly diversity: max uses of same primary base (e.g. cottage cheese, oatmeal) per week. */
 const MAX_BASE_PER_WEEK = 5;
 /** Penalty per slot when base is already at or over cap (diminishing priority). */
 const DIVERSITY_BASE_PENALTY = 6;
 
-// ——— Scoring helpers (likes bonus, recency, variety penalty, base diversity) ———
+// ——— Scoring helpers (recency, variety penalty, base diversity) ———
 const STOP_WORDS = new Set(["и", "в", "на", "с", "по", "для", "из", "к", "о", "у", "без", "от", "до", "the", "and", "with", "for", "from", "with"]);
 /** Signatures from week + last days + body.exclude_title_keys (session); used for variety penalty. */
 function buildRecentSignatureSet(existingTitleKeys: string[]): Set<string> {
@@ -636,8 +710,6 @@ function buildRecentSignatureSet(existingTitleKeys: string[]): Set<string> {
   return out;
 }
 type ScoreRecipeCtx = {
-  likeTokens: string[];
-  likeMode: LikeMode;
   recentSignatures: Set<string>;
   /** Week only: counts per primary base for diversity penalty. */
   usedBaseCounts?: Record<string, number>;
@@ -669,7 +741,6 @@ function computeGoalPriorityBonus(
 }
 
 function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecipeCtx): number {
-  const likeScore = scoreLikeSignal(r, ctx.likeTokens, ctx.likeMode);
   const recencyScore = Math.max(0, 3 - Math.floor(rankIndex / 20));
   const titleTokens = (r.title ?? "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((t) => t.length >= 2 && !STOP_WORDS.has(t)).slice(0, 3);
   let varietyPenalty = 0;
@@ -699,40 +770,68 @@ function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecip
   if (ctx.requireBalanced) goalsScore += goals.includes("balanced") ? 10 : -4;
   if (ctx.preferredGoals && goals.some((g) => ctx.preferredGoals!.has(g))) goalsScore += 4;
   if (ctx.blockedGoals && goals.some((g) => ctx.blockedGoals!.has(g))) goalsScore -= 3;
-  return likeScore + recencyScore - varietyPenalty - baseDiversityPenalty + goalsScore;
+  return recencyScore - varietyPenalty - baseDiversityPenalty + goalsScore;
 }
-/** Stage 4.2 + 4.3: base + goal + age + soft; tie-break goal > age > soft. */
+/** Stage 4.2 + 4.3 + 4.4.2: trust tier → затем base + goal + age + soft + cultural; tie-break goal > age > soft. */
 function pickBestRecipeForSlotWithGoalScoring(
   candidates: RecipeRowPool[],
   ctx: ScoreRecipeCtx,
   selectedGoal: string | undefined,
   dayGoalUsage: Record<string, number> | undefined,
   familyScoring: FamilyScoringContext | null | undefined,
-): { r: RecipeRowPool; goalBonus: number; ageBonus: number; softBonus: number } | null {
+  options?: { includeCulturalComparison?: boolean },
+): {
+  r: RecipeRowPool;
+  goalBonus: number;
+  ageBonus: number;
+  softBonus: number;
+  culturalBonus: number;
+  baseScore: number;
+  finalBeforeCultural: number;
+  finalScoreAfterCultural: number;
+  culturalComparison?: CulturalPickComparison | null;
+} | null {
   if (candidates.length === 0) return null;
   shuffleArray(candidates);
   const sel = selectedGoal && GOAL_SET.has(selectedGoal) && selectedGoal !== "balanced" ? selectedGoal : undefined;
   const eligible = familyScoring?.eligibleMembers ?? [];
   const softMode = familyScoring?.softMode === true;
 
-  const scored = candidates.map((r, rankIndex) => {
-    const base = scoreRecipeForSlot(r, rankIndex, ctx);
+  const scored: ScoredCandidateRow[] = candidates.map((r, rankIndex) => {
+    const baseScore = scoreRecipeForSlot(r, rankIndex, ctx);
     const goals = normalizeNutritionGoals(r.nutrition_goals);
     const goalBonus = computeGoalPriorityBonus(goals, sel, dayGoalUsage);
     const ageBonus = computeAgeBonusForRecipe(goals, eligible);
     const softBonus = computeSoftBonusForRecipe(goals, softMode);
-    const finalScore = base + goalBonus + ageBonus + softBonus;
-    return { r, finalScore, goalBonus, ageBonus, softBonus };
+    const culturalBonus = computeCulturalFamiliarityBonus(r.familiarity);
+    const finalBeforeCultural = baseScore + goalBonus + ageBonus + softBonus;
+    const finalScoreAfterCultural = finalBeforeCultural + culturalBonus;
+    return {
+      r,
+      finalScoreAfterCultural,
+      goalBonus,
+      ageBonus,
+      softBonus,
+      culturalBonus,
+      baseScore,
+      finalBeforeCultural,
+      trustTier: trustOrder(r.trust_level),
+    };
   });
-  scored.sort((a, b) => {
-    if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
-    if (b.goalBonus !== a.goalBonus) return b.goalBonus - a.goalBonus;
-    if (b.ageBonus !== a.ageBonus) return b.ageBonus - a.ageBonus;
-    if (b.softBonus !== a.softBonus) return b.softBonus - a.softBonus;
-    return a.r.id < b.r.id ? -1 : 1;
-  });
-  const top = scored[0]!;
-  return { r: top.r, goalBonus: top.goalBonus, ageBonus: top.ageBonus, softBonus: top.softBonus };
+  const culturalComparison = options?.includeCulturalComparison ? buildCulturalPickComparison(scored) : undefined;
+  const sortedForProd = [...scored].sort((a, b) => compareScoredForSlot(a, b, "with_cultural"));
+  const top = sortedForProd[0]!;
+  return {
+    r: top.r,
+    goalBonus: top.goalBonus,
+    ageBonus: top.ageBonus,
+    softBonus: top.softBonus,
+    culturalBonus: top.culturalBonus,
+    baseScore: top.baseScore,
+    finalBeforeCultural: top.finalBeforeCultural,
+    finalScoreAfterCultural: top.finalScoreAfterCultural,
+    culturalComparison,
+  };
 }
 
 serve(async (req) => {
@@ -815,19 +914,18 @@ serve(async (req) => {
       let replaceMemberData: MemberDataPool | null = memberData;
       let replaceMembersForScoring: Array<{ age_months?: number | null }> = [];
       if (memberId == null) {
-        const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, likes, dislikes").eq("user_id", userId);
-        const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
+        const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, dislikes").eq("user_id", userId);
+        const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; dislikes?: string[] | null }>;
         replaceMemberData = buildFamilyMemberDataForPlan(membersList);
         replaceMembersForScoring = membersList;
       } else {
-        const { data: memberRow } = await supabase.from("members").select("age_months, allergies, likes, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
-        const m = memberRow as { age_months?: number | null; allergies?: string[] | null; likes?: string[] | null; dislikes?: string[] | null } | null;
+        const { data: memberRow } = await supabase.from("members").select("age_months, allergies, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
+        const m = memberRow as { age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null } | null;
         if (m) {
           replaceMemberData = {
             ...(memberData ?? {}),
             age_months: m.age_months ?? memberData?.age_months,
             allergies: Array.isArray(m.allergies) && m.allergies.length > 0 ? m.allergies : (memberData?.allergies ?? []),
-            likes: Array.isArray(m.likes) && m.likes.length > 0 ? m.likes : (memberData?.likes ?? []),
             dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
           };
           replaceMembersForScoring = [{ age_months: m.age_months ?? memberData?.age_months ?? null }];
@@ -846,6 +944,7 @@ serve(async (req) => {
       const pool = await fetchPoolCandidates(supabase, userId, effectiveMemberId, POOL_LIMIT_ONE_DAY);
       const poolForReplace =
         memberId == null && mealType === "dinner" ? pool.filter((r) => isFamilyDinnerCandidate(r)) : pool;
+      const replaceCulturalSummaryAcc = debugCulturalPlan() ? createEmptyCulturalSummaryAccumulator() : undefined;
       const replaceGoalHints = {
         preferredGoals: userNutritionGoals.length > 0 ? new Set<string>(userNutritionGoals) : undefined,
         blockedGoals: undefined,
@@ -853,10 +952,12 @@ serve(async (req) => {
         selectedGoalForScoring,
         dayGoalUsage: {},
         familyScoring: replaceFamilyScoring,
+        planPickDebug: { day_key: dayKey, request_id: "replace_slot" },
+        culturalSummaryAccumulator: replaceCulturalSummaryAcc,
       };
-      let picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, "neutral", undefined, replaceGoalHints);
+      let picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
       if (!picked && memberId == null && mealType === "dinner" && poolForReplace.length < MIN_FAMILY_DINNER) {
-        picked = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, "neutral", undefined, replaceGoalHints);
+        picked = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
       }
       if (picked) {
         const oldRecipeId = currentMeals[mealType]?.recipe_id ?? null;
@@ -868,6 +969,9 @@ serve(async (req) => {
         await supabase.rpc("record_recipe_feedback", { p_recipe_id: picked.id, p_action: "added_to_plan" });
         if (oldRecipeId && oldRecipeId !== picked.id) {
           await supabase.rpc("record_recipe_feedback", { p_recipe_id: oldRecipeId, p_action: "replaced_in_plan" });
+        }
+        if (debugCulturalPlan() && replaceCulturalSummaryAcc && replaceCulturalSummaryAcc.total_picks > 0) {
+          safeLog("CHAT_PLAN_CULTURAL_SUMMARY", finalizeCulturalSummary(replaceCulturalSummaryAcc, "replace_slot"));
         }
         return new Response(JSON.stringify({ pickedSource: "pool", newRecipeId: picked.id, title: picked.title, plan_source: "pool", reason: "pool" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -958,20 +1062,19 @@ serve(async (req) => {
     let effectiveMemberData: MemberDataPool | null = memberData;
     let membersForScoring: Array<{ age_months?: number | null }> = [];
     if (memberId == null) {
-      const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, likes, dislikes").eq("user_id", userId);
-      const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; likes?: string[] | null; dislikes?: string[] | null }>;
+      const { data: membersRows } = await supabase.from("members").select("id, name, age_months, allergies, preferences, dislikes").eq("user_id", userId);
+      const membersList = (membersRows ?? []) as Array<{ id: string; name?: string; age_months?: number | null; allergies?: string[] | null; preferences?: string[] | null; dislikes?: string[] | null }>;
       membersForScoring = membersList;
       effectiveMemberData = buildFamilyMemberDataForPlan(membersList);
       safeLog("family_mode", { members_count: membersList.length });
     } else {
-      const { data: memberRow } = await supabase.from("members").select("age_months, allergies, likes, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
-      const m = memberRow as { age_months?: number | null; allergies?: string[] | null; likes?: string[] | null; dislikes?: string[] | null } | null;
+      const { data: memberRow } = await supabase.from("members").select("age_months, allergies, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
+      const m = memberRow as { age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null } | null;
       if (m) {
         effectiveMemberData = {
           ...(memberData ?? {}),
           age_months: m.age_months ?? memberData?.age_months,
           allergies: Array.isArray(m.allergies) && m.allergies.length > 0 ? m.allergies : (memberData?.allergies ?? []),
-          likes: Array.isArray(m.likes) && m.likes.length > 0 ? m.likes : (memberData?.likes ?? []),
           dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
         };
         membersForScoring = [{ age_months: m.age_months ?? memberData?.age_months ?? null }];
@@ -1030,19 +1133,9 @@ serve(async (req) => {
     let usedTitleKeys: string[] = [];
     const usedTitleKeysByMealType: Record<string, Set<string>> = {};
     const usedCategoriesByMealType: Record<string, Set<string>> = {};
-    // "Любит" — мягкий сигнал: максимум один явный like-match в день и не чаще, чем примерно раз в 2-3 дня.
-    const likeTokens = buildLikeTokens(effectiveMemberData);
-    const recentLikedDayWindow: boolean[] = [];
     for (const k of MEAL_KEYS) {
       usedTitleKeysByMealType[k] = new Set<string>();
       usedCategoriesByMealType[k] = new Set<string>();
-    }
-    if (likeTokens.length > 0) {
-      const lookbackKeys = [...getLastNDaysKeys(dayKeys[0], 2)].reverse();
-      const titlesByDate = await fetchMealTitlesByDateFromPlans(supabase, userId, effectiveMemberId, lookbackKeys);
-      for (const key of lookbackKeys) {
-        recentLikedDayWindow.push(hasLikedTitlesMatch(titlesByDate[key] ?? [], likeTokens));
-      }
     }
     if (dayKeys.length === 1 && Array.isArray(body.day_keys) && body.day_keys.length > 0) {
       const otherDayKeys = body.day_keys.filter((k) => typeof k === "string" && k !== dayKeys[0]);
@@ -1090,6 +1183,7 @@ serve(async (req) => {
     const usedBaseCounts: Record<string, number> = dayKeys.length > 1 ? {} : ({} as Record<string, number>);
     const useBaseDiversity = dayKeys.length > 1;
     const weekGoalCounts: Record<string, number> = {};
+    const culturalSummaryAcc = debugCulturalPlan() ? createEmptyCulturalSummaryAccumulator() : undefined;
 
     if (jobId) {
       await supabase.from("plan_generation_jobs").update({ status: "running", progress_total: dayKeys.length, progress_done: 0, updated_at: new Date().toISOString() }).eq("id", jobId);
@@ -1098,7 +1192,6 @@ serve(async (req) => {
     for (let i = 0; i < dayKeys.length; i++) {
       const dayKey = dayKeys[i];
       lastDayKey = dayKey;
-      let dayLikedRecipeCount = 0;
       const dayGoalCounts: Record<string, number> = {};
       if (jobId && !isSingleDay) {
         await supabase.from("plan_generation_jobs").update({ progress_done: i, last_day_key: dayKey, updated_at: new Date().toISOString() }).eq("id", jobId);
@@ -1113,9 +1206,6 @@ serve(async (req) => {
             ? poolCandidates.filter((r) => isFamilyDinnerCandidate(r))
             : poolCandidates;
         const currentSlot = currentMeals[mealKey];
-        const slotLikeMode: LikeMode = likeTokens.length === 0
-          ? "neutral"
-          : (dayLikedRecipeCount > 0 || recentLikedDayWindow.some(Boolean) ? "avoid" : "favor");
         const excludeIdsForSlot = currentSlot?.recipe_id ? [...usedRecipeIds, currentSlot.recipe_id] : usedRecipeIds;
         const excludeTitlesBase = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
         const excludeTitlesForSlot = currentSlot?.title ? [...excludeTitlesBase, normalizeTitleKey(currentSlot.title)] : excludeTitlesBase;
@@ -1153,7 +1243,6 @@ serve(async (req) => {
           effectiveMemberData,
           excludeIdsForSlot,
           excludeTitlesForSlot,
-          slotLikeMode,
           baseCountsForSlot,
           {
             preferredGoals,
@@ -1162,16 +1251,20 @@ serve(async (req) => {
             selectedGoalForScoring,
             dayGoalUsage: { ...dayGoalCounts },
             familyScoring: familyScoringCtx,
+            planPickDebug: { day_key: dayKey, request_id: requestId },
+            culturalSummaryAccumulator: culturalSummaryAcc,
           }
         );
         if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
-          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, slotLikeMode, baseCountsForSlot, {
+          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, baseCountsForSlot, {
             preferredGoals,
             blockedGoals,
             requireBalanced,
             selectedGoalForScoring,
             dayGoalUsage: { ...dayGoalCounts },
             familyScoring: familyScoringCtx,
+            planPickDebug: { day_key: dayKey, request_id: requestId },
+            culturalSummaryAccumulator: culturalSummaryAcc,
           });
         }
         if (picked) {
@@ -1181,7 +1274,6 @@ serve(async (req) => {
           if (oldRecipeId && oldRecipeId !== picked.id) {
             await supabase.rpc("record_recipe_feedback", { p_recipe_id: oldRecipeId, p_action: "replaced_in_plan" });
           }
-          if (picked.matchedLike) dayLikedRecipeCount++;
           totalAgeBonusSum += picked.ageBonus;
           totalSoftBonusSum += picked.softBonus;
           usedRecipeIds.push(picked.id);
@@ -1212,10 +1304,6 @@ serve(async (req) => {
 
       const upsertErr = await upsertMealPlanRow(supabase, userId, effectiveMemberId, dayKey, newMeals);
       if (upsertErr.error && debugPool()) safeWarn("[plan] upsert failed", { dayKey, error: upsertErr.error });
-      if (likeTokens.length > 0) {
-        recentLikedDayWindow.push(dayLikedRecipeCount > 0);
-        while (recentLikedDayWindow.length > 2) recentLikedDayWindow.shift();
-      }
     }
 
     safeLog("CHAT_PLAN_FAMILY_DEBUG", {
@@ -1227,6 +1315,10 @@ serve(async (req) => {
       total_age_bonus: totalAgeBonusSum,
       total_soft_bonus: totalSoftBonusSum,
     });
+
+    if (debugCulturalPlan() && culturalSummaryAcc && culturalSummaryAcc.total_picks > 0) {
+      safeLog("CHAT_PLAN_CULTURAL_SUMMARY", finalizeCulturalSummary(culturalSummaryAcc, requestId));
+    }
 
     if (!isPremiumOrTrial) {
       await supabase.from("usage_events").insert({ user_id: userId, member_id: effectiveMemberId, feature: "plan_fill_day" });

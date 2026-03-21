@@ -232,7 +232,7 @@ export const RecipeJsonSchema = z.object({
   cookingTimeMinutes: z.number().int().min(1).max(240).optional(),
   ingredients: z.array(IngredientSchema).min(3, "at least 3 ingredients required").max(10),
   steps: z.array(z.string().min(1).max(200)).min(1).max(10),
-  chefAdvice: z.string().max(260, "chefAdvice: 2–3 sentences, max 260 characters").nullable().optional(),
+  chefAdvice: z.string().max(220, "chefAdvice: 0–2 коротких предложения, max 220; иначе null").nullable().optional(),
   mealType: z.enum(MEAL_TYPE_VALUES),
   servings: z.number().int().min(1).max(20).optional(),
   nutrition: NutritionSchema,
@@ -431,7 +431,7 @@ export function parseAndValidateRecipeJsonFromString(jsonStr: string): RecipeJso
         .filter((s) => s.length > 0)
         .slice(0, 10),
       chefAdvice: (p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText) != null
-        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 260)
+        ? String(p.chefAdvice ?? p.chef_advice ?? p.chefAdviceText).slice(0, 220)
         : null,
       mealType: normalizedMealType ?? collapsedMealType ?? undefined,
       servings,

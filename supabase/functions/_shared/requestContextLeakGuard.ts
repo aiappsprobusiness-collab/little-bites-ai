@@ -72,7 +72,7 @@ export interface RequestContextLeakResult {
   suggestedTitle?: string;
   /** true — вызывающий должен пересобрать description через composer. */
   descriptionUseComposer: boolean;
-  /** true — вызывающий должен подставить fallback для chef_advice. */
+  /** true — вызывающий должен обнулить chef_advice (не подставлять шаблон). */
   chefAdviceUseFallback: boolean;
 }
 

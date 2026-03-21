@@ -12,7 +12,7 @@
 - Stage 4.3.4 — goals UI cleanup (minimal chips + no extra copy on cards) (completed)
 - Stage 4.3.5 — goal chips subtle transition + tap feedback (CSS only) (completed)
 - Stage 4.3.6 — deterministic benefit description block (UI-only) (completed)
-- **Current / next:** Stage 4.4 (4.4.1 done) → **Stage 4.4.2** — generate-plan cultural relevance scoring
+- **Current / next:** Stage 4.4 — **4.4.1–4.4.3 done** → далее 4.4.4 (финальный sync при закрытии Stage 4.4)
 - **Pending after 4.4:** Stage 5 — plan page refactor
 
 **После Stage 3:** master progress продолжается как Stage 4 = nutrition_traits + goals, затем **Stage 4.4** (культурно-осознанное ранжирование общего пула в `generate-plan`), **Stage 5** = plan page refactor (см. Planned stages ниже). Отдельный **multilang rollout track** описан в [recipe-multilang-rollout-stages.md](./recipe-multilang-rollout-stages.md); его стадии обозначены **ML-4 … ML-9**, чтобы не путать с master stages.
@@ -41,7 +41,7 @@
 - [x] Stage 4.3.4 — goals UI cleanup: `PlanGoalChipsRow` свёртка до 3 + «…»; убраны сводка «Подобрано с акцентом…» и бейджи/пояснения на карточках плана
 - [x] Stage 4.3.5 — `PlanGoalChipsRow`: плавные переходы состояния + лёгкий `active:scale-[0.98]`; у locked чипов без press-scale
 - [x] Stage 4.3.6 — deterministic benefit text: единый модуль `supabase/functions/_shared/recipeBenefitDescription.ts` (реэкспорт в `src/utils/recipeBenefitDescription.ts`); **канонический `recipes.description` в БД** = тот же builder (не LLM / не `recipeDescriptionComposer`); текст пользы **универсальный** (только `nutrition_goals` + seed), **без** child/adult/family в пулах; контекстным остаётся только **заголовок** блока (`getBenefitLabel` по возрасту/профилю)
-- [ ] Stage 4.4 — Cultural / Cuisine-aware Pool Ranking (metadata + soft scoring in generate-plan; see section below)
+- [ ] Stage 4.4 — Cultural / Cuisine-aware Pool Ranking (metadata + soft scoring + observability in generate-plan; see section below)
 - [ ] Stage 5 — plan page refactor
 
 ## Stage 4.3.6 — Deterministic benefit description (UI + БД)
@@ -59,13 +59,18 @@
 - **Sync (implementation):** пулы фраз живут в `_shared/recipeBenefitDescription.ts` (тёплый бытовой тон, без канцелярита; обновляются целиком при смене копирайта); максимальная длина текста после склейки — **220** символов (`BENEFIT_DESCRIPTION_MAX_LENGTH`); фронт импортирует реэкспорт из `src/utils/recipeBenefitDescription.ts`.
 - **Вариативность (структура):** кроме слотов `BALANCED_INTRO` / `GOAL_CLAUSES` / `GENERIC_NUTRI_OPENER`, добавлены **`ENDING_POOL`** (короткий хвост после тире) и **независимый выбор по слотам** `pickFromSlot(seedBase + суффикс)` — разные стримы xorshift, чтобы интро/клаузы/хвост не коррелировали одним mod-8. Для **одного акцента без balanced** — три формата: готовая строка `SINGLE_FULL`, связка `GENERIC_NUTRI_OPENER + клауза + ENDING`, связка `SINGLE_SOFT_PREFIX + клауза + ENDING`. Составные ветки (balanced+1/2 акцента, два акцента без balanced): `… + ENDING` или `… клауза1, и клауза2 + ENDING`.
 
-### Follow-up: `chef_advice` (аудит, без реализации в этой задаче)
+### `chef_advice` — quality gate (2025-03)
 
-Текущий пайплайн смешивает сырой вывод модели, эвристики `sanitizeChefAdviceForPool` / `enforceChefAdvice` и заготовки `buildChefAdviceFallback`; качество часто «шумное» (повторы, обрывки, несогласованность с шагами). Отдельная задача: сузить контракт, убрать дубли с блоком пользы или ввести детерминированный слой по аналогии с description — **в этом changeset не делалось**.
+- **Источник:** по-прежнему LLM (`chefAdvice` в JSON). **Не** детерминированный composer как у `description`.
+- **Пайплайн:** `sanitizeRecipeText` / `sanitizeMealMentions` → `sanitizeChefAdviceForPool` (аллергии/дети/«ты» → пусто, **без** шаблонной подмены) → `prepareChefAdvicePipeline` (тире/обрывы/«ты»→«Вы») → `normalizeChefAdviceText` → `hasForbiddenChefAdviceStart` + **`isChefAdviceLowValue`** → **`enforceChefAdvice` → `string | null`**. Заглушки `buildChefAdviceFallback` в hot path **не** подставляются; при leak guard по `chef_advice` — **`null`**, не fallback.
+- **БД:** миграция `20260321153000_recipes_chef_advice_optional_with_description.sql` — для chat_ai/week_ai/manual достаточно непустого `description`; `chef_advice` и `advice` могут быть оба NULL. **`recipeCanonical`:** убрана подстановка «Подавайте тёплым.» при пустом совете.
+- **Промпт / Zod:** до **220** символов; `null`, если ценного совета нет. **Retry:** второй вызов LLM, если `passesChefAdviceQualityGate` не прошёл (контекст: title, steps, ingredients).
+- **Диагностика:** `CHEF_ADVICE_DEBUG=true` → лог `CHEF_ADVICE_DEBUG` (raw/normalized/accepted/rejection_reason/advice_source).
+- **Файлы:** `domain/recipe_io/chefAdviceQuality.ts`, `sanitizeAndRepair.ts`, `deepseek-chat/index.ts`, `recipeSchema.ts`, `prompts.ts`, `_shared/recipeCanonical.ts`, миграция выше; доки: `docs/architecture/system-prompts-map.md`, `docs/database/DATABASE_SCHEMA.md`.
 
 ## Stage 4.4 — Cultural / Cuisine-aware Pool Ranking
 
-**Статус:** в работе — **Stage 4.4.1 завершён** (метаданные + эвристика при save); **4.4.2–4.4.4** впереди. **Не является частью multilang rollout** — это слой **pool / ranking architecture** для общего пула рецептов.
+**Статус:** **Stage 4.4.1–4.4.3 завершены** (метаданные + эвристика при save + scoring в generate-plan + расширенная диагностика/метрики); **4.4.4** впереди. **Не является частью multilang rollout** — это слой **pool / ranking architecture** для общего пула рецептов.
 
 ### Проблема: cultural pollution shared pool
 
@@ -137,8 +142,8 @@
 ### Checklist
 
 - [x] **Stage 4.4.1** — recipe cultural metadata foundation (колонки `cuisine`/`region`/`familiarity`; CHECK; `infer_cultural_familiarity` в БД; TS `inferCulturalFamiliarity` + `create_recipe_with_steps`; каноникализация Edge + `src/utils`; без backfill старых строк; без UI)
-- [ ] **Stage 4.4.2** — generate-plan cultural relevance scoring (внутри trust groups; boost/penalty по familiarity)
-- [ ] **Stage 4.4.3** — logging and validation (метрики, сэмплы, сравнение до/после)
+- [x] **Stage 4.4.2** — generate-plan cultural relevance scoring (внутри trust groups; boost/penalty по familiarity)
+- [x] **Stage 4.4.3** — logging and validation (метрики, сэмплы, сравнение до/после)
 - [ ] **Stage 4.4.4** — финальный sync docs при закрытии Stage 4.4 (при необходимости — доп. архитектурные заметки)
 
 ### Stage 4.4.1 — Cultural metadata foundation (completed)
@@ -148,13 +153,35 @@
 - **Каноникализация:** `supabase/functions/_shared/recipeCanonical.ts`, `src/utils/recipeCanonical.ts` — опциональные поля; всегда передаётся вычисленный `familiarity` (явный или через `inferCulturalFamiliarity`); `cuisine`/`region` только если заданы.
 - **Типы:** `src/integrations/supabase/types.ts` — поля на `recipes`.
 - **Документация:** `docs/database/DATABASE_SCHEMA.md` — колонки и RPC.
-- **Не сделано намеренно:** backfill, UI, scoring в `generate-plan`.
+- **Не сделано намеренно:** backfill, UI. Scoring в `generate-plan` — **Stage 4.4.2** (см. ниже).
+
+### Stage 4.4.2 — Cultural relevance scoring in generate-plan (completed)
+
+- **Файлы:** `supabase/functions/generate-plan/culturalPlanScoring.ts` (константы + `computeCulturalFamiliarityBonus`, счётчики для логов); `supabase/functions/generate-plan/index.ts` — `fetchPoolCandidates` читает `cuisine`, `region`, `familiarity`; ранжирование в `pickBestRecipeForSlotWithGoalScoring`.
+- **Trust → score:** сначала сравнение по `trustOrder` (trusted → starter/seed → candidate), **затем** по итоговому скору внутри группы. Культурный бонус **не** может поднять рецепт из более низкой trust-группы выше более высокой. `locale` и `cuisine` **не** используются как proxy предпочтений пользователя; в формуле MVP участвует только **`familiarity`**.
+- **Формула (минимально инвазивно):** `final_score_after_cultural = base_score + goal_bonus + age_bonus + soft_bonus + cultural_bonus`, где `base_score` — выход `scoreRecipeForSlot` (**recency, variety, base diversity, preferred/blocked goals**; **likes в generate-plan не входят** — см. `PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md` §4).
+- **Константы** (`culturalPlanScoring.ts`): `CULTURAL_CLASSIC_BONUS = 0.75`, `CULTURAL_ADAPTED_BONUS = 0`, `CULTURAL_SPECIFIC_PENALTY = 0.75` (для `specific` из итога вычитается эта величина). Значения **намеренно малые** относительно goal/age сигналов. `NULL` / неизвестное значение `familiarity` → нейтрально, как **adapted** (`CULTURAL_ADAPTED_BONUS`). Жёстких фильтров по `specific` нет.
+- **Пути:** один и тот же пайплайн для дня, недели и `replace_slot` (все через `pickFromPoolInMemory` → `pickBestRecipeForSlotWithGoalScoring`).
+- **Логи (валидация, Stage 4.4.2):** при `CHAT_PLAN_CULTURAL_DEBUG=true` — базовая строка `CHAT_PLAN_CULTURAL_DEBUG` (kind `pick`: trust_level, familiarity, cuisine, region, base_score, cultural_bonus, final до/после, слот, selected_goal, счётчики familiarity по пулу слота). **Stage 4.4.3** расширил этот режим (см. ниже).
+
+### Stage 4.4.3 — Observability: before/after cultural, samples, summary (completed)
+
+- **Цель:** без изменения боевой формулы и констант (`CULTURAL_*`) — наблюдаемость: как cultural bonus меняет победителя внутри trust-tier, распределения по familiarity/trust, и «кого вытеснил» cultural.
+- **Файлы:** `supabase/functions/generate-plan/culturalPlanDebug.ts` (`compareScoredForSlot`, `buildCulturalPickComparison`, `accumulateCulturalSummary` / `finalizeCulturalSummary`); `supabase/functions/generate-plan/index.ts` — интеграция в `pickFromPoolInMemory` и run/replace.
+- **Compare mode:** для каждого pick внутри `pickBestRecipeForSlotWithGoalScoring` параллельно считается **гипотетический** победитель по `final_before_cultural` (те же tie-breakers, что и для боевого ранжирования, но без cultural) и **боевой** победитель по `final_after_cultural`. Боевой выбор **не меняется** — он по-прежнему сортируется только по `with_cultural`; сравнение только для логов.
+- **Новые логи** (всё при `CHAT_PLAN_CULTURAL_DEBUG=true`):
+  - `CHAT_PLAN_CULTURAL_DEBUG` — дополнено полем `changed_by_cultural` (кратко).
+  - `CHAT_PLAN_CULTURAL_SAMPLE` — на pick: `request_id`, `day_key`, `meal_slot`, `selected_goal`, `pool_size`, победители до/после (компактные id/title/familiarity/trust/score), `changed_by_cultural`, `score_delta_for_winner`, top 5 кандидатов до и после.
+  - `CHAT_PLAN_CULTURAL_SUMMARY` — на run (`replace_slot` или day/week generation): `total_picks`, `changed_by_cultural_count` / `rate`, `winners_by_familiarity_before` / `after`, `winners_by_trust_before` / `after`, `average_cultural_bonus_of_winners`, `total_pool_counts_by_familiarity` (сумма по пикам слотов), счётчики displacement: `classic_over_specific_count`, `adapted_over_specific_count`, `classic_over_adapted_count`, `no_change_count`.
+- **Устарело:** `CHAT_PLAN_CULTURAL_AGGREGATE` заменён на более полный `CHAT_PLAN_CULTURAL_SUMMARY` (в том же debug-режиме).
+- **Тонирование констант:** откладывается до анализа прод-логов; Stage 4.4.3 не меняет `CULTURAL_CLASSIC_BONUS` / `CULTURAL_ADAPTED_BONUS` / `CULTURAL_SPECIFIC_PENALTY`.
+- **Тесты:** `generate-plan/culturalPlanDebug.test.ts` (unit на compare, смену победителя, trust-tier, агрегат).
 
 ---
 
-## Next implementation prompt (рекомендация для Stage 4.4.2)
+## Next implementation prompt (рекомендация для Stage 4.4.4+)
 
-В `supabase/functions/generate-plan/index.ts`: при выборе из пула учитывать `recipes.familiarity` (и при необходимости `cuisine`) только как **мягкий** reorder внутри trust-групп; не ломать trust → score; лог для валидации. Константы boost/penalty согласовать с разделом «Семантика scoring» выше.
+Stage **4.4.4** — финальный sync docs при закрытии Stage 4.4 (при необходимости — доп. архитектурные заметки). Подстройка констант cultural scoring — **после** сбора прод-метрик из `CHAT_PLAN_CULTURAL_SUMMARY` / `CHAT_PLAN_CULTURAL_SAMPLE`.
 
 ---
 
@@ -384,7 +411,7 @@ Checklist:
 - [x] description removed from critical repair path (descOk не запускает repairDescriptionOnly и не входит в needFullRetry; retry только по adviceOk)
 - [x] description-only repair eliminated (вызов repairDescriptionOnly удалён; при плохом description — только composer в блоке validated)
 - [x] request-context leakage guard added (title, description, chef_advice; фразы: в дорогу, с собой, в контейнер, в школу, в поездку, для дороги и др.)
-- [x] pool-unsafe phrases blocked from saved recipe text (при срабатывании: title — мягкое удаление фразы; description — пересбор composer; chef_advice — fallback)
+- [x] pool-unsafe phrases blocked from saved recipe text (при срабатывании: title — мягкое удаление фразы; description — пересбор composer; chef_advice — **null**, см. обновление quality gate)
 - [x] title lexicon guard added (соте → тушёные овощи / тушёное; только безопасные замены)
 - [x] latency audit instrumentation added (backend: validation_done, LATENCY_AUDIT с total_ms и latencyPhase; frontend: performance.mark chat_request_start, chat_request_sent, chat_response_received, chat_recipe_ready; measure chat_tap_to_recipe_ms)
 - [x] docs updated (этот progress-файл)

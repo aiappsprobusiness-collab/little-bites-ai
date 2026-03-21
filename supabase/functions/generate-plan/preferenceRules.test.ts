@@ -1,9 +1,4 @@
-import {
-  buildLikeTokens,
-  hasLikedTitlesMatch,
-  passesPreferenceFilters,
-  scoreLikeSignal,
-} from "./preferenceRules.ts";
+import { passesPreferenceFilters } from "./preferenceRules.ts";
 
 Deno.test("passesPreferenceFilters blocks nut allergy for recipe with орехами in title", () => {
   const allowed = passesPreferenceFilters(
@@ -79,32 +74,5 @@ Deno.test("passesPreferenceFilters blocks dislike found only in ingredients", ()
 
   if (allowed) {
     throw new Error("Expected dislike to block recipe by ingredients");
-  }
-});
-
-Deno.test("scoreLikeSignal favors liked recipe but can also avoid overusing it", () => {
-  const recipe = {
-    title: "Тыквенная каша",
-    description: "С яблоком",
-    recipe_ingredients: [{ name: "тыква" }],
-  };
-  const likeTokens = buildLikeTokens({ likes: ["тыква"] });
-
-  const favorScore = scoreLikeSignal(recipe, likeTokens, "favor");
-  const avoidScore = scoreLikeSignal(recipe, likeTokens, "avoid");
-
-  if (favorScore <= 0) {
-    throw new Error(`Expected positive like score, got ${favorScore}`);
-  }
-  if (avoidScore >= 0) {
-    throw new Error(`Expected negative like score in avoid mode, got ${avoidScore}`);
-  }
-});
-
-Deno.test("hasLikedTitlesMatch detects recent liked meals by title", () => {
-  const matched = hasLikedTitlesMatch(["Суп-пюре из брокколи", "Каша с тыквой"], buildLikeTokens({ likes: ["тыква"] }));
-
-  if (!matched) {
-    throw new Error("Expected recent titles to match like tokens");
   }
 });

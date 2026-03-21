@@ -7,6 +7,7 @@ export {
   type NutritionGoal,
   BENEFIT_DESCRIPTION_MAX_LENGTH,
   buildRecipeBenefitDescription,
+  normalizeBenefitTitleForSeed,
   pickPriorityAccentGoals,
   resolveBenefitDescriptionSeed,
 } from "../../supabase/functions/_shared/recipeBenefitDescription.ts";

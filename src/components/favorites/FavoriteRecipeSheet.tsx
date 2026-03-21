@@ -70,6 +70,7 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
   const benefitDescription = buildRecipeBenefitDescription({
     recipeId: recipeIdForBenefit,
     goals: nutritionGoals,
+    title,
   });
   const chefAdvice = (recipe as { chefAdvice?: string }).chefAdvice;
   const advice = (recipe as { advice?: string }).advice;

@@ -3,7 +3,6 @@ import { getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
 export type PreferenceMemberData = {
   allergies?: string[] | null;
   dislikes?: string[] | null;
-  likes?: string[] | null;
 };
 
 export type PreferenceRecipe = {
@@ -11,8 +10,6 @@ export type PreferenceRecipe = {
   description?: string | null;
   recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
 };
-
-export type LikeMode = "favor" | "avoid" | "neutral";
 
 function normalizePreferenceText(text: string): string {
   return text
@@ -84,10 +81,6 @@ export function buildDislikeTokens(memberData: PreferenceMemberData | null | und
   return tokenizeList(memberData?.dislikes, true);
 }
 
-export function buildLikeTokens(memberData: PreferenceMemberData | null | undefined): string[] {
-  return tokenizeList(memberData?.likes, false);
-}
-
 export function countMatchedPreferenceTokens(text: string, tokens: string[]): number {
   if (!text || tokens.length === 0) return 0;
   const uniqueTokens = [...new Set(tokens)];
@@ -114,21 +107,3 @@ export function passesPreferenceFilters(recipe: PreferenceRecipe, memberData: Pr
   return true;
 }
 
-export function hasLikeMatch(recipe: PreferenceRecipe, likeTokens: string[]): boolean {
-  return recipeMatchesTokens(recipe, likeTokens, true);
-}
-
-export function hasLikedTitlesMatch(titles: string[], likeTokens: string[]): boolean {
-  if (titles.length === 0 || likeTokens.length === 0) return false;
-  const text = normalizePreferenceText(titles.join(" "));
-  return countMatchedPreferenceTokens(text, likeTokens) > 0;
-}
-
-export function scoreLikeSignal(recipe: PreferenceRecipe, likeTokens: string[], mode: LikeMode): number {
-  if (likeTokens.length === 0 || mode === "neutral") return 0;
-  const text = buildRecipePreferenceText(recipe, true);
-  const hits = Math.min(countMatchedPreferenceTokens(text, likeTokens), 3);
-  if (hits === 0) return 0;
-  if (mode === "favor") return hits * 5;
-  return hits * -3;
-}

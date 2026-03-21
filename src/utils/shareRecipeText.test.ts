@@ -76,6 +76,17 @@ describe("shareRecipeText", () => {
     expect(text).toContain("следуйте привычной технологии");
   });
 
+  it("does not include chef advice block when chefAdvice is null", () => {
+    const text = buildRecipeShareText({
+      title: "Блюдо",
+      recipeId: "id",
+      ingredients: [{ name: "Вода", amount: 100, unit: "мл" }],
+      steps: [{ step_number: 1, instruction: "Смешать." }],
+      chefAdvice: null,
+    });
+    expect(text).not.toContain("👩‍🍳✨ Совет от шефа:");
+  });
+
   describe("buildRecipeShareTextShort", () => {
     it("returns recipe share line, title, link and product value", () => {
       const url = "https://momrecipes.online/r/abc123";

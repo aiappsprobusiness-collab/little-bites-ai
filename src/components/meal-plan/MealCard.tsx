@@ -202,6 +202,7 @@ export function MealCard({
         ? buildRecipeBenefitDescription({
             recipeId,
             goals: nutritionGoals ?? [],
+            title: recipeTitle,
           })
         : null;
 

@@ -32,4 +32,8 @@ export {
   sanitizeChefAdviceForPool,
   passesDescriptionQualityGate,
   passesChefAdviceQualityGate,
+  prepareChefAdvicePipeline,
+  isChefAdviceDebugEnabled,
 } from "./sanitizeAndRepair.ts";
+
+export { isChefAdviceLowValue } from "./chefAdviceQuality.ts";

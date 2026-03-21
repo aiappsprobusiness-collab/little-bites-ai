@@ -1,17 +1,20 @@
 /**
- * Санитизация и ремонт рецепта: описание (composer ≤160), совет шефа (≤260), минимальный fallback.
- * Без дополнительных LLM: trim, нормализация пробелов, усечение по границе предложения, детерминированные fallback.
- * Quality gate: запрещённые фразы, абстрактные зачины — замена на fallback.
+ * Санитизация и ремонт рецепта: описание (composer ≤210), совет шефа (quality gate → string | null).
+ * chef_advice: без LLM-fallback заглушек; см. chefAdviceQuality.ts.
  */
 
 import type { RecipeJson } from "../../recipeSchema.ts";
 import { textContainsRequestContextLeak } from "../../../_shared/requestContextLeakGuard.ts";
+import {
+  CHEF_ADVICE_MAX_LENGTH,
+  isChefAdviceLowValue,
+  normalizeChefAdviceText,
+} from "./chefAdviceQuality.ts";
+
+export { CHEF_ADVICE_MAX_LENGTH, isChefAdviceDebugEnabled } from "./chefAdviceQuality.ts";
 
 /** Максимальная длина description (ровно 2 предложения о пользе). */
 export const DESCRIPTION_MAX_LENGTH = 210;
-
-/** Максимальная длина chefAdvice (2–3 предложения, Stage 2.2: восстановлен запас для живого совета). */
-export const CHEF_ADVICE_MAX_LENGTH = 260;
 
 /** Минимальная длина description; ниже — подставляем fallback. */
 const DESCRIPTION_MIN_FOR_VALID = 60;
@@ -311,18 +314,11 @@ const DESCRIPTION_FORBIDDEN_PHRASES = [
   "подходит для",
 ];
 
-/** Хотя бы один маркер конкретики в chefAdvice (техника, температура, порядок). Нет маркера — считаем общим, используем fallback. */
-const CHEF_ADVICE_CONCRETE_MARKERS = [
-  /обжар/i, /запек/i, /прогр/i, /перемеш/i, /добав/i, /в конце/i, /перед подачей/i,
-  /на слабом огне/i, /под крышкой/i, /до золотистой корочки/i, /чтобы соус/i, /чтобы сохранить/i,
-  /дайте настояться/i, /влажными руками/i, /не перегрей/i, /не перевар/i, /убавь/i, /сними с огня/i,
-];
-
 function hasRestaurantTone(text: string): boolean {
   return CHEF_ADVICE_RESTAURANT_PHRASES.some((re) => re.test(text));
 }
 
-/** Проверяет, нужно ли пересобрать совет (запрещённый старт, штамп или ресторанный тон). */
+/** Проверяет, нужно ли отклонить совет (запрещённый старт, штамп или ресторанный тон). */
 export function hasForbiddenChefAdviceStart(text: string | null | undefined): boolean {
   const t = normalizeSpaces(text ?? "");
   if (!t.length) return false;
@@ -331,41 +327,13 @@ export function hasForbiddenChefAdviceStart(text: string | null | undefined): bo
   return CHEF_ADVICE_FORBIDDEN_STARTS.some((re) => re.test(t));
 }
 
-/** Есть ли в совете хотя бы один конкретный кулинарный маркер. */
-function hasConcreteChefAdviceMarker(text: string): boolean {
-  const t = normalizeSpaces(text).toLowerCase();
-  if (t.length < 25) return false;
-  return CHEF_ADVICE_CONCRETE_MARKERS.some((re) => re.test(t));
-}
-
 /** Проверка quality gate для description: запрещённые фразы или штампы. */
 function descriptionFailsQualityGate(desc: string): boolean {
   const t = normalizeSpaces(desc).toLowerCase();
   return DESCRIPTION_FORBIDDEN_PHRASES.some((phrase) => t.includes(phrase));
 }
 
-/** Известные штампы — слишком общий совет без конкретики. */
-const CHEF_ADVICE_GENERIC_STAMPS = [
-  "добавьте специи по вкусу",
-  "подавайте горячим",
-  "украсьте зеленью",
-  "можно подать с хлебом",
-  "храните в холодильнике",
-  "разогрейте перед подачей",
-  "добавьте соль по вкусу",
-  "попробуйте и скорректируйте",
-  "идеально для семейного ужина",
-  "подойдёт на любой случай",
-];
-
-function isGenericChefAdvice(text: string): boolean {
-  const t = normalizeSpaces(text).toLowerCase();
-  if (t.length < 30) return true;
-  if (CHEF_ADVICE_GENERIC_STAMPS.some((stamp) => t.includes(stamp.toLowerCase()) && t.length < 120)) return true;
-  return false;
-}
-
-/** Fallback по типу блюда (каша/пюре, суп, фрикадельки/котлеты, запеканка, оладьи/панкейки). Все ≤260 символов. */
+/** Fallback по типу блюда (каша/пюре, суп, фрикадельки/котлеты, запеканка, оладьи/панкейки). Тесты / legacy; в hot path не подставляем в БД. */
 const CHEF_ADVICE_BY_DISH_TYPE: Record<string, string[]> = {
   porridge: [
     "Добавьте масло в конце — каша станет нежнее. Подавайте тёплой.",
@@ -404,15 +372,6 @@ function detectDishType(title: string, ingredients: string[] = [], steps: string
   return "default";
 }
 
-/** Шаблоны для пула (sanitizeChefAdviceForPool): короткие, ≤260. */
-const POOL_SAFE_CHEF_ADVICE_TEMPLATES: string[] = [
-  "Запекайте первые 15 минут при высокой температуре, затем убавьте — корочка и сок внутри.",
-  "Дайте блюду 2–3 минуты постоять под крышкой — сочность распределится.",
-  "Нарежьте овощи одинаково — приготовятся одновременно. Не переваривайте.",
-  "Добавьте зелень в конце — аромат сохранится. Подавайте тёплым.",
-  "Снимите с огня и дайте постоять 1–2 минуты — соки распределятся.",
-];
-
 /** Триггеры запрещённого контента в chefAdvice: аллергии/ограничения/профиль. */
 const CHEF_ADVICE_POOL_FORBIDDEN_ALLERGIES = /бкм|аллерг|неперенос|без\s+молоч|без\s+лакт|коровь(его|ий)\s+бел(ок|ка)|по\s+аллерг|учитыва(я|йте)\s+аллерг/i;
 /** Дети/возраст/семья/общий стол. */
@@ -420,20 +379,15 @@ const CHEF_ADVICE_POOL_FORBIDDEN_FAMILY = /(дет(ям|и|ский)|реб(ен
 /** «Ты»-обращение. */
 const CHEF_ADVICE_POOL_FORBIDDEN_TY = /(^|[\s,.:;!?])(ты|тебе|твой|твоя|твоё|твоим|твоей|давай|ваш(?:ему|ей|е)?\s*малышу)([\s,.:;!?]|$)/i;
 
-function buildPoolSafeChefAdviceFallback(recipeIdSeed: string): string {
-  const idx = simpleHash(recipeIdSeed) % POOL_SAFE_CHEF_ADVICE_TEMPLATES.length;
-  return (POOL_SAFE_CHEF_ADVICE_TEMPLATES[idx] ?? POOL_SAFE_CHEF_ADVICE_TEMPLATES[0]!).slice(0, CHEF_ADVICE_MAX_LENGTH);
-}
-
 /**
- * Вычищает chefAdvice от упоминаний профиля, аллергий, детей/семьи и «ты». При любом триггере пересобирает совет из pool-safe шаблона (без LLM).
+ * Вычищает chefAdvice от упоминаний профиля, аллергий, детей/семьи и «ты».
+ * При триггере возвращает пустую строку — downstream сохранит null (без шаблонной подмены).
  */
-export function sanitizeChefAdviceForPool(advice: string | null | undefined, recipeIdSeed?: string): string {
+export function sanitizeChefAdviceForPool(advice: string | null | undefined): string {
   const t = normalizeSpaces(advice ?? "");
   if (!t.length) return t;
-  const seed = (recipeIdSeed ?? "default").trim() || "default";
   if (CHEF_ADVICE_POOL_FORBIDDEN_ALLERGIES.test(t) || CHEF_ADVICE_POOL_FORBIDDEN_FAMILY.test(t) || CHEF_ADVICE_POOL_FORBIDDEN_TY.test(t)) {
-    return buildPoolSafeChefAdviceFallback(seed);
+    return "";
   }
   return t;
 }
@@ -477,21 +431,16 @@ function fixChefAdviceRunOnSentences(advice: string): string {
   return t.replace(re, "$1. $2");
 }
 
-/** Обрезает до последнего завершённого предложения и при необходимости добавляет короткое закрывающее (на «Вы»). */
-function fixChefAdviceTruncation(advice: string): string {
+/** Обрезает до последнего завершённого предложения; без добивания универсальными фразами. */
+function fixChefAdviceTruncationNoPadding(advice: string): string {
   let t = normalizeSpaces(advice);
   if (!t.length || !isChefAdviceTruncated(t)) return t;
   const lastEnd = Math.max(t.lastIndexOf("."), t.lastIndexOf("!"), t.lastIndexOf("?"), t.lastIndexOf("…"));
   if (lastEnd > 0) {
-    t = t.slice(0, lastEnd + 1).trim();
-  } else {
-    const lastSpace = t.lastIndexOf(" ");
-    t = (lastSpace > 0 ? t.slice(0, lastSpace) : t).trim() + ".";
+    return t.slice(0, lastEnd + 1).trim();
   }
-  if (countSentences(t) < 2) {
-    t = normalizeSpaces(t + " Подавайте тёплым.").slice(0, CHEF_ADVICE_MAX_LENGTH);
-  }
-  return t;
+  const lastSpace = t.lastIndexOf(" ");
+  return ((lastSpace > 0 ? t.slice(0, lastSpace) : t).trim() + ".").trim();
 }
 
 /** Детерминированный fallback для chefAdvice по типу блюда (без LLM). */
@@ -596,64 +545,59 @@ export function passesDescriptionQualityGate(
   return hasNutritionalMarker(t);
 }
 
-/** Stage 2.2: 1–3 предложения, макс. 260, нет запрещённых зачинов и явного мусора. */
-export function passesChefAdviceQualityGate(advice: string | null | undefined): boolean {
-  const t = normalizeSpaces(advice ?? "");
-  if (t.length < 25) return false;
-  if (t.length > CHEF_ADVICE_MAX_LENGTH) return false;
-  if (countSentences(t) < 1) return false;
-  return !hasForbiddenChefAdviceStart(t);
+/**
+ * Детерминированная подготовка текста совета (без финального low-value gate): для retry и отладки.
+ */
+export function prepareChefAdvicePipeline(advice: string | null | undefined): string {
+  let t = normalizeSpaces(advice ?? "");
+  if (!t.length) return "";
+  t = fixChefAdviceSpuriousPeriods(t);
+  t = fixChefAdviceRunOnSentences(t);
+  t = fixChefAdviceTruncationNoPadding(t);
+  if (CHEF_ADVICE_TY_PATTERN.test(t)) {
+    t = rewriteChefAdviceTyToVy(t);
+  }
+  return normalizeChefAdviceText(t);
 }
 
-/** Добавляет второе предложение, если только одно (без LLM). */
-function ensureTwoSentences(advice: string): string {
-  if (countSentences(advice) >= 2) return advice;
-  const suffix = " Это поможет сохранить вкус и текстуру.";
-  return normalizeSpaces(advice.trim() + suffix).slice(0, CHEF_ADVICE_MAX_LENGTH);
+/** Достаточно ли хорош сырой ответ модели, чтобы не делать quality-retry (тот же пайплайн, что перед сохранением). */
+export function passesChefAdviceQualityGate(
+  advice: string | null | undefined,
+  ctx?: { title?: string; ingredients?: string[]; steps?: string[] },
+): boolean {
+  const prepared = prepareChefAdvicePipeline(advice);
+  if (!prepared.length) return false;
+  if (hasForbiddenChefAdviceStart(prepared)) return false;
+  const low = isChefAdviceLowValue(prepared, {
+    title: ctx?.title,
+    ingredientNames: ctx?.ingredients,
+    stepTexts: ctx?.steps,
+  });
+  return !low.lowValue;
 }
 
 /**
- * Приводит chefAdvice к лимиту. Quality gate: запрещённый старт, нет конкретного маркера, общий штамп → fallback.
- * При «ты» — переписываем на «Вы», без искусственного добивания длины.
+ * Финальный совет для UI/БД: null, если слабый/общий/запрещённый (не подставляем шаблоны).
  */
 export function enforceChefAdvice(
   advice: string | null | undefined,
-  context?: { title?: string; ingredients?: string[]; steps?: string[]; cookingTimeMinutes?: number; recipeIdSeed?: string }
-): string {
-  let t = normalizeSpaces(advice ?? "");
-  const seed = (context?.recipeIdSeed ?? (context?.title ?? "") + (context?.ingredients?.[0] ?? "") + (context?.steps?.[0] ?? "")).trim() || "default";
-
-  t = fixChefAdviceSpuriousPeriods(t);
-  t = fixChefAdviceRunOnSentences(t);
-  t = fixChefAdviceTruncation(t);
-
-  if (CHEF_ADVICE_TY_PATTERN.test(t)) {
-    t = rewriteChefAdviceTyToVy(t);
-    if (countSentences(t) < 2) t = ensureTwoSentences(t);
-    if (t.length > CHEF_ADVICE_MAX_LENGTH) t = truncateAtSentenceBoundary(t, CHEF_ADVICE_MAX_LENGTH);
-    return t.slice(0, CHEF_ADVICE_MAX_LENGTH);
+  context?: { title?: string; ingredients?: string[]; steps?: string[]; cookingTimeMinutes?: number; recipeIdSeed?: string },
+): string | null {
+  const t = prepareChefAdvicePipeline(advice);
+  if (!t.length) return null;
+  if (hasForbiddenChefAdviceStart(t)) return null;
+  const low = isChefAdviceLowValue(t, {
+    title: context?.title,
+    ingredientNames: context?.ingredients,
+    stepTexts: context?.steps,
+  });
+  if (low.lowValue) return null;
+  let out = t;
+  if (out.length > CHEF_ADVICE_MAX_LENGTH) {
+    out = truncateAtSentenceBoundary(out, CHEF_ADVICE_MAX_LENGTH);
+    out = out.slice(0, CHEF_ADVICE_MAX_LENGTH);
   }
-
-  if (hasForbiddenChefAdviceStart(t)) {
-    return buildChefAdviceFallback({
-      title: context?.title,
-      ingredients: context?.ingredients,
-      steps: context?.steps,
-      recipeIdSeed: seed,
-    });
-  }
-  if (t.length < 20) {
-    return buildChefAdviceFallback({
-      title: context?.title,
-      ingredients: context?.ingredients,
-      steps: context?.steps,
-      recipeIdSeed: seed,
-    });
-  }
-  if (t.length > CHEF_ADVICE_MAX_LENGTH) {
-    t = truncateAtSentenceBoundary(t, CHEF_ADVICE_MAX_LENGTH);
-  }
-  return t.slice(0, CHEF_ADVICE_MAX_LENGTH);
+  return out.trim() || null;
 }
 
 /** Один короткий вызов LLM только для description: польза блюда, 2 предложения, макс. 210. */

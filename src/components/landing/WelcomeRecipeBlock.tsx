@@ -94,6 +94,7 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
     recipeId: (recipe as { id?: string }).id ?? null,
     stableKey: recipeDisplay.title ? `welcome:${recipeDisplay.title}` : "welcome",
     goals: nutritionGoals,
+    title: recipeDisplay.title ?? "",
   });
   const steps = recipeDisplay.steps ?? [];
   const chefAdvice =

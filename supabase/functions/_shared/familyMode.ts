@@ -2,6 +2,7 @@
  * Family mode: plan/chat for "general table" (общий стол).
  * - Age restrictions (consistency, salt, spices, infant texture) are NOT applied.
  * - Allergies and dislikes of ALL family members ARE applied.
+ * - Likes are merged for chat prompts (`buildFamilyMemberDataForChat`); `buildFamilyMemberDataForPlan` does not pass likes into plan pool logic.
  * - infant = age_months < 12; we only ignore infant age requirements (puree, separate feeding), not allergies.
  */
 
@@ -93,7 +94,6 @@ export function getFamilyPromptMembers(members: MemberWithAge[]): {
 export function buildFamilyMemberDataForPlan(members: MemberWithAge[]): {
   allergies?: string[];
   preferences?: string[];
-  likes?: string[];
   dislikes?: string[];
   age_months?: number;
   type: string;
@@ -102,7 +102,6 @@ export function buildFamilyMemberDataForPlan(members: MemberWithAge[]): {
   return {
     allergies: c.allergies.length ? c.allergies : undefined,
     preferences: c.preferences.length ? c.preferences : undefined,
-    likes: c.likes.length ? c.likes : undefined,
     dislikes: c.dislikes.length ? c.dislikes : undefined,
     type: "adult",
   };

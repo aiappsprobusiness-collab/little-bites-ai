@@ -68,6 +68,7 @@ function ChatRecipeCard({
     recipeId: benefitSeed.recipeId,
     stableKey: benefitSeed.stableKey ?? null,
     goals: recipe.nutrition_goals ?? [],
+    title: recipe.title ?? "",
   });
 
   return (

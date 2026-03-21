@@ -454,6 +454,7 @@ export default function RecipePage() {
   const benefitDescription = buildRecipeBenefitDescription({
     recipeId: id ?? null,
     goals: nutritionGoals,
+    title: recipeDisplay.title ?? "",
   });
   const recipeNutrition =
     (recipe as { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).calories != null ||

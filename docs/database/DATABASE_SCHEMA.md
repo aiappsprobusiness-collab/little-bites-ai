@@ -124,8 +124,8 @@ RLS: по `auth.uid() = user_id`. Лимиты Free: 1 член семьи, 1 а
 | meal_type           | text                   | breakfast \| lunch \| snack \| dinner |
 | nutrition_goals     | jsonb NOT NULL DEFAULT '[]' | Goals для UI/плана: ключи balanced, iron_support, brain_development, weight_gain, gentle_digestion, energy_boost (CHECK whitelist). Человекочитаемые подписи только на клиенте: `GOAL_LABELS` в `src/utils/nutritionGoals.ts`. |
 | steps               | jsonb DEFAULT '[]'     | Шаги (альтернатива recipe_steps) |
-| chef_advice         | text                   | Совет шефа (опционально для user_custom) |
-| advice              | text                   | |
+| chef_advice         | text                   | Совет шефа (LLM + quality gate в deepseek-chat); может быть NULL. Для `user_custom` опционально. |
+| advice              | text                   | Альтернативный короткий совет; может быть NULL. Для `chat_ai` / `week_ai` / `manual` триггер `recipes_validate_not_empty` требует только непустой `description`, не требует ни `chef_advice`, ни `advice`. |
 | generation_context  | jsonb                  | Контекст генерации |
 | allergens           | text[]                 | |
 | owner_user_id       | uuid → auth.users      | Владелец user_custom; NULL для остальных |

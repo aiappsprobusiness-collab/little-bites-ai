@@ -299,6 +299,7 @@ export function useRecipes(childId?: string) {
           recipeId: seed.recipeId,
           stableKey: seed.stableKey ?? null,
           goals: nutritionGoalsForBenefit,
+          title: titleStr,
         });
         (normalized as Record<string, unknown>).description = preDesc;
       }
@@ -341,6 +342,7 @@ export function useRecipes(childId?: string) {
         const postDesc = buildRecipeBenefitDescription({
           recipeId,
           goals: nutritionGoalsForBenefit,
+          title: titleStr,
         });
         const { error: benefitDescErr } = await supabase.from('recipes').update({ description: postDesc }).eq('id', recipeId);
         if (benefitDescErr) safeWarn('recipes: canonical benefit description update failed', benefitDescErr);

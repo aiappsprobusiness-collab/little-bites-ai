@@ -87,27 +87,33 @@ Deno.test("enforceDescription: результат всегда <= DESCRIPTION_MA
   }
 });
 
-Deno.test("enforceChefAdvice: результат всегда <= CHEF_ADVICE_MAX_LENGTH (220)", () => {
-  const long = "Совет от шефа: повторяем много раз. ".repeat(15);
-  const out = enforceChefAdvice(long, { title: "Суп", recipeIdSeed: "id1" });
-  if (out.length > CHEF_ADVICE_MAX_LENGTH) {
-    throw new Error(`Expected chefAdvice length <= ${CHEF_ADVICE_MAX_LENGTH}, got ${out.length}`);
+Deno.test("enforceChefAdvice: длинный конкретный совет укладывается в лимит или null", () => {
+  const pad = "Держите 12 минут при 190°C, затем 5 минут при 170°C на решётке. ";
+  const long = pad.repeat(10) + "Курицу посолите за час до запекания.";
+  const out = enforceChefAdvice(long, {
+    title: "Курица в духовке",
+    ingredients: ["Курица"],
+    steps: ["Запекайте."],
+  });
+  if (out != null && out.length > CHEF_ADVICE_MAX_LENGTH) {
+    throw new Error(`Expected length <= ${CHEF_ADVICE_MAX_LENGTH} when non-null, got ${out.length}`);
   }
 });
 
-Deno.test("enforceChefAdvice: запрещённые старты заменяются", () => {
-  if (!hasForbiddenChefAdviceStart("Подавайте горячим.")) {
-    throw new Error("Expected 'Подавайте' to be detected as forbidden start");
+Deno.test("hasForbiddenChefAdviceStart: пафосные зачины ловятся", () => {
+  if (!hasForbiddenChefAdviceStart("Для максимальной нежности не перегревайте.")) {
+    throw new Error("Expected 'Для максимальной' forbidden start");
   }
-  if (!hasForbiddenChefAdviceStart("Можно украсить зеленью.")) {
-    throw new Error("Expected 'Можно' to be detected as forbidden start");
+  if (!hasForbiddenChefAdviceStart("Совет: добавьте соль.")) {
+    throw new Error("Expected 'Совет:' forbidden start");
   }
-  const fixed = enforceChefAdvice("Подавайте горячим. Не перегревайте.", { title: "Суп", recipeIdSeed: "seed1" });
-  if (hasForbiddenChefAdviceStart(fixed)) {
-    throw new Error(`Enforced chefAdvice must not start with forbidden phrase, got: ${fixed.slice(0, 50)}`);
-  }
-  if (fixed.length > CHEF_ADVICE_MAX_LENGTH) {
-    throw new Error(`Enforced chefAdvice must be <= ${CHEF_ADVICE_MAX_LENGTH}, got ${fixed.length}`);
+  const nullAdvice = enforceChefAdvice("Для максимальной нежности подавайте тёплым.", {
+    title: "Суп",
+    ingredients: ["Вода"],
+    steps: ["Варите."],
+  });
+  if (nullAdvice != null) {
+    throw new Error(`Expected null when forbidden start, got: ${nullAdvice}`);
   }
 });
 
@@ -156,39 +162,39 @@ Deno.test("enforceDescription: никогда не заканчивается н
   }
 });
 
-Deno.test("enforceChefAdvice: «Вкус насыщенного вкуса» пересобирается в fallback", () => {
+Deno.test("enforceChefAdvice: «Вкус насыщенного вкуса» → null", () => {
   const broken = "Вкус насыщенного вкуса добавьте немного чеснока перед запеканием.";
-  const out = enforceChefAdvice(broken, { title: "Курица", recipeIdSeed: "s1" });
-  if (/вкус\s+насыщенного\s+вкуса/i.test(out)) {
-    throw new Error(`Broken phrase must be replaced, got: ${out}`);
-  }
-  if (out.length > CHEF_ADVICE_MAX_LENGTH) {
-    throw new Error(`chefAdvice must be <= ${CHEF_ADVICE_MAX_LENGTH}, got ${out.length}`);
-  }
-  if (out.length < 20) {
-    throw new Error(`Rebuilt chefAdvice must be non-empty, got: ${out}`);
+  const out = enforceChefAdvice(broken, { title: "Курица", ingredients: ["Курица"], steps: ["Запекайте."] });
+  if (out != null) {
+    throw new Error(`Expected null for broken stamp phrase, got: ${out}`);
   }
 });
 
-Deno.test("enforceChefAdvice: запрещённые старты и fallback укладываются в лимит", () => {
-  const templates = [
-    enforceChefAdvice("Подавайте горячим.", { title: "Суп", recipeIdSeed: "a" }),
-    enforceChefAdvice("Можно украсить зеленью.", { title: "Салат", recipeIdSeed: "b" }),
-    buildChefAdviceFallback({ title: "Каша", recipeIdSeed: "c" }),
-  ];
-  for (const t of templates) {
-    if (t.length > CHEF_ADVICE_MAX_LENGTH) {
-      throw new Error(`chefAdvice must be <= ${CHEF_ADVICE_MAX_LENGTH}, got ${t.length}: ${t.slice(0, 50)}`);
-    }
-    if (!/[.!?…]\s*$/.test(t)) {
-      throw new Error(`chefAdvice must end with .!?…, got: ${t.slice(-20)}`);
-    }
+Deno.test("enforceChefAdvice: слабый совет → null; buildChefAdviceFallback ≤ лимит (legacy)", () => {
+  const weak = enforceChefAdvice("Подавайте горячим и сразу к столу.", {
+    title: "Суп",
+    ingredients: ["Вода"],
+    steps: ["Варите суп."],
+  });
+  if (weak != null) {
+    throw new Error(`Expected null for generic serving advice, got: ${weak}`);
+  }
+  const fb = buildChefAdviceFallback({ title: "Каша", recipeIdSeed: "c" });
+  if (fb.length > CHEF_ADVICE_MAX_LENGTH) {
+    throw new Error(`Fallback must be <= ${CHEF_ADVICE_MAX_LENGTH}, got ${fb.length}`);
   }
 });
 
 Deno.test("enforceChefAdvice: «ты»-обращение переписывается на «Вы»", () => {
-  const withTy = "Если ты хочешь корочку, запекай первые 15 минут при 210.";
-  const out = enforceChefAdvice(withTy, { title: "Курица", recipeIdSeed: "s1" });
+  const withTy = "Если ты хочешь корочку, запекай первые 15 минут при 210°C.";
+  const out = enforceChefAdvice(withTy, {
+    title: "Курица",
+    ingredients: ["Курица"],
+    steps: ["Разогрейте духовку."],
+  });
+  if (out == null) {
+    throw new Error("Expected non-null after ty rewrite for concrete advice");
+  }
   if (/\b(ты|тебе|твой|твоя|твоё|твоим|твоей)\b/i.test(out)) {
     throw new Error(`chefAdvice must not contain ты/тебе/твой after rewrite, got: ${out}`);
   }
@@ -197,32 +203,28 @@ Deno.test("enforceChefAdvice: «ты»-обращение переписывае
   }
 });
 
-Deno.test("sanitizeChefAdviceForPool: вычищает БКМ/аллергии/детей/семью/ты", () => {
+Deno.test("sanitizeChefAdviceForPool: БКМ/аллергии/детей/семью/ты → пустая строка", () => {
   const forbidden = [
     "Учитывая аллергию на БКМ, запекайте при 180°C.",
     "Подойдёт для детей и семьи. Общий стол.",
     "Если ты хочешь корочку, запекай при 210.",
   ];
   for (const raw of forbidden) {
-    const out = sanitizeChefAdviceForPool(raw, "seed1");
-    if (/бкм|аллерг|детям|семь(я|и)|общ(ий|его)\s*стол/i.test(out)) {
-      throw new Error(`sanitizeChefAdviceForPool must remove forbidden words, got: ${out}`);
-    }
-    if (/(^|[\s,.:;!?])(ты|тебе|твой|твоя|твоё)([\s,.:;!?]|$)/i.test(out)) {
-      throw new Error(`sanitizeChefAdviceForPool must remove ты-обращение, got: ${out}`);
+    const out = sanitizeChefAdviceForPool(raw);
+    if (out.length > 0) {
+      throw new Error(`sanitizeChefAdviceForPool must return empty when unsafe, got: ${out}`);
     }
   }
 });
 
-Deno.test("enforceChefAdvice: результат заканчивается на .!?…", () => {
-  const cases = [
-    enforceChefAdvice("Запекайте 15 минут при 200°C. Это даст корочку.", { recipeIdSeed: "a" }),
-    enforceChefAdvice("Добавьте зелень в конце.", { recipeIdSeed: "b" }),
-  ];
-  for (const out of cases) {
-    if (!/[.!?…]\s*$/.test(out)) {
-      throw new Error(`chefAdvice must end with .!?…, got: ${out.slice(-20)}`);
-    }
+Deno.test("enforceChefAdvice: конкретный совет заканчивается на .!?…", () => {
+  const out = enforceChefAdvice("Запекайте курицу первые 15 минут при 200°C, затем убавьте до 170°C.", {
+    title: "Курица",
+    ingredients: ["Курица"],
+    steps: ["Запекайте в духовке."],
+  });
+  if (out == null || !/[.!?…]\s*$/.test(out)) {
+    throw new Error(`Expected non-null ending with punctuation, got: ${out}`);
   }
 });
 
@@ -250,13 +252,10 @@ Deno.test("enforceDescription: штамп «идеально подходит» 
   }
 });
 
-Deno.test("enforceChefAdvice: «Для максимальной сочности» заменяется на fallback", () => {
+Deno.test("enforceChefAdvice: «Для максимальной сочности» / «это позволит» → null", () => {
   const bad = "Для максимальной сочности запекайте при 200°C. Это позволит сохранить сок.";
-  const out = enforceChefAdvice(bad, { title: "Курица", recipeIdSeed: "y" });
-  if (/для максимальной|это позволит/i.test(out)) {
-    throw new Error(`Forbidden start must be replaced, got: ${out.slice(0, 80)}`);
-  }
-  if (out.length > CHEF_ADVICE_MAX_LENGTH) {
-    throw new Error(`chefAdvice must be <= ${CHEF_ADVICE_MAX_LENGTH}, got ${out.length}`);
+  const out = enforceChefAdvice(bad, { title: "Курица", ingredients: ["Курица"], steps: ["Запекайте."] });
+  if (out != null) {
+    throw new Error(`Expected null, got: ${out}`);
   }
 });

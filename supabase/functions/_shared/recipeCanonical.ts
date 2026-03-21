@@ -225,9 +225,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
 
   const chefAdviceVal = chef_advice != null && String(chef_advice).trim() !== "" ? String(chef_advice).trim() : null;
   const adviceVal = advice != null && String(advice).trim() !== "" ? String(advice).trim() : null;
-  const needsAdvice = (safeSource === "chat_ai" || safeSource === "week_ai" || safeSource === "manual")
-    && !chefAdviceVal && !adviceVal;
-  const finalChefAdvice = chefAdviceVal ?? (needsAdvice ? "Подавайте тёплым." : null);
+  /** chef_advice и advice могут быть оба null — триггер БД не требует совета при непустом description. */
+  const finalChefAdvice = chefAdviceVal;
   const finalAdvice = adviceVal ?? null;
 
   const nutrition_goals = Array.isArray(rawNutritionGoals)
