@@ -217,7 +217,6 @@ export default function ChatPage() {
 
   const { article: openArticle, isLoading: isArticleLoading } = useArticle(openArticleId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const prefillSentRef = useRef(false);
   const lastAppliedPrefillRef = useRef<string | null>(null);
   const prefillQueryAppliedRef = useRef(false);
   const prevProfileKeyRef = useRef<string>("");
@@ -1186,8 +1185,11 @@ export default function ChatPage() {
     }
   }, [input, isChatting, canGenerate, isPremium, hasAccess, usedToday, messages, selectedMemberId, selectedMember, members, memberIdForSave, chat, saveRecipesFromChat, saveChat, toast, markHintsSeen]);
 
-  // Обработка предзаполненного сообщения из state (ScanPage — только для recipes)
-  // В help используем только query prefill (?prefill=...)
+  /**
+   * Предзаполнение input из location.state (План → чат, скан продуктов и т.д.).
+   * Не требует пустой истории: раньше при messages.length > 0 текст терялся.
+   * prefillOnly === true (план) — только вставка; prefillOnly !== true (напр. Scan без флага) — автоотправка через 800 ms.
+   */
   useEffect(() => {
     if (mode === "help") return;
     const state = location.state as {
@@ -1204,23 +1206,22 @@ export default function ChatPage() {
       lastAppliedPrefillRef.current = null;
       return;
     }
-    if (!isChatBootstrapped || isLoadingHistory || messages.length > 0) return;
+    if (!isChatBootstrapped || isLoadingHistory) return;
     if (lastAppliedPrefillRef.current === prefillText) return;
     lastAppliedPrefillRef.current = prefillText;
-    prefillSentRef.current = true;
     setInput(prefillText);
     const { prefillMessage: _pm, prefillOnly: _po, ...restState } = state ?? {};
     navigate(".", {
       replace: true,
       state: Object.keys(restState).length > 0 ? restState : null,
     });
-    if (!state.prefillOnly) {
+    if (state.prefillOnly !== true) {
       const timer = setTimeout(() => {
         handleSend(prefillText);
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [mode, location.state, isChatBootstrapped, isLoadingHistory, messages.length, handleSend, navigate]);
+  }, [mode, location.state, isChatBootstrapped, isLoadingHistory, handleSend, navigate]);
 
   /** UUID из БД (chat_history.id). Локальные id вида "user-173..." / "assistant-173..." не являются UUID. */
   const isChatHistoryId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);

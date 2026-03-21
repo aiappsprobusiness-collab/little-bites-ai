@@ -25,6 +25,7 @@ import { PlanModeHint } from "@/components/plan/PlanModeHint";
 import { PlanGoalChipsRow } from "@/components/plan/PlanGoalChipsRow";
 import { isFamilySelected } from "@/utils/planModeUtils";
 import { selectGoalForEdge } from "@/utils/planGoalSelect";
+import { getPlanSlotChatPrefillMessage } from "@/utils/planChatPrefill";
 import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
@@ -1322,7 +1323,10 @@ export default function MealPlanPage() {
                       state: {
                         fromPlanSlot: true,
                         plannedDate: selectedDayKey,
+                        mealType: firstEmptySlotId ?? "breakfast",
                         memberId: memberIdForPlan ?? undefined,
+                        prefillMessage: getPlanSlotChatPrefillMessage(firstEmptySlotId ?? "breakfast"),
+                        prefillOnly: true,
                       },
                     })
                   }
@@ -1391,7 +1395,10 @@ export default function MealPlanPage() {
                       state: {
                         fromPlanSlot: true,
                         plannedDate: selectedDayKey,
+                        mealType: firstEmptySlotId ?? "breakfast",
                         memberId: memberIdForPlan ?? undefined,
+                        prefillMessage: getPlanSlotChatPrefillMessage(firstEmptySlotId ?? "breakfast"),
+                        prefillOnly: true,
                       },
                     })
                   }

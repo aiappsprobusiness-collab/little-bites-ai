@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
+import { getPlanSlotChatPrefillMessage } from "@/utils/planChatPrefill";
 
 export interface PoolExhaustedSheetProps {
   open: boolean;
@@ -53,20 +54,14 @@ export function PoolExhaustedSheet({
       onOpenChange(false);
       return;
     }
-    const prefillMessage =
-      mealType === "breakfast"
-        ? "Подбери завтрак."
-        : mealType === "lunch"
-          ? "Подбери обед."
-          : mealType === "dinner"
-            ? "Подбери ужин."
-            : "Подбери перекус.";
+    const prefillMessage = getPlanSlotChatPrefillMessage(mealType);
     onOpenChange(false);
     navigate("/chat", {
       state: {
         ...planSlotChatState,
         prefillMessage,
-        prefillOnly: false,
+        /** Только вставка в input; отправка — вручную */
+        prefillOnly: true,
       },
     });
   };
