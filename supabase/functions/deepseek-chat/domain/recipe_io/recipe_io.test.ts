@@ -16,10 +16,13 @@ import {
   sanitizeDescriptionForPool,
   sanitizeChefAdviceForPool,
   DESCRIPTION_MAX_LENGTH,
+  DESCRIPTION_QUALITY_MIN_LENGTH,
+  DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH,
   CHEF_ADVICE_MAX_LENGTH,
   pickCanonicalDescription,
   passesDescriptionQualityGate,
   passesChefAdviceQualityGate,
+  explainCanonicalDescriptionRejection,
 } from "./index.ts";
 
 Deno.test("validateRecipe: валидный JSON рецепт проходит", () => {
@@ -313,6 +316,42 @@ Deno.test("passesDescriptionQualityGate: одно предложение с ма
     "Густой борщ с говядиной согревает и сытит: белок мяса и клетчатка овощей поддерживают энергию на несколько часов.";
   if (!passesDescriptionQualityGate(one, { title: "Борщ с говядиной" })) {
     throw new Error("Expected single-sentence description to pass gate");
+  }
+});
+
+Deno.test("passesDescriptionQualityGate: граница минимальной длины одного предложения (согласовано с промптом)", () => {
+  const borderline =
+    "Каша на молоке сытная: белок и клетчатка для энергии дня.";
+  if (borderline.length < DESCRIPTION_QUALITY_MIN_LENGTH) {
+    throw new Error(`Fixture must be >= ${DESCRIPTION_QUALITY_MIN_LENGTH}, got ${borderline.length}`);
+  }
+  if (!passesDescriptionQualityGate(borderline, { title: "Овсянка с изюмом" })) {
+    throw new Error(`Expected pass at min length, reason would be: ${explainCanonicalDescriptionRejection(borderline, { title: "Овсянка с изюмом" })}`);
+  }
+});
+
+Deno.test("passesDescriptionQualityGate: два предложения короче порога — отказ (too_short_for_two_sentences)", () => {
+  const twoButShort = "Сытный обед: белок из мяса. Клетчатка в овощах.";
+  if (twoButShort.length >= DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH) {
+    throw new Error(`Fixture must be < ${DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH} chars, got ${twoButShort.length}`);
+  }
+  if (passesDescriptionQualityGate(twoButShort, { title: "Рагу" })) {
+    throw new Error("Expected two-sentence short text to fail gate");
+  }
+  const reason = explainCanonicalDescriptionRejection(twoButShort, { title: "Рагу" });
+  if (reason !== "too_short_for_two_sentences") {
+    throw new Error(`Expected too_short_for_two_sentences, got ${reason}`);
+  }
+});
+
+Deno.test("passesDescriptionQualityGate: два предложения ≥45 симв. с маркерами — проходит", () => {
+  const ok =
+    "Сытный обед: белок из мяса даёт сытость. Клетчатка в овощах поддерживает пищеварение.";
+  if (ok.length < DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH) {
+    throw new Error(`Fixture must be >= ${DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH}, got ${ok.length}`);
+  }
+  if (!passesDescriptionQualityGate(ok, { title: "Рагу с овощами" })) {
+    throw new Error(`Expected pass, got: ${explainCanonicalDescriptionRejection(ok, { title: "Рагу с овощами" })}`);
   }
 });
 

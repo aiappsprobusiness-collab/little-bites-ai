@@ -1,13 +1,30 @@
 /**
  * Fallback на клиенте: если бэкенд не вернул сообщение редиректа/нерелевантности,
- * показываем правильный текст по содержимому запроса (те же ключевые слова, что на Edge).
+ * показываем правильный текст по содержимому запроса (те же ключевые слова/паттерны, что на Edge).
  */
 
+import { RUSSIAN_STOOL_KAL_PATTERN } from "../../supabase/functions/_shared/russianStoolKalPattern.ts";
+
+type AssistantTopicKeywordRow = {
+  topicKey: string;
+  topicTitle: string;
+  topicShortTitle: string;
+  keywords: string[];
+  /** Доп. паттерны (например слово «кал» только целиком, не «калорийный»). */
+  patterns?: RegExp[];
+};
+
 /** topicKey совпадает с backend (assistantTopicDetect) и /sos?scenario=; topicShortTitle — для карточки в чате. */
-const ASSISTANT_TOPIC_KEYWORDS: Array<{ topicKey: string; topicTitle: string; topicShortTitle: string; keywords: string[] }> = [
+const ASSISTANT_TOPIC_KEYWORDS: AssistantTopicKeywordRow[] = [
   { topicKey: "new_food", topicTitle: "Как безопасно ввести новый продукт?", topicShortTitle: "Введение продуктов", keywords: ["прикорм", "ввести продукт", "вводить продукт", "новый продукт", "как вводить", "можно ли давать", "в каком возрасте", "первый прикорм", "ввод прикорма", "вводить яйцо", "вводить рыбу", "давать в 6 месяцев", "давать в 8 месяцев"] },
   { topicKey: "allergy", topicTitle: "Аллергия или реакция — что делать?", topicShortTitle: "Аллергия на продукты", keywords: ["аллергий", "аллергия на", "сыпь на", "сыпь после", "реакция на продукт", "покраснели щеки", "зуд после", "реакция на молочку", "реакция на молоко"] },
-  { topicKey: "constipation_diarrhea", topicTitle: "Стул малыша: норма или повод волноваться?", topicShortTitle: "Стул малыша", keywords: ["стул малыша", "стул ребёнка", "стул ребенка", "запор", "понос", "жидкий стул", "зеленый стул", "кал", "жкт", "кишечник", "запор у ребёнка", "понос у ребёнка"] },
+  {
+    topicKey: "constipation_diarrhea",
+    topicTitle: "Стул малыша: норма или повод волноваться?",
+    topicShortTitle: "Стул малыша",
+    keywords: ["стул малыша", "стул ребёнка", "стул ребенка", "запор", "понос", "жидкий стул", "зеленый стул", "жкт", "кишечник", "запор у ребёнка", "понос у ребёнка"],
+    patterns: [RUSSIAN_STOOL_KAL_PATTERN],
+  },
   { topicKey: "spitting_up", topicTitle: "Срыгивания: норма или проблема?", topicShortTitle: "Срыгивания", keywords: ["срыгиван", "срыгивает", "срыгнул", "срыгивание"] },
   { topicKey: "food_refusal", topicTitle: "Ребёнок не хочет есть — что делать?", topicShortTitle: "Ребёнок не ест", keywords: ["малоежка", "не хочет есть", "отказ от еды", "отказывается от еды", "отказывается от прикорма", "не ест", "ест только пюре", "плачет при кормлении"] },
   { topicKey: "routine", topicTitle: "График кормления: подходит ли возрасту?", topicShortTitle: "Режим кормления", keywords: ["режим кормления", "график кормления", "сколько раз кормить", "ночные кормления", "режим питания"] },
@@ -53,8 +70,10 @@ export function getRedirectOrIrrelevantMeta(userMessage: string): RedirectOrIrre
   const lower = normalize(userMessage);
   if (lower.length < 2) return null;
 
-  for (const { topicKey, topicTitle, topicShortTitle, keywords } of ASSISTANT_TOPIC_KEYWORDS) {
-    if (keywords.some((kw) => lower.includes(kw))) {
+  for (const { topicKey, topicTitle, topicShortTitle, keywords, patterns } of ASSISTANT_TOPIC_KEYWORDS) {
+    const byKeyword = keywords.some((kw) => lower.includes(kw));
+    const byPattern = patterns?.some((re) => re.test(lower)) ?? false;
+    if (byKeyword || byPattern) {
       return {
         message: "Этот вопрос лучше задать во вкладке «Помощник».",
         route: "assistant_topic_redirect",

@@ -3,7 +3,12 @@
  * Запуск: из supabase/functions: deno test deepseek-chat/buildPrompt.test.ts --allow-read
  */
 import { generateRecipeSystemPromptV3 } from "./buildPrompt.ts";
-import { RECIPE_SYSTEM_RULES_V3 } from "./prompts.ts";
+import {
+  DESCRIPTION_MAX_LENGTH,
+  DESCRIPTION_QUALITY_MIN_LENGTH,
+  DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH,
+} from "./domain/recipe_io/sanitizeAndRepair.ts";
+import { CHEF_ADVICE_RULES, RECIPE_SYSTEM_RULES_V3 } from "./prompts.ts";
 
 Deno.test("generateRecipeSystemPromptV3: likes не в [CONTEXT] — только оркестратор (index) добавляет мягкий сигнал", () => {
   const prompt = generateRecipeSystemPromptV3(
@@ -61,12 +66,41 @@ Deno.test("generateRecipeSystemPromptV3: НЕ содержит старые дл
   }
 });
 
-Deno.test("RECIPE_SYSTEM_RULES_V3: константа определена и короткая", () => {
+Deno.test("RECIPE_SYSTEM_RULES_V3: компактный блок (Stage B: без раздутого CHEF)", () => {
   const lines = RECIPE_SYSTEM_RULES_V3.trim().split("\n").filter((l) => l.trim().length > 0);
-  if (lines.length > 16) {
-    throw new Error(`RECIPE_SYSTEM_RULES_V3 should be at most ~16 lines, got ${lines.length}`);
+  if (lines.length > 22) {
+    throw new Error(`RECIPE_SYSTEM_RULES_V3 should stay compact, got ${lines.length} non-empty lines`);
   }
   if (!RECIPE_SYSTEM_RULES_V3.includes("Верни ровно 1 JSON")) {
     throw new Error("RECIPE_SYSTEM_RULES_V3 must require single JSON object");
+  }
+});
+
+Deno.test("CHEF_ADVICE_RULES: нет длинных good/bad примеров (quality gate в коде)", () => {
+  if (CHEF_ADVICE_RULES.includes("ХОРОШИЕ ПРИМЕРЫ") || CHEF_ADVICE_RULES.includes("ПЛОХИЕ ПРИМЕРЫ")) {
+    throw new Error("CHEF_ADVICE_RULES must not contain example blocks duplicated with chefAdviceQuality.ts");
+  }
+  const chefLines = CHEF_ADVICE_RULES.trim().split("\n").filter((l) => l.trim().length > 0);
+  if (chefLines.length > 10) {
+    throw new Error(`CHEF_ADVICE_RULES should be <= 10 non-empty lines, got ${chefLines.length}`);
+  }
+});
+
+Deno.test("generateRecipeSystemPromptV3: лимиты description = константы passesDescriptionQualityGate", () => {
+  const prompt = generateRecipeSystemPromptV3(
+    { name: "Test", age_months: 24, allergies: [], dislikes: [] },
+    false,
+    false,
+    [],
+    { mealType: "lunch", servings: 2 },
+  );
+  for (const n of [
+    String(DESCRIPTION_QUALITY_MIN_LENGTH),
+    String(DESCRIPTION_MAX_LENGTH),
+    String(DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH),
+  ]) {
+    if (!prompt.includes(n)) {
+      throw new Error(`Expected recipe prompt to include gate number ${n} for description sync`);
+    }
   }
 });

@@ -800,7 +800,20 @@ serve(async (req) => {
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const tLlmStart = Date.now();
-    safeLog("SENDING PAYLOAD:", JSON.stringify(payload, null, 2));
+    const lastUserMsg = messagesForPayload.length
+      ? String(messagesForPayload[messagesForPayload.length - 1]?.content ?? "")
+      : "";
+    safeLog(
+      "SENDING PAYLOAD_META:",
+      JSON.stringify({
+        model: payload.model,
+        max_tokens: payload.max_tokens,
+        response_format: isRecipeRequest ? "json_object" : undefined,
+        system_prompt_chars: currentSystemPrompt.length,
+        messages_count: payload.messages.length,
+        last_user_message_chars: lastUserMsg.length,
+      }),
+    );
     let response: Response;
     try {
       response = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -939,7 +952,8 @@ serve(async (req) => {
             tag: "DESCRIPTION_QUALITY_GATE_RAW_LLM",
             requestId,
             rawLlmDescriptionFailsGate: true,
-            note: "Финальный канон после санитайзеров: pickCanonicalDescription (LLM или benefit fallback)",
+            note:
+              "Сырой validated.description не прошёл gate; финальный текст после санитайзеров — pickCanonicalDescription (LLM или benefit). Промпт и гейт согласованы на макс. 210 симв.",
           }));
         }
         if (!adviceOk) {

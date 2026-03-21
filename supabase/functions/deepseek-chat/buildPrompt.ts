@@ -218,6 +218,10 @@ export interface RecipePromptV3Options {
  * Компактный system prompt для recipe-path (chat/recipe при isRecipeRequest).
  * Не добавляет generationContextBlock. Контекст минимальный.
  */
+/**
+ * System prompt для JSON recipe-path. Поле description: лимиты и формулировки в **RECIPE_SYSTEM_RULES_V3** (импорт из prompts.ts),
+ * численно совпадают с **passesDescriptionQualityGate** / DESCRIPTION_MAX_LENGTH = 210.
+ */
 export function generateRecipeSystemPromptV3(
   memberData: MemberData | null | undefined,
   isPremium: boolean,

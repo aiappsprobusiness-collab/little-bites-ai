@@ -19,6 +19,24 @@
 
 > **Актуальность архивных подпунктов Stage 2.x:** ниже по тексту исторические чеклисты про `recipeDescriptionComposer` и `descriptionSource: "composer"` отражают прошлую реализацию. **Сейчас** для **`source = chat_ai`**: **`recipes.description`** (и ответ чата) — **LLM-first** через **`pickCanonicalDescription`**; fallback = **`buildRecipeBenefitDescription`**. Слабый **`chef_advice`** не вызывает второй полный вызов LLM → **`null`**. См. § Stage 4.3.6 и `docs/architecture/chat_recipe_generation.md`.
 
+## Audit: deepseek-chat — токены и description fallback (2026-03-22)
+
+**Исходный аудит:** [`docs/dev/deepseek-chat-audit-2026-03-description-and-token-reduction.md`](../dev/deepseek-chat-audit-2026-03-description-and-token-reduction.md).
+
+**Статус Stage B+C (2026-03-22):** реализовано. Итоговый отчёт по изменениям: [`docs/dev/deepseek-chat-audit-2026-03-progress.md`](../dev/deepseek-chat-audit-2026-03-progress.md).
+
+### Сделано в Stage B+C (кратко)
+
+- **Stage B:** сжат **`CHEF_ADVICE_RULES`** в `prompts.ts` (убраны длинные примеры; жёсткие правила + ссылка на пост-gate в коде). Меньше input tokens на recipe-path.
+- **Stage C:** экспортированы **`DESCRIPTION_QUALITY_MIN_LENGTH`** (38), **`DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH`** (45) из `sanitizeAndRepair.ts`; **`RECIPE_SYSTEM_RULES_V3`** и **`RECIPE_STRICT_JSON_CONTRACT`** подставляют те же значения, что **`passesDescriptionQualityGate`** (устранён рассинхрон «макс. 160 в промпте» vs 38–210 в гейте).
+- **Без изменений:** allergy/dislike blocking, CMPA, lunch = soup, `chat_history` на клиенте, политика `chefAdvice` → `null` без заглушек.
+- **Дополнительно (из P0 аудита):** лог перед LLM — **`SENDING PAYLOAD_META`** вместо полного JSON payload; **`isDescriptionInvalid`**: верхняя граница длины выровнена с **`DESCRIPTION_MAX_LENGTH`** (210), а не 180.
+
+### Остаётся follow-up (не в этой задаче)
+
+1. Stage A: метрики долей `rejection_reason` по логам.
+2. Stage D–E: точечная настройка гейта / опциональный `repairDescriptionOnly` под флагом.
+
 ## Planned stages
 - [x] Stage 1 — locale + trust_level
 - [x] Stage 2 — description composer
@@ -425,16 +443,16 @@ Checklist:
 ## Stage 2.4 scope (description rollback — LLM primary)
 - [x] LLM description restored as primary source
 - [x] composer used only as fallback (when isDescriptionInvalid)
-- [x] description validation added (isDescriptionInvalid: пусто, <20, >180, повтор title, запреты, request-context leakage)
-- [x] prompt rules updated (1–2 предложения, макс. 160 симв., не повторять название, не «в дорогу»/«для ребёнка»/«для всей семьи», без мед. обещаний)
+- [x] description validation added (isDescriptionInvalid: пусто, <20, >max, повтор title, запреты, request-context leakage) — **актуально:** верхняя граница как у гейта, 210 симв.
+- [x] prompt rules updated (1–2 предложения, **до 210 симв.** для JSON recipe-path, не повторять название, не «в дорогу»/«для ребёнка»/«для всей семьи», без мед. обещаний) — *исторически в чеклисте было «макс. 160»; заменено на контракт с Zod/gate.*
 - [x] latency/guards from Stage 2.3 preserved
 
 ## Stage 2.4 key files
-- **supabase/functions/deepseek-chat/index.ts** — в validated: только при isDescriptionInvalid(desc) подстановка composer; в response-блоке: descriptionInvalid ? composer : descRaw.slice(0,160); descriptionSource "llm" | "composer_fallback"; при leak.descriptionUseComposer перезапись description и descriptionSource.
-- **supabase/functions/deepseek-chat/domain/recipe_io/sanitizeAndRepair.ts** — isDescriptionInvalid(desc, { title }); импорт textContainsRequestContextLeak из _shared.
-- **supabase/functions/deepseek-chat/domain/recipe_io/index.ts** — экспорт isDescriptionInvalid.
+- **supabase/functions/deepseek-chat/index.ts** — канон описания: **pickCanonicalDescription** (LLM-first или benefit); исторически обсуждались composer/slice — см. текущий `index.ts`.
+- **supabase/functions/deepseek-chat/domain/recipe_io/sanitizeAndRepair.ts** — isDescriptionInvalid(desc, { title }); pickCanonicalDescription; passesDescriptionQualityGate; импорт textContainsRequestContextLeak из _shared.
+- **supabase/functions/deepseek-chat/domain/recipe_io/index.ts** — экспорт isDescriptionInvalid и гейтов описания.
 - **supabase/functions/_shared/requestContextLeakGuard.ts** — textContainsRequestContextLeak(text); фразы «для ребёнка», «для всей семьи» добавлены в REQUEST_CONTEXT_PHRASES.
-- **supabase/functions/deepseek-chat/prompts.ts** — RECIPE_STRICT_JSON_CONTRACT и RECIPE_SYSTEM_RULES_V3: description 1–2 предложения, макс. 160, не повторять title, запреты по контексту и мед. обещаниям.
+- **supabase/functions/deepseek-chat/prompts.ts** — RECIPE_STRICT_JSON_CONTRACT (справочно) и RECIPE_SYSTEM_RULES_V3: description 1–2 предложения, **до 210 симв.** (DESCRIPTION_MAX_LENGTH), мин. 38 и правило двух предложений — как у гейта.
 
 ## Stage 2.4.1 scope (steps leakage guard)
 - [x] request-context leakage guard extended to steps

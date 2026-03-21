@@ -2,7 +2,7 @@
  * Quality gate для chef_advice: краткий практический совет или null (без заглушек).
  */
 
-/** Выровнено с промптом CHEF_ADVICE_RULES (~140) + небольшой запас после нормализации. */
+/** Лимит длины после нормализации; промпт `CHEF_ADVICE_RULES` ссылается на то же значение. */
 export const CHEF_ADVICE_MAX_LENGTH = 160;
 
 const norm = (s: string) => s.replace(/\s+/g, " ").trim();

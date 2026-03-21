@@ -22,6 +22,8 @@ export {
   sanitizeMealMentions,
   getMinimalRecipe,
   DESCRIPTION_MAX_LENGTH,
+  DESCRIPTION_QUALITY_MIN_LENGTH,
+  DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH,
   CHEF_ADVICE_MAX_LENGTH,
   enforceDescription,
   enforceChefAdvice,

@@ -2,6 +2,8 @@
  * Suggested follow-up chips для help-чата. Генерация на фронте по ключевым словам в последнем ответе ассистента.
  */
 
+import { RUSSIAN_STOOL_KAL_PATTERN } from "../../supabase/functions/_shared/russianStoolKalPattern.ts";
+
 export interface HelpFollowupChip {
   label: string;
   prefill: string;
@@ -27,7 +29,10 @@ const RULES: { pattern: RegExp; chips: HelpFollowupChip[] }[] = [
     ],
   },
   {
-    pattern: /стул|понос|диар|запор|кал/,
+    pattern: new RegExp(
+      `стул|понос|диар|запор|${RUSSIAN_STOOL_KAL_PATTERN.source}`,
+      RUSSIAN_STOOL_KAL_PATTERN.flags,
+    ),
     chips: [
       { label: "Какие варианты нормы для возраста?", prefill: "Какие варианты нормы для возраста?" },
       { label: "Что дать пить и как часто?", prefill: "Что дать пить и как часто?" },

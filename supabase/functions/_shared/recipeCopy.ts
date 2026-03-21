@@ -4,7 +4,10 @@
  * chefAdvice: 1–2 предложения, только кулинарные советы. Без возраста/аллергий/ребёнка.
  */
 
-/** Минимальная длина описания в символах; ниже — считаем коротким и допускаем замену. */
+/**
+ * Порог «короткого» описания для legacy **buildRecipeDescription** / shouldReplaceDescription (пул/копирайт).
+ * Не путать с chat_ai: там канон LLM — **pickCanonicalDescription** и минимум **DESCRIPTION_QUALITY_MIN_LENGTH** (38) в sanitizeAndRepair.
+ */
 export const DESCRIPTION_MIN_LENGTH = 160;
 
 /** Однострочные болванки: если description совпадает с одной из них — заменяем на 2–4 предложения. */

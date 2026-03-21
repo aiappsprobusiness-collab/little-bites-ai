@@ -16,6 +16,17 @@ export { CHEF_ADVICE_MAX_LENGTH, isChefAdviceDebugEnabled } from "./chefAdviceQu
 /** Максимальная длина description (ровно 2 предложения о пользе). */
 export const DESCRIPTION_MAX_LENGTH = 210;
 
+/**
+ * Минимальная длина для `passesDescriptionQualityGate` (после санитайзеров).
+ * Промпт recipe-path должен ссылаться на эти же значения — см. `prompts.ts`.
+ */
+export const DESCRIPTION_QUALITY_MIN_LENGTH = 38;
+
+/**
+ * При двух предложениях гейт требует не короче (иначе отрывки вместо двух нормальных фраз).
+ */
+export const DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH = 45;
+
 /** Минимальная длина description; ниже — подставляем fallback. */
 const DESCRIPTION_MIN_FOR_VALID = 60;
 
@@ -522,7 +533,7 @@ function descriptionStartsWithTitle(desc: string, title: string): boolean {
   return descLower.startsWith(titleKey.slice(0, 15)) || titleWords.some((w) => descLower.startsWith(w));
 }
 
-/** Stage 2.4: description плохой — использовать composer fallback. Правила: пусто, <20, >180, повторяет title, запреты, request-context leakage. */
+/** Stage 2.4: description плохой — использовать composer fallback. Правила: пусто, <20, >max, повторяет title, запреты, request-context leakage. */
 export function isDescriptionInvalid(
   desc: string | null | undefined,
   options?: { title?: string }
@@ -530,7 +541,7 @@ export function isDescriptionInvalid(
   const t = normalizeSpaces(desc ?? "");
   if (t.length === 0) return true;
   if (t.length < 20) return true;
-  if (t.length > 180) return true;
+  if (t.length > DESCRIPTION_MAX_LENGTH) return true;
   if (options?.title && descriptionStartsWithTitle(t, options.title)) return true;
   if (descriptionFailsQualityGate(t)) return true;
   if (textContainsRequestContextLeak(t)) return true;
@@ -543,16 +554,19 @@ function lastSentenceComplete(text: string): boolean {
   return /[.!?…]\s*$/.test(t) && !/\s(и|или|а|в|на|что|котор|для|чтобы)\s*\.?\s*$/i.test(t);
 }
 
-/** Quality gate для LLM description → канон БД / ответ: 1–2 предложения, длина, без штампов/leak, нутритивный маркер. */
+/**
+ * Quality gate для LLM description → канон БД / ответ: 1–2 предложения, длина, без штампов/leak, нутритивный маркер.
+ * Верхняя граница = DESCRIPTION_MAX_LENGTH (210), как в Zod и в recipe-path промпте — снижает ложный fallback из‑за рассинхрона с моделью.
+ */
 export function passesDescriptionQualityGate(
   desc: string | null | undefined,
   options?: { title?: string }
 ): boolean {
   const t = normalizeSpaces(desc ?? "");
   const sc = countSentences(t);
-  if (t.length < 38 || t.length > DESCRIPTION_MAX_LENGTH) return false;
+  if (t.length < DESCRIPTION_QUALITY_MIN_LENGTH || t.length > DESCRIPTION_MAX_LENGTH) return false;
   if (sc < 1 || sc > 2) return false;
-  if (sc === 2 && t.length < 45) return false;
+  if (sc === 2 && t.length < DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH) return false;
   if (descriptionFailsQualityGate(t)) return false;
   if (options?.title && descriptionStartsWithTitle(t, options.title)) return false;
   if (!lastSentenceComplete(t)) return false;
@@ -568,9 +582,13 @@ export function explainCanonicalDescriptionRejection(
   if (!t.trim()) return "empty";
   if (textContainsRequestContextLeak(t)) return "request_context_leak";
   const sc = countSentences(t);
-  if (t.length < 38 || t.length > DESCRIPTION_MAX_LENGTH) return "length_out_of_range";
+  if (t.length < DESCRIPTION_QUALITY_MIN_LENGTH || t.length > DESCRIPTION_MAX_LENGTH) {
+    return "length_out_of_range";
+  }
   if (sc < 1 || sc > 2) return "sentence_count_not_one_or_two";
-  if (sc === 2 && t.length < 45) return "too_short_for_two_sentences";
+  if (sc === 2 && t.length < DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH) {
+    return "too_short_for_two_sentences";
+  }
   if (descriptionFailsQualityGate(t)) return "forbidden_phrase_or_stamp";
   if (options?.title && descriptionStartsWithTitle(t, options.title)) return "repeats_title_or_starts_like_title";
   if (!lastSentenceComplete(t)) return "incomplete_final_sentence";

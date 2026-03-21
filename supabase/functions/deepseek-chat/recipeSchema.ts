@@ -224,10 +224,15 @@ function normalizeNutrition(raw: unknown): { kcal_per_serving: number; protein_g
   };
 }
 
-/** Contract: title, description (LLM + pickCanonicalDescription на Edge для chat_ai), ingredients, steps, cookingTime, mealType, servings, chefAdvice (max 220, optional null), nutrition optional. */
+/**
+ * Contract: title, description (LLM + pickCanonicalDescription на Edge для chat_ai), …
+ * description: Zod max 210 = `DESCRIPTION_MAX_LENGTH` (sanitizeAndRepair); минимальная приемлемая длина для канона LLM — `DESCRIPTION_QUALITY_MIN_LENGTH` (38) и правила предложений в `passesDescriptionQualityGate` (тот же модуль).
+ * chefAdvice: Zod max 220; финально `enforceChefAdvice` укладывает в `CHEF_ADVICE_MAX_LENGTH` (160).
+ */
 export const RecipeJsonSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().max(210, "description: 2 sentences benefit, max 210 characters"),
+  // 210 = DESCRIPTION_MAX_LENGTH (domain/recipe_io/sanitizeAndRepair.ts) — держать в синхроне с промптом и pickCanonicalDescription.
+  description: z.string().max(210, "description: max 210 chars (DESCRIPTION_MAX_LENGTH); gate 38–210 + sentences"),
   cookingTime: z.number().int().min(1).max(240).optional(),
   cookingTimeMinutes: z.number().int().min(1).max(240).optional(),
   ingredients: z.array(IngredientSchema).min(3, "at least 3 ingredients required").max(10),
