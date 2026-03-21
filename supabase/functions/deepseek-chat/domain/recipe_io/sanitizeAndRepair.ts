@@ -302,6 +302,48 @@ const CHEF_ADVICE_RESTAURANT_PHRASES = [
   /идеально\s+для\s+подачи\s*[.—]?\s*$/i,
 ];
 
+/**
+ * Утечка «адаптации под профиль/аллергии семьи» в user-facing description (pool-safe).
+ * Не баним любое «без X» (майонез, сахар, обжарки) — только типичные аллергены/диет-маркеры и явные формулировки адаптации.
+ */
+const DESCRIPTION_PROFILE_ADAPTATION_PATTERNS: RegExp[] = [
+  /\bбез\s+молока\b/i,
+  /\bбез\s+молочн/i,
+  /\bбез\s+яиц/i,
+  /\bбез\s+яичн/i,
+  /\bбез\s+глютена?\b/i,
+  /\bбез\s+лактозы?\b/i,
+  /\bбез\s+орех/i,
+  /\bбез\s+арахис/i,
+  /\bбез\s+со(и|ев)\b/i,
+  /\bбез\s+рыб/i,
+  /\bбез\s+коровь/i,
+  /\bбез\s+белк[ао]\s+коровь/i,
+  /\bбкм\b/i,
+  /\bнепереносимост/i,
+  /подходит\s+при\s+аллерг/i,
+  /подходят\s+при\s+аллерг/i,
+  /при\s+аллергии\s+на/i,
+  /с\s+уч[ёе]том\s+аллерг/i,
+  /учитывая\s+аллерг/i,
+  /адаптирован[аоы]?\s+для/i,
+  /для\s+тех\s*,\s*кто\s+не\s+ест/i,
+  /для\s+людей\s+с\s+аллерг/i,
+  /\bбез\s+аллерген/i,
+  /\bгипоаллергенн/i,
+  /\bбезглютенов/i,
+];
+
+/** true — в описании есть маркеры адаптации под ограничения профиля/семьи (недопустимо в pool-safe description). */
+export function descriptionHasProfileAdaptationLeak(text: string | null | undefined): boolean {
+  const t = normalizeSpaces(text ?? "");
+  if (!t.length) return false;
+  for (const re of DESCRIPTION_PROFILE_ADAPTATION_PATTERNS) {
+    if (re.test(t)) return true;
+  }
+  return false;
+}
+
 /** Фразы в description: при наличии — подставляем fallback. */
 const DESCRIPTION_FORBIDDEN_PHRASES = [
   "это блюдо",
@@ -355,10 +397,12 @@ export function hasForbiddenChefAdviceStart(text: string | null | undefined): bo
   return getChefAdviceForbiddenStartKind(text) != null;
 }
 
-/** Проверка quality gate для description: запрещённые фразы или штампы. */
+/** Проверка quality gate для description: утечка адаптации профиля, запрещённые фразы или штампы. */
 function descriptionFailsQualityGate(desc: string): boolean {
-  const t = normalizeSpaces(desc).toLowerCase();
-  return DESCRIPTION_FORBIDDEN_PHRASES.some((phrase) => t.includes(phrase));
+  const t = normalizeSpaces(desc);
+  if (descriptionHasProfileAdaptationLeak(t)) return true;
+  const tl = t.toLowerCase();
+  return DESCRIPTION_FORBIDDEN_PHRASES.some((phrase) => tl.includes(phrase));
 }
 
 /** Fallback по типу блюда (каша/пюре, суп, фрикадельки/котлеты, запеканка, оладьи/панкейки). Тесты / legacy; в hot path не подставляем в БД. */
@@ -661,6 +705,7 @@ export function explainCanonicalDescriptionRejection(
   const t = normalizeSpaces(desc ?? "");
   if (!t.trim()) return "empty";
   if (textContainsRequestContextLeak(t)) return "request_context_leak";
+  if (descriptionHasProfileAdaptationLeak(t)) return "profile_adaptation_leak";
   const sc = countSentences(t);
   if (t.length < DESCRIPTION_QUALITY_MIN_LENGTH || t.length > DESCRIPTION_MAX_LENGTH) {
     return "length_out_of_range";

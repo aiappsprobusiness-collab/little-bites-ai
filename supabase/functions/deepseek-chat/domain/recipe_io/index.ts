@@ -26,6 +26,7 @@ export {
   DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH,
   DESCRIPTION_TITLE_ANCHOR_MIN_STRONG_TOKENS,
   extractStrongTitleTokensForDescriptionAnchoring,
+  descriptionHasProfileAdaptationLeak,
   descriptionPassesTitleAnchoringHeuristic,
   CHEF_ADVICE_MAX_LENGTH,
   enforceDescription,
