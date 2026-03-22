@@ -1734,31 +1734,33 @@ export default function MealPlanPage() {
                 );
               })}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              type="button"
-              className="mt-2 w-full h-10 flex items-center justify-center gap-2 rounded-xl border-border/60 bg-background text-foreground hover:bg-muted/40 text-[13px] font-medium shadow-none"
-              disabled={isAnyGenerating || !user}
-              onClick={() => {
-                if (!hasAccess) {
-                  setPaywallCustomMessage("Список продуктов доступен в Premium");
-                  setShowPaywall(true);
-                  return;
-                }
-                setShoppingBuildSheetOpen(true);
-              }}
-            >
-              <ShoppingCart className="w-[17px] h-[17px] shrink-0 opacity-90" aria-hidden />
-              Собрать список продуктов
-            </Button>
+            {/* Зона под блюдами: заметная CTA + запас снизу, чтобы не сливаться с таббаром */}
+            <div className="mt-3 space-y-3 pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))]">
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                className="w-full h-11 flex items-center justify-center gap-2 rounded-xl border-2 border-primary bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary text-[13px] font-semibold shadow-sm"
+                disabled={isAnyGenerating || !user}
+                onClick={() => {
+                  if (!hasAccess) {
+                    setPaywallCustomMessage("Список продуктов доступен в Premium");
+                    setShowPaywall(true);
+                    return;
+                  }
+                  setShoppingBuildSheetOpen(true);
+                }}
+              >
+                <ShoppingCart className="w-[18px] h-[18px] shrink-0" aria-hidden />
+                Собрать список продуктов
+              </Button>
             {/* Карточка «Спросить в чате» — только Free, план уже сгенерирован */}
             {isFree && (
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2 }}
-                className="mt-2 mb-4 rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[0_1px_4px_-2px_rgba(0,0,0,0.04)]"
+                className="rounded-2xl border border-border/70 bg-card/60 p-4 shadow-[0_1px_4px_-2px_rgba(0,0,0,0.04)]"
               >
                 <h3 className="text-sm font-semibold text-foreground mb-1">
                   Не нашли подходящее блюдо?
@@ -1776,6 +1778,7 @@ export default function MealPlanPage() {
                 </Button>
               </motion.div>
             )}
+            </div>
             </>
           )}
 
