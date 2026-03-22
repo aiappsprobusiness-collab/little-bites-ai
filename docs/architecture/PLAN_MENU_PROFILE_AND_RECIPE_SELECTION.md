@@ -207,4 +207,16 @@ Dislikes — **жёсткое исключение**: рецепт, содерж
 
 ---
 
+## 10. Клиентский UI вкладки «План» (hero, без изменения логики подбора)
+
+Поведение разделов 1–8 **не зависит** от расположения кнопок. Для актуальной раскладки экрана (где справка о профиле, цели, шаринг недели, иерархия CTA) см. **`docs/dev/plan-tab-ui-quiet-hero-2026-03.md`**.
+
+Кратко (на март 2026):
+
+- Подсказка «как учитывается профиль» не дублируется под датой; открывается из меню «Ещё».  
+- Полный выбор цели питания — в нижнем sheet; в hero остаётся компактная сводка.  
+- В hero одна основная кнопка «Собрать день»; «Поделиться неделей» — только в меню для подписчиков.
+
+---
+
 **Документация обновлена:** создан новый документ `docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md`. Существующие канонические документы [ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md](../decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md), [MEAL_TYPE_AND_LUNCH_SOUP.md](../decisions/MEAL_TYPE_AND_LUNCH_SOUP.md), [family-nutrition-rules-map.md](./family-nutrition-rules-map.md) и [PREFERENCES_BERRIES_RATIO.md](../decisions/PREFERENCES_BERRIES_RATIO.md) не изменялись; этот файл их дополняет и ссылается на них.

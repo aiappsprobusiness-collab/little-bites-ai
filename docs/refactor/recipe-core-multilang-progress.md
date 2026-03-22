@@ -53,10 +53,10 @@
 - [x] Stage 4.1 — goals visible in preview (plan + favorites), plan goal selector, generate-plan `selected_goal`, UI labels via `GOAL_LABELS`
 - [x] Stage 4.2 — generate-plan scoring + diversity (no pool narrowing; lunch/soup unchanged)
 - [x] Stage 4.3 — family-aware + age-aware + toddler soft-mode scoring (generate-plan only)
-- [x] Stage 4.3.1 — UI copy + layout (PlanModeHint family text/subtext, Paywall first feature; wrap/min-w-0)
+- [x] Stage 4.3.1 — UI copy + layout (ранее hero `PlanModeHint`; с марта 2026 справка о профиле в меню «Ещё», см. `docs/dev/plan-tab-ui-quiet-hero-2026-03.md`)
 - [x] Stage 4.3.2 — PlanGoalChipsRow: Free только «Баланс»; остальные → paywall; `selectGoalForEdge` + хук `usePlanGenerationJob`
 - [x] Stage 4.3.3 — MealCard: бейдж «Под вашу цель» + короткое пояснение; строка «Подобрано с акцентом…»; при отсутствии совпадений по цели — дисклеймер
-- [x] Stage 4.3.4 — goals UI cleanup: `PlanGoalChipsRow` свёртка до 3 + «…»; убраны сводка «Подобрано с акцентом…» и бейджи/пояснения на карточках плана
+- [x] Stage 4.3.4 — goals UI: на Плане (март 2026) компактная строка + sheet с полным списком (`PlanGoalCompactSheet`); ранее — свёртка до 3 + «…» в hero; убраны сводка «Подобрано с акцентом…» и лишние бейджи на карточках
 - [x] Stage 4.3.5 — `PlanGoalChipsRow`: плавные переходы состояния + лёгкий `active:scale-[0.98]`; у locked чипов без press-scale
 - [x] Stage 4.3.6 — deterministic benefit text: единый модуль `supabase/functions/_shared/recipeBenefitDescription.ts` (реэкспорт в `src/utils/recipeBenefitDescription.ts`); для **`source = chat_ai`** **канонический `recipes.description`** = **LLM-first** (`pickCanonicalDescription`), fallback = тот же **builder** (универсальный текст по `nutrition_goals` + seed), **без** child/adult/family в пулах; контекстным остаётся только **заголовок** блока (`getBenefitLabel` по возрасту/профилю). Устаревший `recipeDescriptionComposer` не используется.
 - [ ] Stage 4.4 — Cultural / Cuisine-aware Pool Ranking (metadata + soft scoring + observability in generate-plan; see section below)
@@ -210,8 +210,8 @@ Stage **4.4.4** — финальный sync docs при закрытии Stage 4
 ## Stage 4.3.4 — Goals UI cleanup (plan)
 
 - `MealPlanPage`: строка «Подобрано с акцентом на…» удалена; дисклеймер «Не нашли точных совпадений…» тоже убран (Stage 4.3.4 follow-up).
-- `PlanGoalChipsRow`: до трёх чипов в свёрнутом виде + «…» (разворот полного списка); при выборе цели не из первых трёх она показывается в свёртке; selected = заливка + более жёсткая рамка, unselected = outline, низкий контраст; без лишней рамки вокруг ряда.
-- `MealCard` / `RecipeCard` preview: только чипы целей (`NutritionGoalsChips`, до 3 в превью); без бейджа «Под вашу цель» и без `getGoalShortDescription` под карточкой.
+- `PlanGoalChipsRow`: в sheet по-прежнему полный список; в hero (март 2026) — `PlanGoalCompactSheet` вместо ряда чипов + «…».
+- `MealCard` / `RecipeCard` preview на Плане: `NutritionGoalsChips` **до 1** тихого чипа (`quiet`); без бейджа «Под вашу цель» и без `getGoalShortDescription` под карточкой.
 
 ## Stage 4.3.3 — Goal impact visible (plan UI) — superseded by 4.3.4 for copy density
 
@@ -226,7 +226,7 @@ Stage **4.4.4** — финальный sync docs при закрытии Stage 4
 
 ## Stage 4.3.1 — Plan hint + paywall copy (UI only)
 
-- `PlanModeHint` (семейный режим): основной текст «✨ Умное меню…», подзаголовок «Без лишних настроек…», переносы (`whitespace-normal break-words`), без `truncate`; режим одного профиля — перенос без обрезки.
+- Справка о профиле на Плане: контент вынесен в `PlanProfileHelpBody` (файл `PlanModeHint.tsx`), показ из меню «Ещё» + sheet; в hero под датой текста нет (см. `docs/dev/plan-tab-ui-quiet-hero-2026-03.md`).
 - `Paywall`: первый пункт списка преимуществ — «Меню, адаптированное под вашего ребёнка»; кастомное сообщение и список — перенос строк, без обрезки.
 
 ## Stage 4.3 — Family-aware scoring

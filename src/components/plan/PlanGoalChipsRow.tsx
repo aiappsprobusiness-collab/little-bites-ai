@@ -1,6 +1,8 @@
 import { useState, useMemo } from "react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PLAN_GOAL_SELECT_ORDER, planGoalChipLabel } from "@/utils/planGoalSelect";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const MAX_VISIBLE_COLLAPSED = 3;
 
@@ -28,6 +30,11 @@ export interface PlanGoalChipsRowProps {
   hasPremiumAccess?: boolean;
   /** Клик по заблокированной цели (Free) — открыть paywall */
   onLockedGoalClick?: () => void;
+  /**
+   * `sheet` — все цели сразу, приглушённые неактивные чипсы (нижний sheet выбора).
+   * `default` — прежняя строка с «…» на главном экране (если понадобится снова).
+   */
+  density?: "default" | "sheet";
 }
 
 /**
@@ -39,14 +46,16 @@ export function PlanGoalChipsRow({
   className,
   hasPremiumAccess = true,
   onLockedGoalClick,
+  density = "default",
 }: PlanGoalChipsRowProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const allGoals = PLAN_GOAL_SELECT_ORDER;
   const hasOverflow = allGoals.length > MAX_VISIBLE_COLLAPSED;
+  const sheetMode = density === "sheet";
   const visibleGoals = useMemo(() => {
-    if (isExpanded || !hasOverflow) return [...allGoals];
+    if (sheetMode || isExpanded || !hasOverflow) return [...allGoals];
     return collapsedGoalKeys(allGoals, value);
-  }, [allGoals, hasOverflow, isExpanded, value]);
+  }, [allGoals, hasOverflow, isExpanded, sheetMode, value]);
 
   const chipTransition =
     "transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out";
@@ -80,15 +89,19 @@ export function PlanGoalChipsRow({
               locked
                 ? "border-border/40 bg-transparent text-muted-foreground/55 opacity-[0.65] cursor-not-allowed scale-100"
                 : isActive
-                  ? "border-primary bg-primary/[0.13] text-foreground shadow-[0_1px_2px_-0.5px_rgba(0,0,0,0.06)] active:scale-[0.98]"
-                  : "border-border/45 bg-transparent text-muted-foreground/85 hover:border-border/80 hover:text-foreground active:scale-[0.98]",
+                  ? sheetMode
+                    ? "border-primary/90 bg-primary/[0.1] text-foreground shadow-none active:scale-[0.98]"
+                    : "border-primary bg-primary/[0.13] text-foreground shadow-[0_1px_2px_-0.5px_rgba(0,0,0,0.06)] active:scale-[0.98]"
+                  : sheetMode
+                    ? "border-border/30 bg-transparent text-muted-foreground/65 hover:border-border/50 hover:text-muted-foreground active:scale-[0.98]"
+                    : "border-border/45 bg-transparent text-muted-foreground/85 hover:border-border/80 hover:text-foreground active:scale-[0.98]",
             )}
           >
             {showLock ? `${label} 🔒` : label}
           </button>
         );
       })}
-      {hasOverflow && !isExpanded && (
+      {hasOverflow && !isExpanded && !sheetMode && (
         <button
           type="button"
           onClick={() => setIsExpanded(true)}
@@ -102,7 +115,7 @@ export function PlanGoalChipsRow({
           …
         </button>
       )}
-      {hasOverflow && isExpanded && (
+      {hasOverflow && isExpanded && !sheetMode && (
         <button
           type="button"
           onClick={() => setIsExpanded(false)}
@@ -116,5 +129,47 @@ export function PlanGoalChipsRow({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * Компактная строка в hero Плана + нижний sheet с полным выбором целей (меньше визуального шума на экране).
+ */
+export function PlanGoalCompactSheet({ className, ...rowProps }: PlanGoalChipsRowProps) {
+  const [open, setOpen] = useState(false);
+  const summary =
+    rowProps.value == null || rowProps.value === "balanced" ? "Баланс" : planGoalChipLabel(rowProps.value);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={cn(
+          "w-full flex items-center gap-3 rounded-xl border border-border/35 bg-muted/10 px-3 py-2.5 text-left transition-colors hover:bg-muted/20 active:scale-[0.99]",
+          className,
+        )}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Цель подбора: ${summary}. Открыть выбор`}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/75 font-medium">Цель подбора</p>
+          <p className="text-sm font-medium text-foreground truncate mt-0.5">{summary}</p>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" aria-hidden />
+      </button>
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[88vh] overflow-y-auto pt-6 pb-8">
+          <SheetHeader className="text-left space-y-1 pr-8">
+            <SheetTitle>Цель подбора меню</SheetTitle>
+            <SheetDescription className="text-left">
+              Учитывается при «Собрать день» и «Собрать неделю». Повторный тап по выбранной цели сбрасывает акцент (остаётся баланс).
+            </SheetDescription>
+          </SheetHeader>
+          <PlanGoalChipsRow {...rowProps} density="sheet" className="mt-5" />
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }

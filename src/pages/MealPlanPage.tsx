@@ -20,8 +20,8 @@ import { ToastAction } from "@/components/ui/toast";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
-import { PlanModeHint } from "@/components/plan/PlanModeHint";
-import { PlanGoalChipsRow } from "@/components/plan/PlanGoalChipsRow";
+import { PlanProfileHelpBody } from "@/components/plan/PlanModeHint";
+import { PlanGoalCompactSheet } from "@/components/plan/PlanGoalChipsRow";
 import { isFamilySelected } from "@/utils/planModeUtils";
 import { selectGoalForEdge } from "@/utils/planGoalSelect";
 import { getPlanSlotChatPrefillMessage } from "@/utils/planChatPrefill";
@@ -31,7 +31,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { normalizeTitleKey } from "@/utils/recipePool";
-import { Check, Trash2, MoreVertical } from "lucide-react";
+import { Check, Info, Trash2, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +39,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getDebugPlanFromStorage, setDebugPlanInStorage } from "@/utils/debugPlan";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
@@ -247,6 +248,7 @@ export default function MealPlanPage() {
   const [searchParams] = useSearchParams();
   const [justCreatedMemberId, setJustCreatedMemberIdState] = useState<string | null>(null);
   const [showWeekPreviewSheet, setShowWeekPreviewSheet] = useState(false);
+  const [planProfileHelpOpen, setPlanProfileHelpOpen] = useState(false);
   const [firstPlanShareBannerDismissed, setFirstPlanShareBannerDismissed] = useState(false);
 
   useEffect(() => {
@@ -960,7 +962,7 @@ export default function MealPlanPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="rounded-2xl bg-primary-light/50 border border-primary-border/80 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.04)] p-3 sm:p-4 mb-2"
+            className="rounded-2xl bg-card/85 border border-border/40 shadow-sm p-3 sm:p-4 mb-2"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -973,25 +975,16 @@ export default function MealPlanPage() {
                   <span className="text-sm text-muted-foreground">{formatShortDate(selectedDate)}</span>
                   {members.length > 0 && (
                     <>
-                      <span className="text-muted-foreground/70">•</span>
+                      <span className="text-muted-foreground/50">·</span>
                       <MemberSelectorButton className="shrink-0" />
                     </>
                   )}
                 </div>
                 {members.length > 0 && (
-                  <PlanModeHint
-                    mode={isFamilySelected(selectedMemberId, members) ? "family" : "member"}
-                    memberAgeMonths={memberDataForPlan?.age_months}
-                    memberAllergies={memberDataForPlan?.allergies}
-                    memberLikes={memberDataForPlan?.likes}
-                    memberDislikes={memberDataForPlan?.dislikes}
-                  />
-                )}
-                {members.length > 0 && (
-                  <PlanGoalChipsRow
+                  <PlanGoalCompactSheet
                     value={planGoalSelection}
                     onChange={setPlanGoalSelection}
-                    className="mt-2"
+                    className="mt-3"
                     hasPremiumAccess={hasAccess}
                     onLockedGoalClick={() => {
                       useAppStore.getState().setPaywallReason("plan_goal_select");
@@ -1008,10 +1001,12 @@ export default function MealPlanPage() {
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <span
-                  className={`
-                    text-[11px] font-medium px-2 py-0.5 rounded-md
-                    ${subscriptionStatus === "premium" ? "bg-primary-pill text-primary" : subscriptionStatus === "trial" ? "bg-amber-100 text-amber-800" : "bg-muted text-muted-foreground"}
-                  `}
+                  className={cn(
+                    "text-[10px] font-medium px-2 py-0.5 rounded-full tabular-nums",
+                    subscriptionStatus === "premium" && "bg-primary/10 text-primary",
+                    subscriptionStatus === "trial" && "bg-amber-500/12 text-amber-900/85",
+                    subscriptionStatus !== "premium" && subscriptionStatus !== "trial" && "bg-muted/70 text-muted-foreground",
+                  )}
                 >
                   {statusBadgeLabel}
                 </span>
@@ -1019,14 +1014,33 @@ export default function MealPlanPage() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors disabled:opacity-60"
+                      className="p-1.5 rounded-lg text-muted-foreground/80 hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-60"
                       disabled={isAnyGenerating}
                       aria-label="Ещё действия"
                     >
                       <MoreVertical className="w-5 h-5" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent align="end" className="w-52">
+                    {members.length > 0 && (
+                      <DropdownMenuItem
+                        onClick={() => setPlanProfileHelpOpen(true)}
+                        className="text-muted-foreground"
+                      >
+                        <Info className="w-4 h-4 mr-2 shrink-0" />
+                        Как учитывается профиль
+                      </DropdownMenuItem>
+                    )}
+                    {hasAccess && (
+                      <DropdownMenuItem
+                        onClick={() => void shareWeekPlan()}
+                        disabled={isAnyGenerating || isWeekPlansLoading}
+                        className="text-muted-foreground"
+                      >
+                        <ShareIosIcon className="w-4 h-4 mr-2 shrink-0" />
+                        Поделиться неделей
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onClick={() => setClearConfirm("day")}
                       disabled={isAnyGenerating}
@@ -1061,65 +1075,78 @@ export default function MealPlanPage() {
                 </DropdownMenu>
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-border/60 space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  size="sm"
-                  className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
-                  disabled={isAnyGenerating || (isFree && todayIndex < 0)}
-                  onClick={async () => {
-                    if (isAnyGenerating) return;
-                    trackUsageEvent("plan_fill_day_click");
-                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
-                    setPoolUpgradeLoading(true);
-                    try {
-                      const result = await runPoolUpgrade({
-                        type: "day",
-                        member_id: memberIdForPlan,
-                        member_data: memberDataForPlan,
-                        day_key: selectedDayKey,
-                        day_keys: dayKeys,
-                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
+            <div className="mt-4 pt-3 border-t border-border/30 space-y-3">
+              <Button
+                size="sm"
+                className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.18)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
+                disabled={isAnyGenerating || (isFree && todayIndex < 0)}
+                onClick={async () => {
+                  if (isAnyGenerating) return;
+                  trackUsageEvent("plan_fill_day_click");
+                  if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
+                  setPoolUpgradeLoading(true);
+                  try {
+                    const result = await runPoolUpgrade({
+                      type: "day",
+                      member_id: memberIdForPlan,
+                      member_data: memberDataForPlan,
+                      day_key: selectedDayKey,
+                      day_keys: dayKeys,
+                      ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
+                    });
+                    trackUsageEvent("plan_fill_day_success");
+                    await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                    const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
+                    const total = result.totalSlots ?? 4;
+                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                      showPartialFillToast(toast, navigate, { filled, total });
+                    } else {
+                      const planReadyT = toast({
+                        title: "Меню на сегодня готово",
+                        description: `Подобрано: ${filled} из ${total}`,
                       });
-                      trackUsageEvent("plan_fill_day_success");
-                      await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
-                      const total = result.totalSlots ?? 4;
-                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                        showPartialFillToast(toast, navigate, { filled, total });
-                      } else {
-                        const planReadyT = toast({
-                          title: "Меню на сегодня готово",
-                          description: `Подобрано: ${filled} из ${total}`,
-                        });
-                        setTimeout(() => planReadyT.dismiss(), 2000);
-                      }
-                    } catch (e: unknown) {
-                      trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
-                      const raw = e instanceof Error ? e.message : "Не удалось заполнить день";
-                      const msg = planErrorMessage(raw, "Не удалось заполнить день");
-                      if (msg === "LIMIT_REACHED") {
-                        /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
-                      } else if (msg === "member_id_required") {
-                        toast({ description: "Выберите профиль ребёнка вверху" });
-                      } else if (msg.includes("слишком много времени")) {
-                        showPartialFillToast(toast, navigate, {});
-                      } else {
-                        toast({ variant: "destructive", title: "Ошибка", description: msg });
-                      }
-                    } finally {
-                      setPoolUpgradeLoading(false);
+                      setTimeout(() => planReadyT.dismiss(), 2000);
                     }
-                  }}
+                  } catch (e: unknown) {
+                    trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
+                    const raw = e instanceof Error ? e.message : "Не удалось заполнить день";
+                    const msg = planErrorMessage(raw, "Не удалось заполнить день");
+                    if (msg === "LIMIT_REACHED") {
+                      /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                    } else if (msg === "member_id_required") {
+                      toast({ description: "Выберите профиль ребёнка вверху" });
+                    } else if (msg.includes("слишком много времени")) {
+                      showPartialFillToast(toast, navigate, {});
+                    } else {
+                      toast({ variant: "destructive", title: "Ошибка", description: msg });
+                    }
+                  } finally {
+                    setPoolUpgradeLoading(false);
+                  }
+                }}
+              >
+                <Sparkles className="w-[18px] h-[18px] shrink-0" />
+                {isAnyGenerating ? "Собираем…" : "Собрать день"}
+              </Button>
+              <div className="flex flex-wrap items-stretch gap-2 sm:gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 flex-1 min-w-[140px] flex items-center justify-center gap-1.5 rounded-xl border-border/60 bg-background/80 text-primary hover:bg-muted/40 text-xs font-medium shadow-none"
+                  onClick={shareDayPlan}
+                  disabled={isAnyGenerating}
                 >
-                  <Sparkles className="w-[18px] h-[18px] shrink-0" />
-                  {isAnyGenerating ? "Собираем…" : "Собрать день"}
+                  <ShareIosIcon className="w-4 h-4 shrink-0" />
+                  Поделиться днём
                 </Button>
                 <Button
+                  variant="ghost"
                   size="sm"
-                  className={isFree
-                    ? "h-11 w-full flex items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 text-muted-foreground hover:bg-muted/60 shadow-none"
-                    : `h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.2)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
+                  className={cn(
+                    "h-9 flex-1 min-w-[120px] flex items-center justify-center gap-1 rounded-xl text-xs font-medium shadow-none border border-transparent",
+                    isFree && "text-muted-foreground hover:text-foreground hover:bg-muted/50",
+                    !isFree && "text-primary/90 hover:text-primary hover:bg-primary/5",
+                  )}
                   disabled={!isFree && isAnyGenerating}
                   onClick={async () => {
                     if (isFree) {
@@ -1172,43 +1199,8 @@ export default function MealPlanPage() {
                     }
                   }}
                 >
-                  <Sparkles className="w-[18px] h-[18px] shrink-0" />
+                  <Sparkles className="w-[14px] h-[14px] shrink-0 opacity-80" />
                   Собрать неделю
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"
-                  onClick={shareDayPlan}
-                  disabled={isAnyGenerating}
-                >
-                  <ShareIosIcon className="w-4 h-4 shrink-0" />
-                  Поделиться днем
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={isFree
-                    ? "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border bg-muted/40 text-muted-foreground hover:bg-muted/60 text-xs font-medium shadow-none"
-                    : "h-9 w-full flex items-center justify-center gap-1.5 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium shadow-none"}
-                  disabled={hasAccess && (isAnyGenerating || isWeekPlansLoading)}
-                  onClick={() => {
-                    if (isFree) {
-                      if (FF_WEEK_PAYWALL_PREVIEW) {
-                        setShowWeekPreviewSheet(true);
-                      } else {
-                        setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
-                        setShowPaywall(true);
-                      }
-                      return;
-                    }
-                    shareWeekPlan();
-                  }}
-                >
-                  <ShareIosIcon className="w-4 h-4 shrink-0" />
-                  Поделиться неделей
                 </Button>
               </div>
             </div>
@@ -1851,6 +1843,27 @@ export default function MealPlanPage() {
         likes={memberDataForPlan?.likes}
         dislikes={memberDataForPlan?.dislikes}
       />
+
+      <Sheet open={planProfileHelpOpen} onOpenChange={setPlanProfileHelpOpen}>
+        <SheetContent side="bottom" className="rounded-t-2xl max-h-[88vh] overflow-y-auto pt-6 pb-8">
+          <SheetHeader className="text-left space-y-1 pr-8">
+            <SheetTitle>Профиль и меню</SheetTitle>
+            <SheetDescription className="text-left">
+              Что учитывается при подборе блюд на вкладке План (без лишнего текста на главном экране).
+            </SheetDescription>
+          </SheetHeader>
+          {members.length > 0 && memberDataForPlan ? (
+            <PlanProfileHelpBody
+              className="mt-4"
+              mode={isFamilySelected(selectedMemberId, members) ? "family" : "member"}
+              memberAgeMonths={"age_months" in memberDataForPlan ? memberDataForPlan.age_months : undefined}
+              memberAllergies={memberDataForPlan.allergies}
+              memberLikes={"likes" in memberDataForPlan ? memberDataForPlan.likes : undefined}
+              memberDislikes={memberDataForPlan.dislikes}
+            />
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <ConfirmActionModal
         open={clearConfirm !== null}

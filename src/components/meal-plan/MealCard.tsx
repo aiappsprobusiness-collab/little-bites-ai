@@ -198,6 +198,8 @@ export function MealCard({
           hint={hint ?? null}
           nutrition={nutrition}
           nutritionGoals={nutritionGoals ?? []}
+          nutritionGoalsMaxVisible={1}
+          nutritionGoalsQuiet
           onClick={handleClick}
           actions={
             showActionsCompact ? (
