@@ -70,6 +70,13 @@ import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsi
 import { checkRequestContextLeak, textContainsRequestContextLeak, cleanStepFromRequestContextLeak } from "../_shared/requestContextLeakGuard.ts";
 import { checkTitleLexicon } from "../_shared/titleLexiconGuard.ts";
 import { inferNutritionGoals } from "../_shared/recipeGoals.ts";
+import {
+  resolveRecipeGenerationRoute,
+  UNDER_6_RECIPE_BLOCK_MESSAGE,
+  type RecipeGenerationRouteKind,
+} from "./domain/recipe_generation/recipeGenerationRouting.ts";
+import { UNDER_6_RECIPE_BLOCK_REASON_CODE } from "./domain/recipe_generation/infantReasonCodes.ts";
+import { runInfantRecipeGeneration } from "./domain/recipe_generation/infantRecipe.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -502,10 +509,20 @@ serve(async (req) => {
               { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
-          const rows = (data ?? []) as Array<{ id?: string; name?: string; age_months?: number; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[] }>;
+          const rows = (data ?? []) as Array<{
+            id?: string;
+            name?: string;
+            type?: string;
+            age_months?: number;
+            allergies?: string[];
+            preferences?: string[];
+            likes?: string[];
+            dislikes?: string[];
+          }>;
           allMembers = rows.map((m) => ({
             ...(m.id && { id: m.id }),
             name: m.name,
+            ...(m.type && { type: m.type }),
             age_months: m.age_months ?? 0,
             allergies: m.allergies ?? [],
             ...(m.preferences && { preferences: m.preferences }),
@@ -614,6 +631,33 @@ serve(async (req) => {
       }
     }
 
+    let recipeGenerationKind: RecipeGenerationRouteKind = "standard";
+    if ((type === "chat" || type === "recipe") && isRecipeRequest) {
+      recipeGenerationKind = resolveRecipeGenerationRoute({
+        isRecipeRequest,
+        targetIsFamily,
+        member: memberDataForPrompt,
+      });
+      if (recipeGenerationKind === "under_6_block") {
+        const ageM = memberDataForPrompt?.age_months ?? memberDataForPrompt?.ageMonths;
+        console.log(JSON.stringify({
+          tag: "under_6_recipe_block",
+          requestId,
+          reason_code: UNDER_6_RECIPE_BLOCK_REASON_CODE,
+          age_months: typeof ageM === "number" ? ageM : null,
+        }));
+        return new Response(
+          JSON.stringify({
+            message: UNDER_6_RECIPE_BLOCK_MESSAGE,
+            recipes: [],
+            route: "under_6_recipe_block",
+            reason_code: UNDER_6_RECIPE_BLOCK_REASON_CODE,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     // В режиме «Семья» подменяем generationContextBlock на server-truth (без младенцев <12m, без "Children:", без "safe for ALL children")
     let effectiveGenerationContextBlock: string = typeof reqGenerationContextBlock === "string" ? reqGenerationContextBlock : "";
     if (targetIsFamily && allMembersForPrompt.length > 0) {
@@ -663,14 +707,20 @@ serve(async (req) => {
       isRecipeRequest && userMessage && isExplicitDishRequest(userMessage) && inferMealTypeFromQuery(userMessage)
         ? inferMealTypeFromQuery(userMessage)!
         : (reqMealType ?? "");
-    let systemPrompt = isRecipeRequest
-      ? generateRecipeSystemPromptV3(memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, {
+    const skipStandardRecipeLlm = isRecipeRequest && recipeGenerationKind === "infant" && !!memberDataForPrompt;
+    let systemPrompt: string;
+    if (!isRecipeRequest) {
+      systemPrompt = getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
+    } else if (skipStandardRecipeLlm) {
+      systemPrompt = "";
+    } else {
+      systemPrompt = generateRecipeSystemPromptV3(memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, {
         mealType: mealTypeForPrompt,
         maxCookingTime: reqMaxCookingTime,
         servings,
         recentTitleKeysLine,
-      })
-      : getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
+      });
+    }
 
     // Раньше для Premium "soft" давали краткий ответ без рецепта; после рефактора relevance только allow/reject — при allow всегда генерируем рецепт, этот блок не используется
     if (false) {
@@ -712,7 +762,7 @@ serve(async (req) => {
       const favorRoll = shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type });
       const { repeatedLikes, windowTitles } = detectRepeatedLikesInRecentTitles(likesForPrompt, recentTitleKeys, { window: 3 });
       const applyPositiveLikes = likesForPrompt.length > 0 && favorRoll && repeatedLikes.length === 0;
-      const applyAntiRepeatLikes = isRecipeRequest && likesForPrompt.length > 0 && repeatedLikes.length > 0;
+      const applyAntiRepeatLikes = isRecipeRequest && !skipStandardRecipeLlm && likesForPrompt.length > 0 && repeatedLikes.length > 0;
 
       if (likesDebug) {
         let reasonDbg = "no_likes_in_profile";
@@ -742,7 +792,7 @@ serve(async (req) => {
       }
       if (applyPositiveLikes) {
         const joined = likesForPrompt.join(", ");
-        if (isRecipeRequest) {
+        if (isRecipeRequest && !skipStandardRecipeLlm) {
           systemPrompt += "\n\n" + buildRecipeSoftLikesPromptBlock(joined, targetIsFamily);
           systemPrompt += "\n\n" + LIKES_DIVERSITY_RULE.trim();
         } else {
@@ -772,142 +822,200 @@ serve(async (req) => {
     let data: { choices?: Array<{ message?: { content?: string } }>; usage?: unknown } = {};
     let responseRecipes: Array<Record<string, unknown>> = [];
 
-    safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
+    safeLog(
+      "FINAL_SYSTEM_PROMPT:",
+      skipStandardRecipeLlm ? "(infant recipe path — отдельный system prompt в runInfantRecipeGeneration)" : currentSystemPrompt.slice(0, 200) + "...",
+    );
 
     const isExpertSoft = false;
     const maxTokensChat =
       type === "chat" && !isExpertSoft ? tariffResult.maxTokens : undefined;
-    const promptConfig = {
-      maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : 8192),
-    };
-    const messagesForPayload = isRecipeRequest
-      ? [{ role: "user" as const, content: userMessage }]
-      : messages;
-    const payload = {
-      model: "deepseek-chat",
-      messages: [{ role: "system", content: currentSystemPrompt }, ...messagesForPayload],
-      stream: false,
-      max_tokens: promptConfig.maxTokens,
-      temperature: isRecipeRequest ? 0.4 : 0.7,
-      top_p: 0.8,
-      repetition_penalty: 1.1,
-      ...(isRecipeRequest && { response_format: { type: "json_object" } }),
-    };
-
-    const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "sos_consultant" ? 30000 : 120000);
-    const timeoutMs = MAIN_LLM_TIMEOUT_MS;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const tLlmStart = Date.now();
-    const lastUserMsg = messagesForPayload.length
-      ? String(messagesForPayload[messagesForPayload.length - 1]?.content ?? "")
-      : "";
-    safeLog(
-      "SENDING PAYLOAD_META:",
-      JSON.stringify({
-        model: payload.model,
-        max_tokens: payload.max_tokens,
-        response_format: isRecipeRequest ? "json_object" : undefined,
-        system_prompt_chars: currentSystemPrompt.length,
-        messages_count: payload.messages.length,
-        last_user_message_chars: lastUserMsg.length,
-      }),
-    );
-    let response: Response;
-    try {
-      response = await fetch("https://api.deepseek.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
+
+    if (skipStandardRecipeLlm && memberDataForPrompt) {
+      const inf = await runInfantRecipeGeneration({
+        apiKey: DEEPSEEK_API_KEY,
+        userMessage,
+        member: memberDataForPrompt,
+        requestId,
+        mealType: mealTypeForPrompt,
+        maxCookingTime: reqMaxCookingTime,
+        servings,
+        recentTitleKeysLine,
       });
-      clearTimeout(timeoutId);
-    } catch (error) {
-      clearTimeout(timeoutId);
-      safeError("deepseek-chat request error", serializeError(error));
-      if (error instanceof Error && error.name === "AbortError") {
-        logPerf("llm_ttfb", tLlmStart, requestId);
-        logPerf("llm_total", tLlmStart, requestId);
-        logPerf("total_ms", t0, requestId);
-        if (isRecipeRequest) {
-          const minimal = getMinimalRecipe((body as { mealType?: string }).mealType ?? "snack");
+      if (!inf.ok) {
+        console.log(JSON.stringify({
+          tag: "recipe_infant_path",
+          requestId,
+          phase: "rejected",
+          reason_code: inf.reason_code,
+          severity_outward: inf.severity_outward,
+          retry_count: inf.retryCount,
+          validator: inf.lastValidation
+            ? {
+              ok: inf.lastValidation.ok,
+              severity: inf.lastValidation.severity,
+              severity_outward: inf.lastValidation.severity === "technical" ? "hard" : inf.lastValidation.severity,
+              reason_code: inf.lastValidation.reason_code,
+            }
+            : undefined,
+        }));
+        return new Response(
+          JSON.stringify({
+            message: inf.userMessage,
+            recipes: [],
+            route: "infant_recipe_rejected",
+            reason_code: inf.reason_code,
+            severity_outward: inf.severity_outward,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      assistantMessage = JSON.stringify(inf.recipe);
+      responseRecipes = [inf.recipe as Record<string, unknown>];
+      data = { choices: [{ message: { content: assistantMessage } }], usage: inf.usage };
+      console.log(JSON.stringify({
+        tag: "recipe_infant_path",
+        requestId,
+        phase: "ok",
+        retry_count: inf.retryCount,
+        validator_reason: inf.lastValidation.reason_code,
+      }));
+      logPerf("llm_ttfb", tLlmStart, requestId);
+      logPerf("llm_body", tLlmStart, requestId, { response_chars: assistantMessage.length });
+      logPerf("llm_total", tLlmStart, requestId);
+    } else {
+      const promptConfig = {
+        maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : 8192),
+      };
+      const messagesForPayload = isRecipeRequest
+        ? [{ role: "user" as const, content: userMessage }]
+        : messages;
+      const payload = {
+        model: "deepseek-chat",
+        messages: [{ role: "system", content: currentSystemPrompt }, ...messagesForPayload],
+        stream: false,
+        max_tokens: promptConfig.maxTokens,
+        temperature: isRecipeRequest ? 0.4 : 0.7,
+        top_p: 0.8,
+        repetition_penalty: 1.1,
+        ...(isRecipeRequest && { response_format: { type: "json_object" } }),
+      };
+
+      const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "sos_consultant" ? 30000 : 120000);
+      const timeoutMs = MAIN_LLM_TIMEOUT_MS;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      const lastUserMsg = messagesForPayload.length
+        ? String(messagesForPayload[messagesForPayload.length - 1]?.content ?? "")
+        : "";
+      safeLog(
+        "SENDING PAYLOAD_META:",
+        JSON.stringify({
+          model: payload.model,
+          max_tokens: payload.max_tokens,
+          response_format: isRecipeRequest ? "json_object" : undefined,
+          system_prompt_chars: currentSystemPrompt.length,
+          messages_count: payload.messages.length,
+          last_user_message_chars: lastUserMsg.length,
+        }),
+      );
+      let response: Response;
+      try {
+        response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        safeError("deepseek-chat request error", serializeError(error));
+        if (error instanceof Error && error.name === "AbortError") {
+          logPerf("llm_ttfb", tLlmStart, requestId);
+          logPerf("llm_total", tLlmStart, requestId);
+          logPerf("total_ms", t0, requestId);
+          if (isRecipeRequest) {
+            const minimal = getMinimalRecipe((body as { mealType?: string }).mealType ?? "snack");
+            return new Response(
+              JSON.stringify({
+                message: JSON.stringify(minimal),
+                recipes: [minimal],
+                recipe_id: null,
+                _timeout: true,
+              }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          const fallbackMsg = `Request timeout after ${timeoutMs}ms`;
           return new Response(
-            JSON.stringify({
-              message: JSON.stringify(minimal),
-              recipes: [minimal],
-              recipe_id: null,
-              _timeout: true,
-            }),
+            JSON.stringify({ error: "timeout", message: fallbackMsg }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        const fallbackMsg = `Request timeout after ${timeoutMs}ms`;
+        throw error;
+      }
+      logPerf("llm_ttfb", tLlmStart, requestId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        safeError("DeepSeek API error", { ...serializeError(new Error(`HTTP ${response.status}`)), status: response.status, body: errorText.slice(0, 500) });
+        if (response.status === 429) {
+          return new Response(
+            JSON.stringify({ error: "rate_limit", message: "Превышен лимит запросов DeepSeek. Попробуйте позже." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        const message = "DeepSeek вернул ошибку. Попробуйте ещё раз.";
         return new Response(
-          JSON.stringify({ error: "timeout", message: fallbackMsg }),
+          JSON.stringify({ error: "api_error", message, status: response.status }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      throw error;
-    }
-    const llmTtfbMs = Date.now() - tLlmStart;
-    logPerf("llm_ttfb", tLlmStart, requestId);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      safeError("DeepSeek API error", { ...serializeError(new Error(`HTTP ${response.status}`)), status: response.status, body: errorText.slice(0, 500) });
-      if (response.status === 429) {
+      const tBodyStart = Date.now();
+      let bodyText: string;
+      try {
+        bodyText = await response.text();
+      } catch (err) {
+        safeWarn("response.text failed", serializeError(err));
         return new Response(
-          JSON.stringify({ error: "rate_limit", message: "Превышен лимит запросов DeepSeek. Попробуйте позже." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const message = "DeepSeek вернул ошибку. Попробуйте ещё раз.";
-      return new Response(
-        JSON.stringify({ error: "api_error", message, status: response.status }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const tBodyStart = Date.now();
-    let bodyText: string;
-    try {
-      bodyText = await response.text();
-    } catch (err) {
-      safeWarn("response.text failed", serializeError(err));
-      return new Response(
-        JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    const llmBodyMs = Date.now() - tBodyStart;
-    try {
-      data = JSON.parse(bodyText) as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
-    } catch (err) {
-      safeWarn("parse response body failed", serializeError(err));
-      return new Response(
-        JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
-    logPerf("llm_body", tBodyStart, requestId, { response_chars: assistantMessage.length });
-    const llmTotalMs = Date.now() - tLlmStart;
-    logPerf("llm_total", tLlmStart, requestId);
-    if (!assistantMessage) {
-      return new Response(
-        JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      const llmBodyMs = Date.now() - tBodyStart;
+      try {
+        data = JSON.parse(bodyText) as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
+      } catch (err) {
+        safeWarn("parse response body failed", serializeError(err));
+        return new Response(
+          JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      assistantMessage = (data.choices?.[0]?.message?.content ?? "").trim();
+      logPerf("llm_body", tBodyStart, requestId, { response_chars: assistantMessage.length });
+      const llmTotalMs = Date.now() - tLlmStart;
+      logPerf("llm_total", tLlmStart, requestId);
+      if (!assistantMessage) {
+        return new Response(
+          JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     /** true если первый LLM-ответ валиден, но chefAdvice не прошёл gate — полный retry больше не делаем. */
     let recipeQualityRetrySkippedDueToBadChefAdvice = false;
 
-    if (isRecipeJsonRequest) {
+    if (isRecipeJsonRequest && !skipStandardRecipeLlm) {
       const tNormStart = Date.now();
       const parseLog = (msg: string, meta?: Record<string, unknown>) =>
         console.log(JSON.stringify({ tag: "RECIPE_PARSE", requestId, ...meta, msg }));

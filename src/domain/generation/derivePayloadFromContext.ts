@@ -5,6 +5,8 @@ export interface MemberDataPayload {
   name: string;
   birth_date?: string;
   ageMonths: number;
+  /** v2 members.type — передаётся на Edge для recipe routing (infant / under-6). */
+  type?: string;
   allergies?: string[];
   ageDescription?: string;
   preferences?: string[];
@@ -32,6 +34,7 @@ export interface MemberWithAgeMonths {
   id: string;
   name: string;
   age_months?: number | null;
+  type?: string | null;
   allergies?: string[] | null;
   preferences?: string[] | null;
 }
@@ -64,10 +67,13 @@ export function derivePayloadFromContext(
     const allergies = (p.allergies ?? []).filter((a) => a?.trim());
     const likes = (p.likes ?? []).filter((a) => a?.trim());
     const dislikes = (p.dislikes ?? []).filter((a) => a?.trim());
+    const rowType = membersWithAgeMonths.find((x) => x.id === p.id)?.type;
+    const typeStr = typeof rowType === "string" && rowType.trim() ? rowType.trim().toLowerCase() : undefined;
     return {
       memberData: {
         name: p.name,
         ageMonths,
+        ...(typeStr ? { type: typeStr } : {}),
         allergies: allergies.length ? allergies : undefined,
         likes: likes.length ? likes : undefined,
         dislikes: dislikes.length ? dislikes : undefined,

@@ -151,6 +151,7 @@ export function useDeepSeekAPI() {
         id: c.id,
         name: c.name,
         age_months: c.age_months,
+        type: c.type,
         allergies: c.allergies,
       })));
       const generationContextBlock = buildPrompt(context, freshMembers.map((c) => ({

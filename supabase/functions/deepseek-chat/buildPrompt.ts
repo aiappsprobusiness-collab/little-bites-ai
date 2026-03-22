@@ -20,6 +20,8 @@ import { getFamilyContextPromptLine, getFamilyContextPromptLineEmpty } from "./d
 export interface MemberData {
   id?: string;
   name?: string;
+  /** v2 members.type: child | adult | family — для routing recipe path (infant / under-6). */
+  type?: string;
   birth_date?: string;
   age_months?: number;
   ageMonths?: number;
@@ -81,7 +83,13 @@ export function normalizeMemberData(raw: MemberData | null | undefined): MemberD
     const parsed = parseInt(months, 10);
     num = !Number.isNaN(parsed) ? Math.max(0, parsed) : undefined;
   }
-  return { ...raw, age_months: num, ageMonths: num };
+  const typeTrim = typeof raw.type === "string" ? raw.type.trim().toLowerCase() : "";
+  return {
+    ...raw,
+    age_months: num,
+    ageMonths: num,
+    ...(typeTrim ? { type: typeTrim } : {}),
+  };
 }
 
 export function findYoungestMember(members: MemberData[]): MemberData | null {

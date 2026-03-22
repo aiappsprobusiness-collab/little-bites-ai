@@ -12,7 +12,25 @@
 - **domain/recipe_io** — парсинг/валидация/retry JSON рецепта, описание/совет шефа, ремонт и санитизация.
 - **domain/meal** — определение типа приёма пищи из запроса, дефолты (servings, maxCookingTime).
 
-Оркестратор **index.ts**: вход → policy-block → сборка промпта → вызов модели → parse/repair → сохранение → ответ.
+Оркестратор **index.ts**: вход → policy-block → **маршрут recipe-generation** (standard / infant / блок 0–5 мес) → сборка промпта → вызов модели → parse/repair → сохранение → ответ.
+
+### Маршрутизация recipe-generation (прикорм 6–11 мес и блок 0–5 мес)
+
+Действует **только** если запрос уже попал в **recipe-generation path** (`isRecipeRequest`: `type === "recipe"` или `type === "chat"` после allow по релевантности). **Не** влияет на SOS, balance_check, нерелевантный чат, assistant_topic.
+
+| Ветка | Условие | Поведение |
+|--------|---------|-----------|
+| **under_6_block** | `targetIsFamily === false`, профиль **child** (`members.type` или fallback см. ниже), числовой **age_months** ∈ [0, 5] | Ответ с текстом-подсказкой, `recipes: []`, `route: "under_6_recipe_block"`. Без LLM, без сохранения рецепта, без списания успешной генерации в `usage_events` (рецепта нет). |
+| **infant** | не семья, **child**, числовой **age_months** ∈ [6, 11] | Отдельный компактный промпт (**domain/recipe_generation/infantRecipePrompt.ts**), вызов LLM через **runInfantRecipeGeneration**, Zod как у standard, затем **validateInfantRecipe**. До 2 попыток LLM при провале схемы/валидатора. Успех → тот же пост-пайплайн санитизации/сохранения, что и у standard JSON. |
+| **standard** | семья, взрослый, ребёнок ≥12 мес, ребёнок без числового возраста, неизвестный тип при возрасте ≥12 мес | Текущий **generateRecipeSystemPromptV3** без изменений правил. |
+
+**Семья:** infant path **не** используется; общие семейные рецепты остаются на standard path (без вывода «младенческого» сценария из состава семьи).
+
+**Отсутствие `age_months` у child:** infant и under_6 **не** включаются → **standard** path. Это продуктовый компромисс: корректность infant-routing зависит от полноты профиля; отдельный UX «укажите возраст» в первой версии не добавлялся.
+
+**Отсутствие `type` в запросе:** если с клиента не передан `type`, Edge может считать профиль «ребёнком» только при эвристике **числовой возраст &lt; 12 мес** (`normalizeMemberTypeForRecipeRouting` в **recipeGenerationRouting.ts**). Явный **`type: "adult"`** отключает infant/under_6.
+
+**Границы 6–11 / 0–5 / 12+:** это **решение продукта для routing генерации рецептов**, а не медицинское утверждение. Infant path закрывает узкий сценарий прикорма в чате; 0–5 мес — без генерации рецепта (мягкое сообщение); с 12 мес ребёнок идёт в тот же standard JSON-путь, что и раньше (toddler-правила в общей системе возрастных категорий).
 
 ---
 
@@ -24,6 +42,7 @@
 - **Парсинг/валидация/retry рецепта, описание/совет, санитизация** — `deepseek-chat/domain/recipe_io/`, `_shared/parsing/`, `_shared/recipeCopy.ts`; схема — `deepseek-chat/recipeSchema.ts`.
 - **Тип приёма пищи из запроса** — `deepseek-chat/domain/meal/` (re-export `_shared/mealType/inferMealType.ts`).
 - **Оркестрация, лимиты, сохранение в БД** — `deepseek-chat/index.ts`.
+- **Infant path / under-6 routing, reason_code** — `deepseek-chat/domain/recipe_generation/` (`recipeGenerationRouting.ts`, `infantReasonCodes.ts`, `infantSafetyValidator.ts`, `infantRecipe.ts`, `infantRecipePrompt.ts`).
 
 ---
 
@@ -35,7 +54,54 @@
 | ok (рецепт) | 200 | `message`, `recipes`, `recipe_id?` | Успешная генерация. |
 | ok (без рецепта) | 200 | `message`, `recipes: []` | Заглушка, SOS, анализ тарелки. |
 | redirect/irrelevant | 200 | `message`, `recipes: []`, `route: "assistant_topic" \| "irrelevant"`, при assistant_topic — `topicKey`, `topicTitle`, `topicShortTitle` | Маршрутизация: тема Помощника или нерелевантный запрос; фронт рендерит SystemHintCard (короткий текст, «Тема: {topicShortTitle}», кнопка «Перейти в Помощник»). |
+| under_6_recipe_block | 200 | `message`, `recipes: []`, `route: "under_6_recipe_block"`, **`reason_code`: `"under_6_recipe_block"`** | Только **recipe-generation path**: профиль **child** с числовым **age_months** 0–5. LLM не вызывается, рецепт не сохраняется. **`under_6_recipe_block`** — код блокировки routing, **не** код infant-validator. |
+| infant_recipe_rejected | 200 | `message`, `recipes: []`, `route: "infant_recipe_rejected"`, **`reason_code`**, **`severity_outward`**: `"soft"` \| `"hard"` | Только **infant path** (6–11 мес): отказ валидатора, pipeline или исчерпаны попытки. Внутренний `severity: "technical"` в логах маппится наружу в **`severity_outward: "hard"`**. |
 | ошибка | 200/429/500 | `error`, `message` | Лимит, таймаут, API/сервер. |
+
+### Единый текст under-6 (recipe path only)
+
+Текст поля **`message`** при **`route: "under_6_recipe_block"`** (абзацы разделены пустой строкой `\n\n`):
+
+1. Сейчас подбирать рецепты ещё рано — обычно прикорм начинают примерно с 6 месяцев.
+2. Пока лучше ориентироваться на привычное питание малыша и рекомендации вашего педиатра.
+3. Когда ребёнку исполнится 6 месяцев, я помогу подобрать первые блюда для начала прикорма.
+
+Константа в коде: **`UNDER_6_RECIPE_BLOCK_MESSAGE`** (`recipeGenerationRouting.ts`). В ответе также передаётся **`reason_code: "under_6_recipe_block"`** (константа **`UNDER_6_RECIPE_BLOCK_REASON_CODE`** в `infantReasonCodes.ts`).
+
+### Канонический словарь `reason_code` (infant validator + pipeline)
+
+Единый источник перечислений: **`supabase/functions/deepseek-chat/domain/recipe_generation/infantReasonCodes.ts`**. В логах и в ответе API используются **только** перечисленные ниже коды (без синонимов вроде `bad_recipe` / `too_complex` / `recipe_too_complex`).
+
+**Hard** (сразу отказ, **без** второго вызова LLM по результату validator):
+
+| reason_code | Назначение |
+|-------------|------------|
+| `invalid_age_range` | Infant path вызван при возрасте вне 6–11 мес (защита от ошибки routing). |
+| `too_many_ingredients_for_stage` | Слишком много ингредиентов для этапа. |
+| `too_complex_for_stage` | Слишком сложное блюдо / слишком много шагов / явно «взрослая» сложность для этапа. |
+| `invalid_texture_for_stage` | Текстура не соответствует этапу (например кусочки в 6–7 мес). |
+| `adult_style_dish` | Блюдо в стиле «взрослой» готовки (жарка, гриль, копчение и т.п.). |
+| `unsafe_serving_format` | Неподходящая подача (бутерброды, канапе, шпажки…). |
+| `stage_incompatible_recipe` | Рецепт в целом не соответствует этапу при прочих проверках. |
+
+**Soft** (одна **повторная** генерация с уточнением в system prompt):
+
+| reason_code | Назначение |
+|-------------|------------|
+| `too_many_new_elements_at_once` | Много компонентов на верхней границе нормы для этапа. |
+| `ambiguous_texture_description` | Текстура сформулирована неоднозначно (например потенциально жёсткие кусочки в 8–9 мес). |
+| `ambiguous_serving_guidance` | Зарезервировано под эвристики подачи (в коде может не срабатывать, пока нет правил). |
+| `insufficient_stage_adaptation` | Зарезервировано под недостаточную адаптацию под stage (эвристики по мере необходимости). |
+
+**Technical** (в логах `severity: "technical"`; наружу **`severity_outward: "hard"`**; рецепт не сохраняется):
+
+| reason_code | Назначение |
+|-------------|------------|
+| `infant_prompt_contract_violation` | Пустой или заведомо неверный ответ модели относительно контракта. |
+| `infant_recipe_parse_failed` | JSON/Zod не прошли после повторной попытки исправления в промпте. |
+| `infant_validator_internal_error` | Сбой вызова LLM (сеть, HTTP, таймаут и т.п.). |
+
+**Поведение retry в `runInfantRecipeGeneration`:** повторный вызов LLM — для **soft**-кодов валидатора и **один раз** для `infant_recipe_parse_failed` / уточнение при пустом ответе (`infant_prompt_contract_violation`); **hard**-validator → сразу ответ `infant_recipe_rejected`; **internal_error** → без retry.
 
 Примеры: **blocked** — `{"blocked":true,"blocked_by":"allergy","profile_name":"Ребёнок","blocked_items":["орехи"],"suggested_alternatives":[...],"message":"У профиля..."}`. **ok** — `{"message":"{...}","recipes":[{...}],"recipe_id":"uuid"}`. **Лимит** — `{"error":"LIMIT_REACHED","message":"Лимит на сегодня исчерпан.","payload":{"feature":"chat_recipe","limit":2,"used":2}}`.
 
@@ -205,7 +271,7 @@
 **Запрос (клиент → deepseek-chat):**
 
 - `messages`, `type` (chat | recipe | sos_consultant | balance_check)
-- `memberData` (name, ageMonths, allergies, likes, dislikes, difficulty)
+- `memberData` (name, ageMonths, **type** (child \| adult \| family), allergies, likes, dislikes, difficulty)
 - `targetIsFamily`, `memberId`, `allMembers` (в режиме «Семья»)
 - `generationContextBlock` (на Edge в режиме «Семья» подменяется)
 - `mealType`, `maxCookingTime`, при необходимости `extraSystemSuffix`
