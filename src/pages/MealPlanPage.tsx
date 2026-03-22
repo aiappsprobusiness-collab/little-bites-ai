@@ -1121,25 +1121,7 @@ export default function MealPlanPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 w-full flex items-center justify-center gap-2 rounded-xl border-border/60 bg-background/80 text-foreground hover:bg-muted/40 text-[13px] font-medium shadow-none"
-                type="button"
-                disabled={isAnyGenerating || !user}
-                onClick={() => {
-                  if (!hasAccess) {
-                    setPaywallCustomMessage("Список продуктов доступен в Premium");
-                    setShowPaywall(true);
-                    return;
-                  }
-                  setShoppingBuildSheetOpen(true);
-                }}
-              >
-                <ShoppingCart className="w-[17px] h-[17px] shrink-0 opacity-90" />
-                Список из меню
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 w-full flex items-center justify-center gap-1.5 rounded-xl border-border/50 bg-background/60 text-primary hover:bg-muted/35 text-xs font-medium shadow-none"
+                className="h-10 w-full flex items-center justify-center gap-2 rounded-xl border-border/60 bg-background text-foreground hover:bg-muted/40 text-[13px] font-medium shadow-none"
                 onClick={shareDayPlan}
                 disabled={isAnyGenerating}
               >
@@ -1752,6 +1734,24 @@ export default function MealPlanPage() {
                 );
               })}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              className="mt-2 w-full h-10 flex items-center justify-center gap-2 rounded-xl border-border/60 bg-background text-foreground hover:bg-muted/40 text-[13px] font-medium shadow-none"
+              disabled={isAnyGenerating || !user}
+              onClick={() => {
+                if (!hasAccess) {
+                  setPaywallCustomMessage("Список продуктов доступен в Premium");
+                  setShowPaywall(true);
+                  return;
+                }
+                setShoppingBuildSheetOpen(true);
+              }}
+            >
+              <ShoppingCart className="w-[17px] h-[17px] shrink-0 opacity-90" aria-hidden />
+              Собрать список продуктов
+            </Button>
             {/* Карточка «Спросить в чате» — только Free, план уже сгенерирован */}
             {isFree && (
               <motion.div

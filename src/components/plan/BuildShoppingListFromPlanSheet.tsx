@@ -87,7 +87,7 @@ export function BuildShoppingListFromPlanSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-2xl">
         <SheetHeader className="text-left">
-          <SheetTitle>Список из меню</SheetTitle>
+          <SheetTitle>Собрать список продуктов</SheetTitle>
           <SheetDescription>
             Соберём продукты из плана, суммируем одинаковые позиции. Список станет вашим черновиком: его можно менять вручную;
             изменения в плане не перезапишут его сами по себе.

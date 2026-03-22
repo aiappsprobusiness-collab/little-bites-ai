@@ -94,13 +94,13 @@ function ShoppingListItem({
   return (
     <div
       className={cn(
-        "rounded-lg border border-border bg-card overflow-hidden",
+        "rounded-lg border border-border/80 bg-card overflow-hidden",
         item.is_purchased && "opacity-60"
       )}
     >
       <div
         className={cn(
-          "flex items-center gap-3 px-3 py-2.5 min-h-[48px]",
+          "flex items-center gap-3 px-3 py-2 min-h-[44px]",
           hasSources && "cursor-pointer"
         )}
       >
@@ -384,13 +384,21 @@ export function ShoppingListView() {
 
   const listHasContent = items.length > 0;
 
+  const periodHeadline =
+    range === "today" ? "Список покупок на сегодня" : "Список покупок на неделю";
+  const periodSubline = listHasContent
+    ? null
+    : syncMetaStored?.last_synced_at
+      ? "Соберите снова из плана или добавьте вручную."
+      : "Соберите из плана или добавьте продукты вручную.";
+
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-foreground tracking-tight">Список покупок</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Черновик по меню: отмечайте купленное, удаляйте лишнее, добавляйте свои позиции.
-        </p>
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">{periodHeadline}</h2>
+        {periodSubline != null && (
+          <p className="text-xs text-muted-foreground mt-1">{periodSubline}</p>
+        )}
       </div>
 
       <BuildShoppingListFromPlanSheet
@@ -428,24 +436,6 @@ export function ShoppingListView() {
         <MemberSelectorButton className="shrink-0 ml-auto" />
       </div>
 
-      {/* Инфо: снимок, не live-зеркало */}
-      <div className="rounded-lg bg-muted/40 border border-border/50 px-3 py-2 text-sm text-muted-foreground">
-        <p>
-          {listHasContent
-            ? range === "today"
-              ? "Снимок по меню на сегодня. План дальше меняется отдельно — список не обновляется сам."
-              : "Снимок по меню на неделю. План дальше меняется отдельно — список не обновляется сам."
-            : syncMetaStored?.last_synced_at
-              ? "Список пуст. Соберите снова из меню или добавьте позиции вручную."
-              : range === "today"
-                ? "Соберите список из меню на сегодня или на неделю — одинаковые продукты суммируются."
-                : "Соберите список из меню на сегодня или на неделю — одинаковые продукты суммируются."}
-        </p>
-        <p className="mt-0.5 text-xs">
-          Основной вход: вкладка План → «Список из меню». Здесь — ваш рабочий список.
-        </p>
-      </div>
-
       {!loading && items.length > 0 && planDrift && (
         <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <p className="text-xs text-muted-foreground">В меню есть изменения после последней сборки.</p>
@@ -460,69 +450,72 @@ export function ShoppingListView() {
         </div>
       )}
 
-      {/* Компактный action row: Copy (только для личного использования), More */}
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="gap-1.5 h-8 text-muted-foreground" onClick={handleCopy}>
-          <Copy className="w-3.5 h-3.5" />
-          <span className="text-xs">Скопировать список продуктов</span>
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 ml-auto">
-              <MoreVertical className="w-4 h-4" aria-label="Ещё" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={() => void handleRebuildFromPlan()}>Собрать заново из меню</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setAddProductSheetOpen(true)}>
-              <ListPlus className="w-3.5 h-3.5 mr-2" />
-              Добавить продукт вручную
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleRemovePurchased} disabled={!items.some((i) => i.is_purchased)}>
-              Убрать купленные
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleClear} disabled={items.length === 0} className="text-destructive focus:text-destructive">
-              Очистить список
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Поиск + кнопка Фильтр */}
-      {!loading && items.length > 0 && (
-        <div className="flex items-center gap-2">
-          <Input
-            type="search"
-            placeholder="Поиск…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-9 flex-1 max-w-[200px] text-sm"
-            aria-label="Поиск по ингредиентам"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn("h-9 gap-1.5", filterActiveCount > 0 && "border-[#6b7c3d]/50 text-[#6b7c3d]")}
-            onClick={() => setFilterSheetOpen(true)}
-          >
-            <Filter className="w-3.5 h-3.5" />
-            Фильтр
-            {filterActiveCount > 0 && <span className="text-xs">({filterActiveCount})</span>}
-          </Button>
+      {/* Поиск, фильтр и меню — одна строка, если список не пустой; иначе только «Ещё» */}
+      {!loading && (
+        <div className={cn("flex items-center gap-2", items.length === 0 && "justify-end")}>
+          {items.length > 0 && (
+            <>
+              <Input
+                type="search"
+                placeholder="Поиск…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 flex-1 min-w-0 text-sm"
+                aria-label="Поиск по ингредиентам"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-9 shrink-0 gap-1.5 px-2.5 text-muted-foreground font-normal hover:text-foreground",
+                  filterActiveCount > 0 && "text-[#6b7c3d] hover:text-[#5a6b32]"
+                )}
+                onClick={() => setFilterSheetOpen(true)}
+              >
+                <Filter className="w-3.5 h-3.5 opacity-80" />
+                <span className="text-xs">Фильтр</span>
+                {filterActiveCount > 0 && <span className="text-xs font-medium">({filterActiveCount})</span>}
+              </Button>
+            </>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-9 w-9 shrink-0 p-0 text-muted-foreground">
+                <MoreVertical className="w-4 h-4" aria-label="Ещё" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => void handleRebuildFromPlan()}>Собрать заново из меню</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCopy} disabled={items.length === 0}>
+                <Copy className="w-3.5 h-3.5 mr-2" />
+                Скопировать список
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAddProductSheetOpen(true)}>
+                <ListPlus className="w-3.5 h-3.5 mr-2" />
+                Добавить продукт вручную
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleRemovePurchased} disabled={!items.some((i) => i.is_purchased)}>
+                Убрать купленные
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleClear} disabled={items.length === 0} className="text-destructive focus:text-destructive">
+                Очистить список
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
 
       {/* Filter sheet */}
       <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] flex flex-col p-0">
-          <SheetHeader className="p-4 pb-2 text-left">
-            <SheetTitle>Фильтры</SheetTitle>
-            <SheetDescription>Категории, рецепты и только некупленные</SheetDescription>
+          <SheetHeader className="p-5 pb-3 text-left space-y-1">
+            <SheetTitle className="text-base">Фильтр</SheetTitle>
+            <SheetDescription className="sr-only">Настройка отображения списка покупок</SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-hidden flex flex-col min-h-0 px-4 space-y-4">
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0 px-5 space-y-6 pb-2">
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">Категория</p>
-              <div className="flex flex-wrap gap-1.5">
+              <p className="text-xs font-medium text-muted-foreground mb-2.5">Категория</p>
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => setSelectedCategory("all")}
@@ -548,16 +541,18 @@ export function ShoppingListView() {
                 ))}
               </div>
             </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">Рецепты</p>
+            <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/90 mb-2.5">
+                Рецепты
+              </p>
               <input
                 type="search"
                 placeholder="Поиск по рецепту…"
                 value={recipeSearch}
                 onChange={(e) => setRecipeSearch(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm mb-2"
+                className="flex h-8 w-full rounded-md border border-border/60 bg-background/80 px-2.5 py-1 text-xs mb-2.5"
               />
-              <label className="flex items-center gap-2 py-1 cursor-pointer">
+              <label className="flex items-center gap-2.5 py-1 cursor-pointer min-h-9">
                 <input
                   type="checkbox"
                   checked={draftAllRecipes}
@@ -565,14 +560,14 @@ export function ShoppingListView() {
                     setDraftAllRecipes(e.target.checked);
                     if (e.target.checked) setDraftRecipeIds(new Set());
                   }}
-                  className="h-4 w-4 rounded border-border"
+                  className="h-4 w-4 rounded border-border shrink-0"
                 />
-                <span className="text-sm">Все рецепты</span>
+                <span className="text-sm text-foreground/90">Все рецепты</span>
               </label>
-              <ul className="max-h-32 overflow-y-auto space-y-0.5 mt-1">
+              <ul className="max-h-36 overflow-y-auto space-y-1 mt-1">
                 {filteredRecipesForSheet.map((r) => (
                   <li key={r.id}>
-                    <label className="flex items-center gap-2 py-1.5 cursor-pointer">
+                    <label className="flex items-center gap-2.5 py-1 min-h-8 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={!draftAllRecipes && draftRecipeIds.has(r.id)}
@@ -580,27 +575,33 @@ export function ShoppingListView() {
                         disabled={draftAllRecipes}
                         className="h-4 w-4 rounded border-border shrink-0"
                       />
-                      <span className="text-sm truncate">{r.title || "Без названия"}</span>
+                      <span className="text-sm text-foreground/85 truncate min-w-0 flex-1" title={r.title || undefined}>
+                        {r.title || "Без названия"}
+                      </span>
                     </label>
                   </li>
                 ))}
               </ul>
             </div>
-            <label className="flex items-center gap-2 py-2 cursor-pointer">
+            <label className="flex items-center gap-2.5 py-1 cursor-pointer min-h-10">
               <input
                 type="checkbox"
                 checked={filterOnlyUnpurchased}
                 onChange={(e) => setFilterOnlyUnpurchased(e.target.checked)}
-                className="h-4 w-4 rounded border-border"
+                className="h-4 w-4 rounded border-border shrink-0"
               />
               <span className="text-sm">Только некупленные</span>
             </label>
           </div>
-          <SheetFooter className="p-4 pt-2 border-t gap-2">
-            <Button variant="secondary" onClick={handleResetFilters}>
+          <SheetFooter className="p-5 pt-3 border-t flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3">
+            <button
+              type="button"
+              className="text-sm text-muted-foreground hover:text-foreground py-2 sm:py-0 self-center sm:self-auto"
+              onClick={handleResetFilters}
+            >
               Сбросить фильтры
-            </Button>
-            <Button className="bg-[#6b7c3d] hover:bg-[#5a6b32] text-white" onClick={handleApplyFilter}>
+            </button>
+            <Button className="w-full sm:w-auto bg-[#6b7c3d] hover:bg-[#5a6b32] text-white" onClick={handleApplyFilter}>
               Применить
             </Button>
           </SheetFooter>
@@ -654,31 +655,43 @@ export function ShoppingListView() {
       )}
 
       {!loading && items.length > 0 && (
-        <div className="space-y-4">
-          {filteredItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">По выбранным фильтрам ничего не найдено.</p>
-          ) : (
-            CATEGORY_ORDER.filter((c) => (byCategory[c]?.length ?? 0) > 0).map((cat) => (
-              <div key={cat}>
-                <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground tracking-wide mb-2">
-                  <IconBadge icon={CATEGORY_ICON[cat]} variant={CATEGORY_BADGE_VARIANT[cat]} size="sm" />
-                  <span className="text-foreground">{CATEGORY_LABEL[cat]}</span>
-                </h3>
-                <ul className="space-y-1.5">
-                  {byCategory[cat].map((item) => (
-                    <li key={item.id}>
-                      <ShoppingListItem
-                        item={item}
-                        onTogglePurchased={(id, is_purchased) => setItemPurchased({ itemId: id, is_purchased })}
-                        onDelete={(it) => handleDeleteItem(it)}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))
+        <>
+          <div className="space-y-5">
+            {filteredItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4">По выбранным фильтрам ничего не найдено.</p>
+            ) : (
+              CATEGORY_ORDER.filter((c) => (byCategory[c]?.length ?? 0) > 0).map((cat) => (
+                <div key={cat}>
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground tracking-wide mb-2.5">
+                    <IconBadge icon={CATEGORY_ICON[cat]} variant={CATEGORY_BADGE_VARIANT[cat]} size="sm" />
+                    <span className="text-foreground">{CATEGORY_LABEL[cat]}</span>
+                  </h3>
+                  <ul className="space-y-2">
+                    {byCategory[cat].map((item) => (
+                      <li key={item.id}>
+                        <ShoppingListItem
+                          item={item}
+                          onTogglePurchased={(id, is_purchased) => setItemPurchased({ itemId: id, is_purchased })}
+                          onDelete={(it) => handleDeleteItem(it)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))
+            )}
+          </div>
+          {filteredItems.length > 0 && (
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground py-2 -mt-1"
+            >
+              <Copy className="w-3.5 h-3.5 shrink-0 opacity-80" aria-hidden />
+              Скопировать список
+            </button>
           )}
-        </div>
+        </>
       )}
     </div>
   );
