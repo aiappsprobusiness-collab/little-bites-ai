@@ -72,11 +72,9 @@ import { checkTitleLexicon } from "../_shared/titleLexiconGuard.ts";
 import { inferNutritionGoals } from "../_shared/recipeGoals.ts";
 import {
   resolveRecipeGenerationRoute,
-  UNDER_6_RECIPE_BLOCK_MESSAGE,
+  buildUnder12CuratedRecipeBlockPayload,
   type RecipeGenerationRouteKind,
 } from "./domain/recipe_generation/recipeGenerationRouting.ts";
-import { UNDER_6_RECIPE_BLOCK_REASON_CODE } from "./domain/recipe_generation/infantReasonCodes.ts";
-import { runInfantRecipeGeneration } from "./domain/recipe_generation/infantRecipe.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -638,23 +636,19 @@ serve(async (req) => {
         targetIsFamily,
         member: memberDataForPrompt,
       });
-      if (recipeGenerationKind === "under_6_block") {
+      if (recipeGenerationKind === "under_12_curated_block") {
         const ageM = memberDataForPrompt?.age_months ?? memberDataForPrompt?.ageMonths;
+        const payload = buildUnder12CuratedRecipeBlockPayload();
         console.log(JSON.stringify({
-          tag: "under_6_recipe_block",
+          tag: "under_12_curated_recipe_block",
           requestId,
-          reason_code: UNDER_6_RECIPE_BLOCK_REASON_CODE,
+          reason_code: payload.reason_code,
           age_months: typeof ageM === "number" ? ageM : null,
         }));
-        return new Response(
-          JSON.stringify({
-            message: UNDER_6_RECIPE_BLOCK_MESSAGE,
-            recipes: [],
-            route: "under_6_recipe_block",
-            reason_code: UNDER_6_RECIPE_BLOCK_REASON_CODE,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -707,12 +701,9 @@ serve(async (req) => {
       isRecipeRequest && userMessage && isExplicitDishRequest(userMessage) && inferMealTypeFromQuery(userMessage)
         ? inferMealTypeFromQuery(userMessage)!
         : (reqMealType ?? "");
-    const skipStandardRecipeLlm = isRecipeRequest && recipeGenerationKind === "infant" && !!memberDataForPrompt;
     let systemPrompt: string;
     if (!isRecipeRequest) {
       systemPrompt = getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
-    } else if (skipStandardRecipeLlm) {
-      systemPrompt = "";
     } else {
       systemPrompt = generateRecipeSystemPromptV3(memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, {
         mealType: mealTypeForPrompt,
@@ -762,7 +753,7 @@ serve(async (req) => {
       const favorRoll = shouldFavorLikes({ requestId, userId: userId ?? undefined, mode: type });
       const { repeatedLikes, windowTitles } = detectRepeatedLikesInRecentTitles(likesForPrompt, recentTitleKeys, { window: 3 });
       const applyPositiveLikes = likesForPrompt.length > 0 && favorRoll && repeatedLikes.length === 0;
-      const applyAntiRepeatLikes = isRecipeRequest && !skipStandardRecipeLlm && likesForPrompt.length > 0 && repeatedLikes.length > 0;
+      const applyAntiRepeatLikes = isRecipeRequest && likesForPrompt.length > 0 && repeatedLikes.length > 0;
 
       if (likesDebug) {
         let reasonDbg = "no_likes_in_profile";
@@ -792,7 +783,7 @@ serve(async (req) => {
       }
       if (applyPositiveLikes) {
         const joined = likesForPrompt.join(", ");
-        if (isRecipeRequest && !skipStandardRecipeLlm) {
+        if (isRecipeRequest) {
           systemPrompt += "\n\n" + buildRecipeSoftLikesPromptBlock(joined, targetIsFamily);
           systemPrompt += "\n\n" + LIKES_DIVERSITY_RULE.trim();
         } else {
@@ -822,10 +813,7 @@ serve(async (req) => {
     let data: { choices?: Array<{ message?: { content?: string } }>; usage?: unknown } = {};
     let responseRecipes: Array<Record<string, unknown>> = [];
 
-    safeLog(
-      "FINAL_SYSTEM_PROMPT:",
-      skipStandardRecipeLlm ? "(infant recipe path — отдельный system prompt в runInfantRecipeGeneration)" : currentSystemPrompt.slice(0, 200) + "...",
-    );
+    safeLog("FINAL_SYSTEM_PROMPT:", currentSystemPrompt.slice(0, 200) + "...");
 
     const isExpertSoft = false;
     const maxTokensChat =
@@ -833,66 +821,13 @@ serve(async (req) => {
 
     const tLlmStart = Date.now();
 
-    if (skipStandardRecipeLlm && memberDataForPrompt) {
-      const inf = await runInfantRecipeGeneration({
-        apiKey: DEEPSEEK_API_KEY,
-        userMessage,
-        member: memberDataForPrompt,
-        requestId,
-        mealType: mealTypeForPrompt,
-        maxCookingTime: reqMaxCookingTime,
-        servings,
-        recentTitleKeysLine,
-      });
-      if (!inf.ok) {
-        console.log(JSON.stringify({
-          tag: "recipe_infant_path",
-          requestId,
-          phase: "rejected",
-          reason_code: inf.reason_code,
-          severity_outward: inf.severity_outward,
-          retry_count: inf.retryCount,
-          validator: inf.lastValidation
-            ? {
-              ok: inf.lastValidation.ok,
-              severity: inf.lastValidation.severity,
-              severity_outward: inf.lastValidation.severity === "technical" ? "hard" : inf.lastValidation.severity,
-              reason_code: inf.lastValidation.reason_code,
-            }
-            : undefined,
-        }));
-        return new Response(
-          JSON.stringify({
-            message: inf.userMessage,
-            recipes: [],
-            route: "infant_recipe_rejected",
-            reason_code: inf.reason_code,
-            severity_outward: inf.severity_outward,
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      assistantMessage = JSON.stringify(inf.recipe);
-      responseRecipes = [inf.recipe as Record<string, unknown>];
-      data = { choices: [{ message: { content: assistantMessage } }], usage: inf.usage };
-      console.log(JSON.stringify({
-        tag: "recipe_infant_path",
-        requestId,
-        phase: "ok",
-        retry_count: inf.retryCount,
-        validator_reason: inf.lastValidation.reason_code,
-      }));
-      logPerf("llm_ttfb", tLlmStart, requestId);
-      logPerf("llm_body", tLlmStart, requestId, { response_chars: assistantMessage.length });
-      logPerf("llm_total", tLlmStart, requestId);
-    } else {
-      const promptConfig = {
-        maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : 8192),
-      };
-      const messagesForPayload = isRecipeRequest
+    const promptConfig = {
+      maxTokens: isRecipeRequest ? RECIPE_MAX_TOKENS : maxTokensChat ?? (isExpertSoft ? 500 : 8192),
+    };
+    const messagesForPayload = isRecipeRequest
         ? [{ role: "user" as const, content: userMessage }]
         : messages;
-      const payload = {
+    const payload = {
         model: "deepseek-chat",
         messages: [{ role: "system", content: currentSystemPrompt }, ...messagesForPayload],
         stream: false,
@@ -1010,12 +945,11 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-    }
 
     /** true если первый LLM-ответ валиден, но chefAdvice не прошёл gate — полный retry больше не делаем. */
     let recipeQualityRetrySkippedDueToBadChefAdvice = false;
 
-    if (isRecipeJsonRequest && !skipStandardRecipeLlm) {
+    if (isRecipeJsonRequest) {
       const tNormStart = Date.now();
       const parseLog = (msg: string, meta?: Record<string, unknown>) =>
         console.log(JSON.stringify({ tag: "RECIPE_PARSE", requestId, ...meta, msg }));

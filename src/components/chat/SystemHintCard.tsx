@@ -11,6 +11,8 @@ export interface SystemHintCardProps {
   topicShortTitle?: string;
   /** При клике на кнопку: открыть вкладку Помощник. Для нерелевантных запросов не передавать — кнопка не показывается. */
   onOpenAssistant?: (topicKey?: string) => void;
+  /** Доп. кнопки под основным текстом (например «План» + «Помощь маме» для curated 0–11 мес). */
+  extraActions?: ReactNode;
   /** Слот для кнопки меню (⋯) в правом верхнем углу карточки. */
   actionSlot?: ReactNode;
   /** Время сообщения — одно отображение внутри карточки. */
@@ -26,6 +28,7 @@ export function SystemHintCard({
   topicKey,
   topicShortTitle,
   onOpenAssistant,
+  extraActions,
   actionSlot,
   timestamp,
 }: SystemHintCardProps) {
@@ -64,6 +67,7 @@ export function SystemHintCard({
               <ChevronRight className="h-3.5 w-3.5" />
             </Button>
           )}
+          {extraActions != null ? <div className="mt-2 flex flex-col gap-2">{extraActions}</div> : null}
           {timestamp != null && (
             <p className="text-xs text-muted-foreground pt-0.5">
               {timestamp.toLocaleTimeString("ru-RU", {

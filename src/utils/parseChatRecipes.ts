@@ -283,6 +283,10 @@ export function parseRecipeFromPlainText(text: string): ParsedRecipe | null {
     (item) => !(/^[А-ЯЁA-Z]/.test(item) && containsActionVerb(item))
   );
 
+  if (cleanedIngredients.length === 0 && steps.length === 0 && title === 'Рецепт из чата') {
+    return null;
+  }
+
   return {
     title: title.slice(0, 200),
     ingredients: cleanedIngredients,
@@ -639,12 +643,20 @@ const HUMAN_TEXT_MARKERS = [
   'Ребенок',
   'Для каждого',
   'Совет от шефа',
+  /** Ответы Edge без JSON: curated 0–11 мес / старые блоки / подсказки */
+  'Не удалось подобрать подходящее простое блюдо',
+  'схеме прикорма',
+  'подбирать рецепты ещё рано',
+  'Сейчас подбирать рецепты ещё рано',
+  'Для малышей до года мы не генерируем',
 ];
 
 function looksLikeHumanText(text: string): boolean {
-  if (!text || text.length < 150) return false;
+  if (!text) return false;
   const t = text.trim();
-  return HUMAN_TEXT_MARKERS.some((m) => t.includes(m)) || (t.split(/\n/).length >= 4 && t.length > 300);
+  if (HUMAN_TEXT_MARKERS.some((m) => t.includes(m))) return true;
+  if (t.length < 150) return false;
+  return t.split(/\n/).length >= 4 && t.length > 300;
 }
 
 /**

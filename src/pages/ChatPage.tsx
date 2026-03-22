@@ -40,6 +40,7 @@ import type { BlockedMeta } from "@/types/chatBlocked";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
 import { A2HS_EVENT_AFTER_FIRST_RECIPE, A2HS_EVENT_AFTER_TWO_RECIPES } from "@/hooks/usePWAInstall";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
@@ -469,7 +470,9 @@ export default function ChatPage() {
       const r = (response ?? "").trim();
       return (
         r.includes("Этот чат помогает подбирать рецепты") ||
-        r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
+        r.includes("Этот вопрос лучше задать во вкладке «Помощник»") ||
+        r.includes("Для малышей до года мы не генерируем") ||
+        r.includes("Сейчас подбирать рецепты ещё рано")
       );
     };
     const formatWithRecipeMap = (recipeMap: Record<string, ParsedRecipe>) => {
@@ -501,12 +504,15 @@ export default function ChatPage() {
           } else if (!msg.recipe_id && isRedirectOrIrrelevantResponse(msg.response)) {
             const r = (msg.response ?? "").trim();
             const meta = msg.meta && typeof msg.meta === "object" ? (msg.meta as Record<string, unknown>) : undefined;
+            const rawHint = typeof meta?.systemHintType === "string" ? meta.systemHintType : "";
             const systemHintType: SystemHintRoute =
-              typeof meta?.systemHintType === "string" && (meta.systemHintType === "assistant_topic_redirect" || meta.systemHintType === "assistant_irrelevant")
-                ? (meta.systemHintType as SystemHintRoute)
-                : r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
-                  ? "assistant_topic_redirect"
-                  : "assistant_irrelevant";
+              rawHint === "assistant_topic_redirect" || rawHint === "assistant_irrelevant" || rawHint === "curated_under_12_recipe"
+                ? (rawHint as SystemHintRoute)
+                : r.includes("Для малышей до года мы не генерируем") || r.includes("Сейчас подбирать рецепты ещё рано")
+                  ? "curated_under_12_recipe"
+                  : r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
+                    ? "assistant_topic_redirect"
+                    : "assistant_irrelevant";
             const fallbackMeta = getRedirectOrIrrelevantMeta(msg.message ?? "");
             const topicKey = (typeof meta?.topicKey === "string" ? meta.topicKey : undefined) ?? fallbackMeta?.topicKey;
             const topicTitle = (typeof meta?.topicTitle === "string" ? meta.topicTitle : undefined) ?? fallbackMeta?.topicTitle;
@@ -819,9 +825,21 @@ export default function ChatPage() {
           break;
         }
         apiRecipes = Array.isArray(response?.recipes) ? response.recipes : [];
+        const apiRouteEarly = (response as { route?: string })?.route;
+        /** Edge вернул готовый UX-текст без рецепта — не гонять parseRecipesFromChat (иначе «Рецепт из чата» + пустые шаги → validateRecipe: Invalid recipe format). */
+        const isStructuredTextNoRecipe =
+          apiRecipes.length === 0 &&
+          !!rawMessage &&
+          (apiRouteEarly === "under_12_curated_recipe_block" ||
+            apiRouteEarly === "under_6_recipe_block" ||
+            apiRouteEarly === "infant_recipe_rejected" ||
+            apiRouteEarly === "assistant_topic" ||
+            apiRouteEarly === "irrelevant");
         parsed = apiRecipes.length > 0
           ? parseRecipesFromApiResponse(apiRecipes as Array<Record<string, unknown>>, rawMessage || "Вот рецепт")
-          : parseRecipesFromChat(userMessage.content, rawMessage);
+          : isStructuredTextNoRecipe
+            ? { recipes: [], displayText: rawMessage }
+            : parseRecipesFromChat(userMessage.content, rawMessage);
         const recipe = parsed.recipes[0];
 
         if (!recipe) {
@@ -895,6 +913,10 @@ export default function ChatPage() {
         const systemHintType: SystemHintRoute =
           apiRoute === "assistant_topic" ? "assistant_topic_redirect"
           : apiRoute === "irrelevant" ? "assistant_irrelevant"
+          : apiRoute === "under_12_curated_recipe_block" ||
+              apiRoute === "under_6_recipe_block" ||
+              apiRoute === "infant_recipe_rejected"
+            ? "curated_under_12_recipe"
           : fallbackMeta?.route ?? "assistant_irrelevant";
         const topicKey = apiTopicKey ?? fallbackMeta?.topicKey;
         const topicTitle = apiTopicTitle ?? fallbackMeta?.topicTitle;
@@ -1489,6 +1511,18 @@ export default function ChatPage() {
                 topicKey={m.topicKey}
                 topicTitle={m.topicTitle}
                 topicShortTitle={m.topicShortTitle}
+                systemHintExtraActions={
+                  mode === "recipes" && m.systemHintType === "curated_under_12_recipe" ? (
+                    <>
+                      <Button type="button" variant="default" size="sm" className="h-8 w-full sm:w-auto" onClick={() => navigate("/meal-plan")}>
+                        Открыть план
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" className="h-8 w-full sm:w-auto" onClick={() => navigate("/sos")}>
+                        Помощь маме
+                      </Button>
+                    </>
+                  ) : undefined
+                }
                 onOpenAssistant={
                   mode === "recipes" && m.systemHintType === "assistant_topic_redirect"
                     ? (topicKey) => navigate("/sos" + (topicKey ? "?scenario=" + encodeURIComponent(topicKey) : ""))

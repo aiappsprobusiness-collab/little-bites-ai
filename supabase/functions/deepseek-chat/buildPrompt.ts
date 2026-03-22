@@ -20,7 +20,7 @@ import { getFamilyContextPromptLine, getFamilyContextPromptLineEmpty } from "./d
 export interface MemberData {
   id?: string;
   name?: string;
-  /** v2 members.type: child | adult | family — для routing recipe path (infant / under-6). */
+  /** v2 members.type: child | adult | family — для routing recipe path (блок 0–11 мес без AI — см. recipeGenerationRouting). */
   type?: string;
   birth_date?: string;
   age_months?: number;

@@ -52,7 +52,7 @@ export function getRedirectOrIrrelevantMessage(userMessage: string): string | nu
   return meta?.message ?? null;
 }
 
-export type SystemHintRoute = "assistant_topic_redirect" | "assistant_irrelevant";
+export type SystemHintRoute = "assistant_topic_redirect" | "assistant_irrelevant" | "curated_under_12_recipe";
 
 export interface RedirectOrIrrelevantMeta {
   message: string;

@@ -5,7 +5,7 @@ export interface MemberDataPayload {
   name: string;
   birth_date?: string;
   ageMonths: number;
-  /** v2 members.type — передаётся на Edge для recipe routing (infant / under-6). */
+  /** v2 members.type — передаётся на Edge для recipe routing (child до 12 мес: curated-only, без AI-рецепта в чате). */
   type?: string;
   allergies?: string[];
   ageDescription?: string;

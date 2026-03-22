@@ -239,7 +239,15 @@ export function useReplaceMealSlot(
         recipe_id?: string | null;
         recipes?: Array<{ title?: string }>;
         message?: string;
+        route?: string;
       };
+      if (data.route === "under_12_curated_recipe_block") {
+        throw new Error(
+          typeof data.message === "string" && data.message.trim()
+            ? data.message
+            : "Для малышей до года рецепты в чате не генерируются — выберите блюда в плане питания.",
+        );
+      }
       const recipeId = data.recipe_id ?? null;
       const title =
         data.recipes?.[0]?.title ?? (typeof data.message === "string" ? data.message.slice(0, 100) : "Рецепт");

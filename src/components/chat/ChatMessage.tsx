@@ -107,6 +107,8 @@ interface ChatMessageProps {
   topicTitle?: string;
   topicShortTitle?: string;
   onOpenAssistant?: (topicKey?: string) => void;
+  /** Доп. кнопки в SystemHintCard (curated 0–11 мес: план + Помощь маме). */
+  systemHintExtraActions?: ReactNode;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'snack' | 'dinner';
@@ -177,7 +179,7 @@ function isValidRecipeId(v: string): boolean {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, selectedProfileId, onOpenArticle, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false, systemHintType, topicKey, topicTitle, topicShortTitle, onOpenAssistant }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, selectedProfileId, onOpenArticle, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false, systemHintType, topicKey, topicTitle, topicShortTitle, onOpenAssistant, systemHintExtraActions }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const [addToPlanOpen, setAddToPlanOpen] = useState(false);
@@ -442,6 +444,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 topicKey={topicKey}
                 topicShortTitle={topicShortTitle}
                 onOpenAssistant={onOpenAssistant}
+                extraActions={systemHintExtraActions}
                 actionSlot={
                   <button
                     type="button"
