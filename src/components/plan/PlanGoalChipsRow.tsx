@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PLAN_GOAL_SELECT_ORDER, planGoalChipLabel } from "@/utils/planGoalSelect";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const MAX_VISIBLE_COLLAPSED = 3;
 
@@ -133,45 +133,99 @@ export function PlanGoalChipsRow({
 }
 
 /**
- * Компактная строка в hero Плана + нижний sheet с полным выбором целей (меньше визуального шума на экране).
+ * Пилюля цели: тот же уровень контрола, что профиль, но чуть тише (как `MemberSelectorButton variant="light"`).
  */
-export function PlanGoalCompactSheet({ className, ...rowProps }: PlanGoalChipsRowProps) {
+const planGoalSelectorPillBase =
+  "flex items-center gap-1.5 rounded-full min-h-[40px] h-9 px-3 py-2 text-sm font-medium text-foreground bg-muted/60 border border-border whitespace-nowrap truncate max-w-[140px] shadow-none transition-colors";
+
+export type PlanGoalCompactSheetProps = PlanGoalChipsRowProps & {
+  /** Во время генерации плана — как у селектора профиля. */
+  disabled?: boolean;
+};
+
+function isGoalRowSelected(value: string | null, g: string): boolean {
+  if (g === "balanced") return value === "balanced" || value === null;
+  return value === g;
+}
+
+/**
+ * Селектор цели в hero Плана (пилюля + ChevronDown) и диалог выбора в формате `MemberSelectorButton`.
+ * В `MealPlanPage` — в одном ряду с профилем: `justify-start gap-3`.
+ */
+export function PlanGoalCompactSheet({ className, disabled = false, ...rowProps }: PlanGoalCompactSheetProps) {
   const [open, setOpen] = useState(false);
   const summary =
     rowProps.value == null || rowProps.value === "balanced" ? "Баланс" : planGoalChipLabel(rowProps.value);
+
+  const { value, onChange, hasPremiumAccess = true, onLockedGoalClick } = rowProps;
+
+  const handleOpenChange = (next: boolean) => {
+    if (disabled && next) return;
+    setOpen(next);
+  };
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        disabled={disabled}
+        aria-disabled={disabled}
+        onClick={() => !disabled && setOpen(true)}
         className={cn(
-          "group flex w-full max-w-full items-center gap-1.5 border-0 bg-transparent py-1.5 pl-0 pr-1 text-left transition-colors active:opacity-90",
+          planGoalSelectorPillBase,
+          disabled ? "opacity-70 cursor-not-allowed pointer-events-none" : "hover:bg-muted active:opacity-95 cursor-pointer",
           className,
         )}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label={`Цель подбора: ${summary}. Открыть выбор`}
+        aria-label={`Выбрать цель подбора: ${summary}`}
       >
-        <span className="min-w-0 truncate text-sm font-medium text-foreground/90 group-hover:text-foreground">
-          {summary}
-        </span>
-        <ChevronRight
-          className="h-3.5 w-3.5 shrink-0 text-muted-foreground/35 group-hover:text-muted-foreground/60"
-          aria-hidden
-        />
+        <span className="min-w-0 truncate max-w-[100px]">{summary}</span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
       </button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[88vh] overflow-y-auto pt-6 pb-8">
-          <SheetHeader className="text-left space-y-1 pr-8">
-            <SheetTitle>Цель подбора меню</SheetTitle>
-            <SheetDescription className="text-left">
-              Учитывается при «Собрать день» и «Собрать неделю». Повторный тап по выбранной цели сбрасывает акцент (остаётся баланс).
-            </SheetDescription>
-          </SheetHeader>
-          <PlanGoalChipsRow {...rowProps} density="sheet" className="mt-5" />
-        </SheetContent>
-      </Sheet>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className="rounded-2xl max-w-[90vw]">
+          <DialogHeader>
+            <DialogTitle className="text-typo-title font-semibold">Цель подбора меню</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-1 py-2 max-h-[min(70vh,420px)] overflow-y-auto">
+            {PLAN_GOAL_SELECT_ORDER.map((g) => {
+              const label = planGoalChipLabel(g);
+              const isBalanced = g === "balanced";
+              const locked = !isBalanced && !hasPremiumAccess;
+              const selected = isGoalRowSelected(value, g);
+
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => {
+                    if (locked) {
+                      setOpen(false);
+                      onLockedGoalClick?.();
+                      return;
+                    }
+                    if (selected) {
+                      onChange(null);
+                    } else {
+                      onChange(g);
+                    }
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "text-left py-3 px-4 rounded-xl min-h-[44px] transition-colors disabled:opacity-70",
+                    locked && "opacity-65 text-muted-foreground",
+                    selected && !locked ? "bg-primary-light font-medium text-text-main" : !locked && "hover:bg-muted text-foreground",
+                  )}
+                >
+                  {locked ? `${label} 🔒` : label}
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

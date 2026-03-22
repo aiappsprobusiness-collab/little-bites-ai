@@ -56,7 +56,7 @@
 - [x] Stage 4.3.1 — UI copy + layout (ранее hero `PlanModeHint`; с марта 2026 справка о профиле в меню «Ещё», см. `docs/dev/plan-tab-ui-quiet-hero-2026-03.md`)
 - [x] Stage 4.3.2 — PlanGoalChipsRow: Free только «Баланс»; остальные → paywall; `selectGoalForEdge` + хук `usePlanGenerationJob`
 - [x] Stage 4.3.3 — MealCard: бейдж «Под вашу цель» + короткое пояснение; строка «Подобрано с акцентом…»; при отсутствии совпадений по цели — дисклеймер
-- [x] Stage 4.3.4 — goals UI: на Плане (март 2026) компактная строка + sheet с полным списком (`PlanGoalCompactSheet`); ранее — свёртка до 3 + «…» в hero; убраны сводка «Подобрано с акцентом…» и лишние бейджи на карточках
+- [x] Stage 4.3.4 — goals UI: на Плане `PlanGoalCompactSheet` — пилюля-селектор рядом с профилем + bottom sheet; ранее — свёртка до 3 + «…» в hero; убраны сводка «Подобрано с акцентом…» и лишние бейджи на карточках
 - [x] Stage 4.3.5 — `PlanGoalChipsRow`: плавные переходы состояния + лёгкий `active:scale-[0.98]`; у locked чипов без press-scale
 - [x] Stage 4.3.6 — deterministic benefit text: единый модуль `supabase/functions/_shared/recipeBenefitDescription.ts` (реэкспорт в `src/utils/recipeBenefitDescription.ts`); для **`source = chat_ai`** **канонический `recipes.description`** = **LLM-first** (`pickCanonicalDescription`), fallback = тот же **builder** (универсальный текст по `nutrition_goals` + seed), **без** child/adult/family в пулах; контекстным остаётся только **заголовок** блока (`getBenefitLabel` по возрасту/профилю). Устаревший `recipeDescriptionComposer` не используется.
 - [ ] Stage 4.4 — Cultural / Cuisine-aware Pool Ranking (metadata + soft scoring + observability in generate-plan; see section below)
@@ -210,7 +210,7 @@ Stage **4.4.4** — финальный sync docs при закрытии Stage 4
 ## Stage 4.3.4 — Goals UI cleanup (plan)
 
 - `MealPlanPage`: строка «Подобрано с акцентом на…» удалена; дисклеймер «Не нашли точных совпадений…» тоже убран (Stage 4.3.4 follow-up).
-- `PlanGoalChipsRow`: в sheet по-прежнему полный список; в hero (март 2026) — `PlanGoalCompactSheet` вместо ряда чипов + «…».
+- `PlanGoalChipsRow`: строка чипсов остаётся для других контекстов; в hero `PlanGoalCompactSheet` — вторая пилюля рядом с профилем + **Dialog**-список целей (как у `MemberSelectorButton`).
 - `MealCard` / `RecipeCard` preview на Плане: `NutritionGoalsChips` **до 1** тихого чипа (`quiet`); без бейджа «Под вашу цель» и без `getGoalShortDescription` под карточкой.
 
 ## Stage 4.3.3 — Goal impact visible (plan UI) — superseded by 4.3.4 for copy density

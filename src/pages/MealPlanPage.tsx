@@ -39,7 +39,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getDebugPlanFromStorage, setDebugPlanInStorage } from "@/utils/debugPlan";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
@@ -224,18 +224,13 @@ const mealTypes = [
 /** Месяца в родительном падеже для дат: "11 марта", "9 февраля". */
 const MONTHS_GENITIVE = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
-/** Russian date: "Понедельник, 9 февраля" — weekday capitalized, month genitive lowercase */
+/** Одна строка для hero Плана: «Воскресенье, 22 марта» (ru-RU, месяц в родительном падеже). Без префикса «Сегодня». */
 function formatDayHeader(date: Date): string {
   const weekday = date.toLocaleDateString("ru-RU", { weekday: "long" });
   const capitalized = weekday.charAt(0).toUpperCase() + weekday.slice(1);
   const day = date.getDate();
   const month = MONTHS_GENITIVE[date.getMonth()];
   return `${capitalized}, ${day} ${month}`;
-}
-
-/** Короткая дата: "11 марта" (родительный падеж месяца). */
-function formatShortDate(date: Date): string {
-  return `${date.getDate()} ${MONTHS_GENITIVE[date.getMonth()]}`;
 }
 
 export default function MealPlanPage() {
@@ -966,34 +961,27 @@ export default function MealPlanPage() {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-semibold text-foreground leading-tight tracking-tight">
-                  {selectedDayKey === todayKey
-                    ? "Сегодня, " + formatDayHeader(selectedDate).split(", ")[0].toLowerCase()
-                    : formatDayHeader(selectedDate).split(", ")[0] + ", " + formatShortDate(selectedDate)}
+                <h2 className="text-lg font-semibold text-foreground leading-tight tracking-tight text-balance">
+                  {formatDayHeader(selectedDate)}
                 </h2>
-                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                  <span className="text-sm text-muted-foreground">{formatShortDate(selectedDate)}</span>
-                  {members.length > 0 && (
-                    <>
-                      <span className="text-muted-foreground/50">·</span>
-                      <MemberSelectorButton className="shrink-0" />
-                    </>
-                  )}
-                </div>
                 {members.length > 0 && (
-                  <PlanGoalCompactSheet
-                    value={planGoalSelection}
-                    onChange={setPlanGoalSelection}
-                    className="mt-3"
-                    hasPremiumAccess={hasAccess}
-                    onLockedGoalClick={() => {
-                      useAppStore.getState().setPaywallReason("plan_goal_select");
-                      useAppStore.getState().setPaywallCustomMessage(
-                        "Эти блюда подбираются с учётом цели питания. В Premium и Trial можно выбрать фокус подбора (Железо, Концентрация и др.).",
-                      );
-                      useAppStore.getState().setShowPaywall(true);
-                    }}
-                  />
+                  <div className="mt-3 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
+                    <MemberSelectorButton className="shrink-0" disabled={isAnyGenerating} />
+                    <PlanGoalCompactSheet
+                      value={planGoalSelection}
+                      onChange={setPlanGoalSelection}
+                      className="shrink-0"
+                      disabled={isAnyGenerating}
+                      hasPremiumAccess={hasAccess}
+                      onLockedGoalClick={() => {
+                        useAppStore.getState().setPaywallReason("plan_goal_select");
+                        useAppStore.getState().setPaywallCustomMessage(
+                          "Эти блюда подбираются с учётом цели питания. В Premium и Trial можно выбрать фокус подбора (Железо, Концентрация и др.).",
+                        );
+                        useAppStore.getState().setShowPaywall(true);
+                      }}
+                    />
+                  </div>
                 )}
                 {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
                   <span className="text-xs text-slate-500">DB: {dayDbCount} | AI: {dayAiCount}</span>
@@ -1852,11 +1840,8 @@ export default function MealPlanPage() {
 
       <Sheet open={planProfileHelpOpen} onOpenChange={setPlanProfileHelpOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[88vh] overflow-y-auto pt-6 pb-8">
-          <SheetHeader className="text-left space-y-1 pr-8">
+          <SheetHeader className="text-left pr-8">
             <SheetTitle>Профиль и меню</SheetTitle>
-            <SheetDescription className="text-left">
-              Что учитывается при подборе блюд на вкладке План (без лишнего текста на главном экране).
-            </SheetDescription>
           </SheetHeader>
           {members.length > 0 && memberDataForPlan ? (
             <PlanProfileHelpBody
