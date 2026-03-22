@@ -588,6 +588,8 @@ export default function MealPlanPage() {
   }, [selectedDayKey, dayMealPlans]);
   /** Единый источник: dayMealPlans (развёрнутые слоты из одной строки). Пустой день только когда загрузка завершена и слотов с recipe_id нет. При refetch после fill не показываем empty. */
   const hasNoDishes = dayMealPlans.filter((p) => p.recipe_id).length === 0;
+  /** Есть хотя бы одно блюдо в плане выбранного дня — для CTA «Отправить меню». */
+  const dayHasShareableMeals = !hasNoDishes;
   const isEmptyDay = !isLoading && !isFetching && hasNoDishes;
   /** Последняя генерация завершилась с сообщением «нет рецептов для взрослого» — показываем отдельный empty state. */
   const isAdultNoRecipesEmpty =
@@ -598,7 +600,7 @@ export default function MealPlanPage() {
     if (!justCreatedMemberId || planReadyToastShownRef.current) return;
     if (isLoading || isFetching) return;
     planReadyToastShownRef.current = true;
-    // Не сбрасываем justCreatedMemberId здесь — баннер «Поделиться меню» остаётся до закрытия пользователем
+    // Не сбрасываем justCreatedMemberId здесь — баннер «План готов» / «Отправить меню» остаётся до закрытия пользователем
     const t = toast({
       title: "План питания на сегодня готов 🍽",
       description: "Мы подобрали меню на сегодня",
@@ -947,14 +949,14 @@ export default function MealPlanPage() {
                 size="sm"
                 className="h-9 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium gap-1.5"
                 onClick={shareDayPlan}
-                disabled={isAnyGenerating}
+                disabled={isAnyGenerating || !dayHasShareableMeals}
               >
                 <ShareIosIcon className="w-4 h-4 shrink-0" />
-                Поделиться меню на день
+                Отправить меню
               </Button>
             </motion.div>
           )}
-          {/* 1) Hero: главные CTA сверху, шаринг ниже */}
+          {/* 1) Hero: «Собрать день» + «Собрать неделю»; отправка меню — под списком блюд */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1028,7 +1030,7 @@ export default function MealPlanPage() {
                         className="text-muted-foreground"
                       >
                         <ShareIosIcon className="w-4 h-4 mr-2 shrink-0" />
-                        Поделиться неделей
+                        Отправить меню на неделю
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
@@ -1117,16 +1119,6 @@ export default function MealPlanPage() {
               >
                 <Sparkles className="w-[18px] h-[18px] shrink-0" />
                 {isAnyGenerating ? "Собираем…" : "Собрать день"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-10 w-full flex items-center justify-center gap-2 rounded-xl border-border/60 bg-background text-foreground hover:bg-muted/40 text-[13px] font-medium shadow-none"
-                onClick={shareDayPlan}
-                disabled={isAnyGenerating}
-              >
-                <ShareIosIcon className="w-4 h-4 shrink-0" />
-                Поделиться днём
               </Button>
               <button
                 type="button"
@@ -1760,6 +1752,19 @@ export default function MealPlanPage() {
                   Собрать список продуктов
                 </Button>
               </motion.div>
+              {dayHasShareableMeals && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  className="w-full h-10 flex items-center justify-center gap-2 rounded-xl text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 shadow-none border-0"
+                  onClick={() => void shareDayPlan()}
+                  disabled={isAnyGenerating || !user}
+                >
+                  <ShareIosIcon className="w-4 h-4 shrink-0 opacity-80" aria-hidden />
+                  Отправить меню
+                </Button>
+              )}
             {/* Карточка «Спросить в чате» — только Free, план уже сгенерирован */}
             {isFree && (
               <motion.div
