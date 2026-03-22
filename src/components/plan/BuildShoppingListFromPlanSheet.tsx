@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,6 +11,7 @@ import { loadPlanShoppingIngredients, planShoppingIngredientsQueryKey } from "@/
 import { loadPlanSignature, planSignatureQueryKey } from "@/hooks/usePlanSignature";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { markShoppingListEntranceStagger } from "@/utils/shopping/shoppingListEntrance";
 
 export type BuildShoppingListFromPlanSheetProps = {
   open: boolean;
@@ -69,12 +72,13 @@ export function BuildShoppingListFromPlanSheet({
         last_synced_at: new Date().toISOString(),
       };
       await replaceItems({ items: payload, syncMeta: newSyncMeta });
+      markShoppingListEntranceStagger();
       await queryClient.invalidateQueries({ queryKey: planShoppingIngredientsQueryKey(user.id, range, planMemberId) });
       await queryClient.invalidateQueries({ queryKey: planSignatureQueryKey(user.id, range, planMemberId) });
       toast({ title: "Список собран из меню", description: "Можно редактировать и отмечать купленное." });
       onOpenChange(false);
       if (navigateToShoppingTabOnSuccess) {
-        navigate("/favorites", { state: { tab: "shopping_list" } });
+        navigate("/favorites", { state: { tab: "shopping_list", shoppingListJustBuilt: true } });
       }
     } catch {
       toast({ variant: "destructive", title: "Не удалось собрать список" });
@@ -132,14 +136,27 @@ export function BuildShoppingListFromPlanSheet({
           >
             Отмена
           </Button>
-          <Button
-            type="button"
-            className="w-full sm:flex-1 min-h-12 text-typo-body font-semibold bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
-            disabled={pending || !listId}
-            onClick={() => void handleBuild()}
+          <motion.div
+            className="w-full sm:flex-1"
+            whileTap={pending || !listId ? undefined : { scale: 0.97 }}
+            transition={{ type: "spring", stiffness: 520, damping: 28 }}
           >
-            {pending ? "Собираем…" : "Собрать список"}
-          </Button>
+            <Button
+              type="button"
+              className="w-full min-h-12 text-typo-body font-semibold bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
+              disabled={pending || !listId}
+              onClick={() => void handleBuild()}
+            >
+              {pending ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin opacity-90" aria-hidden />
+                  Собираем список…
+                </span>
+              ) : (
+                "Собрать список"
+              )}
+            </Button>
+          </motion.div>
         </SheetFooter>
       </SheetContent>
     </Sheet>

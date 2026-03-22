@@ -1736,24 +1736,30 @@ export default function MealPlanPage() {
             </div>
             {/* Зона под блюдами: заметная CTA + запас снизу, чтобы не сливаться с таббаром */}
             <div className="mt-3 space-y-3 pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))]">
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                className="w-full h-11 flex items-center justify-center gap-2 rounded-xl border-2 border-primary bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary text-[13px] font-semibold shadow-sm"
-                disabled={isAnyGenerating || !user}
-                onClick={() => {
-                  if (!hasAccess) {
-                    setPaywallCustomMessage("Список продуктов доступен в Premium");
-                    setShowPaywall(true);
-                    return;
-                  }
-                  setShoppingBuildSheetOpen(true);
-                }}
+              <motion.div
+                className="w-full"
+                whileTap={isAnyGenerating || !user ? undefined : { scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 520, damping: 28 }}
               >
-                <ShoppingCart className="w-[18px] h-[18px] shrink-0" aria-hidden />
-                Собрать список продуктов
-              </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  className="w-full h-11 flex items-center justify-center gap-2 rounded-xl border-2 border-primary bg-primary/5 text-primary hover:bg-primary/10 hover:border-primary text-[13px] font-semibold shadow-sm"
+                  disabled={isAnyGenerating || !user}
+                  onClick={() => {
+                    if (!hasAccess) {
+                      setPaywallCustomMessage("Список продуктов доступен в Premium");
+                      setShowPaywall(true);
+                      return;
+                    }
+                    setShoppingBuildSheetOpen(true);
+                  }}
+                >
+                  <ShoppingCart className="w-[18px] h-[18px] shrink-0" aria-hidden />
+                  Собрать список продуктов
+                </Button>
+              </motion.div>
             {/* Карточка «Спросить в чате» — только Free, план уже сгенерирован */}
             {isFree && (
               <motion.div

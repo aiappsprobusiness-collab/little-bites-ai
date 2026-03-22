@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Copy, MoreVertical, Filter, ShoppingCart, X, ChevronDown, ChevronRight, ListPlus, Carrot, Apple, Milk, Fish, Wheat, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { IconBadge, type IconBadgeVariant } from "@/components/ui/IconBadge";
@@ -38,6 +39,10 @@ import {
 import { capitalizeIngredientName, normalizeUnitForDisplay } from "@/utils/ingredientDisplay";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import {
+  SHOPPING_LIST_ENTRANCE_SESSION_KEY,
+  markShoppingListEntranceStagger,
+} from "@/utils/shopping/shoppingListEntrance";
 
 const CATEGORY_ORDER: ProductCategory[] = ["vegetables", "fruits", "dairy", "meat", "grains", "other"];
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
@@ -92,11 +97,11 @@ function ShoppingListItem({
   const hasSources = sources.length > 0;
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border border-border/80 bg-card overflow-hidden",
-        item.is_purchased && "opacity-60"
-      )}
+    <motion.div
+      className="rounded-lg border border-border/80 bg-card overflow-hidden"
+      initial={false}
+      animate={{ opacity: item.is_purchased ? 0.62 : 1 }}
+      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
         className={cn(
@@ -104,20 +109,38 @@ function ShoppingListItem({
           hasSources && "cursor-pointer"
         )}
       >
-        <button
+        <motion.button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onTogglePurchased(item.id, !item.is_purchased);
           }}
+          whileTap={{ scale: 0.92 }}
+          animate={
+            item.is_purchased ? { scale: [1, 1.1, 1] } : { scale: 1 }
+          }
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           className={cn(
-            "w-5 h-5 rounded border shrink-0 flex items-center justify-center transition-colors touch-manipulation",
+            "w-5 h-5 rounded border shrink-0 flex items-center justify-center touch-manipulation overflow-hidden",
             item.is_purchased ? "bg-[#6b7c3d] border-[#6b7c3d]" : "border-border bg-background"
           )}
           aria-label={item.is_purchased ? "Отметить не купленным" : "Отметить купленным"}
         >
-          {item.is_purchased && <span className="text-white text-xs">✓</span>}
-        </button>
+          <AnimatePresence mode="popLayout" initial={false}>
+            {item.is_purchased && (
+              <motion.span
+                key="ok"
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.4, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 480, damping: 26 }}
+                className="text-white text-xs leading-none"
+              >
+                ✓
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.button>
         <button
           type="button"
           onClick={() => hasSources && setExpanded((e) => !e)}
@@ -126,14 +149,20 @@ function ShoppingListItem({
             !hasSources && "cursor-default"
           )}
         >
-          <span
-            className={cn(
-              "text-sm flex-1 min-w-0",
-              item.is_purchased && "line-through text-muted-foreground"
-            )}
+          <motion.span
+            className="text-sm flex-1 min-w-0 block"
+            animate={{ opacity: item.is_purchased ? 0.72 : 1 }}
+            transition={{ duration: 0.2 }}
           >
-            {formatItemShort(item)}
-          </span>
+            <span
+              className={cn(
+                "inline transition-[text-decoration-color] duration-200",
+                item.is_purchased && "line-through decoration-muted-foreground/80 text-muted-foreground"
+              )}
+            >
+              {formatItemShort(item)}
+            </span>
+          </motion.span>
           {hasSources && (
             <span className="shrink-0 text-muted-foreground">
               {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -162,7 +191,7 @@ function ShoppingListItem({
           </ul>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -238,6 +267,7 @@ export function ShoppingListView() {
       } else {
         await replaceItems({ items: payload, syncMeta: newSyncMeta });
       }
+      markShoppingListEntranceStagger();
       toast({ title: "Список собран заново из меню" });
     } catch {
       toast({ variant: "destructive", title: "Не удалось собрать список" });
@@ -317,6 +347,63 @@ export function ShoppingListView() {
     acc[cat].push(item);
     return acc;
   }, {} as Record<ProductCategory, ShoppingListItemRow[]>);
+
+  const visibleCategories = CATEGORY_ORDER.filter((c) => (byCategory[c]?.length ?? 0) > 0);
+
+  const [listEntranceKey, setListEntranceKey] = useState(0);
+  useEffect(() => {
+    if (loading) return;
+    if (filteredItems.length === 0) return;
+    let armed = false;
+    try {
+      armed = sessionStorage.getItem(SHOPPING_LIST_ENTRANCE_SESSION_KEY) === "1";
+      if (armed) sessionStorage.removeItem(SHOPPING_LIST_ENTRANCE_SESSION_KEY);
+    } catch {
+      /* private mode */
+    }
+    if (!armed) return;
+    setListEntranceKey((k) => k + 1);
+    const n = filteredItems.length + visibleCategories.length;
+    const delayMs = Math.min(560, 240 + n * 22);
+    const t = window.setTimeout(() => {
+      try {
+        navigator.vibrate?.(12);
+      } catch {
+        /* unsupported */
+      }
+    }, delayMs);
+    return () => clearTimeout(t);
+  }, [loading, filteredItems.length, visibleCategories.length]);
+
+  const listStaggerVariants = useMemo(() => {
+    const n = Math.max(filteredItems.length + visibleCategories.length, 8);
+    const staggerItem = Math.min(0.034, Math.max(0.02, 0.52 / n));
+    return {
+      root: {
+        hidden: {},
+        show: {
+          transition: { staggerChildren: 0.075, delayChildren: 0.045 },
+        },
+      },
+      category: {
+        hidden: {},
+        show: {
+          transition: {
+            staggerChildren: staggerItem,
+            delayChildren: 0.08,
+          },
+        },
+      },
+      categoryHeader: {
+        hidden: { opacity: 0, y: 8 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] } },
+      },
+      row: {
+        hidden: { opacity: 0, y: 8 },
+        show: { opacity: 1, y: 0, transition: { duration: 0.18, ease: [0.22, 1, 0.36, 1] } },
+      },
+    };
+  }, [filteredItems.length, visibleCategories.length]);
 
   const filteredRecipesForSheet = useMemo(() => {
     if (!recipeSearch.trim()) return uniqueRecipes;
@@ -660,25 +747,40 @@ export function ShoppingListView() {
             {filteredItems.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4">По выбранным фильтрам ничего не найдено.</p>
             ) : (
-              CATEGORY_ORDER.filter((c) => (byCategory[c]?.length ?? 0) > 0).map((cat) => (
-                <div key={cat}>
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground tracking-wide mb-2.5">
-                    <IconBadge icon={CATEGORY_ICON[cat]} variant={CATEGORY_BADGE_VARIANT[cat]} size="sm" />
-                    <span className="text-foreground">{CATEGORY_LABEL[cat]}</span>
-                  </h3>
-                  <ul className="space-y-2">
-                    {byCategory[cat].map((item) => (
-                      <li key={item.id}>
-                        <ShoppingListItem
-                          item={item}
-                          onTogglePurchased={(id, is_purchased) => setItemPurchased({ itemId: id, is_purchased })}
-                          onDelete={(it) => handleDeleteItem(it)}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))
+              <motion.div
+                key={listEntranceKey}
+                className="space-y-5"
+                initial={listEntranceKey > 0 ? "hidden" : false}
+                animate="show"
+                variants={listStaggerVariants.root}
+              >
+                {visibleCategories.map((cat) => (
+                  <motion.section
+                    key={cat}
+                    variants={listStaggerVariants.category}
+                    className="block space-y-2"
+                  >
+                    <motion.h3
+                      variants={listStaggerVariants.categoryHeader}
+                      className="flex items-center gap-2 text-sm font-semibold text-foreground tracking-wide mb-2.5"
+                    >
+                      <IconBadge icon={CATEGORY_ICON[cat]} variant={CATEGORY_BADGE_VARIANT[cat]} size="sm" />
+                      <span className="text-foreground">{CATEGORY_LABEL[cat]}</span>
+                    </motion.h3>
+                    <div className="space-y-2">
+                      {byCategory[cat].map((item) => (
+                        <motion.div key={item.id} variants={listStaggerVariants.row}>
+                          <ShoppingListItem
+                            item={item}
+                            onTogglePurchased={(id, is_purchased) => setItemPurchased({ itemId: id, is_purchased })}
+                            onDelete={(it) => handleDeleteItem(it)}
+                          />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.section>
+                ))}
+              </motion.div>
             )}
           </div>
           {filteredItems.length > 0 && (

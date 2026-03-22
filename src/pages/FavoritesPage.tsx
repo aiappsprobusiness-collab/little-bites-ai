@@ -44,6 +44,8 @@ export default function FavoritesPage() {
     plannedDate?: string;
     mealType?: string;
     memberId?: string;
+    /** Мягкий вход на вкладку списка после сборки с плана */
+    shoppingListJustBuilt?: boolean;
   } | null;
   const stateTab = locationState?.tab;
   const planSlotFromNav =
@@ -55,10 +57,22 @@ export default function FavoritesPage() {
         }
       : null;
   const [tab, setTab] = useState<FavoritesTab>("favorites");
+  const [shoppingListFromPlanBuild] = useState(
+    () => !!locationState?.shoppingListJustBuilt
+  );
+  const [shoppingPanelEntranceDone, setShoppingPanelEntranceDone] = useState(false);
   useEffect(() => {
     if (stateTab === "my_recipes") setTab("my_recipes");
     if (stateTab === "shopping_list") setTab("shopping_list");
   }, [stateTab]);
+
+  useEffect(() => {
+    if (!shoppingListFromPlanBuild) return;
+    navigate(`${location.pathname}${location.search}`, {
+      replace: true,
+      state: { tab: "shopping_list" as const },
+    });
+  }, [shoppingListFromPlanBuild, navigate, location.pathname, location.search]);
 
   const openShoppingList = () => {
     if (!hasAccess) {
@@ -209,7 +223,22 @@ export default function FavoritesPage() {
         />
         )}
 
-        {tab === "shopping_list" && hasAccess && <ShoppingListView />}
+        {tab === "shopping_list" && hasAccess && (
+          <motion.div
+            initial={
+              shoppingListFromPlanBuild && !shoppingPanelEntranceDone
+                ? { opacity: 0, y: 10 }
+                : false
+            }
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.23, ease: [0.22, 1, 0.36, 1] }}
+            onAnimationComplete={() => {
+              if (shoppingListFromPlanBuild) setShoppingPanelEntranceDone(true);
+            }}
+          >
+            <ShoppingListView />
+          </motion.div>
+        )}
 
         {tab === "my_recipes" && (
           <>

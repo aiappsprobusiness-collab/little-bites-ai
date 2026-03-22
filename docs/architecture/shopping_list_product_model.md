@@ -17,7 +17,7 @@
 
 ## Где собирать список (IA)
 
-- **Основной вход:** экран **План** → после блока приёмов пищи за день кнопка **«Собрать список продуктов»** (secondary outline, иконка корзины). Открывается sheet **«Собрать список продуктов»** с выбором периода и **«Собрать список»**; после успеха — переход на вкладку списка в разделе избранного (`/favorites` с `state.tab = shopping_list`).
+- **Основной вход:** экран **План** → после блока приёмов пищи за день кнопка **«Собрать список продуктов»** (secondary outline, иконка корзины). Открывается sheet **«Собрать список продуктов»** с выбором периода и **«Собрать список»**; после успеха — переход на вкладку списка в разделе избранного (`/favorites` с `state.tab = shopping_list` и при необходимости `state.shoppingListJustBuilt` для мягкого fade/slide входа панели). Одноразовая stagger-анимация строк после успешной сборки задаётся флагом в `sessionStorage` (см. `src/utils/shopping/shoppingListEntrance.ts`).
 - **Верхний блок плана** остаётся для **«Собрать день»** (primary), **«Поделиться днём»** (secondary) и **«Собрать неделю»** (tertiary / текст), без конкурирующей кнопки списка рядом с ними.
 - **Обоснование размещения:** пользователь сначала видит блюда дня, затем логичное действие «собрать список».
 
@@ -46,6 +46,7 @@
 | План: CTA | `src/pages/MealPlanPage.tsx` |
 | Экран списка | `src/components/favorites/ShoppingListView.tsx` |
 | Избранное: навигация | `src/pages/FavoritesPage.tsx` |
+| Вход на список после сборки (флаг анимации) | `src/utils/shopping/shoppingListEntrance.ts` |
 | Данные списка | `src/hooks/useShoppingList.ts` |
 | Агрегация из плана | `src/hooks/usePlanShoppingIngredients.ts` (`loadPlanShoppingIngredients`) |
 | Подпись плана | `src/hooks/usePlanSignature.ts` (`loadPlanSignature`) |
