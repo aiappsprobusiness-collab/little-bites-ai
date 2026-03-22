@@ -627,45 +627,7 @@ export default function RecipePage() {
           )}
         </div>
 
-        {/* Порции: только не из Избранного (в Избранном порции не показываем) */}
-        {!fromFavorites && (
-          <div className="mt-5">
-            <span className="text-[11px] font-medium text-muted-foreground/90 block">Порции</span>
-            <div className="inline-flex items-center rounded-[999px] bg-primary-light/40 border border-primary-border/60 overflow-hidden">
-              <motion.button
-                type="button"
-                onClick={() => {
-                  userHasChangedServingsRef.current = true;
-                  setServingsSelected((s) => Math.max(1, s - 1));
-                }}
-                whileTap={{ scale: 0.96 }}
-                transition={{ duration: 0.1 }}
-                className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
-                aria-label="Уменьшить порции"
-              >
-                −
-              </motion.button>
-              <span className="min-w-[2.75rem] text-center text-sm font-semibold text-foreground" aria-live="polite">
-                {servingsSelected}
-              </span>
-              <motion.button
-                type="button"
-                onClick={() => {
-                  userHasChangedServingsRef.current = true;
-                  setServingsSelected((s) => Math.min(20, s + 1));
-                }}
-                whileTap={{ scale: 0.96 }}
-                transition={{ duration: 0.1 }}
-                className="h-10 min-w-[44px] px-3 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/10 transition-colors duration-150 touch-manipulation"
-                aria-label="Увеличить порции"
-              >
-                +
-              </motion.button>
-            </div>
-          </div>
-        )}
-
-        {/* Ингредиенты: список с заголовком «на X порций» (подпись скрыта в Избранном) */}
+        {/* Ингредиенты: порции — компактный степпер справа от заголовка (не из Избранного) */}
         <RecipeIngredientList
           className="mt-6"
           ingredients={ingredientsForChips}
@@ -673,6 +635,45 @@ export default function RecipePage() {
           scaledOverrides={fromMealPlan ? undefined : scaledOverrides}
           servingsCount={servingsSelected}
           hideServingsSubtitle={fromFavorites}
+          headerRight={
+            !fromFavorites ? (
+              <div
+                className="inline-flex items-center rounded-full bg-primary-light/50 border border-primary-border/70 overflow-hidden shadow-sm"
+                role="group"
+                aria-label="Количество порций"
+              >
+                <motion.button
+                  type="button"
+                  onClick={() => {
+                    userHasChangedServingsRef.current = true;
+                    setServingsSelected((s) => Math.max(1, s - 1));
+                  }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={{ duration: 0.1 }}
+                  className="h-8 w-9 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/15 text-base leading-none font-medium touch-manipulation"
+                  aria-label="Уменьшить порции"
+                >
+                  −
+                </motion.button>
+                <span className="min-w-[1.5rem] px-0.5 text-center text-xs font-semibold text-foreground tabular-nums" aria-live="polite">
+                  {servingsSelected}
+                </span>
+                <motion.button
+                  type="button"
+                  onClick={() => {
+                    userHasChangedServingsRef.current = true;
+                    setServingsSelected((s) => Math.min(20, s + 1));
+                  }}
+                  whileTap={{ scale: 0.96 }}
+                  transition={{ duration: 0.1 }}
+                  className="h-8 w-9 flex items-center justify-center text-muted-foreground hover:text-foreground active:bg-primary/15 text-base leading-none font-medium touch-manipulation"
+                  aria-label="Увеличить порции"
+                >
+                  +
+                </motion.button>
+              </div>
+            ) : undefined
+          }
         />
 
         {chefAdvice?.trim() ? (

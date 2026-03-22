@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { ingredientDisplayLabel, type IngredientItem } from "@/types/recipe";
 import type { ParsedIngredient } from "@/utils/parseChatRecipes";
 import { capitalizeIngredientName, shortenIngredientName } from "@/utils/ingredientDisplay";
@@ -43,6 +44,8 @@ export interface RecipeIngredientListProps {
   servingsCount: number;
   /** Не показывать подпись «На X порций» (например в карточке рецепта в Избранном) */
   hideServingsSubtitle?: boolean;
+  /** Элемент справа от заголовка «Ингредиенты» (например компактный выбор порций) */
+  headerRight?: ReactNode;
   emptyLabel?: string;
   className?: string;
 }
@@ -53,19 +56,27 @@ export function RecipeIngredientList({
   scaledOverrides,
   servingsCount,
   hideServingsSubtitle = false,
+  headerRight,
   emptyLabel = "ИИ уточняет состав…",
   className,
 }: RecipeIngredientListProps) {
   const label = servingsLabel(servingsCount);
   const subtitle = `На ${servingsCount} ${label}`;
 
+  const titleRow = (
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+      <p className="text-sm font-semibold text-foreground mb-0 min-w-0" aria-hidden>
+        Ингредиенты
+      </p>
+      {headerRight != null ? <div className="shrink-0">{headerRight}</div> : null}
+    </div>
+  );
+
   if (ingredients.length === 0) {
     return (
       <div className={className}>
-        <p className="text-sm font-semibold text-foreground mb-0" aria-hidden>
-          Ингредиенты
-        </p>
-        {!hideServingsSubtitle && <p className="text-[11px] text-muted-foreground/80 mt-0.5">{subtitle}</p>}
+        {titleRow}
+        {!hideServingsSubtitle && <p className="text-[11px] text-muted-foreground/80 mt-1">{subtitle}</p>}
         <p className="text-xs text-muted-foreground mt-1">{emptyLabel}</p>
       </div>
     );
@@ -73,10 +84,8 @@ export function RecipeIngredientList({
 
   return (
     <div className={className}>
-      <p className="text-sm font-semibold text-foreground mb-0" aria-hidden>
-        Ингредиенты
-      </p>
-      {!hideServingsSubtitle && <p className="text-[11px] text-muted-foreground/80 mt-0.5 mb-2">{subtitle}</p>}
+      {titleRow}
+      {!hideServingsSubtitle && <p className="text-[11px] text-muted-foreground/80 mt-1 mb-2">{subtitle}</p>}
       <ul className="space-y-0 divide-y divide-[rgba(0,0,0,0.05)]" aria-label={hideServingsSubtitle ? "Ингредиенты" : `Ингредиенты, ${subtitle}`}>
         {ingredients.map((ing, idx) => {
           const displayText = getDisplayText(ing, overrides[idx] ?? scaledOverrides?.[idx]);
