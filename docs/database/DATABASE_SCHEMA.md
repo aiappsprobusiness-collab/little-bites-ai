@@ -160,7 +160,7 @@ RLS: SELECT — публичные или свои (или private + owner). INS
 | display_text     | text                | Текст вида «морковь — 100 г» |
 | canonical_amount | numeric             | В граммах/мл (g/ml) |
 | canonical_unit   | text                | g \| ml (CHECK) |
-| category         | product_category    | vegetables, fruits, dairy, meat, grains, other |
+| category         | product_category    | vegetables, fruits, dairy, meat, grains, other, **fish**, **fats**, **spices** (enum); в UI списка покупок fish → секция meat, fats/spices → other |
 | order_index      | integer DEFAULT 0   | |
 | substitute       | text                | Замена (Premium Smart Swap) |
 

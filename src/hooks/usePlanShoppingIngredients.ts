@@ -11,6 +11,7 @@ import {
   toShoppingDisplayUnitAndAmount,
   type NormalizedUnit,
 } from "@/utils/shopping/normalizeIngredientForShopping";
+import { mapDbProductCategoryToShoppingAisle } from "@/utils/shopping/mapDbProductCategoryToShoppingAisle";
 
 export interface SourceRecipe {
   id: string;
@@ -154,7 +155,7 @@ export async function loadPlanShoppingIngredients(
         multiplier
       );
       if (res == null) continue;
-      const category = toProductCategory(ing.category);
+      const category = mapDbProductCategoryToShoppingAisle(ing.category);
       const cur = aggMap.get(res.key);
       if (cur) {
         cur.amountSum += res.amountToSum;
@@ -194,16 +195,6 @@ export async function loadPlanShoppingIngredients(
     });
   }
   return result;
-}
-
-/** Категория из БД (в т.ч. fish, fats, spices) → категория для списка продуктов (ProductCategory). */
-function toProductCategory(cat: string | null | undefined): ProductCategory {
-  if (cat == null || String(cat).trim() === "") return "other";
-  const c = String(cat).trim().toLowerCase();
-  if (["vegetables", "fruits", "dairy", "meat", "grains", "other"].includes(c)) return c as ProductCategory;
-  if (c === "fish") return "meat";
-  if (c === "fats" || c === "spices") return "other";
-  return "other";
 }
 
 /**

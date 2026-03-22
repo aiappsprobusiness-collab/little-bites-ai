@@ -5,6 +5,7 @@
 
 import { capitalizeIngredientName, normalizeUnitForDisplay } from "@/utils/ingredientDisplay";
 import type { ProductCategory } from "@/hooks/useShoppingList";
+import { mapDbProductCategoryToShoppingAisle } from "@/utils/shopping/mapDbProductCategoryToShoppingAisle";
 
 const CATEGORY_ORDER: ProductCategory[] = ["vegetables", "fruits", "dairy", "meat", "grains", "other"];
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
@@ -33,8 +34,7 @@ function formatItemLine(item: ShoppingListItemForFormat): string {
 }
 
 function normalizeCategory(cat: string | null | undefined): ProductCategory {
-  const raw = (cat ?? "other").trim().toLowerCase();
-  return CATEGORY_ORDER.includes(raw as ProductCategory) ? (raw as ProductCategory) : "other";
+  return mapDbProductCategoryToShoppingAisle(cat);
 }
 
 /**

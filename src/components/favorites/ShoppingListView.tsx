@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { formatShoppingListForCopy } from "@/utils/shoppingListTextFormatter";
 import { formatAmountForDisplay, normalizeIngredientDisplayName } from "@/utils/shopping/normalizeIngredientForShopping";
+import { mapDbProductCategoryToShoppingAisle } from "@/utils/shopping/mapDbProductCategoryToShoppingAisle";
 import {
   Sheet,
   SheetContent,
@@ -319,8 +320,7 @@ export function ShoppingListView() {
     if (selectedCategory !== "all") {
       const cat = selectedCategory;
       list = list.filter((i) => {
-        const raw = i.category ?? "other";
-        const normalized: ProductCategory = CATEGORY_ORDER.includes(raw as ProductCategory) ? (raw as ProductCategory) : "other";
+        const normalized = mapDbProductCategoryToShoppingAisle(i.category as string | null);
         return normalized === cat;
       });
     }
@@ -341,8 +341,7 @@ export function ShoppingListView() {
   }, [items, selectedCategory, selectedRecipeIds, filterOnlyUnpurchased, searchQuery]);
 
   const byCategory = filteredItems.reduce((acc, item) => {
-    const raw = item.category ?? "other";
-    const cat: ProductCategory = CATEGORY_ORDER.includes(raw as ProductCategory) ? (raw as ProductCategory) : "other";
+    const cat = mapDbProductCategoryToShoppingAisle(item.category as string | null);
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(item);
     return acc;

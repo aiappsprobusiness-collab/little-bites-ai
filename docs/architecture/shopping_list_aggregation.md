@@ -19,6 +19,8 @@
 
 ## Модуль нормализации
 
+**Маппинг категорий БД → секции списка:** `src/utils/shopping/mapDbProductCategoryToShoppingAisle.ts` — в Postgres `product_category` включает **fish**, **fats**, **spices** (модель «полки» Cooper); в UI списка шесть проходов: **fish → meat** («Мясо и рыба»), fats/spices → **other** («Прочее»). Используется при агрегации из плана (`loadPlanShoppingIngredients`), при чтении `shopping_list_items` и при группировке/копировании в UI. Раньше значение `fish` в строке списка не входило в `CATEGORY_ORDER` и отображалось как «Прочее».
+
 **Файл:** `src/utils/shopping/normalizeIngredientForShopping.ts`
 
 ### Функции
@@ -39,7 +41,7 @@
 - **DISPLAY_STRIP_WORDS** — слова, убираемые только при отображении имени (сладкое, спелый, детский, натуральный, обогащённый и т.д.). Удаление по целым словам.
 - **DISPLAY_STRIP_PHRASES** — фразы для display (например «с кальцием»).
 - **SPOON_TO_ML** — 1 tbsp = 15 ml, 1 tsp = 5 ml (только для жидкостей при агрегации).
-- **SOLID_CATEGORIES** — vegetables, fruits, meat, grains: для этих категорий ложки не конвертируются в мл (в списке остаются ст.л./ч.л.).
+- **SOLID_CATEGORIES** — vegetables, fruits, meat, grains, **fish**: для этих категорий ложки не конвертируются в мл (в списке остаются ст.л./ч.л.); `fish` в БД учитывается до маппинга в секцию meat.
 
 ### Ключ агрегации
 

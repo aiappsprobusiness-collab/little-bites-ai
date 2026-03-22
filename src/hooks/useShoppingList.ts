@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { mapDbProductCategoryToShoppingAisle } from "@/utils/shopping/mapDbProductCategoryToShoppingAisle";
 
 export type ProductCategory = "vegetables" | "fruits" | "dairy" | "meat" | "grains" | "other";
 
@@ -93,7 +94,10 @@ export function useShoppingList() {
         .order("created_at", { ascending: true });
       const { data, error } = (await q) as { data: ShoppingListItemRow[] | null; error: { message: string } | null };
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((row) => ({
+        ...row,
+        category: mapDbProductCategoryToShoppingAisle(row.category as string | null),
+      }));
     },
     enabled: !!listId,
     staleTime: 30_000,

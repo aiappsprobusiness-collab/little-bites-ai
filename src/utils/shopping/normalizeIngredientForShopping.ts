@@ -126,7 +126,8 @@ export function normalizeIngredientUnitForShopping(
 export const SPOON_TO_ML = { tbsp: 15, tsp: 5 } as const;
 
 /** Категории, для которых ложки не переводим в мл (твёрдые/сыпучие). */
-const SOLID_CATEGORIES = new Set(["vegetables", "fruits", "meat", "grains"]);
+/** Как в БД product_category: fish — отдельное значение, по смыслу как meat для ложек (не переводим в мл). */
+const SOLID_CATEGORIES = new Set(["vegetables", "fruits", "meat", "grains", "fish"]);
 
 export interface ShoppingAggregationInput {
   name: string;
