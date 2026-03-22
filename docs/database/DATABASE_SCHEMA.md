@@ -121,7 +121,7 @@ RLS: по `auth.uid() = user_id`. Лимиты Free: 1 член семьи, 1 а
 | tags                | text[]                 | |
 | source_products     | text[]                 | |
 | source              | text                   | chat_ai \| week_ai \| starter \| seed \| manual \| user_custom |
-| meal_type           | text                   | breakfast \| lunch \| snack \| dinner |
+| meal_type           | text                   | breakfast \| lunch \| snack \| dinner (только эти четыре; `create_user_recipe` / `update_user_recipe` не сохраняют `other` и прочие значения — в NULL) |
 | nutrition_goals     | jsonb NOT NULL DEFAULT '[]' | Goals для UI/плана: ключи balanced, iron_support, brain_development, weight_gain, gentle_digestion, energy_boost (CHECK whitelist). Человекочитаемые подписи только на клиенте: `GOAL_LABELS` в `src/utils/nutritionGoals.ts`. |
 | steps               | jsonb DEFAULT '[]'     | Шаги (альтернатива recipe_steps) |
 | chef_advice         | text                   | Совет шефа (LLM + quality gate в deepseek-chat, first-pass; **без** второго полного LLM-вызова рецепта при отклонении совета); может быть NULL. Для `user_custom` опционально. |

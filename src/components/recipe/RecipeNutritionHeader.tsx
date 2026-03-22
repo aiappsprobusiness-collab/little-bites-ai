@@ -34,6 +34,8 @@ export interface RecipeNutritionHeaderProps {
   nutrition?: RecipeNutritionHeaderSource | null;
   variant?: "details" | "card";
   className?: string;
+  /** Список избранного / мои рецепты: тише бейджи и мета, без «кричащего» primary. */
+  tone?: "default" | "quiet";
 }
 
 /**
@@ -46,6 +48,7 @@ export function RecipeNutritionHeader({
   nutrition,
   variant = "details",
   className,
+  tone = "default",
 }: RecipeNutritionHeaderProps) {
   const { kcal, protein, fat, carbs } = normalizeNutrition(nutrition);
   const hasKcal = kcal != null;
@@ -57,30 +60,52 @@ export function RecipeNutritionHeader({
   if (!hasMeta && !hasMacros) return null;
 
   const isCard = variant === "card";
-  const macrosSize = isCard ? "text-[11px]" : "text-xs";
+  const isQuiet = tone === "quiet";
+  const macrosSize = isQuiet ? "text-[10px]" : isCard ? "text-[11px]" : "text-xs";
   const metaItemClass = "inline-flex items-baseline gap-1.5";
+  const mealQuietClass =
+    "inline-flex items-center rounded-md border border-border/55 bg-muted/35 text-[10px] font-medium text-muted-foreground px-2 py-0.5";
 
   return (
-    <div className={cn("space-y-1", className)}>
+    <div className={cn(isQuiet ? "space-y-0.5" : "space-y-1", className)}>
       {hasMeta && (
         <div
-          className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 min-w-0"
+          className={cn(
+            "flex flex-wrap items-baseline min-w-0",
+            isQuiet ? "gap-x-2.5 gap-y-1" : "gap-x-3 gap-y-1.5",
+          )}
           role="group"
           aria-label="Тип приёма, калории, время приготовления"
         >
           {hasMeal && (
-            <span className={recipeMealBadge}>{mealTypeLabel!.trim()}</span>
+            <span className={isQuiet ? mealQuietClass : recipeMealBadge}>{mealTypeLabel!.trim()}</span>
           )}
           {hasTime && (
-            <span className={cn(recipeTimeClass, metaItemClass)}>
-              <Clock className="mt-[1px] h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span
+              className={cn(
+                metaItemClass,
+                isQuiet
+                  ? "inline-flex items-center gap-1 text-[11px] text-muted-foreground/75"
+                  : recipeTimeClass,
+              )}
+            >
+              <Clock
+                className={cn("mt-[1px] shrink-0", isQuiet ? "h-3 w-3" : "h-3.5 w-3.5")}
+                aria-hidden
+              />
               <span>{formatMinutes(cookingTimeMinutes)}</span>
             </span>
           )}
           {hasKcal && (
-            <span className={recipeKcalChip}>
+            <span
+              className={
+                isQuiet
+                  ? "inline-flex items-baseline text-[11px] text-muted-foreground/80 tabular-nums"
+                  : recipeKcalChip
+              }
+            >
               <span>{Math.round(kcal!)}</span>
-              <span className="opacity-90"> ккал</span>
+              <span className={isQuiet ? "opacity-80" : "opacity-90"}> ккал</span>
             </span>
           )}
         </div>
@@ -90,7 +115,10 @@ export function RecipeNutritionHeader({
         const [label, line] = full.split("\n");
         return (
           <div
-            className={cn(macrosSize, "text-muted-foreground/90 leading-snug")}
+            className={cn(
+              macrosSize,
+              isQuiet ? "text-muted-foreground/65 leading-snug" : "text-muted-foreground/90 leading-snug",
+            )}
             role="paragraph"
           >
             <span>{label}</span>

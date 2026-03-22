@@ -60,7 +60,7 @@
 
 - **Назначение:** избранные рецепты пользователя (или по member_id). Лимиты: 5 (free) / 50 (premium) в приложении.
 - **Таблицы:** `favorites_v2` (user_id, recipe_id, member_id, recipe_data — legacy/кэш). RPC toggle_favorite_v2, лимиты в приложении.
-- **UI:** FavoritesPage, useFavorites, FavoriteCard, MyRecipeCard.
+- **UI:** FavoritesPage, useFavorites, FavoriteCard, MyRecipeCard. Визуальная иерархия экрана коллекции и шапки: **docs/dev/favorites-tab-ui-quiet-2026-03.md**.
 - **Edge/Services:** нет Edge; Supabase client и RPC.
 - **Зависимости:** recipes, profiles_v2 (лимит по тарифу).
 
@@ -77,7 +77,7 @@
 - **Назначение:** списки покупок по рецептам (ингредиенты с количеством, категорией). Items связаны с recipe_id, recipe_title. Список — **снимок** после явной сборки из плана; автоматической синхронизации с меню нет. В `shopping_lists.meta` хранится состояние последней сборки (last_synced_*, plan_signature) для спокойного статуса «в меню есть изменения» и пересборки по клику. Продуктовая модель: **docs/architecture/shopping_list_product_model.md**.
 - **Агрегация и нормализация:** при сборе списка из плана ингредиенты нормализуются по имени и единицам, чтобы одинаковые продукты не дублировались (подробно: **docs/architecture/shopping_list_aggregation.md**). Модуль `src/utils/shopping/normalizeIngredientForShopping.ts`, хук usePlanShoppingIngredients, `loadPlanShoppingIngredients`.
 - **Таблицы:** `shopping_lists` (в т.ч. meta для sync state), `shopping_list_items` (recipe_id, category product_category, meta для source_recipes).
-- **UI:** MealPlanPage («Собрать список продуктов» после блюд дня), BuildShoppingListFromPlanSheet, FavoritesPage («Покупки»), ShoppingListView, useShoppingList, usePlanSignature.
+- **UI:** MealPlanPage («Собрать список продуктов» после блюд дня), BuildShoppingListFromPlanSheet, FavoritesPage (вторичная ссылка «Покупки» под табами коллекции), ShoppingListView, useShoppingList, usePlanSignature.
 - **Edge/Services:** нет Edge; Supabase client.
 - **Зависимости:** recipes, recipe_ingredients, meal_plans_v2.
 

@@ -130,7 +130,7 @@ export default function RecipePage() {
 
   const planMemberId = state?.memberId ?? selectedMemberId ?? null;
   const planDate = fromMealPlan && plannedDate ? new Date(plannedDate + "T12:00:00") : new Date();
-  const { data: dayPlans } = useMealPlans(planMemberId ?? undefined).getMealPlansByDate(planDate);
+  const { data: dayPlans, isLoading: dayPlanLoading } = useMealPlans(planMemberId ?? undefined).getMealPlansByDate(planDate);
   const planSlot = fromMealPlan && plannedDate && planMealType
     ? dayPlans?.find((p) => p.planned_date === plannedDate && p.meal_type === planMealType)
     : null;
@@ -242,7 +242,7 @@ export default function RecipePage() {
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
 
-  // Синхронизируем порции: из Избранного всегда 1; из слота плана — только при первом входе в слот (по ключу дата+приём+профиль). Не перезатираем из refetch.
+  // Синхронизируем порции: из Избранного всегда 1; из слота плана — после готовности запроса плана на дату (иначе slotServings временно undefined → ложный дефолт и «дрифт» со списком покупок). При refetch подтягиваем серверные порции, если пользователь их не трогал.
   useEffect(() => {
     if (!recipe?.id) return;
     if (fromFavorites) {
@@ -259,9 +259,13 @@ export default function RecipePage() {
       setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
       return;
     }
-    const slotKey = plannedDate && planMealType ? `${plannedDate}-${planMealType}-${planMemberId ?? "fam"}` : null;
-    if (slotKey && slotKey !== lastSyncedPlanSlotKeyRef.current) {
-      lastSyncedPlanSlotKeyRef.current = slotKey;
+    const planSlotSyncKey =
+      plannedDate && planMealType ? `${plannedDate}-${planMealType}-${planMemberId ?? "fam"}-${recipe.id}` : null;
+    if (!planSlotSyncKey) return;
+    if (dayPlanLoading) return;
+
+    if (planSlotSyncKey !== lastSyncedPlanSlotKeyRef.current) {
+      lastSyncedPlanSlotKeyRef.current = planSlotSyncKey;
       userHasChangedServingsRef.current = false;
       if (slotServings != null && slotServings >= 1) {
         setServingsSelected(slotServings);
@@ -273,10 +277,28 @@ export default function RecipePage() {
       }
       return;
     }
-    if (slotKey && slotServings === servingsSelected) {
+    if (
+      slotServings != null &&
+      slotServings >= 1 &&
+      slotServings !== servingsSelected &&
+      !userHasChangedServingsRef.current
+    ) {
+      setServingsSelected(slotServings);
+    }
+    if (slotServings === servingsSelected) {
       userHasChangedServingsRef.current = false;
     }
-  }, [recipe?.id, fromFavorites, fromMealPlan, plannedDate, planMealType, planMemberId, slotServings, servingsSelected]);
+  }, [
+    recipe?.id,
+    fromFavorites,
+    fromMealPlan,
+    plannedDate,
+    planMealType,
+    planMemberId,
+    slotServings,
+    servingsSelected,
+    dayPlanLoading,
+  ]);
 
   // Сохранение порций слота плана при изменении пользователем (debounce); при уходе со страницы — сохранить сразу
   const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -34,6 +34,7 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
     >
       <RecipeCard
         variant="preview"
+        previewPresentation="collection"
         header={{
           mealLabel: null,
           cookingTimeMinutes,
@@ -44,10 +45,11 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
         showHint={false}
         nutrition={nutrition}
         nutritionGoals={(recipe as { nutrition_goals?: string[] | null }).nutrition_goals ?? []}
+        nutritionGoalsMaxVisible={2}
         onClick={onTap}
         actions={
-          <>
-            <span className="text-xs font-medium rounded-md px-2 py-0.5 shrink-0 bg-muted text-muted-foreground">
+          <div className="flex flex-col items-center gap-2 shrink-0">
+            <span className="text-[10px] font-medium text-muted-foreground/65 px-0.5 text-center leading-snug max-w-[4.25rem] line-clamp-2">
               Мой рецепт
             </span>
             {onEdit && (
@@ -57,10 +59,10 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
                   e.stopPropagation();
                   onEdit(e);
                 }}
-                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/80 active:scale-95 transition-all shrink-0"
+                className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground/85 bg-transparent border border-border/45 hover:bg-muted/40 active:scale-[0.98] transition-all shrink-0"
                 aria-label="Редактировать"
               >
-                <Pencil className="h-4 w-4" />
+                <Pencil className="h-[17px] w-[17px] stroke-[1.5]" />
               </button>
             )}
             {onAddToPlan && isPremium && (
@@ -70,13 +72,13 @@ export function MyRecipeCard({ recipe, index = 0, onTap, onAddToPlan, onEdit, is
                   e.stopPropagation();
                   onAddToPlan();
                 }}
-                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground border border-border hover:bg-muted/50 active:scale-95 transition-all shrink-0"
+                className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground/85 bg-transparent border border-border/45 hover:bg-muted/40 active:scale-[0.98] transition-all shrink-0"
                 aria-label="Добавить в план"
               >
-                <CalendarPlus className="h-4 w-4" />
+                <CalendarPlus className="h-[17px] w-[17px] stroke-[1.5]" />
               </button>
             )}
-          </>
+          </div>
         }
       />
     </motion.div>

@@ -14,14 +14,13 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { getAppLocale } from "@/utils/appLocale";
 import { cn } from "@/lib/utils";
+import { normalizeRecipePlanMealType, recipePlanMealOptionsForForm } from "@/utils/recipeMealSlots";
 
-const MEAL_OPTIONS = [
-  { id: "breakfast", label: "Завтрак" },
-  { id: "lunch", label: "Обед" },
-  { id: "snack", label: "Полдник" },
-  { id: "dinner", label: "Ужин" },
-  { id: "other", label: "Другое" },
-] as const;
+const MEAL_OPTIONS = recipePlanMealOptionsForForm();
+
+function mealTypeAllowedForDb(raw: string | null | undefined): string {
+  return normalizeRecipePlanMealType(raw) ?? "";
+}
 
 export interface MyRecipeFormSheetProps {
   open: boolean;
@@ -65,7 +64,7 @@ export function MyRecipeFormSheet({
     if (recipeId && initialData) {
       setTitle(initialData.title ?? "");
       setDescription(initialData.description ?? "");
-      setMealType(initialData.meal_type ?? "");
+      setMealType(mealTypeAllowedForDb(initialData.meal_type));
       setChefAdvice(initialData.chef_advice ?? "");
       setSteps(
         initialData.steps?.length
@@ -92,7 +91,7 @@ export function MyRecipeFormSheet({
           if (row) {
             setTitle((row as { title?: string }).title ?? "");
             setDescription((row as { description?: string }).description ?? "");
-            setMealType((row as { meal_type?: string }).meal_type ?? "");
+            setMealType(mealTypeAllowedForDb((row as { meal_type?: string }).meal_type));
             setChefAdvice((row as { chef_advice?: string }).chef_advice ?? "");
             const stepsJson = (row as { steps_json?: { instruction?: string; step_number?: number }[] }).steps_json;
             const stepList = Array.isArray(stepsJson) ? stepsJson : [];
@@ -166,7 +165,7 @@ export function MyRecipeFormSheet({
           recipe_id: recipeId,
           title: t,
           description: description.trim() || null,
-          meal_type: mealType.trim() || null,
+          meal_type: mealTypeAllowedForDb(mealType) || null,
           tags: [],
           chef_advice: chefAdvice.trim() || null,
           steps: stepsFiltered,
@@ -177,7 +176,7 @@ export function MyRecipeFormSheet({
         await createUserRecipe({
           title: t,
           description: description.trim() || null,
-          meal_type: mealType.trim() || null,
+          meal_type: mealTypeAllowedForDb(mealType) || null,
           tags: [],
           chef_advice: chefAdvice.trim() || null,
           steps: stepsFiltered,

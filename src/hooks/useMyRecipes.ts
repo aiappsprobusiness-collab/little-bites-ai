@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { getAppLocale } from "@/utils/appLocale";
+import { normalizeRecipePlanMealType } from "@/utils/recipeMealSlots";
 import type { RecipePreview } from "@/types/recipePreview";
 
 export interface MyRecipePreview extends RecipePreview {
@@ -163,7 +164,7 @@ export function useMyRecipes(locale?: string | null) {
       const { data, error } = await supabase.rpc("create_user_recipe", {
         p_title: params.title.trim(),
         p_description: params.description?.trim() ?? null,
-        p_meal_type: params.meal_type?.trim() ?? null,
+        p_meal_type: normalizeRecipePlanMealType(params.meal_type ?? undefined),
         p_tags: params.tags ?? [],
         p_chef_advice: params.chef_advice?.trim() || null,
         p_steps: stepsPayload,
@@ -226,7 +227,7 @@ export function useMyRecipes(locale?: string | null) {
         p_recipe_id: params.recipe_id,
         p_title: params.title.trim(),
         p_description: params.description?.trim() ?? null,
-        p_meal_type: params.meal_type?.trim() ?? null,
+        p_meal_type: normalizeRecipePlanMealType(params.meal_type ?? undefined),
         p_tags: params.tags ?? [],
         p_chef_advice: params.chef_advice?.trim() || null,
         p_steps: stepsPayload,

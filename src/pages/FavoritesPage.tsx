@@ -161,51 +161,61 @@ export default function FavoritesPage() {
   return (
     <MobileLayout>
       <div className="px-4 pb-4 overflow-x-hidden max-w-full">
-        {/* Табы рецептов + вторичный вход к списку покупок (сборка — с экрана План). */}
-        <div className="flex flex-col gap-2 mb-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
-              <button
-                type="button"
-                onClick={() => setTab("favorites")}
-                className={cn(
-                  "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors",
-                  tab === "favorites" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
-                )}
+        <div className="flex flex-col gap-3 mb-1">
+          {tab !== "shopping_list" ? (
+            <>
+              <div
+                className="flex rounded-xl bg-muted/35 p-1 gap-0.5"
+                role="tablist"
+                aria-label="Раздел коллекции рецептов"
               >
-                Избранное
-              </button>
-              <button
-                type="button"
-                onClick={() => setTab("my_recipes")}
-                className={cn(
-                  "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors",
-                  tab === "my_recipes" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Мои рецепты
-              </button>
-            </div>
-            {tab !== "shopping_list" && (
-              <div className="flex items-center gap-2 shrink-0 ml-auto">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === "favorites"}
+                  onClick={() => setTab("favorites")}
+                  className={cn(
+                    "flex-1 min-w-0 py-2.5 px-2 text-sm font-medium rounded-lg transition-all",
+                    tab === "favorites"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground/90"
+                  )}
+                >
+                  Избранное
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === "my_recipes"}
+                  onClick={() => setTab("my_recipes")}
+                  className={cn(
+                    "flex-1 min-w-0 py-2.5 px-2 text-sm font-medium rounded-lg transition-all",
+                    tab === "my_recipes"
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground/90"
+                  )}
+                >
+                  Мои рецепты
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-3 min-h-[36px]">
+                <MemberSelectorButton variant="light" className="shrink min-w-0 max-w-[min(100%,11rem)]" />
                 <button
                   type="button"
                   onClick={openShoppingList}
-                  className="text-[13px] font-medium inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1.5 text-xs text-muted-foreground/85 hover:text-foreground py-1.5 pl-2 -mr-1 transition-colors"
                 >
-                  <ShoppingCart className="w-3.5 h-3.5" />
+                  <ShoppingCart className="w-3.5 h-3.5 opacity-60" aria-hidden />
                   Покупки
-                  {!hasAccess && <Lock className="w-3 h-3 opacity-70" aria-hidden />}
+                  {!hasAccess && <Lock className="w-3 h-3 opacity-50" aria-hidden />}
                 </button>
-                <MemberSelectorButton className="shrink-0" />
               </div>
-            )}
-          </div>
-          {tab === "shopping_list" && (
+            </>
+          ) : (
             <button
               type="button"
               onClick={() => setTab("favorites")}
-              className="inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground w-fit -mt-0.5"
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-fit"
             >
               <ChevronLeft className="w-4 h-4" />
               К избранному и рецептам
@@ -219,7 +229,7 @@ export default function FavoritesPage() {
           onSelectedChange={setIngredientFilterTerms}
           mode={ingredientFilterMode}
           onModeChange={setIngredientFilterMode}
-          className="mb-3"
+          className="mb-4"
         />
         )}
 
@@ -271,7 +281,8 @@ export default function FavoritesPage() {
               </p>
             ) : (
               <>
-                <div className="flex justify-end mb-2">
+                <p className="text-xs text-muted-foreground/80 mb-2.5">Свои рецепты в коллекции</p>
+                <div className="flex justify-end mb-3">
                   <Button
                     onClick={openCreateForm}
                     className="rounded-full gap-2 bg-[#6b7c3d] hover:bg-[#6b7c3d]/90"
@@ -280,7 +291,7 @@ export default function FavoritesPage() {
                     Создать свой рецепт
                   </Button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                 {myRecipesFiltered.map((recipe, index) => (
                     <MyRecipeCard
                       key={recipe.id}
@@ -358,7 +369,9 @@ export default function FavoritesPage() {
                 По выбранным ингредиентам ничего не найдено. Измените фильтр или сбросьте его.
               </p>
             ) : (
-              <div className="space-y-3">
+              <>
+                <p className="text-xs text-muted-foreground/80 mb-2.5">Сохранённые рецепты</p>
+                <div className="space-y-4">
                 {favoritesFiltered.map((favorite, index) => (
                   <FavoriteCard
                     key={favorite.id}
@@ -388,7 +401,8 @@ export default function FavoritesPage() {
                     }
                   />
                 ))}
-              </div>
+                </div>
+              </>
             )}
           </>
         )}

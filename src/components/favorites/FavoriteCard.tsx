@@ -30,6 +30,7 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
     >
       <RecipeCard
         variant="preview"
+        previewPresentation="collection"
         header={{
           mealLabel: vm.mealTypeLabel,
           cookingTimeMinutes: vm.cookingTimeMinutes,
@@ -41,19 +42,20 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
         hint={vm.hint}
         nutrition={nutrition}
         nutritionGoals={(favorite.recipe as { nutrition_goals?: string[] | null }).nutrition_goals ?? []}
+        nutritionGoalsMaxVisible={2}
         onClick={onTap}
         actions={
-          <div className="flex flex-col items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex flex-col items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleFavorite(e);
               }}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-primary bg-primary/10 border border-primary/20 hover:opacity-90 active:scale-95 transition-all shrink-0"
+              className="h-9 w-9 rounded-xl flex items-center justify-center text-primary/90 bg-muted/30 border border-border/50 hover:bg-muted/55 active:scale-[0.98] transition-all shrink-0"
               aria-label="Убрать из избранного"
             >
-              <Heart className="h-4 w-4 fill-primary" />
+              <Heart className="h-[17px] w-[17px] fill-primary/75 text-primary" strokeWidth={1.5} />
             </button>
             {onAddToPlan && (
               <button
@@ -62,10 +64,10 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
                   e.stopPropagation();
                   onAddToPlan();
                 }}
-                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground border border-border hover:bg-muted/50 active:scale-95 transition-all shrink-0"
+                className="h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground/85 bg-transparent border border-border/45 hover:bg-muted/40 active:scale-[0.98] transition-all shrink-0"
                 aria-label="Добавить в план"
               >
-                <CalendarPlus className="h-4 w-4" />
+                <CalendarPlus className="h-[17px] w-[17px] stroke-[1.5]" />
               </button>
             )}
           </div>

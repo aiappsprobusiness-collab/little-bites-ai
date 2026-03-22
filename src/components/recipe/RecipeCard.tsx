@@ -47,6 +47,11 @@ export interface RecipeCardProps {
   nutritionGoalsQuiet?: boolean;
   /** Количество порций для блока ингредиентов (в списке, не в превью). По умолчанию 1. */
   servingsCount?: number;
+  /**
+   * Превью в списке «коллекции» (избранное / мои рецепты): тише мета, мягче фон, больше воздуха.
+   * Не использовать в MealCard — там свой ритм плана.
+   */
+  previewPresentation?: "default" | "collection";
 }
 
 export function RecipeCard({
@@ -73,9 +78,11 @@ export function RecipeCard({
   nutritionGoalsMaxVisible,
   nutritionGoalsQuiet = false,
   servingsCount = 1,
+  previewPresentation = "default",
 }: RecipeCardProps) {
   const isPreview = variant === "preview";
   const isFull = variant === "full";
+  const isCollectionPreview = isPreview && previewPresentation === "collection";
   const headerVariant: RecipeHeaderVariant = isPreview ? "compact" : isFull ? "full" : "chat";
   const headerWithNutrition = { ...header, nutrition };
 
@@ -83,7 +90,13 @@ export function RecipeCard({
   const isChefTip = !!(showChefTip && chefAdvice?.trim());
   const tipTitle = "Совет от шефа";
 
-  const bodyPadding = isPreview ? "p-3 pt-2 pb-1" : isFull ? "p-4 pt-3 sm:p-6 sm:pt-4" : "p-3 pt-2";
+  const bodyPadding = isCollectionPreview
+    ? "px-3.5 pt-2.5 pb-2.5"
+    : isPreview
+      ? "p-3 pt-2 pb-1"
+      : isFull
+        ? "p-4 pt-3 sm:p-6 sm:pt-4"
+        : "p-3 pt-2";
   const bodySpace = isPreview ? "space-y-2" : "space-y-3";
 
   /** В превью — чипсы (если showIngredientChips); в chat/full — единый список ингредиентов. */
@@ -96,8 +109,8 @@ export function RecipeCard({
         <NutritionGoalsChips
           goals={nutritionGoals}
           maxVisible={nutritionGoalsMaxVisible}
-          quiet={nutritionGoalsQuiet}
-          className="-mt-2 mb-1"
+          quiet={nutritionGoalsQuiet || isCollectionPreview}
+          className={cn(isCollectionPreview ? "-mt-1 mb-1.5" : "-mt-2 mb-1")}
         />
       )}
       {isPreview && showChips && (
@@ -145,16 +158,18 @@ export function RecipeCard({
         className={cn(
           recipeCard,
           "touch-manipulation active:opacity-95 transition-opacity",
-          "bg-primary/[0.06]",
+          isCollectionPreview ? "bg-card border-border/60 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.06)]" : "bg-primary/[0.06]",
           onClick && "cursor-pointer",
           className
         )}
       >
-        <div className="flex items-stretch justify-between gap-0 w-full">
+        <div className={cn("flex items-stretch justify-between w-full", isCollectionPreview ? "gap-1" : "gap-0")}>
           <div className="min-w-0 flex-1">
             <RecipeHeader
               {...headerWithNutrition}
               variant="compact"
+              nutritionTone={isCollectionPreview ? "quiet" : "default"}
+              compactCollection={isCollectionPreview}
               className="bg-transparent shadow-none rounded-none -mb-px"
             />
             <div className={cn(bodyPadding, bodySpace)}>
@@ -162,7 +177,13 @@ export function RecipeCard({
             </div>
           </div>
           {actions && (
-            <div className="flex flex-col shrink-0 items-center gap-1 py-2 pr-3 pl-2" onClick={(e) => e.stopPropagation()}>
+            <div
+              className={cn(
+                "flex flex-col shrink-0 items-center justify-center",
+                isCollectionPreview ? "gap-2 py-3 pr-3 pl-1" : "gap-1 py-2 pr-3 pl-2",
+              )}
+              onClick={(e) => e.stopPropagation()}
+            >
               {actions}
             </div>
           )}
