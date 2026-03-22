@@ -85,22 +85,24 @@ export function BuildShoppingListFromPlanSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-2xl">
-        <SheetHeader className="text-left">
-          <SheetTitle>Собрать список продуктов</SheetTitle>
-          <SheetDescription>
+      <SheetContent side="bottom" className="rounded-t-2xl px-5 pt-6 pb-6">
+        <SheetHeader className="text-left space-y-3 pr-10">
+          <SheetTitle className="text-plan-recipe-title font-semibold text-foreground leading-tight">
+            Собрать список продуктов
+          </SheetTitle>
+          <SheetDescription className="text-typo-body font-normal text-foreground/90 leading-relaxed">
             Соберём продукты из плана, суммируем одинаковые позиции. Список станет вашим черновиком: его можно менять вручную;
             изменения в плане не перезапишут его сами по себе.
           </SheetDescription>
         </SheetHeader>
-        <div className="py-4 space-y-3">
-          <p className="text-xs font-medium text-muted-foreground">Период</p>
+        <div className="py-5 space-y-3">
+          <p className="text-typo-body font-semibold text-foreground">Период</p>
           <div className="flex rounded-full border border-border overflow-hidden bg-muted/30">
             <button
               type="button"
               onClick={() => setRange("today")}
               className={cn(
-                "flex-1 px-3 py-2.5 text-[13px] font-medium transition-colors",
+                "flex-1 min-h-[48px] px-3 py-3 text-typo-body font-semibold transition-colors touch-manipulation",
                 range === "today" ? "bg-[#6b7c3d] text-white" : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -112,7 +114,7 @@ export function BuildShoppingListFromPlanSheet({
               onClick={() => setRange("week")}
               title={!hasAccess ? "Доступно в Premium" : undefined}
               className={cn(
-                "flex-1 px-3 py-2.5 text-[13px] font-medium transition-colors",
+                "flex-1 min-h-[48px] px-3 py-3 text-typo-body font-semibold transition-colors touch-manipulation",
                 range === "week" ? "bg-[#6b7c3d] text-white" : "text-muted-foreground hover:text-foreground",
                 !hasAccess && "opacity-50 cursor-not-allowed"
               )}
@@ -121,13 +123,18 @@ export function BuildShoppingListFromPlanSheet({
             </button>
           </div>
         </div>
-        <SheetFooter className="flex-col sm:flex-row gap-2">
-          <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => onOpenChange(false)}>
+        <SheetFooter className="flex-col sm:flex-row gap-3 pt-2 sm:pt-0">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto min-h-12 text-typo-body font-semibold"
+            onClick={() => onOpenChange(false)}
+          >
             Отмена
           </Button>
           <Button
             type="button"
-            className="w-full sm:flex-1 bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
+            className="w-full sm:flex-1 min-h-12 text-typo-body font-semibold bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
             disabled={pending || !listId}
             onClick={() => void handleBuild()}
           >
