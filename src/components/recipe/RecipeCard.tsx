@@ -41,7 +41,7 @@ export interface RecipeCardProps {
   /** КБЖУ на порцию (мета-строка в шапке + строка БЖУ под шапкой). */
   nutrition?: { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null } | null;
   nutritionGoals?: unknown;
-  /** Сколько целей показывать в превью (по умолчанию 3). На Плане передаётся 1. */
+  /** Сколько целей показывать в превью. Не задано — все цели. */
   nutritionGoalsMaxVisible?: number;
   /** Тихие чипсы целей (вкладка План). */
   nutritionGoalsQuiet?: boolean;
@@ -95,9 +95,9 @@ export function RecipeCard({
       {isPreview && (
         <NutritionGoalsChips
           goals={nutritionGoals}
-          maxVisible={nutritionGoalsMaxVisible ?? 3}
+          maxVisible={nutritionGoalsMaxVisible}
           quiet={nutritionGoalsQuiet}
-          className="mt-0.5"
+          className="-mt-3.5 mb-1"
         />
       )}
       {isPreview && showChips && (
