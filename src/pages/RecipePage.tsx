@@ -257,6 +257,19 @@ export default function RecipePage() {
   const [servingsSelected, setServingsSelected] = useState(1);
   const userHasChangedServingsRef = useRef(false);
   const lastSyncedPlanSlotKeyRef = useRef<string | null>(null);
+  /** Актуальные значения для cleanup при unmount (избегаем stale closure и случая без cleanup при slotServings === servingsSelected). */
+  const fromMealPlanPersistRef = useRef(false);
+  const plannedDatePersistRef = useRef<string | null>(null);
+  const planMealTypePersistRef = useRef<string | null>(null);
+  const planRowMemberIdPersistRef = useRef<string | null | undefined>(undefined);
+  const servingsSelectedPersistRef = useRef(1);
+  const slotServingsPersistRef = useRef<number | undefined>(undefined);
+  fromMealPlanPersistRef.current = !!fromMealPlan;
+  plannedDatePersistRef.current = plannedDate;
+  planMealTypePersistRef.current = planMealType;
+  planRowMemberIdPersistRef.current = planRowMemberId;
+  servingsSelectedPersistRef.current = servingsSelected;
+  slotServingsPersistRef.current = slotServings;
 
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
@@ -325,31 +338,49 @@ export default function RecipePage() {
     dayPlanLoading,
   ]);
 
-  // Сохранение порций слота плана при изменении пользователем (debounce); при уходе со страницы — сохранить сразу
+  // Сохранение порций в meals.*.servings (meal_plans_v2). Debounce + обязательный cleanup при unmount по refs.
+  // Раньше при slotServings === servingsSelected эффект делал ранний return без cleanup — при закрытии карточки flush не вызывался, если последний run был «чистый».
   const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!fromMealPlan || plannedDate == null || planMealType == null) return;
-    if (slotServings === servingsSelected) return;
-    if (servingsSaveRef.current) clearTimeout(servingsSaveRef.current);
-    servingsSaveRef.current = setTimeout(() => {
-      servingsSaveRef.current = null;
-      const next = servingsSelected;
-      if (next < 1) return;
-      updateSlotServings({
-        planned_date: plannedDate,
-        member_id: planRowMemberId ?? null,
-        meal_type: planMealType as "breakfast" | "lunch" | "snack" | "dinner",
-        servings: next,
-      }).catch(() => {});
-    }, 400);
-    return () => {
+    if (!fromMealPlan || plannedDate == null || planMealType == null) {
+      return undefined;
+    }
+
+    if (servingsSelected !== slotServings && servingsSelected >= 1) {
       if (servingsSaveRef.current) clearTimeout(servingsSaveRef.current);
-      if (servingsSelected !== slotServings && servingsSelected >= 1) {
+      servingsSaveRef.current = setTimeout(() => {
+        servingsSaveRef.current = null;
+        const next = servingsSelectedPersistRef.current;
+        if (next < 1) return;
+        const pd = plannedDatePersistRef.current;
+        const mt = planMealTypePersistRef.current;
+        if (pd == null || mt == null) return;
         updateSlotServings({
-          planned_date: plannedDate,
-          member_id: planRowMemberId ?? null,
-          meal_type: planMealType as "breakfast" | "lunch" | "snack" | "dinner",
-          servings: servingsSelected,
+          planned_date: pd,
+          member_id: planRowMemberIdPersistRef.current ?? null,
+          meal_type: mt as "breakfast" | "lunch" | "snack" | "dinner",
+          servings: next,
+        }).catch(() => {});
+      }, 400);
+    }
+
+    return () => {
+      if (servingsSaveRef.current) {
+        clearTimeout(servingsSaveRef.current);
+        servingsSaveRef.current = null;
+      }
+      if (!fromMealPlanPersistRef.current) return;
+      const pd = plannedDatePersistRef.current;
+      const mt = planMealTypePersistRef.current;
+      if (pd == null || mt == null) return;
+      const sel = servingsSelectedPersistRef.current;
+      const sl = slotServingsPersistRef.current;
+      if (sel >= 1 && sel !== sl) {
+        updateSlotServings({
+          planned_date: pd,
+          member_id: planRowMemberIdPersistRef.current ?? null,
+          meal_type: mt as "breakfast" | "lunch" | "snack" | "dinner",
+          servings: sel,
         }).catch(() => {});
       }
     };

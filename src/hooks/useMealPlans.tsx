@@ -440,6 +440,10 @@ export function useMealPlans(
     },
     onSuccess: (_row, params) => {
       patchCachedMealPlansServings(params);
+      // Узкая инвалидация: только запросы плана, затрагивающие эту дату (не весь meal_plans_v2 пользователя).
+      queryClient.invalidateQueries({
+        predicate: (q) => mealPlanQueryTouchesDate(q.queryKey, params.planned_date),
+      });
       queryClient.invalidateQueries({ queryKey: ['plan_signature'] });
     },
   });

@@ -1,0 +1,52 @@
+# Порции в карточке рецепта из Плана — persistence (март 2026)
+
+## Root cause
+
+1. **Источник истины для выбранных порций из плана** уже задан: поле **`meals.<meal_type>.servings`** в строке **`meal_plans_v2`** (не колонки рецепта). Мутация **`updateSlotServings`** пишет только этот JSON-слот; **`servings_base` / `servings_recommended`** и строки рецепта в БД не меняются.
+
+2. **Сброс при повторном открытии** возникал, когда значение **не доходило до БД** или **кэш React Query оставался с `servings: undefined`**: UI показывал пересчёт по локальному `servingsSelected`, а при следующем монтировании карточка снова брала дефолт из рецепта (часто **1**).
+
+3. **Конкретный баг в эффекте сохранения на `RecipePage`**: при **`slotServings === servingsSelected`** эффект делал **ранний `return` без функции cleanup**. После успешного debounce-сохранения кэш патчился → слот и UI совпадали → последний запуск эффекта **не регистрировал cleanup**. При **закрытии карточки до истечения 400 ms** debounce предыдущий cleanup уже мог отработать на **устаревшем замыкании** (`servingsSelected` / `slotServings` не те), а **финальный flush при unmount отсутствовал** — запись в Supabase не вызывалась.
+
+## Где хранится выбранное число порций
+
+- **Персистентно:** `meal_plans_v2.meals[breakfast|lunch|snack|dinner].servings` для строки с **`user_id` + `planned_date` + `member_id`** (для «Семья» Premium — `member_id IS NULL`).
+
+## Ключ / идентификация слота
+
+Логический ключ слота (как в UI и запросах):
+
+- **`planned_date`** (день),
+- **`member_id`** строки плана (`null` = семейная строка),
+- **`meal_type`** (слот приёма),
+- **`recipe_id`** (совпадение с `id` из маршрута на `RecipePage`).
+
+Навигация с Плана передаёт в `location.state`: `fromMealPlan`, `plannedDate`, `mealType`, опционально `memberId` (см. `MealCard`).
+
+## Инициализация карточки
+
+1. Если открытие **из плана** и в кэше/данных слота есть **`servings ≥ 1`** → **`servingsSelected`** = значение слота (до загрузки полного объекта рецепта, опираясь на `id` из URL).
+2. Иначе, после загрузки рецепта → прежняя UX-логика: **`servings_base` / `servings_recommended`**.
+
+Пересчёт ингредиентов: **`servingMultiplier = servingsSelected / servings_base`** от **канонической базы** рецепта; для плана дополнительно **`applyIngredientOverrides`** с подстановками слота (`RecipePage`).
+
+## Изменённые файлы
+
+- `src/pages/RecipePage.tsx` — refs для актуальных значений; эффект сохранения **всегда** возвращает cleanup при контексте плана; debounce и flush по refs; таймер вызывает `updateSlotServings` тоже по refs.
+- `src/hooks/useMealPlans.tsx` — в **`updateSlotServings.onSuccess`**: узкая **`invalidateQueries({ predicate })`** по дате (в дополнение к патчу кэша и `plan_signature`).
+- `docs/architecture/shopping_list_product_model.md` — актуализирован абзац про порции и пункт ручной проверки.
+- `docs/dev/plan-recipe-servings-persistence-2026-03.md` — этот документ.
+
+## Что проверить руками
+
+1. План → блюдо → карточка → **1 → 3** → **сразу** назад на план (< 400 ms) → снова та же карточка: **3**, ингредиенты как для 3 порций.
+2. То же с ожиданием > 400 ms перед закрытием.
+3. Premium «Семья» и отдельный ребёнок — порции не должны путаться между строками плана.
+4. Карточка **не** из плана (без `fromMealPlan`): поведение порций как раньше (без записи в `meal_plans_v2`).
+
+## Сознательно не трогалось
+
+- Схема БД, RPC, Edge Functions.
+- Канонические поля рецепта и строки `recipe_ingredients`.
+- Глобальный стор / «последнее число порций на recipeId» без контекста слота.
+- `recipePlanMutedWeekKey` на `RecipePage` (по-прежнему чтение из storage при монтировании; при расхождении с Планом см. существующие правила в `shopping_list_product_model.md`).
