@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar as CalendarIcon, Loader2, Sparkles, Plus } from "lucide-react";
+import { Calendar as CalendarIcon, Loader2, Sparkles, Plus, ShoppingCart } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMealPlans, mealPlansKey } from "@/hooks/useMealPlans";
 import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
@@ -73,6 +73,7 @@ import { trackUsageEvent } from "@/utils/usageEvents";
 import { consumeJustCreatedMemberId } from "@/services/planFill";
 import { FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
 import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/WeekPreviewPaywallSheet";
+import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingListFromPlanSheet";
 import { createSharedPlan } from "@/services/sharedPlan";
 import {
   A2HS_EVENT_AFTER_FIRST_DAY,
@@ -243,6 +244,7 @@ export default function MealPlanPage() {
   const [searchParams] = useSearchParams();
   const [justCreatedMemberId, setJustCreatedMemberIdState] = useState<string | null>(null);
   const [showWeekPreviewSheet, setShowWeekPreviewSheet] = useState(false);
+  const [shoppingBuildSheetOpen, setShoppingBuildSheetOpen] = useState(false);
   const [planProfileHelpOpen, setPlanProfileHelpOpen] = useState(false);
   const [firstPlanShareBannerDismissed, setFirstPlanShareBannerDismissed] = useState(false);
 
@@ -1119,6 +1121,24 @@ export default function MealPlanPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className="h-10 w-full flex items-center justify-center gap-2 rounded-xl border-border/60 bg-background/80 text-foreground hover:bg-muted/40 text-[13px] font-medium shadow-none"
+                type="button"
+                disabled={isAnyGenerating || !user}
+                onClick={() => {
+                  if (!hasAccess) {
+                    setPaywallCustomMessage("Список продуктов доступен в Premium");
+                    setShowPaywall(true);
+                    return;
+                  }
+                  setShoppingBuildSheetOpen(true);
+                }}
+              >
+                <ShoppingCart className="w-[17px] h-[17px] shrink-0 opacity-90" />
+                Список из меню
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 className="h-9 w-full flex items-center justify-center gap-1.5 rounded-xl border-border/50 bg-background/60 text-primary hover:bg-muted/35 text-xs font-medium shadow-none"
                 onClick={shareDayPlan}
                 disabled={isAnyGenerating}
@@ -1836,6 +1856,14 @@ export default function MealPlanPage() {
         allergies={memberDataForPlan?.allergies}
         likes={memberDataForPlan?.likes}
         dislikes={memberDataForPlan?.dislikes}
+      />
+
+      <BuildShoppingListFromPlanSheet
+        open={shoppingBuildSheetOpen}
+        onOpenChange={setShoppingBuildSheetOpen}
+        planMemberId={memberIdForPlan}
+        hasAccess={hasAccess}
+        navigateToShoppingTabOnSuccess
       />
 
       <Sheet open={planProfileHelpOpen} onOpenChange={setPlanProfileHelpOpen}>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Heart, MessageCircle, Plus, Lock, ShoppingCart } from "lucide-react";
+import { Heart, MessageCircle, Plus, Lock, ShoppingCart, ChevronLeft } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { Button } from "@/components/ui/button";
@@ -60,7 +60,7 @@ export default function FavoritesPage() {
     if (stateTab === "shopping_list") setTab("shopping_list");
   }, [stateTab]);
 
-  const handleShoppingListTabClick = () => {
+  const openShoppingList = () => {
     if (!hasAccess) {
       setPaywallCustomMessage("Список продуктов доступен в Premium");
       setShowPaywall(true);
@@ -147,41 +147,56 @@ export default function FavoritesPage() {
   return (
     <MobileLayout>
       <div className="px-4 pb-4 overflow-x-hidden max-w-full">
-        {/* Табы: единый оливковый акцент для активного */}
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <button
-            type="button"
-            onClick={() => setTab("favorites")}
-            className={cn(
-              "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors",
-              tab === "favorites" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
+        {/* Табы рецептов + вторичный вход к списку покупок (сборка — с экрана План). */}
+        <div className="flex flex-col gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+              <button
+                type="button"
+                onClick={() => setTab("favorites")}
+                className={cn(
+                  "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors",
+                  tab === "favorites" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Избранное
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("my_recipes")}
+                className={cn(
+                  "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors",
+                  tab === "my_recipes" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Мои рецепты
+              </button>
+            </div>
+            {tab !== "shopping_list" && (
+              <div className="flex items-center gap-2 shrink-0 ml-auto">
+                <button
+                  type="button"
+                  onClick={openShoppingList}
+                  className="text-[13px] font-medium inline-flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" />
+                  Покупки
+                  {!hasAccess && <Lock className="w-3 h-3 opacity-70" aria-hidden />}
+                </button>
+                <MemberSelectorButton className="shrink-0" />
+              </div>
             )}
-          >
-            Избранное
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("my_recipes")}
-            className={cn(
-              "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors",
-              tab === "my_recipes" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Мои рецепты
-          </button>
-          <button
-            type="button"
-            onClick={handleShoppingListTabClick}
-            className={cn(
-              "text-[13px] font-medium px-4 py-2.5 rounded-full border transition-colors inline-flex items-center gap-1.5",
-              tab === "shopping_list" ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground" : "bg-transparent border-border text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <ShoppingCart className="w-3.5 h-3.5" />
-            Список продуктов
-            {!hasAccess && <Lock className="w-3 h-3 opacity-70" />}
-          </button>
-          {tab !== "shopping_list" && <MemberSelectorButton className="shrink-0 ml-auto" />}
+          </div>
+          {tab === "shopping_list" && (
+            <button
+              type="button"
+              onClick={() => setTab("favorites")}
+              className="inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground w-fit -mt-0.5"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              К избранному и рецептам
+            </button>
+          )}
         </div>
 
         {(tab === "favorites" || tab === "my_recipes") && (

@@ -13,7 +13,10 @@ import {
 } from "@/hooks/useShoppingList";
 import { usePlanShoppingIngredients } from "@/hooks/usePlanShoppingIngredients";
 import { usePlanSignature } from "@/hooks/usePlanSignature";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useFamily } from "@/contexts/FamilyContext";
+import { mealPlanMemberIdForShoppingSync } from "@/utils/mealPlanMemberScope";
+import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingListFromPlanSheet";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { formatShoppingListForCopy } from "@/utils/shoppingListTextFormatter";
@@ -165,9 +168,11 @@ function ShoppingListItem({
 
 export function ShoppingListView() {
   const { toast } = useToast();
-  const { selectedMemberId } = useFamily();
-  const memberId = selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId;
+  const { selectedMemberId, members } = useFamily();
+  const { hasAccess } = useSubscription();
+  const memberId = mealPlanMemberIdForShoppingSync({ hasAccess, selectedMemberId, members });
   const [range, setRange] = useState<"today" | "week">("today");
+  const [buildSheetOpen, setBuildSheetOpen] = useState(false);
 
   const {
     listId,
@@ -196,7 +201,8 @@ export function ShoppingListView() {
   const { data: planSignature } = usePlanSignature(range, memberId);
 
   const syncMetaStored = listMeta as ShoppingListSyncMeta | undefined;
-  const planChanged = useMemo(() => {
+  /** План на экране разошёлся с подписью последней сборки — без автоперезаписи списка. */
+  const planDrift = useMemo(() => {
     if (planSignature == null || planSignature === "") return false;
     if (syncMetaStored?.last_synced_range !== range) return true;
     const storedMember = syncMetaStored?.last_synced_member_id ?? null;
@@ -204,8 +210,15 @@ export function ShoppingListView() {
     return syncMetaStored?.last_synced_plan_signature !== planSignature;
   }, [planSignature, syncMetaStored, range, memberId]);
 
-  const handleSyncFromPlan = async () => {
+  const handleRebuildFromPlan = async () => {
     if (!listId || planIngredients === undefined) return;
+    if (planIngredients.length === 0) {
+      toast({
+        title: "Нет блюд в меню за выбранный период",
+        description: "Переключите «Сегодня» / «Неделя» или добавьте рецепты в план.",
+      });
+      return;
+    }
     const payload = planIngredients.map((ing) => ({
       name: ing.name,
       amount: ing.displayAmount ?? ing.amount,
@@ -225,9 +238,9 @@ export function ShoppingListView() {
       } else {
         await replaceItems({ items: payload, syncMeta: newSyncMeta });
       }
-      toast({ title: "Список обновлён из меню" });
+      toast({ title: "Список собран заново из меню" });
     } catch {
-      toast({ variant: "destructive", title: "Не удалось обновить список" });
+      toast({ variant: "destructive", title: "Не удалось собрать список" });
     }
   };
 
@@ -369,8 +382,25 @@ export function ShoppingListView() {
     Boolean
   ).length;
 
+  const listHasContent = items.length > 0;
+
   return (
     <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">Список покупок</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Черновик по меню: отмечайте купленное, удаляйте лишнее, добавляйте свои позиции.
+        </p>
+      </div>
+
+      <BuildShoppingListFromPlanSheet
+        open={buildSheetOpen}
+        onOpenChange={setBuildSheetOpen}
+        planMemberId={memberId}
+        hasAccess={hasAccess}
+        navigateToShoppingTabOnSuccess={false}
+      />
+
       {/* Верхний ряд: Сегодня/Неделя + селектор профиля */}
       <div className="flex items-center gap-2">
         <div className="flex rounded-full border border-border overflow-hidden bg-muted/30 shrink-0">
@@ -398,24 +428,34 @@ export function ShoppingListView() {
         <MemberSelectorButton className="shrink-0 ml-auto" />
       </div>
 
-      {/* Инфо-блок */}
+      {/* Инфо: снимок, не live-зеркало */}
       <div className="rounded-lg bg-muted/40 border border-border/50 px-3 py-2 text-sm text-muted-foreground">
         <p>
-          {range === "today" ? "Список собран из меню на сегодня." : "Список собран из меню на неделю."}
+          {listHasContent
+            ? range === "today"
+              ? "Снимок по меню на сегодня. План дальше меняется отдельно — список не обновляется сам."
+              : "Снимок по меню на неделю. План дальше меняется отдельно — список не обновляется сам."
+            : syncMetaStored?.last_synced_at
+              ? "Список пуст. Соберите снова из меню или добавьте позиции вручную."
+              : range === "today"
+                ? "Соберите список из меню на сегодня или на неделю — одинаковые продукты суммируются."
+                : "Соберите список из меню на сегодня или на неделю — одинаковые продукты суммируются."}
         </p>
-        <p className="mt-0.5">Можно отмечать купленное и добавлять свои продукты.</p>
+        <p className="mt-0.5 text-xs">
+          Основной вход: вкладка План → «Список из меню». Здесь — ваш рабочий список.
+        </p>
       </div>
 
-      {/* Баннер «Меню изменилось» */}
-      {!loading && planChanged && (
-        <div className="rounded-lg border border-[#6b7c3d]/50 bg-[#6b7c3d]/10 px-3 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <p className="text-sm font-medium text-foreground">Меню изменилось</p>
+      {!loading && items.length > 0 && planDrift && (
+        <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <p className="text-xs text-muted-foreground">В меню есть изменения после последней сборки.</p>
           <Button
+            variant="secondary"
             size="sm"
-            className="bg-[#6b7c3d] hover:bg-[#5a6b32] text-white shrink-0"
-            onClick={handleSyncFromPlan}
+            className="h-8 text-xs shrink-0 border-border/60"
+            onClick={() => void handleRebuildFromPlan()}
           >
-            Обновить список
+            Собрать заново
           </Button>
         </div>
       )}
@@ -433,7 +473,7 @@ export function ShoppingListView() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={handleSyncFromPlan}>Обновить из плана</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void handleRebuildFromPlan()}>Собрать заново из меню</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setAddProductSheetOpen(true)}>
               <ListPlus className="w-3.5 h-3.5 mr-2" />
               Добавить продукт вручную
@@ -591,20 +631,25 @@ export function ShoppingListView() {
       {emptyState && (
         <div className="rounded-2xl border border-border bg-card shadow-soft p-8 text-center">
           <ShoppingCart className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-          <p className="text-sm text-muted-foreground mb-3">
+          <p className="text-sm text-muted-foreground mb-4">
             {hasPlanData
-              ? "Нажмите «Обновить из плана» в меню (⋮), чтобы собрать список из меню."
-              : "Добавьте блюда в План — затем соберите список из меню."}
+              ? "Соберите список из текущего меню — ингредиенты с разных блюд объединятся."
+              : "Добавьте блюда в План или начните с пустого списка и добавьте продукты вручную."}
           </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setAddProductSheetOpen(true)}
-          >
-            <ListPlus className="w-3.5 h-3.5" />
-            Добавить продукт вручную
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-2 justify-center items-stretch">
+            <Button
+              size="sm"
+              className="gap-1.5 bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
+              onClick={() => setBuildSheetOpen(true)}
+            >
+              <ListPlus className="w-3.5 h-3.5" />
+              Собрать из меню
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddProductSheetOpen(true)}>
+              <ListPlus className="w-3.5 h-3.5" />
+              Добавить вручную
+            </Button>
+          </div>
         </div>
       )}
 
