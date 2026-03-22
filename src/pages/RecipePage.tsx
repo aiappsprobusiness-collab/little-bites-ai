@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -146,9 +146,13 @@ export default function RecipePage() {
   const planDate = fromMealPlan && plannedDate ? new Date(plannedDate + "T12:00:00") : new Date();
   const mealPlansApi = useMealPlans(planRowMemberId, starterProfile, { mutedWeekKey: recipePlanMutedWeekKey });
   const { data: dayPlans, isLoading: dayPlanLoading } = mealPlansApi.getMealPlansByDate(planDate);
-  const planSlot = fromMealPlan && plannedDate && planMealType
-    ? dayPlans?.find((p) => p.planned_date === plannedDate && p.meal_type === planMealType)
-    : null;
+  const planSlot =
+    fromMealPlan && plannedDate && planMealType && id
+      ? dayPlans?.find(
+          (p) =>
+            p.planned_date === plannedDate && p.meal_type === planMealType && p.recipe_id === id
+        )
+      : null;
   const slotOverrides = planSlot?.ingredient_overrides ?? [];
   const slotServings = planSlot?.servings;
 
@@ -257,15 +261,16 @@ export default function RecipePage() {
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
 
-  // Синхронизируем порции: из Избранного всегда 1; из слота плана — после готовности запроса плана на дату. useLayoutEffect — до отрисовки, иначе один кадр с useState(1) и «прыжок». Кэш порций после save патчится в updateSlotServings (onMutate/onSuccess).
-  useLayoutEffect(() => {
-    if (!recipe?.id) return;
+  // Порции из плана: не ждём загрузку recipe — id из URL + dayPlans из кэша; иначе кадр с 1 и скачок после fetch рецепта.
+  // После save слота кэш плана патчится в updateSlotServings (без invalidate всего meal_plans_v2).
+  useEffect(() => {
     if (fromFavorites) {
       setServingsSelected(1);
       lastSyncedPlanSlotKeyRef.current = null;
       return;
     }
     if (!fromMealPlan) {
+      if (!recipe?.id) return;
       lastSyncedPlanSlotKeyRef.current = null;
       userHasChangedServingsRef.current = false;
       const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
@@ -274,22 +279,26 @@ export default function RecipePage() {
       setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
       return;
     }
-    const planSlotSyncKey =
-      plannedDate && planMealType ? `${plannedDate}-${planMealType}-${planRowMemberId ?? "fam"}-${recipe.id}` : null;
-    if (!planSlotSyncKey) return;
+    if (!id || !plannedDate || !planMealType) return;
     if (dayPlanLoading) return;
 
+    const planSlotSyncKey = `${plannedDate}-${planMealType}-${planRowMemberId ?? "fam"}-${id}`;
+
     if (planSlotSyncKey !== lastSyncedPlanSlotKeyRef.current) {
-      lastSyncedPlanSlotKeyRef.current = planSlotSyncKey;
       userHasChangedServingsRef.current = false;
       if (slotServings != null && slotServings >= 1) {
+        lastSyncedPlanSlotKeyRef.current = planSlotSyncKey;
         setServingsSelected(slotServings);
-      } else {
-        const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
-        const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
-        const defaultServings = base >= 4 ? base : recommended;
-        setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
+        return;
       }
+      if (!recipe?.id) {
+        return;
+      }
+      lastSyncedPlanSlotKeyRef.current = planSlotSyncKey;
+      const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
+      const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
+      const defaultServings = base >= 4 ? base : recommended;
+      setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
       return;
     }
     if (
@@ -304,6 +313,7 @@ export default function RecipePage() {
       userHasChangedServingsRef.current = false;
     }
   }, [
+    id,
     recipe?.id,
     fromFavorites,
     fromMealPlan,

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { formatLocalDate } from '@/utils/dateUtils';
@@ -361,26 +361,42 @@ export function useMealPlans(
     },
   });
 
-  const mealPlansV2Predicate = (q: { queryKey: unknown }) =>
-    Array.isArray(q.queryKey) && q.queryKey[0] === 'meal_plans_v2' && q.queryKey[1] === user?.id;
+  /** Ключ: ['meal_plans_v2', userId, memberId, start, end?, profileKey, mutedWeekKey] — без end одна дата; с end — диапазон. */
+  const mealPlanQueryTouchesDate = (queryKey: unknown, plannedDate: string): boolean => {
+    if (!Array.isArray(queryKey) || queryKey[0] !== 'meal_plans_v2' || queryKey[1] !== user?.id) return false;
+    const start = queryKey[3];
+    if (typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return false;
+    const fourth = queryKey[4];
+    const fifthIsDate = typeof fourth === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fourth);
+    if (fifthIsDate) {
+      const end = fourth;
+      return plannedDate >= start && plannedDate <= end;
+    }
+    return start === plannedDate;
+  };
 
-  /** Сразу правит кэш списков слотов: между success и концом refetch после invalidate иначе остаётся старое servings → «прыжок» порций на RecipePage. */
+  /** Обновить кэш только затронутых запросов (без cancelQueries и без invalidate всего плана — иначе лавина refetch и лаг UI). */
   const patchCachedMealPlansServings = (params: {
     planned_date: string;
     member_id: string | null;
     meal_type: MealType;
     servings: number;
   }) => {
-    queryClient.setQueriesData({ predicate: mealPlansV2Predicate }, (old: unknown) => {
-      if (!Array.isArray(old)) return old;
-      return (old as MealPlanItemV2[]).map((item) =>
-        item.planned_date === params.planned_date &&
-        item.meal_type === params.meal_type &&
-        (item.member_id ?? null) === (params.member_id ?? null)
-          ? { ...item, servings: params.servings }
-          : item
-      );
-    });
+    queryClient.setQueriesData(
+      {
+        predicate: (q) => mealPlanQueryTouchesDate(q.queryKey, params.planned_date),
+      },
+      (old: unknown) => {
+        if (!Array.isArray(old)) return old;
+        return (old as MealPlanItemV2[]).map((item) =>
+          item.planned_date === params.planned_date &&
+          item.meal_type === params.meal_type &&
+          (item.member_id ?? null) === (params.member_id ?? null)
+            ? { ...item, servings: params.servings }
+            : item
+        );
+      }
+    );
   };
 
   /** Обновить только servings слота (planned_date + member_id + meal_type). */
@@ -422,22 +438,8 @@ export function useMealPlans(
       if (updateErr) throw updateErr;
       return row as unknown as MealPlansV2Row;
     },
-    onMutate: async (params) => {
-      if (!user?.id) return {};
-      await queryClient.cancelQueries({ predicate: mealPlansV2Predicate });
-      const previous = queryClient.getQueriesData({ predicate: mealPlansV2Predicate });
-      patchCachedMealPlansServings(params);
-      return { previous };
-    },
-    onError: (_err, _params, context) => {
-      const prev = context as { previous?: [QueryKey, unknown][] } | undefined;
-      prev?.previous?.forEach(([queryKey, data]) => {
-        queryClient.setQueryData(queryKey, data);
-      });
-    },
     onSuccess: (_row, params) => {
       patchCachedMealPlansServings(params);
-      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
       queryClient.invalidateQueries({ queryKey: ['plan_signature'] });
     },
   });
