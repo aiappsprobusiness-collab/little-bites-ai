@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Loader2, Sparkles, Plus, ShoppingCart } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMealPlans, mealPlansKey } from "@/hooks/useMealPlans";
+import { useMealPlanMemberData, MEAL_PLAN_MUTED_WEEK_STORAGE_KEY } from "@/hooks/useMealPlanMemberData";
 import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -284,49 +285,20 @@ export default function MealPlanPage() {
   const mealPlanMemberId = isFree && selectedMemberId === "family"
     ? (members[0]?.id ?? undefined)
     : (isFamilyMode ? null : (selectedMemberId || undefined));
-  const memberDataForPlan = useMemo(() => {
-    if (isFamilyMode && members.length > 0) {
-      const allAllergies = Array.from(new Set(members.flatMap((c) => c.allergies ?? [])));
-      const allLikes = Array.from(new Set(members.flatMap((c) => (c as { likes?: string[] }).likes ?? []).map((p) => String(p).trim()).filter(Boolean)));
-      const allDislikes = Array.from(new Set(members.flatMap((c) => (c as { dislikes?: string[] }).dislikes ?? []).map((p) => String(p).trim()).filter(Boolean)));
-      return {
-        name: "Семья",
-        type: "family" as const,
-        allergies: allAllergies,
-        likes: allLikes,
-        dislikes: allDislikes,
-      };
-    }
-    const memberForPlan = selectedMember ?? (isFree && selectedMemberId === "family" && members.length > 0 ? members[0] : null);
-    if (memberForPlan) {
-      const m = memberForPlan as { allergies?: string[]; likes?: string[]; dislikes?: string[]; type?: string };
-      return {
-        name: memberForPlan.name,
-        age_months: memberForPlan.age_months ?? 0,
-        type: m.type ?? "child",
-        allergies: m.allergies ?? [],
-        likes: m.likes ?? [],
-        dislikes: m.dislikes ?? [],
-      };
-    }
-    return null;
-  }, [isFamilyMode, members, selectedMember, isFree, selectedMemberId]);
+  const { memberDataForPlan, starterProfile } = useMealPlanMemberData();
 
-  const MUTED_WEEK_STORAGE_KEY = "mealPlan_mutedWeekKey";
   const [mutedWeekKey, setMutedWeekKey] = useState<string | null>(() => {
     if (typeof localStorage === "undefined") return null;
-    const stored = localStorage.getItem(MUTED_WEEK_STORAGE_KEY);
+    const stored = localStorage.getItem(MEAL_PLAN_MUTED_WEEK_STORAGE_KEY);
     const currentStart = getRollingStartKey();
     return stored === currentStart ? stored : null;
   });
   const setMutedWeekKeyAndStorage = useCallback((key: string | null) => {
     setMutedWeekKey(key);
     if (typeof localStorage === "undefined") return;
-    if (key) localStorage.setItem(MUTED_WEEK_STORAGE_KEY, key);
-    else localStorage.removeItem(MUTED_WEEK_STORAGE_KEY);
+    if (key) localStorage.setItem(MEAL_PLAN_MUTED_WEEK_STORAGE_KEY, key);
+    else localStorage.removeItem(MEAL_PLAN_MUTED_WEEK_STORAGE_KEY);
   }, []);
-
-  const starterProfile = memberDataForPlan ? { allergies: memberDataForPlan.allergies, likes: memberDataForPlan.likes, dislikes: memberDataForPlan.dislikes } : null;
   const { getMealPlans, getMealPlansByDate, getMealPlanRowExists, clearWeekPlan, deleteMealPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
 
   const memberIdForPlan = mealPlanMemberId ?? null;

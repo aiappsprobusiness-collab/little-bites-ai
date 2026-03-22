@@ -42,6 +42,7 @@ import { NutritionGoalsChips } from "@/components/recipe/NutritionGoalsChips";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { cn } from "@/lib/utils";
 import { mealPlanMemberIdForShoppingSync } from "@/utils/mealPlanMemberScope";
+import { useMealPlanMemberData, readMealPlanMutedWeekKeyFromStorage } from "@/hooks/useMealPlanMemberData";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -84,6 +85,9 @@ export default function RecipePage() {
   const location = useLocation();
   const { toast } = useToast();
   const { selectedMember, selectedMemberId, members } = useFamily();
+  const { starterProfile } = useMealPlanMemberData();
+  /** Совпадает с queryKey MealPlanPage — иначе план на дату грузится заново без кэша и слот/порции «прыгают». */
+  const recipePlanMutedWeekKey = useMemo(() => readMealPlanMutedWeekKeyFromStorage(), []);
   const { hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
@@ -140,14 +144,15 @@ export default function RecipePage() {
         : mealPlanMemberIdForShoppingSync({ hasAccess, selectedMemberId, members })
       : undefined;
   const planDate = fromMealPlan && plannedDate ? new Date(plannedDate + "T12:00:00") : new Date();
-  const { data: dayPlans, isLoading: dayPlanLoading } = useMealPlans(planRowMemberId).getMealPlansByDate(planDate);
+  const mealPlansApi = useMealPlans(planRowMemberId, starterProfile, { mutedWeekKey: recipePlanMutedWeekKey });
+  const { data: dayPlans, isLoading: dayPlanLoading } = mealPlansApi.getMealPlansByDate(planDate);
   const planSlot = fromMealPlan && plannedDate && planMealType
     ? dayPlans?.find((p) => p.planned_date === plannedDate && p.meal_type === planMealType)
     : null;
   const slotOverrides = planSlot?.ingredient_overrides ?? [];
   const slotServings = planSlot?.servings;
 
-  const { updateSlotIngredientOverrides, updateSlotServings } = useMealPlans(planRowMemberId);
+  const { updateSlotServings } = mealPlansApi;
 
   const { isFavorite: isFavoriteFn, toggleFavorite } = useFavorites("all");
   const isFavorite = !!id && isFavoriteFn(id, favoriteMemberId);
