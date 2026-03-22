@@ -41,6 +41,7 @@ import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader
 import { NutritionGoalsChips } from "@/components/recipe/NutritionGoalsChips";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { cn } from "@/lib/utils";
+import { mealPlanMemberIdForShoppingSync } from "@/utils/mealPlanMemberScope";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,7 +83,7 @@ export default function RecipePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { selectedMember, selectedMemberId } = useFamily();
+  const { selectedMember, selectedMemberId, members } = useFamily();
   const { hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
@@ -128,16 +129,25 @@ export default function RecipePage() {
   const planMealType = state?.mealType ?? null;
   const favoriteMemberId = stateMemberId ?? (selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : null);
 
-  const planMemberId = state?.memberId ?? selectedMemberId ?? null;
+  /**
+   * member_id строки meal_plans_v2 для слота. С Плана в state часто нет memberId (семья Premium) —
+   * нельзя подставлять selectedMemberId === "family" в запрос (иначе слот не находится, порции скачут 6↔1).
+   */
+  const planRowMemberId =
+    fromMealPlan && plannedDate && planMealType
+      ? state?.memberId != null
+        ? state.memberId
+        : mealPlanMemberIdForShoppingSync({ hasAccess, selectedMemberId, members })
+      : undefined;
   const planDate = fromMealPlan && plannedDate ? new Date(plannedDate + "T12:00:00") : new Date();
-  const { data: dayPlans, isLoading: dayPlanLoading } = useMealPlans(planMemberId ?? undefined).getMealPlansByDate(planDate);
+  const { data: dayPlans, isLoading: dayPlanLoading } = useMealPlans(planRowMemberId).getMealPlansByDate(planDate);
   const planSlot = fromMealPlan && plannedDate && planMealType
     ? dayPlans?.find((p) => p.planned_date === plannedDate && p.meal_type === planMealType)
     : null;
   const slotOverrides = planSlot?.ingredient_overrides ?? [];
   const slotServings = planSlot?.servings;
 
-  const { updateSlotIngredientOverrides, updateSlotServings } = useMealPlans(planMemberId ?? undefined);
+  const { updateSlotIngredientOverrides, updateSlotServings } = useMealPlans(planRowMemberId);
 
   const { isFavorite: isFavoriteFn, toggleFavorite } = useFavorites("all");
   const isFavorite = !!id && isFavoriteFn(id, favoriteMemberId);
@@ -260,7 +270,7 @@ export default function RecipePage() {
       return;
     }
     const planSlotSyncKey =
-      plannedDate && planMealType ? `${plannedDate}-${planMealType}-${planMemberId ?? "fam"}-${recipe.id}` : null;
+      plannedDate && planMealType ? `${plannedDate}-${planMealType}-${planRowMemberId ?? "fam"}-${recipe.id}` : null;
     if (!planSlotSyncKey) return;
     if (dayPlanLoading) return;
 
@@ -294,7 +304,7 @@ export default function RecipePage() {
     fromMealPlan,
     plannedDate,
     planMealType,
-    planMemberId,
+    planRowMemberId,
     slotServings,
     servingsSelected,
     dayPlanLoading,
@@ -303,7 +313,7 @@ export default function RecipePage() {
   // Сохранение порций слота плана при изменении пользователем (debounce); при уходе со страницы — сохранить сразу
   const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!fromMealPlan || plannedDate == null || planMealType == null || planMemberId === undefined) return;
+    if (!fromMealPlan || plannedDate == null || planMealType == null) return;
     if (slotServings === servingsSelected) return;
     if (servingsSaveRef.current) clearTimeout(servingsSaveRef.current);
     servingsSaveRef.current = setTimeout(() => {
@@ -312,7 +322,7 @@ export default function RecipePage() {
       if (next < 1) return;
       updateSlotServings({
         planned_date: plannedDate,
-        member_id: planMemberId ?? null,
+        member_id: planRowMemberId ?? null,
         meal_type: planMealType as "breakfast" | "lunch" | "snack" | "dinner",
         servings: next,
       }).catch(() => {});
@@ -322,13 +332,13 @@ export default function RecipePage() {
       if (servingsSelected !== slotServings && servingsSelected >= 1) {
         updateSlotServings({
           planned_date: plannedDate,
-          member_id: planMemberId ?? null,
+          member_id: planRowMemberId ?? null,
           meal_type: planMealType as "breakfast" | "lunch" | "snack" | "dinner",
           servings: servingsSelected,
         }).catch(() => {});
       }
     };
-  }, [fromMealPlan, plannedDate, planMealType, planMemberId, slotServings, servingsSelected, updateSlotServings]);
+  }, [fromMealPlan, plannedDate, planMealType, planRowMemberId, slotServings, servingsSelected, updateSlotServings]);
 
   const displayIngredients = recipe ? getDisplayIngredients(recipe as RecipeDisplayIngredients) : [];
   const servingsBase = Math.max(1, (recipe as { servings_base?: number | null })?.servings_base ?? 1);
