@@ -962,7 +962,7 @@ export default function MealPlanPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="rounded-2xl bg-card/85 border border-border/40 shadow-sm p-3 sm:p-4 mb-2"
+            className="rounded-2xl bg-card/70 border-0 p-3 sm:p-4 mb-2 shadow-none ring-1 ring-border/20"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -1075,7 +1075,7 @@ export default function MealPlanPage() {
                 </DropdownMenu>
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-border/30 space-y-3">
+            <div className="mt-4 pt-3 border-t border-border/15 space-y-2.5">
               <Button
                 size="sm"
                 className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.18)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
@@ -1128,81 +1128,87 @@ export default function MealPlanPage() {
                 <Sparkles className="w-[18px] h-[18px] shrink-0" />
                 {isAnyGenerating ? "Собираем…" : "Собрать день"}
               </Button>
-              <div className="flex flex-wrap items-stretch gap-2 sm:gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 flex-1 min-w-[140px] flex items-center justify-center gap-1.5 rounded-xl border-border/60 bg-background/80 text-primary hover:bg-muted/40 text-xs font-medium shadow-none"
-                  onClick={shareDayPlan}
-                  disabled={isAnyGenerating}
-                >
-                  <ShareIosIcon className="w-4 h-4 shrink-0" />
-                  Поделиться днём
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "h-9 flex-1 min-w-[120px] flex items-center justify-center gap-1 rounded-xl text-xs font-medium shadow-none border border-transparent",
-                    isFree && "text-muted-foreground hover:text-foreground hover:bg-muted/50",
-                    !isFree && "text-primary/90 hover:text-primary hover:bg-primary/5",
-                  )}
-                  disabled={!isFree && isAnyGenerating}
-                  onClick={async () => {
-                    if (isFree) {
-                      if (FF_WEEK_PAYWALL_PREVIEW) {
-                        setShowWeekPreviewSheet(true);
-                      } else {
-                        setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
-                        setShowPaywall(true);
-                      }
-                      return;
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 w-full flex items-center justify-center gap-1.5 rounded-xl border-border/50 bg-background/60 text-primary hover:bg-muted/35 text-xs font-medium shadow-none"
+                onClick={shareDayPlan}
+                disabled={isAnyGenerating}
+              >
+                <ShareIosIcon className="w-4 h-4 shrink-0" />
+                Поделиться днём
+              </Button>
+              <button
+                type="button"
+                disabled={!isFree && isAnyGenerating}
+                className={cn(
+                  "w-full flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0 py-2 text-xs font-normal transition-colors",
+                  "text-muted-foreground hover:text-foreground underline-offset-4 hover:underline",
+                  "disabled:opacity-50 disabled:pointer-events-none disabled:no-underline",
+                )}
+                onClick={async () => {
+                  if (isFree) {
+                    if (FF_WEEK_PAYWALL_PREVIEW) {
+                      setShowWeekPreviewSheet(true);
+                    } else {
+                      setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
+                      setShowPaywall(true);
                     }
-                    if (isAnyGenerating) {
-                      toast({ description: "Идёт подбор рецептов, подождите…" });
-                      return;
+                    return;
+                  }
+                  if (isAnyGenerating) {
+                    toast({ description: "Идёт подбор рецептов, подождите…" });
+                    return;
+                  }
+                  if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
+                  setPoolUpgradeLoading(true);
+                  try {
+                    const result = await runPoolUpgrade({
+                      type: "week",
+                      member_id: memberIdForPlan,
+                      member_data: memberDataForPlan,
+                      start_key: getRollingStartKey(),
+                      day_keys: getRollingDayKeys(),
+                      ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
+                    });
+                    setMutedWeekKeyAndStorage(null);
+                    await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                    const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
+                    const total = result.totalSlots ?? 28;
+                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                      showPartialFillToast(toast, navigate, { filled, total });
+                    } else {
+                      toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
                     }
-                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
-                    setPoolUpgradeLoading(true);
-                    try {
-                      const result = await runPoolUpgrade({
-                        type: "week",
-                        member_id: memberIdForPlan,
-                        member_data: memberDataForPlan,
-                        start_key: getRollingStartKey(),
-                        day_keys: getRollingDayKeys(),
-                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
-                      });
-                      setMutedWeekKeyAndStorage(null);
-                      await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
-                      const total = result.totalSlots ?? 28;
-                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                        showPartialFillToast(toast, navigate, { filled, total });
-                      } else {
-                        toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
-                      }
-                    } catch (e: unknown) {
-                      const raw = e instanceof Error ? e.message : "Не удалось заполнить неделю";
-                      const msg = planErrorMessage(raw, "Не удалось заполнить неделю");
-                      if (msg === "LIMIT_REACHED") {
-                        /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
-                      } else if (msg === "member_id_required") {
-                        toast({ description: "Выберите профиль ребёнка вверху" });
-                      } else if (msg.includes("слишком много времени")) {
-                        showPartialFillToast(toast, navigate, {});
-                      } else {
-                        toast({ variant: "destructive", title: "Ошибка", description: msg });
-                      }
-                    } finally {
-                      setPoolUpgradeLoading(false);
+                  } catch (e: unknown) {
+                    const raw = e instanceof Error ? e.message : "Не удалось заполнить неделю";
+                    const msg = planErrorMessage(raw, "Не удалось заполнить неделю");
+                    if (msg === "LIMIT_REACHED") {
+                      /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                    } else if (msg === "member_id_required") {
+                      toast({ description: "Выберите профиль ребёнка вверху" });
+                    } else if (msg.includes("слишком много времени")) {
+                      showPartialFillToast(toast, navigate, {});
+                    } else {
+                      toast({ variant: "destructive", title: "Ошибка", description: msg });
                     }
-                  }}
-                >
-                  <Sparkles className="w-[14px] h-[14px] shrink-0 opacity-80" />
-                  Собрать неделю
-                </Button>
-              </div>
+                  } finally {
+                    setPoolUpgradeLoading(false);
+                  }
+                }}
+              >
+                {isFree ? (
+                  <>
+                    <span className="text-[13px] leading-none select-none" aria-hidden>
+                      🔒
+                    </span>
+                    <span>Собрать неделю</span>
+                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/75">Premium</span>
+                  </>
+                ) : (
+                  <span>Собрать неделю</span>
+                )}
+              </button>
             </div>
           </motion.div>
 

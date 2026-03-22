@@ -146,18 +146,20 @@ export function PlanGoalCompactSheet({ className, ...rowProps }: PlanGoalChipsRo
         type="button"
         onClick={() => setOpen(true)}
         className={cn(
-          "w-full flex items-center gap-3 rounded-xl border border-border/35 bg-muted/10 px-3 py-2.5 text-left transition-colors hover:bg-muted/20 active:scale-[0.99]",
+          "group flex w-full max-w-full items-center gap-1.5 border-0 bg-transparent py-1.5 pl-0 pr-1 text-left transition-colors active:opacity-90",
           className,
         )}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Цель подбора: ${summary}. Открыть выбор`}
       >
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground/75 font-medium">Цель подбора</p>
-          <p className="text-sm font-medium text-foreground truncate mt-0.5">{summary}</p>
-        </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" aria-hidden />
+        <span className="min-w-0 truncate text-sm font-medium text-foreground/90 group-hover:text-foreground">
+          {summary}
+        </span>
+        <ChevronRight
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground/35 group-hover:text-muted-foreground/60"
+          aria-hidden
+        />
       </button>
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="bottom" className="rounded-t-2xl max-h-[88vh] overflow-y-auto pt-6 pb-8">
