@@ -29,13 +29,13 @@ export const recipeIngredientChip =
 export const recipeIngredientChipText =
   "text-foreground font-medium text-xs min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis";
 
-/** Блок «Совет от шефа»: тёплый фон #F6F4EC, увеличенный padding */
+/** Блок «Совет от шефа»: тёплый фон #F6F4EC; отступы задаёт ChefAdviceCard */
 export const recipeChefAdviceCard =
-  "rounded-2xl p-5 border border-primary-border/50 bg-[#F6F4EC] flex gap-3 items-start border-l-2 border-l-primary/20";
+  "rounded-2xl border border-primary-border/50 bg-[#F6F4EC] border-l-[3px] border-l-primary/25 shadow-none";
 
-/** Мини-совет (free): нейтральный фон */
+/** Мини-совет (free): нейтральный фон; отступы задаёт ChefAdviceCard */
 export const recipeMiniAdviceCard =
-  "rounded-xl p-3 border border-border bg-muted/30 flex gap-2.5 items-start";
+  "rounded-xl border border-border bg-muted/30 shadow-none";
 
 /** Мета-строка (время, аудитория) */
 export const recipeMetaRow = "flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground";
