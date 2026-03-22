@@ -87,7 +87,7 @@ export function BuildShoppingListFromPlanSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="rounded-t-2xl px-5 pt-6 pb-6">
         <SheetHeader className="text-left space-y-3 pr-10">
-          <SheetTitle className="text-plan-recipe-title font-semibold text-foreground leading-tight">
+          <SheetTitle className="text-typo-body font-semibold text-foreground leading-tight">
             Собрать список продуктов
           </SheetTitle>
           <SheetDescription className="text-typo-body font-normal text-foreground/90 leading-relaxed">
