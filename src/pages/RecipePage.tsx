@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -257,8 +257,8 @@ export default function RecipePage() {
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
 
-  // Синхронизируем порции: из Избранного всегда 1; из слота плана — после готовности запроса плана на дату (иначе slotServings временно undefined → ложный дефолт и «дрифт» со списком покупок). При refetch подтягиваем серверные порции, если пользователь их не трогал.
-  useEffect(() => {
+  // Синхронизируем порции: из Избранного всегда 1; из слота плана — после готовности запроса плана на дату. useLayoutEffect — до отрисовки, иначе один кадр с useState(1) и «прыжок». Кэш порций после save патчится в updateSlotServings (onMutate/onSuccess).
+  useLayoutEffect(() => {
     if (!recipe?.id) return;
     if (fromFavorites) {
       setServingsSelected(1);
