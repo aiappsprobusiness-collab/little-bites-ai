@@ -97,7 +97,7 @@ export function RecipeCard({
           goals={nutritionGoals}
           maxVisible={nutritionGoalsMaxVisible}
           quiet={nutritionGoalsQuiet}
-          className="-mt-3.5 mb-1"
+          className="-mt-2 mb-1"
         />
       )}
       {isPreview && showChips && (
