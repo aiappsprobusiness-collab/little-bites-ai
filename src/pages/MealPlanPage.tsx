@@ -817,13 +817,18 @@ export default function MealPlanPage() {
         });
         const body = buildDayMenuShareBody(shareMenuPreview.meals);
         const fullText = appendShareLinkOnce(body, url);
+        let sharedOk = false;
         if (typeof navigator !== "undefined" && navigator.share) {
           await navigator.share({ title: "Меню на день", text: fullText });
-        } else {
-          await navigator.clipboard?.writeText(fullText);
+          sharedOk = true;
+        } else if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(fullText);
           toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
+          sharedOk = true;
+        } else {
+          toast({ variant: "destructive", description: "Не удалось скопировать: браузер не поддерживает буфер обмена" });
         }
-        setShareMenuPreview(null);
+        if (sharedOk) setShareMenuPreview(null);
         return;
       }
       const { url } = await createSharedPlan(user.id, memberIdForPlan, {
@@ -838,13 +843,18 @@ export default function MealPlanPage() {
       }));
       const body = buildWeekMenuShareBody(dayRows);
       const fullText = appendShareLinkOnce(body, url);
+      let sharedOk = false;
       if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({ title: "Меню на неделю", text: fullText });
-      } else {
-        await navigator.clipboard?.writeText(fullText);
+        sharedOk = true;
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(fullText);
         toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
+        sharedOk = true;
+      } else {
+        toast({ variant: "destructive", description: "Не удалось скопировать: браузер не поддерживает буфер обмена" });
       }
-      setShareMenuPreview(null);
+      if (sharedOk) setShareMenuPreview(null);
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
       toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось поделиться" });
