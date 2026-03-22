@@ -74,7 +74,20 @@ import { consumeJustCreatedMemberId } from "@/services/planFill";
 import { FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
 import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/WeekPreviewPaywallSheet";
 import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingListFromPlanSheet";
-import { createSharedPlan } from "@/services/sharedPlan";
+import { createSharedPlan, type SharedPlanPayloadWeek } from "@/services/sharedPlan";
+import {
+  appendShareLinkOnce,
+  buildDayMenuShareBody,
+  buildWeekMenuShareBody,
+  weekMealsBrief,
+} from "@/utils/shareMenuText";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   A2HS_EVENT_AFTER_FIRST_DAY,
   A2HS_EVENT_AFTER_FIRST_WEEK,
@@ -247,6 +260,12 @@ export default function MealPlanPage() {
   const [shoppingBuildSheetOpen, setShoppingBuildSheetOpen] = useState(false);
   const [planProfileHelpOpen, setPlanProfileHelpOpen] = useState(false);
   const [firstPlanShareBannerDismissed, setFirstPlanShareBannerDismissed] = useState(false);
+  const [shareMenuPreview, setShareMenuPreview] = useState<
+    | { kind: "day"; meals: Array<{ meal_type: string; label: string; title: string }> }
+    | { kind: "week"; days: SharedPlanPayloadWeek["days"] }
+    | null
+  >(null);
+  const [shareMenuSending, setShareMenuSending] = useState(false);
 
   useEffect(() => {
     const id = consumeJustCreatedMemberId();
@@ -757,8 +776,7 @@ export default function MealPlanPage() {
     return plannedMeal?.recipe_id ?? getPlannedMealRecipe(plannedMeal)?.id ?? null;
   };
 
-  const shareDayPlan = useCallback(async () => {
-    if (!user?.id) return;
+  const openShareDayPreview = useCallback(() => {
     const meals = dayMealPlans
       .filter((p) => p.recipe_id)
       .map((p) => ({
@@ -770,24 +788,12 @@ export default function MealPlanPage() {
       toast({ description: "Добавьте блюда в план дня, чтобы поделиться" });
       return;
     }
-    try {
-      const { url } = await createSharedPlan(user.id, memberIdForPlan, { date: selectedDayKey, meals });
-      const shareText = "Сегодня готовлю по этому меню для семьи 🍽👇";
-      const textWithLink = `${shareText}\n${url}`;
-      if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "Меню на день", text: textWithLink, url });
-      } else {
-        await navigator.clipboard?.writeText(textWithLink);
-        toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
-      }
-    } catch (e) {
-      toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось поделиться" });
-    }
-  }, [user?.id, memberIdForPlan, selectedDayKey, dayMealPlans, mealTypes, previews, toast]);
+    setShareMenuPreview({ kind: "day", meals });
+  }, [dayMealPlans, mealTypes, previews, toast]);
 
-  const shareWeekPlan = useCallback(async () => {
+  const openShareWeekPreview = useCallback(() => {
     if (!user?.id) return;
-    const days = dayKeys.map((dayKey, i) => {
+    const days: SharedPlanPayloadWeek["days"] = dayKeys.map((dayKey, i) => {
       const dayPlans = weekPlans.filter((p) => p.planned_date === dayKey);
       const meals = dayPlans
         .filter((p) => p.recipe_id)
@@ -797,25 +803,76 @@ export default function MealPlanPage() {
       const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
       return { date: dayKey, label: capitalized, meals };
     });
+    setShareMenuPreview({ kind: "week", days });
+  }, [user?.id, dayKeys, weekPlans, rollingDates]);
+
+  const confirmShareMenuPreview = useCallback(async () => {
+    if (!shareMenuPreview || !user?.id) return;
+    setShareMenuSending(true);
     try {
+      if (shareMenuPreview.kind === "day") {
+        const { url } = await createSharedPlan(user.id, memberIdForPlan, {
+          date: selectedDayKey,
+          meals: shareMenuPreview.meals,
+        });
+        const body = buildDayMenuShareBody(shareMenuPreview.meals);
+        const fullText = appendShareLinkOnce(body, url);
+        if (typeof navigator !== "undefined" && navigator.share) {
+          await navigator.share({ title: "Меню на день", text: fullText });
+        } else {
+          await navigator.clipboard?.writeText(fullText);
+          toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
+        }
+        setShareMenuPreview(null);
+        return;
+      }
       const { url } = await createSharedPlan(user.id, memberIdForPlan, {
         type: "week",
         startDate: dayKeys[0],
         endDate: dayKeys[6],
-        days,
+        days: shareMenuPreview.days,
       });
-      const shareText = "Нашла готовое меню на неделю для семьи 🍲👇";
-      const textWithLink = `${shareText}\n${url}`;
+      const dayRows = shareMenuPreview.days.map((d, i) => ({
+        dayShort: getDayLabel(rollingDates[i]),
+        brief: weekMealsBrief(d.meals),
+      }));
+      const body = buildWeekMenuShareBody(dayRows);
+      const fullText = appendShareLinkOnce(body, url);
       if (typeof navigator !== "undefined" && navigator.share) {
-        await navigator.share({ title: "Меню на неделю", text: textWithLink, url });
+        await navigator.share({ title: "Меню на неделю", text: fullText });
       } else {
-        await navigator.clipboard?.writeText(textWithLink);
+        await navigator.clipboard?.writeText(fullText);
         toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
       }
+      setShareMenuPreview(null);
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось поделиться" });
+    } finally {
+      setShareMenuSending(false);
     }
-  }, [user?.id, memberIdForPlan, dayKeys, weekPlans, rollingDates, toast]);
+  }, [
+    shareMenuPreview,
+    user?.id,
+    memberIdForPlan,
+    selectedDayKey,
+    dayKeys,
+    rollingDates,
+    toast,
+  ]);
+
+  const shareMenuPreviewBody = useMemo(() => {
+    if (!shareMenuPreview) return "";
+    if (shareMenuPreview.kind === "day") {
+      return buildDayMenuShareBody(shareMenuPreview.meals);
+    }
+    return buildWeekMenuShareBody(
+      shareMenuPreview.days.map((d, i) => ({
+        dayShort: getDayLabel(rollingDates[i]),
+        brief: weekMealsBrief(d.meals),
+      })),
+    );
+  }, [shareMenuPreview, rollingDates]);
 
   // Группируем планы по типу приема пищи
   const mealsByType = mealTypes.reduce((acc, mealType) => {
@@ -948,12 +1005,15 @@ export default function MealPlanPage() {
                 variant="outline"
                 size="sm"
                 className="h-9 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium gap-1.5"
-                onClick={shareDayPlan}
+                onClick={openShareDayPreview}
                 disabled={isAnyGenerating || !dayHasShareableMeals}
               >
                 <ShareIosIcon className="w-4 h-4 shrink-0" />
                 Отправить меню
               </Button>
+              {dayHasShareableMeals ? (
+                <p className="text-[10px] text-muted-foreground mt-1.5">Покажите близким или сохраните себе</p>
+              ) : null}
             </motion.div>
           )}
           {/* 1) Hero: «Собрать день» + «Собрать неделю»; отправка меню — под списком блюд */}
@@ -1025,7 +1085,7 @@ export default function MealPlanPage() {
                     )}
                     {hasAccess && (
                       <DropdownMenuItem
-                        onClick={() => void shareWeekPlan()}
+                        onClick={() => openShareWeekPreview()}
                         disabled={isAnyGenerating || isWeekPlansLoading}
                         className="text-muted-foreground"
                       >
@@ -1753,17 +1813,20 @@ export default function MealPlanPage() {
                 </Button>
               </motion.div>
               {dayHasShareableMeals && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  type="button"
-                  className="w-full h-10 flex items-center justify-center gap-2 rounded-xl text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 shadow-none border-0"
-                  onClick={() => void shareDayPlan()}
-                  disabled={isAnyGenerating || !user}
-                >
-                  <ShareIosIcon className="w-4 h-4 shrink-0 opacity-80" aria-hidden />
-                  Отправить меню
-                </Button>
+                <div className="flex flex-col items-stretch gap-0.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    className="w-full h-10 flex items-center justify-center gap-2 rounded-xl text-[13px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 shadow-none border-0"
+                    onClick={() => openShareDayPreview()}
+                    disabled={isAnyGenerating || !user}
+                  >
+                    <ShareIosIcon className="w-4 h-4 shrink-0 opacity-80" aria-hidden />
+                    Отправить меню
+                  </Button>
+                  <p className="text-[10px] text-center text-muted-foreground">Покажите близким или сохраните себе</p>
+                </div>
               )}
             {/* Карточка «Спросить в чате» — только Free, план уже сгенерирован */}
             {isFree && (
@@ -1897,6 +1960,39 @@ export default function MealPlanPage() {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={shareMenuPreview != null}
+        onOpenChange={(open) => {
+          if (!open && !shareMenuSending) setShareMenuPreview(null);
+        }}
+      >
+        <DialogContent className="max-w-[min(100vw-1.5rem,28rem)] p-4 sm:p-5">
+          <DialogHeader>
+            <DialogTitle>Ваше меню</DialogTitle>
+          </DialogHeader>
+          <pre className="text-sm text-foreground whitespace-pre-wrap font-sans max-h-[min(50vh,18rem)] overflow-y-auto rounded-lg bg-muted/40 p-3 border border-border/50">
+            {shareMenuPreviewBody}
+          </pre>
+          <DialogFooter>
+            <Button
+              type="button"
+              className="w-full rounded-xl inline-flex items-center justify-center gap-2"
+              disabled={shareMenuSending}
+              onClick={() => void confirmShareMenuPreview()}
+            >
+              {shareMenuSending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden />
+                  Отправляем…
+                </>
+              ) : (
+                "Отправить"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmActionModal
         open={clearConfirm !== null}
