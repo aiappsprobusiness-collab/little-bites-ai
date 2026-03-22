@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { mapDbProductCategoryToShoppingAisle } from "@/utils/shopping/mapDbProductCategoryToShoppingAisle";
+import { resolveProductCategoryForShoppingIngredient } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
 
 export type ProductCategory = "vegetables" | "fruits" | "dairy" | "meat" | "grains" | "other";
 
@@ -96,7 +96,11 @@ export function useShoppingList() {
       if (error) throw error;
       return (data ?? []).map((row) => ({
         ...row,
-        category: mapDbProductCategoryToShoppingAisle(row.category as string | null),
+        category: resolveProductCategoryForShoppingIngredient(
+          row.category as string | null,
+          row.name,
+          null
+        ),
       }));
     },
     enabled: !!listId,

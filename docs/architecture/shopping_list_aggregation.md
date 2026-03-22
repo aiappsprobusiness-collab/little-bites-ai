@@ -19,7 +19,9 @@
 
 ## Модуль нормализации
 
-**Маппинг категорий БД → секции списка:** `src/utils/shopping/mapDbProductCategoryToShoppingAisle.ts` — в Postgres `product_category` включает **fish**, **fats**, **spices** (модель «полки» Cooper); в UI списка шесть проходов: **fish → meat** («Мясо и рыба»), fats/spices → **other** («Прочее»). Используется при агрегации из плана (`loadPlanShoppingIngredients`), при чтении `shopping_list_items` и при группировке/копировании в UI. Раньше значение `fish` в строке списка не входило в `CATEGORY_ORDER` и отображалось как «Прочее».
+**Маппинг категорий БД → секции списка:** `src/utils/shopping/mapDbProductCategoryToShoppingAisle.ts` — в Postgres `product_category` включает **fish**, **fats**, **spices**; в UI шесть проходов: **fish → meat**, fats/spices → **other**. Используется внутри `resolveProductCategoryForShoppingIngredient` (`inferShoppingCategoryFromIngredient.ts`).
+
+**Fallback по названию:** если в `recipe_ingredients` или в строке списка `category` = `other` или `NULL`, категория для полки выводится эвристикой по **name + display_text** (нормализация ё→е, порядок правил как в RPC `infer_ingredient_category`). Так позиции вроде свёклы, авокадо, тунца/стейка тунца, тофу не оседают в «Прочее», когда в БД не заполнена категория. При чтении `shopping_list_items` то же правило по полю `name` подтягивает отображение без обязательной пересборки списка.
 
 **Файл:** `src/utils/shopping/normalizeIngredientForShopping.ts`
 

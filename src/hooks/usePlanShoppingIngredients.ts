@@ -11,7 +11,7 @@ import {
   toShoppingDisplayUnitAndAmount,
   type NormalizedUnit,
 } from "@/utils/shopping/normalizeIngredientForShopping";
-import { mapDbProductCategoryToShoppingAisle } from "@/utils/shopping/mapDbProductCategoryToShoppingAisle";
+import { resolveProductCategoryForShoppingIngredient } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
 
 export interface SourceRecipe {
   id: string;
@@ -86,7 +86,7 @@ export async function loadPlanShoppingIngredients(
     supabase.from("recipes").select("id, servings_base, title").in("id", recipeIds),
     supabase
       .from("recipe_ingredients")
-      .select("recipe_id, name, amount, unit, canonical_amount, canonical_unit, category")
+      .select("recipe_id, name, amount, unit, canonical_amount, canonical_unit, category, display_text")
       .in("recipe_id", recipeIds),
   ]);
   if (recipesRes.error) throw recipesRes.error;
@@ -108,6 +108,7 @@ export async function loadPlanShoppingIngredients(
       canonical_amount: number | null;
       canonical_unit: string | null;
       category: string | null;
+      display_text: string | null;
     }[]
   >();
   for (const ing of ingredientsRes.data ?? []) {
@@ -119,6 +120,7 @@ export async function loadPlanShoppingIngredients(
       canonical_amount: number | null;
       canonical_unit: string | null;
       category: string | null;
+      display_text: string | null;
     };
     if (!ingredientsByRecipe.has(r.recipe_id)) ingredientsByRecipe.set(r.recipe_id, []);
     ingredientsByRecipe.get(r.recipe_id)!.push(r);
@@ -143,6 +145,11 @@ export async function loadPlanShoppingIngredients(
     const multiplier = servings / base;
     const ings = ingredientsByRecipe.get(recipe_id) ?? [];
     for (const ing of ings) {
+      const category = resolveProductCategoryForShoppingIngredient(
+        ing.category,
+        ing.name,
+        ing.display_text
+      );
       const res = buildShoppingAggregationKey(
         {
           name: ing.name,
@@ -150,12 +157,11 @@ export async function loadPlanShoppingIngredients(
           unit: ing.unit,
           canonical_amount: ing.canonical_amount,
           canonical_unit: ing.canonical_unit,
-          category: ing.category,
+          category,
         },
         multiplier
       );
       if (res == null) continue;
-      const category = mapDbProductCategoryToShoppingAisle(ing.category);
       const cur = aggMap.get(res.key);
       if (cur) {
         cur.amountSum += res.amountToSum;
