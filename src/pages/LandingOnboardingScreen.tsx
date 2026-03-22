@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
 import { WelcomeRecipeBlock } from "@/components/landing/WelcomeRecipeBlock";
+import { WELCOME_LANDING_DEMO_RECIPE } from "@/data/welcomeLandingDemoRecipe";
 
 const BENEFIT_CARDS = [
   {
@@ -140,7 +141,7 @@ export default function LandingOnboardingScreen() {
           <h2 id="welcome-recipe-title" className="text-lg font-semibold text-foreground mb-3">
             Как выглядит рецепт в приложении
           </h2>
-          <WelcomeRecipeBlock />
+          <WelcomeRecipeBlock recipe={WELCOME_LANDING_DEMO_RECIPE} isLoading={false} />
         </section>
 
         {/* E) Инфо перед CTA */}

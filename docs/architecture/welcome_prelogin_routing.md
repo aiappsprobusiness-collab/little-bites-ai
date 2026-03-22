@@ -6,7 +6,7 @@
 - `src/utils/standalone.ts` — определение standalone PWA (display-mode, navigator.standalone)
 - `src/utils/onboardingAttribution.ts` — сохранение атрибуции (utm_*, entry_point, ref, shareRef) в `onboarding_attribution`
 - `src/utils/landingAnalytics.ts` — безопасная обёртка событий аналитики (landing_view, landing_demo_open, share_*_cta_click и др.)
-- `src/data/demoRecipe.ts` — хардкодный демо-рецепт «Омлет с кабачком»
+- `src/data/welcomeLandingDemoRecipe.ts` — статический демо-рецепт для блока на `/welcome` (без БД для анона)
 - `src/components/RootRedirect.tsx` — умная маршрутизация с root `/`
 - `src/components/landing/DemoRecipeSheet.tsx` — bottom sheet с демо-рецептом и CTA «Сохранить рецепт»
 - `src/pages/LandingOnboardingScreen.tsx` — маркетинговый экран `/welcome`
@@ -30,8 +30,9 @@
 - Standalone определяется только на клиенте после гидрации (избежание mismatch).
 
 ### `/welcome`
-- Маркетинговый landing onboarding: hero, 3 карточки преимуществ, блок «Пример результата», CTA «Попробовать бесплатно».
-- Кнопка «Попробовать пример» открывает bottom sheet с демо-рецептом; «Сохранить рецепт» — для неавторизованных ведёт в auth с сообщением, для авторизованных — toast «Сохранено».
+- Маркетинговый landing onboarding: hero, 3 карточки преимуществ, блок «Как выглядит рецепт в приложении» (`WelcomeRecipeBlock`), CTA «Получить свой план» / «Войти».
+- Блок рецепта на welcome для **неавторизованных** использует **статический** демо-рецепт (`src/data/welcomeLandingDemoRecipe.ts`), без вызова `get_recipe_full`: RPC не отдаёт чужие рецепты анону; раньше параллельный запрос демо-UUID ломал блок и при переходе с `/p/:ref` (шаринг плана), и на странице `/r/:shareRef`, если в проп передавался рецепт, а ошибка хука всё равно скрывала UI.
+- Кнопка «Попробовать пример» (если есть в UI) открывает bottom sheet с демо-рецептом; «Сохранить рецепт» — для неавторизованных ведёт в auth с сообщением, для авторизованных — toast «Сохранено».
 - При открытии сохраняется атрибуция в `onboarding_attribution`, отправляется событие `landing_view`.
 
 ### `/prelogin`

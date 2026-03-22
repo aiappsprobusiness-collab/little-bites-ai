@@ -57,10 +57,13 @@ function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem
 /** Read-only recipe block for welcome: same look as in-app recipe (meal chip, time, calories, BJU, title, description, ingredients, chef advice, steps). Optional max-height + fade. */
 export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingProp }: WelcomeRecipeBlockProps = {}) {
   const { getRecipeById } = useRecipes();
-  const { data: recipeFromHook, isLoading: isLoadingHook, error } = getRecipeById(WELCOME_RECIPE_ID);
+  /** Не запрашивать демо из БД, если рецепт передан снаружи — иначе ошибка get_recipe_full у анона скрывала бы весь блок. */
+  const welcomeFetchId = recipeProp === undefined ? WELCOME_RECIPE_ID : "";
+  const { data: recipeFromHook, isLoading: isLoadingHook, error } = getRecipeById(welcomeFetchId);
 
-  const isLoading = recipeProp !== undefined ? isLoadingProp ?? false : isLoadingHook;
-  const recipe = recipeProp !== undefined ? recipeProp : recipeFromHook;
+  const useHookRecipe = recipeProp === undefined;
+  const isLoading = useHookRecipe ? isLoadingHook : (isLoadingProp ?? false);
+  const recipe = useHookRecipe ? recipeFromHook : recipeProp;
 
   if (isLoading) {
     return (
@@ -70,9 +73,9 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
     );
   }
 
-  if (recipeProp === null || error || !recipe) {
-    return null;
-  }
+  if (recipeProp === null) return null;
+  if (useHookRecipe && (error || !recipe)) return null;
+  if (!useHookRecipe && !recipe) return null;
 
   const recipeDisplay = recipe as RecipeDisplayIngredients & {
     title?: string;
