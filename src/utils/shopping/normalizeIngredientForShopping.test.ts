@@ -170,17 +170,50 @@ describe("buildShoppingAggregationKey", () => {
     expect(r?.amountToSum).toBe(2);
   });
 
-  it("Картофель 200 г и Картофель 1 шт. → different keys", () => {
+  it("Картофель 200 г и Картофель 1 шт. → один ключ в г (PCS→г для овощей)", () => {
     const r1 = buildShoppingAggregationKey(
       { name: "Картофель", amount: 200, unit: "г", canonical_amount: 200, canonical_unit: "g" },
       1
     );
     const r2 = buildShoppingAggregationKey(
-      { name: "Картофель", amount: 1, unit: "шт.", canonical_amount: null, canonical_unit: null },
+      {
+        name: "Картофель",
+        amount: 1,
+        unit: "шт.",
+        canonical_amount: null,
+        canonical_unit: null,
+        display_text: null,
+      },
       1
     );
     expect(r1?.key).toBe("картофель|g");
-    expect(r2?.key).toBe("картофель|pcs");
+    expect(r2?.key).toBe("картофель|g");
+    expect(r2?.amountToSum).toBe(100);
+  });
+
+  it("перец чёрный и перец черный — один ключ (ё→е)", () => {
+    const r1 = buildShoppingAggregationKey(
+      { name: "Перец чёрный молотый", amount: 5, unit: "г", canonical_amount: 5, canonical_unit: "g" },
+      1
+    );
+    const r2 = buildShoppingAggregationKey(
+      { name: "Перец черный молотый", amount: 5, unit: "г", canonical_amount: 5, canonical_unit: "g" },
+      1
+    );
+    expect(r1?.key).toBe(r2?.key);
+  });
+
+  it("яйцо / яйца куриные — один канонический сегмент", () => {
+    const a = buildShoppingAggregationKey(
+      { name: "Яйцо", amount: 2, unit: "шт.", canonical_amount: null, canonical_unit: null },
+      1
+    );
+    const b = buildShoppingAggregationKey(
+      { name: "Яйца куриные", amount: 2, unit: "шт.", canonical_amount: null, canonical_unit: null },
+      1
+    );
+    expect(a?.key).toBe("яйца|pcs");
+    expect(b?.key).toBe("яйца|pcs");
   });
 
   it("canonical_unit ml у одного, unit=мл у второго → same key", () => {
@@ -235,5 +268,8 @@ describe("toShoppingDisplayUnitAndAmount", () => {
   it("g → г, pcs → шт.", () => {
     expect(toShoppingDisplayUnitAndAmount("g", 100)).toEqual({ displayAmount: 100, displayUnit: "г" });
     expect(toShoppingDisplayUnitAndAmount("pcs", 2)).toEqual({ displayAmount: 2, displayUnit: "шт." });
+  });
+  it("g: от 1000 г показываем кг", () => {
+    expect(toShoppingDisplayUnitAndAmount("g", 1100)).toEqual({ displayAmount: 1.1, displayUnit: "кг" });
   });
 });

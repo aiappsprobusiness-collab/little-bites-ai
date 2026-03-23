@@ -1,7 +1,18 @@
 /**
  * Нормализация ингредиентов только для агрегации списка покупок.
  * Не меняет данные рецептов в БД и не влияет на карточки рецептов.
+ *
+ * Канонические алиасы и PCS→г для овощей — см. `canonicalShoppingIngredient.ts`.
  */
+
+import {
+  applyYoToE,
+  getPreferredShoppingDisplayNameForCanonicalSegment,
+  isShoppingPcsToGramsEligibleCanonicalSegment,
+  parseGramsPerPieceFromDisplayText,
+  resolveCanonicalShoppingNameSegment,
+  SHOPPING_PCS_TO_GRAMS,
+} from "./canonicalShoppingIngredient";
 
 /** Суффиксы/прилагательные, которые не меняют базовый продукт (для ключа агрегации). */
 export const STRIP_SUFFIXES = [
@@ -50,6 +61,8 @@ export function normalizeIngredientNameForShopping(name: string): string {
   s = s.replace(/\s*\([^)]*\)\s*/g, " ").trim();
   // Удалить проценты жирности: 10%, 20%, 3.2% и т.п.
   s = s.replace(/\s*\d+(?:[.,]\d+)?\s*%\s*/g, " ").trim();
+  // Стабильный ключ: ё → е (перец чёрный / перец черный)
+  s = applyYoToE(s);
   // Убрать описательные суффиксы (как отдельные слова)
   for (const suffix of STRIP_SUFFIXES) {
     const re = new RegExp(`\\s+${escapeRegExp(suffix)}\\s*$`, "i");
@@ -135,6 +148,8 @@ export interface ShoppingAggregationInput {
   unit: string | null;
   canonical_amount: number | null;
   canonical_unit: string | null;
+  /** Строка из рецепта «Название — количество» — для парсинга (N г) при шт.→г. */
+  display_text?: string | null;
   /** Категория из recipe_ingredients: для grains/vegetables/fruits/meat ложки не конвертируем в мл. */
   category?: string | null;
 }
@@ -158,9 +173,10 @@ export function buildShoppingAggregationKey(
   input: ShoppingAggregationInput,
   multiplier: number
 ): ShoppingAggregationKeyResult | null {
-  const { name, amount, unit, canonical_amount, canonical_unit, category } = input;
+  const { name, amount, unit, canonical_amount, canonical_unit, category, display_text } = input;
   const normalizedName = normalizeIngredientNameForShopping(name);
   if (normalizedName === "") return null;
+  const { segment: canonicalNameSegment } = resolveCanonicalShoppingNameSegment(normalizedName);
 
   const rawAmount = (amount ?? 0) * multiplier;
   const canAmount = (canonical_amount ?? 0) * multiplier;
@@ -170,7 +186,7 @@ export function buildShoppingAggregationKey(
     const amt = Number.isFinite(canAmount) && canAmount > 0 ? canAmount : rawAmount;
     if (amt <= 0) return null;
     return {
-      key: `${normalizedName}|${canonical_unit}`,
+      key: `${canonicalNameSegment}|${canonical_unit}`,
       aggregationUnit: canonical_unit,
       amountToSum: amt,
       originalName: name.trim(),
@@ -178,13 +194,44 @@ export function buildShoppingAggregationKey(
   }
 
   const normalizedUnit = normalizeIngredientUnitForShopping(unit, canonical_unit);
+
+  /** Овощи из allowlist: шт. и г суммируются в г (см. SHOPPING_PCS_TO_GRAMS / парсинг display_text). */
+  if (
+    (normalizedUnit === "g" || normalizedUnit === "pcs") &&
+    isShoppingPcsToGramsEligibleCanonicalSegment(canonicalNameSegment)
+  ) {
+    let grams: number | null = null;
+    if (normalizedUnit === "g") {
+      grams = Number.isFinite(rawAmount) && rawAmount > 0 ? rawAmount : null;
+    } else if (normalizedUnit === "pcs") {
+      const amtPcs = amount ?? 0;
+      const perFromDisplay = parseGramsPerPieceFromDisplayText(display_text ?? null, amtPcs);
+      const lookupKey = applyYoToE(canonicalNameSegment.trim().toLowerCase());
+      const perPiece =
+        perFromDisplay ??
+        (SHOPPING_PCS_TO_GRAMS as Record<string, number>)[lookupKey] ??
+        null;
+      if (perPiece != null && Number.isFinite(perPiece) && perPiece > 0) {
+        grams = rawAmount * perPiece;
+      }
+    }
+    if (grams != null && grams > 0) {
+      return {
+        key: `${canonicalNameSegment}|g`,
+        aggregationUnit: "g",
+        amountToSum: grams,
+        originalName: name.trim(),
+      };
+    }
+  }
+
   if (normalizedUnit === null) {
     // Неизвестная единица — ключ по сырому unit, чтобы не склеивать с чем попало; для отображения сохраняем как есть
     const u = (unit ?? "").trim() || "?";
     const amt = Number.isFinite(rawAmount) && rawAmount > 0 ? rawAmount : 0;
     if (amt <= 0) return null;
     return {
-      key: `${normalizedName}|${u}`,
+      key: `${canonicalNameSegment}|${u}`,
       aggregationUnit: u,
       amountToSum: amt,
       originalName: name.trim(),
@@ -197,7 +244,7 @@ export function buildShoppingAggregationKey(
     if (isSolid) {
       if (rawAmount <= 0) return null;
       return {
-        key: `${normalizedName}|${normalizedUnit}`,
+        key: `${canonicalNameSegment}|${normalizedUnit}`,
         aggregationUnit: normalizedUnit,
         amountToSum: rawAmount,
         originalName: name.trim(),
@@ -207,7 +254,7 @@ export function buildShoppingAggregationKey(
     const amountMl = rawAmount * mlPerSpoon;
     if (amountMl <= 0) return null;
     return {
-      key: `${normalizedName}|ml`,
+      key: `${canonicalNameSegment}|ml`,
       aggregationUnit: "ml",
       amountToSum: amountMl,
       originalName: name.trim(),
@@ -218,7 +265,7 @@ export function buildShoppingAggregationKey(
   const amt = Number.isFinite(rawAmount) && rawAmount > 0 ? rawAmount : 0;
   if (amt <= 0) return null;
   return {
-    key: `${normalizedName}|${normalizedUnit}`,
+    key: `${canonicalNameSegment}|${normalizedUnit}`,
     aggregationUnit: normalizedUnit,
     amountToSum: amt,
     originalName: name.trim(),
@@ -234,6 +281,10 @@ export function toShoppingDisplayUnitAndAmount(
   amount: number
 ): { displayAmount: number; displayUnit: string } {
   const rounded = Math.round(amount * 10) / 10;
+  if (aggregationUnit === "g" && amount >= 1000) {
+    const kg = Math.round((amount / 1000) * 100) / 100;
+    return { displayAmount: kg, displayUnit: "кг" };
+  }
   if (aggregationUnit === "ml" && amount > 0) {
     if (amount >= 30) {
       return { displayAmount: rounded, displayUnit: "мл" };
@@ -307,4 +358,15 @@ export function chooseShoppingDisplayName(names: string[]): string {
   });
   const shortest = cleaned.reduce((a, b) => (a.length <= b.length ? a : b));
   return shortest || names[0]?.trim() || "";
+}
+
+/**
+ * Итоговое имя строки списка: каноническое display из словаря (если есть) + display-нормализация.
+ * merge_key формата `canonicalSegment|unit`.
+ */
+export function shoppingListDisplayNameFromAggregationKey(mergeKey: string, names: string[]): string {
+  const segment = mergeKey.split("|")[0]?.trim() ?? "";
+  const chosen = chooseShoppingDisplayName(names);
+  const withCanonical = getPreferredShoppingDisplayNameForCanonicalSegment(segment, chosen);
+  return normalizeIngredientDisplayName(withCanonical);
 }

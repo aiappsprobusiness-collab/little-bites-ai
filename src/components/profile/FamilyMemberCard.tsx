@@ -73,6 +73,7 @@ export function FamilyMemberCard({
                   key={`${item.type}-${i}-${item.label}`}
                   label={item.label}
                   variant={chipVariantFromType(item.type)}
+                  allowWrap
                 />
               ))}
               {overflowCount > 0 && (

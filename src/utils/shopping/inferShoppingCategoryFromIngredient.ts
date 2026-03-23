@@ -18,6 +18,11 @@ export function inferDbProductCategoryFromText(combined: string): string {
   const n = normalizeIngredientTextForCategoryMatch(combined, "");
   if (!n) return "other";
 
+  /** Не «крупы»: слово «паста» в томатной пасте не должно попадать в grains. */
+  if (/(^|\s)(томатн|томатная)\s+паст|паста\s+томатн|томатн\s+соус/.test(n)) {
+    return "other";
+  }
+
   if (
     /говядин|свинин|баранин|индейк|куриц|фарш|котлет|телятин|окорок|грудинк|шея|колбас|сосиск|бекон|ветчин/.test(
       n,

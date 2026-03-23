@@ -13,6 +13,8 @@ If you are an AI agent working with this repository, read the following document
 
 These documents provide the core project context and should be used before making assumptions about the architecture.
 
+**Chat input bar (textarea UX):** docs/dev/chat-input-ui.md — при изменениях нижней панели ввода на экране чата.
+
 ---
 
 ## Структура
@@ -94,6 +96,7 @@ docs/
 - **PR_*.md** — описания pull request’ов (аллергии, ланч/суп, аллергены и т.д.).
 - **PHASE3_TWEAKS.md**, **RECIPES_CLEANUP.md**, **POOL_AND_CHAT_RECIPES.md** — твики и очистки.
 - **CHAT_BLOCKED_BEHAVIOR.md** — поведение при blocked-ответах в чате.
+- **chat-input-ui.md** — поле ввода чата (авто-рост textarea, Enter/Shift+Enter, выравнивание кнопки).
 - **deepseek-chat_refactor_report.md** — отчёт о рефакторинге deepseek-chat.
 
 Используйте при планировании задач и ревью изменений.

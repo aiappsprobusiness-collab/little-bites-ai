@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Copy, MoreVertical, Filter, ShoppingCart, X, ChevronDown, ChevronRight, ListPlus, Carrot, Apple, Milk, Fish, Wheat, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,8 @@ import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingL
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { formatShoppingListForCopy } from "@/utils/shoppingListTextFormatter";
-import { formatAmountForDisplay, normalizeIngredientDisplayName } from "@/utils/shopping/normalizeIngredientForShopping";
+import { normalizeIngredientDisplayName } from "@/utils/shopping/normalizeIngredientForShopping";
+import { formatShoppingListPurchaseLine } from "@/utils/shopping/shoppingListPurchaseDisplay";
 import { mapDbProductCategoryToShoppingAisle } from "@/utils/shopping/mapDbProductCategoryToShoppingAisle";
 import {
   Sheet,
@@ -37,13 +38,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { capitalizeIngredientName, normalizeUnitForDisplay } from "@/utils/ingredientDisplay";
+import { capitalizeIngredientName } from "@/utils/ingredientDisplay";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import {
   SHOPPING_LIST_ENTRANCE_SESSION_KEY,
   markShoppingListEntranceStagger,
 } from "@/utils/shopping/shoppingListEntrance";
+import { computeEffectiveShoppingItemView } from "@/utils/shopping/shoppingListEffectiveView";
 
 const CATEGORY_ORDER: ProductCategory[] = ["vegetables", "fruits", "dairy", "meat", "grains", "other"];
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
@@ -73,28 +75,47 @@ const CATEGORY_BADGE_VARIANT: Record<ProductCategory, IconBadgeVariant> = {
   other: "amber",
 };
 
-function formatItemShort(item: ShoppingListItemRow): string {
+function formatItemShort(
+  item: ShoppingListItemRow,
+  effective?: { amount: number | null; unit: string | null }
+): string {
   const name = normalizeIngredientDisplayName(item.name) || capitalizeIngredientName(item.name);
-  const a = item.amount != null && item.amount > 0 ? item.amount : null;
-  const u = normalizeUnitForDisplay(item.unit);
-  const amountStr = a != null ? formatAmountForDisplay(a, item.unit) : "";
-  if (a != null && u) return `${name}, ${amountStr} ${u}`;
-  if (a != null) return `${name}, ${amountStr}`;
-  return name;
+  const rawA = effective ? effective.amount : item.amount;
+  const unitForFormat = effective?.unit ?? item.unit;
+  return formatShoppingListPurchaseLine({
+    displayName: name,
+    amount: rawA,
+    unit: unitForFormat,
+    mergeKey: item.meta?.merge_key,
+    aggregationUnit: item.meta?.aggregation_unit,
+  });
+}
+
+/** Фраза «в N рецепте» / «в N рецептах» для подписи в свёрнутой строке (N ≥ 2). */
+function formatRecipeSourcesCountPhrase(n: number): string {
+  if (n % 10 === 1 && n % 100 !== 11) return `в ${n} рецепте`;
+  return `в ${n} рецептах`;
 }
 
 /** Один пункт списка: чекбокс, название, количество, удалить; по тапу — раскрыть рецепты. */
 function ShoppingListItem({
   item,
+  recipeFilterSelectedIds,
   onTogglePurchased,
   onDelete,
 }: {
   item: ShoppingListItemRow;
+  /** Непустой Set — активен фильтр по рецептам; пересчёт количества и списка источников. */
+  recipeFilterSelectedIds: Set<string> | null;
   onTogglePurchased: (itemId: string, is_purchased: boolean) => void;
   onDelete: (item: ShoppingListItemRow) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const sources = getSourceRecipesFromItem(item);
+  const view = useMemo(
+    () => computeEffectiveShoppingItemView(item, recipeFilterSelectedIds),
+    [item, recipeFilterSelectedIds]
+  );
+  const sources = view.sources;
   const hasSources = sources.length > 0;
 
   return (
@@ -161,7 +182,15 @@ function ShoppingListItem({
                 item.is_purchased && "line-through decoration-muted-foreground/80 text-muted-foreground"
               )}
             >
-              {formatItemShort(item)}
+              <span className="text-sm">
+                {formatItemShort(item, { amount: view.amount, unit: view.unit })}
+              </span>
+              {!expanded && view.recipeCount > 1 && (
+                <span className="text-xs text-muted-foreground">
+                  {" "}
+                  · {formatRecipeSourcesCountPhrase(view.recipeCount)}
+                </span>
+              )}
             </span>
           </motion.span>
           {hasSources && (
@@ -223,9 +252,11 @@ export function ShoppingListView() {
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | "all">("all");
   const [selectedRecipeIds, setSelectedRecipeIds] = useState<Set<string>>(new Set());
   const [filterOnlyUnpurchased, setFilterOnlyUnpurchased] = useState(false);
-  const [draftAllRecipes, setDraftAllRecipes] = useState(true);
-  const [draftRecipeIds, setDraftRecipeIds] = useState<Set<string>>(new Set());
+  /** Выбранные рецепты в sheet фильтра; источник правды для чекбоксов (в т.ч. «Все рецепты» = полный набор id). */
+  const [draftRecipeIds, setDraftRecipeIds] = useState<Set<string>>(() => new Set());
   const [recipeSearch, setRecipeSearch] = useState("");
+  const recipeFilterSheetWasOpenRef = useRef(false);
+  const recipeFilterMasterCheckboxRef = useRef<HTMLInputElement>(null);
 
   const { data: planIngredients, isLoading: planLoading } = usePlanShoppingIngredients(range, memberId);
   const { data: planSignature } = usePlanSignature(range, memberId);
@@ -256,6 +287,8 @@ export function ShoppingListView() {
       category: ing.category,
       source_recipes: ing.source_recipes?.length ? ing.source_recipes : undefined,
       merge_key: ing.merge_key,
+      source_contributions: ing.source_contributions?.length ? ing.source_contributions : undefined,
+      aggregation_unit: ing.aggregation_unit,
     }));
     const newSyncMeta: ShoppingListSyncMeta = {
       last_synced_range: range,
@@ -277,12 +310,18 @@ export function ShoppingListView() {
   };
 
   const handleCopy = () => {
-    const itemsForFormat = items.map((i) => ({
-      name: normalizeIngredientDisplayName(i.name) || i.name,
-      amount: i.amount,
-      unit: i.unit,
-      category: i.category,
-    }));
+    const recipeFilterSet = selectedRecipeIds.size > 0 ? selectedRecipeIds : null;
+    const itemsForFormat = filteredItems.map((i) => {
+      const v = computeEffectiveShoppingItemView(i, recipeFilterSet);
+      return {
+        name: normalizeIngredientDisplayName(i.name) || i.name,
+        amount: v.amount,
+        unit: v.unit,
+        category: i.category,
+        merge_key: i.meta?.merge_key ?? null,
+        aggregation_unit: i.meta?.aggregation_unit ?? null,
+      };
+    });
     const text = formatShoppingListForCopy(itemsForFormat, range);
     navigator.clipboard?.writeText(text).then(
       () => toast({ title: "Скопировано" }),
@@ -315,6 +354,48 @@ export function ShoppingListView() {
     }
     return [...byId.values()];
   }, [items]);
+
+  /** При открытии sheet: черновик = полный набор id (если фильтр не задан) или текущий subset. */
+  useEffect(() => {
+    const wasOpen = recipeFilterSheetWasOpenRef.current;
+    if (filterSheetOpen && !wasOpen) {
+      const allIds = uniqueRecipes.map((r) => r.id);
+      if (selectedRecipeIds.size === 0) {
+        setDraftRecipeIds(new Set(allIds));
+      } else {
+        setDraftRecipeIds(new Set(selectedRecipeIds));
+      }
+    }
+    recipeFilterSheetWasOpenRef.current = filterSheetOpen;
+  }, [filterSheetOpen, uniqueRecipes, selectedRecipeIds]);
+
+  const recipeFilterMasterChecked = useMemo(() => {
+    if (uniqueRecipes.length === 0) return false;
+    return (
+      draftRecipeIds.size === uniqueRecipes.length &&
+      uniqueRecipes.every((r) => draftRecipeIds.has(r.id))
+    );
+  }, [uniqueRecipes, draftRecipeIds]);
+
+  const recipeFilterMasterIndeterminate = useMemo(() => {
+    if (uniqueRecipes.length === 0) return false;
+    return draftRecipeIds.size > 0 && !recipeFilterMasterChecked;
+  }, [uniqueRecipes, draftRecipeIds, recipeFilterMasterChecked]);
+
+  useEffect(() => {
+    const el = recipeFilterMasterCheckboxRef.current;
+    if (el) el.indeterminate = recipeFilterMasterIndeterminate;
+  }, [recipeFilterMasterIndeterminate]);
+
+  const recipeFilterApplyDisabled = uniqueRecipes.length > 0 && draftRecipeIds.size === 0;
+
+  const handleRecipeFilterMasterChange = (checked: boolean) => {
+    if (checked) {
+      setDraftRecipeIds(new Set(uniqueRecipes.map((r) => r.id)));
+    } else {
+      setDraftRecipeIds(new Set());
+    }
+  };
 
   const filteredItems = useMemo(() => {
     let list = items;
@@ -412,8 +493,18 @@ export function ShoppingListView() {
   }, [uniqueRecipes, recipeSearch]);
 
   const handleApplyFilter = () => {
-    if (draftAllRecipes || draftRecipeIds.size === 0) setSelectedRecipeIds(new Set());
-    else setSelectedRecipeIds(new Set(draftRecipeIds));
+    if (recipeFilterApplyDisabled) return;
+    const allIds = uniqueRecipes.map((r) => r.id);
+    const allSelected =
+      uniqueRecipes.length > 0 &&
+      draftRecipeIds.size === uniqueRecipes.length &&
+      allIds.every((id) => draftRecipeIds.has(id));
+
+    if (allSelected || uniqueRecipes.length === 0) {
+      setSelectedRecipeIds(new Set());
+    } else {
+      setSelectedRecipeIds(new Set(draftRecipeIds));
+    }
     setFilterSheetOpen(false);
   };
 
@@ -421,13 +512,11 @@ export function ShoppingListView() {
     setSelectedCategory("all");
     setSelectedRecipeIds(new Set());
     setFilterOnlyUnpurchased(false);
-    setDraftAllRecipes(true);
     setDraftRecipeIds(new Set());
     setFilterSheetOpen(false);
   };
 
   const toggleDraftRecipe = (recipeId: string) => {
-    setDraftAllRecipes(false);
     setDraftRecipeIds((prev) => {
       const next = new Set(prev);
       if (next.has(recipeId)) next.delete(recipeId);
@@ -641,12 +730,10 @@ export function ShoppingListView() {
               />
               <label className="flex items-center gap-2.5 py-1 cursor-pointer min-h-9">
                 <input
+                  ref={recipeFilterMasterCheckboxRef}
                   type="checkbox"
-                  checked={draftAllRecipes}
-                  onChange={(e) => {
-                    setDraftAllRecipes(e.target.checked);
-                    if (e.target.checked) setDraftRecipeIds(new Set());
-                  }}
+                  checked={recipeFilterMasterChecked}
+                  onChange={(e) => handleRecipeFilterMasterChange(e.target.checked)}
                   className="h-4 w-4 rounded border-border shrink-0"
                 />
                 <span className="text-sm text-foreground/90">Все рецепты</span>
@@ -657,9 +744,8 @@ export function ShoppingListView() {
                     <label className="flex items-center gap-2.5 py-1 min-h-8 cursor-pointer">
                       <input
                         type="checkbox"
-                        checked={!draftAllRecipes && draftRecipeIds.has(r.id)}
+                        checked={draftRecipeIds.has(r.id)}
                         onChange={() => toggleDraftRecipe(r.id)}
-                        disabled={draftAllRecipes}
                         className="h-4 w-4 rounded border-border shrink-0"
                       />
                       <span className="text-sm text-foreground/85 truncate min-w-0 flex-1" title={r.title || undefined}>
@@ -688,7 +774,14 @@ export function ShoppingListView() {
             >
               Сбросить фильтры
             </button>
-            <Button className="w-full sm:w-auto bg-[#6b7c3d] hover:bg-[#5a6b32] text-white" onClick={handleApplyFilter}>
+            <Button
+              className="w-full sm:w-auto bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
+              onClick={handleApplyFilter}
+              disabled={recipeFilterApplyDisabled}
+              title={
+                recipeFilterApplyDisabled ? "Выберите хотя бы один рецепт или отметьте «Все рецепты»" : undefined
+              }
+            >
               Применить
             </Button>
           </SheetFooter>
@@ -772,6 +865,9 @@ export function ShoppingListView() {
                         <motion.div key={item.id} variants={listStaggerVariants.row}>
                           <ShoppingListItem
                             item={item}
+                            recipeFilterSelectedIds={
+                              selectedRecipeIds.size > 0 ? selectedRecipeIds : null
+                            }
                             onTogglePurchased={(id, is_purchased) => setItemPurchased({ itemId: id, is_purchased })}
                             onDelete={(it) => handleDeleteItem(it)}
                           />

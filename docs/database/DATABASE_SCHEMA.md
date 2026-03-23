@@ -441,7 +441,7 @@ RLS: SELECT — authenticated; запись — service_role.
 | category             | product_category | |
 | is_purchased         | boolean | |
 | recipe_title         | text | |
-| meta                 | jsonb | `source_recipes` (рецепты-источники для фильтра), `merge_key` (ключ агрегации из `buildShoppingAggregationKey` — для слияния строк без дублей). |
+| meta                 | jsonb | `source_recipes`, `merge_key`; опционально `source_contributions` (вклад по `recipe_id` в единицах `aggregation_unit`) и `aggregation_unit` — для пересчёта количества при фильтре по рецептам в UI (см. `docs/architecture/shopping_list_aggregation.md`). |
 | created_at           | timestamptz | |
 
 ---

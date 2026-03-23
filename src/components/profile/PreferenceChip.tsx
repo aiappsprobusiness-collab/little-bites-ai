@@ -28,6 +28,10 @@ const variantStyles: Record<
 const chipBase =
   "inline-flex items-center gap-1.5 h-7 py-[6px] px-[10px] rounded-[10px] text-[13px] font-medium leading-none whitespace-nowrap border cursor-default";
 
+/** Карточка семьи: длинные подписи (напр. «белок коровьего молока») без обрезки. */
+const chipBaseWrap =
+  "inline-flex items-start gap-1.5 min-h-7 min-w-0 max-w-full py-1.5 px-[10px] rounded-[10px] text-[13px] font-medium leading-snug border cursor-default";
+
 export interface PreferenceChipProps {
   label: string;
   variant: PreferenceChipVariant;
@@ -40,6 +44,8 @@ export interface PreferenceChipProps {
   className?: string;
   /** Ограничение ширины текста с truncate */
   maxWidth?: string | number;
+  /** Полный текст с переносами (предпросмотр в списке семьи). */
+  allowWrap?: boolean;
 }
 
 export function PreferenceChip({
@@ -51,15 +57,25 @@ export function PreferenceChip({
   onLockedClick,
   className,
   maxWidth = "140px",
+  allowWrap = false,
 }: PreferenceChipProps) {
   const styles = variantStyles[variant];
   const isInteractive = removable || locked;
+  const chipLayout = allowWrap ? chipBaseWrap : chipBase;
+  const labelEl = allowWrap ? (
+    <span className="break-words text-left min-w-0 flex-1">{label}</span>
+  ) : (
+    <span
+      className="truncate"
+      style={{ maxWidth: typeof maxWidth === "number" ? `${maxWidth}px` : maxWidth }}
+    >
+      {label}
+    </span>
+  );
 
   const content = (
     <>
-      <span className="truncate" style={{ maxWidth: typeof maxWidth === "number" ? `${maxWidth}px` : maxWidth }}>
-        {label}
-      </span>
+      {labelEl}
       {removable && onRemove && (
         <button
           type="button"
@@ -99,7 +115,7 @@ export function PreferenceChip({
         tabIndex={0}
         onClick={onLockedClick}
         onKeyDown={(e) => e.key === "Enter" && onLockedClick()}
-        className={cn(chipBase, isInteractive && "cursor-pointer")}
+        className={cn(chipLayout, isInteractive && "cursor-pointer")}
         style={style}
       >
         {content}
@@ -110,7 +126,7 @@ export function PreferenceChip({
   if (removable) {
     return (
       <span
-        className={cn(chipBase, "cursor-default")}
+        className={cn(chipLayout, "cursor-default")}
         style={style}
       >
         {content}
@@ -119,7 +135,7 @@ export function PreferenceChip({
   }
 
   return (
-    <span className={cn(chipBase, className)} style={style}>
+    <span className={cn(chipLayout, className)} style={style}>
       {content}
     </span>
   );

@@ -12,6 +12,8 @@ const STATUS_LABEL: Record<string, string> = {
 export interface ProfileHeaderCardProps {
   displayName: string;
   status: string;
+  /** Почта аккаунта (под именем вместо «Подписка активна» для Premium). */
+  accountEmail?: string | null;
   onEditClick: (e: React.MouseEvent) => void;
   freePlanLine: string;
   trialUntilFormatted: string | null;
@@ -26,6 +28,7 @@ export interface ProfileHeaderCardProps {
 export function ProfileHeaderCard({
   displayName,
   status,
+  accountEmail,
   onEditClick,
   freePlanLine,
   trialUntilFormatted,
@@ -39,8 +42,11 @@ export function ProfileHeaderCard({
   const isTrial = status === "trial";
   const isFree = status === "free";
 
-  const statusSubtext =
-    isFree ? "Free план" : isTrial ? "Пробный период" : "Подписка активна";
+  const statusSubtext = isFree
+    ? "Free план"
+    : isTrial
+      ? "Пробный период"
+      : accountEmail?.trim() ?? "";
 
   const row2Secondary =
     isFree
@@ -68,7 +74,7 @@ export function ProfileHeaderCard({
             <div className="text-lg font-semibold text-foreground truncate leading-tight">
               {displayName}
             </div>
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-[11px] text-muted-foreground mt-0.5 truncate" title={statusSubtext || undefined}>
               {statusSubtext}
             </p>
           </div>

@@ -27,6 +27,10 @@ describe("inferShoppingCategoryFromIngredient", () => {
     expect(inferDbProductCategoryFromText("тофу, 100 г")).toBe("dairy");
   });
 
+  it("томатная паста не попадает в grains из-за слова «паста»", () => {
+    expect(inferDbProductCategoryFromText("томатная паста, 2 ст.л.")).toBe("other");
+  });
+
   it("resolve uses DB when set, infers when other", () => {
     expect(resolveProductCategoryForShoppingIngredient("fish", "x", null)).toBe("meat");
     expect(resolveProductCategoryForShoppingIngredient("other", "авокадо", null)).toBe("fruits");

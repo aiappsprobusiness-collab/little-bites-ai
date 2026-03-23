@@ -53,6 +53,8 @@
 - docs/decisions/MEAL_TYPE_AND_LUNCH_SOUP.md
 - docs/decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md
 
+**UI чата (поле ввода, клавиатура, авто-рост):** docs/dev/chat-input-ui.md — не путать с хранением истории (`CHAT_HISTORY_SOURCE_OF_TRUTH.md`).
+
 Эти документы считаются каноническими. Их нельзя переписывать или объединять без отдельного плана.
 
 **Canonical docs must stay synchronized with implementation.** When changing a covered domain, update the matching canonical docs in the same task.

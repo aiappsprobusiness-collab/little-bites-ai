@@ -1,8 +1,11 @@
-import { forwardRef } from "react";
+import { forwardRef, useCallback, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+
+/** ~5 строк при line-height 20px; дальше — скролл внутри textarea */
+const CHAT_INPUT_MAX_HEIGHT_PX = 120;
 
 export interface ChatInputBarProps {
   value: string;
@@ -43,6 +46,31 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
     },
     ref
   ) {
+    const innerRef = useRef<HTMLTextAreaElement | null>(null);
+
+    const setTextareaRef = useCallback(
+      (node: HTMLTextAreaElement | null) => {
+        innerRef.current = node;
+        if (typeof ref === "function") {
+          ref(node);
+        } else if (ref != null) {
+          (ref as React.MutableRefObject<HTMLTextAreaElement | null>).current = node;
+        }
+      },
+      [ref]
+    );
+
+    const syncTextareaHeight = useCallback(() => {
+      const el = innerRef.current;
+      if (!el) return;
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, CHAT_INPUT_MAX_HEIGHT_PX)}px`;
+    }, []);
+
+    useLayoutEffect(() => {
+      syncTextareaHeight();
+    }, [value, syncTextareaHeight]);
+
     const showPlaceholderOverlay = mode === "recipes" && !value.trim() && placeholderSuggestions.length > 0;
     const currentPlaceholder = placeholderSuggestions[placeholderIndex];
 
@@ -55,7 +83,7 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
         )}
         style={{ bottom: "calc(var(--layout-nav-height) - 3rem)" }}
       >
-        <div className="flex w-full items-center gap-2 min-w-0">
+        <div className="flex w-full items-end gap-2 min-w-0">
           {/* Поле ввода (pill/capsule) */}
           <div className="relative flex-1 min-w-0">
             {showPlaceholderOverlay && (
@@ -78,17 +106,19 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
               </div>
             )}
             <Textarea
-              ref={ref}
+              ref={setTextareaRef}
               value={value}
               onChange={(e) => onChange(e.target.value)}
+              onInput={syncTextareaHeight}
               onKeyDown={onKeyDown}
               placeholder={mode === "help" ? placeholder : ""}
               disabled={disabled}
               rows={1}
               className={cn(
-                "min-h-[44px] max-h-[120px] w-full min-w-0 resize-none",
+                "min-h-[44px] max-h-[120px] w-full min-w-0 resize-none overflow-y-auto leading-5",
                 "rounded-full bg-[#FFFFFF] border border-[#E6E6E6]",
                 "py-3 px-4 text-sm placeholder:text-muted-foreground",
+                "transition-[height] duration-100 ease-out",
                 "focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary/30"
               )}
             />

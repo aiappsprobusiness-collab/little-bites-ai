@@ -2,8 +2,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { resolveProductCategoryForShoppingIngredient } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
-import type { ShoppingListItemMeta, ShoppingIngredientPayload } from "@/utils/shopping/shoppingListMerge";
+import type {
+  ShoppingListItemMeta,
+  ShoppingIngredientPayload,
+  ShoppingSourceContribution,
+} from "@/utils/shopping/shoppingListMerge";
 import { mergeShoppingItemMeta, shoppingRowMatchesPayload } from "@/utils/shopping/shoppingListMerge";
+import { toShoppingDisplayUnitAndAmount } from "@/utils/shopping/normalizeIngredientForShopping";
 
 export type { ShoppingIngredientPayload } from "@/utils/shopping/shoppingListMerge";
 
@@ -144,6 +149,8 @@ export function useShoppingList() {
         category: ProductCategory | null;
         source_recipes?: SourceRecipe[];
         merge_key?: string;
+        source_contributions?: ShoppingSourceContribution[];
+        aggregation_unit?: string | null;
       }[];
       syncMeta?: ShoppingListSyncMeta;
     }) => {
@@ -157,6 +164,10 @@ export function useShoppingList() {
             const m: ShoppingListItemMeta = {};
             if (item.merge_key) m.merge_key = item.merge_key;
             if (item.source_recipes?.length) m.source_recipes = item.source_recipes;
+            if (item.source_contributions?.length) m.source_contributions = item.source_contributions;
+            if (item.aggregation_unit != null && String(item.aggregation_unit).trim() !== "") {
+              m.aggregation_unit = item.aggregation_unit;
+            }
             return Object.keys(m).length > 0 ? m : null;
           })();
           return {
@@ -216,18 +227,43 @@ export function useShoppingList() {
         const ex = rows.find((r) => shoppingRowMatchesPayload(r, payload));
         const newRecipe = payload.source_recipes?.[0] ?? null;
         if (ex) {
-          const newAmount = (ex.amount ?? 0) + (payload.amount ?? 0);
-          const merged = mergeShoppingItemMeta(ex, newRecipe, payload.merge_key);
-          await supabase.from("shopping_list_items").update({ amount: newAmount, meta: merged }).eq("id", ex.id);
+          const merged = mergeShoppingItemMeta(ex, newRecipe, payload.merge_key, {
+            delta: payload.source_contributions,
+            aggregation_unit: payload.aggregation_unit ?? null,
+          });
+          let newAmount = (ex.amount ?? 0) + (payload.amount ?? 0);
+          let newUnit = ex.unit;
+          if (merged.source_contributions?.length && merged.aggregation_unit != null) {
+            const total = merged.source_contributions.reduce((s, c) => s + c.amount_sum, 0);
+            const d = toShoppingDisplayUnitAndAmount(merged.aggregation_unit, total);
+            newAmount = d.displayAmount;
+            newUnit = d.displayUnit;
+          }
+          await supabase
+            .from("shopping_list_items")
+            .update({ amount: newAmount, unit: newUnit, meta: merged })
+            .eq("id", ex.id);
           ex.amount = newAmount;
+          ex.unit = newUnit;
           ex.meta = merged;
         } else {
-          const meta = mergeShoppingItemMeta({ meta: null, recipe_id: null, recipe_title: null }, newRecipe, payload.merge_key);
+          const meta = mergeShoppingItemMeta({ meta: null, recipe_id: null, recipe_title: null }, newRecipe, payload.merge_key, {
+            delta: payload.source_contributions,
+            aggregation_unit: payload.aggregation_unit ?? null,
+          });
+          let amount = payload.amount;
+          let unit = payload.unit;
+          if (meta.source_contributions?.length && meta.aggregation_unit != null) {
+            const total = meta.source_contributions.reduce((s, c) => s + c.amount_sum, 0);
+            const d = toShoppingDisplayUnitAndAmount(meta.aggregation_unit, total);
+            amount = d.displayAmount;
+            unit = d.displayUnit;
+          }
           await supabase.from("shopping_list_items").insert({
             shopping_list_id: list.id,
             name: payload.name.trim(),
-            amount: payload.amount,
-            unit: payload.unit ?? null,
+            amount,
+            unit: unit ?? null,
             category: payload.category ?? "other",
             recipe_id: newRecipe?.id ?? null,
             recipe_title: newRecipe?.title ?? null,

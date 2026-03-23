@@ -6,12 +6,12 @@ import { addDays } from "@/utils/dateRange";
 import type { ProductCategory } from "./useShoppingList";
 import {
   buildShoppingAggregationKey,
-  chooseShoppingDisplayName,
-  normalizeIngredientDisplayName,
+  shoppingListDisplayNameFromAggregationKey,
   toShoppingDisplayUnitAndAmount,
   type NormalizedUnit,
 } from "@/utils/shopping/normalizeIngredientForShopping";
 import { resolveProductCategoryForShoppingIngredient } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
+import type { ShoppingSourceContribution } from "@/utils/shopping/shoppingListMerge";
 
 export interface SourceRecipe {
   id: string;
@@ -28,6 +28,10 @@ export interface AggregatedIngredient {
   category: ProductCategory | null;
   /** Рецепты, из которых попал ингредиент (для фильтра по рецептам). */
   source_recipes: SourceRecipe[];
+  /** Вклад по recipe_id (единицы aggregation_unit) — для пересчёта количества при фильтре. */
+  source_contributions: ShoppingSourceContribution[];
+  /** Единица суммирования вкладов (как в buildShoppingAggregationKey). */
+  aggregation_unit: string | null;
   /** Ключ группировки (как в buildShoppingAggregationKey) — для merge без дублей при добавлении из рецепта. */
   merge_key: string;
 }
@@ -134,6 +138,7 @@ export async function loadPlanShoppingIngredients(
     aggregationUnit: NormalizedUnit | string | null;
     category: ProductCategory | null;
     sourceRecipeIds: Set<string>;
+    contributionsByRecipe: Map<string, number>;
   };
   const aggMap = new Map<string, AggVal>();
 
@@ -159,6 +164,7 @@ export async function loadPlanShoppingIngredients(
           unit: ing.unit,
           canonical_amount: ing.canonical_amount,
           canonical_unit: ing.canonical_unit,
+          display_text: ing.display_text,
           category,
         },
         multiplier
@@ -167,16 +173,21 @@ export async function loadPlanShoppingIngredients(
       const cur = aggMap.get(res.key);
       if (cur) {
         cur.amountSum += res.amountToSum;
+        const prevC = cur.contributionsByRecipe.get(recipe_id) ?? 0;
+        cur.contributionsByRecipe.set(recipe_id, prevC + res.amountToSum);
         if (!cur.names.includes(res.originalName)) cur.names.push(res.originalName);
         if (category !== "other" && cur.category === "other") cur.category = category;
         addSource(cur, recipe_id);
       } else {
+        const contributionsByRecipe = new Map<string, number>();
+        contributionsByRecipe.set(recipe_id, res.amountToSum);
         aggMap.set(res.key, {
           amountSum: res.amountToSum,
           names: [res.originalName],
           aggregationUnit: res.aggregationUnit,
           category,
           sourceRecipeIds: new Set([recipe_id]),
+          contributionsByRecipe,
         });
       }
     }
@@ -189,9 +200,13 @@ export async function loadPlanShoppingIngredients(
   const result: AggregatedIngredient[] = [];
   for (const [mergeKey, v] of aggMap.entries()) {
     if (v.amountSum <= 0) continue;
-    const displayName = chooseShoppingDisplayName(v.names);
-    const nameForUi = displayName ? normalizeIngredientDisplayName(displayName) : displayName;
+    const nameForUi = shoppingListDisplayNameFromAggregationKey(mergeKey, v.names);
     const { displayAmount, displayUnit } = toShoppingDisplayUnitAndAmount(v.aggregationUnit, v.amountSum);
+    const source_contributions: ShoppingSourceContribution[] = [...v.contributionsByRecipe.entries()].map(
+      ([recipe_id, amount_sum]) => ({ recipe_id, amount_sum })
+    );
+    const aggregation_unit =
+      v.aggregationUnit == null ? null : typeof v.aggregationUnit === "string" ? v.aggregationUnit : String(v.aggregationUnit);
     result.push({
       name: nameForUi,
       amount: displayAmount,
@@ -200,6 +215,8 @@ export async function loadPlanShoppingIngredients(
       displayUnit,
       category: v.category,
       source_recipes: toSourceRecipes(v.sourceRecipeIds),
+      source_contributions,
+      aggregation_unit,
       merge_key: mergeKey,
     });
   }

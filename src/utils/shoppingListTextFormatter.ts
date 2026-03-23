@@ -3,9 +3,10 @@
  * Публичный шаринг списка продуктов убран — только копирование для личного использования.
  */
 
-import { capitalizeIngredientName, normalizeUnitForDisplay } from "@/utils/ingredientDisplay";
+import { capitalizeIngredientName } from "@/utils/ingredientDisplay";
 import type { ProductCategory } from "@/hooks/useShoppingList";
 import { mapDbProductCategoryToShoppingAisle } from "@/utils/shopping/mapDbProductCategoryToShoppingAisle";
+import { formatShoppingListPurchaseLine } from "@/utils/shopping/shoppingListPurchaseDisplay";
 
 const CATEGORY_ORDER: ProductCategory[] = ["vegetables", "fruits", "dairy", "meat", "grains", "other"];
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
@@ -22,15 +23,22 @@ export interface ShoppingListItemForFormat {
   amount: number | null;
   unit: string | null;
   category?: ProductCategory | null;
+  merge_key?: string | null;
+  aggregation_unit?: string | null;
 }
 
 function formatItemLine(item: ShoppingListItemForFormat): string {
-  const name = capitalizeIngredientName(item.name);
-  const a = item.amount != null && item.amount > 0 ? item.amount : null;
-  const u = normalizeUnitForDisplay(item.unit);
-  if (a != null && u) return `${name} — ${a} ${u}`;
-  if (a != null) return `${name} — ${a}`;
-  return name;
+  const displayName = capitalizeIngredientName(item.name);
+  return formatShoppingListPurchaseLine(
+    {
+      displayName,
+      amount: item.amount,
+      unit: item.unit,
+      mergeKey: item.merge_key,
+      aggregationUnit: item.aggregation_unit,
+    },
+    { delimiter: " — " }
+  );
 }
 
 function normalizeCategory(cat: string | null | undefined): ProductCategory {

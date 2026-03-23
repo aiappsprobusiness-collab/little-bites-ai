@@ -65,6 +65,8 @@ export function BuildShoppingListFromPlanSheet({
         category: ing.category,
         source_recipes: ing.source_recipes?.length ? ing.source_recipes : undefined,
         merge_key: ing.merge_key,
+        source_contributions: ing.source_contributions?.length ? ing.source_contributions : undefined,
+        aggregation_unit: ing.aggregation_unit,
       }));
       const newSyncMeta: ShoppingListSyncMeta = {
         last_synced_range: range,

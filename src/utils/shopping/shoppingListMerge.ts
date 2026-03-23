@@ -1,8 +1,7 @@
 import type { ProductCategory, SourceRecipe } from "@/hooks/useShoppingList";
 import {
   buildShoppingAggregationKey,
-  chooseShoppingDisplayName,
-  normalizeIngredientDisplayName,
+  shoppingListDisplayNameFromAggregationKey,
   toShoppingDisplayUnitAndAmount,
 } from "@/utils/shopping/normalizeIngredientForShopping";
 import {
@@ -11,10 +10,20 @@ import {
   resolveProductCategoryForShoppingIngredient,
 } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
 
+/** Вклад рецепта в строку (в единицах aggregation_unit, как amountToSum в агрегации). */
+export type ShoppingSourceContribution = {
+  recipe_id: string;
+  amount_sum: number;
+};
+
 /** meta.shopping_list_items: источники рецептов и стабильный ключ слияния. */
 export type ShoppingListItemMeta = {
   source_recipes?: SourceRecipe[];
   merge_key?: string;
+  /** Вклады по recipe_id для пересчёта количества при фильтре по рецептам. */
+  source_contributions?: ShoppingSourceContribution[];
+  /** Единица для toShoppingDisplayUnitAndAmount при суммировании вкладов. */
+  aggregation_unit?: string | null;
 };
 
 /** Одна позиция для merge в список (из плана или из карточки рецепта). */
@@ -25,6 +34,8 @@ export type ShoppingIngredientPayload = {
   category: ProductCategory | null;
   merge_key: string;
   source_recipes?: SourceRecipe[];
+  source_contributions?: ShoppingSourceContribution[];
+  aggregation_unit?: string | null;
 };
 
 /** Легаси-ключ как в первой версии addRecipeIngredients: trim lower name + точная строка unit. */
@@ -98,6 +109,7 @@ export function buildShoppingIngredientPayloadsFromRecipe(
         unit: ing.unit,
         canonical_amount: ing.canonical_amount,
         canonical_unit: ing.canonical_unit,
+        display_text: ing.display_text,
         category: rawCat,
       },
       multiplier
@@ -105,12 +117,24 @@ export function buildShoppingIngredientPayloadsFromRecipe(
     if (res == null) continue;
 
     const { displayAmount, displayUnit } = toShoppingDisplayUnitAndAmount(res.aggregationUnit, res.amountToSum);
-    const nameForUi = normalizeIngredientDisplayName(chooseShoppingDisplayName([res.originalName]));
+    const nameForUi = shoppingListDisplayNameFromAggregationKey(res.key, [res.originalName]);
     const category = resolveProductCategoryForShoppingIngredient(rawCat, ing.name, ing.display_text);
 
     const prev = byKey.get(res.key);
+    const contrib: ShoppingSourceContribution = { recipe_id: recipeId, amount_sum: res.amountToSum };
+    const aggUnitStr =
+      typeof res.aggregationUnit === "string" ? res.aggregationUnit : res.aggregationUnit != null ? String(res.aggregationUnit) : null;
     if (prev) {
       prev.amount = (prev.amount ?? 0) + (displayAmount ?? 0);
+      const list = prev.source_contributions ?? [];
+      const idx = list.findIndex((c) => c.recipe_id === recipeId);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], amount_sum: list[idx].amount_sum + res.amountToSum };
+        prev.source_contributions = list;
+      } else {
+        prev.source_contributions = [...list, contrib];
+      }
+      if (aggUnitStr != null) prev.aggregation_unit = aggUnitStr;
     } else {
       byKey.set(res.key, {
         name: nameForUi,
@@ -119,6 +143,8 @@ export function buildShoppingIngredientPayloadsFromRecipe(
         category,
         merge_key: res.key,
         source_recipes: [source],
+        source_contributions: [contrib],
+        aggregation_unit: aggUnitStr,
       });
     }
   }
@@ -136,8 +162,22 @@ export function shoppingRowMatchesPayload(
   return legacyShoppingLineKey(row.name, row.unit) === legacyShoppingLineKey(payload.name, payload.unit);
 }
 
+/** Слить вклады по recipe_id (добавление из рецепта / merge строк). */
+export function mergeContributionMaps(
+  a: ShoppingSourceContribution[] | undefined,
+  b: ShoppingSourceContribution[] | undefined
+): ShoppingSourceContribution[] | undefined {
+  if (!a?.length && !b?.length) return undefined;
+  const m = new Map<string, number>();
+  for (const c of a ?? []) m.set(c.recipe_id, (m.get(c.recipe_id) ?? 0) + c.amount_sum);
+  for (const c of b ?? []) m.set(c.recipe_id, (m.get(c.recipe_id) ?? 0) + c.amount_sum);
+  const out = [...m.entries()].map(([recipe_id, amount_sum]) => ({ recipe_id, amount_sum }));
+  return out.length ? out : undefined;
+}
+
 /**
  * Объединить meta.source_recipes с новым рецептом; выставить merge_key (поддержка строк без ключа).
+ * delta — вклады из новой партии (добавление из карточки рецепта).
  */
 export function mergeShoppingItemMeta(
   row: {
@@ -146,7 +186,11 @@ export function mergeShoppingItemMeta(
     recipe_title?: string | null;
   },
   newRecipe: SourceRecipe | null,
-  mergeKeyForRow: string
+  mergeKeyForRow: string,
+  contributionMerge?: {
+    delta?: ShoppingSourceContribution[];
+    aggregation_unit?: string | null;
+  }
 ): ShoppingListItemMeta {
   const existing = row.meta?.source_recipes ?? (row.recipe_id ? [{ id: row.recipe_id, title: row.recipe_title ?? "" }] : []);
   const byId = new Map(existing.map((r) => [r.id, r]));
@@ -154,5 +198,10 @@ export function mergeShoppingItemMeta(
   const arr = [...byId.values()];
   const out: ShoppingListItemMeta = { merge_key: mergeKeyForRow };
   if (arr.length > 0) out.source_recipes = arr;
+
+  const merged = mergeContributionMaps(row.meta?.source_contributions, contributionMerge?.delta);
+  if (merged?.length) out.source_contributions = merged;
+  const agg = contributionMerge?.aggregation_unit ?? row.meta?.aggregation_unit;
+  if (agg != null && String(agg).trim() !== "") out.aggregation_unit = agg;
   return out;
 }

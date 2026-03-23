@@ -63,6 +63,7 @@ function memberAvatar(_member: MembersRow, index: number): string {
   return VEGETABLE_EMOJIS[index % VEGETABLE_EMOJIS.length];
 }
 
+/** Дата окончания подписки/пробного периода (ru-RU уже включает «г.» в конце). */
 function formatSubscriptionEndDate(isoDate: string | null): string {
   if (!isoDate) return "";
   const d = new Date(isoDate);
@@ -71,12 +72,6 @@ function formatSubscriptionEndDate(isoDate: string | null): string {
     month: "long",
     year: "numeric",
   });
-}
-
-/** For subscription panel: "25 марта 2026" → "25 марта 2026 г." */
-function formatSubscriptionEndDateWithYear(isoDate: string | null): string {
-  const s = formatSubscriptionEndDate(isoDate);
-  return s ? `${s} г.` : "";
 }
 
 export default function ProfilePage() {
@@ -278,10 +273,11 @@ export default function ProfilePage() {
           <ProfileHeaderCard
             displayName={displayName}
             status={subscriptionStatus}
+            accountEmail={user?.email ?? undefined}
             onEditClick={handleOpenNameModal}
             freePlanLine="5 запросов в день · 1 профиль"
-            trialUntilFormatted={trialUntil ? formatSubscriptionEndDateWithYear(trialUntil) : null}
-            expiresAtFormatted={expiresAt ? formatSubscriptionEndDateWithYear(expiresAt) : null}
+            trialUntilFormatted={trialUntil ? formatSubscriptionEndDate(trialUntil) : null}
+            expiresAtFormatted={expiresAt ? formatSubscriptionEndDate(expiresAt) : null}
             onSubscriptionCta={handleSubscriptionCta}
           />
 
