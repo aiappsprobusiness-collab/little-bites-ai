@@ -77,9 +77,11 @@ import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/Wee
 import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingListFromPlanSheet";
 import { createSharedPlan, type SharedPlanPayloadWeek } from "@/services/sharedPlan";
 import {
+  appendDayMenuShareLink,
   appendShareLinkOnce,
   buildDayMenuShareBody,
   buildWeekMenuShareBody,
+  getShareIntroText,
   weekMealsBrief,
 } from "@/utils/shareMenuText";
 import {
@@ -262,7 +264,11 @@ export default function MealPlanPage() {
   const [planProfileHelpOpen, setPlanProfileHelpOpen] = useState(false);
   const [firstPlanShareBannerDismissed, setFirstPlanShareBannerDismissed] = useState(false);
   const [shareMenuPreview, setShareMenuPreview] = useState<
-    | { kind: "day"; meals: Array<{ meal_type: string; label: string; title: string }> }
+    | {
+        kind: "day";
+        meals: Array<{ meal_type: string; label: string; title: string }>;
+        shareIntro: string;
+      }
     | { kind: "week"; days: SharedPlanPayloadWeek["days"] }
     | null
   >(null);
@@ -760,7 +766,11 @@ export default function MealPlanPage() {
       toast({ description: "Добавьте блюда в план дня, чтобы поделиться" });
       return;
     }
-    setShareMenuPreview({ kind: "day", meals });
+    setShareMenuPreview({
+      kind: "day",
+      meals,
+      shareIntro: getShareIntroText(new Date()),
+    });
   }, [dayMealPlans, mealTypes, previews, toast]);
 
   const openShareWeekPreview = useCallback(() => {
@@ -787,8 +797,10 @@ export default function MealPlanPage() {
           date: selectedDayKey,
           meals: shareMenuPreview.meals,
         });
-        const body = buildDayMenuShareBody(shareMenuPreview.meals);
-        const fullText = appendShareLinkOnce(body, url);
+        const body = buildDayMenuShareBody(shareMenuPreview.meals, {
+          intro: shareMenuPreview.shareIntro,
+        });
+        const fullText = appendDayMenuShareLink(body, url);
         let sharedOk = false;
         if (typeof navigator !== "undefined" && navigator.share) {
           await navigator.share({ title: "Меню на день", text: fullText });
@@ -846,7 +858,9 @@ export default function MealPlanPage() {
   const shareMenuPreviewBody = useMemo(() => {
     if (!shareMenuPreview) return "";
     if (shareMenuPreview.kind === "day") {
-      return buildDayMenuShareBody(shareMenuPreview.meals);
+      return buildDayMenuShareBody(shareMenuPreview.meals, {
+        intro: shareMenuPreview.shareIntro,
+      });
     }
     return buildWeekMenuShareBody(
       shareMenuPreview.days.map((d, i) => ({

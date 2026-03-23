@@ -1,4 +1,5 @@
 import {
+  appendDayMenuShareLink,
   appendShareLinkOnce,
   buildDayMenuShareBody,
   buildWeekMenuShareBody,
@@ -7,24 +8,32 @@ import {
 
 describe("shareMenuText", () => {
   describe("buildDayMenuShareBody", () => {
-    it("skips empty slots and uses перекус label for snack", () => {
-      const text = buildDayMenuShareBody([
-        { meal_type: "lunch", label: "Обед", title: "Борщ" },
-        { meal_type: "snack", label: "Полдник", title: "Йогурт" },
-        { meal_type: "breakfast", label: "Завтрак", title: "Каша" },
-      ]);
-      expect(text).toContain("Собрал(а) меню на день 👇");
+    const fixedIntro = "Собрала для семьи меню на сегодня в MomRecipes 👇";
+
+    it("skips empty slots and uses fixed RU labels for slots", () => {
+      const text = buildDayMenuShareBody(
+        [
+          { meal_type: "lunch", label: "Обед", title: "Борщ" },
+          { meal_type: "snack", label: "Полдник", title: "Йогурт" },
+          { meal_type: "breakfast", label: "Завтрак", title: "Каша" },
+        ],
+        { intro: fixedIntro }
+      );
+      expect(text.startsWith(fixedIntro)).toBe(true);
       expect(text).toContain("🍓 Завтрак: Каша");
       expect(text).toContain("🍲 Обед: Борщ");
       expect(text).toContain("🥪 Перекус: Йогурт");
       expect(text).not.toContain("Ужин");
-      expect(text).toContain("Список продуктов уже готов");
+      expect(text).toContain(
+        "Список продуктов уже готов — можно сразу идти в магазин 🛒"
+      );
     });
 
     it("omits snack when not planned", () => {
-      const text = buildDayMenuShareBody([
-        { meal_type: "breakfast", label: "Завтрак", title: "Омлет" },
-      ]);
+      const text = buildDayMenuShareBody(
+        [{ meal_type: "breakfast", label: "Завтрак", title: "Омлет" }],
+        { intro: fixedIntro }
+      );
       expect(text).not.toContain("Перекус");
     });
   });
@@ -61,6 +70,20 @@ describe("shareMenuText", () => {
     });
     it("ignores empty link", () => {
       expect(appendShareLinkOnce("A", "")).toBe("A");
+    });
+  });
+
+  describe("appendDayMenuShareLink", () => {
+    it("adds Посмотреть меню and url as last line", () => {
+      const body = "Текст\n\nстрока";
+      const u = "https://momrecipes.online/p/abc";
+      expect(appendDayMenuShareLink(body, u)).toBe(
+        `${body}\n\nПосмотреть меню:\n${u}`
+      );
+    });
+    it("does not duplicate url", () => {
+      const u = "https://x.test/p/x";
+      expect(appendDayMenuShareLink(`A\n${u}`, u)).toBe(`A\n${u}`);
     });
   });
 });
