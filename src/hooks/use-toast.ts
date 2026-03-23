@@ -159,13 +159,15 @@ function toast({ duration, ...rest }: Toast) {
       ...rest,
       id,
       open: true,
+      ...(duration !== undefined ? { duration } : {}),
       onOpenChange: (open) => {
         if (!open) dismiss();
       },
     },
   });
 
-  if (typeof duration === "number" && duration > 0) {
+  /* Radix Root получает duration; дублируем таймер только для конечных значений (Infinity — только Radix). */
+  if (typeof duration === "number" && duration > 0 && Number.isFinite(duration)) {
     durationTimeouts.set(id, setTimeout(() => dismiss(), duration));
   }
 

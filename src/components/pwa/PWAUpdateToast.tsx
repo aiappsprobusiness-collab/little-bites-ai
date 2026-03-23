@@ -14,6 +14,8 @@ export function PWAUpdateToast() {
       toast({
         title: "Доступна новая версия",
         description: "Нажмите «Обновить», чтобы загрузить изменения.",
+        /** Пока не обновили или не закрыли свайпом/крестиком — не гасим (Radix Toast). */
+        duration: Number.POSITIVE_INFINITY,
         action: (
           <ToastAction
             altText="Обновить"
