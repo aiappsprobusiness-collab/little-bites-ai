@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ThumbsUp, ThumbsDown, ShoppingCart } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -42,6 +42,11 @@ import { NutritionGoalsChips } from "@/components/recipe/NutritionGoalsChips";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { cn } from "@/lib/utils";
 import { mealPlanMemberIdForShoppingSync } from "@/utils/mealPlanMemberScope";
+import { useShoppingList } from "@/hooks/useShoppingList";
+import {
+  buildShoppingIngredientPayloadsFromRecipe,
+  recipeRpcIngredientsToShoppingRows,
+} from "@/utils/shopping/shoppingListMerge";
 import { useMealPlanMemberData, readMealPlanMutedWeekKeyFromStorage } from "@/hooks/useMealPlanMemberData";
 import {
   AlertDialog,
@@ -89,6 +94,7 @@ export default function RecipePage() {
   /** Совпадает с queryKey MealPlanPage — иначе план на дату грузится заново без кэша и слот/порции «прыгают». */
   const recipePlanMutedWeekKey = useMemo(() => readMealPlanMutedWeekKeyFromStorage(), []);
   const { hasAccess } = useSubscription();
+  const { addRecipeIngredients, isAddingToList } = useShoppingList();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const isFree = !hasAccess;
@@ -547,6 +553,38 @@ export default function RecipePage() {
         }
       : null;
 
+  const handleAddIngredientsToShopping = async () => {
+    if (!id || !recipe) return;
+    if (!hasAccess) {
+      setPaywallCustomMessage("Список покупок доступен в Premium.");
+      setShowPaywall(true);
+      return;
+    }
+    const rows = recipeRpcIngredientsToShoppingRows((recipe as { ingredients?: unknown[] }).ingredients);
+    if (rows.length === 0) {
+      toast({ title: "Нет ингредиентов для списка" });
+      return;
+    }
+    const sb = Math.max(1, (recipe as { servings_base?: number | null }).servings_base ?? 1);
+    const multiplier = servingsSelected / sb;
+    const title = recipeDisplay.title ?? "Рецепт";
+    const payloads = buildShoppingIngredientPayloadsFromRecipe(rows, multiplier, id, title);
+    if (payloads.length === 0) {
+      toast({ title: "Не удалось подготовить количества для списка" });
+      return;
+    }
+    try {
+      const { wasEmpty } = await addRecipeIngredients({ payloads });
+      toast({
+        title: wasEmpty ? "Создали список и добавили ингредиенты ✓" : "Добавили в список покупок ✓",
+      });
+    } catch {
+      toast({ variant: "destructive", title: "Не удалось добавить в список" });
+    }
+  };
+
+  const shoppingRowsForButton = recipeRpcIngredientsToShoppingRows((recipe as { ingredients?: unknown[] }).ingredients);
+
   return (
     <MobileLayout
       title={headerTitle}
@@ -753,6 +791,21 @@ export default function RecipePage() {
             ) : undefined
           }
         />
+
+        {id && (
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full gap-2 justify-center border-border/80 text-foreground"
+              disabled={isAddingToList || shoppingRowsForButton.length === 0}
+              onClick={() => void handleAddIngredientsToShopping()}
+            >
+              <ShoppingCart className="w-4 h-4 shrink-0" aria-hidden />
+              Добавить в покупки
+            </Button>
+          </div>
+        )}
 
         {chefAdvice?.trim() ? (
           <ChefAdviceCard title="Совет от шефа" body={chefAdvice.trim()} isChefTip className="mt-6" />

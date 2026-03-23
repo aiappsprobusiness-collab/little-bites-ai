@@ -28,6 +28,8 @@ export interface AggregatedIngredient {
   category: ProductCategory | null;
   /** Рецепты, из которых попал ингредиент (для фильтра по рецептам). */
   source_recipes: SourceRecipe[];
+  /** Ключ группировки (как в buildShoppingAggregationKey) — для merge без дублей при добавлении из рецепта. */
+  merge_key: string;
 }
 
 type MealsSlot = { recipe_id?: string; title?: string; servings?: number };
@@ -185,7 +187,7 @@ export async function loadPlanShoppingIngredients(
   }
 
   const result: AggregatedIngredient[] = [];
-  for (const v of aggMap.values()) {
+  for (const [mergeKey, v] of aggMap.entries()) {
     if (v.amountSum <= 0) continue;
     const displayName = chooseShoppingDisplayName(v.names);
     const nameForUi = displayName ? normalizeIngredientDisplayName(displayName) : displayName;
@@ -198,6 +200,7 @@ export async function loadPlanShoppingIngredients(
       displayUnit,
       category: v.category,
       source_recipes: toSourceRecipes(v.sourceRecipeIds),
+      merge_key: mergeKey,
     });
   }
   return result;

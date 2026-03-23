@@ -69,7 +69,7 @@
 
 - **Хук — вход:** range (`today` | `week`), memberId (согласовать с планом через `mealPlanMemberIdForShoppingSync`, см. **shopping_list_product_model.md**).
 - **Экспорт `loadPlanShoppingIngredients(userId, range, memberId)`:** та же агрегация без React Query (sheet на Плане, единая логика с хуком).
-- **Выход:** массив `AggregatedIngredient[]` (name, amount, unit, displayAmount, displayUnit, category, source_recipes).
+- **Выход:** массив `AggregatedIngredient[]` (name, amount, unit, displayAmount, displayUnit, category, source_recipes, **merge_key** — тот же ключ, что в `buildShoppingAggregationKey`, сохраняется в `shopping_list_items.meta.merge_key` при сборке из меню и при добавлении из карточки рецепта для корректного слияния без дублей).
 
 Внутри:
 
@@ -85,7 +85,8 @@
 ## Связь с другими частями
 
 - **Сбор в БД** только по явному действию пользователя; `shopping_lists.meta` хранит подпись последней сборки для сравнения с планом (без автоперезаписи). См. **shopping_list_product_model.md**.
-- **replaceItems** и **addRecipeIngredients** не применяют слой нормализации агрегации к произвольным вставкам: агрегация выполняется в `loadPlanShoppingIngredients` перед replace; ручные и построчные добавления идут отдельно.
+- **replaceItems:** при сборке из меню в каждую строку пишется `meta.merge_key` (ключ агрегации) и `meta.source_recipes`.
+- **addRecipeIngredients** (`useShoppingList`): добавление ингредиентов **из карточки рецепта** (`RecipePage`, кнопка «Добавить в покупки») строит те же ключи и display-поля, что и план, через `buildShoppingIngredientPayloadsFromRecipe` в `src/utils/shopping/shoppingListMerge.ts` (внутри — `buildShoppingAggregationKey` + `toShoppingDisplayUnitAndAmount`). Слияние с существующими строками: совпадение по `meta.merge_key`, иначе легаси `trim().toLowerCase(name)|unit` как в первой версии. Ручное добавление продукта без `merge_key` по-прежнему только легаси-ключом. Несовпадение единиц на одном ключе не конвертируется: разные ключи агрегации → разные строки.
 - **recipe_ingredients** и RPC **create_recipe_with_steps** не меняются этим слоем; возможная будущая нормализация при записи в БД — отдельный уровень (см. вариант «два уровня» в обсуждении нормализации).
 
 ---

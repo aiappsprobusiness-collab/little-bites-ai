@@ -255,6 +255,7 @@ export function ShoppingListView() {
       unit: ing.displayUnit ?? ing.unit,
       category: ing.category,
       source_recipes: ing.source_recipes?.length ? ing.source_recipes : undefined,
+      merge_key: ing.merge_key,
     }));
     const newSyncMeta: ShoppingListSyncMeta = {
       last_synced_range: range,

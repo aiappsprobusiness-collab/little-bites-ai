@@ -2,6 +2,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { resolveProductCategoryForShoppingIngredient } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
+import type { ShoppingListItemMeta, ShoppingIngredientPayload } from "@/utils/shopping/shoppingListMerge";
+import { mergeShoppingItemMeta, shoppingRowMatchesPayload } from "@/utils/shopping/shoppingListMerge";
+
+export type { ShoppingIngredientPayload } from "@/utils/shopping/shoppingListMerge";
 
 export type ProductCategory = "vegetables" | "fruits" | "dairy" | "meat" | "grains" | "other";
 
@@ -20,7 +24,7 @@ export interface ShoppingListItemRow {
   is_purchased: boolean | null;
   recipe_id: string | null;
   recipe_title: string | null;
-  meta?: { source_recipes?: SourceRecipe[] } | null;
+  meta?: ShoppingListItemMeta | null;
 }
 
 /** Источники рецептов для строки: из meta или из recipe_id/recipe_title. */
@@ -139,6 +143,7 @@ export function useShoppingList() {
         unit: string | null;
         category: ProductCategory | null;
         source_recipes?: SourceRecipe[];
+        merge_key?: string;
       }[];
       syncMeta?: ShoppingListSyncMeta;
     }) => {
@@ -147,14 +152,22 @@ export function useShoppingList() {
       const { error: delErr } = await supabase.from("shopping_list_items").delete().eq("shopping_list_id", listId);
       if (delErr) throw delErr;
       if (items.length > 0) {
-        const rows = items.map((item) => ({
-          shopping_list_id: listId,
-          name: item.name,
-          amount: item.amount,
-          unit: item.unit,
-          category: item.category ?? "other",
-          meta: item.source_recipes?.length ? { source_recipes: item.source_recipes } : null,
-        }));
+        const rows = items.map((item) => {
+          const meta: ShoppingListItemMeta | null = (() => {
+            const m: ShoppingListItemMeta = {};
+            if (item.merge_key) m.merge_key = item.merge_key;
+            if (item.source_recipes?.length) m.source_recipes = item.source_recipes;
+            return Object.keys(m).length > 0 ? m : null;
+          })();
+          return {
+            shopping_list_id: listId,
+            name: item.name,
+            amount: item.amount,
+            unit: item.unit,
+            category: item.category ?? "other",
+            meta,
+          };
+        });
         const { error: insErr } = await supabase.from("shopping_list_items").insert(rows);
         if (insErr) throw insErr;
       }
@@ -174,61 +187,60 @@ export function useShoppingList() {
   });
 
   const addRecipeIngredients = useMutation({
-    mutationFn: async (params: {
-      ingredients: { name: string; amount: number | null; unit: string | null; category?: ProductCategory | null }[];
-      recipeId?: string | null;
-      recipeTitle?: string | null;
-    }) => {
+    mutationFn: async (params: { payloads: ShoppingIngredientPayload[] }): Promise<{ wasEmpty: boolean }> => {
       if (!user) throw new Error("Not authenticated");
       const list = await getOrCreateActiveList(user.id);
-      type ExRow = { id: string; name: string; amount: number | null; unit: string | null; meta?: { source_recipes?: SourceRecipe[] } | null; recipe_id?: string | null; recipe_title?: string | null };
-      const existingRes = (await supabase
+      const { count: countBefore } = await supabase
+        .from("shopping_list_items")
+        .select("id", { count: "exact", head: true })
+        .eq("shopping_list_id", list.id);
+      const wasEmpty = (countBefore ?? 0) === 0;
+
+      type ExRow = {
+        id: string;
+        name: string;
+        amount: number | null;
+        unit: string | null;
+        meta?: ShoppingListItemMeta | null;
+        recipe_id?: string | null;
+        recipe_title?: string | null;
+      };
+      const existingRes = await supabase
         .from("shopping_list_items")
         .select("id, name, amount, unit, is_purchased, meta, recipe_id, recipe_title")
-        .eq("shopping_list_id", list.id)
-        .eq("is_purchased", false)) as { data: ExRow[] | null; error: { message: string } | null };
+        .eq("shopping_list_id", list.id);
       if (existingRes.error) throw existingRes.error;
-      const existingMap = new Map<string, ExRow>(
-        (existingRes.data ?? []).map((r) => [`${(r.name ?? "").trim().toLowerCase()}|${(r.unit ?? "")}`, r])
-      );
-      const newRecipe: SourceRecipe | null =
-        params.recipeId != null
-          ? { id: params.recipeId, title: (params.recipeTitle ?? "").trim() }
-          : null;
-      function mergeMeta(row: ExRow, recipe: SourceRecipe | null): { source_recipes: SourceRecipe[] } | null {
-        const existing = row.meta?.source_recipes ?? (row.recipe_id ? [{ id: row.recipe_id, title: row.recipe_title ?? "" }] : []);
-        const byId = new Map(existing.map((r) => [r.id, r]));
-        if (recipe) byId.set(recipe.id, recipe);
-        const arr = [...byId.values()];
-        return arr.length > 0 ? { source_recipes: arr } : null;
-      }
-      for (const ing of params.ingredients) {
-        const key = `${ing.name.trim().toLowerCase()}|${ing.unit ?? ""}`;
-        const ex = existingMap.get(key);
+      const rows = (existingRes.data ?? []) as ExRow[];
+
+      for (const payload of params.payloads) {
+        const ex = rows.find((r) => shoppingRowMatchesPayload(r, payload));
+        const newRecipe = payload.source_recipes?.[0] ?? null;
         if (ex) {
-          const newAmount = (ex.amount ?? 0) + (ing.amount ?? 0);
-          const merged = mergeMeta(ex, newRecipe);
-          await supabase
-            .from("shopping_list_items")
-            .update({ amount: newAmount, meta: merged })
-            .eq("id", ex.id);
+          const newAmount = (ex.amount ?? 0) + (payload.amount ?? 0);
+          const merged = mergeShoppingItemMeta(ex, newRecipe, payload.merge_key);
+          await supabase.from("shopping_list_items").update({ amount: newAmount, meta: merged }).eq("id", ex.id);
+          ex.amount = newAmount;
+          ex.meta = merged;
         } else {
+          const meta = mergeShoppingItemMeta({ meta: null, recipe_id: null, recipe_title: null }, newRecipe, payload.merge_key);
           await supabase.from("shopping_list_items").insert({
             shopping_list_id: list.id,
-            name: ing.name.trim(),
-            amount: ing.amount,
-            unit: ing.unit ?? null,
-            category: ing.category ?? "other",
-            recipe_id: params.recipeId ?? null,
-            recipe_title: params.recipeTitle ?? null,
-            meta: newRecipe ? { source_recipes: [newRecipe] } : null,
+            name: payload.name.trim(),
+            amount: payload.amount,
+            unit: payload.unit ?? null,
+            category: payload.category ?? "other",
+            recipe_id: newRecipe?.id ?? null,
+            recipe_title: newRecipe?.title ?? null,
+            meta,
           });
         }
       }
+      return { wasEmpty };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: LIST_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["shopping_list_items"] });
+      if (listId) queryClient.invalidateQueries({ queryKey: ITEMS_QUERY_KEY(listId) });
     },
   });
 
