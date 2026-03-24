@@ -106,7 +106,7 @@ export interface PickRecipeFromPoolArgs {
   limitCandidates?: number;
 }
 
-type RecipeRow = {
+export type PoolRecipeRow = {
   id: string;
   title: string;
   tags: string[] | null;
@@ -114,8 +114,23 @@ type RecipeRow = {
   cooking_time_minutes: number | null;
   source?: string | null;
   meal_type?: string | null;
+  min_age_months?: number | null;
+  max_age_months?: number | null;
   recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
 };
+
+type RecipeRow = PoolRecipeRow;
+
+/** Согласовано с Edge generate-plan recipeFitsAgeRange. */
+export function recipeFitsAgeMonthsRow(
+  min: number | null | undefined,
+  max: number | null | undefined,
+  ageMonths: number
+): boolean {
+  if (max != null && ageMonths > max) return false;
+  if (min != null && ageMonths < min) return false;
+  return true;
+}
 
 /** Токены аллергенов из allergenTokens (курица→кур/куриц, орехи→орех, молоко→dairy и т.д.). */
 function getAllergyTokens(memberData: MemberDataForPool | null | undefined): string[] {
@@ -182,6 +197,104 @@ export function passesProfileFilter(
   return { pass: true };
 }
 
+export type FilterPoolCandidatesForSlotOptions = {
+  slotNorm: MealType;
+  memberData?: MemberDataForPool | null;
+  excludeRecipeIds: string[];
+  excludeTitleKeys: string[];
+};
+
+/**
+ * Те же in-memory фильтры, что и в pickRecipeFromPool: слот, возраст &lt;12 (min/max), sanity, аллергии/dislikes.
+ */
+export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: FilterPoolCandidatesForSlotOptions): PoolRecipeRow[] {
+  const { slotNorm, memberData, excludeRecipeIds, excludeTitleKeys } = options;
+  const excludeSet = new Set(excludeRecipeIds);
+  const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
+
+  let filtered = rows;
+  if (excludeRecipeIds.length >= 50 || excludeSet.size > 0) {
+    filtered = filtered.filter((r) => !excludeSet.has(r.id));
+  }
+
+  filtered = filtered.filter((r) => {
+    const key = normalizeTitleKey(r.title);
+    return !excludeTitleSet.has(key);
+  });
+
+  filtered = filtered.filter((r) => {
+    const recNorm = normalizeMealType(r.meal_type);
+    return recNorm !== null && recNorm === slotNorm;
+  });
+  const candidatesAfterMealType = filtered.length;
+
+  const ageMonths = memberData?.age_months ?? (memberData?.age_years != null ? memberData.age_years * 12 : null);
+  if (ageMonths != null && ageMonths < 12) {
+    filtered = filtered.filter((r) =>
+      recipeFitsAgeMonthsRow(r.min_age_months ?? null, r.max_age_months ?? null, ageMonths)
+    );
+  }
+
+  if (slotNorm === "breakfast") {
+    filtered = filtered.filter((r) => !isSoupLikeTitle(r.title));
+  }
+
+  filtered = filtered.filter((r) => getSanityBlockedReasons(r.title, slotNorm).length === 0);
+  filtered = filtered.filter((r) => passesProfileFilter(r, memberData).pass);
+
+  if (isDebugPool() && filtered.length === 0 && rows.length > 0) {
+    console.log("[POOL DEBUG] filterPoolCandidatesForSlot: all filtered out", {
+      slotNorm,
+      candidatesAfterMealType,
+      inCount: rows.length,
+    });
+  }
+
+  return filtered;
+}
+
+export type ListFilteredPoolRecipesArgs = Omit<PickRecipeFromPoolArgs, "excludeRecipeIds" | "excludeTitleKeys"> & {
+  excludeRecipeIds?: string[];
+  excludeTitleKeys?: string[];
+  limitCandidates?: number;
+};
+
+/** Список рецептов пула после тех же фильтров, что pickRecipeFromPool (для подсчёта «ещё варианты» / fallback). */
+export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolRecipesArgs): Promise<PoolRecipeRow[]> {
+  const {
+    supabase,
+    mealType,
+    memberData,
+    excludeRecipeIds = [],
+    excludeTitleKeys = [],
+    limitCandidates = 150,
+  } = args;
+
+  const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
+  const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
+
+  const selectFields = hasAllergies
+    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
+    : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
+
+  const { data: rows, error } = await supabase
+    .from("recipes")
+    .select(selectFields)
+    .in("source", ["seed", "manual", "week_ai", "chat_ai"])
+    .order("created_at", { ascending: false })
+    .limit(limitCandidates);
+
+  if (error || !rows?.length) return [];
+
+  const rawCandidates = rows as PoolRecipeRow[];
+  return filterPoolCandidatesForSlot(rawCandidates, {
+    slotNorm,
+    memberData,
+    excludeRecipeIds,
+    excludeTitleKeys,
+  });
+}
+
 /** Выбрать рецепт из пула по слоту приёма пищи. */
 export async function pickRecipeFromPool(
   args: PickRecipeFromPoolArgs
@@ -198,14 +311,12 @@ export async function pickRecipeFromPool(
   } = args;
 
   const excludeSet = new Set(excludeRecipeIds);
-  const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
-
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
   const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
 
   const selectFields = hasAllergies
-    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, recipe_ingredients(name, display_text)"
-    : "id, title, tags, description, cooking_time_minutes, source, meal_type";
+    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
+    : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
   let q = supabase
     .from("recipes")
@@ -239,36 +350,15 @@ export async function pickRecipeFromPool(
 
   const rawCandidates = (rows ?? []) as RecipeRow[];
   const candidatesFromDb = rawCandidates.length;
-  let filtered = rawCandidates;
 
-  if (excludeRecipeIds.length >= 50 || excludeSet.size > 0) {
-    filtered = filtered.filter((r) => !excludeSet.has(r.id));
-  }
-
-  filtered = filtered.filter((r) => {
-    const key = normalizeTitleKey(r.title);
-    return !excludeTitleSet.has(key);
+  const filtered = filterPoolCandidatesForSlot(rawCandidates, {
+    slotNorm,
+    memberData,
+    excludeRecipeIds,
+    excludeTitleKeys,
   });
 
-  filtered = filtered.filter((r) => {
-    const recNorm = normalizeMealType(r.meal_type);
-    return recNorm !== null && recNorm === slotNorm;
-  });
   const candidatesAfterMealType = filtered.length;
-
-  if (slotNorm === "breakfast") {
-    filtered = filtered.filter((r) => !isSoupLikeTitle(r.title));
-  }
-
-  filtered = filtered.filter((r) => getSanityBlockedReasons(r.title, slotNorm).length === 0);
-
-  for (const r of filtered) {
-    const { pass } = passesProfileFilter(r, memberData);
-    if (!pass) filtered = filtered.filter((x) => x.id !== r.id);
-  }
-  filtered = filtered.filter((r) => passesProfileFilter(r, memberData).pass);
-
-  const afterFiltersCount = filtered.length;
 
   if (filtered.length === 0) {
     if (isDebugPool()) {
@@ -297,7 +387,7 @@ export async function pickRecipeFromPool(
       memberId,
       candidatesFromDb,
       candidatesAfterMealType,
-      afterFiltersCount,
+      afterFiltersCount: filtered.length,
       pickedSource: "db",
       pickedRecipeId: picked.id,
       rejectReason: undefined,

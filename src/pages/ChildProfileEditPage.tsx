@@ -463,6 +463,8 @@ export default function ChildProfileEditPage() {
                             <PreferenceChip
                               label={item.value}
                               variant="allergy"
+                              size="compact"
+                              allowWrap
                               locked={isLocked}
                               onLockedClick={isLocked ? () => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); } : undefined}
                               removable={!isLocked}
@@ -541,7 +543,7 @@ export default function ChildProfileEditPage() {
                     </p>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {LIKES_GHOST_CHIPS.map((chip) => (
-                        <PreferenceChip key={chip} label={chip} variant="like" />
+                        <PreferenceChip key={chip} label={chip} variant="like" size="compact" />
                       ))}
                     </div>
                     <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border border-border text-muted-foreground">
@@ -593,7 +595,7 @@ export default function ChildProfileEditPage() {
                     </p>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {DISLIKES_GHOST_CHIPS.map((chip) => (
-                        <PreferenceChip key={chip} label={chip} variant="dislike" />
+                        <PreferenceChip key={chip} label={chip} variant="dislike" size="compact" />
                       ))}
                     </div>
                     <div className="mt-3 w-full rounded-xl py-2.5 text-center text-sm font-medium border border-border text-muted-foreground">

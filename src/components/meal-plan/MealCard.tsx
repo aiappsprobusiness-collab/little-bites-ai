@@ -109,6 +109,7 @@ export function MealCard({
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
+  const displayMealLabel = mealTypeLabel ?? meta.label;
   const timeStr = meta.time ? ` · ${meta.time}` : "";
   const ageStr = formatAge(ageMonths ?? null);
   const cookStr = cookTimeMinutes != null ? `${cookTimeMinutes} мин` : "";
@@ -125,7 +126,7 @@ export function MealCard({
       state: {
         fromMealPlan: true,
         preloadedTitle: recipeTitle,
-        mealTypeLabel: mealTypeLabel ?? meta.label,
+        mealTypeLabel: displayMealLabel,
         plannedDate: plannedDate ?? undefined,
         mealType,
         memberId: planMemberId ?? undefined,
@@ -187,7 +188,7 @@ export function MealCard({
         <RecipeCard
           variant="preview"
           header={{
-            mealLabel: meta.label,
+            mealLabel: displayMealLabel,
             cookingTimeMinutes: cookTimeMinutes ?? null,
             title: recipeTitle,
           }}
@@ -273,7 +274,7 @@ export function MealCard({
       )}
     >
       <div className="text-typo-caption text-muted-foreground">
-        {meta.emoji} {meta.label}{timeStr}
+        {meta.emoji} {displayMealLabel}{timeStr}
       </div>
       <div className="text-typo-body font-semibold text-foreground leading-tight">
         {recipeTitle}

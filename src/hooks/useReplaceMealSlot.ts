@@ -7,7 +7,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { resolveUnit } from "@/utils/productUtils";
 import { extractSingleJsonObject } from "@/utils/parseChatRecipes";
-import { normalizeMealType, isSoupLikeTitle, passesProfileFilter, getSanityBlockedReasons, type MemberDataForPool } from "@/utils/recipePool";
+import {
+  normalizeMealType,
+  isSoupLikeTitle,
+  passesProfileFilter,
+  getSanityBlockedReasons,
+  recipeFitsAgeMonthsRow,
+  type MemberDataForPool,
+} from "@/utils/recipePool";
 import { isDebugPlanEnabled } from "@/utils/debugPlan";
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
 
@@ -94,8 +101,8 @@ export function useReplaceMealSlot(
       const slotNorm = normalizeMealType(params.mealType) ?? (params.mealType as "breakfast" | "lunch" | "snack" | "dinner");
       const hasAllergies = Array.isArray(params.memberData?.allergies) && params.memberData.allergies.length > 0;
       const selectFields = hasAllergies
-        ? "id, title, tags, description, meal_type, recipe_ingredients(name, display_text)"
-        : "id, title, tags, description, meal_type";
+        ? "id, title, tags, description, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
+        : "id, title, tags, description, meal_type, min_age_months, max_age_months";
 
       let q = supabase
         .from("recipes")
@@ -106,12 +113,27 @@ export function useReplaceMealSlot(
       const { data: rows, error } = await q;
       if (error || !rows?.length) return null;
 
-      type Row = { id: string; title: string; tags?: string[] | null; description?: string | null; meal_type?: string | null; recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null };
+      type Row = {
+        id: string;
+        title: string;
+        tags?: string[] | null;
+        description?: string | null;
+        meal_type?: string | null;
+        min_age_months?: number | null;
+        max_age_months?: number | null;
+        recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
+      };
       let filtered = rows as Row[];
       filtered = filtered.filter((r) => {
         const recNorm = normalizeMealType(r.meal_type);
         return recNorm === null ? slotNorm === "snack" : recNorm === slotNorm;
       });
+      const ageMonths = params.memberData?.age_months;
+      if (ageMonths != null && ageMonths < 12) {
+        filtered = filtered.filter((r) =>
+          recipeFitsAgeMonthsRow(r.min_age_months ?? null, r.max_age_months ?? null, ageMonths)
+        );
+      }
       if (slotNorm === "breakfast") {
         filtered = filtered.filter((r) => !isSoupLikeTitle(r.title));
       }

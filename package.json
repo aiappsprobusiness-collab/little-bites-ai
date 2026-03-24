@@ -32,6 +32,8 @@
     "scripts:create-test-users": "node scripts/create-test-users.mjs",
     "debug:plan": "node scripts/collect-plan-debug-logs.mjs --mode week --debug",
     "check:migrations": "node scripts/check-migrations-immutable.mjs",
+    "seed:infant:json": "node scripts/generate-infant-seed-json.mjs",
+    "seed:infant:import": "node scripts/import-infant-seed.mjs",
     "check:db-docs": "node scripts/check-db-docs-consistency.mjs",
     "resize:og-onion": "node scripts/resize-og-onion.mjs"
   },

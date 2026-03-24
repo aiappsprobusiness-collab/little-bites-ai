@@ -46,7 +46,13 @@ export function MemberProfileCard({
               {allergies.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {allergies.map((allergy) => (
-                    <PreferenceChip key={allergy} label={normalizeAllergyToken(allergy)} variant="allergy" />
+                    <PreferenceChip
+                      key={allergy}
+                      label={normalizeAllergyToken(allergy)}
+                      variant="allergy"
+                      size="compact"
+                      allowWrap
+                    />
                   ))}
                 </div>
               )}

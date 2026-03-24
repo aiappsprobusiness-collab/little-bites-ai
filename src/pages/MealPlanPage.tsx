@@ -5,7 +5,7 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar as CalendarIcon, Loader2, Sparkles, Plus, ShoppingCart } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMealPlans, mealPlansKey } from "@/hooks/useMealPlans";
 import { useMealPlanMemberData, MEAL_PLAN_MUTED_WEEK_STORAGE_KEY } from "@/hooks/useMealPlanMemberData";
 import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
@@ -18,7 +18,7 @@ import { usePlanGenerationJob, getStoredJobId, setStoredJobId } from "@/hooks/us
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams, Link } from "react-router-dom";
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { PlanProfileHelpBody } from "@/components/plan/PlanModeHint";
@@ -31,7 +31,14 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
-import { normalizeTitleKey } from "@/utils/recipePool";
+import {
+  normalizeTitleKey,
+  pickRecipeFromPool,
+  listFilteredPoolRecipesForPlanSlot,
+  type MemberDataForPool,
+  type MealType,
+} from "@/utils/recipePool";
+import { supabase } from "@/integrations/supabase/client";
 import { Check, Info, Trash2, MoreVertical } from "lucide-react";
 import {
   DropdownMenu,
@@ -72,6 +79,13 @@ import { applyReplaceSlotToPlanCache, applyClearSlotToPlanCache } from "@/utils/
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { consumeJustCreatedMemberId } from "@/services/planFill";
+import {
+  getInfantComplementaryAgeBandU12,
+  infantComplementaryGuidanceExtraText,
+  infantComplementaryIntroSecondLineText,
+  infantComplementaryPickQualificationText,
+  isInfantComplementaryPlanContext,
+} from "@/utils/infantComplementaryPlan";
 import { FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
 import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/WeekPreviewPaywallSheet";
 import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingListFromPlanSheet";
@@ -291,7 +305,87 @@ export default function MealPlanPage() {
   const mealPlanMemberId = isFree && selectedMemberId === "family"
     ? (members[0]?.id ?? undefined)
     : (isFamilyMode ? null : (selectedMemberId || undefined));
+  const isInfantPlanUi = isInfantComplementaryPlanContext({
+    memberId: mealPlanMemberId ?? null,
+    isFamilyMode,
+    ageMonths: selectedMember?.age_months ?? null,
+  });
+  const infantAgeMonths =
+    selectedMember?.age_months != null && Number.isFinite(selectedMember.age_months)
+      ? Math.max(0, Math.round(selectedMember.age_months))
+      : null;
+  const infantAgeBandU12 = useMemo(() => getInfantComplementaryAgeBandU12(infantAgeMonths), [infantAgeMonths]);
   const { memberDataForPlan, starterProfile } = useMealPlanMemberData();
+
+  const infantPoolMemberData = useMemo((): MemberDataForPool | null => {
+    if (!memberDataForPlan || !("age_months" in memberDataForPlan) || memberDataForPlan.age_months == null) return null;
+    return {
+      allergies: memberDataForPlan.allergies,
+      likes: "likes" in memberDataForPlan ? memberDataForPlan.likes : undefined,
+      dislikes: "dislikes" in memberDataForPlan ? memberDataForPlan.dislikes : undefined,
+      age_months: memberDataForPlan.age_months,
+    };
+  }, [memberDataForPlan]);
+
+  const infantPoolAllergiesKey = useMemo(
+    () => JSON.stringify(memberDataForPlan && "allergies" in memberDataForPlan ? memberDataForPlan.allergies ?? [] : []),
+    [memberDataForPlan]
+  );
+  const infantPoolDislikesKey = useMemo(
+    () => JSON.stringify(memberDataForPlan && "dislikes" in memberDataForPlan ? memberDataForPlan.dislikes ?? [] : []),
+    [memberDataForPlan]
+  );
+
+  const infantPoolQueryEnabled = Boolean(user?.id && isInfantPlanUi && infantPoolMemberData);
+
+  const { data: infantBreakfastPoolRows = [], isLoading: infantBreakfastPoolLoading } = useQuery({
+    queryKey: [
+      "infant_plan_pool",
+      "breakfast",
+      user?.id,
+      mealPlanMemberId,
+      infantPoolMemberData?.age_months,
+      infantPoolAllergiesKey,
+      infantPoolDislikesKey,
+    ],
+    queryFn: () =>
+      listFilteredPoolRecipesForPlanSlot({
+        supabase,
+        userId: user!.id,
+        memberId: mealPlanMemberId ?? "",
+        mealType: "breakfast",
+        memberData: infantPoolMemberData,
+        limitCandidates: 150,
+      }),
+    enabled: infantPoolQueryEnabled,
+    staleTime: 120_000,
+  });
+
+  const { data: infantLunchPoolRows = [], isLoading: infantLunchPoolLoading } = useQuery({
+    queryKey: [
+      "infant_plan_pool",
+      "lunch",
+      user?.id,
+      mealPlanMemberId,
+      infantPoolMemberData?.age_months,
+      infantPoolAllergiesKey,
+      infantPoolDislikesKey,
+    ],
+    queryFn: () =>
+      listFilteredPoolRecipesForPlanSlot({
+        supabase,
+        userId: user!.id,
+        memberId: mealPlanMemberId ?? "",
+        mealType: "lunch",
+        memberData: infantPoolMemberData,
+        limitCandidates: 150,
+      }),
+    enabled: infantPoolQueryEnabled,
+    staleTime: 120_000,
+  });
+
+  const infantPoolListsLoading = infantBreakfastPoolLoading || infantLunchPoolLoading;
+  const infantBreakfastPoolCount = infantBreakfastPoolRows.length;
 
   const [mutedWeekKey, setMutedWeekKey] = useState<string | null>(() => {
     if (typeof localStorage === "undefined") return null;
@@ -357,6 +451,10 @@ export default function MealPlanPage() {
   const todayKey = formatLocalDate(new Date());
 
   const initialPlanRanRef = useRef(false);
+  /** Инкремент при каждом запуске клиентского добора прикорма — отмена предыдущего async при смене дня/данных. */
+  const infantClientFillRunRef = useRef(0);
+  /** Один concurrent save на `${dayKey}:${mealType}` — без параллельных replace при моргании запросов. */
+  const infantAutoFillSlotLocksRef = useRef<Set<string>>(new Set());
 
   const [replacingSlotKey, setReplacingSlotKey] = useState<string | null>(null);
   const [poolExhaustedContext, setPoolExhaustedContext] = useState<{ dayKey: string; mealType: string } | null>(null);
@@ -478,7 +576,7 @@ export default function MealPlanPage() {
     }
   }, [location.pathname, searchParams, members, rollingDates, setSelectedMemberId]);
 
-  const { replaceMealSlotAuto, getFreeSwapUsedForDay } = useReplaceMealSlot(
+  const { replaceMealSlotAuto, getFreeSwapUsedForDay, replaceSlotWithRecipe } = useReplaceMealSlot(
     memberIdForPlan,
     { startKey, endKey, hasAccess }
   );
@@ -542,6 +640,9 @@ export default function MealPlanPage() {
   );
 
   const { data: dayMealPlans = [], isLoading, isFetching } = getMealPlansByDate(selectedDate);
+  /** Актуальные планы дня для проверок внутри async автодобора прикорма (избегаем гонок). */
+  const dayMealPlansRef = useRef(dayMealPlans);
+  dayMealPlansRef.current = dayMealPlans;
   const { data: rowExistsData } = getMealPlanRowExists(selectedDate);
 
   const clearSlotAndOpenPoolFallback = useCallback(
@@ -591,6 +692,12 @@ export default function MealPlanPage() {
   /** Последняя генерация завершилась с сообщением «нет рецептов для взрослого» — показываем отдельный empty state. */
   const isAdultNoRecipesEmpty =
     isEmptyDay && !!planJob?.status && planJob.status === "done" && (planJob.error_text ?? "").includes("взрослого профиля");
+
+  const showInfantPoolExhaustedFallback =
+    isInfantPlanUi &&
+    !isAdultNoRecipesEmpty &&
+    !infantPoolListsLoading &&
+    infantBreakfastPoolCount === 0;
 
   const planReadyToastShownRef = useRef(false);
   useEffect(() => {
@@ -688,6 +795,16 @@ export default function MealPlanPage() {
     () => [...new Set([...replaceExcludeTitleKeys, ...(sessionExcludeTitleKeys[selectedDayKey] ?? [])])],
     [replaceExcludeTitleKeys, sessionExcludeTitleKeys, selectedDayKey]
   );
+
+  /** Смена дня: не держим «замену» от предыдущего дня — иначе блокируется ↻ и добор. */
+  useEffect(() => {
+    setReplacingSlotKey(null);
+  }, [selectedDayKey]);
+
+  /** Смена дня: сброс блокировок автодобора прикорма. */
+  useEffect(() => {
+    infantAutoFillSlotLocksRef.current.clear();
+  }, [selectedDayKey]);
 
   const hasDbWeekPlan = weekPlans.some((p) => !p.isStarter);
   const hasAnyWeekPlan = weekPlans.length > 0;
@@ -877,9 +994,34 @@ export default function MealPlanPage() {
     return acc;
   }, {} as Record<string, typeof dayMealPlans[0] | null>);
 
+  /**
+   * Прикорм &lt;12 мес: 4–6 — только основное; 7–8 — второе только если есть в плане;
+   * 9–11 — второй слот, если есть блюдо в плане или есть кандидаты lunch в пуле (UX, без смены Edge).
+   */
+  const infantSlotsForRender = useMemo(() => {
+    if (!isInfantPlanUi) return null;
+    const lunch = mealsByType.lunch;
+    const lunchRecipe = lunch ? getPlannedMealRecipe(lunch) : null;
+    const lunchRecipeId = lunch ? getPlannedMealRecipeId(lunch) : null;
+    const lunchHas = !!(lunch && lunchRecipeId && lunchRecipe?.title);
+    const band = infantAgeBandU12 ?? "7_8";
+    const out: Array<{ id: string; label: string }> = [{ id: "breakfast", label: "Основное блюдо" }];
+    if (band === "4_6") return out;
+    if (band === "7_8") {
+      if (lunchHas) out.push({ id: "lunch", label: "Второе блюдо" });
+      return out;
+    }
+    if (lunchHas || infantLunchPoolRows.length > 0) {
+      out.push({ id: "lunch", label: "Второе блюдо" });
+    }
+    return out;
+  }, [isInfantPlanUi, mealsByType, infantAgeBandU12, infantLunchPoolRows]);
+
+  const planSlotsForRender = isInfantPlanUi && infantSlotsForRender ? infantSlotsForRender : mealTypes;
+
   /** Первый пустой слот по порядку завтрак → ужин: PRIMARY empty UI; остальные пустые — SECONDARY (пересчитывается при заполнении). */
   const firstEmptySlotId = useMemo(() => {
-    for (const slot of mealTypes) {
+    for (const slot of planSlotsForRender) {
       const plannedMeal = mealsByType[slot.id];
       const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
       const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
@@ -887,7 +1029,193 @@ export default function MealPlanPage() {
       if (!hasDish) return slot.id;
     }
     return null;
-  }, [mealsByType, mealTypes]);
+  }, [mealsByType, planSlotsForRender]);
+
+  /** Сводка слотов выбранного дня — в deps автодобора вместо всего dayMealPlans (меньше лишних перезапусков и моргания). */
+  const infantDaySlotsSignature = useMemo(
+    () =>
+      dayMealPlans
+        .filter((p) => p.planned_date === selectedDayKey)
+        .map((p) => `${p.meal_type}:${p.recipe_id ?? ""}`)
+        .sort()
+        .join("|"),
+    [dayMealPlans, selectedDayKey]
+  );
+
+  /**
+   * Прикорм &lt;12: пустые слоты выбранного дня добираем из клиентского пула (как «Показать другой вариант», без Edge).
+   * После удаления блюда / перехода на день без recipe_id в expand — подбор снова запускается.
+   */
+  useEffect(() => {
+    if (!isInfantPlanUi || !user?.id || !infantPoolMemberData || !mealPlanMemberId) return;
+    if (showInfantPoolExhaustedFallback) return;
+    if (infantPoolListsLoading) return;
+    if (isLoading || isFetching) return;
+
+    const slots = infantSlotsForRender;
+    if (!slots?.length) return;
+
+    const emptySlots = slots.filter((slot) => {
+      const plannedMeal = dayMealPlans.find(
+        (p) => p.planned_date === selectedDayKey && p.meal_type === slot.id
+      );
+      if (!plannedMeal) return true;
+      const recipe = getPlannedMealRecipe(plannedMeal);
+      const rid = getPlannedMealRecipeId(plannedMeal);
+      return !(rid && recipe?.title);
+    });
+    if (emptySlots.length === 0) return;
+
+    const runId = ++infantClientFillRunRef.current;
+    let cancelled = false;
+
+    void (async () => {
+      const filledRecipeIds: string[] = [];
+      const filledTitleKeys: string[] = [];
+
+      for (const slot of emptySlots) {
+        if (cancelled || runId !== infantClientFillRunRef.current) return;
+
+        const baseExcludeIds = [...new Set([...replaceExcludeRecipeIdsMerged, ...filledRecipeIds])];
+        const baseExcludeKeys = [...new Set([...replaceExcludeTitleKeysMerged, ...filledTitleKeys])];
+
+        let candidatesAfterFilter: number | null = null;
+        if (import.meta.env.DEV || isPlanDebug()) {
+          const listed = await listFilteredPoolRecipesForPlanSlot({
+            supabase,
+            userId: user.id,
+            memberId: mealPlanMemberId,
+            mealType: slot.id as MealType,
+            memberData: infantPoolMemberData,
+            excludeRecipeIds: baseExcludeIds,
+            excludeTitleKeys: baseExcludeKeys,
+            limitCandidates: 150,
+          });
+          candidatesAfterFilter = listed.length;
+        }
+
+        let picked = await pickRecipeFromPool({
+          supabase,
+          userId: user.id,
+          memberId: mealPlanMemberId,
+          mealType: slot.id as MealType,
+          memberData: infantPoolMemberData,
+          excludeRecipeIds: baseExcludeIds,
+          excludeTitleKeys: baseExcludeKeys,
+          limitCandidates: 150,
+        });
+        let usedRelaxedExcludes = false;
+        if (!picked) {
+          usedRelaxedExcludes = true;
+          picked = await pickRecipeFromPool({
+            supabase,
+            userId: user.id,
+            memberId: mealPlanMemberId,
+            mealType: slot.id as MealType,
+            memberData: infantPoolMemberData,
+            excludeRecipeIds: [],
+            excludeTitleKeys: [],
+            limitCandidates: 200,
+          });
+        }
+
+        if (import.meta.env.DEV || isPlanDebug()) {
+          console.log("[infant_plan_fill]", {
+            slot: slot.id,
+            day_key: selectedDayKey,
+            age_months: infantPoolMemberData.age_months,
+            usedRecipeIds: baseExcludeIds,
+            candidatesAfterFilter,
+            pickedId: picked?.id ?? null,
+            usedRelaxedExcludes: usedRelaxedExcludes && !!picked,
+          });
+        }
+
+        if (!picked) continue;
+
+        if (cancelled || runId !== infantClientFillRunRef.current) return;
+
+        const lockKey = `${selectedDayKey}:${slot.id}`;
+        if (infantAutoFillSlotLocksRef.current.has(lockKey)) continue;
+
+        const cur = dayMealPlansRef.current.find(
+          (p) => p.planned_date === selectedDayKey && p.meal_type === slot.id
+        );
+        const curRecipe = cur ? getPlannedMealRecipe(cur) : null;
+        const curRid = cur ? getPlannedMealRecipeId(cur) : null;
+        if (cur && curRid && curRecipe?.title) continue;
+
+        infantAutoFillSlotLocksRef.current.add(lockKey);
+        try {
+          await replaceSlotWithRecipe({
+            dayKey: selectedDayKey,
+            mealType: slot.id,
+            recipeId: picked.id,
+            recipeTitle: picked.title,
+          });
+        } catch (e: unknown) {
+          if (!cancelled && runId === infantClientFillRunRef.current) {
+            toast({
+              variant: "destructive",
+              title: "Не удалось сохранить блюдо",
+              description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+            });
+          }
+          return;
+        } finally {
+          infantAutoFillSlotLocksRef.current.delete(lockKey);
+        }
+
+        if (cancelled || runId !== infantClientFillRunRef.current) return;
+
+        applyReplaceSlotToPlanCache(
+          queryClient,
+          { mealPlansKeyWeek, mealPlansKeyDay },
+          {
+            dayKey: selectedDayKey,
+            mealType: slot.id,
+            newRecipeId: picked.id,
+            title: picked.title,
+            plan_source: "pool",
+          },
+          mealPlanMemberId ?? null
+        );
+        filledRecipeIds.push(picked.id);
+        filledTitleKeys.push(normalizeTitleKey(picked.title));
+        setSessionExcludeRecipeIds((prev) => ({
+          ...prev,
+          [selectedDayKey]: [...(prev[selectedDayKey] ?? []), picked.id],
+        }));
+        setSessionExcludeTitleKeys((prev) => ({
+          ...prev,
+          [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(picked.title)],
+        }));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isInfantPlanUi,
+    user?.id,
+    infantPoolMemberData,
+    mealPlanMemberId,
+    showInfantPoolExhaustedFallback,
+    infantPoolListsLoading,
+    isLoading,
+    isFetching,
+    infantSlotsForRender,
+    infantDaySlotsSignature,
+    selectedDayKey,
+    replaceExcludeRecipeIdsMerged,
+    replaceExcludeTitleKeysMerged,
+    replaceSlotWithRecipe,
+    queryClient,
+    mealPlansKeyWeek,
+    mealPlansKeyDay,
+    toast,
+  ]);
 
   const planDebug = isPlanDebug();
 
@@ -973,7 +1301,7 @@ export default function MealPlanPage() {
         {/* Content wrapper: один скролл + subtle pattern; горизонтальный скролл/overscroll отключены */}
         <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-x-none">
           {/* Блок приглашения к шарингу после первой генерации */}
-          {justCreatedMemberId && !firstPlanShareBannerDismissed && (
+          {justCreatedMemberId && !firstPlanShareBannerDismissed && !isInfantPlanUi && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1022,9 +1350,38 @@ export default function MealPlanPage() {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <h2 className="text-lg font-semibold text-foreground leading-tight tracking-tight text-balance">
-                  {formatDayHeader(selectedDate)}
+                  {isInfantPlanUi ? "Прикорм на сегодня" : formatDayHeader(selectedDate)}
                 </h2>
-                {members.length > 0 && (
+                {isInfantPlanUi ? (
+                  <p className="text-sm text-muted-foreground mt-1">{formatDayHeader(selectedDate)}</p>
+                ) : null}
+                {isInfantPlanUi && members.length > 0 ? (
+                  <div className="mt-2 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
+                    <MemberSelectorButton
+                      className="max-w-full"
+                      disabled={isAnyGenerating}
+                      leadingEmoji="👶"
+                      fitLabelWidth
+                    />
+                  </div>
+                ) : null}
+                {isInfantPlanUi ? (
+                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                    В этом возрасте основное питание — грудное молоко или смесь.{" "}
+                    {infantComplementaryIntroSecondLineText(infantAgeBandU12 ?? "7_8")}
+                  </p>
+                ) : null}
+                {isInfantPlanUi ? (
+                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                    Сегодня мы подобрали подходящий вариант прикорма для вашего малыша.
+                  </p>
+                ) : null}
+                {isInfantPlanUi ? (
+                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                    {infantComplementaryPickQualificationText(infantAgeBandU12 ?? "7_8")}
+                  </p>
+                ) : null}
+                {members.length > 0 && !isInfantPlanUi ? (
                   <div className="mt-3 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
                     <MemberSelectorButton className="shrink-0" disabled={isAnyGenerating} />
                     <PlanGoalCompactSheet
@@ -1042,7 +1399,7 @@ export default function MealPlanPage() {
                       }}
                     />
                   </div>
-                )}
+                ) : null}
                 {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
                   <span className="text-xs text-slate-500">DB: {dayDbCount} | AI: {dayAiCount}</span>
                 )}
@@ -1079,7 +1436,7 @@ export default function MealPlanPage() {
                         Как учитывается профиль
                       </DropdownMenuItem>
                     )}
-                    {hasAccess && (
+                    {hasAccess && !isInfantPlanUi && (
                       <DropdownMenuItem
                         onClick={() => openShareWeekPreview()}
                         disabled={isAnyGenerating || isWeekPlansLoading}
@@ -1123,131 +1480,133 @@ export default function MealPlanPage() {
                 </DropdownMenu>
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-border/15 space-y-2.5">
-              <Button
-                size="sm"
-                className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.18)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
-                disabled={isAnyGenerating || (isFree && todayIndex < 0)}
-                onClick={async () => {
-                  if (isAnyGenerating) return;
-                  trackUsageEvent("plan_fill_day_click");
-                  if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
-                  setPoolUpgradeLoading(true);
-                  try {
-                    const result = await runPoolUpgrade({
-                      type: "day",
-                      member_id: memberIdForPlan,
-                      member_data: memberDataForPlan,
-                      day_key: selectedDayKey,
-                      day_keys: dayKeys,
-                      ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
-                    });
-                    trackUsageEvent("plan_fill_day_success");
-                    await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                    const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
-                    const total = result.totalSlots ?? 4;
-                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                      showPartialFillToast(toast, navigate, { filled, total });
-                    } else {
-                      const planReadyT = toast({
-                        title: "Меню на сегодня готово",
-                        description: `Подобрано: ${filled} из ${total}`,
+            {!isInfantPlanUi ? (
+              <div className="mt-4 pt-3 border-t border-border/15 space-y-2.5">
+                <Button
+                  size="sm"
+                  className={`h-11 w-full flex items-center justify-center gap-2 rounded-xl bg-primary bg-gradient-to-b from-white/10 to-transparent hover:opacity-90 text-white border-0 transition-all duration-150 ${ctaGlow ? "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2),0_0_0_3px_rgba(110,127,59,0.18)]" : "shadow-[0_2px_4px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.2)]"} active:translate-y-px active:shadow-[0_1px_2px_rgba(0,0,0,0.05)]`}
+                  disabled={isAnyGenerating || (isFree && todayIndex < 0)}
+                  onClick={async () => {
+                    if (isAnyGenerating) return;
+                    trackUsageEvent("plan_fill_day_click");
+                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
+                    setPoolUpgradeLoading(true);
+                    try {
+                      const result = await runPoolUpgrade({
+                        type: "day",
+                        member_id: memberIdForPlan,
+                        member_data: memberDataForPlan,
+                        day_key: selectedDayKey,
+                        day_keys: dayKeys,
+                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
                       });
-                      setTimeout(() => planReadyT.dismiss(), 2000);
+                      trackUsageEvent("plan_fill_day_success");
+                      await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
+                      const total = result.totalSlots ?? 4;
+                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                        showPartialFillToast(toast, navigate, { filled, total });
+                      } else {
+                        const planReadyT = toast({
+                          title: "Меню на сегодня готово",
+                          description: `Подобрано: ${filled} из ${total}`,
+                        });
+                        setTimeout(() => planReadyT.dismiss(), 2000);
+                      }
+                    } catch (e: unknown) {
+                      trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
+                      const raw = e instanceof Error ? e.message : "Не удалось заполнить день";
+                      const msg = planErrorMessage(raw, "Не удалось заполнить день");
+                      if (msg === "LIMIT_REACHED") {
+                        /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                      } else if (msg === "member_id_required") {
+                        toast({ description: "Выберите профиль ребёнка вверху" });
+                      } else if (msg.includes("слишком много времени")) {
+                        showPartialFillToast(toast, navigate, {});
+                      } else {
+                        toast({ variant: "destructive", title: "Ошибка", description: msg });
+                      }
+                    } finally {
+                      setPoolUpgradeLoading(false);
                     }
-                  } catch (e: unknown) {
-                    trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
-                    const raw = e instanceof Error ? e.message : "Не удалось заполнить день";
-                    const msg = planErrorMessage(raw, "Не удалось заполнить день");
-                    if (msg === "LIMIT_REACHED") {
-                      /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
-                    } else if (msg === "member_id_required") {
-                      toast({ description: "Выберите профиль ребёнка вверху" });
-                    } else if (msg.includes("слишком много времени")) {
-                      showPartialFillToast(toast, navigate, {});
-                    } else {
-                      toast({ variant: "destructive", title: "Ошибка", description: msg });
+                  }}
+                >
+                  <Sparkles className="w-[18px] h-[18px] shrink-0" />
+                  {isAnyGenerating ? "Собираем…" : "Собрать день"}
+                </Button>
+                <button
+                  type="button"
+                  disabled={!isFree && isAnyGenerating}
+                  className={cn(
+                    "w-full flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0 py-2 text-xs font-normal transition-colors",
+                    "text-muted-foreground hover:text-foreground underline-offset-4 hover:underline",
+                    "disabled:opacity-50 disabled:pointer-events-none disabled:no-underline",
+                  )}
+                  onClick={async () => {
+                    if (isFree) {
+                      if (FF_WEEK_PAYWALL_PREVIEW) {
+                        setShowWeekPreviewSheet(true);
+                      } else {
+                        setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
+                        setShowPaywall(true);
+                      }
+                      return;
                     }
-                  } finally {
-                    setPoolUpgradeLoading(false);
-                  }
-                }}
-              >
-                <Sparkles className="w-[18px] h-[18px] shrink-0" />
-                {isAnyGenerating ? "Собираем…" : "Собрать день"}
-              </Button>
-              <button
-                type="button"
-                disabled={!isFree && isAnyGenerating}
-                className={cn(
-                  "w-full flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0 py-2 text-xs font-normal transition-colors",
-                  "text-muted-foreground hover:text-foreground underline-offset-4 hover:underline",
-                  "disabled:opacity-50 disabled:pointer-events-none disabled:no-underline",
-                )}
-                onClick={async () => {
-                  if (isFree) {
-                    if (FF_WEEK_PAYWALL_PREVIEW) {
-                      setShowWeekPreviewSheet(true);
-                    } else {
-                      setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
-                      setShowPaywall(true);
+                    if (isAnyGenerating) {
+                      toast({ description: "Идёт подбор рецептов, подождите…" });
+                      return;
                     }
-                    return;
-                  }
-                  if (isAnyGenerating) {
-                    toast({ description: "Идёт подбор рецептов, подождите…" });
-                    return;
-                  }
-                  if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
-                  setPoolUpgradeLoading(true);
-                  try {
-                    const result = await runPoolUpgrade({
-                      type: "week",
-                      member_id: memberIdForPlan,
-                      member_data: memberDataForPlan,
-                      start_key: getRollingStartKey(),
-                      day_keys: getRollingDayKeys(),
-                      ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
-                    });
-                    setMutedWeekKeyAndStorage(null);
-                    await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-                    const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
-                    const total = result.totalSlots ?? 28;
-                    if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                      showPartialFillToast(toast, navigate, { filled, total });
-                    } else {
-                      toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
+                    if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "week" });
+                    setPoolUpgradeLoading(true);
+                    try {
+                      const result = await runPoolUpgrade({
+                        type: "week",
+                        member_id: memberIdForPlan,
+                        member_data: memberDataForPlan,
+                        start_key: getRollingStartKey(),
+                        day_keys: getRollingDayKeys(),
+                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
+                      });
+                      setMutedWeekKeyAndStorage(null);
+                      await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
+                      const total = result.totalSlots ?? 28;
+                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
+                        showPartialFillToast(toast, navigate, { filled, total });
+                      } else {
+                        toast({ title: "Заполнить всю неделю", description: `Подобрано: ${filled} из ${total}` });
+                      }
+                    } catch (e: unknown) {
+                      const raw = e instanceof Error ? e.message : "Не удалось заполнить неделю";
+                      const msg = planErrorMessage(raw, "Не удалось заполнить неделю");
+                      if (msg === "LIMIT_REACHED") {
+                        /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
+                      } else if (msg === "member_id_required") {
+                        toast({ description: "Выберите профиль ребёнка вверху" });
+                      } else if (msg.includes("слишком много времени")) {
+                        showPartialFillToast(toast, navigate, {});
+                      } else {
+                        toast({ variant: "destructive", title: "Ошибка", description: msg });
+                      }
+                    } finally {
+                      setPoolUpgradeLoading(false);
                     }
-                  } catch (e: unknown) {
-                    const raw = e instanceof Error ? e.message : "Не удалось заполнить неделю";
-                    const msg = planErrorMessage(raw, "Не удалось заполнить неделю");
-                    if (msg === "LIMIT_REACHED") {
-                      /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
-                    } else if (msg === "member_id_required") {
-                      toast({ description: "Выберите профиль ребёнка вверху" });
-                    } else if (msg.includes("слишком много времени")) {
-                      showPartialFillToast(toast, navigate, {});
-                    } else {
-                      toast({ variant: "destructive", title: "Ошибка", description: msg });
-                    }
-                  } finally {
-                    setPoolUpgradeLoading(false);
-                  }
-                }}
-              >
-                {isFree ? (
-                  <>
-                    <span className="text-[13px] leading-none select-none" aria-hidden>
-                      🔒
-                    </span>
+                  }}
+                >
+                  {isFree ? (
+                    <>
+                      <span className="text-[13px] leading-none select-none" aria-hidden>
+                        🔒
+                      </span>
+                      <span>Собрать неделю</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/75">Premium</span>
+                    </>
+                  ) : (
                     <span>Собрать неделю</span>
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/75">Premium</span>
-                  </>
-                ) : (
-                  <span>Собрать неделю</span>
-                )}
-              </button>
-            </div>
+                  )}
+                </button>
+              </div>
+            ) : null}
           </motion.div>
 
           {/* 2) Чипсы дней — горизонтальный скролл только внутри этого блока, страница по X не двигается */}
@@ -1331,13 +1690,46 @@ export default function MealPlanPage() {
           )}
 
           {/* 3) Приёмы пищи: loader при загрузке/refetch, иначе empty state или слоты (единый источник: dayMealPlans) */}
-          {isLoading || isFetching ? (
+          {isLoading || isFetching || (isInfantPlanUi && !isAdultNoRecipesEmpty && infantPoolListsLoading) ? (
             <div className="mt-3 space-y-4 pb-4">
-              {mealTypes.map((slot) => (
+              {(isInfantPlanUi
+                ? infantAgeBandU12 === "4_6"
+                  ? [{ id: "sk1" }]
+                  : [
+                      { id: "sk1" },
+                      { id: "sk2" },
+                    ]
+                : mealTypes
+              ).map((slot) => (
                 <MealCardSkeleton key={slot.id} />
               ))}
             </div>
-          ) : isEmptyDay ? (
+          ) : showInfantPoolExhaustedFallback ? (
+            <>
+              <div className="mt-3 rounded-2xl border border-border/50 bg-primary/[0.04] p-4 space-y-3">
+                <p className="text-sm text-foreground leading-relaxed">
+                  Пока нет подходящих вариантов для этого возраста.
+                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Попробуйте позже или откройте раздел «Помощь маме».
+                </p>
+                <Link
+                  to="/sos"
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline inline-flex min-h-[44px] items-center gap-1"
+                >
+                  Помощь маме
+                </Link>
+              </div>
+              <div className="mt-4 space-y-3 px-0 pb-1">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {infantComplementaryGuidanceExtraText(infantAgeBandU12)}
+                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Новый продукт лучше вводить постепенно и наблюдать за реакцией малыша.
+                </p>
+              </div>
+            </>
+          ) : isEmptyDay && !(isInfantPlanUi && !isAdultNoRecipesEmpty) ? (
             <div className="mt-2 rounded-2xl border border-primary-border/60 bg-primary-light/30 p-4 text-center">
               <p className="text-4xl mb-1.5" aria-hidden>{isAdultNoRecipesEmpty ? "📋" : "✨"}</p>
               <h3 className="text-plan-hero-title font-semibold text-foreground mb-1">
@@ -1369,7 +1761,8 @@ export default function MealPlanPage() {
                   <Plus className="w-4 h-4 mr-1.5 shrink-0" />
                   Сгенерировать в чате
                 </Button>
-                ) : (
+                ) : !isInfantPlanUi ? (
+                  <>
                   <Button
                     size="sm"
                     className="rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-soft"
@@ -1413,14 +1806,13 @@ export default function MealPlanPage() {
                           toast({ variant: "destructive", title: "Ошибка", description: msg });
                         }
                       } finally {
-                          setPoolUpgradeLoading(false);
-                        }
+                        setPoolUpgradeLoading(false);
+                      }
                     }}
                   >
                     <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
                     Собрать день
                   </Button>
-                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -1441,12 +1833,14 @@ export default function MealPlanPage() {
                   <Plus className="w-4 h-4 mr-1.5 shrink-0" />
                   {isAdultNoRecipesEmpty ? "Сгенерировать в чате" : "Подобрать рецепт"}
                 </Button>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : (
             <>
             <div className="mt-3 space-y-4 pb-4">
-              {mealTypes.map((slot) => {
+              {planSlotsForRender.map((slot) => {
                 const plannedMeal = mealsByType[slot.id];
                 const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
                 const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
@@ -1455,6 +1849,7 @@ export default function MealPlanPage() {
                 return (
                   <div key={slot.id}>
                     {hasDish ? (
+                      <>
                       <MealCard
                         mealType={plannedMeal!.meal_type}
                         recipeTitle={recipe!.title}
@@ -1471,7 +1866,7 @@ export default function MealPlanPage() {
                         proteins={previews[recipeId!]?.proteins}
                         fats={previews[recipeId!]?.fats}
                         carbs={previews[recipeId!]?.carbs}
-                        nutritionGoals={previews[recipeId!]?.nutrition_goals ?? []}
+                        nutritionGoals={isInfantPlanUi ? [] : (previews[recipeId!]?.nutrition_goals ?? [])}
                         isFavorite={isFavoriteForPlan(recipeId!, memberIdForPlan)}
                         onToggleFavorite={async (rid, next) => {
                           const p = previews[rid];
@@ -1639,6 +2034,7 @@ export default function MealPlanPage() {
                           }
                         } : undefined}
                       />
+                      </>
                     ) : isLoading || isAnyGenerating || replacingSlotKey === `${selectedDayKey}_${slot.id}` ? (
                       <MealCardSkeleton />
                     ) : (
@@ -1659,15 +2055,22 @@ export default function MealPlanPage() {
                         >
                           {slot.label}
                         </span>
-                        <p
-                          className={cn(
-                            "text-sm font-semibold leading-snug",
-                            isPrimaryEmpty ? "text-foreground" : "text-muted-foreground"
-                          )}
-                        >
-                          Блюдо не выбрано
-                        </p>
-                        {!isAnyGenerating && (
+                        {isInfantPlanUi ? (
+                          <p className="text-sm text-foreground/90 leading-relaxed flex items-start gap-2.5 pr-1">
+                            <Loader2 className="w-4 h-4 shrink-0 mt-0.5 animate-spin text-primary/60" aria-hidden />
+                            <span>Мы подбираем подходящий вариант прикорма…</span>
+                          </p>
+                        ) : (
+                          <p
+                            className={cn(
+                              "text-sm font-semibold leading-snug",
+                              isPrimaryEmpty ? "text-foreground" : "text-muted-foreground"
+                            )}
+                          >
+                            Блюдо не выбрано
+                          </p>
+                        )}
+                        {!isAnyGenerating && !isInfantPlanUi && (
                           <button
                             type="button"
                             className={cn(
@@ -1782,8 +2185,25 @@ export default function MealPlanPage() {
                 );
               })}
             </div>
+            {isInfantPlanUi && !isAdultNoRecipesEmpty ? (
+              <div className="mt-4 space-y-3 px-0 pb-1">
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {infantComplementaryGuidanceExtraText(infantAgeBandU12)}
+                </p>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Новый продукт лучше вводить постепенно и наблюдать за реакцией малыша.
+                </p>
+                <Link
+                  to="/sos"
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline inline-flex items-center gap-1 min-h-[44px]"
+                >
+                  Помощь маме
+                </Link>
+              </div>
+            ) : null}
             {/* Зона под блюдами: заметная CTA + запас снизу, чтобы не сливаться с таббаром */}
             <div className="mt-3 space-y-3 pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))]">
+              {!isInfantPlanUi ? (
               <motion.div
                 className="w-full"
                 whileTap={isAnyGenerating || !user ? undefined : { scale: 0.97 }}
@@ -1808,7 +2228,8 @@ export default function MealPlanPage() {
                   Собрать список продуктов
                 </Button>
               </motion.div>
-              {dayHasShareableMeals && (
+              ) : null}
+              {!isInfantPlanUi && dayHasShareableMeals && (
                 <div className="flex flex-col items-stretch gap-0.5">
                   <Button
                     variant="ghost"
@@ -1825,7 +2246,7 @@ export default function MealPlanPage() {
                 </div>
               )}
             {/* Карточка «Спросить в чате» — только Free, план уже сгенерирован */}
-            {isFree && (
+            {!isInfantPlanUi && isFree && (
               <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -1856,6 +2277,7 @@ export default function MealPlanPage() {
             missingDayKeys.length === 1 &&
             missingDayKeys[0] === endKey &&
             !isFree &&
+            !isInfantPlanUi &&
             !isAnyGenerating && (
               <div className="mt-4 flex flex-col gap-1">
                 <p className="text-typo-caption text-muted-foreground">Последний день без плана</p>

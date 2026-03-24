@@ -19,6 +19,7 @@ export type MealPlanMemberDataForEdge = {
   allergies: string[];
   likes: string[];
   dislikes: string[];
+  /** Не подставлять 0 при отсутствии возраста — иначе Edge считает профиль «младенческим». */
   age_months?: number;
 };
 
@@ -67,7 +68,9 @@ export function useMealPlanMemberData(): {
       const m = memberForPlan as { allergies?: string[]; likes?: string[]; dislikes?: string[]; type?: string };
       return {
         name: memberForPlan.name,
-        age_months: memberForPlan.age_months ?? 0,
+        ...(memberForPlan.age_months != null && Number.isFinite(memberForPlan.age_months)
+          ? { age_months: Math.max(0, Math.round(memberForPlan.age_months)) }
+          : {}),
         type: m.type ?? "child",
         allergies: m.allergies ?? [],
         likes: m.likes ?? [],

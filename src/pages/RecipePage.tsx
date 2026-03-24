@@ -540,6 +540,8 @@ export default function RecipePage() {
     goals: nutritionGoals,
     title: recipeDisplay.title ?? "",
   });
+  const dbDescription = (recipeDisplay.description ?? "").trim();
+  const heroDescription = dbDescription.length > 0 ? dbDescription : benefitDescription;
   const recipeNutrition =
     (recipe as { calories?: number | null; proteins?: number | null; fats?: number | null; carbs?: number | null }).calories != null ||
     (recipe as { proteins?: number | null }).proteins != null ||
@@ -612,7 +614,7 @@ export default function RecipePage() {
                   <span>{benefitLabel}</span>
                 </p>
               )}
-              <p className="text-sm text-muted-foreground leading-[1.6]">{benefitDescription}</p>
+              <p className="text-sm text-muted-foreground leading-[1.6]">{heroDescription}</p>
               <NutritionGoalsChips goals={nutritionGoals} className="mt-1" />
             </div>
           </div>

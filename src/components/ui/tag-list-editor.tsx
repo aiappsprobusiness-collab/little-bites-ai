@@ -88,6 +88,8 @@ export function TagListEditor({
                   <PreferenceChip
                     label={item}
                     variant={chipVariant}
+                    size="compact"
+                    allowWrap
                     removable
                     onRemove={() => onRemove(i)}
                   />

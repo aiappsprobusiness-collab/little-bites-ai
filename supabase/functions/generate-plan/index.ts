@@ -834,6 +834,141 @@ function pickBestRecipeForSlotWithGoalScoring(
   };
 }
 
+/** Один профиль ребёнка &lt; 12 мес (не «Семья»): упрощённый прикорм из пула, без четырёх слотов. */
+function isInfantComplementaryPlan(memberData: MemberDataPool | null, memberId: string | null): boolean {
+  if (memberId == null) return false;
+  const t = (memberData?.type ?? "").toLowerCase();
+  if (t === "adult" || t === "family") return false;
+  const age = memberData?.age_months;
+  if (age == null || !Number.isFinite(Number(age))) return false;
+  return Math.max(0, Math.round(Number(age))) < 12;
+}
+
+function infantSeedHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h) + s.charCodeAt(i);
+  return Math.abs(h);
+}
+
+/** 4–6 мес → 1 блюдо; 7–8 → 1 или 2; 9–11 → чаще 2 (детерминированно от dayKey). */
+function getInfantComplementaryDishCount(ageMonths: number, dayKey: string, memberId: string | null): number {
+  if (ageMonths < 4) return 1;
+  if (ageMonths <= 6) return 1;
+  if (ageMonths <= 8) {
+    return (infantSeedHash(`${dayKey}|${memberId ?? ""}|c1`) % 2) === 0 ? 1 : 2;
+  }
+  return (infantSeedHash(`${dayKey}|${memberId ?? ""}|c2`) % 10) < 8 ? 2 : 1;
+}
+
+function filterInfantComplementaryCandidates(
+  pool: RecipeRowPool[],
+  memberData: MemberDataPool | null,
+  excludeRecipeIds: string[],
+  excludeTitleKeys: string[],
+): RecipeRowPool[] {
+  const excludeSet = new Set(excludeRecipeIds);
+  const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
+  const ageContext = getMemberAgeContext(memberData);
+  let filtered = pool.filter((r) => !excludeSet.has(r.id));
+  filtered = filtered.filter((r) => !excludeTitleSet.has(normalizeTitleKey(r.title ?? "")));
+  if (ageContext.applyFilter && ageContext.ageMonths != null) {
+    const am = ageContext.ageMonths;
+    filtered = filtered.filter((r) => recipeFitsAgeRange(r, am));
+    filtered = filtered.filter((r) => !recipeBlockedByInfantKeywords(r, am));
+  }
+  if (isAdultContext(memberData)) {
+    filtered = filtered.filter((r) => r.max_age_months == null || r.max_age_months > 12);
+  }
+  filtered = filtered.filter((r) => {
+    const { resolved } = getResolvedMealType(r);
+    return resolved !== null && resolved !== "dinner";
+  });
+  filtered = filtered.filter((r) => passesProfileFilter(r, memberData));
+  filtered = filtered.filter((r) => {
+    const { resolved } = getResolvedMealType(r);
+    if (resolved === null) return false;
+    const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
+    return slotSanityCheck(resolved, [r.title ?? "", r.description ?? "", ing].join(" "));
+  });
+  return filtered;
+}
+
+function pickInfantComplementaryFromPool(
+  pool: RecipeRowPool[],
+  memberData: MemberDataPool | null,
+  excludeRecipeIds: string[],
+  excludeTitleKeys: string[],
+  usedBaseCounts: Record<string, number> | undefined,
+  goalHints: {
+    preferredGoals?: Set<string>;
+    blockedGoals?: Set<string>;
+    requireBalanced?: boolean;
+    selectedGoalForScoring?: string;
+    dayGoalUsage?: Record<string, number>;
+    familyScoring?: FamilyScoringContext | null;
+    planPickDebug?: { day_key?: string; request_id?: string };
+    culturalSummaryAccumulator?: CulturalSummaryAccumulator | null;
+  },
+): {
+  id: string;
+  title: string;
+  primaryBase: string;
+  goalBonus: number;
+  ageBonus: number;
+  softBonus: number;
+  culturalFamiliarityKey: CulturalFamiliarityCountKey;
+} | null {
+  const work = filterInfantComplementaryCandidates(pool, memberData, excludeRecipeIds, excludeTitleKeys);
+  if (work.length === 0) return null;
+  const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
+  const ctx: ScoreRecipeCtx = {
+    recentSignatures,
+    usedBaseCounts,
+    preferredGoals: goalHints.preferredGoals,
+    blockedGoals: goalHints.blockedGoals,
+    requireBalanced: goalHints.requireBalanced,
+  };
+  const scoredPick = pickBestRecipeForSlotWithGoalScoring(
+    work,
+    ctx,
+    goalHints.selectedGoalForScoring,
+    goalHints.dayGoalUsage,
+    goalHints.familyScoring,
+    { includeCulturalComparison: debugCulturalPlan() },
+  );
+  if (!scoredPick) return null;
+  const best = scoredPick.r;
+  const primaryBase = inferPrimaryBase(best);
+  const winnerKey = culturalFamiliarityCountKey(best.familiarity);
+  return {
+    id: best.id,
+    title: best.title,
+    primaryBase,
+    goalBonus: scoredPick.goalBonus,
+    ageBonus: scoredPick.ageBonus,
+    softBonus: scoredPick.softBonus,
+    culturalFamiliarityKey: winnerKey,
+  };
+}
+
+function applyPickedRecipeGoalsToDayWeek(
+  recipeId: string,
+  pool: RecipeRowPool[],
+  dayGoalCounts: Record<string, number>,
+  weekGoalCounts: Record<string, number>,
+): void {
+  const pickedGoals = normalizeNutritionGoals(pool.find((r) => r.id === recipeId)?.nutrition_goals);
+  if (pickedGoals.length === 0) {
+    dayGoalCounts.balanced = (dayGoalCounts.balanced ?? 0) + 1;
+    weekGoalCounts.balanced = (weekGoalCounts.balanced ?? 0) + 1;
+  } else {
+    for (const g of pickedGoals) {
+      dayGoalCounts[g] = (dayGoalCounts[g] ?? 0) + 1;
+      weekGoalCounts[g] = (weekGoalCounts[g] ?? 0) + 1;
+    }
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -919,14 +1054,15 @@ serve(async (req) => {
         replaceMemberData = buildFamilyMemberDataForPlan(membersList);
         replaceMembersForScoring = membersList;
       } else {
-        const { data: memberRow } = await supabase.from("members").select("age_months, allergies, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
-        const m = memberRow as { age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null } | null;
+        const { data: memberRow } = await supabase.from("members").select("age_months, allergies, dislikes, type").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
+        const m = memberRow as { age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null; type?: string | null } | null;
         if (m) {
           replaceMemberData = {
             ...(memberData ?? {}),
             age_months: m.age_months ?? memberData?.age_months,
             allergies: Array.isArray(m.allergies) && m.allergies.length > 0 ? m.allergies : (memberData?.allergies ?? []),
             dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
+            type: m.type ?? memberData?.type,
           };
           replaceMembersForScoring = [{ age_months: m.age_months ?? memberData?.age_months ?? null }];
         } else if (memberData?.age_months != null) {
@@ -955,9 +1091,26 @@ serve(async (req) => {
         planPickDebug: { day_key: dayKey, request_id: "replace_slot" },
         culturalSummaryAccumulator: replaceCulturalSummaryAcc,
       };
-      let picked = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
-      if (!picked && memberId == null && mealType === "dinner" && poolForReplace.length < MIN_FAMILY_DINNER) {
-        picked = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
+      let picked: { id: string; title: string } | null = null;
+      if (isInfantComplementaryPlan(replaceMemberData, memberId)) {
+        if (mealType === "breakfast" || mealType === "lunch") {
+          const ip = pickInfantComplementaryFromPool(
+            poolForReplace,
+            replaceMemberData,
+            excludeRecipeIds,
+            excludeTitleKeys,
+            undefined,
+            replaceGoalHints,
+          );
+          if (ip) picked = { id: ip.id, title: ip.title };
+        }
+      } else {
+        const p1 = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
+        picked = p1 ? { id: p1.id, title: p1.title } : null;
+        if (!picked && memberId == null && mealType === "dinner" && poolForReplace.length < MIN_FAMILY_DINNER) {
+          const p2 = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
+          picked = p2 ? { id: p2.id, title: p2.title } : null;
+        }
       }
       if (picked) {
         const oldRecipeId = currentMeals[mealType]?.recipe_id ?? null;
@@ -1068,14 +1221,15 @@ serve(async (req) => {
       effectiveMemberData = buildFamilyMemberDataForPlan(membersList);
       safeLog("family_mode", { members_count: membersList.length });
     } else {
-      const { data: memberRow } = await supabase.from("members").select("age_months, allergies, dislikes").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
-      const m = memberRow as { age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null } | null;
+      const { data: memberRow } = await supabase.from("members").select("age_months, allergies, dislikes, type").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
+      const m = memberRow as { age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null; type?: string | null } | null;
       if (m) {
         effectiveMemberData = {
           ...(memberData ?? {}),
           age_months: m.age_months ?? memberData?.age_months,
           allergies: Array.isArray(m.allergies) && m.allergies.length > 0 ? m.allergies : (memberData?.allergies ?? []),
           dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
+          type: m.type ?? memberData?.type,
         };
         membersForScoring = [{ age_months: m.age_months ?? memberData?.age_months ?? null }];
       } else if (memberData?.age_months != null) {
@@ -1083,6 +1237,7 @@ serve(async (req) => {
       }
     }
     const familyScoringCtx = buildFamilyScoringContext(membersForScoring);
+    const isInfantPlanRun = isInfantComplementaryPlan(effectiveMemberData, effectiveMemberId);
 
     const isAdultPlan = isAdultContext(effectiveMemberData);
     const poolSuitableCount = isAdultPlan ? poolCandidates.filter((r) => r.max_age_months == null || r.max_age_months > 12).length : poolCandidates.length;
@@ -1108,7 +1263,11 @@ serve(async (req) => {
     }
 
     let cheapTotal = 0;
-    for (const mk of MEAL_KEYS) cheapTotal += getCheapFilteredCount(poolCandidates, mk, [], [], effectiveMemberData);
+    if (isInfantPlanRun && effectiveMemberData?.age_months != null) {
+      cheapTotal = filterInfantComplementaryCandidates(poolCandidates, effectiveMemberData, [], []).length > 0 ? 1 : 0;
+    } else {
+      for (const mk of MEAL_KEYS) cheapTotal += getCheapFilteredCount(poolCandidates, mk, [], [], effectiveMemberData);
+    }
     if (cheapTotal === 0) {
       const totalMs = Date.now() - tRunStart;
       safeLog("[TIMING] done", { requestId, totalMs, filledDaysCount: 0, filledSlotsCount: 0, fastFailReason: "cheap_zero" });
@@ -1184,6 +1343,7 @@ serve(async (req) => {
     const useBaseDiversity = dayKeys.length > 1;
     const weekGoalCounts: Record<string, number> = {};
     const culturalSummaryAcc = debugCulturalPlan() ? createEmptyCulturalSummaryAccumulator() : undefined;
+    let infantDaysWithMeal = 0;
 
     if (jobId) {
       await supabase.from("plan_generation_jobs").update({ status: "running", progress_total: dayKeys.length, progress_done: 0, updated_at: new Date().toISOString() }).eq("id", jobId);
@@ -1200,16 +1360,9 @@ serve(async (req) => {
       const currentMeals = (existingRow as { meals?: Record<string, MealSlot> } | null)?.meals ?? {};
       const newMeals: Record<string, MealSlot | null | undefined> = { ...currentMeals };
 
-      for (const mealKey of MEAL_KEYS) {
-        const poolForSlot =
-          memberId == null && mealKey === "dinner"
-            ? poolCandidates.filter((r) => isFamilyDinnerCandidate(r))
-            : poolCandidates;
-        const currentSlot = currentMeals[mealKey];
-        const excludeIdsForSlot = currentSlot?.recipe_id ? [...usedRecipeIds, currentSlot.recipe_id] : usedRecipeIds;
-        const excludeTitlesBase = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
-        const excludeTitlesForSlot = currentSlot?.title ? [...excludeTitlesBase, normalizeTitleKey(currentSlot.title)] : excludeTitlesBase;
-        const baseCountsForSlot = useBaseDiversity ? usedBaseCounts : undefined;
+      if (isInfantPlanRun && effectiveMemberData?.age_months != null) {
+        const ageM = Math.max(0, Math.round(Number(effectiveMemberData.age_months)));
+        const dishCount = getInfantComplementaryDishCount(ageM, dayKey, effectiveMemberId);
         const nonBalancedGoals = ALLOWED_NUTRITION_GOALS.filter((g) => g !== "balanced");
         let leastUsedGoal: NutritionGoal | null = null;
         let leastCount = Number.MAX_SAFE_INTEGER;
@@ -1235,70 +1388,194 @@ serve(async (req) => {
             if ((dayGoalCounts[g] ?? 0) > 0) blockedGoals.add(g);
           }
         }
-        const slotsLeft = MEAL_KEYS.length - (Object.keys(newMeals).length);
-        const requireBalanced = (dayGoalCounts["balanced"] ?? 0) === 0 && slotsLeft <= 2;
-        let picked = pickFromPoolInMemory(
-          poolForSlot,
-          mealKey,
+        const requireBalanced = (dayGoalCounts["balanced"] ?? 0) === 0 && dishCount <= 2;
+        const baseCountsForSlot = useBaseDiversity ? usedBaseCounts : undefined;
+        const goalHintsBase = {
+          preferredGoals,
+          blockedGoals,
+          requireBalanced,
+          selectedGoalForScoring,
+          dayGoalUsage: { ...dayGoalCounts },
+          familyScoring: familyScoringCtx,
+          planPickDebug: { day_key: dayKey, request_id: requestId },
+          culturalSummaryAccumulator: culturalSummaryAcc,
+        };
+
+        const picked1 = pickInfantComplementaryFromPool(
+          poolCandidates,
           effectiveMemberData,
-          excludeIdsForSlot,
-          excludeTitlesForSlot,
+          usedRecipeIds,
+          [...usedTitleKeys],
           baseCountsForSlot,
-          {
-            preferredGoals,
-            blockedGoals,
-            requireBalanced,
-            selectedGoalForScoring,
-            dayGoalUsage: { ...dayGoalCounts },
-            familyScoring: familyScoringCtx,
-            planPickDebug: { day_key: dayKey, request_id: requestId },
-            culturalSummaryAccumulator: culturalSummaryAcc,
-          }
+          goalHintsBase,
         );
-        if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
-          picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, baseCountsForSlot, {
-            preferredGoals,
-            blockedGoals,
-            requireBalanced,
-            selectedGoalForScoring,
-            dayGoalUsage: { ...dayGoalCounts },
-            familyScoring: familyScoringCtx,
-            planPickDebug: { day_key: dayKey, request_id: requestId },
-            culturalSummaryAccumulator: culturalSummaryAcc,
-          });
-        }
-        if (picked) {
-          newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
-          await supabase.rpc("record_recipe_feedback", { p_recipe_id: picked.id, p_action: "added_to_plan" });
-          const oldRecipeId = currentSlot?.recipe_id;
-          if (oldRecipeId && oldRecipeId !== picked.id) {
+        const currentBreakfast = currentMeals.breakfast;
+        if (picked1) {
+          newMeals.breakfast = { recipe_id: picked1.id, title: picked1.title, plan_source: "pool" };
+          await supabase.rpc("record_recipe_feedback", { p_recipe_id: picked1.id, p_action: "added_to_plan" });
+          const oldRecipeId = currentBreakfast?.recipe_id;
+          if (oldRecipeId && oldRecipeId !== picked1.id) {
             await supabase.rpc("record_recipe_feedback", { p_recipe_id: oldRecipeId, p_action: "replaced_in_plan" });
           }
-          totalAgeBonusSum += picked.ageBonus;
-          totalSoftBonusSum += picked.softBonus;
-          usedRecipeIds.push(picked.id);
-          usedTitleKeys.push(normalizeTitleKey(picked.title));
-          usedTitleKeysByMealType[mealKey]?.add(normalizeTitleKey(picked.title));
-          usedCategoriesByMealType[mealKey]?.add(inferDishCategoryKey(picked.title, null, null));
+          totalAgeBonusSum += picked1.ageBonus;
+          totalSoftBonusSum += picked1.softBonus;
+          usedRecipeIds.push(picked1.id);
+          usedTitleKeys.push(normalizeTitleKey(picked1.title));
+          usedTitleKeysByMealType.breakfast?.add(normalizeTitleKey(picked1.title));
+          usedCategoriesByMealType.breakfast?.add(inferDishCategoryKey(picked1.title, null, null));
           if (useBaseDiversity) {
-            usedBaseCounts[picked.primaryBase] = (usedBaseCounts[picked.primaryBase] ?? 0) + 1;
+            usedBaseCounts[picked1.primaryBase] = (usedBaseCounts[picked1.primaryBase] ?? 0) + 1;
           }
-          const pickedGoals = normalizeNutritionGoals(
-            poolCandidates.find((r) => r.id === picked!.id)?.nutrition_goals
-          );
-          if (pickedGoals.length === 0) {
-            dayGoalCounts.balanced = (dayGoalCounts.balanced ?? 0) + 1;
-            weekGoalCounts.balanced = (weekGoalCounts.balanced ?? 0) + 1;
-          } else {
-            for (const g of pickedGoals) {
-              dayGoalCounts[g] = (dayGoalCounts[g] ?? 0) + 1;
-              weekGoalCounts[g] = (weekGoalCounts[g] ?? 0) + 1;
-            }
-          }
+          applyPickedRecipeGoalsToDayWeek(picked1.id, poolCandidates, dayGoalCounts, weekGoalCounts);
           totalDbCount++;
         } else {
-          /** Не смогли подобрать из пула — очищаем слот, иначе остаётся старый рецепт и расходится с filledSlotsCount. */
-          newMeals[mealKey] = null;
+          newMeals.breakfast = null;
+        }
+
+        if (dishCount >= 2) {
+          const goalHints2 = {
+            ...goalHintsBase,
+            dayGoalUsage: { ...dayGoalCounts },
+          };
+          const picked2 = pickInfantComplementaryFromPool(
+            poolCandidates,
+            effectiveMemberData,
+            usedRecipeIds,
+            [...usedTitleKeys],
+            baseCountsForSlot,
+            goalHints2,
+          );
+          const currentLunch = currentMeals.lunch;
+          if (picked2) {
+            newMeals.lunch = { recipe_id: picked2.id, title: picked2.title, plan_source: "pool" };
+            await supabase.rpc("record_recipe_feedback", { p_recipe_id: picked2.id, p_action: "added_to_plan" });
+            const oldRecipeId = currentLunch?.recipe_id;
+            if (oldRecipeId && oldRecipeId !== picked2.id) {
+              await supabase.rpc("record_recipe_feedback", { p_recipe_id: oldRecipeId, p_action: "replaced_in_plan" });
+            }
+            totalAgeBonusSum += picked2.ageBonus;
+            totalSoftBonusSum += picked2.softBonus;
+            usedRecipeIds.push(picked2.id);
+            usedTitleKeys.push(normalizeTitleKey(picked2.title));
+            usedTitleKeysByMealType.lunch?.add(normalizeTitleKey(picked2.title));
+            usedCategoriesByMealType.lunch?.add(inferDishCategoryKey(picked2.title, null, null));
+            if (useBaseDiversity) {
+              usedBaseCounts[picked2.primaryBase] = (usedBaseCounts[picked2.primaryBase] ?? 0) + 1;
+            }
+            applyPickedRecipeGoalsToDayWeek(picked2.id, poolCandidates, dayGoalCounts, weekGoalCounts);
+            totalDbCount++;
+          } else {
+            newMeals.lunch = null;
+          }
+        } else {
+          newMeals.lunch = null;
+        }
+
+        newMeals.snack = null;
+        newMeals.dinner = null;
+
+        if (picked1) infantDaysWithMeal++;
+      } else {
+        for (const mealKey of MEAL_KEYS) {
+          const poolForSlot =
+            memberId == null && mealKey === "dinner"
+              ? poolCandidates.filter((r) => isFamilyDinnerCandidate(r))
+              : poolCandidates;
+          const currentSlot = currentMeals[mealKey];
+          const excludeIdsForSlot = currentSlot?.recipe_id ? [...usedRecipeIds, currentSlot.recipe_id] : usedRecipeIds;
+          const excludeTitlesBase = [...usedTitleKeys, ...(usedTitleKeysByMealType[mealKey] ? [...usedTitleKeysByMealType[mealKey]] : [])];
+          const excludeTitlesForSlot = currentSlot?.title ? [...excludeTitlesBase, normalizeTitleKey(currentSlot.title)] : excludeTitlesBase;
+          const baseCountsForSlot = useBaseDiversity ? usedBaseCounts : undefined;
+          const nonBalancedGoals = ALLOWED_NUTRITION_GOALS.filter((g) => g !== "balanced");
+          let leastUsedGoal: NutritionGoal | null = null;
+          let leastCount = Number.MAX_SAFE_INTEGER;
+          for (const g of nonBalancedGoals) {
+            if (dayGoalCounts[g] != null && dayGoalCounts[g] > 0) continue;
+            const c = weekGoalCounts[g] ?? 0;
+            if (c < leastCount) {
+              leastCount = c;
+              leastUsedGoal = g;
+            }
+          }
+          const preferredGoals = new Set<string>();
+          if (userNutritionGoals.length > 0) {
+            for (const g of userNutritionGoals) preferredGoals.add(g);
+          }
+          if ((dayGoalCounts["balanced"] ?? 0) === 0) preferredGoals.add("balanced");
+          if (leastUsedGoal) preferredGoals.add(leastUsedGoal);
+          const blockedGoals = new Set<string>();
+          if ((dayGoalCounts["balanced"] ?? 0) >= 1) blockedGoals.add("balanced");
+          const dayExtraGoalCount = Object.entries(dayGoalCounts).filter(([g, c]) => g !== "balanced" && c > 0).length;
+          if (dayExtraGoalCount >= 1) {
+            for (const g of nonBalancedGoals) {
+              if ((dayGoalCounts[g] ?? 0) > 0) blockedGoals.add(g);
+            }
+          }
+          const slotsLeft = MEAL_KEYS.length - (Object.keys(newMeals).length);
+          const requireBalanced = (dayGoalCounts["balanced"] ?? 0) === 0 && slotsLeft <= 2;
+          let picked = pickFromPoolInMemory(
+            poolForSlot,
+            mealKey,
+            effectiveMemberData,
+            excludeIdsForSlot,
+            excludeTitlesForSlot,
+            baseCountsForSlot,
+            {
+              preferredGoals,
+              blockedGoals,
+              requireBalanced,
+              selectedGoalForScoring,
+              dayGoalUsage: { ...dayGoalCounts },
+              familyScoring: familyScoringCtx,
+              planPickDebug: { day_key: dayKey, request_id: requestId },
+              culturalSummaryAccumulator: culturalSummaryAcc,
+            }
+          );
+          if (!picked && memberId == null && mealKey === "dinner" && poolForSlot.length < MIN_FAMILY_DINNER) {
+            picked = pickFromPoolInMemory(poolCandidates, mealKey, effectiveMemberData, excludeIdsForSlot, excludeTitlesForSlot, baseCountsForSlot, {
+              preferredGoals,
+              blockedGoals,
+              requireBalanced,
+              selectedGoalForScoring,
+              dayGoalUsage: { ...dayGoalCounts },
+              familyScoring: familyScoringCtx,
+              planPickDebug: { day_key: dayKey, request_id: requestId },
+              culturalSummaryAccumulator: culturalSummaryAcc,
+            });
+          }
+          if (picked) {
+            newMeals[mealKey] = { recipe_id: picked.id, title: picked.title, plan_source: "pool" };
+            await supabase.rpc("record_recipe_feedback", { p_recipe_id: picked.id, p_action: "added_to_plan" });
+            const oldRecipeId = currentSlot?.recipe_id;
+            if (oldRecipeId && oldRecipeId !== picked.id) {
+              await supabase.rpc("record_recipe_feedback", { p_recipe_id: oldRecipeId, p_action: "replaced_in_plan" });
+            }
+            totalAgeBonusSum += picked.ageBonus;
+            totalSoftBonusSum += picked.softBonus;
+            usedRecipeIds.push(picked.id);
+            usedTitleKeys.push(normalizeTitleKey(picked.title));
+            usedTitleKeysByMealType[mealKey]?.add(normalizeTitleKey(picked.title));
+            usedCategoriesByMealType[mealKey]?.add(inferDishCategoryKey(picked.title, null, null));
+            if (useBaseDiversity) {
+              usedBaseCounts[picked.primaryBase] = (usedBaseCounts[picked.primaryBase] ?? 0) + 1;
+            }
+            const pickedGoals = normalizeNutritionGoals(
+              poolCandidates.find((r) => r.id === picked!.id)?.nutrition_goals
+            );
+            if (pickedGoals.length === 0) {
+              dayGoalCounts.balanced = (dayGoalCounts.balanced ?? 0) + 1;
+              weekGoalCounts.balanced = (weekGoalCounts.balanced ?? 0) + 1;
+            } else {
+              for (const g of pickedGoals) {
+                dayGoalCounts[g] = (dayGoalCounts[g] ?? 0) + 1;
+                weekGoalCounts[g] = (weekGoalCounts[g] ?? 0) + 1;
+              }
+            }
+            totalDbCount++;
+          } else {
+            /** Не смогли подобрать из пула — очищаем слот, иначе остаётся старый рецепт и расходится с filledSlotsCount. */
+            newMeals[mealKey] = null;
+          }
         }
       }
 
@@ -1324,9 +1601,23 @@ serve(async (req) => {
       await supabase.from("usage_events").insert({ user_id: userId, member_id: effectiveMemberId, feature: "plan_fill_day" });
     }
 
+    const infantExpectedSlotsTotal =
+      isInfantPlanRun && effectiveMemberData?.age_months != null
+        ? dayKeys.reduce(
+            (sum, dk) =>
+              sum +
+              getInfantComplementaryDishCount(
+                Math.max(0, Math.round(Number(effectiveMemberData.age_months))),
+                dk,
+                effectiveMemberId,
+              ),
+            0,
+          )
+        : dayKeys.length * MEAL_KEYS.length;
+
     if (jobId) {
       const filledSlotsFinal = totalDbCount + totalAiCount;
-      const totalSlotsRun = dayKeys.length * MEAL_KEYS.length;
+      const totalSlotsRun = infantExpectedSlotsTotal;
       const errorTextFinal = filledSlotsFinal < totalSlotsRun ? "partial:pool_exhausted" : null;
       await supabase
         .from("plan_generation_jobs")
@@ -1336,11 +1627,11 @@ serve(async (req) => {
 
     const totalMs = Date.now() - tRunStart;
     const filledSlotsCount = totalDbCount + totalAiCount;
-    const filledDaysCount = Math.floor(filledSlotsCount / MEAL_KEYS.length);
+    const filledDaysCount = isInfantPlanRun ? infantDaysWithMeal : Math.floor(filledSlotsCount / MEAL_KEYS.length);
     safeLog("[TIMING] done", { requestId, totalMs, filledDaysCount, filledSlotsCount });
     if (totalMs > 2000) safeWarn("[TIMING WARN]", { stage: "totalMs", ms: totalMs, requestId });
 
-    const totalSlots = dayKeys.length * MEAL_KEYS.length;
+    const totalSlots = infantExpectedSlotsTotal;
     const emptySlotsCount = totalSlots - filledSlotsCount;
     const partial = emptySlotsCount > 0;
 

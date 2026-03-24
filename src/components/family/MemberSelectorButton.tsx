@@ -21,6 +21,13 @@ export interface MemberSelectorButtonProps {
   className?: string;
   /** light = компактная пилюля без тяжёлой заливки (Chat). */
   variant?: "default" | "light";
+  /** Эмодзи или короткий символ слева от подписи (напр. 👶 на плане прикорма). */
+  leadingEmoji?: string;
+  /**
+   * Ширина по содержимому (без max-width и ellipsis на имени).
+   * Для компактного чипа в ряд с другими контролами не передавать.
+   */
+  fitLabelWidth?: boolean;
 }
 
 /**
@@ -34,6 +41,8 @@ export function MemberSelectorButton({
   onProfileChange,
   className = "",
   variant = "default",
+  leadingEmoji,
+  fitLabelWidth = false,
 }: MemberSelectorButtonProps) {
   const { members, selectedMemberId, setSelectedMemberId, isFreeLocked } = useFamily();
   const { hasAccess } = useSubscription();
@@ -58,8 +67,16 @@ export function MemberSelectorButton({
 
   const isLight = variant === "light";
   const pillClasses = isLight
-    ? "flex items-center gap-1.5 rounded-full min-h-[36px] h-9 px-3 py-2 text-sm font-medium text-foreground bg-muted/60 border border-border hover:bg-muted max-w-[120px] truncate"
-    : "flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-primary bg-primary-pill whitespace-nowrap truncate max-w-[140px]";
+    ? fitLabelWidth
+      ? "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full min-h-[36px] px-3 py-2 text-sm font-medium text-foreground bg-muted/60 border border-border hover:bg-muted"
+      : "flex items-center gap-1.5 rounded-full min-h-[36px] h-9 px-3 py-2 text-sm font-medium text-foreground bg-muted/60 border border-border hover:bg-muted max-w-[120px] truncate"
+    : fitLabelWidth
+      ? "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-primary bg-primary-pill border-0"
+      : "flex items-center gap-1.5 rounded-full min-h-[40px] px-3 py-2 text-typo-muted font-semibold text-primary bg-primary-pill whitespace-nowrap truncate max-w-[140px]";
+
+  const labelSpanClass = fitLabelWidth
+    ? "min-w-0 text-left break-words [overflow-wrap:anywhere]"
+    : "truncate max-w-[100px]";
 
   const handleClick = useCallback(() => {
     if (disabled) {
@@ -105,7 +122,14 @@ export function MemberSelectorButton({
           className={`${pillClasses} ${disabled ? "opacity-70 cursor-not-allowed pointer-events-none" : "hover:opacity-90 active:opacity-95 cursor-pointer"} ${className}`}
           aria-label="Профиль ребёнка"
         >
-          <span className="truncate">{displayName}</span>
+          {leadingEmoji ? (
+            <span className="shrink-0 text-base leading-none" aria-hidden>
+              {leadingEmoji}
+            </span>
+          ) : null}
+          <span className={fitLabelWidth ? "min-w-0 text-left break-words [overflow-wrap:anywhere]" : "truncate"}>
+            {displayName}
+          </span>
         </button>
       ) : (
         <button
@@ -116,7 +140,12 @@ export function MemberSelectorButton({
           className={`${pillClasses} hover:opacity-90 active:opacity-95 shadow-none transition-colors ${!isLight ? "border-0" : ""} ${disabled ? "opacity-70 cursor-not-allowed pointer-events-none" : ""} ${className}`}
           aria-label="Выбрать профиль"
         >
-          <span className="truncate max-w-[100px]">{displayName}</span>
+          {leadingEmoji ? (
+            <span className="shrink-0 text-base leading-none" aria-hidden>
+              {leadingEmoji}
+            </span>
+          ) : null}
+          <span className={labelSpanClass}>{displayName}</span>
           <ChevronDown className={`shrink-0 text-muted-foreground ${isLight ? "w-3.5 h-3.5" : "w-4 h-4 text-primary opacity-80"}`} aria-hidden />
         </button>
       )}

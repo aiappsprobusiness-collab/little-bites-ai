@@ -73,11 +73,12 @@ export function FamilyMemberCard({
                   key={`${item.type}-${i}-${item.label}`}
                   label={item.label}
                   variant={chipVariantFromType(item.type)}
+                  size="compact"
                   allowWrap
                 />
               ))}
               {overflowCount > 0 && (
-                <span className="inline-flex items-center min-h-[28px] py-0 px-[10px] rounded-[999px] text-[13px] font-medium text-muted-foreground border border-border/40 bg-muted/20">
+                <span className="inline-flex items-center min-h-6 py-0 px-2 rounded-[999px] text-[11px] font-medium text-muted-foreground border border-border/40 bg-muted/20">
                   +{overflowCount}
                 </span>
               )}
