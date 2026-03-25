@@ -6,6 +6,7 @@ import { ChefAdviceCard } from "./ChefAdviceCard";
 import { RecipeSteps } from "./RecipeSteps";
 import { NutritionGoalsChips } from "./NutritionGoalsChips";
 import { cn } from "@/lib/utils";
+import { getChefAdviceCardPresentation } from "@/utils/infantRecipe";
 
 export type RecipeCardVariant = "preview" | "chat" | "full";
 
@@ -52,6 +53,12 @@ export interface RecipeCardProps {
    * `infant` — плотнее шапка и тело, колонка действий слева с разделителем (прикорм в плане).
    */
   previewPresentation?: "default" | "collection" | "infant";
+  /**
+   * Возрастной диапазон рецепта (для блоков подсказок).
+   * Используется для infant UX: label "Совет от шефа" -> "Подсказка для мамы".
+   * Не ломает обычные flows, т.к. проп опциональный.
+   */
+  recipeMaxAgeMonths?: number | null;
 }
 
 export function RecipeCard({
@@ -79,6 +86,7 @@ export function RecipeCard({
   nutritionGoalsQuiet = false,
   servingsCount = 1,
   previewPresentation = "default",
+  recipeMaxAgeMonths = null,
 }: RecipeCardProps) {
   const isPreview = variant === "preview";
   const isFull = variant === "full";
@@ -88,8 +96,11 @@ export function RecipeCard({
   const headerWithNutrition = { ...header, nutrition };
 
   const tipBody = (showChefTip && chefAdvice?.trim()) ? chefAdvice!.trim() : (advice?.trim() ?? chefAdvice?.trim());
-  const isChefTip = !!(showChefTip && chefAdvice?.trim());
-  const tipTitle = "Совет от шефа";
+  const isChefTipFromSource = !!(showChefTip && chefAdvice?.trim());
+  const { title: tipTitle, isChefTip: effectiveIsChefTip } = getChefAdviceCardPresentation({
+    recipe: { max_age_months: recipeMaxAgeMonths },
+    isChefTip: isChefTipFromSource,
+  });
 
   const bodyPadding = isCollectionPreview
     ? "px-3.5 pt-2.5 pb-2.5"
@@ -145,7 +156,7 @@ export function RecipeCard({
         </p>
       )}
       {!isPreview && tipBody && (
-        <ChefAdviceCard title={tipTitle} body={tipBody} isChefTip={isChefTip} />
+        <ChefAdviceCard title={tipTitle} body={tipBody} isChefTip={effectiveIsChefTip} />
       )}
       {!isPreview && steps && steps.length > 0 && <RecipeSteps steps={steps} />}
       {children}

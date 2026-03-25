@@ -5,6 +5,7 @@
 
 import type { IngredientItem } from "@/types/recipe";
 import { ingredientDisplayLabel } from "@/types/recipe";
+import { getAdviceSectionTitle, getShareDescriptionHeading } from "@/utils/infantRecipe";
 
 /** Базовый URL приложения для ссылок в шаринге (рецепт, подпись). Без localhost — всегда прод. */
 const BASE_URL = "https://momrecipes.online";
@@ -42,6 +43,8 @@ export interface ShareRecipeInput {
   steps?: Array<{ instruction?: string; step_number?: number }> | null;
   /** Совет от шефа (chef_advice / chefAdvice). */
   chefAdvice?: string | null;
+  /** Для age-aware UX infant-рецептов. */
+  max_age_months?: number | null;
   /** Тип приёма пищи: для строки 🥣 Завтрак / 🍲 Обед и т.д. Может быть уже локализованная строка (mealTypeLabel) или ключ. */
   mealTypeLabel?: string | null;
   meal_type?: MealTypeKey | string | null;
@@ -106,6 +109,7 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
     ingredients,
     steps,
     chefAdvice,
+    max_age_months,
     mealTypeLabel,
     meal_type,
     shareUrl,
@@ -129,7 +133,7 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
   // 4) Описание / польза
   if (description != null && String(description).trim() !== "") {
     blank();
-    lines.push("💚 Почему это полезно:");
+    lines.push(getShareDescriptionHeading({ recipe: { max_age_months } }));
     lines.push(String(description).trim());
   }
 
@@ -156,7 +160,11 @@ export function buildRecipeShareText(params: ShareRecipeInput): string {
   // 7) Совет от шефа
   if (chefAdvice != null && String(chefAdvice).trim() !== "") {
     blank();
-    lines.push("👩‍🍳✨ Совет от шефа:");
+    const adviceTitle = getAdviceSectionTitle({
+      recipe: { max_age_months },
+      kind: "chef",
+    });
+    lines.push(`👩‍🍳✨ ${adviceTitle}:`);
     lines.push(String(chefAdvice).trim());
   }
 

@@ -1,6 +1,8 @@
 /**
  * Импорт infant seed из data/infant-seed-recipes.json в Supabase (service role).
- * Обходит create_recipe_with_steps (там user_id должен совпадать с auth.uid()).
+ * Идемпотентность: поиск существующей строки по
+ * (user_id, source=seed, locale, norm_title, min_age_months, max_age_months),
+ * затем UPDATE + замена ингредиентов/шагов или INSERT.
  *
  * Переменные окружения:
  *   SUPABASE_URL
@@ -12,7 +14,7 @@
  *   --purge        перед вставкой удалить рецепты этого владельца с тегом batch из файла
  *   --purge-only   только удалить батч (по тегу), без чтения JSON и без вставки
  *
- * Опционально: INFANT_SEED_BATCH_TAG (по умолчанию infant_curated_batch1) — для --purge-only, если JSON не нужен.
+ * Опционально: INFANT_SEED_BATCH_TAG — для --purge-only, если JSON не нужен.
  *
  * Запуск: node scripts/import-infant-seed.mjs
  */
@@ -99,6 +101,12 @@ function inferIngredientCategory(name) {
   return "vegetables";
 }
 
+function normTitle(title) {
+  return String(title ?? "")
+    .trim()
+    .toLowerCase();
+}
+
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("Нужны SUPABASE_URL и SUPABASE_SERVICE_ROLE_KEY.");
   process.exit(1);
@@ -110,7 +118,7 @@ if (!CATALOG_USER_ID) {
 }
 
 const defaultBatchTag =
-  process.env.INFANT_SEED_BATCH_TAG || "infant_curated_batch1";
+  process.env.INFANT_SEED_BATCH_TAG || "infant_curated_v2";
 
 let bundle = null;
 let recipes = [];
@@ -160,17 +168,37 @@ async function purgeBatch() {
   console.log(`purge: удалено рецептов: ${ids.length}`);
 }
 
-async function importOne(r) {
-  const id = randomUUID();
+async function findExistingRecipeId(r) {
+  const nt = normTitle(r.title);
+  const { data, error } = await supabase
+    .from("recipes")
+    .select("id")
+    .eq("user_id", CATALOG_USER_ID)
+    .eq("source", "seed")
+    .eq("locale", "ru")
+    .eq("norm_title", nt)
+    .eq("min_age_months", r.min_age_months)
+    .eq("max_age_months", r.max_age_months)
+    .maybeSingle();
+  if (error) {
+    console.error("findExistingRecipeId:", error);
+    return null;
+  }
+  return data?.id ?? null;
+}
+
+function buildRecipeRow(r, id) {
   const nutrition_goals = Array.isArray(r.nutrition_goals) ? r.nutrition_goals : [];
   const tags = Array.isArray(r.tags) ? r.tags : [];
-
-  const recipeRow = {
+  const ctm = Number(r.cooking_time_minutes) || 15;
+  return {
     id,
     user_id: CATALOG_USER_ID,
     title: r.title,
     description: r.description ?? "",
-    cooking_time_minutes: r.cooking_time_minutes ?? 20,
+    chef_advice: r.chef_advice ?? "",
+    cooking_time_minutes: ctm,
+    cooking_time: ctm,
     min_age_months: r.min_age_months ?? 6,
     max_age_months: r.max_age_months ?? 11,
     source: "seed",
@@ -178,20 +206,32 @@ async function importOne(r) {
     tags,
     nutrition_goals,
     is_soup: Boolean(r.is_soup),
-    servings_base: 1,
-    servings_recommended: 1,
+    servings_base: r.servings_base ?? 1,
+    servings_recommended: r.servings_recommended ?? 1,
     locale: "ru",
-    trust_level: "seed",
+    trust_level: "trusted",
+    calories: r.calories ?? null,
+    proteins: r.proteins ?? null,
+    fats: r.fats ?? null,
+    carbs: r.carbs ?? null,
     steps: [],
     child_id: null,
     member_id: null,
   };
+}
 
-  const { error: re } = await supabase.from("recipes").insert(recipeRow);
-  if (re) return { ok: false, error: re, title: r.title };
+async function replaceIngredientsAndSteps(recipeId, r) {
+  const { error: di } = await supabase
+    .from("recipe_ingredients")
+    .delete()
+    .eq("recipe_id", recipeId);
+  if (di) return { ok: false, error: di, phase: "delete_ingredients" };
+
+  const { error: ds } = await supabase.from("recipe_steps").delete().eq("recipe_id", recipeId);
+  if (ds) return { ok: false, error: ds, phase: "delete_steps" };
 
   const ingredients = (r.ingredients ?? []).map((ing, i) => ({
-    recipe_id: id,
+    recipe_id: recipeId,
     name: ing.name,
     amount: ing.amount ?? null,
     unit: ing.unit ?? null,
@@ -203,24 +243,63 @@ async function importOne(r) {
   }));
 
   const { error: ie } = await supabase.from("recipe_ingredients").insert(ingredients);
-  if (ie) {
-    await supabase.from("recipes").delete().eq("id", id);
-    return { ok: false, error: ie, title: r.title, recipeId: id };
-  }
+  if (ie) return { ok: false, error: ie, phase: "insert_ingredients" };
 
   const steps = (r.steps ?? []).map((s, i) => ({
-    recipe_id: id,
+    recipe_id: recipeId,
     step_number: s.step_number ?? i + 1,
     instruction: s.instruction ?? "",
   }));
 
   const { error: se } = await supabase.from("recipe_steps").insert(steps);
-  if (se) {
-    await supabase.from("recipes").delete().eq("id", id);
-    return { ok: false, error: se, title: r.title, recipeId: id };
+  if (se) return { ok: false, error: se, phase: "insert_steps" };
+
+  return { ok: true };
+}
+
+async function upsertOne(r) {
+  const existingId = await findExistingRecipeId(r);
+  const id = existingId ?? randomUUID();
+  const row = buildRecipeRow(r, id);
+
+  if (existingId) {
+    const { error: ue } = await supabase
+      .from("recipes")
+      .update({
+        title: row.title,
+        description: row.description,
+        chef_advice: row.chef_advice,
+        cooking_time_minutes: row.cooking_time_minutes,
+        cooking_time: row.cooking_time,
+        min_age_months: row.min_age_months,
+        max_age_months: row.max_age_months,
+        meal_type: row.meal_type,
+        tags: row.tags,
+        nutrition_goals: row.nutrition_goals,
+        is_soup: row.is_soup,
+        servings_base: row.servings_base,
+        servings_recommended: row.servings_recommended,
+        trust_level: row.trust_level,
+        calories: row.calories,
+        proteins: row.proteins,
+        fats: row.fats,
+        carbs: row.carbs,
+        locale: row.locale,
+        steps: row.steps,
+      })
+      .eq("id", id);
+    if (ue) return { ok: false, error: ue, title: r.title, mode: "update" };
+  } else {
+    const { error: ie } = await supabase.from("recipes").insert(row);
+    if (ie) return { ok: false, error: ie, title: r.title, mode: "insert" };
   }
 
-  return { ok: true, id };
+  const child = await replaceIngredientsAndSteps(id, r);
+  if (!child.ok) {
+    return { ok: false, error: child.error, title: r.title, recipeId: id, phase: child.phase };
+  }
+
+  return { ok: true, id, mode: existingId ? "updated" : "inserted" };
 }
 
 async function main() {
@@ -252,14 +331,17 @@ async function main() {
   }
   if (purge) await purgeBatch();
 
-  let ok = 0;
+  let inserted = 0;
+  let updated = 0;
   const failures = [];
   for (const r of recipes) {
-    const res = await importOne(r);
-    if (res.ok) ok += 1;
-    else failures.push(res);
+    const res = await upsertOne(r);
+    if (res.ok) {
+      if (res.mode === "updated") updated += 1;
+      else inserted += 1;
+    } else failures.push(res);
   }
-  console.log(`Готово: вставлено ${ok}, ошибок ${failures.length}`);
+  console.log(`Готово: вставлено ${inserted}, обновлено ${updated}, ошибок ${failures.length}`);
   if (failures.length) {
     console.error("Первые ошибки:", failures.slice(0, 5));
     process.exit(1);

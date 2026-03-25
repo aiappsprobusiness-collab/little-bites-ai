@@ -55,6 +55,22 @@ describe("shareRecipeText", () => {
     expect(full.endsWith(expectedTail)).toBe(true);
   });
 
+  it("infant recipe uses mom advice label and infant description heading", () => {
+    const infant = buildRecipeShareText({
+      title: "Пюре",
+      description: "Мягкое пюре для этапа прикорма.",
+      cooking_time_minutes: 10,
+      recipeId: "uuid-infant",
+      ingredients: [],
+      chefAdvice: "Текстура будет нежной при мягком разваривании.",
+      meal_type: "breakfast",
+      max_age_months: 11,
+    });
+    expect(infant).toContain("👩‍🍳✨ Подсказка для мамы:");
+    expect(infant).not.toContain("👩‍🍳✨ Совет от шефа:");
+    expect(infant).toContain("💚 Текстура и этап прикорма:");
+  });
+
   it("uses plain newlines and no markdown", () => {
     const text = buildRecipeShareText({
       title: "A",

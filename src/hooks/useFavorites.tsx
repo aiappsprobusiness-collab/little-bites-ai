@@ -16,6 +16,8 @@ export type StoredRecipe = RecipeSuggestion & {
   ingredientNames?: string[];
   ingredientTotalCount?: number;
   nutrition_goals?: string[] | null;
+  min_age_months?: number | null;
+  max_age_months?: number | null;
 };
 
 export type FavoritesFilter = 'all' | 'family' | string;
@@ -103,12 +105,25 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
         safeError('DB Error in useFavorites (get_recipe_previews):', rpcError.message);
       }
 
-      const previewMap = new Map<string, { title: string; description: string | null; cooking_time_minutes: number | null; ingredient_names: string[]; ingredient_total_count: number }>();
+      const previewMap = new Map<
+        string,
+        {
+          title: string;
+          description: string | null;
+          cooking_time_minutes: number | null;
+          min_age_months: number | null;
+          max_age_months: number | null;
+          ingredient_names: string[];
+          ingredient_total_count: number;
+        }
+      >();
       for (const r of (previewRows ?? []) as Array<{
         id: string;
         title: string | null;
         description: string | null;
         cooking_time_minutes: number | null;
+        min_age_months: number | null;
+        max_age_months: number | null;
         ingredient_names: string[] | null;
         ingredient_total_count: number | null;
       }>) {
@@ -116,6 +131,8 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
           title: r.title ?? '',
           description: r.description ?? null,
           cooking_time_minutes: r.cooking_time_minutes ?? null,
+          min_age_months: r.min_age_months ?? null,
+          max_age_months: r.max_age_months ?? null,
           ingredient_names: Array.isArray(r.ingredient_names) ? r.ingredient_names : [],
           ingredient_total_count: typeof r.ingredient_total_count === 'number' ? r.ingredient_total_count : 0,
         });
@@ -176,6 +193,8 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
             ageRange: '',
             ingredientNames: preview.ingredient_names,
             ingredientTotalCount: preview.ingredient_total_count,
+            min_age_months: preview.min_age_months,
+            max_age_months: preview.max_age_months,
             member_id: memberIdByRecipeId.get(f.recipe_id) ?? undefined,
             ...(mealTypeFromDb && { mealType: mealTypeFromDb }),
           }

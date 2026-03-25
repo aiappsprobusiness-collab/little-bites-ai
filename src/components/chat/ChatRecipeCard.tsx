@@ -6,6 +6,7 @@ import {
   buildRecipeBenefitDescription,
   resolveBenefitDescriptionSeed,
 } from "@/utils/recipeBenefitDescription";
+import { isInfantRecipe } from "@/utils/infantRecipe";
 
 export interface ChatRecipeCardRecipe {
   title: string;
@@ -16,6 +17,7 @@ export interface ChatRecipeCardRecipe {
   chefAdvice?: string;
   advice?: string;
   mealType?: string;
+  max_age_months?: number | null;
   calories?: number | null;
   proteins?: number | null;
   fats?: number | null;
@@ -58,7 +60,8 @@ function ChatRecipeCard({
         }
         : null;
 
-  const benefitLabel = getBenefitLabel(ageMonths);
+  const isInfant = isInfantRecipe({ max_age_months: recipe.max_age_months });
+  const benefitLabel = isInfant ? null : getBenefitLabel(ageMonths);
   const benefitSeed = resolveBenefitDescriptionSeed({
     recipeId: savedRecipeId,
     chatMessageId: chatMessageId ?? null,
@@ -95,6 +98,7 @@ function ChatRecipeCard({
       steps={recipe.steps}
       nutrition={nutrition}
       nutritionGoals={recipe.nutrition_goals ?? []}
+      recipeMaxAgeMonths={recipe.max_age_months ?? null}
     />
   );
 }

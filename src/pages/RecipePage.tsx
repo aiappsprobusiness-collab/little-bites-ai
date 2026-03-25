@@ -43,6 +43,7 @@ import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
 import { cn } from "@/lib/utils";
 import { mealPlanMemberIdForShoppingSync } from "@/utils/mealPlanMemberScope";
 import { useShoppingList } from "@/hooks/useShoppingList";
+import { getChefAdviceCardPresentation, isInfantRecipe } from "@/utils/infantRecipe";
 import {
   buildShoppingIngredientPayloadsFromRecipe,
   recipeRpcIngredientsToShoppingRows,
@@ -175,21 +176,27 @@ export default function RecipePage() {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    supabase.rpc("get_recipe_my_vote", { p_recipe_id: id }).then(({ data }) => {
-      if (!cancelled && data === "like") setUserVote("like");
-      else if (!cancelled && data === "dislike") setUserVote("dislike");
-      else if (!cancelled) setUserVote(null);
-    }).catch(() => {
-      if (!cancelled) setUserVote(null);
-    });
-    return () => { cancelled = true; };
+    (async () => {
+      try {
+        const { data } = await (supabase.rpc as any)("get_recipe_my_vote", { p_recipe_id: id });
+        if (cancelled) return;
+        if (data === "like") setUserVote("like");
+        else if (data === "dislike") setUserVote("dislike");
+        else setUserVote(null);
+      } catch {
+        if (!cancelled) setUserVote(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   const handleRecipeFeedback = async (action: "like" | "dislike") => {
     if (!id) return;
     if (userVote === action) return; /* повторный тот же голос — no-op, без API и toast */
     try {
-      await supabase.rpc("record_recipe_feedback", { p_recipe_id: id, p_action: action });
+      await (supabase.rpc as any)("record_recipe_feedback", { p_recipe_id: id, p_action: action });
       setUserVote(action);
       toast({ title: action === "like" ? "Спасибо за отзыв" : "Учли" });
     } catch {
@@ -507,6 +514,7 @@ export default function RecipePage() {
     advice?: string | null;
     cooking_time_minutes?: number | null;
     min_age_months?: number | null;
+    max_age_months?: number | null;
     source?: string | null;
     servings_base?: number | null;
     servings_recommended?: number | null;
@@ -522,6 +530,17 @@ export default function RecipePage() {
   const minAgeMonths = recipeDisplay.min_age_months;
   const nutritionGoals = recipeDisplay.nutrition_goals ?? [];
 
+  const isInfant = isInfantRecipe({ max_age_months: recipeDisplay.max_age_months });
+
+  const chefAdvicePresentation = getChefAdviceCardPresentation({
+    recipe: { max_age_months: recipeDisplay.max_age_months },
+    isChefTip: true,
+  });
+  const miniAdvicePresentation = getChefAdviceCardPresentation({
+    recipe: { max_age_months: recipeDisplay.max_age_months },
+    isChefTip: false,
+  });
+
   const handleDeleteRecipe = async () => {
     if (!id) return;
     try {
@@ -535,6 +554,7 @@ export default function RecipePage() {
   };
 
   const benefitLabel = getBenefitLabel(selectedMember?.age_months ?? undefined);
+  const benefitLabelForDisplay = isInfant ? null : benefitLabel;
   const benefitDescription = buildRecipeBenefitDescription({
     recipeId: id ?? null,
     goals: nutritionGoals,
@@ -557,6 +577,7 @@ export default function RecipePage() {
 
   const handleAddIngredientsToShopping = async () => {
     if (!id || !recipe) return;
+    if (recipe && isInfantRecipe(recipe)) return;
     if (!hasAccess) {
       setPaywallCustomMessage("Список покупок доступен в Premium.");
       setShowPaywall(true);
@@ -608,10 +629,10 @@ export default function RecipePage() {
                 variant="details"
               />
 
-              {benefitLabel && (
+              {benefitLabelForDisplay && (
                 <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                   <span aria-hidden="true">🌿</span>
-                  <span>{benefitLabel}</span>
+                  <span>{benefitLabelForDisplay}</span>
                 </p>
               )}
               <p className="text-sm text-muted-foreground leading-[1.6]">{heroDescription}</p>
@@ -794,7 +815,7 @@ export default function RecipePage() {
           }
         />
 
-        {id && (
+        {id && recipe && !isInfantRecipe(recipe) && (
           <div className="mt-4">
             <Button
               type="button"
@@ -810,9 +831,19 @@ export default function RecipePage() {
         )}
 
         {chefAdvice?.trim() ? (
-          <ChefAdviceCard title="Совет от шефа" body={chefAdvice.trim()} isChefTip className="mt-6" />
+          <ChefAdviceCard
+            title={chefAdvicePresentation.title}
+            body={chefAdvice.trim()}
+            isChefTip={chefAdvicePresentation.isChefTip}
+            className="mt-6"
+          />
         ) : advice?.trim() ? (
-          <ChefAdviceCard title="Совет от шефа" body={advice.trim()} isChefTip={false} className="mt-6" />
+          <ChefAdviceCard
+            title={miniAdvicePresentation.title}
+            body={advice.trim()}
+            isChefTip={miniAdvicePresentation.isChefTip}
+            className="mt-6"
+          />
         ) : null}
 
         <RecipeSteps steps={steps} className="mt-6" />

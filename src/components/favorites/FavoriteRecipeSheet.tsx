@@ -17,6 +17,7 @@ import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeMetaRow } from "@/components/recipe/RecipeMetaRow";
+import { getChefAdviceCardPresentation, isInfantRecipe } from "@/utils/infantRecipe";
 
 function normalizeIngredients(raw: unknown): ParsedIngredient[] {
   if (!Array.isArray(raw)) return [];
@@ -57,6 +58,8 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
 
   const audience = getRecipeAudience(favorite.recipe, members);
   const recipe = favorite.recipe;
+  const recipeMaxAgeMonths = (recipe as { max_age_months?: number | null }).max_age_months ?? null;
+  const isInfant = isInfantRecipe({ max_age_months: recipeMaxAgeMonths });
   const title = typeof recipe?.title === "string" ? recipe.title.trim() : "Рецепт";
   const recipeIdForBenefit = (favorite as { _recipeId?: string })._recipeId ?? (recipe as { id?: string })?.id ?? null;
   const nutritionGoals = (recipe as { nutrition_goals?: string[] | null }).nutrition_goals ?? [];
@@ -72,10 +75,17 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
     goals: nutritionGoals,
     title,
   });
+  const recipeDescription = (recipe as { description?: string | null }).description;
+  const descriptionForHeader =
+    isInfant && recipeDescription?.trim() ? recipeDescription.trim() : benefitDescription;
   const chefAdvice = (recipe as { chefAdvice?: string }).chefAdvice;
   const advice = (recipe as { advice?: string }).advice;
   const tip = (isPremium && chefAdvice?.trim()) ? chefAdvice.trim() : (advice?.trim() ?? chefAdvice?.trim());
   const isChefTip = isPremium && chefAdvice?.trim();
+  const tipPresentation = getChefAdviceCardPresentation({
+    recipe: { max_age_months: recipeMaxAgeMonths },
+    isChefTip: !!isChefTip,
+  });
   const nutrition =
     (recipe as { calories?: number | null }).calories != null ||
     (recipe as { proteins?: number | null }).proteins != null ||
@@ -106,8 +116,8 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
               mealLabel={mealLabel}
               cookingTimeMinutes={numTime ?? null}
               title={title}
-              benefitLabel={getBenefitLabel(ageMonths)}
-              description={benefitDescription}
+              benefitLabel={isInfant ? null : getBenefitLabel(ageMonths)}
+              description={descriptionForHeader}
               nutrition={nutrition}
             />
             <RecipeIngredientList ingredients={ingredients} servingsCount={1} hideServingsSubtitle />
@@ -118,7 +128,7 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
               </span>
             </RecipeMetaRow>
             {tip && (
-              <ChefAdviceCard title="Совет от шефа" body={tip} isChefTip={isChefTip} />
+              <ChefAdviceCard title={tipPresentation.title} body={tip} isChefTip={tipPresentation.isChefTip} />
             )}
             <RecipeSteps steps={steps} />
           </div>

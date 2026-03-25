@@ -2,6 +2,7 @@
  * Утилиты для парсинга рецептов из ответов AI в чате
  */
 import { safeLog, safeWarn } from "./safeLogger";
+import { getAdviceSectionTitle, isInfantRecipe } from "./infantRecipe";
 
 /** Ингредиент (контракт AI: displayText, canonical). */
 export interface IngredientWithSubstitute {
@@ -27,6 +28,8 @@ export interface ParsedRecipe {
   chefAdvice?: string;
   /** Мини-совет (Free, поле advice в JSON). */
   advice?: string;
+  min_age_months?: number | null;
+  max_age_months?: number | null;
   /** КБЖУ на порцию (от API/БД). Отображаются только для Premium/Trial. */
   calories?: number | null;
   proteins?: number | null;
@@ -499,6 +502,8 @@ export function parseRecipesFromApiResponse(
     const steps = Array.isArray(r.steps) ? (r.steps as string[]).map((s) => String(s ?? "").trim()).filter(Boolean) : [];
     const nutritionFields = extractNutritionFields(r as Record<string, unknown>);
     const goals = extractNutritionGoals(r as Record<string, unknown>);
+    const minAgeMonths = asFiniteNumberField((r as Record<string, unknown>).min_age_months ?? (r as Record<string, unknown>).minAgeMonths);
+    const maxAgeMonths = asFiniteNumberField((r as Record<string, unknown>).max_age_months ?? (r as Record<string, unknown>).maxAgeMonths);
     return {
       title: String(title).trim(),
       description: typeof r.description === "string" ? r.description : undefined,
@@ -508,6 +513,9 @@ export function parseRecipesFromApiResponse(
       mealType: r.mealType as ParsedRecipe["mealType"],
       chefAdvice: extractChefAdvice(r as Record<string, unknown>),
       advice: typeof r.advice === "string" ? r.advice : undefined,
+      ...(minAgeMonths != null || maxAgeMonths != null
+        ? { min_age_months: minAgeMonths ?? null, max_age_months: maxAgeMonths ?? null }
+        : {}),
       ...nutritionFields,
       ...(goals?.length ? { nutrition_goals: goals } : {}),
     };
@@ -560,12 +568,16 @@ function formatRecipeForDisplay(recipe: ParsedRecipe): string {
     recipe.steps.forEach((step, i) => lines.push(`${i + 1}. ${step}`));
   }
   if (recipe.chefAdvice?.trim()) {
+    const isInfant = isInfantRecipe(recipe);
+    const title = getAdviceSectionTitle({ recipe, kind: "chef" });
     lines.push('');
-    lines.push('👨‍🍳 **Совет от шефа:**');
+    lines.push(`${isInfant ? "👩‍🍳" : "👨‍🍳"} **${title}:**`);
     lines.push(recipe.chefAdvice.trim());
   } else if (recipe.advice?.trim()) {
+    const isInfant = isInfantRecipe(recipe);
+    const title = getAdviceSectionTitle({ recipe, kind: "mini" });
     lines.push('');
-    lines.push('💡 **Мини-совет:**');
+    lines.push(`${isInfant ? "👩‍🍳" : "💡"} **${title}:**`);
     lines.push(recipe.advice.trim());
   }
   return lines.join('\n');

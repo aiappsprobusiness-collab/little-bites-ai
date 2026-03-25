@@ -11,6 +11,7 @@ import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader";
 import { cn } from "@/lib/utils";
 import type { PublicRecipePayload } from "@/services/publicRecipeShare";
+import { getChefAdviceCardPresentation, isInfantRecipe } from "@/utils/infantRecipe";
 
 const WELCOME_RECIPE_ID = "4dcaf358-5aea-4806-89c1-ffe02e96d8e3";
 
@@ -85,20 +86,27 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
     advice?: string | null;
     cooking_time_minutes?: number | null;
     min_age_months?: number | null;
+    max_age_months?: number | null;
     nutrition_goals?: string[] | null;
   };
   const mealType = (recipeDisplay as { meal_type?: string | null }).meal_type ?? null;
   const mealLabel = getMealLabel(mealType);
   const cookingTime = recipeDisplay.cooking_time_minutes;
   const minAgeMonths = recipeDisplay.min_age_months;
+  const isInfant = isInfantRecipe({ max_age_months: recipeDisplay.max_age_months });
   const nutritionGoals = recipeDisplay.nutrition_goals ?? [];
   const benefitLabel = getBenefitLabel(minAgeMonths ?? undefined);
+  const benefitLabelForDisplay = isInfant ? null : benefitLabel;
   const benefitDescription = buildRecipeBenefitDescription({
     recipeId: (recipe as { id?: string }).id ?? null,
     stableKey: recipeDisplay.title ? `welcome:${recipeDisplay.title}` : "welcome",
     goals: nutritionGoals,
     title: recipeDisplay.title ?? "",
   });
+  const heroDescription =
+    isInfant && recipeDisplay.description?.trim()
+      ? recipeDisplay.description.trim()
+      : benefitDescription;
   const steps = recipeDisplay.steps ?? [];
   const chefAdvice =
     recipeDisplay.chefAdvice ?? (recipeDisplay as { chef_advice?: string | null }).chef_advice;
@@ -118,6 +126,15 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
       : null;
 
   const displayIngredients = getDisplayIngredients(recipe as RecipeDisplayIngredients);
+
+  const chefAdvicePresentation = getChefAdviceCardPresentation({
+    recipe: { max_age_months: recipeDisplay.max_age_months },
+    isChefTip: true,
+  });
+  const miniAdvicePresentation = getChefAdviceCardPresentation({
+    recipe: { max_age_months: recipeDisplay.max_age_months },
+    isChefTip: false,
+  });
 
   return (
     <section className="mb-10">
@@ -143,14 +160,14 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
                 variant="details"
               />
 
-              {benefitLabel && (
+              {benefitLabelForDisplay && (
                 <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                   <span aria-hidden="true">🌿</span>
-                  <span>{benefitLabel}</span>
+                  <span>{benefitLabelForDisplay}</span>
                 </p>
               )}
               <p className="text-sm text-muted-foreground leading-[1.6]">
-                {benefitDescription}
+                {heroDescription}
               </p>
             </div>
           </div>
@@ -164,16 +181,16 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
 
             {chefAdvice?.trim() ? (
               <ChefAdviceCard
-                title="Совет от шефа"
+                title={chefAdvicePresentation.title}
                 body={chefAdvice.trim()}
-                isChefTip
+                isChefTip={chefAdvicePresentation.isChefTip}
                 className="mt-6"
               />
             ) : advice?.trim() ? (
               <ChefAdviceCard
-                title="Совет от шефа"
+                title={miniAdvicePresentation.title}
                 body={advice.trim()}
-                isChefTip={false}
+                isChefTip={miniAdvicePresentation.isChefTip}
                 className="mt-6"
               />
             ) : null}

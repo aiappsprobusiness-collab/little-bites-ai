@@ -1,0 +1,1192 @@
+{
+  "seedSet": "infant_7_8_months_stage2",
+  "locale": "ru",
+  "source": "seed",
+  "trust_level": "trusted",
+  "recipes": [
+    {
+      "title": "Пюре из кабачка и индейки",
+      "description": "Мягкое овощное блюдо с нежным мясным компонентом для расширения прикорма. Текстуру легко сделать более гладкой или чуть плотнее.",
+      "chef_advice": "Индейку лучше измельчать вместе с тёплым кабачком, так масса получается мягче. Если нужно, добавьте немного воды от варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 25,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 82,
+      "proteins": 9.2,
+      "fats": 2.1,
+      "carbs": 4.6,
+      "tags": ["infant", "7_8_months", "puree", "meat", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кабачок", "amount": 90, "unit": "г", "display_text": "Кабачок — 90 г", "category": "vegetables" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Очистите кабачок и нарежьте кусочками.",
+        "Филе индейки нарежьте небольшими кусочками.",
+        "Отварите или приготовьте на пару кабачок и индейку до мягкости.",
+        "Измельчите всё вместе до нужной текстуры."
+      ]
+    },
+    {
+      "title": "Пюре из цветной капусты и индейки",
+      "description": "Нежное блюдо из знакомых продуктов с мягкой подачей на каждый день. Подходит для постепенного введения мясных сочетаний.",
+      "chef_advice": "Чтобы текстура была ровнее, сначала доведите индейку до полной мягкости. При необходимости разбавьте пюре ложкой тёплой воды.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 27,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 88,
+      "proteins": 9.8,
+      "fats": 2.2,
+      "carbs": 5.0,
+      "tags": ["infant", "7_8_months", "puree", "meat", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Цветная капуста", "amount": 90, "unit": "г", "display_text": "Цветная капуста — 90 г", "category": "vegetables" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Подготовьте цветную капусту и индейку.",
+        "Приготовьте всё на пару или отварите до мягкости.",
+        "Соедините продукты и измельчите.",
+        "Проверьте, чтобы масса была мягкой и тёплой."
+      ]
+    },
+    {
+      "title": "Пюре из брокколи и индейки",
+      "description": "Простое сочетание овоща и мяса с мягкой текстурой для более сытной порции. Хорошо подходит для расширения дневного меню малыша.",
+      "chef_advice": "Если вкус брокколи кажется ярким, добавьте чуть больше овощной части. Для более гладкой подачи пробейте массу дольше.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 25,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 89,
+      "proteins": 10.1,
+      "fats": 2.2,
+      "carbs": 5.4,
+      "tags": ["infant", "7_8_months", "puree", "meat", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Брокколи", "amount": 90, "unit": "г", "display_text": "Брокколи — 90 г", "category": "vegetables" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Разберите брокколи на небольшие соцветия.",
+        "Индейку нарежьте кусочками.",
+        "Отварите или приготовьте всё на пару до мягкости.",
+        "Измельчите брокколи и индейку вместе."
+      ]
+    },
+    {
+      "title": "Пюре из тыквы и индейки",
+      "description": "Мягкое блюдо с нежной текстурой для спокойного расширения прикорма. Консистенцию легко подстроить под привычный формат подачи.",
+      "chef_advice": "Тыква делает текстуру мягче, поэтому её удобно брать как основу. Если масса густая, добавьте немного тёплой воды.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 26,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 86,
+      "proteins": 9.3,
+      "fats": 2.1,
+      "carbs": 6.3,
+      "tags": ["infant", "7_8_months", "puree", "meat", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Тыква", "amount": 90, "unit": "г", "display_text": "Тыква — 90 г", "category": "vegetables" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Очистите тыкву и нарежьте кусочками.",
+        "Филе индейки подготовьте небольшими кусочками.",
+        "Приготовьте оба продукта до мягкости.",
+        "Измельчите всё вместе до нужной текстуры."
+      ]
+    },
+    {
+      "title": "Пюре из картофеля и индейки",
+      "description": "Сытное, но мягкое блюдо для дневного приёма пищи без лишних добавок. Хорошо подходит для введения более плотной текстуры.",
+      "chef_advice": "Картофель разминайте сразу после варки, пока он мягкий. Индейку лучше добавлять понемногу и измельчать вместе с овощем.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 28,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 108,
+      "proteins": 9.5,
+      "fats": 2.1,
+      "carbs": 13.4,
+      "tags": ["infant", "7_8_months", "puree", "meat", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Картофель", "amount": 90, "unit": "г", "display_text": "Картофель — 90 г", "category": "vegetables" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Очистите картофель и нарежьте кубиками.",
+        "Подготовьте индейку кусочками.",
+        "Отварите картофель и индейку до полной мягкости.",
+        "Измельчите всё вместе до мягкой массы."
+      ]
+    },
+    {
+      "title": "Пюре из кабачка и курицы",
+      "description": "Нежное сочетание овоща и белого мяса с мягкой подачей для спокойного прикорма. Подходит для небольшой сытной порции.",
+      "chef_advice": "Курицу важно не пересушить, поэтому готовьте её до мягкости без длительной варки. Если нужно, добавьте немного воды от варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 25,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 84,
+      "proteins": 9.4,
+      "fats": 2.0,
+      "carbs": 4.7,
+      "tags": ["infant", "7_8_months", "puree", "chicken", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кабачок", "amount": 90, "unit": "г", "display_text": "Кабачок — 90 г", "category": "vegetables" },
+        { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Очистите кабачок и нарежьте кусочками.",
+        "Куриное филе нарежьте небольшими кусочками.",
+        "Приготовьте оба продукта до мягкости.",
+        "Измельчите вместе до подходящей консистенции."
+      ]
+    },
+    {
+      "title": "Пюре из цветной капусты и курицы",
+      "description": "Мягкое блюдо из простых продуктов для расширения обеденного меню малыша. Текстура остаётся нежной и понятной для этого этапа прикорма.",
+      "chef_advice": "Сначала доведите капусту и курицу до полной мягкости. Для более гладкой подачи пробейте массу чуть дольше.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 27,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 89,
+      "proteins": 10.0,
+      "fats": 2.1,
+      "carbs": 5.1,
+      "tags": ["infant", "7_8_months", "puree", "chicken", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Цветная капуста", "amount": 90, "unit": "г", "display_text": "Цветная капуста — 90 г", "category": "vegetables" },
+        { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Подготовьте цветную капусту и курицу.",
+        "Отварите или приготовьте на пару до мягкости.",
+        "Соедините продукты и измельчите.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Пюре из кабачка и кролика",
+      "description": "Нежное мясо с мягким овощем в спокойном формате для дневного прикорма. Хорошо подходит для постепенного расширения привычного рациона.",
+      "chef_advice": "Кролика лучше готовить до очень мягкого состояния, чтобы масса была ровнее. Если нужно, используйте немного воды от варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 30,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 86,
+      "proteins": 9.8,
+      "fats": 2.1,
+      "carbs": 4.6,
+      "tags": ["infant", "7_8_months", "puree", "rabbit", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кабачок", "amount": 90, "unit": "г", "display_text": "Кабачок — 90 г", "category": "vegetables" },
+        { "name": "Филе кролика", "amount": 40, "unit": "г", "display_text": "Филе кролика — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Подготовьте кабачок и филе кролика.",
+        "Приготовьте оба продукта до полной мягкости.",
+        "Измельчите всё вместе в пюре.",
+        "При необходимости смягчите текстуру водой от варки."
+      ]
+    },
+    {
+      "title": "Пюре из тыквы и кролика",
+      "description": "Мягкое и сытное блюдо с нежной текстурой для небольшого обеда. Подходит для расширения мясных сочетаний без лишних ингредиентов.",
+      "chef_advice": "Тыква помогает сделать текстуру более ровной и мягкой. Если масса получается плотной, добавьте немного тёплой воды.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 30,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 87,
+      "proteins": 9.4,
+      "fats": 2.1,
+      "carbs": 6.2,
+      "tags": ["infant", "7_8_months", "puree", "rabbit", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Тыква", "amount": 90, "unit": "г", "display_text": "Тыква — 90 г", "category": "vegetables" },
+        { "name": "Филе кролика", "amount": 40, "unit": "г", "display_text": "Филе кролика — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Очистите тыкву и нарежьте кусочками.",
+        "Филе кролика нарежьте небольшими кусочками.",
+        "Отварите или приготовьте всё до мягкости.",
+        "Измельчите продукты вместе."
+      ]
+    },
+    {
+      "title": "Гречневая каша с тыквой",
+      "description": "Нежная каша с мягким овощным вкусом для спокойного завтрака. Консистенцию легко сделать более гладкой или чуть плотнее.",
+      "chef_advice": "Гречку разварите до полной мягкости, а тыкву приготовьте отдельно до нежности. После соединения оцените густоту и при необходимости добавьте воду.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 22,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 98,
+      "proteins": 3.3,
+      "fats": 1.0,
+      "carbs": 21.0,
+      "tags": ["infant", "7_8_months", "porridge", "grains", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Гречневая крупа", "amount": 18, "unit": "г", "display_text": "Гречневая крупа — 18 г", "category": "grains" },
+        { "name": "Тыква", "amount": 50, "unit": "г", "display_text": "Тыква — 50 г", "category": "vegetables" },
+        { "name": "Вода", "amount": 170, "unit": "мл", "display_text": "Вода — 170 мл", "category": "other" }
+      ],
+      "steps": [
+        "Промойте гречневую крупу и сварите до мягкости.",
+        "Тыкву приготовьте отдельно до мягкости.",
+        "Соедините гречку с тыквой и измельчите или разомните.",
+        "Остудите до тёплого состояния."
+      ]
+    },
+    {
+      "title": "Рисовая каша с яблоком и грушей",
+      "description": "Мягкая каша с деликатной фруктовой подачей для спокойного утреннего меню. Хорошо подходит для небольшой порции без лишних добавок.",
+      "chef_advice": "Фрукты лучше сначала сделать мягкими, а потом соединять с рисом. Для более нежной подачи пробейте всё вместе.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 24,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 104,
+      "proteins": 2.2,
+      "fats": 0.2,
+      "carbs": 23.4,
+      "tags": ["infant", "7_8_months", "porridge", "fruit", "grains"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Рисовая крупа", "amount": 16, "unit": "г", "display_text": "Рисовая крупа — 16 г", "category": "grains" },
+        { "name": "Яблоко", "amount": 35, "unit": "г", "display_text": "Яблоко — 35 г", "category": "fruits" },
+        { "name": "Груша", "amount": 35, "unit": "г", "display_text": "Груша — 35 г", "category": "fruits" },
+        { "name": "Вода", "amount": 170, "unit": "мл", "display_text": "Вода — 170 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите рисовую крупу до полной мягкости.",
+        "Яблоко и грушу приготовьте до мягкости.",
+        "Соедините рис с фруктами и измельчите.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Овсяная каша с яблоком и бананом",
+      "description": "Нежная каша с мягким фруктовым вкусом для простого завтрака на каждый день. Текстура остаётся понятной и мягкой для этого этапа прикорма.",
+      "chef_advice": "Банан добавляйте уже в готовую мягкую кашу. Если масса получилась плотной, разбавьте её небольшим количеством тёплой воды.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 14,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 108,
+      "proteins": 3.0,
+      "fats": 1.6,
+      "carbs": 20.1,
+      "tags": ["infant", "7_8_months", "porridge", "fruit", "grains"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Овсяные хлопья", "amount": 16, "unit": "г", "display_text": "Овсяные хлопья — 16 г", "category": "grains" },
+        { "name": "Яблоко", "amount": 40, "unit": "г", "display_text": "Яблоко — 40 г", "category": "fruits" },
+        { "name": "Банан", "amount": 35, "unit": "г", "display_text": "Банан — 35 г", "category": "fruits" },
+        { "name": "Вода", "amount": 160, "unit": "мл", "display_text": "Вода — 160 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите овсяные хлопья на воде до мягкости.",
+        "Яблоко приготовьте до мягкости, банан разомните.",
+        "Соедините кашу с фруктами и перемешайте.",
+        "При необходимости слегка измельчите до более нежной текстуры."
+      ]
+    },
+    {
+      "title": "Гречневая каша с грушей и бананом",
+      "description": "Мягкая каша с фруктовым вкусом для небольшого завтрака без лишних добавок. Подходит для расширения привычных сочетаний в меню малыша.",
+      "chef_advice": "Если банан делает кашу слишком плотной, добавьте немного тёплой воды. Грушу лучше вводить уже мягкой, без кожуры.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 20,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 112,
+      "proteins": 3.2,
+      "fats": 1.0,
+      "carbs": 23.5,
+      "tags": ["infant", "7_8_months", "porridge", "fruit", "grains"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Гречневая крупа", "amount": 18, "unit": "г", "display_text": "Гречневая крупа — 18 г", "category": "grains" },
+        { "name": "Груша", "amount": 40, "unit": "г", "display_text": "Груша — 40 г", "category": "fruits" },
+        { "name": "Банан", "amount": 35, "unit": "г", "display_text": "Банан — 35 г", "category": "fruits" },
+        { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите гречневую крупу до мягкости.",
+        "Грушу приготовьте до мягкости, банан разомните.",
+        "Соедините кашу с фруктами и измельчите или хорошо разомните.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Кукурузная каша с тыквой и яблоком",
+      "description": "Нежная каша с мягким фруктово-овощным акцентом для разнообразия утреннего меню. Хорошо подходит для маленькой порции прикорма.",
+      "chef_advice": "Кукурузную крупу варите до полной мягкости, чтобы избежать крупинок. Тыкву и яблоко сначала доведите до мягкости отдельно.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 22,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 103,
+      "proteins": 2.3,
+      "fats": 0.8,
+      "carbs": 22.3,
+      "tags": ["infant", "7_8_months", "porridge", "fruit_vegetable", "grains"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кукурузная крупа", "amount": 18, "unit": "г", "display_text": "Кукурузная крупа — 18 г", "category": "grains" },
+        { "name": "Тыква", "amount": 35, "unit": "г", "display_text": "Тыква — 35 г", "category": "vegetables" },
+        { "name": "Яблоко", "amount": 35, "unit": "г", "display_text": "Яблоко — 35 г", "category": "fruits" },
+        { "name": "Вода", "amount": 175, "unit": "мл", "display_text": "Вода — 175 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите кукурузную крупу до мягкости.",
+        "Тыкву и яблоко приготовьте до мягкости.",
+        "Соедините всё вместе и измельчите.",
+        "Остудите до комфортной температуры."
+      ]
+    },
+    {
+      "title": "Пюре из кабачка, картофеля и индейки",
+      "description": "Сытное, но мягкое блюдо для дневного прикорма с понятной текстурой. Подходит для перехода к более плотным сочетаниям.",
+      "chef_advice": "Картофель делает массу плотнее, поэтому при необходимости добавьте немного воды от варки. Индейку измельчайте вместе с овощами, пока они тёплые.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 28,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 102,
+      "proteins": 9.4,
+      "fats": 2.1,
+      "carbs": 12.7,
+      "tags": ["infant", "7_8_months", "puree", "meat", "vegetable", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кабачок", "amount": 60, "unit": "г", "display_text": "Кабачок — 60 г", "category": "vegetables" },
+        { "name": "Картофель", "amount": 60, "unit": "г", "display_text": "Картофель — 60 г", "category": "vegetables" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Подготовьте овощи и индейку.",
+        "Отварите или приготовьте всё на пару до полной мягкости.",
+        "Измельчите продукты вместе.",
+        "Доведите до мягкой консистенции при необходимости."
+      ]
+    },
+    {
+      "title": "Пюре из цветной капусты, картофеля и курицы",
+      "description": "Нежное блюдо из знакомых продуктов для сытного обеда без лишних добавок. Текстуру легко сделать более гладкой или чуть гуще.",
+      "chef_advice": "Если масса получается плотной, добавьте немного воды от варки. Для ровной текстуры сначала измельчайте курицу вместе с мягким картофелем.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 29,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 105,
+      "proteins": 9.8,
+      "fats": 2.1,
+      "carbs": 12.9,
+      "tags": ["infant", "7_8_months", "puree", "chicken", "vegetable", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Цветная капуста", "amount": 60, "unit": "г", "display_text": "Цветная капуста — 60 г", "category": "vegetables" },
+        { "name": "Картофель", "amount": 60, "unit": "г", "display_text": "Картофель — 60 г", "category": "vegetables" },
+        { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Подготовьте цветную капусту, картофель и курицу.",
+        "Приготовьте всё до мягкости.",
+        "Соедините продукты и измельчите.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Пюре из тыквы, риса и индейки",
+      "description": "Мягкое блюдо с крупой и мясом для более сытной порции прикорма. Хорошо подходит для спокойного расширения дневного меню.",
+      "chef_advice": "Рис должен быть полностью мягким, чтобы не утяжелять текстуру. После соединения всех продуктов оцените густоту и при необходимости добавьте воду.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 30,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 112,
+      "proteins": 9.0,
+      "fats": 2.0,
+      "carbs": 15.0,
+      "tags": ["infant", "7_8_months", "puree", "meat", "grain", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Тыква", "amount": 60, "unit": "г", "display_text": "Тыква — 60 г", "category": "vegetables" },
+        { "name": "Рисовая крупа", "amount": 14, "unit": "г", "display_text": "Рисовая крупа — 14 г", "category": "grains" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" },
+        { "name": "Вода", "amount": 150, "unit": "мл", "display_text": "Вода — 150 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите рис до полной мягкости.",
+        "Тыкву и индейку приготовьте отдельно до мягкости.",
+        "Соедините все продукты и измельчите.",
+        "Перед подачей остудите до тёплого состояния."
+      ]
+    },
+    {
+      "title": "Пюре из брокколи, гречки и индейки",
+      "description": "Сытное сочетание овоща, крупы и мяса с мягкой подачей для дневного меню малыша. Подходит для постепенного расширения текстур и вкусов.",
+      "chef_advice": "Если вкус брокколи выходит ярче, увеличьте долю гречки или индейки совсем немного. Для более нежной подачи пробейте массу дольше.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 30,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 115,
+      "proteins": 9.8,
+      "fats": 2.2,
+      "carbs": 14.1,
+      "tags": ["infant", "7_8_months", "puree", "meat", "grain", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Брокколи", "amount": 55, "unit": "г", "display_text": "Брокколи — 55 г", "category": "vegetables" },
+        { "name": "Гречневая крупа", "amount": 14, "unit": "г", "display_text": "Гречневая крупа — 14 г", "category": "grains" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" },
+        { "name": "Вода", "amount": 150, "unit": "мл", "display_text": "Вода — 150 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите гречневую крупу до мягкости.",
+        "Брокколи и индейку приготовьте отдельно до мягкости.",
+        "Соедините все продукты и измельчите.",
+        "При необходимости смягчите текстуру водой от варки."
+      ]
+    },
+    {
+      "title": "Пюре из кабачка, риса и курицы",
+      "description": "Мягкое блюдо с крупой и белым мясом для более сытной дневной порции. Текстура остаётся нежной и удобной для этого возраста.",
+      "chef_advice": "Рис добавляйте только хорошо разваренным. Если блюдо получается густым, немного разведите его тёплой водой.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 28,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 110,
+      "proteins": 9.1,
+      "fats": 2.0,
+      "carbs": 14.6,
+      "tags": ["infant", "7_8_months", "puree", "chicken", "grain", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кабачок", "amount": 60, "unit": "г", "display_text": "Кабачок — 60 г", "category": "vegetables" },
+        { "name": "Рисовая крупа", "amount": 14, "unit": "г", "display_text": "Рисовая крупа — 14 г", "category": "grains" },
+        { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" },
+        { "name": "Вода", "amount": 150, "unit": "мл", "display_text": "Вода — 150 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите рисовую крупу до полной мягкости.",
+        "Кабачок и курицу приготовьте до мягкости.",
+        "Соедините всё вместе и измельчите.",
+        "Остудите до комфортной температуры."
+      ]
+    },
+    {
+      "title": "Пюре из картофеля, моркови и индейки",
+      "description": "Спокойное сочетание знакомых продуктов для сытной порции прикорма. Подходит, когда малыш уже ест более плотные овощные сочетания.",
+      "chef_advice": "Морковь должна стать совсем мягкой перед измельчением. Для более нежной подачи добавьте немного воды от варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 30,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 109,
+      "proteins": 9.3,
+      "fats": 2.1,
+      "carbs": 13.8,
+      "tags": ["infant", "7_8_months", "puree", "meat", "vegetable", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Картофель", "amount": 55, "unit": "г", "display_text": "Картофель — 55 г", "category": "vegetables" },
+        { "name": "Морковь", "amount": 45, "unit": "г", "display_text": "Морковь — 45 г", "category": "vegetables" },
+        { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Очистите картофель и морковь, нарежьте кусочками.",
+        "Подготовьте индейку небольшими кусочками.",
+        "Приготовьте всё до полной мягкости.",
+        "Измельчите продукты вместе."
+      ]
+    },
+    {
+      "title": "Пюре из тыквы, кабачка и курицы",
+      "description": "Нежное сочетание мягких овощей и белого мяса для спокойного обеда. Консистенцию легко регулировать под привычную малышу подачу.",
+      "chef_advice": "Тыква и кабачок дают мягкую основу, поэтому курицу удобно вводить именно в таком сочетании. Если нужно, добавьте немного воды от варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 27,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 92,
+      "proteins": 9.2,
+      "fats": 2.0,
+      "carbs": 7.8,
+      "tags": ["infant", "7_8_months", "puree", "chicken", "vegetable", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Тыква", "amount": 50, "unit": "г", "display_text": "Тыква — 50 г", "category": "vegetables" },
+        { "name": "Кабачок", "amount": 50, "unit": "г", "display_text": "Кабачок — 50 г", "category": "vegetables" },
+        { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Подготовьте овощи и курицу.",
+        "Приготовьте всё до мягкости.",
+        "Измельчите продукты вместе до однородной или чуть более плотной массы.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Пюре из цветной капусты, кабачка и кролика",
+      "description": "Мягкое блюдо с нежной текстурой для расширения мясных сочетаний в меню малыша. Хорошо подходит для сытной, но спокойной дневной порции.",
+      "chef_advice": "Кролика лучше готовить чуть дольше до полной мягкости. Для более гладкой подачи измельчайте его вместе с мягкими овощами.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 31,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 91,
+      "proteins": 9.7,
+      "fats": 2.1,
+      "carbs": 6.0,
+      "tags": ["infant", "7_8_months", "puree", "rabbit", "vegetable", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Цветная капуста", "amount": 50, "unit": "г", "display_text": "Цветная капуста — 50 г", "category": "vegetables" },
+        { "name": "Кабачок", "amount": 50, "unit": "г", "display_text": "Кабачок — 50 г", "category": "vegetables" },
+        { "name": "Филе кролика", "amount": 40, "unit": "г", "display_text": "Филе кролика — 40 г", "category": "meat" }
+      ],
+      "steps": [
+        "Подготовьте овощи и кролика.",
+        "Приготовьте всё до мягкости.",
+        "Соедините продукты и измельчите.",
+        "Проверьте температуру перед подачей."
+      ]
+    },
+    {
+      "title": "Пюре из картофеля и желтка",
+      "description": "Мягкое блюдо с более сытной текстурой для расширения прикорма. Подходит для небольшой порции, если желток уже введён в рацион.",
+      "chef_advice": "Желток добавляйте в уже тёплый, а не горячий картофель. При необходимости смягчите текстуру ложкой тёплой воды.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 20,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 104,
+      "proteins": 4.1,
+      "fats": 4.0,
+      "carbs": 12.5,
+      "tags": ["infant", "7_8_months", "puree", "egg_yolk", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Картофель", "amount": 90, "unit": "г", "display_text": "Картофель — 90 г", "category": "vegetables" },
+        { "name": "Куриный желток", "amount": 0.5, "unit": "шт.", "display_text": "Куриный желток — 1/2 шт.", "category": "other" }
+      ],
+      "steps": [
+        "Отварите картофель до полной мягкости.",
+        "Отдельно сварите яйцо вкрутую и отделите желток.",
+        "Разомните картофель и добавьте половину желтка.",
+        "При необходимости доведите до мягкой консистенции."
+      ]
+    },
+    {
+      "title": "Пюре из кабачка и желтка",
+      "description": "Нежное овощное блюдо с мягким добавлением желтка для небольшого дневного приёма пищи. Текстура остаётся лёгкой и понятной для малыша.",
+      "chef_advice": "Желток удобнее вмешивать в уже готовый тёплый кабачок. Если масса густая, добавьте немного воды от варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 18,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 63,
+      "proteins": 3.6,
+      "fats": 4.1,
+      "carbs": 3.8,
+      "tags": ["infant", "7_8_months", "puree", "egg_yolk", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кабачок", "amount": 100, "unit": "г", "display_text": "Кабачок — 100 г", "category": "vegetables" },
+        { "name": "Куриный желток", "amount": 0.5, "unit": "шт.", "display_text": "Куриный желток — 1/2 шт.", "category": "other" }
+      ],
+      "steps": [
+        "Приготовьте кабачок до мягкости.",
+        "Сварите яйцо вкрутую и отделите желток.",
+        "Измельчите кабачок и вмешайте половину желтка.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Пюре из цветной капусты и желтка",
+      "description": "Мягкое блюдо из простых продуктов для спокойного расширения прикорма. Хорошо подходит для небольшой сытной порции.",
+      "chef_advice": "Цветную капусту доведите до очень мягкого состояния, чтобы текстура оставалась ровной. Желток добавляйте постепенно, оценивая густоту.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 20,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 68,
+      "proteins": 4.0,
+      "fats": 4.1,
+      "carbs": 4.8,
+      "tags": ["infant", "7_8_months", "puree", "egg_yolk", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Цветная капуста", "amount": 100, "unit": "г", "display_text": "Цветная капуста — 100 г", "category": "vegetables" },
+        { "name": "Куриный желток", "amount": 0.5, "unit": "шт.", "display_text": "Куриный желток — 1/2 шт.", "category": "other" }
+      ],
+      "steps": [
+        "Приготовьте цветную капусту до мягкости.",
+        "Сварите яйцо вкрутую и отделите желток.",
+        "Измельчите капусту и вмешайте половину желтка.",
+        "При необходимости добавьте немного тёплой воды."
+      ]
+    },
+    {
+      "title": "Пюре из картофеля, кабачка и желтка",
+      "description": "Сытное, но мягкое сочетание для более плотной дневной порции. Подходит, когда желток и овощи уже знакомы малышу по отдельности.",
+      "chef_advice": "Картофель и кабачок лучше соединять ещё тёплыми, тогда желток распределяется ровнее. Если текстура плотная, немного разведите её водой.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 22,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 89,
+      "proteins": 4.0,
+      "fats": 4.1,
+      "carbs": 10.2,
+      "tags": ["infant", "7_8_months", "puree", "egg_yolk", "vegetable", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Картофель", "amount": 60, "unit": "г", "display_text": "Картофель — 60 г", "category": "vegetables" },
+        { "name": "Кабачок", "amount": 60, "unit": "г", "display_text": "Кабачок — 60 г", "category": "vegetables" },
+        { "name": "Куриный желток", "amount": 0.5, "unit": "шт.", "display_text": "Куриный желток — 1/2 шт.", "category": "other" }
+      ],
+      "steps": [
+        "Отварите картофель и кабачок до мягкости.",
+        "Сварите яйцо вкрутую и отделите желток.",
+        "Измельчите овощи и вмешайте половину желтка.",
+        "Проверьте, чтобы масса оставалась мягкой."
+      ]
+    },
+    {
+      "title": "Пюре из кабачка и трески",
+      "description": "Нежное рыбное блюдо с мягким овощем для спокойного введения новых сочетаний. Подходит для небольшой порции, если рыба уже введена в рацион.",
+      "chef_advice": "Треску важно тщательно проверить на отсутствие косточек. Для более нежной подачи измельчайте рыбу вместе с тёплым кабачком.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 22,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 76,
+      "proteins": 9.3,
+      "fats": 1.1,
+      "carbs": 4.5,
+      "tags": ["infant", "7_8_months", "puree", "fish", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кабачок", "amount": 90, "unit": "г", "display_text": "Кабачок — 90 г", "category": "vegetables" },
+        { "name": "Филе трески", "amount": 40, "unit": "г", "display_text": "Филе трески — 40 г", "category": "fish" }
+      ],
+      "steps": [
+        "Подготовьте кабачок и филе трески без косточек.",
+        "Приготовьте оба продукта на пару или отварите до мягкости.",
+        "Измельчите всё вместе до мягкой массы.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Пюре из картофеля и трески",
+      "description": "Мягкое рыбное блюдо с более сытной текстурой для спокойного дневного меню. Хорошо подходит для маленькой порции прикорма.",
+      "chef_advice": "Картофель смягчает вкус рыбы и делает подачу более привычной. Перед подачей обязательно проверьте, чтобы в рыбе не осталось косточек.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 24,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 98,
+      "proteins": 9.2,
+      "fats": 1.1,
+      "carbs": 12.9,
+      "tags": ["infant", "7_8_months", "puree", "fish", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Картофель", "amount": 90, "unit": "г", "display_text": "Картофель — 90 г", "category": "vegetables" },
+        { "name": "Филе трески", "amount": 40, "unit": "г", "display_text": "Филе трески — 40 г", "category": "fish" }
+      ],
+      "steps": [
+        "Подготовьте картофель и филе трески.",
+        "Приготовьте оба продукта до мягкости.",
+        "Проверьте рыбу на отсутствие косточек.",
+        "Измельчите всё вместе."
+      ]
+    },
+    {
+      "title": "Пюре из цветной капусты и трески",
+      "description": "Нежное сочетание мягкого овоща и рыбы для спокойного введения рыбных блюд. Текстура легко регулируется под привычную подачу.",
+      "chef_advice": "Цветная капуста помогает сделать текстуру более воздушной. Если масса плотная, добавьте немного воды от варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 23,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 79,
+      "proteins": 9.6,
+      "fats": 1.1,
+      "carbs": 5.0,
+      "tags": ["infant", "7_8_months", "puree", "fish", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Цветная капуста", "amount": 90, "unit": "г", "display_text": "Цветная капуста — 90 г", "category": "vegetables" },
+        { "name": "Филе трески", "amount": 40, "unit": "г", "display_text": "Филе трески — 40 г", "category": "fish" }
+      ],
+      "steps": [
+        "Подготовьте цветную капусту и треску без косточек.",
+        "Приготовьте оба продукта до мягкости.",
+        "Соедините их и измельчите.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Пюре из тыквы и трески",
+      "description": "Мягкое рыбное блюдо с нежной овощной основой для расширения прикорма. Подходит для маленькой порции без лишних добавок.",
+      "chef_advice": "Тыква делает вкус более спокойным и текстуру мягче. Перед измельчением ещё раз проверьте рыбу на косточки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 23,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 78,
+      "proteins": 9.2,
+      "fats": 1.1,
+      "carbs": 6.0,
+      "tags": ["infant", "7_8_months", "puree", "fish", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Тыква", "amount": 90, "unit": "г", "display_text": "Тыква — 90 г", "category": "vegetables" },
+        { "name": "Филе трески", "amount": 40, "unit": "г", "display_text": "Филе трески — 40 г", "category": "fish" }
+      ],
+      "steps": [
+        "Очистите тыкву и подготовьте филе трески.",
+        "Приготовьте оба продукта до мягкости.",
+        "Проверьте треску на отсутствие косточек.",
+        "Измельчите всё вместе до нужной текстуры."
+      ]
+    },
+    {
+      "title": "Рисовая каша с тыквой и бананом",
+      "description": "Нежная каша с мягким сладковатым вкусом для спокойного завтрака. Хорошо подходит для небольшой порции без лишних добавок.",
+      "chef_advice": "Банан лучше добавлять в уже готовую тёплую кашу. Если текстура плотная, разведите её небольшим количеством тёплой воды.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 20,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 111,
+      "proteins": 2.1,
+      "fats": 0.2,
+      "carbs": 24.9,
+      "tags": ["infant", "7_8_months", "porridge", "fruit_vegetable", "grains"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Рисовая крупа", "amount": 16, "unit": "г", "display_text": "Рисовая крупа — 16 г", "category": "grains" },
+        { "name": "Тыква", "amount": 35, "unit": "г", "display_text": "Тыква — 35 г", "category": "vegetables" },
+        { "name": "Банан", "amount": 35, "unit": "г", "display_text": "Банан — 35 г", "category": "fruits" },
+        { "name": "Вода", "amount": 170, "unit": "мл", "display_text": "Вода — 170 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите рисовую крупу до мягкости.",
+        "Тыкву приготовьте до мягкости, банан разомните.",
+        "Соедините кашу с тыквой и бананом.",
+        "При необходимости слегка измельчите до более мягкой текстуры."
+      ]
+    },
+    {
+      "title": "Овсяная каша с грушей и тыквой",
+      "description": "Мягкая каша с деликатным фруктово-овощным вкусом для разнообразия утреннего меню. Текстуру легко сделать более гладкой или чуть плотнее.",
+      "chef_advice": "Грушу и тыкву лучше сначала довести до мягкости. После соединения с кашей оцените густоту и при необходимости добавьте воду.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 16,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 97,
+      "proteins": 2.8,
+      "fats": 1.5,
+      "carbs": 17.9,
+      "tags": ["infant", "7_8_months", "porridge", "fruit_vegetable", "grains"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Овсяные хлопья", "amount": 16, "unit": "г", "display_text": "Овсяные хлопья — 16 г", "category": "grains" },
+        { "name": "Груша", "amount": 35, "unit": "г", "display_text": "Груша — 35 г", "category": "fruits" },
+        { "name": "Тыква", "amount": 35, "unit": "г", "display_text": "Тыква — 35 г", "category": "vegetables" },
+        { "name": "Вода", "amount": 160, "unit": "мл", "display_text": "Вода — 160 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите овсяные хлопья на воде до мягкости.",
+        "Грушу и тыкву приготовьте до мягкости.",
+        "Соедините всё вместе и измельчите или хорошо разомните.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Гречневая каша с яблоком и тыквой",
+      "description": "Нежная каша с мягкой подачей для спокойного домашнего завтрака. Подходит для расширения привычных сочетаний без сложных вкусов.",
+      "chef_advice": "Тыкву и яблоко удобно готовить вместе до мягкости. Если гречка остаётся плотной, измельчите блюдо чуть дольше.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 21,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 101,
+      "proteins": 3.2,
+      "fats": 1.0,
+      "carbs": 21.7,
+      "tags": ["infant", "7_8_months", "porridge", "fruit_vegetable", "grains"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Гречневая крупа", "amount": 18, "unit": "г", "display_text": "Гречневая крупа — 18 г", "category": "grains" },
+        { "name": "Яблоко", "amount": 35, "unit": "г", "display_text": "Яблоко — 35 г", "category": "fruits" },
+        { "name": "Тыква", "amount": 35, "unit": "г", "display_text": "Тыква — 35 г", "category": "vegetables" },
+        { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите гречневую крупу до мягкости.",
+        "Яблоко и тыкву приготовьте до мягкости.",
+        "Соедините все продукты и измельчите.",
+        "Остудите до комфортной температуры."
+      ]
+    },
+    {
+      "title": "Пюре из яблока, груши и творога",
+      "description": "Мягкое фруктовое блюдо с нежной текстурой для перекуса или завтрака. Подходит для небольшой порции, если творог уже введён в рацион малыша.",
+      "chef_advice": "Фрукты лучше сделать мягкими заранее, а творог добавлять уже в тёплую, не горячую массу. Для более ровной текстуры всё можно слегка пробить блендером.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 94,
+      "proteins": 5.0,
+      "fats": 3.0,
+      "carbs": 11.8,
+      "tags": ["infant", "7_8_months", "snack", "fruit", "dairy"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Яблоко", "amount": 40, "unit": "г", "display_text": "Яблоко — 40 г", "category": "fruits" },
+        { "name": "Груша", "amount": 40, "unit": "г", "display_text": "Груша — 40 г", "category": "fruits" },
+        { "name": "Творог детский", "amount": 40, "unit": "г", "display_text": "Творог детский — 40 г", "category": "dairy" }
+      ],
+      "steps": [
+        "Яблоко и грушу приготовьте до мягкости.",
+        "Измельчите фрукты до нежного пюре.",
+        "Добавьте творог и хорошо перемешайте.",
+        "Подавайте сразу после приготовления."
+      ]
+    },
+    {
+      "title": "Пюре из банана и творога",
+      "description": "Очень простое мягкое блюдо для перекуса с нежной подачей. Хорошо подходит для небольшой порции без лишних ингредиентов.",
+      "chef_advice": "Используйте мягкий спелый банан без плотных волокон. Если хотите более нежную текстуру, слегка пробейте массу блендером.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 5,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 101,
+      "proteins": 4.9,
+      "fats": 3.1,
+      "carbs": 13.2,
+      "tags": ["infant", "7_8_months", "snack", "fruit", "dairy"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Банан", "amount": 50, "unit": "г", "display_text": "Банан — 50 г", "category": "fruits" },
+        { "name": "Творог детский", "amount": 40, "unit": "г", "display_text": "Творог детский — 40 г", "category": "dairy" }
+      ],
+      "steps": [
+        "Разомните банан вилкой до мягкой массы.",
+        "Добавьте детский творог.",
+        "Хорошо перемешайте до однородности.",
+        "Подавайте сразу."
+      ]
+    },
+    {
+      "title": "Пюре из груши и творога",
+      "description": "Мягкий перекус с деликатной текстурой для спокойного дневного меню. Подходит для небольшой порции, если оба продукта уже знакомы малышу.",
+      "chef_advice": "Грушу лучше сделать мягкой заранее, особенно если она плотная. Творог вмешивайте уже после лёгкого остывания фруктовой массы.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 10,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 92,
+      "proteins": 4.8,
+      "fats": 3.0,
+      "carbs": 11.5,
+      "tags": ["infant", "7_8_months", "snack", "fruit", "dairy"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Груша", "amount": 50, "unit": "г", "display_text": "Груша — 50 г", "category": "fruits" },
+        { "name": "Творог детский", "amount": 40, "unit": "г", "display_text": "Творог детский — 40 г", "category": "dairy" }
+      ],
+      "steps": [
+        "Подготовьте грушу и приготовьте её до мягкости.",
+        "Измельчите грушу в пюре.",
+        "Добавьте творог и перемешайте.",
+        "Подавайте тёплым или комнатной температуры."
+      ]
+    },
+    {
+      "title": "Пюре из яблока, банана и творога",
+      "description": "Нежный фруктово-молочный перекус для маленькой порции без лишних добавок. Хорошо подходит для расширения привычных сочетаний.",
+      "chef_advice": "Яблоко лучше сначала сделать мягким, чтобы текстура была ровнее. Банан и творог добавляйте уже в готовую тёплую массу.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 12,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 103,
+      "proteins": 4.9,
+      "fats": 3.0,
+      "carbs": 14.4,
+      "tags": ["infant", "7_8_months", "snack", "fruit", "dairy", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Яблоко", "amount": 40, "unit": "г", "display_text": "Яблоко — 40 г", "category": "fruits" },
+        { "name": "Банан", "amount": 35, "unit": "г", "display_text": "Банан — 35 г", "category": "fruits" },
+        { "name": "Творог детский", "amount": 35, "unit": "г", "display_text": "Творог детский — 35 г", "category": "dairy" }
+      ],
+      "steps": [
+        "Яблоко приготовьте до мягкости.",
+        "Банан разомните вилкой.",
+        "Соедините яблоко, банан и творог.",
+        "Перемешайте до мягкой однородной массы."
+      ]
+    },
+    {
+      "title": "Пюре из картофеля, кабачка и трески",
+      "description": "Мягкое рыбное блюдо с более сытной основой для дневного прикорма. Подходит для маленькой порции при спокойном введении рыбы.",
+      "chef_advice": "Картофель делает текстуру плотнее, поэтому кабачок здесь особенно полезен для мягкости. Перед подачей ещё раз проверьте, что в рыбе нет косточек.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 26,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 101,
+      "proteins": 9.1,
+      "fats": 1.1,
+      "carbs": 13.1,
+      "tags": ["infant", "7_8_months", "puree", "fish", "vegetable", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Картофель", "amount": 55, "unit": "г", "display_text": "Картофель — 55 г", "category": "vegetables" },
+        { "name": "Кабачок", "amount": 55, "unit": "г", "display_text": "Кабачок — 55 г", "category": "vegetables" },
+        { "name": "Филе трески", "amount": 40, "unit": "г", "display_text": "Филе трески — 40 г", "category": "fish" }
+      ],
+      "steps": [
+        "Подготовьте картофель, кабачок и треску.",
+        "Приготовьте всё до мягкости.",
+        "Проверьте рыбу на отсутствие косточек.",
+        "Измельчите все продукты вместе."
+      ]
+    },
+    {
+      "title": "Пюре из цветной капусты, картофеля и трески",
+      "description": "Нежное рыбно-овощное блюдо для спокойного дневного меню малыша. Текстура остаётся мягкой и удобной для этого возраста.",
+      "chef_advice": "Цветная капуста помогает сделать подачу более воздушной. Если масса получилась плотной, добавьте немного воды от варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 27,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 103,
+      "proteins": 9.4,
+      "fats": 1.1,
+      "carbs": 13.0,
+      "tags": ["infant", "7_8_months", "puree", "fish", "vegetable", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Цветная капуста", "amount": 50, "unit": "г", "display_text": "Цветная капуста — 50 г", "category": "vegetables" },
+        { "name": "Картофель", "amount": 55, "unit": "г", "display_text": "Картофель — 55 г", "category": "vegetables" },
+        { "name": "Филе трески", "amount": 40, "unit": "г", "display_text": "Филе трески — 40 г", "category": "fish" }
+      ],
+      "steps": [
+        "Подготовьте овощи и треску без косточек.",
+        "Приготовьте всё до полной мягкости.",
+        "Соедините продукты и измельчите.",
+        "Подавайте тёплым."
+      ]
+    },
+    {
+      "title": "Овощное пюре с индейкой и желтком",
+      "description": "Сытное, но мягкое блюдо для более плотной дневной порции прикорма. Подходит, когда все продукты уже знакомы малышу по отдельности.",
+      "chef_advice": "Желток удобнее вмешивать в уже готовую тёплую массу. Если текстура плотная, добавьте немного воды от варки овощей.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 30,
+      "min_age_months": 8,
+      "max_age_months": 8,
+      "calories": 110,
+      "proteins": 10.2,
+      "fats": 4.2,
+      "carbs": 7.2,
+      "tags": ["infant", "7_8_months", "puree", "meat", "egg_yolk", "vegetable"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Кабачок", "amount": 50, "unit": "г", "display_text": "Кабачок — 50 г", "category": "vegetables" },
+        { "name": "Цветная капуста", "amount": 50, "unit": "г", "display_text": "Цветная капуста — 50 г", "category": "vegetables" },
+        { "name": "Филе индейки", "amount": 35, "unit": "г", "display_text": "Филе индейки — 35 г", "category": "meat" },
+        { "name": "Куриный желток", "amount": 0.5, "unit": "шт.", "display_text": "Куриный желток — 1/2 шт.", "category": "other" }
+      ],
+      "steps": [
+        "Подготовьте овощи и индейку.",
+        "Приготовьте всё до мягкости.",
+        "Сварите яйцо вкрутую и отделите желток.",
+        "Измельчите овощи с индейкой и вмешайте половину желтка."
+      ]
+    },
+    {
+      "title": "Гречневая каша с яблоком, грушей и бананом",
+      "description": "Нежная каша с мягким фруктовым вкусом для спокойного и понятного завтрака. Хорошо подходит для маленькой порции без лишних добавок.",
+      "chef_advice": "Не делайте блюдо слишком густым: банан уже уплотняет текстуру. При необходимости добавьте немного тёплой воды после соединения.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 22,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 116,
+      "proteins": 3.1,
+      "fats": 1.0,
+      "carbs": 25.1,
+      "tags": ["infant", "7_8_months", "porridge", "fruit", "grains", "three_ingredients"],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        { "name": "Гречневая крупа", "amount": 16, "unit": "г", "display_text": "Гречневая крупа — 16 г", "category": "grains" },
+        { "name": "Яблоко", "amount": 30, "unit": "г", "display_text": "Яблоко — 30 г", "category": "fruits" },
+        { "name": "Груша", "amount": 30, "unit": "г", "display_text": "Груша — 30 г", "category": "fruits" },
+        { "name": "Банан", "amount": 30, "unit": "г", "display_text": "Банан — 30 г", "category": "fruits" },
+        { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+      ],
+      "steps": [
+        "Сварите гречневую крупу до мягкости.",
+        "Яблоко и грушу приготовьте до мягкости, банан разомните.",
+        "Соедините кашу с фруктами.",
+        "Измельчите или хорошо разомните до мягкой текстуры."
+      ]
+    }
+  ]
+}
