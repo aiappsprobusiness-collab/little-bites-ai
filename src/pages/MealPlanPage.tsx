@@ -1345,7 +1345,10 @@ export default function MealPlanPage() {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
-            className="rounded-2xl bg-card/70 border-0 p-3 sm:p-4 mb-2 shadow-none ring-1 ring-border/20"
+            className={cn(
+              "rounded-2xl bg-card/70 border-0 shadow-none ring-1 ring-border/20",
+              isInfantPlanUi ? "p-2.5 sm:p-3.5 mb-1.5" : "p-3 sm:p-4 mb-2",
+            )}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -1353,12 +1356,13 @@ export default function MealPlanPage() {
                   {isInfantPlanUi ? "Прикорм на сегодня" : formatDayHeader(selectedDate)}
                 </h2>
                 {isInfantPlanUi ? (
-                  <p className="text-sm text-muted-foreground mt-1">{formatDayHeader(selectedDate)}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">{formatDayHeader(selectedDate)}</p>
                 ) : null}
                 {isInfantPlanUi && members.length > 0 ? (
-                  <div className="mt-2 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
+                  <div className="mt-1.5 flex w-full min-w-0 flex-wrap items-center justify-start gap-2">
                     <MemberSelectorButton
-                      className="max-w-full"
+                      variant="light"
+                      className="max-w-full min-h-[44px] px-2.5 sm:px-3"
                       disabled={isAnyGenerating}
                       leadingEmoji="👶"
                       fitLabelWidth
@@ -1366,20 +1370,14 @@ export default function MealPlanPage() {
                   </div>
                 ) : null}
                 {isInfantPlanUi ? (
-                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                    В этом возрасте основное питание — грудное молоко или смесь.{" "}
-                    {infantComplementaryIntroSecondLineText(infantAgeBandU12 ?? "7_8")}
-                  </p>
-                ) : null}
-                {isInfantPlanUi ? (
-                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                    Сегодня мы подобрали подходящий вариант прикорма для вашего малыша.
-                  </p>
-                ) : null}
-                {isInfantPlanUi ? (
-                  <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                    {infantComplementaryPickQualificationText(infantAgeBandU12 ?? "7_8")}
-                  </p>
+                  <div className="mt-1.5 space-y-1.5 text-sm text-muted-foreground leading-relaxed text-pretty">
+                    <p>
+                      В этом возрасте основное питание — грудное молоко или смесь.{" "}
+                      {infantComplementaryIntroSecondLineText(infantAgeBandU12 ?? "7_8")}
+                    </p>
+                    <p>Сегодня мы подобрали подходящий вариант прикорма для вашего малыша.</p>
+                    <p>{infantComplementaryPickQualificationText(infantAgeBandU12 ?? "7_8")}</p>
+                  </div>
                 ) : null}
                 {members.length > 0 && !isInfantPlanUi ? (
                   <div className="mt-3 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
@@ -1691,7 +1689,7 @@ export default function MealPlanPage() {
 
           {/* 3) Приёмы пищи: loader при загрузке/refetch, иначе empty state или слоты (единый источник: dayMealPlans) */}
           {isLoading || isFetching || (isInfantPlanUi && !isAdultNoRecipesEmpty && infantPoolListsLoading) ? (
-            <div className="mt-3 space-y-4 pb-4">
+            <div className={cn("mt-3 pb-4", isInfantPlanUi ? "space-y-3" : "space-y-4")}>
               {(isInfantPlanUi
                 ? infantAgeBandU12 === "4_6"
                   ? [{ id: "sk1" }]
@@ -1706,25 +1704,25 @@ export default function MealPlanPage() {
             </div>
           ) : showInfantPoolExhaustedFallback ? (
             <>
-              <div className="mt-3 rounded-2xl border border-border/50 bg-primary/[0.04] p-4 space-y-3">
-                <p className="text-sm text-foreground leading-relaxed">
+              <div className="mt-3 rounded-2xl border border-border/50 bg-primary/[0.04] p-3.5 space-y-2.5">
+                <p className="text-sm text-foreground leading-relaxed text-pretty">
                   Пока нет подходящих вариантов для этого возраста.
                 </p>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
                   Попробуйте позже или откройте раздел «Помощь маме».
                 </p>
                 <Link
                   to="/sos"
-                  className="text-sm font-medium text-primary underline-offset-4 hover:underline inline-flex min-h-[44px] items-center gap-1"
+                  className="text-sm font-medium text-primary/90 underline-offset-4 hover:underline hover:text-primary inline-flex min-h-[44px] items-center gap-1 py-0.5"
                 >
                   Помощь маме
                 </Link>
               </div>
-              <div className="mt-4 space-y-3 px-0 pb-1">
-                <p className="text-sm text-muted-foreground leading-relaxed">
+              <div className="mt-3 space-y-2.5 px-0 pb-0">
+                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
                   {infantComplementaryGuidanceExtraText(infantAgeBandU12)}
                 </p>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
                   Новый продукт лучше вводить постепенно и наблюдать за реакцией малыша.
                 </p>
               </div>
@@ -1839,7 +1837,7 @@ export default function MealPlanPage() {
             </div>
           ) : (
             <>
-            <div className="mt-3 space-y-4 pb-4">
+            <div className={cn("mt-3 pb-4", isInfantPlanUi ? "space-y-3" : "space-y-4")}>
               {planSlotsForRender.map((slot) => {
                 const plannedMeal = mealsByType[slot.id];
                 const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
@@ -1857,6 +1855,7 @@ export default function MealPlanPage() {
                         mealTypeLabel={slot.label}
                         plannedDate={selectedDayKey}
                         planMemberId={mealPlanMemberId ?? null}
+                        infantPlanUi={isInfantPlanUi}
                         compact
                         isLoadingPreviews={isLoadingPreviews}
                         cookTimeMinutes={previews[recipeId!]?.cookTimeMinutes}
@@ -2186,23 +2185,30 @@ export default function MealPlanPage() {
               })}
             </div>
             {isInfantPlanUi && !isAdultNoRecipesEmpty ? (
-              <div className="mt-4 space-y-3 px-0 pb-1">
-                <p className="text-sm text-muted-foreground leading-relaxed">
+              <div className="mt-3 space-y-2.5 px-0 pb-1">
+                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
                   {infantComplementaryGuidanceExtraText(infantAgeBandU12)}
                 </p>
-                <p className="text-sm text-muted-foreground leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
                   Новый продукт лучше вводить постепенно и наблюдать за реакцией малыша.
                 </p>
                 <Link
                   to="/sos"
-                  className="text-sm font-medium text-primary underline-offset-4 hover:underline inline-flex items-center gap-1 min-h-[44px]"
+                  className="text-sm font-medium text-primary/90 underline-offset-4 hover:underline hover:text-primary inline-flex items-center gap-1 min-h-[44px] py-0.5"
                 >
                   Помощь маме
                 </Link>
               </div>
             ) : null}
-            {/* Зона под блюдами: заметная CTA + запас снизу, чтобы не сливаться с таббаром */}
-            <div className="mt-3 space-y-3 pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))]">
+            {/* Зона под блюдами: заметная CTA + запас снизу, чтобы не сливаться с таббаром (прикорм — только нижний отступ) */}
+            <div
+              className={cn(
+                "space-y-3",
+                isInfantPlanUi
+                  ? "mt-2 pb-[calc(4rem+env(safe-area-inset-bottom,0px))]"
+                  : "mt-3 pb-[calc(3.75rem+env(safe-area-inset-bottom,0px))]",
+              )}
+            >
               {!isInfantPlanUi ? (
               <motion.div
                 className="w-full"

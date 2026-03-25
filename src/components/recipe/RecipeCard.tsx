@@ -49,9 +49,9 @@ export interface RecipeCardProps {
   servingsCount?: number;
   /**
    * Превью в списке «коллекции» (избранное / мои рецепты): тише мета, мягче фон, больше воздуха.
-   * Не использовать в MealCard — там свой ритм плана.
+   * `infant` — плотнее шапка и тело, колонка действий слева с разделителем (прикорм в плане).
    */
-  previewPresentation?: "default" | "collection";
+  previewPresentation?: "default" | "collection" | "infant";
 }
 
 export function RecipeCard({
@@ -83,6 +83,7 @@ export function RecipeCard({
   const isPreview = variant === "preview";
   const isFull = variant === "full";
   const isCollectionPreview = isPreview && previewPresentation === "collection";
+  const isInfantPreview = isPreview && previewPresentation === "infant";
   const headerVariant: RecipeHeaderVariant = isPreview ? "compact" : isFull ? "full" : "chat";
   const headerWithNutrition = { ...header, nutrition };
 
@@ -92,12 +93,14 @@ export function RecipeCard({
 
   const bodyPadding = isCollectionPreview
     ? "px-3.5 pt-2.5 pb-2.5"
-    : isPreview
-      ? "p-3 pt-2 pb-1"
-      : isFull
-        ? "p-4 pt-3 sm:p-6 sm:pt-4"
-        : "p-3 pt-2";
-  const bodySpace = isPreview ? "space-y-2" : "space-y-3";
+    : isInfantPreview
+      ? "px-2.5 pt-1.5 pb-1"
+      : isPreview
+        ? "p-3 pt-2 pb-1"
+        : isFull
+          ? "p-4 pt-3 sm:p-6 sm:pt-4"
+          : "p-3 pt-2";
+  const bodySpace = isPreview ? (isInfantPreview ? "space-y-1.5" : "space-y-2") : "space-y-3";
 
   /** В превью — чипсы (если showIngredientChips); в chat/full — единый список ингредиентов. */
   const showChips = showIngredientChips ?? !isPreview;
@@ -109,8 +112,10 @@ export function RecipeCard({
         <NutritionGoalsChips
           goals={nutritionGoals}
           maxVisible={nutritionGoalsMaxVisible}
-          quiet={nutritionGoalsQuiet || isCollectionPreview}
-          className={cn(isCollectionPreview ? "-mt-1 mb-1.5" : "-mt-2 mb-1")}
+          quiet={nutritionGoalsQuiet || isCollectionPreview || isInfantPreview}
+          className={cn(
+            isCollectionPreview ? "-mt-1 mb-1.5" : isInfantPreview ? "-mt-1.5 mb-0.5" : "-mt-2 mb-1",
+          )}
         />
       )}
       {isPreview && showChips && (
@@ -158,18 +163,26 @@ export function RecipeCard({
         className={cn(
           recipeCard,
           "touch-manipulation active:opacity-95 transition-opacity",
-          isCollectionPreview ? "bg-card border-border/60 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.06)]" : "bg-primary/[0.06]",
+          isCollectionPreview
+            ? "bg-card border-border/60 shadow-[0_1px_8px_-2px_rgba(0,0,0,0.06)]"
+            : "bg-primary/[0.06]",
           onClick && "cursor-pointer",
           className
         )}
       >
-        <div className={cn("flex items-stretch justify-between w-full", isCollectionPreview ? "gap-1" : "gap-0")}>
+        <div
+          className={cn(
+            "flex items-stretch justify-between w-full",
+            isCollectionPreview ? "gap-1" : isInfantPreview ? "gap-1.5" : "gap-0",
+          )}
+        >
           <div className="min-w-0 flex-1">
             <RecipeHeader
               {...headerWithNutrition}
               variant="compact"
-              nutritionTone={isCollectionPreview ? "quiet" : "default"}
+              nutritionTone={isCollectionPreview || isInfantPreview ? "quiet" : "default"}
               compactCollection={isCollectionPreview}
+              compactDensity={isInfantPreview ? "tight" : "default"}
               className="bg-transparent shadow-none rounded-none -mb-px"
             />
             <div className={cn(bodyPadding, bodySpace)}>
@@ -179,8 +192,12 @@ export function RecipeCard({
           {actions && (
             <div
               className={cn(
-                "flex flex-col shrink-0 items-center justify-center",
-                isCollectionPreview ? "gap-2 py-3 pr-3 pl-1" : "gap-1 py-2 pr-3 pl-2",
+                "flex flex-col shrink-0",
+                isCollectionPreview
+                  ? "items-center justify-center gap-2 py-3 pr-3 pl-1"
+                  : isInfantPreview
+                    ? "items-center justify-start gap-0.5 pt-2 pb-1.5 pr-2.5 pl-1.5 border-l border-border/20"
+                    : "items-center justify-center gap-1 py-2 pr-3 pl-2",
               )}
               onClick={(e) => e.stopPropagation()}
             >

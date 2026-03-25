@@ -20,6 +20,8 @@ export interface RecipeHeaderProps {
   nutritionTone?: "default" | "quiet";
   /** Компактная карточка в списке коллекции: чуть сильнее заголовок и воздух. */
   compactCollection?: boolean;
+  /** Узкая плотность для компактной карточки (напр. прикорм в плане на мобильном). */
+  compactDensity?: "default" | "tight";
 }
 
 export function RecipeHeader({
@@ -34,13 +36,16 @@ export function RecipeHeader({
   nutrition,
   nutritionTone = "default",
   compactCollection = false,
+  compactDensity = "default",
 }: RecipeHeaderProps) {
   const isCompact = variant === "compact";
   const isFull = variant === "full";
   const paddingClass = isCompact
     ? compactCollection
       ? "px-3.5 pt-3.5 pb-1.5"
-      : "px-3 pt-3 pb-1"
+      : compactDensity === "tight"
+        ? "px-2.5 pt-2.5 pb-0.5"
+        : "px-3 pt-3 pb-1"
     : isFull
       ? "px-4 pt-5 pb-4 sm:px-6 sm:pt-6 sm:pb-5"
       : "px-4 pt-4 pb-3";
@@ -56,8 +61,8 @@ export function RecipeHeader({
   const descriptionText = description?.trim() ?? "";
   const showDescription = descriptionText && (benefitLabel || descriptionText);
 
-  const titleBottom = compactCollection ? "mb-2" : "mb-1.5";
-  const metaBottom = compactCollection ? "mb-0.5" : "mb-1";
+  const titleBottom = compactCollection ? "mb-2" : compactDensity === "tight" ? "mb-1" : "mb-1.5";
+  const metaBottom = compactCollection ? "mb-0.5" : compactDensity === "tight" ? "mb-0.5" : "mb-1";
 
   return (
     <header className={cn(recipeHeaderBg, paddingClass, className)}>

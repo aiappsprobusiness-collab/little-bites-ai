@@ -67,6 +67,8 @@ export interface MealCardProps {
   onDelete?: () => void;
   /** При включённом __PLAN_DEBUG / ?debugPool=1: показывать бейдж DB или AI. */
   debugSource?: "db" | "ai";
+  /** Прикорм &lt;12 мес в плане: более плотная превью-карточка под мобильный Android. */
+  infantPlanUi?: boolean;
   /** КБЖУ на порцию (мета + БЖУ в карточке рецепта). */
   calories?: number | null;
   proteins?: number | null;
@@ -101,6 +103,7 @@ export function MealCard({
   replaceShowsLock = false,
   onDelete,
   debugSource,
+  infantPlanUi = false,
   calories: nutritionCalories,
   proteins: nutritionProteins,
   fats: nutritionFats,
@@ -187,6 +190,7 @@ export function MealCard({
       <>
         <RecipeCard
           variant="preview"
+          previewPresentation={infantPlanUi ? "infant" : "default"}
           header={{
             mealLabel: displayMealLabel,
             cookingTimeMinutes: cookTimeMinutes ?? null,
@@ -203,7 +207,7 @@ export function MealCard({
           onClick={handleClick}
           actions={
             showActionsCompact ? (
-              <div className="flex flex-col gap-1 items-stretch">
+              <div className={cn("flex flex-col items-stretch", infantPlanUi ? "gap-0.5" : "gap-1")}>
                 {debugSource && (
                   <span
                     className={cn(
@@ -219,9 +223,12 @@ export function MealCard({
                     type="button"
                     onClick={handleReplaceClick}
                     disabled={isReplaceLoading}
-                    className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-primary bg-primary/10 border border-primary-border hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none"
-                    title={replaceShowsLock ? "Доступно в Premium" : "Заменить"}
-                    aria-label={replaceShowsLock ? "Замена блюда доступна в Premium" : "Заменить блюдо"}
+                    className={cn(
+                      "rounded-full shrink-0 flex items-center justify-center text-primary bg-primary/10 border border-primary-border hover:opacity-90 active:scale-95 transition-all disabled:opacity-60 disabled:pointer-events-none",
+                      infantPlanUi ? "h-10 w-10 min-h-[44px] min-w-[44px]" : "h-9 w-9",
+                    )}
+                    title={replaceShowsLock ? "Доступно в Premium" : "Подобрать другой вариант"}
+                    aria-label={replaceShowsLock ? "Замена блюда доступна в Premium" : "Подобрать другой вариант блюда"}
                   >
                     {isReplaceLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -244,7 +251,10 @@ export function MealCard({
                       e.stopPropagation();
                       onDelete();
                     }}
-                    className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border hover:border-destructive/30 active:scale-95 transition-all"
+                    className={cn(
+                      "rounded-full shrink-0 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border hover:border-destructive/30 active:scale-95 transition-all",
+                      infantPlanUi ? "h-10 w-10 min-h-[44px] min-w-[44px]" : "h-9 w-9",
+                    )}
                     title="Удалить из плана"
                     aria-label="Удалить блюдо из плана"
                   >
