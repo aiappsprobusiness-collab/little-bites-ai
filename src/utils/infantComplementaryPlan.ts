@@ -17,7 +17,7 @@ export function isInfantComplementaryPlanContext(params: {
 
 /**
  * Три UX-группы прикорма на клиенте (age_months < 12). Логику подбора на Edge не меняет.
- * 0–6 мес — как 4–6 (один слот в UI); 7–8; 9–11.
+ * Видимость карточек «Новый продукт» / «Уже знакомое» на Плане задаётся пулами primary/secondary, не возрастной веткой.
  */
 export type InfantComplementaryAgeBandU12 = "4_6" | "7_8" | "9_11";
 

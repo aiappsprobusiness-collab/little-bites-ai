@@ -8,6 +8,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildBlockedTokens, containsAnyToken, containsAnyTokenForAllergy } from "@/utils/allergenTokens";
 import {
   isIntroducingPeriodActive,
+  extractKeyProductKeysFromIngredients,
+  scoreInfantIntroducedMatch,
   scoreInfantIntroducingPeriodSort,
   type IngredientForProductKey,
 } from "@/utils/introducedProducts";
@@ -104,6 +106,9 @@ export interface MemberDataForPool {
   age_years?: number;
 }
 
+/** Слот прикорма &lt;12 мес: новый продукт (primary) vs только введённые (secondary). */
+export type InfantSlotRole = "primary" | "secondary";
+
 export interface PickRecipeFromPoolArgs {
   supabase: SupabaseClient;
   userId: string;
@@ -113,6 +118,42 @@ export interface PickRecipeFromPoolArgs {
   excludeRecipeIds: string[];
   excludeTitleKeys: string[];
   limitCandidates?: number;
+  /** Прикорм: разделение кандидатов для завтрака (новинка) и обеда (только знакомое). */
+  infantSlotRole?: InfantSlotRole | null;
+}
+
+const MAX_KEYS_INFANT_FILTER = 100;
+
+function recipeKeysForInfantFilter(ingredients: IngredientForProductKey[] | null | undefined): string[] {
+  return extractKeyProductKeysFromIngredients(ingredients, MAX_KEYS_INFANT_FILTER);
+}
+
+function recipeHasNovelProductKey(row: PoolRecipeRow, introducedSet: Set<string>): boolean {
+  const keys = recipeKeysForInfantFilter((row.recipe_ingredients ?? null) as IngredientForProductKey[] | null);
+  return keys.some((k) => !introducedSet.has(k));
+}
+
+/** Все извлечённые ключевые продукты входят во введённые (нет «новинок» в рецепте). */
+function recipeIsOnlyFamiliarProducts(row: PoolRecipeRow, introducedSet: Set<string>): boolean {
+  const keys = recipeKeysForInfantFilter((row.recipe_ingredients ?? null) as IngredientForProductKey[] | null);
+  if (keys.length === 0) return false;
+  return keys.every((k) => introducedSet.has(k));
+}
+
+function computeFirstNovelProductKeyForPoolRow(
+  row: PoolRecipeRow,
+  introducedKeys: string[]
+): string | null {
+  const keys = extractKeyProductKeysFromIngredients(
+    (row.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
+    6
+  );
+  if (keys.length === 0) return null;
+  const set = new Set(introducedKeys);
+  for (const k of keys) {
+    if (!set.has(k)) return k;
+  }
+  return keys[0] ?? null;
 }
 
 export type PoolRecipeRow = {
@@ -211,13 +252,14 @@ export type FilterPoolCandidatesForSlotOptions = {
   memberData?: MemberDataForPool | null;
   excludeRecipeIds: string[];
   excludeTitleKeys: string[];
+  infantSlotRole?: InfantSlotRole | null;
 };
 
 /**
  * Те же in-memory фильтры, что и в pickRecipeFromPool: слот, возраст &lt;12 (min/max), sanity, аллергии/dislikes.
  */
 export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: FilterPoolCandidatesForSlotOptions): PoolRecipeRow[] {
-  const { slotNorm, memberData, excludeRecipeIds, excludeTitleKeys } = options;
+  const { slotNorm, memberData, excludeRecipeIds, excludeTitleKeys, infantSlotRole } = options;
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
 
@@ -231,13 +273,23 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
     return !excludeTitleSet.has(key);
   });
 
+  const ageMonths = memberData?.age_months ?? (memberData?.age_years != null ? memberData.age_years * 12 : null);
+  /** Прикорм &lt;12: две карточки — «новинка» и «знакомое»; подбор из общего пула, без привязки recipe.meal_type к слоту плана. */
+  const infantComplementaryUnifiedPool =
+    ageMonths != null &&
+    ageMonths < 12 &&
+    (infantSlotRole === "primary" || infantSlotRole === "secondary");
+
   filtered = filtered.filter((r) => {
     const recNorm = normalizeMealType(r.meal_type);
-    return recNorm !== null && recNorm === slotNorm;
+    if (recNorm === null) return false;
+    if (infantComplementaryUnifiedPool) {
+      return true;
+    }
+    return recNorm === slotNorm;
   });
   const candidatesAfterMealType = filtered.length;
 
-  const ageMonths = memberData?.age_months ?? (memberData?.age_years != null ? memberData.age_years * 12 : null);
   if (ageMonths != null && ageMonths < 12) {
     filtered = filtered.filter((r) =>
       recipeFitsAgeMonthsRow(r.min_age_months ?? null, r.max_age_months ?? null, ageMonths)
@@ -259,7 +311,9 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
     });
   }
 
-  const introducedKeys = Array.isArray(memberData?.introduced_product_keys) ? memberData.introduced_product_keys : [];
+  const introducedKeys = Array.isArray(memberData?.introduced_product_keys)
+    ? memberData.introduced_product_keys.filter((k): k is string => Boolean(k))
+    : [];
   const introducingKey = memberData?.introducing_product_key ?? null;
   const introducingStarted = memberData?.introducing_started_at ?? null;
   const introducingPeriodActive =
@@ -267,7 +321,37 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
     !!introducingStarted &&
     isIntroducingPeriodActive(introducingKey, introducingStarted, new Date());
 
-  if (ageMonths != null && ageMonths < 12 && (introducedKeys.length > 0 || introducingPeriodActive)) {
+  const role = infantSlotRole ?? null;
+
+  if (ageMonths != null && ageMonths < 12 && role === "secondary") {
+    if (introducedKeys.length === 0) {
+      return [];
+    }
+    const introducedSet = new Set(introducedKeys);
+    filtered = filtered.filter((r) => recipeIsOnlyFamiliarProducts(r, introducedSet));
+    filtered = [...filtered].sort((a, b) => {
+      const aScore = scoreInfantIntroducedMatch({
+        ageMonths,
+        introducedProductKeys: introducedKeys,
+        ingredients: (a.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
+      });
+      const bScore = scoreInfantIntroducedMatch({
+        ageMonths,
+        introducedProductKeys: introducedKeys,
+        ingredients: (b.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
+      });
+      return bScore - aScore;
+    });
+    return filtered;
+  }
+
+  if (ageMonths != null && ageMonths < 12 && role === "primary" && introducedKeys.length > 0) {
+    const introducedSet = new Set(introducedKeys);
+    const withNovel = filtered.filter((r) => recipeHasNovelProductKey(r, introducedSet));
+    if (withNovel.length > 0) filtered = withNovel;
+  }
+
+  if (ageMonths != null && ageMonths < 12 && role !== "secondary" && (introducedKeys.length > 0 || introducingPeriodActive)) {
     filtered = [...filtered].sort((a, b) => {
       const aScore = scoreInfantIntroducingPeriodSort({
         ageMonths,
@@ -305,6 +389,7 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
     excludeRecipeIds = [],
     excludeTitleKeys = [],
     limitCandidates = 150,
+    infantSlotRole,
   } = args;
 
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
@@ -319,7 +404,10 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
       new Date()
     );
 
-  const selectFields = (hasAllergies || hasIntroduced || hasIntroducing)
+  const needsIngredientsForInfantRole =
+    infantSlotRole === "primary" || infantSlotRole === "secondary";
+
+  const selectFields = (hasAllergies || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole)
     ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
     : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
@@ -338,13 +426,21 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
     memberData,
     excludeRecipeIds,
     excludeTitleKeys,
+    infantSlotRole: args.infantSlotRole ?? null,
   });
 }
+
+export type PickRecipeFromPoolResult = {
+  id: string;
+  title: string;
+  /** Первый «новый» ключ продукта (для primary-слота и confirm при смене introducing). */
+  firstNovelProductKey: string | null;
+};
 
 /** Выбрать рецепт из пула по слоту приёма пищи. */
 export async function pickRecipeFromPool(
   args: PickRecipeFromPoolArgs
-): Promise<{ id: string; title: string } | null> {
+): Promise<PickRecipeFromPoolResult | null> {
   const {
     supabase,
     userId,
@@ -354,6 +450,7 @@ export async function pickRecipeFromPool(
     excludeRecipeIds,
     excludeTitleKeys,
     limitCandidates = 60,
+    infantSlotRole,
   } = args;
 
   const excludeSet = new Set(excludeRecipeIds);
@@ -369,7 +466,10 @@ export async function pickRecipeFromPool(
       new Date()
     );
 
-  const selectFields = (hasAllergies || hasIntroduced || hasIntroducing)
+  const needsIngredientsForInfantRole =
+    infantSlotRole === "primary" || infantSlotRole === "secondary";
+
+  const selectFields = (hasAllergies || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole)
     ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
     : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
@@ -411,6 +511,7 @@ export async function pickRecipeFromPool(
     memberData,
     excludeRecipeIds,
     excludeTitleKeys,
+    infantSlotRole: infantSlotRole ?? null,
   });
 
   const candidatesAfterMealType = filtered.length;
@@ -449,5 +550,10 @@ export async function pickRecipeFromPool(
     });
   }
 
-  return { id: picked.id, title: picked.title };
+  const introducedKeysForNovel = Array.isArray(memberData?.introduced_product_keys)
+    ? memberData.introduced_product_keys.filter((k): k is string => Boolean(k))
+    : [];
+  const firstNovelProductKey = computeFirstNovelProductKeyForPoolRow(picked, introducedKeysForNovel);
+
+  return { id: picked.id, title: picked.title, firstNovelProductKey };
 }

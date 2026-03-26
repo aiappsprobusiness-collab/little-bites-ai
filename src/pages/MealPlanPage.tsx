@@ -315,6 +315,13 @@ export default function MealPlanPage() {
     extracted: string[];
     ingredientNames: string[];
   } | null>(null);
+  /** Подтверждение смены продукта введения при автозамене primary-слота. */
+  const [infantReplacePrimaryConfirm, setInfantReplacePrimaryConfirm] = useState<{
+    currentLabel: string;
+    newLabel: string;
+    picked: { id: string; title: string; firstNovelProductKey: string | null };
+    slotId: string;
+  } | null>(null);
 
   useEffect(() => {
     const id = consumeJustCreatedMemberId();
@@ -413,6 +420,7 @@ export default function MealPlanPage() {
     queryKey: [
       "infant_plan_pool",
       "breakfast",
+      "primary",
       user?.id,
       mealPlanMemberId,
       infantPoolMemberData?.age_months,
@@ -429,15 +437,17 @@ export default function MealPlanPage() {
         mealType: "breakfast",
         memberData: infantPoolMemberData,
         limitCandidates: 150,
+        infantSlotRole: "primary",
       }),
     enabled: infantPoolQueryEnabled,
     staleTime: 120_000,
   });
 
-  const { data: infantLunchPoolRows = [], isLoading: infantLunchPoolLoading } = useQuery({
+  const { data: infantFamiliarLunchPoolRows = [], isLoading: infantFamiliarLunchPoolLoading } = useQuery({
     queryKey: [
       "infant_plan_pool",
       "lunch",
+      "secondary",
       user?.id,
       mealPlanMemberId,
       infantPoolMemberData?.age_months,
@@ -454,13 +464,18 @@ export default function MealPlanPage() {
         mealType: "lunch",
         memberData: infantPoolMemberData,
         limitCandidates: 150,
+        infantSlotRole: "secondary",
       }),
-    enabled: infantPoolQueryEnabled,
+    enabled: infantPoolQueryEnabled && introducedProductKeys.length > 0,
     staleTime: 120_000,
   });
 
-  const infantPoolListsLoading = infantBreakfastPoolLoading || infantLunchPoolLoading;
-  const infantBreakfastPoolCount = infantBreakfastPoolRows.length;
+  const infantPoolListsLoading =
+    infantBreakfastPoolLoading || (introducedProductKeys.length > 0 && infantFamiliarLunchPoolLoading);
+  /** Есть ли хотя бы один кандидат для экрана: новинка (primary) или только знакомое (secondary). */
+  const infantPoolHasAnyCandidateForUi =
+    infantBreakfastPoolRows.length > 0 ||
+    (introducedProductKeys.length > 0 && infantFamiliarLunchPoolRows.length > 0);
 
   const [mutedWeekKey, setMutedWeekKey] = useState<string | null>(() => {
     if (typeof localStorage === "undefined") return null;
@@ -813,7 +828,7 @@ export default function MealPlanPage() {
     isInfantPlanUi &&
     !isAdultNoRecipesEmpty &&
     !infantPoolListsLoading &&
-    infantBreakfastPoolCount === 0;
+    !infantPoolHasAnyCandidateForUi;
 
   const saveIntroducedProductKeys = useCallback(async (nextKeys: string[]) => {
     if (!selectedMember?.id) return;
@@ -891,6 +906,86 @@ export default function MealPlanPage() {
       });
     }
   }, [selectedMember?.id, toast, updateMember]);
+
+  /** Окно наблюдения (grace): «всё хорошо» — продукт в список введённых, сброс периода. */
+  const introducingReactionOk = useCallback(async () => {
+    if (!selectedMember?.id) return;
+    const m = selectedMember as MembersRow;
+    const key = m.introducing_product_key;
+    if (!key?.trim()) return;
+    const nextKeys = introducedProductKeys.includes(key)
+      ? introducedProductKeys
+      : Array.from(new Set([...introducedProductKeys, key]));
+    try {
+      await updateMember({
+        id: selectedMember.id,
+        introducing_product_key: null,
+        introducing_started_at: null,
+        introduced_product_keys: nextKeys,
+      });
+      toast({ description: "Отлично, продукт можно считать введённым" });
+    } catch (e: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось сохранить",
+        description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+      });
+    }
+  }, [introducedProductKeys, selectedMember, toast, updateMember]);
+
+  const introducingReactionDislike = useCallback(async () => {
+    if (!selectedMember?.id) return;
+    try {
+      await updateMember({
+        id: selectedMember.id,
+        introducing_product_key: null,
+        introducing_started_at: null,
+      });
+      toast({ description: "Можно попробовать этот продукт позже в другом виде" });
+    } catch (e: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось сохранить",
+        description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+      });
+    }
+  }, [selectedMember?.id, toast, updateMember]);
+
+  const introducingReactionIssue = useCallback(async () => {
+    if (!selectedMember?.id) return;
+    try {
+      await updateMember({
+        id: selectedMember.id,
+        introducing_product_key: null,
+        introducing_started_at: null,
+      });
+      const r = toast({
+        title: "Если есть сомнения",
+        description:
+          "В «Помощь маме» есть материалы про реакции на новые продукты. При тяжёлых симптомах обратитесь к врачу.",
+        duration: 12_000,
+      });
+      r.update({
+        action: (
+          <ToastAction
+            altText="Открыть Помощь маме"
+            onClick={() => {
+              r.dismiss();
+              navigate("/sos");
+            }}
+          >
+            Помощь маме
+          </ToastAction>
+        ),
+      });
+    } catch (e: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось сохранить",
+        description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+      });
+    }
+  }, [navigate, selectedMember?.id, toast, updateMember]);
 
   const addIntroducedFromRecipe = useCallback(
     async (ingredientNames: string[] | undefined, forceSwitchProduct = false) => {
@@ -1310,27 +1405,30 @@ export default function MealPlanPage() {
   }, {} as Record<string, typeof dayMealPlans[0] | null>);
 
   /**
-   * Прикорм &lt;12 мес: 4–6 — только основное; 7–8 — второе только если есть в плане;
-   * 9–11 — второй слот, если есть блюдо в плане или есть кандидаты lunch в пуле (UX, без смены Edge).
+   * Прикорм &lt;12 мес, все возрастные группы (4–6 / 7–8 / 9–11):
+   * — «Новый продукт» (breakfast, primary): только если в пуле primary есть ≥1 кандидат.
+   * — «Уже знакомое» (lunch, secondary): только если список введённых не пуст и в пуле secondary есть ≥1 кандидат.
+   * Не привязываемся к тому, есть ли обед в плане на этот день.
    */
   const infantSlotsForRender = useMemo(() => {
     if (!isInfantPlanUi) return null;
-    const lunch = mealsByType.lunch;
-    const lunchRecipe = lunch ? getPlannedMealRecipe(lunch) : null;
-    const lunchRecipeId = lunch ? getPlannedMealRecipeId(lunch) : null;
-    const lunchHas = !!(lunch && lunchRecipeId && lunchRecipe?.title);
-    const band = infantAgeBandU12 ?? "7_8";
-    const out: Array<{ id: string; label: string }> = [{ id: "breakfast", label: "Основное блюдо" }];
-    if (band === "4_6") return out;
-    if (band === "7_8") {
-      if (lunchHas) out.push({ id: "lunch", label: "Второе блюдо" });
-      return out;
+    const primaryCount = infantBreakfastPoolRows.length;
+    const secondaryCount = infantFamiliarLunchPoolRows.length;
+    const hasIntroduced = introducedProductKeys.length > 0;
+    const out: Array<{ id: string; label: string }> = [];
+    if (primaryCount > 0) {
+      out.push({ id: "breakfast", label: "🆕 Новый продукт" });
     }
-    if (lunchHas || infantLunchPoolRows.length > 0) {
-      out.push({ id: "lunch", label: "Второе блюдо" });
+    if (hasIntroduced && secondaryCount > 0) {
+      out.push({ id: "lunch", label: "🍽 Уже знакомое" });
     }
     return out;
-  }, [isInfantPlanUi, mealsByType, infantAgeBandU12, infantLunchPoolRows]);
+  }, [
+    isInfantPlanUi,
+    infantBreakfastPoolRows.length,
+    infantFamiliarLunchPoolRows.length,
+    introducedProductKeys.length,
+  ]);
 
   const planSlotsForRender = isInfantPlanUi && infantSlotsForRender ? infantSlotsForRender : mealTypes;
 
@@ -1395,6 +1493,8 @@ export default function MealPlanPage() {
         const baseExcludeKeys = [...new Set([...replaceExcludeTitleKeysMerged, ...filledTitleKeys])];
 
         let candidatesAfterFilter: number | null = null;
+        const infantRoleForSlot = slot.id === "breakfast" ? "primary" : "secondary";
+
         if (import.meta.env.DEV || isPlanDebug()) {
           const listed = await listFilteredPoolRecipesForPlanSlot({
             supabase,
@@ -1405,6 +1505,7 @@ export default function MealPlanPage() {
             excludeRecipeIds: baseExcludeIds,
             excludeTitleKeys: baseExcludeKeys,
             limitCandidates: 150,
+            infantSlotRole: infantRoleForSlot,
           });
           candidatesAfterFilter = listed.length;
         }
@@ -1418,6 +1519,7 @@ export default function MealPlanPage() {
           excludeRecipeIds: baseExcludeIds,
           excludeTitleKeys: baseExcludeKeys,
           limitCandidates: 150,
+          infantSlotRole: infantRoleForSlot,
         });
         let usedRelaxedExcludes = false;
         if (!picked) {
@@ -1431,6 +1533,7 @@ export default function MealPlanPage() {
             excludeRecipeIds: [],
             excludeTitleKeys: [],
             limitCandidates: 200,
+            infantSlotRole: infantRoleForSlot,
           });
         }
 
@@ -1937,46 +2040,98 @@ export default function MealPlanPage() {
           </motion.div>
 
           {isInfantPlanUi && infantIntroducingBanner?.kind === "active" ? (
-            <div className="mt-2 rounded-2xl border border-primary/20 bg-primary/[0.06] px-3.5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-foreground leading-snug">
-                Продолжаем вводить: {infantIntroducingBanner.label} (день {infantIntroducingBanner.day})
-              </p>
-              <button
-                type="button"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground underline-offset-4 hover:underline shrink-0 min-h-[44px] px-2 -mx-2 text-left sm:text-right"
-                onClick={() => void clearIntroducingPeriod()}
-                disabled={isUpdatingMember}
-              >
-                Завершить введение
-              </button>
+            <div className="mt-2 rounded-2xl border border-primary/20 bg-primary/[0.06] px-3.5 py-3 space-y-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-sm text-foreground leading-snug">
+                    Продолжаем вводить: {infantIntroducingBanner.label} (день {infantIntroducingBanner.day})
+                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Пошаговое введение — 3 дня; затем окно наблюдения за реакцией (обычно 3–5 дней, как в «Помощь маме»).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground underline-offset-4 hover:underline shrink-0 min-h-[44px] px-2 -mx-2 text-left sm:text-right"
+                  onClick={() => void clearIntroducingPeriod()}
+                  disabled={isUpdatingMember}
+                >
+                  Завершить введение
+                </button>
+              </div>
             </div>
           ) : null}
           {isInfantPlanUi && infantIntroducingBanner?.kind === "grace" ? (
-            <div className="mt-2 rounded-2xl border border-border/60 bg-muted/30 px-3.5 py-3 space-y-3">
-              <p className="text-sm text-foreground leading-snug">
-                Вы недавно вводили: {infantIntroducingBanner.label}
-              </p>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:flex-1 rounded-xl border-primary/30"
-                  disabled={isUpdatingMember}
-                  onClick={() => void continueIntroducingFromGrace()}
-                >
-                  Продолжить
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:flex-1 rounded-xl text-muted-foreground border-border"
-                  disabled={isUpdatingMember}
-                  onClick={() => void tryNewIntroducingProduct()}
-                >
-                  Попробовать новый продукт
-                </Button>
+            <div className="mt-2 rounded-2xl border border-border/60 bg-muted/30 px-3.5 py-3 space-y-4">
+              <div className="space-y-1">
+                <p className="text-sm text-foreground leading-snug">
+                  Вы недавно начали вводить: {infantIntroducingBanner.label}
+                </p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Обычно за реакцией наблюдают 3–5 дней.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">
+                  Как малыш перенёс {infantIntroducingBanner.label}?
+                </p>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className="w-full rounded-xl"
+                    disabled={isUpdatingMember}
+                    onClick={() => void introducingReactionOk()}
+                  >
+                    Всё хорошо
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full rounded-xl border-border"
+                    disabled={isUpdatingMember}
+                    onClick={() => void introducingReactionDislike()}
+                  >
+                    Не понравилось
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-full rounded-xl text-muted-foreground"
+                    disabled={isUpdatingMember}
+                    onClick={() => void introducingReactionIssue()}
+                  >
+                    Была реакция
+                  </Button>
+                </div>
+              </div>
+              <div className="border-t border-border/50 pt-3 space-y-2">
+                <p className="text-xs text-muted-foreground">Или продолжите с тем же продуктом:</p>
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:flex-1 rounded-xl border-primary/30"
+                    disabled={isUpdatingMember}
+                    onClick={() => void continueIntroducingFromGrace()}
+                  >
+                    Продолжить с {infantIntroducingBanner.label}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full sm:flex-1 rounded-xl text-muted-foreground border-border"
+                    disabled={isUpdatingMember}
+                    onClick={() => void tryNewIntroducingProduct()}
+                  >
+                    Попробовать новый продукт
+                  </Button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -2209,8 +2364,10 @@ export default function MealPlanPage() {
           ) : (
             <>
             <div className={cn("mt-3 pb-4", isInfantPlanUi ? "space-y-3" : "space-y-4")}>
-              {isInfantPlanUi ? (
-                <p className="text-sm font-medium text-foreground">Сегодня можно попробовать:</p>
+              {isInfantPlanUi && planSlotsForRender.length > 0 ? (
+                <p className="text-sm font-medium text-foreground">
+                  {infantBreakfastPoolRows.length > 0 ? "Сегодня можно попробовать:" : "Уже знакомое"}
+                </p>
               ) : null}
               {planSlotsForRender.map((slot) => {
                 const plannedMeal = mealsByType[slot.id];
@@ -2293,6 +2450,109 @@ export default function MealPlanPage() {
                           }
                           setReplacingSlotKey(slotKey);
                           try {
+                            if (
+                              isInfantPremiumAutoreplace &&
+                              infantPoolMemberData &&
+                              user?.id &&
+                              mealPlanMemberId
+                            ) {
+                              const role = slot.id === "breakfast" ? "primary" : "secondary";
+                              const picked = await pickRecipeFromPool({
+                                supabase,
+                                userId: user.id,
+                                memberId: mealPlanMemberId,
+                                mealType: slot.id as MealType,
+                                memberData: infantPoolMemberData,
+                                excludeRecipeIds: replaceExcludeRecipeIdsMerged,
+                                excludeTitleKeys: replaceExcludeTitleKeysMerged,
+                                limitCandidates: 150,
+                                infantSlotRole: role,
+                              });
+                              if (!picked) {
+                                await clearSlotAndOpenPoolFallback({
+                                  dayKey: selectedDayKey,
+                                  mealType: slot.id,
+                                  planSlotId: plannedMeal.id,
+                                  infantReason: "candidates_exhausted",
+                                  skipClear: true,
+                                });
+                                return;
+                              }
+                              if (picked.id === recipeId) {
+                                toast({ description: "Нет других вариантов" });
+                                return;
+                              }
+                              const introKey =
+                                (selectedMember as MembersRow | undefined)?.introducing_product_key?.trim() ?? null;
+                              if (
+                                role === "primary" &&
+                                introKey &&
+                                picked.firstNovelProductKey &&
+                                picked.firstNovelProductKey !== introKey
+                              ) {
+                                setInfantReplacePrimaryConfirm({
+                                  currentLabel: getProductDisplayLabel(introKey),
+                                  newLabel: getProductDisplayLabel(picked.firstNovelProductKey),
+                                  picked: {
+                                    id: picked.id,
+                                    title: picked.title,
+                                    firstNovelProductKey: picked.firstNovelProductKey,
+                                  },
+                                  slotId: slot.id,
+                                });
+                                return;
+                              }
+                              await replaceSlotWithRecipe({
+                                dayKey: selectedDayKey,
+                                mealType: slot.id,
+                                recipeId: picked.id,
+                                recipeTitle: picked.title,
+                              });
+                              setSessionExcludeRecipeIds((prev) => ({
+                                ...prev,
+                                [selectedDayKey]: [...(prev[selectedDayKey] ?? []), picked.id],
+                              }));
+                              setSessionExcludeTitleKeys((prev) => ({
+                                ...prev,
+                                [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(picked.title)],
+                              }));
+                              applyReplaceSlotToPlanCache(
+                                queryClient,
+                                { mealPlansKeyWeek, mealPlansKeyDay },
+                                {
+                                  dayKey: selectedDayKey,
+                                  mealType: slot.id,
+                                  newRecipeId: picked.id,
+                                  title: picked.title,
+                                  plan_source: "pool",
+                                },
+                                mealPlanMemberId ?? null
+                              );
+                              await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                              setPoolAutoReplaceCountBySlot((prev) => ({
+                                ...prev,
+                                [slotKey]: (prev[slotKey] ?? 0) + 1,
+                              }));
+                              appendInfantMatchedVariant({
+                                dayKey: selectedDayKey,
+                                mealType: slot.id,
+                                recipeId: picked.id,
+                                title: picked.title,
+                              });
+                              toast({ description: "Блюдо заменено" });
+                              if (isPlanDebug()) {
+                                console.info("[replace_slot]", {
+                                  requestId: undefined,
+                                  dayKey: selectedDayKey,
+                                  memberId: mealPlanMemberId,
+                                  slot: slot.id,
+                                  ok: true,
+                                  reason: "client_pool_infant",
+                                });
+                              }
+                              return;
+                            }
+
                             const result = await replaceMealSlotAuto({
                               dayKey: selectedDayKey,
                               mealType: slot.id,
@@ -2905,6 +3165,78 @@ export default function MealPlanPage() {
         onConfirm={async () => {
           const p = introduceConflictPayload;
           if (p) await addIntroducedFromRecipe(p.ingredientNames, true);
+        }}
+      />
+
+      <ConfirmActionModal
+        open={infantReplacePrimaryConfirm != null}
+        onOpenChange={(open) => {
+          if (!open) setInfantReplacePrimaryConfirm(null);
+        }}
+        title="Заменить продукт введения?"
+        description={
+          infantReplacePrimaryConfirm
+            ? `Вы уже начали вводить ${infantReplacePrimaryConfirm.currentLabel}. Заменить на ${infantReplacePrimaryConfirm.newLabel}?`
+            : ""
+        }
+        confirmText="Да"
+        cancelText="Нет"
+        onConfirm={async () => {
+          const p = infantReplacePrimaryConfirm;
+          if (!p || !selectedMember?.id || !user?.id || !mealPlanMemberId) return;
+          const slotKey = getSlotDayKey(selectedDayKey, p.slotId);
+          try {
+            await updateMember({
+              id: selectedMember.id,
+              introducing_product_key: null,
+              introducing_started_at: null,
+            });
+            await queryClient.invalidateQueries({ queryKey: ["members", user?.id] });
+            await replaceSlotWithRecipe({
+              dayKey: selectedDayKey,
+              mealType: p.slotId,
+              recipeId: p.picked.id,
+              recipeTitle: p.picked.title,
+            });
+            setSessionExcludeRecipeIds((prev) => ({
+              ...prev,
+              [selectedDayKey]: [...(prev[selectedDayKey] ?? []), p.picked.id],
+            }));
+            setSessionExcludeTitleKeys((prev) => ({
+              ...prev,
+              [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(p.picked.title)],
+            }));
+            applyReplaceSlotToPlanCache(
+              queryClient,
+              { mealPlansKeyWeek, mealPlansKeyDay },
+              {
+                dayKey: selectedDayKey,
+                mealType: p.slotId,
+                newRecipeId: p.picked.id,
+                title: p.picked.title,
+                plan_source: "pool",
+              },
+              mealPlanMemberId ?? null
+            );
+            await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+            setPoolAutoReplaceCountBySlot((prev) => ({
+              ...prev,
+              [slotKey]: (prev[slotKey] ?? 0) + 1,
+            }));
+            appendInfantMatchedVariant({
+              dayKey: selectedDayKey,
+              mealType: p.slotId,
+              recipeId: p.picked.id,
+              title: p.picked.title,
+            });
+            toast({ description: "Блюдо заменено" });
+          } catch (e: unknown) {
+            toast({
+              variant: "destructive",
+              title: "Ошибка",
+              description: e instanceof Error ? e.message : "Не удалось заменить",
+            });
+          }
         }}
       />
 

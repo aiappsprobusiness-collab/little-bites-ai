@@ -116,6 +116,8 @@
 ## 6. Infant replace fallback (&lt;12 мес)
 
 - Для infant-flow (`age_months < 12`, не family) автозамена по кнопке ↻ для **Premium/Trial** ограничена: максимум **5 успешных автозамен на один слот в рамках одного дня**.
+- Подбор замены на экране плана: **`pickRecipeFromPool`** с **`infantSlotRole`**: `primary` (завтрак — новый продукт) и `secondary` (обед — только продукты из `introduced_product_keys`); сохранение слота — **`replaceSlotWithRecipe`**. Edge **`replace_slot`** для этого UI не вызывается.
+- Если задан **`introducing_product_key`**, а новый primary-рецепт вводит **другой** ключ продукта — показывается подтверждение; при «Да» сбрасываются `introducing_product_key` / `introducing_started_at` и применяется выбранный рецепт.
 - Лимит считается по ключу `dayKey + mealType` (per-slot-per-day), а не глобально на день.
 - После достижения лимита или исчерпания кандидатов показывается **infant-specific** `PoolExhaustedSheet`:
   - без CTA «Подобрать/Сгенерировать в чате»;
