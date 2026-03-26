@@ -1,0 +1,1369 @@
+{
+  "seedSet": "infant_9_11_months_stage3",
+  "locale": "ru",
+  "source": "seed",
+  "trust_level": "trusted",
+  "recipes": [
+        {
+          "title": "Овсяная каша с яблоком и мягкими кусочками банана",
+          "description": "Мягкая каша с более плотной текстурой для спокойного перехода от пюре к еде с кусочками. Подходит для тренировки жевания в привычном формате завтрака.",
+          "chef_advice": "Банан лучше добавить в конце и оставить часть небольшими мягкими кусочками. Если ребёнок пока не готов к такой текстуре, слегка разомните их вилкой.",
+          "meal_type": "breakfast",
+          "cooking_time_minutes": 14,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 112,
+          "proteins": 3.1,
+          "fats": 1.7,
+          "carbs": 21.4,
+          "tags": ["infant", "9_11_months", "breakfast", "porridge", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Овсяные хлопья", "amount": 18, "unit": "г", "display_text": "Овсяные хлопья — 18 г", "category": "grains" },
+            { "name": "Яблоко", "amount": 40, "unit": "г", "display_text": "Яблоко — 40 г", "category": "fruits" },
+            { "name": "Банан", "amount": 35, "unit": "г", "display_text": "Банан — 35 г", "category": "fruits" },
+            { "name": "Вода", "amount": 170, "unit": "мл", "display_text": "Вода — 170 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите овсяные хлопья на воде до мягкости.",
+            "Яблоко приготовьте до мягкости и добавьте в кашу.",
+            "Банан нарежьте очень маленькими мягкими кусочками.",
+            "Часть банана вмешайте в кашу, часть оставьте сверху."
+          ]
+        },
+        {
+          "title": "Гречневая каша с грушей и мягкими кусочками яблока",
+          "description": "Нежная каша с мягкими фруктовыми кусочками для постепенного расширения текстур. Хорошо подходит для понятного и спокойного утреннего меню.",
+          "chef_advice": "Яблоко оставляйте только очень мягкими мелкими кусочками, без плотной кожуры. Если ребёнок устал жевать, часть порции можно дополнительно размять.",
+          "meal_type": "breakfast",
+          "cooking_time_minutes": 18,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 109,
+          "proteins": 3.2,
+          "fats": 1.0,
+          "carbs": 23.0,
+          "tags": ["infant", "9_11_months", "breakfast", "porridge", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Гречневая крупа", "amount": 18, "unit": "г", "display_text": "Гречневая крупа — 18 г", "category": "grains" },
+            { "name": "Груша", "amount": 40, "unit": "г", "display_text": "Груша — 40 г", "category": "fruits" },
+            { "name": "Яблоко", "amount": 35, "unit": "г", "display_text": "Яблоко — 35 г", "category": "fruits" },
+            { "name": "Вода", "amount": 170, "unit": "мл", "display_text": "Вода — 170 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите гречневую крупу до мягкости.",
+            "Грушу приготовьте до мягкости и слегка разомните.",
+            "Яблоко приготовьте отдельно и нарежьте очень мелкими кусочками.",
+            "Соедините всё и подавайте тёплым."
+          ]
+        },
+        {
+          "title": "Рисовая каша с тыквой и мягкими кусочками груши",
+          "description": "Мягкая каша с овощной основой и мягкими кусочками фрукта для тренировки новой текстуры. Подходит для спокойного и сытного завтрака.",
+          "chef_advice": "Грушу не добавляйте сырой: сначала доведите её до мягкости. Если блюдо кажется густым, разбавьте его небольшим количеством тёплой воды.",
+          "meal_type": "breakfast",
+          "cooking_time_minutes": 20,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 107,
+          "proteins": 2.2,
+          "fats": 0.2,
+          "carbs": 23.7,
+          "tags": ["infant", "9_11_months", "breakfast", "porridge", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Рисовая крупа", "amount": 17, "unit": "г", "display_text": "Рисовая крупа — 17 г", "category": "grains" },
+            { "name": "Тыква", "amount": 40, "unit": "г", "display_text": "Тыква — 40 г", "category": "vegetables" },
+            { "name": "Груша", "amount": 35, "unit": "г", "display_text": "Груша — 35 г", "category": "fruits" },
+            { "name": "Вода", "amount": 175, "unit": "мл", "display_text": "Вода — 175 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите рисовую крупу до полной мягкости.",
+            "Тыкву приготовьте отдельно и разомните.",
+            "Грушу доведите до мягкости и нарежьте мелкими кусочками.",
+            "Соедините всё вместе и подавайте тёплым."
+          ]
+        },
+        {
+          "title": "Омлет на пару с кабачком",
+          "description": "Мягкое блюдо с нежной структурой для расширения завтраков и ужинов в прикорме. Хорошо подходит для перехода к более самостоятельной еде.",
+          "chef_advice": "Кабачок лучше натереть очень мелко и слегка отжать. Готовый омлет удобно нарезать узкими мягкими полосками для самостоятельной подачи.",
+          "meal_type": "breakfast",
+          "cooking_time_minutes": 15,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 86,
+          "proteins": 6.2,
+          "fats": 5.3,
+          "carbs": 2.7,
+          "tags": ["infant", "9_11_months", "breakfast", "omelet", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Куриное яйцо", "amount": 1, "unit": "шт.", "display_text": "Куриное яйцо — 1 шт.", "category": "other" },
+            { "name": "Кабачок", "amount": 40, "unit": "г", "display_text": "Кабачок — 40 г", "category": "vegetables" },
+            { "name": "Вода", "amount": 20, "unit": "мл", "display_text": "Вода — 20 мл", "category": "other" }
+          ],
+          "steps": [
+            "Натрите кабачок очень мелко.",
+            "Взбейте яйцо с водой до однородности.",
+            "Добавьте кабачок и перемешайте.",
+            "Готовьте на пару до полной готовности."
+          ]
+        },
+        {
+          "title": "Омлет на пару с брокколи",
+          "description": "Нежный омлет с мягкими кусочками овоща для спокойного расширения текстур. Подходит для завтрака или лёгкого ужина малыша.",
+          "chef_advice": "Брокколи лучше заранее приготовить до мягкости и очень мелко нарезать. Если подаёте руками, остудите и нарежьте короткими полосками.",
+          "meal_type": "breakfast",
+          "cooking_time_minutes": 16,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 87,
+          "proteins": 6.4,
+          "fats": 5.3,
+          "carbs": 2.9,
+          "tags": ["infant", "9_11_months", "breakfast", "omelet", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Куриное яйцо", "amount": 1, "unit": "шт.", "display_text": "Куриное яйцо — 1 шт.", "category": "other" },
+            { "name": "Брокколи", "amount": 35, "unit": "г", "display_text": "Брокколи — 35 г", "category": "vegetables" },
+            { "name": "Вода", "amount": 20, "unit": "мл", "display_text": "Вода — 20 мл", "category": "other" }
+          ],
+          "steps": [
+            "Приготовьте брокколи до мягкости и мелко нарежьте.",
+            "Взбейте яйцо с водой.",
+            "Добавьте брокколи и аккуратно перемешайте.",
+            "Готовьте на пару до полной готовности."
+          ]
+        },
+        {
+          "title": "Творог с мягкой грушей",
+          "description": "Нежный перекус с мягкой текстурой для спокойной подачи в течение дня. Подходит для небольшой порции, если творог уже введён в рацион.",
+          "chef_advice": "Если груша плотная, сначала сделайте её мягкой на пару. Творог вмешивайте уже в тёплую, не горячую фруктовую массу.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 10,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 93,
+          "proteins": 5.1,
+          "fats": 3.0,
+          "carbs": 11.6,
+          "tags": ["infant", "9_11_months", "snack", "dairy", "soft_texture"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Творог детский", "amount": 45, "unit": "г", "display_text": "Творог детский — 45 г", "category": "dairy" },
+            { "name": "Груша", "amount": 50, "unit": "г", "display_text": "Груша — 50 г", "category": "fruits" }
+          ],
+          "steps": [
+            "Подготовьте грушу и доведите её до мягкости.",
+            "Измельчите или разомните грушу.",
+            "Добавьте творог и хорошо перемешайте.",
+            "Подавайте сразу после приготовления."
+          ]
+        },
+        {
+          "title": "Творог с бананом и яблоком",
+          "description": "Мягкий фруктово-молочный перекус для привычного и спокойного меню малыша. Консистенцию легко подстроить под текущий этап жевания.",
+          "chef_advice": "Яблоко лучше сделать мягким заранее, а банан добавлять уже свежим. Если ребёнок ест кусочки хуже, массу можно слегка размять вилкой.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 12,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 104,
+          "proteins": 5.0,
+          "fats": 3.1,
+          "carbs": 14.5,
+          "tags": ["infant", "9_11_months", "snack", "dairy", "fruit"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Творог детский", "amount": 40, "unit": "г", "display_text": "Творог детский — 40 г", "category": "dairy" },
+            { "name": "Банан", "amount": 35, "unit": "г", "display_text": "Банан — 35 г", "category": "fruits" },
+            { "name": "Яблоко", "amount": 35, "unit": "г", "display_text": "Яблоко — 35 г", "category": "fruits" }
+          ],
+          "steps": [
+            "Яблоко приготовьте до мягкости.",
+            "Банан разомните вилкой.",
+            "Соедините фрукты с творогом.",
+            "Перемешайте до мягкой массы."
+          ]
+        },
+        {
+          "title": "Пюре из картофеля с индейкой и мягкими кусочками кабачка",
+          "description": "Сытное блюдо с более плотной текстурой для перехода от гладкого пюре к еде с мягкими кусочками. Подходит для спокойного обеда малыша.",
+          "chef_advice": "Основу сделайте мягкой и однородной, а кабачок оставьте очень маленькими мягкими кусочками. Так ребёнку проще привыкать к новой текстуре.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 28,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 114,
+          "proteins": 9.8,
+          "fats": 2.1,
+          "carbs": 14.0,
+          "tags": ["infant", "9_11_months", "lunch", "meat", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Картофель", "amount": 80, "unit": "г", "display_text": "Картофель — 80 г", "category": "vegetables" },
+            { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" },
+            { "name": "Кабачок", "amount": 35, "unit": "г", "display_text": "Кабачок — 35 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Отварите картофель и индейку до мягкости.",
+            "Кабачок приготовьте отдельно до мягкости.",
+            "Картофель с индейкой разомните или измельчите.",
+            "Добавьте очень мелкие мягкие кусочки кабачка."
+          ]
+        },
+        {
+          "title": "Размятая гречка с индейкой и брокколи",
+          "description": "Мягкое блюдо, которое можно раздавить вилкой, для постепенного перехода к более взрослой текстуре. Хорошо подходит для сытного дневного приёма пищи.",
+          "chef_advice": "Не превращайте всё в гладкое пюре: для этого возраста полезно оставлять мягкую неровную текстуру. Брокколи лучше нарезать особенно мелко.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 26,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 118,
+          "proteins": 10.2,
+          "fats": 2.3,
+          "carbs": 14.6,
+          "tags": ["infant", "9_11_months", "lunch", "meat", "fork_mashed"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Гречневая крупа", "amount": 16, "unit": "г", "display_text": "Гречневая крупа — 16 г", "category": "grains" },
+            { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" },
+            { "name": "Брокколи", "amount": 45, "unit": "г", "display_text": "Брокколи — 45 г", "category": "vegetables" },
+            { "name": "Вода", "amount": 160, "unit": "мл", "display_text": "Вода — 160 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите гречку до мягкости.",
+            "Индейку и брокколи приготовьте отдельно до мягкости.",
+            "Нарежьте индейку и брокколи очень мелко.",
+            "Соедините всё и слегка разомните вилкой."
+          ]
+        },
+        {
+          "title": "Рис с курицей и тыквой, размятый вилкой",
+          "description": "Мягкое сытное блюдо с более плотной текстурой для постепенного расширения меню. Подходит для спокойного обеда без лишних ингредиентов.",
+          "chef_advice": "Рис важно хорошо разварить, чтобы блюдо оставалось мягким. Если текстура получается плотной, добавьте немного тёплой воды.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 27,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 120,
+          "proteins": 9.3,
+          "fats": 2.0,
+          "carbs": 16.1,
+          "tags": ["infant", "9_11_months", "lunch", "chicken", "fork_mashed"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Рисовая крупа", "amount": 16, "unit": "г", "display_text": "Рисовая крупа — 16 г", "category": "grains" },
+            { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" },
+            { "name": "Тыква", "amount": 50, "unit": "г", "display_text": "Тыква — 50 г", "category": "vegetables" },
+            { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите рис до полной мягкости.",
+            "Курицу и тыкву приготовьте до мягкости.",
+            "Курицу очень мелко нарежьте.",
+            "Соедините всё и слегка разомните вилкой."
+          ]
+        },
+        {
+          "title": "Овощное рагу с индейкой для малыша",
+          "description": "Мягкое блюдо с небольшими кусочками овощей и мяса для тренировки жевания в спокойном формате. Хорошо подходит для более самостоятельного обеда.",
+          "chef_advice": "Нарезайте продукты очень мелко и доводите каждый компонент до мягкости. Для первого знакомства с таким форматом часть порции можно дополнительно размять.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 30,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 106,
+          "proteins": 9.7,
+          "fats": 2.2,
+          "carbs": 11.3,
+          "tags": ["infant", "9_11_months", "lunch", "stew", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Кабачок", "amount": 50, "unit": "г", "display_text": "Кабачок — 50 г", "category": "vegetables" },
+            { "name": "Морковь", "amount": 35, "unit": "г", "display_text": "Морковь — 35 г", "category": "vegetables" },
+            { "name": "Картофель", "amount": 50, "unit": "г", "display_text": "Картофель — 50 г", "category": "vegetables" },
+            { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" }
+          ],
+          "steps": [
+            "Нарежьте овощи и индейку очень маленькими кусочками.",
+            "Приготовьте всё до полной мягкости.",
+            "Проверьте, что морковь и картофель легко разминаются.",
+            "Подавайте как мягкое рагу или слегка разомните."
+          ]
+        },
+        {
+          "title": "Овощное рагу с курицей для малыша",
+          "description": "Мягкое блюдо с понятными продуктами и небольшими кусочками для тренировки новой текстуры. Подходит для более уверенного этапа прикорма.",
+          "chef_advice": "Куриное филе не пересушивайте и режьте очень мелко. Если ребёнку пока легче, часть овощей можно сделать чуть мягче и раздавить вилкой.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 29,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 104,
+          "proteins": 9.4,
+          "fats": 2.0,
+          "carbs": 11.2,
+          "tags": ["infant", "9_11_months", "lunch", "stew", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Цветная капуста", "amount": 45, "unit": "г", "display_text": "Цветная капуста — 45 г", "category": "vegetables" },
+            { "name": "Кабачок", "amount": 45, "unit": "г", "display_text": "Кабачок — 45 г", "category": "vegetables" },
+            { "name": "Картофель", "amount": 50, "unit": "г", "display_text": "Картофель — 50 г", "category": "vegetables" },
+            { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" }
+          ],
+          "steps": [
+            "Подготовьте овощи и курицу очень маленькими кусочками.",
+            "Приготовьте всё до мягкости.",
+            "Проверьте, что овощи легко разминаются ложкой.",
+            "Подавайте тёплым."
+          ]
+        },
+        {
+          "title": "Мягкие тефтельки из индейки на пару",
+          "description": "Нежные тефтельки с мягкой текстурой для самостоятельной подачи или обеда с ложкой. Подходят для перехода к более взрослому формату блюда.",
+          "chef_advice": "Делайте тефтельки очень маленькими и мягкими, чтобы их можно было легко разломить пальцами. Для первого раза удобно подать их рядом с овощным пюре.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 25,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 101,
+          "proteins": 10.8,
+          "fats": 2.2,
+          "carbs": 7.2,
+          "tags": ["infant", "9_11_months", "lunch", "meatballs", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Филе индейки", "amount": 60, "unit": "г", "display_text": "Филе индейки — 60 г", "category": "meat" },
+            { "name": "Кабачок", "amount": 30, "unit": "г", "display_text": "Кабачок — 30 г", "category": "vegetables" },
+            { "name": "Рисовая крупа", "amount": 8, "unit": "г", "display_text": "Рисовая крупа — 8 г", "category": "grains" }
+          ],
+          "steps": [
+            "Отварите рис до мягкости.",
+            "Индейку и кабачок измельчите очень мелко.",
+            "Смешайте всё и сформируйте маленькие тефтельки.",
+            "Готовьте на пару до полной готовности."
+          ]
+        },
+        {
+          "title": "Мягкие тефтельки из курицы и кабачка",
+          "description": "Нежное блюдо с мягкой структурой для более самостоятельного приёма пищи. Хорошо подходит для обеда или ужина в формате finger food.",
+          "chef_advice": "Кабачок помогает сделать тефтельки мягче и сочнее. Готовые тефтельки проверьте: они должны легко разламываться ложкой или пальцами.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 24,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 98,
+          "proteins": 10.2,
+          "fats": 2.1,
+          "carbs": 6.8,
+          "tags": ["infant", "9_11_months", "lunch", "meatballs", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Куриное филе", "amount": 60, "unit": "г", "display_text": "Куриное филе — 60 г", "category": "meat" },
+            { "name": "Кабачок", "amount": 35, "unit": "г", "display_text": "Кабачок — 35 г", "category": "vegetables" },
+            { "name": "Овсяные хлопья", "amount": 8, "unit": "г", "display_text": "Овсяные хлопья — 8 г", "category": "grains" }
+          ],
+          "steps": [
+            "Кабачок натрите очень мелко.",
+            "Куриное филе измельчите.",
+            "Смешайте курицу, кабачок и овсяные хлопья.",
+            "Сформируйте маленькие тефтельки и приготовьте на пару."
+          ]
+        },
+        {
+          "title": "Мягкие рыбные тефтельки из трески",
+          "description": "Нежные рыбные тефтельки для спокойного введения более самостоятельной еды. Подходят для маленькой порции, если рыба уже знакома малышу.",
+          "chef_advice": "Особенно внимательно проверьте рыбу на косточки до готовки. Подавайте тефтельки маленькими, чтобы их было удобно брать и легко жевать.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 23,
+          "min_age_months": 10,
+          "max_age_months": 11,
+          "calories": 89,
+          "proteins": 10.4,
+          "fats": 1.2,
+          "carbs": 6.0,
+          "tags": ["infant", "9_11_months", "lunch", "fish", "meatballs", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Филе трески", "amount": 60, "unit": "г", "display_text": "Филе трески — 60 г", "category": "fish" },
+            { "name": "Картофель", "amount": 35, "unit": "г", "display_text": "Картофель — 35 г", "category": "vegetables" },
+            { "name": "Рисовая крупа", "amount": 8, "unit": "г", "display_text": "Рисовая крупа — 8 г", "category": "grains" }
+          ],
+          "steps": [
+            "Сварите рис до мягкости.",
+            "Картофель приготовьте до мягкости.",
+            "Проверьте треску на отсутствие косточек и измельчите.",
+            "Смешайте всё, сформируйте маленькие тефтельки и приготовьте на пару."
+          ]
+        },
+        {
+          "title": "Оладьи из кабачка для малыша",
+          "description": "Мягкие овощные оладьи для самостоятельной подачи и спокойного перехода к более плотной еде. Хорошо подходят для перекуса или лёгкого ужина.",
+          "chef_advice": "Делайте оладьи небольшими и тонкими, чтобы они оставались мягкими внутри. После приготовления остудите и проверьте, что кусочек легко ломается.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 18,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 82,
+          "proteins": 3.6,
+          "fats": 2.2,
+          "carbs": 11.0,
+          "tags": ["infant", "9_11_months", "snack", "fritters", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Кабачок", "amount": 80, "unit": "г", "display_text": "Кабачок — 80 г", "category": "vegetables" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" },
+            { "name": "Овсяные хлопья", "amount": 12, "unit": "г", "display_text": "Овсяные хлопья — 12 г", "category": "grains" }
+          ],
+          "steps": [
+            "Натрите кабачок очень мелко и слегка отожмите.",
+            "Добавьте яйцо и овсяные хлопья.",
+            "Перемешайте и оставьте массу на несколько минут.",
+            "Готовьте небольшие оладьи на антипригарной поверхности."
+          ]
+        },
+        {
+          "title": "Оладьи из тыквы для малыша",
+          "description": "Мягкие овощные оладьи с нежной текстурой для перекуса или самостоятельной подачи. Подходят для спокойного расширения привычного меню.",
+          "chef_advice": "Тыкву лучше заранее сделать мягкой, тогда оладьи получаются нежнее. Для подачи руками нарежьте их на удобные полоски.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 20,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 88,
+          "proteins": 3.5,
+          "fats": 2.2,
+          "carbs": 12.5,
+          "tags": ["infant", "9_11_months", "snack", "fritters", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Тыква", "amount": 80, "unit": "г", "display_text": "Тыква — 80 г", "category": "vegetables" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" },
+            { "name": "Рисовая крупа", "amount": 10, "unit": "г", "display_text": "Рисовая крупа — 10 г", "category": "grains" }
+          ],
+          "steps": [
+            "Приготовьте тыкву до мягкости и разомните.",
+            "Добавьте яйцо и мелко размолотую рисовую крупу.",
+            "Сформируйте небольшие оладьи.",
+            "Готовьте до мягкой готовности."
+          ]
+        },
+        {
+          "title": "Банановые оладьи для малыша",
+          "description": "Мягкие фруктовые оладьи для перекуса с удобной текстурой для самостоятельной еды. Хорошо подходят для спокойной подачи без лишних добавок.",
+          "chef_advice": "Используйте очень спелый банан и не делайте оладьи толстыми. После приготовления дайте им немного остыть, чтобы структура стала устойчивее.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 12,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 101,
+          "proteins": 3.2,
+          "fats": 2.4,
+          "carbs": 16.0,
+          "tags": ["infant", "9_11_months", "snack", "fritters", "finger_food", "fruit"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Банан", "amount": 60, "unit": "г", "display_text": "Банан — 60 г", "category": "fruits" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" },
+            { "name": "Овсяные хлопья", "amount": 12, "unit": "г", "display_text": "Овсяные хлопья — 12 г", "category": "grains" }
+          ],
+          "steps": [
+            "Разомните банан вилкой.",
+            "Добавьте яйцо и овсяные хлопья.",
+            "Перемешайте до мягкой массы.",
+            "Готовьте маленькие оладьи до мягкой готовности."
+          ]
+        },
+        {
+          "title": "Оладьи из яблока и овсянки",
+          "description": "Нежные фруктовые оладьи с мягкой текстурой для перекуса или завтрака. Подходят для более уверенного этапа прикорма с finger food.",
+          "chef_advice": "Яблоко лучше натереть очень мелко или заранее размягчить. Если оладьи кажутся сухими, подавайте их сразу после приготовления.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 15,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 95,
+          "proteins": 3.1,
+          "fats": 2.3,
+          "carbs": 15.1,
+          "tags": ["infant", "9_11_months", "snack", "fritters", "finger_food", "fruit"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Яблоко", "amount": 55, "unit": "г", "display_text": "Яблоко — 55 г", "category": "fruits" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" },
+            { "name": "Овсяные хлопья", "amount": 12, "unit": "г", "display_text": "Овсяные хлопья — 12 г", "category": "grains" }
+          ],
+          "steps": [
+            "Натрите яблоко очень мелко.",
+            "Добавьте яйцо и овсяные хлопья.",
+            "Перемешайте и оставьте массу на несколько минут.",
+            "Готовьте небольшие оладьи до мягкости."
+          ]
+        },
+        {
+          "title": "Мягкие палочки из кабачка",
+          "description": "Простой овощной finger food для самостоятельной подачи и тренировки жевания. Подходит как дополнение к основному приёму пищи или перекус.",
+          "chef_advice": "Палочки должны быть длинными, но очень мягкими, чтобы ребёнку было удобно держать их всей ладонью. Проверяйте мягкость перед подачей.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 12,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 24,
+          "proteins": 1.0,
+          "fats": 0.2,
+          "carbs": 4.4,
+          "tags": ["infant", "9_11_months", "snack", "finger_food", "vegetable"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Кабачок", "amount": 100, "unit": "г", "display_text": "Кабачок — 100 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Очистите кабачок и нарежьте длинными палочками.",
+            "Приготовьте палочки на пару до полной мягкости.",
+            "Слегка остудите.",
+            "Проверьте, что кусочек легко разламывается пальцами."
+          ]
+        },
+        {
+          "title": "Мягкие палочки из тыквы",
+          "description": "Мягкий овощной вариант для еды руками с понятной и спокойной подачей. Подходит для закрепления навыка самостоятельного приёма пищи.",
+          "chef_advice": "Не делайте палочки слишком тонкими, чтобы их было удобно брать. При этом каждая должна легко разминаться между пальцами.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 15,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 31,
+          "proteins": 1.1,
+          "fats": 0.1,
+          "carbs": 6.4,
+          "tags": ["infant", "9_11_months", "snack", "finger_food", "vegetable"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Тыква", "amount": 100, "unit": "г", "display_text": "Тыква — 100 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Нарежьте тыкву удобными палочками.",
+            "Приготовьте их до мягкости.",
+            "Остудите до комфортной температуры.",
+            "Подавайте сразу."
+          ]
+        },
+        {
+          "title": "Мягкие палочки из картофеля",
+          "description": "Простой и сытный finger food для более самостоятельной еды в течение дня. Подходит как спокойный гарнир или небольшой перекус.",
+          "chef_advice": "Картофельные палочки особенно важно не пересушить. Готовый кусочек должен легко сминаться языком и дёснами.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 16,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 74,
+          "proteins": 1.8,
+          "fats": 0.1,
+          "carbs": 16.4,
+          "tags": ["infant", "9_11_months", "snack", "finger_food", "vegetable"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Картофель", "amount": 100, "unit": "г", "display_text": "Картофель — 100 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Очистите картофель и нарежьте толстыми палочками.",
+            "Приготовьте на пару или отварите до мягкости.",
+            "Слегка остудите.",
+            "Проверьте мягкость перед подачей."
+          ]
+        },
+        {
+          "title": "Мягкие соцветия брокколи",
+          "description": "Простой овощной вариант для еды руками с мягкой текстурой и понятной формой. Подходит для тренировки самостоятельного приёма пищи.",
+          "chef_advice": "Выбирайте небольшие соцветия, которые удобно держать. Брокколи должна быть мягкой целиком, не только сверху.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 10,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 28,
+          "proteins": 2.4,
+          "fats": 0.3,
+          "carbs": 4.0,
+          "tags": ["infant", "9_11_months", "snack", "finger_food", "vegetable"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Брокколи", "amount": 100, "unit": "г", "display_text": "Брокколи — 100 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Разберите брокколи на маленькие соцветия.",
+            "Приготовьте на пару до полной мягкости.",
+            "Остудите до комфортной температуры.",
+            "Подавайте сразу."
+          ]
+        },
+        {
+          "title": "Мягкие соцветия цветной капусты",
+          "description": "Нежный овощной finger food для спокойного знакомства с едой руками. Хорошо подходит как дополнение к основному блюду.",
+          "chef_advice": "Соцветия должны быть маленькими и очень мягкими, без плотной середины. Перед подачей проверьте каждый кусочек вилкой.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 11,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 26,
+          "proteins": 2.1,
+          "fats": 0.3,
+          "carbs": 3.7,
+          "tags": ["infant", "9_11_months", "snack", "finger_food", "vegetable"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Цветная капуста", "amount": 100, "unit": "г", "display_text": "Цветная капуста — 100 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Разберите цветную капусту на маленькие соцветия.",
+            "Приготовьте до мягкости.",
+            "Слегка остудите.",
+            "Подавайте тёплой."
+          ]
+        },
+        {
+          "title": "Запечённое яблоко кусочками",
+          "description": "Мягкий фруктовый перекус для самостоятельной подачи с удобной и понятной текстурой. Подходит для спокойного этапа введения кусочков.",
+          "chef_advice": "Яблоко должно стать совсем мягким, без плотных участков. Для удобства нарежьте его короткими дольками или кубиками.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 18,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 49,
+          "proteins": 0.2,
+          "fats": 0.1,
+          "carbs": 12.1,
+          "tags": ["infant", "9_11_months", "snack", "fruit", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Яблоко", "amount": 100, "unit": "г", "display_text": "Яблоко — 100 г", "category": "fruits" }
+          ],
+          "steps": [
+            "Очистите яблоко и нарежьте дольками.",
+            "Приготовьте до мягкости в духовке или на пару.",
+            "Остудите до тёплого состояния.",
+            "Подавайте удобными кусочками."
+          ]
+        },
+        {
+          "title": "Мягкие кусочки груши",
+          "description": "Нежный фруктовый вариант для самостоятельной подачи и мягкого перехода к еде руками. Хорошо подходит как спокойный перекус без лишних добавок.",
+          "chef_advice": "Если груша плотная, не подавайте её сырой. Сначала доведите её до мягкости и нарежьте небольшими удобными кусочками.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 10,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 52,
+          "proteins": 0.3,
+          "fats": 0.1,
+          "carbs": 13.1,
+          "tags": ["infant", "9_11_months", "snack", "fruit", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Груша", "amount": 100, "unit": "г", "display_text": "Груша — 100 г", "category": "fruits" }
+          ],
+          "steps": [
+            "Очистите грушу и нарежьте кусочками.",
+            "Приготовьте до мягкости.",
+            "Остудите до комфортной температуры.",
+            "Подавайте сразу."
+          ]
+        },
+        {
+          "title": "Мягкие кусочки банана",
+          "description": "Простой фруктовый перекус с удобной мягкой текстурой для самостоятельной подачи. Подходит для закрепления навыка есть руками.",
+          "chef_advice": "Выбирайте спелый мягкий банан без плотных волокон. Кусочки делайте небольшими, но удобными для захвата ладонью.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 5,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 78,
+          "proteins": 1.0,
+          "fats": 0.2,
+          "carbs": 18.0,
+          "tags": ["infant", "9_11_months", "snack", "fruit", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Банан", "amount": 80, "unit": "г", "display_text": "Банан — 80 г", "category": "fruits" }
+          ],
+          "steps": [
+            "Очистите банан.",
+            "Нарежьте его небольшими мягкими кусочками.",
+            "Разложите на тарелке.",
+            "Подавайте сразу."
+          ]
+        },
+        {
+          "title": "Запеканка из кабачка и творога",
+          "description": "Нежная запеканка с мягкой структурой для лёгкого ужина или перекуса малыша. Подходит для более уверенного этапа прикорма с мягкими кусочками.",
+          "chef_advice": "Запеканка должна остаться влажной и мягкой, без плотной корочки. После приготовления нарежьте её маленькими мягкими брусочками.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 24,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 96,
+          "proteins": 6.0,
+          "fats": 4.1,
+          "carbs": 8.4,
+          "tags": ["infant", "9_11_months", "dinner", "casserole", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Кабачок", "amount": 80, "unit": "г", "display_text": "Кабачок — 80 г", "category": "vegetables" },
+            { "name": "Творог детский", "amount": 50, "unit": "г", "display_text": "Творог детский — 50 г", "category": "dairy" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" }
+          ],
+          "steps": [
+            "Натрите кабачок очень мелко и слегка отожмите.",
+            "Смешайте кабачок с творогом и яйцом.",
+            "Переложите массу в форму.",
+            "Запекайте до мягкой готовности."
+          ]
+        },
+        {
+          "title": "Запеканка из картофеля и курицы",
+          "description": "Сытное мягкое блюдо с привычными продуктами для спокойного ужина малыша. Хорошо подходит для перехода к более взрослому формату еды.",
+          "chef_advice": "Не делайте запеканку сухой: картофель и курица должны оставаться мягкими. После готовности удобно нарезать её маленькими мягкими квадратами.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 28,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 118,
+          "proteins": 9.7,
+          "fats": 2.1,
+          "carbs": 14.9,
+          "tags": ["infant", "9_11_months", "dinner", "casserole", "soft_texture"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Картофель", "amount": 80, "unit": "г", "display_text": "Картофель — 80 г", "category": "vegetables" },
+            { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" }
+          ],
+          "steps": [
+            "Отварите картофель и курицу до мягкости.",
+            "Картофель разомните, курицу нарежьте очень мелко.",
+            "Смешайте всё с яйцом.",
+            "Переложите в форму и запекайте до мягкой готовности."
+          ]
+        },
+        {
+          "title": "Запеканка из риса и яблока",
+          "description": "Нежная мягкая запеканка с фруктовой основой для спокойного завтрака или лёгкого ужина. Подходит для более уверенного этапа прикорма.",
+          "chef_advice": "Рис должен быть хорошо разваренным, а яблоко — мягким. Не пересушивайте запеканку, чтобы её легко было разламывать ложкой.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 26,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 112,
+          "proteins": 3.1,
+          "fats": 2.2,
+          "carbs": 20.1,
+          "tags": ["infant", "9_11_months", "dinner", "casserole", "fruit"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Рисовая крупа", "amount": 18, "unit": "г", "display_text": "Рисовая крупа — 18 г", "category": "grains" },
+            { "name": "Яблоко", "amount": 50, "unit": "г", "display_text": "Яблоко — 50 г", "category": "fruits" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" },
+            { "name": "Вода", "amount": 170, "unit": "мл", "display_text": "Вода — 170 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите рис до полной мягкости.",
+            "Яблоко приготовьте до мягкости и измельчите.",
+            "Смешайте рис, яблоко и яйцо.",
+            "Запекайте до мягкой готовности."
+          ]
+        },
+        {
+          "title": "Омлет на пару с цветной капустой",
+          "description": "Мягкое блюдо с нежной структурой для ужина или завтрака в более уверенном этапе прикорма. Подходит для спокойной подачи кусочками.",
+          "chef_advice": "Цветную капусту нужно особенно хорошо размягчить и нарезать очень мелко. Готовый омлет можно подать маленькими брусочками.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 16,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 84,
+          "proteins": 6.1,
+          "fats": 5.2,
+          "carbs": 2.6,
+          "tags": ["infant", "9_11_months", "dinner", "omelet", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Куриное яйцо", "amount": 1, "unit": "шт.", "display_text": "Куриное яйцо — 1 шт.", "category": "other" },
+            { "name": "Цветная капуста", "amount": 35, "unit": "г", "display_text": "Цветная капуста — 35 г", "category": "vegetables" },
+            { "name": "Вода", "amount": 20, "unit": "мл", "display_text": "Вода — 20 мл", "category": "other" }
+          ],
+          "steps": [
+            "Приготовьте цветную капусту до мягкости и мелко нарежьте.",
+            "Взбейте яйцо с водой.",
+            "Добавьте капусту.",
+            "Готовьте на пару до полной готовности."
+          ]
+        },
+        {
+          "title": "Мягкие кусочки лосося с картофелем",
+          "description": "Нежное рыбное блюдо с мягким гарниром для спокойного знакомства с более взрослой подачей. Подходит для маленькой порции, если рыба уже знакома малышу.",
+          "chef_advice": "Особенно тщательно проверьте рыбу на косточки и делайте кусочки очень маленькими. Картофель можно подать рядом мягкими палочками или слегка размять.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 22,
+          "min_age_months": 10,
+          "max_age_months": 11,
+          "calories": 121,
+          "proteins": 10.0,
+          "fats": 5.0,
+          "carbs": 8.8,
+          "tags": ["infant", "9_11_months", "dinner", "fish", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Филе лосося", "amount": 40, "unit": "г", "display_text": "Филе лосося — 40 г", "category": "fish" },
+            { "name": "Картофель", "amount": 70, "unit": "г", "display_text": "Картофель — 70 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Приготовьте лосось до мягкости.",
+            "Картофель отварите до мягкости.",
+            "Проверьте рыбу на отсутствие косточек.",
+            "Подавайте маленькими мягкими кусочками."
+          ]
+        },
+        {
+          "title": "Мягкие кусочки индейки с тыквой",
+          "description": "Простое мясо-овощное блюдо с мягкой текстурой для спокойного перехода к более самостоятельной еде. Подходит для обеда или лёгкого ужина малыша.",
+          "chef_advice": "Индейку режьте очень мелко и не пересушивайте. Тыква здесь помогает сделать подачу мягче и спокойнее по текстуре.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 24,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 96,
+          "proteins": 9.5,
+          "fats": 2.1,
+          "carbs": 7.6,
+          "tags": ["infant", "9_11_months", "dinner", "meat", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Филе индейки", "amount": 45, "unit": "г", "display_text": "Филе индейки — 45 г", "category": "meat" },
+            { "name": "Тыква", "amount": 60, "unit": "г", "display_text": "Тыква — 60 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Приготовьте индейку до мягкости.",
+            "Тыкву доведите до мягкости отдельно.",
+            "Индейку нарежьте очень маленькими кусочками.",
+            "Подавайте вместе с мягкой тыквой."
+          ]
+        },
+        {
+          "title": "Размятый картофель с курицей и цветной капустой",
+          "description": "Сытное мягкое блюдо, которое удобно подавать ложкой или в более плотной текстуре. Подходит для спокойного ужина без лишних добавок.",
+          "chef_advice": "Не делайте массу полностью гладкой, если ребёнок уже уверенно ест. Цветную капусту лучше добавить очень мелко, чтобы она не выбивалась по текстуре.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 27,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 112,
+          "proteins": 9.6,
+          "fats": 2.1,
+          "carbs": 13.8,
+          "tags": ["infant", "9_11_months", "dinner", "fork_mashed", "chicken"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Картофель", "amount": 80, "unit": "г", "display_text": "Картофель — 80 г", "category": "vegetables" },
+            { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" },
+            { "name": "Цветная капуста", "amount": 40, "unit": "г", "display_text": "Цветная капуста — 40 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Отварите картофель, курицу и цветную капусту до мягкости.",
+            "Курицу мелко нарежьте.",
+            "Картофель разомните вилкой.",
+            "Добавьте курицу и очень мелко нарезанную капусту."
+          ]
+        },
+        {
+          "title": "Запеканка из брокколи и картофеля",
+          "description": "Мягкая овощная запеканка для спокойного ужина или перекуса в более уверенном этапе прикорма. Хорошо подходит для подачи небольшими мягкими кусочками.",
+          "chef_advice": "Брокколи заранее сделайте мягкой и нарежьте очень мелко. Не запекайте до плотной корочки — внутри блюдо должно оставаться нежным.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 24,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 92,
+          "proteins": 3.8,
+          "fats": 2.1,
+          "carbs": 13.8,
+          "tags": ["infant", "9_11_months", "dinner", "casserole", "vegetable"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Картофель", "amount": 80, "unit": "г", "display_text": "Картофель — 80 г", "category": "vegetables" },
+            { "name": "Брокколи", "amount": 40, "unit": "г", "display_text": "Брокколи — 40 г", "category": "vegetables" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" }
+          ],
+          "steps": [
+            "Отварите картофель и брокколи до мягкости.",
+            "Картофель разомните, брокколи мелко нарежьте.",
+            "Добавьте яйцо и перемешайте.",
+            "Запекайте до мягкой готовности."
+          ]
+        },
+        {
+          "title": "Размятый рис с треской и кабачком",
+          "description": "Нежное рыбное блюдо с мягкой текстурой для более уверенного этапа прикорма. Подходит для спокойной подачи ложкой без лишней плотности.",
+          "chef_advice": "Рыбу проверяйте особенно внимательно на косточки. Если текстура кажется слишком рассыпчатой, слегка объедините её мягким кабачком.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 24,
+          "min_age_months": 10,
+          "max_age_months": 11,
+          "calories": 108,
+          "proteins": 9.4,
+          "fats": 1.2,
+          "carbs": 15.0,
+          "tags": ["infant", "9_11_months", "lunch", "fish", "fork_mashed"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Рисовая крупа", "amount": 16, "unit": "г", "display_text": "Рисовая крупа — 16 г", "category": "grains" },
+            { "name": "Филе трески", "amount": 40, "unit": "г", "display_text": "Филе трески — 40 г", "category": "fish" },
+            { "name": "Кабачок", "amount": 50, "unit": "г", "display_text": "Кабачок — 50 г", "category": "vegetables" },
+            { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите рис до мягкости.",
+            "Треску и кабачок приготовьте отдельно до мягкости.",
+            "Проверьте рыбу на отсутствие косточек.",
+            "Соедините всё и слегка разомните вилкой."
+          ]
+        },
+        {
+          "title": "Гречка с кроликом и морковью, размятая вилкой",
+          "description": "Сытное блюдо с мягкой, но уже не полностью гладкой текстурой для спокойного дневного меню. Подходит для уверенного этапа введения более плотной еды.",
+          "chef_advice": "Морковь должна стать очень мягкой, чтобы не выбиваться по текстуре. Кролика режьте особенно мелко или слегка разберите на волокна.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 29,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 119,
+          "proteins": 10.0,
+          "fats": 2.3,
+          "carbs": 14.8,
+          "tags": ["infant", "9_11_months", "lunch", "rabbit", "fork_mashed"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Гречневая крупа", "amount": 16, "unit": "г", "display_text": "Гречневая крупа — 16 г", "category": "grains" },
+            { "name": "Филе кролика", "amount": 40, "unit": "г", "display_text": "Филе кролика — 40 г", "category": "meat" },
+            { "name": "Морковь", "amount": 40, "unit": "г", "display_text": "Морковь — 40 г", "category": "vegetables" },
+            { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите гречку до мягкости.",
+            "Кролика и морковь приготовьте до полной мягкости.",
+            "Кролика очень мелко нарежьте.",
+            "Соедините всё и слегка разомните вилкой."
+          ]
+        },
+        {
+          "title": "Рис с желтком и кабачком, размятый вилкой",
+          "description": "Мягкое сытное блюдо для спокойного перехода к более плотной текстуре в знакомых сочетаниях. Подходит для небольшой дневной порции, если желток уже введён.",
+          "chef_advice": "Желток лучше вмешивать в уже тёплую массу, а не в горячую. Кабачок здесь помогает сделать блюдо мягче и более влажным.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 22,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 104,
+          "proteins": 3.8,
+          "fats": 4.0,
+          "carbs": 13.4,
+          "tags": ["infant", "9_11_months", "lunch", "egg_yolk", "fork_mashed"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Рисовая крупа", "amount": 16, "unit": "г", "display_text": "Рисовая крупа — 16 г", "category": "grains" },
+            { "name": "Кабачок", "amount": 60, "unit": "г", "display_text": "Кабачок — 60 г", "category": "vegetables" },
+            { "name": "Куриный желток", "amount": 0.5, "unit": "шт.", "display_text": "Куриный желток — 1/2 шт.", "category": "other" },
+            { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите рис до мягкости.",
+            "Кабачок приготовьте отдельно до мягкости.",
+            "Сварите яйцо вкрутую и отделите желток.",
+            "Соедините всё и слегка разомните вилкой."
+          ]
+        },
+        {
+          "title": "Овсяная каша с тыквой и творогом",
+          "description": "Нежная каша с мягкой молочно-овощной подачей для спокойного завтрака или перекуса. Подходит для более уверенного этапа прикорма, если творог уже введён.",
+          "chef_advice": "Творог добавляйте уже в готовую тёплую кашу. Если текстура получилась слишком плотной, немного смягчите её тёплой водой.",
+          "meal_type": "breakfast",
+          "cooking_time_minutes": 15,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 110,
+          "proteins": 5.3,
+          "fats": 3.3,
+          "carbs": 15.5,
+          "tags": ["infant", "9_11_months", "breakfast", "porridge", "dairy"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Овсяные хлопья", "amount": 16, "unit": "г", "display_text": "Овсяные хлопья — 16 г", "category": "grains" },
+            { "name": "Тыква", "amount": 40, "unit": "г", "display_text": "Тыква — 40 г", "category": "vegetables" },
+            { "name": "Творог детский", "amount": 35, "unit": "г", "display_text": "Творог детский — 35 г", "category": "dairy" },
+            { "name": "Вода", "amount": 160, "unit": "мл", "display_text": "Вода — 160 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите овсяные хлопья до мягкости.",
+            "Тыкву приготовьте отдельно до мягкости и разомните.",
+            "Соедините кашу с тыквой.",
+            "Добавьте творог и перемешайте."
+          ]
+        },
+        {
+          "title": "Гречневая каша с бананом и творогом",
+          "description": "Мягкая каша с нежной фруктово-молочной подачей для спокойного утреннего меню малыша. Хорошо подходит для небольшой сытной порции.",
+          "chef_advice": "Банан лучше вмешивать в конце, чтобы сохранить мягкий вкус и структуру. Если нужно, оставьте часть банана слегка размятой, а не полностью однородной.",
+          "meal_type": "breakfast",
+          "cooking_time_minutes": 17,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 116,
+          "proteins": 5.2,
+          "fats": 3.2,
+          "carbs": 17.6,
+          "tags": ["infant", "9_11_months", "breakfast", "porridge", "dairy", "fruit"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Гречневая крупа", "amount": 16, "unit": "г", "display_text": "Гречневая крупа — 16 г", "category": "grains" },
+            { "name": "Банан", "amount": 35, "unit": "г", "display_text": "Банан — 35 г", "category": "fruits" },
+            { "name": "Творог детский", "amount": 35, "unit": "г", "display_text": "Творог детский — 35 г", "category": "dairy" },
+            { "name": "Вода", "amount": 160, "unit": "мл", "display_text": "Вода — 160 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите гречневую крупу до мягкости.",
+            "Банан разомните вилкой.",
+            "Добавьте банан в кашу.",
+            "Вмешайте творог в уже тёплую кашу."
+          ]
+        },
+        {
+          "title": "Омлет на пару с творогом",
+          "description": "Нежный мягкий вариант для спокойного завтрака или ужина в более уверенном этапе прикорма. Подходит для подачи небольшими мягкими кусочками.",
+          "chef_advice": "Творог делает омлет мягче, поэтому не нужно готовить его слишком долго. Готовый омлет лучше нарезать короткими полосками или маленькими квадратиками.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 14,
+          "min_age_months": 10,
+          "max_age_months": 11,
+          "calories": 96,
+          "proteins": 7.2,
+          "fats": 5.8,
+          "carbs": 2.5,
+          "tags": ["infant", "9_11_months", "dinner", "omelet", "dairy", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Куриное яйцо", "amount": 1, "unit": "шт.", "display_text": "Куриное яйцо — 1 шт.", "category": "other" },
+            { "name": "Творог детский", "amount": 25, "unit": "г", "display_text": "Творог детский — 25 г", "category": "dairy" },
+            { "name": "Вода", "amount": 15, "unit": "мл", "display_text": "Вода — 15 мл", "category": "other" }
+          ],
+          "steps": [
+            "Взбейте яйцо с водой.",
+            "Добавьте творог и аккуратно перемешайте.",
+            "Перелейте массу в форму.",
+            "Готовьте на пару до полной готовности."
+          ]
+        },
+        {
+          "title": "Мягкие кусочки курицы с брокколи и рисом",
+          "description": "Сытное блюдо с мягкими кусочками и привычными продуктами для спокойного обеда малыша. Подходит для более уверенного этапа перехода к семейной еде.",
+          "chef_advice": "Рис здесь удобен как мягкая основа, а курицу лучше нарезать совсем мелко. Брокколи добавляйте только очень мягкой и без жёстких частей.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 26,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 117,
+          "proteins": 9.6,
+          "fats": 2.0,
+          "carbs": 15.6,
+          "tags": ["infant", "9_11_months", "lunch", "chicken", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Куриное филе", "amount": 40, "unit": "г", "display_text": "Куриное филе — 40 г", "category": "meat" },
+            { "name": "Рисовая крупа", "amount": 16, "unit": "г", "display_text": "Рисовая крупа — 16 г", "category": "grains" },
+            { "name": "Брокколи", "amount": 40, "unit": "г", "display_text": "Брокколи — 40 г", "category": "vegetables" },
+            { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите рис до мягкости.",
+            "Курицу и брокколи приготовьте отдельно до мягкости.",
+            "Курицу мелко нарежьте, брокколи очень мелко порубите.",
+            "Соедините всё вместе."
+          ]
+        },
+        {
+          "title": "Мягкие кусочки индейки с цветной капустой и картофелем",
+          "description": "Спокойное мясо-овощное блюдо с мягкой текстурой для обеда в более уверенном этапе прикорма. Хорошо подходит для постепенного приближения к семейному столу.",
+          "chef_advice": "Картофель удобно слегка размять, а индейку оставить очень мелкими кусочками. Цветную капусту не переваривайте в воду, лучше сохранить её мягкой, но не водянистой.",
+          "meal_type": "lunch",
+          "cooking_time_minutes": 27,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 113,
+          "proteins": 9.8,
+          "fats": 2.1,
+          "carbs": 13.9,
+          "tags": ["infant", "9_11_months", "lunch", "meat", "soft_pieces"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Филе индейки", "amount": 40, "unit": "г", "display_text": "Филе индейки — 40 г", "category": "meat" },
+            { "name": "Цветная капуста", "amount": 45, "unit": "г", "display_text": "Цветная капуста — 45 г", "category": "vegetables" },
+            { "name": "Картофель", "amount": 70, "unit": "г", "display_text": "Картофель — 70 г", "category": "vegetables" }
+          ],
+          "steps": [
+            "Приготовьте индейку, капусту и картофель до мягкости.",
+            "Индейку очень мелко нарежьте.",
+            "Картофель слегка разомните вилкой.",
+            "Соедините всё и подавайте тёплым."
+          ]
+        },
+        {
+          "title": "Запеканка из тыквы и риса",
+          "description": "Мягкая овощно-крупяная запеканка для спокойного ужина или завтрака малыша. Подходит для подачи небольшими мягкими кусочками в более уверенном этапе прикорма.",
+          "chef_advice": "Рис должен быть хорошо разваренным, тогда запеканка останется нежной. После приготовления не спешите резать её горячей — дайте ей немного стабилизироваться.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 25,
+          "min_age_months": 9,
+          "max_age_months": 11,
+          "calories": 108,
+          "proteins": 2.8,
+          "fats": 2.1,
+          "carbs": 20.0,
+          "tags": ["infant", "9_11_months", "dinner", "casserole", "vegetable"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Тыква", "amount": 70, "unit": "г", "display_text": "Тыква — 70 г", "category": "vegetables" },
+            { "name": "Рисовая крупа", "amount": 16, "unit": "г", "display_text": "Рисовая крупа — 16 г", "category": "grains" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" },
+            { "name": "Вода", "amount": 165, "unit": "мл", "display_text": "Вода — 165 мл", "category": "other" }
+          ],
+          "steps": [
+            "Сварите рис до мягкости.",
+            "Тыкву приготовьте до мягкости и разомните.",
+            "Смешайте рис, тыкву и яйцо.",
+            "Запекайте до мягкой готовности."
+          ]
+        },
+        {
+          "title": "Овощные мини-котлетки из индейки",
+          "description": "Мягкий формат для самостоятельной подачи или ужина с ложкой в более уверенном этапе прикорма. Подходит для спокойного перехода к блюдам семейного формата.",
+          "chef_advice": "Делайте котлетки маленькими и плоскими, тогда они лучше сохраняют мягкость. Для первой подачи можно разломить одну котлетку на глазах у ребёнка.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 25,
+          "min_age_months": 10,
+          "max_age_months": 11,
+          "calories": 103,
+          "proteins": 10.4,
+          "fats": 2.3,
+          "carbs": 7.5,
+          "tags": ["infant", "9_11_months", "dinner", "meatballs", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Филе индейки", "amount": 55, "unit": "г", "display_text": "Филе индейки — 55 г", "category": "meat" },
+            { "name": "Морковь", "amount": 25, "unit": "г", "display_text": "Морковь — 25 г", "category": "vegetables" },
+            { "name": "Кабачок", "amount": 25, "unit": "г", "display_text": "Кабачок — 25 г", "category": "vegetables" },
+            { "name": "Овсяные хлопья", "amount": 8, "unit": "г", "display_text": "Овсяные хлопья — 8 г", "category": "grains" }
+          ],
+          "steps": [
+            "Индейку измельчите.",
+            "Овощи натрите очень мелко.",
+            "Смешайте всё с овсяными хлопьями.",
+            "Сформируйте маленькие котлетки и приготовьте на пару."
+          ]
+        },
+        {
+          "title": "Мягкие кусочки творожной запеканки с бананом",
+          "description": "Нежная запеканка для перекуса или завтрака с удобной мягкой текстурой для самостоятельной подачи. Хорошо подходит для более уверенного этапа прикорма.",
+          "chef_advice": "Банан делает запеканку мягче, поэтому не стоит добавлять много крупы. После готовности подавайте небольшими мягкими кубиками.",
+          "meal_type": "snack",
+          "cooking_time_minutes": 22,
+          "min_age_months": 10,
+          "max_age_months": 11,
+          "calories": 117,
+          "proteins": 6.2,
+          "fats": 3.5,
+          "carbs": 15.0,
+          "tags": ["infant", "9_11_months", "snack", "casserole", "dairy", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Творог детский", "amount": 60, "unit": "г", "display_text": "Творог детский — 60 г", "category": "dairy" },
+            { "name": "Банан", "amount": 40, "unit": "г", "display_text": "Банан — 40 г", "category": "fruits" },
+            { "name": "Куриное яйцо", "amount": 0.5, "unit": "шт.", "display_text": "Куриное яйцо — 1/2 шт.", "category": "other" },
+            { "name": "Овсяные хлопья", "amount": 8, "unit": "г", "display_text": "Овсяные хлопья — 8 г", "category": "grains" }
+          ],
+          "steps": [
+            "Разомните банан вилкой.",
+            "Смешайте банан с творогом, яйцом и овсяными хлопьями.",
+            "Переложите массу в форму.",
+            "Запекайте до мягкой готовности."
+          ]
+        },
+        {
+          "title": "Мини-омлет с индейкой на пару",
+          "description": "Мягкое белковое блюдо для спокойного ужина или завтрака в более уверенном этапе прикорма. Подходит для подачи маленькими кусочками или полосками.",
+          "chef_advice": "Индейку добавляйте только очень мелко нарезанной и уже мягкой. Готовый омлет удобно делить на маленькие мягкие части для самостоятельной подачи.",
+          "meal_type": "dinner",
+          "cooking_time_minutes": 18,
+          "min_age_months": 10,
+          "max_age_months": 11,
+          "calories": 94,
+          "proteins": 8.1,
+          "fats": 5.5,
+          "carbs": 2.3,
+          "tags": ["infant", "9_11_months", "dinner", "omelet", "meat", "finger_food"],
+          "nutrition_goals": [],
+          "servings_base": 1,
+          "servings_recommended": 1,
+          "is_soup": false,
+          "ingredients": [
+            { "name": "Куриное яйцо", "amount": 1, "unit": "шт.", "display_text": "Куриное яйцо — 1 шт.", "category": "other" },
+            { "name": "Филе индейки", "amount": 20, "unit": "г", "display_text": "Филе индейки — 20 г", "category": "meat" },
+            { "name": "Вода", "amount": 20, "unit": "мл", "display_text": "Вода — 20 мл", "category": "other" }
+          ],
+          "steps": [
+            "Индейку приготовьте до мягкости и очень мелко нарежьте.",
+            "Взбейте яйцо с водой.",
+            "Добавьте индейку и перемешайте.",
+            "Готовьте на пару до полной готовности."
+          ]
+        }
+  ]
+}

@@ -1,19 +1,20 @@
-# Infant curated seed-пул (4–6 и 7–8 мес)
+# Infant curated seed-пул (4–6, 7–8 и 9–11 мес)
 
 ## Что в репозитории
 
 - **Исходные наборы (source of truth):**  
   - `data/infant-seed/infant_4_6_months_stage1.json`  
   - `data/infant-seed/infant_7_8_months_stage2.json`  
+  - `data/infant-seed/infant_9_11_months_stage3.json`  
   Curated тексты, ингредиенты, шаги, КБЖУ, теги — не из программного генератора «заглушек».
 
-- **Сборка:** `scripts/infant-seed/buildInfantSeedRecipes.mjs` — читает оба JSON, нормализует шаги (строки → `{ step_number, instruction }`), добавляет batch-тег, валидирует поля.
+- **Сборка:** `scripts/infant-seed/buildInfantSeedRecipes.mjs` — читает три JSON (4–6, 7–8, 9–11), нормализует шаги (строки → `{ step_number, instruction }`), добавляет batch-тег, валидирует поля.
 
-- **Снимок для импорта:** `data/infant-seed-recipes.json` — пересборка: `npm run seed:infant:json` (≈86 рецептов: 45 + 41).
+- **Снимок для импорта:** `data/infant-seed-recipes.json` — пересборка: `npm run seed:infant:json` (сводный curated набор 4–6, 7–8, 9–11).
 
 - **Импорт:** `scripts/import-infant-seed.mjs` — **service role**, не `create_recipe_with_steps` (там `user_id` = `auth.uid()`).
 
-- **Поля пула:** `source = seed`, `locale = ru`, `trust_level = trusted`, `nutrition_goals = []` (отбор в плане для младенцев — по `min_age_months` / `max_age_months` и правилам generate-plan, не по целям). Текст «подсказки для мамы» хранится в `chef_advice`. На клиенте для infant-рецептов этот контент подписывается как **«Подсказка для мамы»**, а `description` берётся напрямую из `recipes.description` (про текстуру/этап прикорма).
+- **Поля пула:** `source = seed`, `locale = ru`, `trust_level = trusted`, `nutrition_goals = []` (отбор в плане для младенцев — по `min_age_months` / `max_age_months` и правилам generate-plan, не по целям). Текст «подсказки для мамы» хранится в `chef_advice`. На клиенте для infant-рецептов этот контент подписывается как **«Подсказка для мамы»**, а `description` берётся напрямую из `recipes.description` (про текстуру/этап прикорма). Группа 9–11 мес остаётся в infant UX-path (<12), но допускает более плотные текстуры, мягкие кусочки и finger food в curated-пуле.
 
 - **Идемпотентность:** повторный запуск ищет строку по `(user_id, source, locale, norm_title, min_age_months, max_age_months)` и делает **UPDATE** + замену ингредиентов/шагов, иначе **INSERT**. В БД: частичный уникальный индекс `recipes_seed_catalog_identity_v1` (миграция `20260325130000_recipes_seed_catalog_unique.sql`).
 

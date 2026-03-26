@@ -16,6 +16,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..", "..");
 const path46 = join(root, "data", "infant-seed", "infant_4_6_months_stage1.json");
 const path78 = join(root, "data", "infant-seed", "infant_7_8_months_stage2.json");
+const path911 = join(root, "data", "infant-seed", "infant_9_11_months_stage3.json");
 
 function loadBundle(path, label) {
   if (!existsSync(path)) {
@@ -99,10 +100,11 @@ function mergeTags(tags, seedSet) {
 export function buildInfantSeedRecipes() {
   const b46 = loadBundle(path46, "4–6 мес");
   const b78 = loadBundle(path78, "7–8 мес");
+  const b911 = loadBundle(path911, "9–11 мес");
 
   const out = [];
 
-  for (const bundle of [b46, b78]) {
+  for (const bundle of [b46, b78, b911]) {
     const seedSet = bundle.seedSet ?? "unknown";
     const recipes = bundle.recipes ?? [];
     for (let idx = 0; idx < recipes.length; idx++) {
