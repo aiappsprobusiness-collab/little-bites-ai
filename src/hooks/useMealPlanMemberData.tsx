@@ -19,6 +19,7 @@ export type MealPlanMemberDataForEdge = {
   allergies: string[];
   likes: string[];
   dislikes: string[];
+  introduced_product_keys?: string[];
   /** Не подставлять 0 при отсутствии возраста — иначе Edge считает профиль «младенческим». */
   age_months?: number;
 };
@@ -61,6 +62,7 @@ export function useMealPlanMemberData(): {
         allergies: allAllergies,
         likes: allLikes,
         dislikes: allDislikes,
+        introduced_product_keys: [],
       };
     }
     const memberForPlan = selectedMember ?? (isFree && selectedMemberId === "family" && members.length > 0 ? members[0] : null);
@@ -75,6 +77,9 @@ export function useMealPlanMemberData(): {
         allergies: m.allergies ?? [],
         likes: m.likes ?? [],
         dislikes: m.dislikes ?? [],
+        introduced_product_keys: Array.isArray((memberForPlan as { introduced_product_keys?: unknown }).introduced_product_keys)
+          ? ((memberForPlan as { introduced_product_keys: string[] }).introduced_product_keys ?? [])
+          : [],
       };
     }
     return null;

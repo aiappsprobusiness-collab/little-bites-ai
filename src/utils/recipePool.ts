@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildBlockedTokens, containsAnyToken, containsAnyTokenForAllergy } from "@/utils/allergenTokens";
+import { scoreInfantIntroducedMatch, type IngredientForProductKey } from "@/utils/introducedProducts";
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -91,6 +92,7 @@ export interface MemberDataForPool {
   preferences?: string | string[];
   likes?: string | string[];
   dislikes?: string | string[];
+  introduced_product_keys?: string[];
   age_months?: number;
   age_years?: number;
 }
@@ -116,7 +118,7 @@ export type PoolRecipeRow = {
   meal_type?: string | null;
   min_age_months?: number | null;
   max_age_months?: number | null;
-  recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
+  recipe_ingredients?: Array<{ name?: string; display_text?: string; category?: string | null }> | null;
 };
 
 type RecipeRow = PoolRecipeRow;
@@ -250,6 +252,23 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
     });
   }
 
+  const introducedKeys = Array.isArray(memberData?.introduced_product_keys) ? memberData.introduced_product_keys : [];
+  if (ageMonths != null && ageMonths < 12 && introducedKeys.length > 0) {
+    filtered = [...filtered].sort((a, b) => {
+      const aScore = scoreInfantIntroducedMatch({
+        ageMonths,
+        introducedProductKeys: introducedKeys,
+        ingredients: (a.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
+      });
+      const bScore = scoreInfantIntroducedMatch({
+        ageMonths,
+        introducedProductKeys: introducedKeys,
+        ingredients: (b.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
+      });
+      return bScore - aScore;
+    });
+  }
+
   return filtered;
 }
 
@@ -272,9 +291,10 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
 
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
   const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
+  const hasIntroduced = Array.isArray(memberData?.introduced_product_keys) && memberData.introduced_product_keys.length > 0;
 
-  const selectFields = hasAllergies
-    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
+  const selectFields = (hasAllergies || hasIntroduced)
+    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
     : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
   const { data: rows, error } = await supabase
@@ -313,9 +333,10 @@ export async function pickRecipeFromPool(
   const excludeSet = new Set(excludeRecipeIds);
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
   const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
+  const hasIntroduced = Array.isArray(memberData?.introduced_product_keys) && memberData.introduced_product_keys.length > 0;
 
-  const selectFields = hasAllergies
-    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
+  const selectFields = (hasAllergies || hasIntroduced)
+    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
     : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
   let q = supabase

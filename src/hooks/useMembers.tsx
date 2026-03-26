@@ -24,7 +24,7 @@ function allergyItemsToActiveValues(items: AllergyItemRow[]): string[] {
 
 function normalizeMemberPayload<T extends Record<string, unknown>>(payload: T): T {
   const out = { ...payload };
-  const arrayKeys = ["allergies", "preferences", "likes", "dislikes"] as const;
+  const arrayKeys = ["allergies", "preferences", "likes", "dislikes", "introduced_product_keys"] as const;
   for (const key of arrayKeys) {
     if (key in out && out[key] !== undefined) {
       (out as Record<string, unknown>)[key] = ensureStringArray(out[key]);
@@ -127,6 +127,7 @@ export function useMembers() {
           preferences: ensureStringArray(row.preferences),
           likes: ensureStringArray(row.likes),
           dislikes: ensureStringArray(row.dislikes),
+          introduced_product_keys: ensureStringArray(row.introduced_product_keys),
           difficulty: row.difficulty != null ? String(row.difficulty) : null,
         } as MembersRow;
       });

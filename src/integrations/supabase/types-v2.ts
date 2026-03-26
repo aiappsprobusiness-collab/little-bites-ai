@@ -86,6 +86,8 @@ export interface MembersRow {
   likes: string[];
   /** What member dislikes / does not eat (hard). Excluded in auto-plan and chat. */
   dislikes: string[];
+  /** Нормализованные ключи уже введённых продуктов для прикорма (<12 мес). */
+  introduced_product_keys: string[];
   /** Legacy DB column: easy | medium | any. Unused in app; kept for DB compat. */
   difficulty: string | null;
 }
@@ -100,6 +102,7 @@ export interface MembersInsert {
   preferences?: string[];
   likes?: string[];
   dislikes?: string[];
+  introduced_product_keys?: string[];
   difficulty?: string | null;
 }
 export interface MembersUpdate {
@@ -113,6 +116,7 @@ export interface MembersUpdate {
   preferences?: string[];
   likes?: string[];
   dislikes?: string[];
+  introduced_product_keys?: string[];
   difficulty?: string | null;
 }
 

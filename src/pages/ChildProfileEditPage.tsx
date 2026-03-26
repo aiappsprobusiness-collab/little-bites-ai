@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import { normalizeAllergyToken } from "@/utils/allergyAliases";
+import { getProductDisplayLabel, normalizeProductKeys } from "@/utils/introducedProducts";
 import { PreferenceChip } from "@/components/profile/PreferenceChip";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
@@ -52,6 +53,8 @@ export default function ChildProfileEditPage() {
   const [likesInput, setLikesInput] = useState("");
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [dislikesInput, setDislikesInput] = useState("");
+  const [introducedProductKeys, setIntroducedProductKeys] = useState<string[]>([]);
+  const [introducedProductsInput, setIntroducedProductsInput] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const initRef = useRef(false);
@@ -72,6 +75,8 @@ export default function ChildProfileEditPage() {
       setLikesInput("");
       setDislikes([]);
       setDislikesInput("");
+      setIntroducedProductKeys([]);
+      setIntroducedProductsInput("");
       initRef.current = true;
       return;
     }
@@ -91,6 +96,8 @@ export default function ChildProfileEditPage() {
     setLikesInput("");
     setDislikes((member as MembersRow).dislikes ?? []);
     setDislikesInput("");
+    setIntroducedProductKeys((member as MembersRow).introduced_product_keys ?? []);
+    setIntroducedProductsInput("");
   }, [isNew, id, member?.id]);
 
   const allergiesHandlers = {
@@ -202,6 +209,26 @@ export default function ChildProfileEditPage() {
       setDislikes((prev) => prev.filter((_, i) => i !== index));
     },
   };
+  const introducedHandlers = {
+    add: (raw: string) => {
+      const toAdd = parseTags(raw);
+      if (!toAdd.length) return;
+      const normalized = normalizeProductKeys(toAdd);
+      if (!normalized.length) {
+        setIntroducedProductsInput("");
+        return;
+      }
+      setIntroducedProductKeys((prev) => addDedup(prev, normalized, MAX_CHIPS));
+      setIntroducedProductsInput("");
+    },
+    remove: (index: number) => {
+      setIntroducedProductKeys((prev) => prev.filter((_, i) => i !== index));
+    },
+    edit: (value: string, index: number) => {
+      setIntroducedProductsInput(getProductDisplayLabel(value));
+      setIntroducedProductKeys((prev) => prev.filter((_, i) => i !== index));
+    },
+  };
 
   const ageMonths = birthDate ? birthDateToAgeMonths(birthDate) : null;
 
@@ -213,6 +240,7 @@ export default function ChildProfileEditPage() {
         allergyItems.length > 0 ||
         likes.length > 0 ||
         dislikes.length > 0
+        || introducedProductKeys.length > 0
       );
     }
     if (!member) return false;
@@ -221,16 +249,21 @@ export default function ChildProfileEditPage() {
     const origItems = (member as MembersRow).allergy_items ?? (member.allergies ?? []).map((value, sort_order) => ({ value, is_active: true, sort_order }));
     const origLikes = (member as MembersRow).likes ?? [];
     const origDislikes = (member as MembersRow).dislikes ?? [];
+    const origIntroduced = (member as MembersRow).introduced_product_keys ?? [];
     if (name.trim() !== origName || birthDate !== origBirth) return true;
     if (allergyItems.length !== origItems.length) return true;
     for (let i = 0; i < allergyItems.length; i++) {
       if (allergyItems[i].value !== origItems[i]?.value || allergyItems[i].is_active !== origItems[i]?.is_active) return true;
     }
-    if (likes.length !== origLikes.length || dislikes.length !== origDislikes.length) return true;
+    if (likes.length !== origLikes.length || dislikes.length !== origDislikes.length || introducedProductKeys.length !== origIntroduced.length) return true;
     const toKey = (a: string[]) => [...a].sort().join(",");
-    if (toKey(likes) !== toKey(origLikes) || toKey(dislikes) !== toKey(origDislikes)) return true;
+    if (
+      toKey(likes) !== toKey(origLikes) ||
+      toKey(dislikes) !== toKey(origDislikes) ||
+      toKey(introducedProductKeys) !== toKey(origIntroduced)
+    ) return true;
     return false;
-  }, [isNew, member, name, birthDate, allergyItems, likes, dislikes]);
+  }, [isNew, member, name, birthDate, allergyItems, likes, dislikes, introducedProductKeys]);
 
   const handleSave = async () => {
     const trimmedName = name.trim();
@@ -260,6 +293,7 @@ export default function ChildProfileEditPage() {
           likes,
           dislikes,
         }),
+        introduced_product_keys: introducedProductKeys,
       });
       toast({ title: "Профиль сохранён" });
         savedSuccessfullyRef.current = true;
@@ -297,6 +331,7 @@ export default function ChildProfileEditPage() {
           likes,
           dislikes,
         }),
+        introduced_product_keys: introducedProductKeys,
       });
       toast({ title: "Профиль сохранён" });
       savedSuccessfullyRef.current = true;
@@ -631,6 +666,29 @@ export default function ChildProfileEditPage() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {ageMonths != null && ageMonths < 12 && (
+                  <div className="space-y-[6px]">
+                    <Label htmlFor="profile-introduced-products" className="text-sm font-medium flex items-center gap-1.5">
+                      <span className="text-[18px] leading-none" aria-hidden>🥄</span>
+                      Уже введённые продукты
+                    </Label>
+                    <TagListEditor
+                      id="profile-introduced-products"
+                      chipVariant="like"
+                      items={introducedProductKeys.map((key) => getProductDisplayLabel(key))}
+                      inputValue={introducedProductsInput}
+                      onInputChange={setIntroducedProductsInput}
+                      onAdd={introducedHandlers.add}
+                      onEdit={introducedHandlers.edit}
+                      onRemove={introducedHandlers.remove}
+                      placeholder="Например: кабачок, яблоко"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Используем для более мягкого подбора прикорма. Можно не заполнять.
+                    </p>
                   </div>
                 )}
 
