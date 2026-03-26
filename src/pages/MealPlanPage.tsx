@@ -82,9 +82,6 @@ import { trackUsageEvent } from "@/utils/usageEvents";
 import { consumeJustCreatedMemberId } from "@/services/planFill";
 import {
   getInfantComplementaryAgeBandU12,
-  infantComplementaryGuidanceExtraText,
-  infantComplementaryIntroSecondLineText,
-  infantComplementaryPickQualificationText,
   isInfantComplementaryPlanContext,
 } from "@/utils/infantComplementaryPlan";
 import {
@@ -1491,23 +1488,27 @@ export default function MealPlanPage() {
                   </div>
                 ) : null}
                 {isInfantPlanUi ? (
-                  <div className="mt-1.5 space-y-1.5 text-sm text-muted-foreground leading-relaxed text-pretty">
+                  <div className="mt-1.5 space-y-3 text-sm text-muted-foreground leading-relaxed text-pretty">
                     <p>
-                      В этом возрасте основное питание — грудное молоко или смесь.{" "}
-                      {infantComplementaryIntroSecondLineText(infantAgeBandU12 ?? "7_8")}
+                      В этом возрасте основное питание — грудное молоко или смесь. Прикорм вводится постепенно,
+                      обычно 1–2 раза в день.
                     </p>
-                    <p>Сегодня мы подобрали подходящий вариант прикорма для вашего малыша.</p>
-                    <p>{infantComplementaryPickQualificationText(infantAgeBandU12 ?? "7_8")}</p>
-                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 rounded-lg text-xs"
-                        onClick={() => setIntroducedProductsDialogOpen(true)}
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Подробнее о прикорме:</p>
+                      <Link
+                        to="/sos"
+                        className="inline-flex min-h-[44px] items-center text-sm font-medium text-primary hover:text-primary/90 underline-offset-4 hover:underline"
                       >
-                        Редактировать введённые продукты
-                      </Button>
+                        Помощь маме →
+                      </Link>
                     </div>
+                    <button
+                      type="button"
+                      className="inline-flex min-h-[44px] items-center text-sm font-normal text-muted-foreground hover:text-foreground underline-offset-4 hover:underline w-fit text-left"
+                      onClick={() => setIntroducedProductsDialogOpen(true)}
+                    >
+                      Что уже введено →
+                    </button>
                   </div>
                 ) : null}
                 {members.length > 0 && !isInfantPlanUi ? (
@@ -1738,39 +1739,44 @@ export default function MealPlanPage() {
             ) : null}
           </motion.div>
 
-          {/* 2) Чипсы дней — горизонтальный скролл только внутри этого блока, страница по X не двигается */}
-          <div className="flex gap-1 overflow-x-auto overflow-y-hidden pb-2 -mx-4 px-4 scrollbar-none min-w-0 max-w-full" style={{ scrollbarWidth: "none" }}>
-            {rollingDates.map((date, index) => {
-              const dayKey = formatLocalDate(date);
-              const isDayLockedForFree = isFree && dayKey !== todayKey;
-              return (
-                <DayTabButton
-                  key={dayKey}
-                  dayLabel={getDayLabel(date)}
-                  dateNum={date.getDate()}
-                  isSelected={selectedDay === index}
-                  status={getDayStatus(index)}
-                  isToday={dayKey === todayKey}
-                  disabled={false}
-                  isLocked={isDayLockedForFree}
-                  onClick={() => {
-                    if (isDayLockedForFree) {
-                      if (FF_WEEK_PAYWALL_PREVIEW) {
-                        setShowWeekPreviewSheet(true);
-                      } else {
-                        toast({
-                          title: "Доступно в Premium",
-                          description: "План на 7 дней — только для подписчиков.",
-                        });
+          {/* 2) Чипсы дней — только для плана 12+; в прикорме (&lt;12 мес) недельная лента скрыта */}
+          {!isInfantPlanUi ? (
+            <div
+              className="flex gap-1 overflow-x-auto overflow-y-hidden pb-2 -mx-4 px-4 scrollbar-none min-w-0 max-w-full"
+              style={{ scrollbarWidth: "none" }}
+            >
+              {rollingDates.map((date, index) => {
+                const dayKey = formatLocalDate(date);
+                const isDayLockedForFree = isFree && dayKey !== todayKey;
+                return (
+                  <DayTabButton
+                    key={dayKey}
+                    dayLabel={getDayLabel(date)}
+                    dateNum={date.getDate()}
+                    isSelected={selectedDay === index}
+                    status={getDayStatus(index)}
+                    isToday={dayKey === todayKey}
+                    disabled={false}
+                    isLocked={isDayLockedForFree}
+                    onClick={() => {
+                      if (isDayLockedForFree) {
+                        if (FF_WEEK_PAYWALL_PREVIEW) {
+                          setShowWeekPreviewSheet(true);
+                        } else {
+                          toast({
+                            title: "Доступно в Premium",
+                            description: "План на 7 дней — только для подписчиков.",
+                          });
+                        }
+                        return;
                       }
-                      return;
-                    }
-                    setSelectedDay(index);
-                  }}
-                />
-              );
-            })}
-          </div>
+                      setSelectedDay(index);
+                    }}
+                  />
+                );
+              })}
+            </div>
+          ) : null}
 
           {isAnyGenerating && (
             <div className="flex items-center justify-between gap-3 mt-1 -mx-4 px-4">
@@ -1848,14 +1854,6 @@ export default function MealPlanPage() {
                 >
                   Помощь маме
                 </Link>
-              </div>
-              <div className="mt-3 space-y-2.5 px-0 pb-0">
-                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
-                  {infantComplementaryGuidanceExtraText(infantAgeBandU12)}
-                </p>
-                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
-                  Новый продукт лучше вводить постепенно и наблюдать за реакцией малыша.
-                </p>
               </div>
             </>
           ) : isEmptyDay && !(isInfantPlanUi && !isAdultNoRecipesEmpty) ? (
@@ -1969,6 +1967,9 @@ export default function MealPlanPage() {
           ) : (
             <>
             <div className={cn("mt-3 pb-4", isInfantPlanUi ? "space-y-3" : "space-y-4")}>
+              {isInfantPlanUi ? (
+                <p className="text-sm font-medium text-foreground">Сегодня можно попробовать:</p>
+              ) : null}
               {planSlotsForRender.map((slot) => {
                 const plannedMeal = mealsByType[slot.id];
                 const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
@@ -2185,18 +2186,31 @@ export default function MealPlanPage() {
                         } : undefined}
                       />
                       {isInfantPlanUi && selectedMember?.id && (selectedMember.type ?? "child") !== "family" ? (
-                        <div className="mt-2 flex items-center gap-2">
+                        <div className="mt-2">
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="h-8 rounded-lg text-xs"
+                            className="h-9 w-full rounded-xl border-primary/25 text-xs font-medium text-foreground hover:bg-primary/[0.06]"
                             disabled={isUpdatingMember}
-                            onClick={async () => {
-                              await addIntroducedFromRecipe(previews[recipeId!]?.ingredientNames);
+                            onClick={() => {
+                              void addIntroducedFromRecipe(previews[recipeId!]?.ingredientNames);
                             }}
                           >
-                            Уже пробовали
+                            {(() => {
+                              const names = previews[recipeId!]?.ingredientNames;
+                              const keys =
+                                names?.length && names.length > 0
+                                  ? extractKeyProductKeysFromIngredients(
+                                      names.map((name) => ({ name, display_text: name })),
+                                      1,
+                                    )
+                                  : [];
+                              const label = keys.length ? getProductDisplayLabel(keys[0]) : null;
+                              return label
+                                ? `Добавить ${label} в введённые →`
+                                : "Добавить продукт в введённые →";
+                            })()}
                           </Button>
                         </div>
                       ) : null}
@@ -2351,22 +2365,6 @@ export default function MealPlanPage() {
                 );
               })}
             </div>
-            {isInfantPlanUi && !isAdultNoRecipesEmpty ? (
-              <div className="mt-3 space-y-2.5 px-0 pb-1">
-                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
-                  {infantComplementaryGuidanceExtraText(infantAgeBandU12)}
-                </p>
-                <p className="text-sm text-muted-foreground leading-relaxed text-pretty">
-                  Новый продукт лучше вводить постепенно и наблюдать за реакцией малыша.
-                </p>
-                <Link
-                  to="/sos"
-                  className="text-sm font-medium text-primary/90 underline-offset-4 hover:underline hover:text-primary inline-flex items-center gap-1 min-h-[44px] py-0.5"
-                >
-                  Помощь маме
-                </Link>
-              </div>
-            ) : null}
             {/* Зона под блюдами: заметная CTA + запас снизу, чтобы не сливаться с таббаром (прикорм — только нижний отступ) */}
             <div
               className={cn(

@@ -29,23 +29,4 @@ export function getInfantComplementaryAgeBandU12(ageMonths: number | null): Infa
   return "9_11";
 }
 
-/** Вторая фраза в hero после «грудное молоко или смесь». */
-export function infantComplementaryIntroSecondLineText(band: InfantComplementaryAgeBandU12 | null): string {
-  if (band === "4_6") return "Прикорм вводится постепенно, обычно 1–2 раза в день.";
-  if (band === "9_11") return "Рацион становится разнообразнее, обычно 1–2 раза в день.";
-  return "Рацион постепенно расширяется, обычно 1–2 раза в день.";
-}
-
-/** Строка после «Сегодня мы подобрали…» — про выбранное блюдо. */
-export function infantComplementaryPickQualificationText(band: InfantComplementaryAgeBandU12 | null): string {
-  if (band === "4_6") return "Это мягкий и безопасный вариант для начала прикорма";
-  if (band === "9_11") return "Подходит для текущего этапа питания малыша";
-  return "Это мягкий и понятный вариант, который хорошо подходит на этапе расширения прикорма";
-}
-
-/** Доп. строка под слотами прикорма (не hero, не про наблюдение за реакцией). */
-export function infantComplementaryGuidanceExtraText(band: InfantComplementaryAgeBandU12 | null): string {
-  if (band === "4_6") return "В начале прикорма достаточно одного нового блюда в день.";
-  if (band === "9_11") return "Рацион становится разнообразнее, можно предлагать 1–2 блюда в день.";
-  return "Если малыш уже привык к прикорму, можно предложить ещё одно блюдо позже.";
-}
+/** Тексты hero прикорма задаются в `MealPlanPage` (единый короткий блок для всех возрастов &lt;12 мес). */
