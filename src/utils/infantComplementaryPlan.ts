@@ -16,8 +16,22 @@ export function isInfantComplementaryPlanContext(params: {
 }
 
 /**
+ * В БД `meal_plans.meal_type` для прикорма фиксированно: «новый продукт» → breakfast, «уже знакомое» → lunch.
+ * Смысл UI — две роли `newRecipe` / `familiarRecipe`, не завтрак/обед.
+ */
+export const INFANT_PLAN_SLOT_NEW_PRODUCT = "breakfast" as const;
+export const INFANT_PLAN_SLOT_FAMILIAR = "lunch" as const;
+
+export function isInfantNewRecipePlanSlot(slotId: string): boolean {
+  return slotId === INFANT_PLAN_SLOT_NEW_PRODUCT;
+}
+
+export function isInfantFamiliarRecipePlanSlot(slotId: string): boolean {
+  return slotId === INFANT_PLAN_SLOT_FAMILIAR;
+}
+
+/**
  * Три UX-группы прикорма на клиенте (age_months < 12). Логику подбора на Edge не меняет.
- * Видимость карточек «Новый продукт» / «Уже знакомое» на Плане задаётся пулами primary/secondary, не возрастной веткой.
  */
 export type InfantComplementaryAgeBandU12 = "4_6" | "7_8" | "9_11";
 

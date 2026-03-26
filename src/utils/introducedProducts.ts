@@ -7,12 +7,21 @@ export type IngredientForProductKey = {
 };
 
 /**
- * JS `\b` word boundary does NOT treat Cyrillic letters as word chars (`\w` is [A-Za-z0-9_]).
- * Russian stems must match without `\b`, otherwise "кабачок" never matches `\bкабач`.
+ * Ключи продуктов для прикорма: русские названия → канонический ключ.
+ *
+ * **RegExp в JS:** `\w` = только `[A-Za-z0-9_]` — **не** матчит кириллицу. Для русских
+ * окончаний после стема используйте `[а-яё]*` или `\p{L}+` с флагом `u`, никогда `\w*`.
+ * Граница `\b` тоже не считает кириллицу «словесной» как в Perl; для RU-стемов —
+ * подстроки без `\b` на кириллице (ниже) или явные классы букв.
  */
 const PRODUCT_ALIAS_PATTERNS: Array<{ key: string; patterns: RegExp[]; label: string }> = [
+  { key: "corn", label: "Кукуруза", patterns: [/кукуруз/iu, /\bcorn\b/iu] },
   { key: "zucchini", label: "Кабачок", patterns: [/кабач/iu, /\bzucchini\b/iu] },
-  { key: "cauliflower", label: "Цветная капуста", patterns: [/цветн\w*\s+капуст/iu, /\bcauliflower\b/iu] },
+  {
+    key: "cauliflower",
+    label: "Цветная капуста",
+    patterns: [/цветн[а-яё]*\s+капуст/iu, /\bcauliflower\b/iu],
+  },
   { key: "broccoli", label: "Брокколи", patterns: [/броккол/iu, /\bbroccoli\b/iu] },
   { key: "pumpkin", label: "Тыква", patterns: [/тыкв/iu, /\bpumpkin\b/iu] },
   { key: "carrot", label: "Морковь", patterns: [/морков/iu, /\bcarrot\b/iu] },
@@ -61,6 +70,14 @@ export function normalizeProductKey(raw: string | null | undefined): string | nu
   return null;
 }
 
+/**
+ * Canonical ключ продукта для прикорма: фразы «кукурузная каша», «пюре из кабачка» и т.п.
+ * Синоним `normalizeProductKey` — явное имя для UI и сравнения с `introduced_product_keys`.
+ */
+export function normalizeIngredientToProductKey(raw: string | null | undefined): string | null {
+  return normalizeProductKey(raw);
+}
+
 export function normalizeProductKeys(values: Array<string | null | undefined>): string[] {
   const out = new Set<string>();
   for (const value of values) {
@@ -99,6 +116,203 @@ export function extractKeyProductKeysFromIngredients(
   }
 
   return result;
+}
+
+/** Все распознанные ключевые продукты (до maxKeys) — для правил прикорма «новый + введённые». */
+export function extractAllKeyProductKeysFromIngredients(
+  ingredients: IngredientForProductKey[] | null | undefined,
+  maxKeys = 100
+): string[] {
+  return extractKeyProductKeysFromIngredients(ingredients, maxKeys);
+}
+
+export function partitionInfantNovelAndFamiliarKeys(
+  allKeys: string[],
+  introducedProductKeys: string[]
+): { novelKeys: string[]; familiarKeys: string[] } {
+  const introducedSet = new Set(introducedProductKeys.filter(Boolean));
+  const novelKeys = allKeys.filter((k) => !introducedSet.has(k));
+  const familiarKeys = allKeys.filter((k) => introducedSet.has(k));
+  return { novelKeys, familiarKeys };
+}
+
+/** Ключи продуктов для первого прикорма (0 введённых): только овощи из тройки. */
+export const ALLOWED_START_PRODUCT_KEYS = new Set<string>(["zucchini", "broccoli", "cauliflower"]);
+
+export type InfantFeedingMode = "standard" | "early_start";
+
+/** 6+ мес — стандарт; &lt;6 — ранний старт (не норма). */
+export function getInfantFeedingMode(ageMonths: number | null | undefined): InfantFeedingMode {
+  if (ageMonths != null && ageMonths < 6) return "early_start";
+  return "standard";
+}
+
+function countNonTechnicalFoodIngredientRows(ingredients: IngredientForProductKey[] | null | undefined): number {
+  if (!ingredients?.length) return 0;
+  let n = 0;
+  for (const item of ingredients) {
+    const merged = [item.display_text ?? "", item.name ?? ""].join(" ").trim();
+    if (!merged) continue;
+    if (isTechnicalIngredient(merged)) continue;
+    n++;
+  }
+  return n;
+}
+
+export type InfantRecipeValidityResult = {
+  valid: boolean;
+  reason: string;
+  canonicalKeys: string[];
+  novelKeys: string[];
+};
+
+/**
+ * Блок «Сегодня можно попробовать» (primary): старт — одна строка продукта из ALLOWED_START;
+ * после старта — **ровно один** новый продукт, остальные только из введённых (не «только знакомые» — они во втором блоке).
+ */
+export function evaluateInfantRecipeComplementaryRules(
+  ingredients: IngredientForProductKey[] | null | undefined,
+  introducedProductKeys: string[]
+): InfantRecipeValidityResult {
+  const introduced = introducedProductKeys.filter(Boolean);
+  const introducedSet = new Set(introduced);
+  const canonicalKeys = extractAllKeyProductKeysFromIngredients(ingredients, 100);
+  const foodRows = countNonTechnicalFoodIngredientRows(ingredients);
+  const novelKeys = canonicalKeys.filter((k) => !introducedSet.has(k));
+
+  if (introduced.length === 0) {
+    if (foodRows !== 1) {
+      return {
+        valid: false,
+        reason: foodRows === 0 ? "start_no_food_ingredient_rows" : "start_multi_food_rows",
+        canonicalKeys,
+        novelKeys,
+      };
+    }
+    if (canonicalKeys.length !== 1) {
+      return {
+        valid: false,
+        reason: canonicalKeys.length === 0 ? "start_no_recognized_product" : "start_multiple_keys",
+        canonicalKeys,
+        novelKeys,
+      };
+    }
+    if (!ALLOWED_START_PRODUCT_KEYS.has(canonicalKeys[0])) {
+      return { valid: false, reason: "start_not_allowed_product", canonicalKeys, novelKeys };
+    }
+    return { valid: true, reason: "start_ok", canonicalKeys, novelKeys };
+  }
+
+  if (canonicalKeys.length === 0) {
+    return { valid: false, reason: "after_no_recognized_keys", canonicalKeys, novelKeys };
+  }
+  if (novelKeys.length !== 1) {
+    return {
+      valid: false,
+      reason: novelKeys.length === 0 ? "after_no_novel_for_new_block" : "after_multiple_novel_products",
+      canonicalKeys,
+      novelKeys,
+    };
+  }
+  return { valid: true, reason: "after_ok", canonicalKeys, novelKeys };
+}
+
+/** Secondary-слот: только продукты из введённых (без новинок). */
+export function evaluateInfantSecondaryFamiliarOnly(
+  ingredients: IngredientForProductKey[] | null | undefined,
+  introducedProductKeys: string[]
+): InfantRecipeValidityResult {
+  const introducedSet = new Set(introducedProductKeys.filter(Boolean));
+  const canonicalKeys = extractAllKeyProductKeysFromIngredients(ingredients, 100);
+  const novelKeys = canonicalKeys.filter((k) => !introducedSet.has(k));
+  if (canonicalKeys.length === 0) {
+    return { valid: false, reason: "secondary_no_keys", canonicalKeys, novelKeys };
+  }
+  if (novelKeys.length > 0) {
+    return { valid: false, reason: "secondary_has_novel", canonicalKeys, novelKeys };
+  }
+  return { valid: true, reason: "secondary_ok", canonicalKeys, novelKeys };
+}
+
+export type ValidInfantRecipesContext = {
+  introducedProductKeys: string[];
+  infantSlotRole?: "primary" | "secondary" | null;
+};
+
+export function getValidInfantRecipes<T extends { id: string; recipe_ingredients?: IngredientForProductKey[] | null }>(
+  recipes: T[],
+  context: ValidInfantRecipesContext
+): T[] {
+  const introduced = context.introducedProductKeys.filter(Boolean);
+  const role = context.infantSlotRole ?? "primary";
+  const ing = (r: T) => (r.recipe_ingredients ?? null) as IngredientForProductKey[] | null;
+  if (role === "secondary") {
+    return recipes.filter((r) => evaluateInfantSecondaryFamiliarOnly(ing(r), introduced).valid);
+  }
+  return recipes.filter((r) => evaluateInfantRecipeComplementaryRules(ing(r), introduced).valid);
+}
+
+/** Логи отклонения рецептов: `?debugInfant=1` в URL. */
+export function isInfantComplementaryFeedDebug(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("debugInfant") === "1";
+}
+
+/** Строки для UI: «Новый продукт: …», при необходимости «Знакомый продукт: …». */
+export function getInfantPrimaryIntroducingLinesFromIngredientNames(
+  ingredientNames: string[] | null | undefined,
+  introducedProductKeys: string[]
+): string[] {
+  const ing = (ingredientNames ?? []).map((name) => ({ name, display_text: name }));
+  const ev = evaluateInfantRecipeComplementaryRules(ing, introducedProductKeys);
+  if (!ev.valid) return [];
+  const { novelKeys, familiarKeys } = partitionInfantNovelAndFamiliarKeys(ev.canonicalKeys, introducedProductKeys);
+  const lines: string[] = [];
+  if (novelKeys.length === 1) {
+    lines.push(`Новый продукт: ${getProductDisplayLabel(novelKeys[0])}`);
+  }
+  if (familiarKeys.length > 0) {
+    const labels = familiarKeys.map((k) => getProductDisplayLabel(k));
+    if (labels.length === 1) {
+      lines.push(`Знакомый продукт: ${labels[0]}`);
+    } else {
+      lines.push(`Знакомые продукты: ${labels.join(", ")}`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * Ключи продуктов для кнопки «Добавить в введённые» и сохранения: все ингредиенты,
+ * при отсутствии ключей — разбор названия блюда («кукурузная каша» → corn).
+ */
+export function extractProductKeysForIntroduceClick(
+  ingredientNames: string[] | undefined,
+  recipeTitle: string | null | undefined
+): string[] {
+  const ing = (ingredientNames ?? []).map((name) => ({ name, display_text: name }));
+  const fromIng = extractAllKeyProductKeysFromIngredients(ing, 100);
+  if (fromIng.length > 0) return fromIng;
+  const fromTitle = normalizeIngredientToProductKey(recipeTitle);
+  return fromTitle ? [fromTitle] : [];
+}
+
+/** До 6 мес, пустой список введённых: не брать каши/крупы как первое блюдо (по названию). */
+export function isInfantFirstFoodPorridgeLikeTitle(title: string | null | undefined): boolean {
+  if (!title || typeof title !== "string") return false;
+  const t = title.toLowerCase();
+  return /каша|крупа|крупы|манн|манка|геркулес|хлопь/i.test(t);
+}
+
+/** Ключи из рецепта, которых ещё нет во введённых — для кнопки «Добавить … в введённые». */
+export function getInfantNovelProductKeysForIntroduce(
+  ingredientNames: string[] | undefined,
+  recipeTitle: string | null | undefined,
+  introducedProductKeys: string[]
+): string[] {
+  const extracted = extractProductKeysForIntroduceClick(ingredientNames, recipeTitle);
+  const introduced = new Set(introducedProductKeys);
+  return extracted.filter((k) => !introduced.has(k));
 }
 
 export function scoreInfantIntroducedMatch(params: {

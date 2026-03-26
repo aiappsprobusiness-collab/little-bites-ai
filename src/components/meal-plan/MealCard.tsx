@@ -69,6 +69,8 @@ export interface MealCardProps {
   debugSource?: "db" | "ai";
   /** Прикорм &lt;12 мес в плане: более плотная превью-карточка под мобильный Android. */
   infantPlanUi?: boolean;
+  /** Прикорм primary: явные строки «Новый продукт: …» / «Знакомый продукт: …» вместо общего бейджа слота. */
+  infantIntroducingLines?: string[] | null;
   /** КБЖУ на порцию (мета + БЖУ в карточке рецепта). */
   calories?: number | null;
   proteins?: number | null;
@@ -104,6 +106,7 @@ export function MealCard({
   onDelete,
   debugSource,
   infantPlanUi = false,
+  infantIntroducingLines,
   calories: nutritionCalories,
   proteins: nutritionProteins,
   fats: nutritionFats,
@@ -112,7 +115,9 @@ export function MealCard({
 }: MealCardProps) {
   const navigate = useNavigate();
   const meta = MEAL_LABELS[mealType] ?? { label: mealType, emoji: "🍽", time: "" };
+  const hasInfantIntroLines = infantPlanUi && (infantIntroducingLines?.length ?? 0) > 0;
   const displayMealLabel = mealTypeLabel ?? meta.label;
+  const recipeCardMealLabel = hasInfantIntroLines ? null : displayMealLabel;
   const timeStr = meta.time ? ` · ${meta.time}` : "";
   const ageStr = formatAge(ageMonths ?? null);
   const cookStr = cookTimeMinutes != null ? `${cookTimeMinutes} мин` : "";
@@ -188,11 +193,20 @@ export function MealCard({
 
     return (
       <>
+        {hasInfantIntroLines ? (
+          <div className="w-full mb-1.5 space-y-0.5 px-0.5">
+            {infantIntroducingLines!.map((line, i) => (
+              <p key={i} className="text-[11px] font-medium text-foreground leading-snug">
+                {line}
+              </p>
+            ))}
+          </div>
+        ) : null}
         <RecipeCard
           variant="preview"
           previewPresentation={infantPlanUi ? "infant" : "default"}
           header={{
-            mealLabel: displayMealLabel,
+            mealLabel: recipeCardMealLabel,
             cookingTimeMinutes: cookTimeMinutes ?? null,
             title: recipeTitle,
           }}

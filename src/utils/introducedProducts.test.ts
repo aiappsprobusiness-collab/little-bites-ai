@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   calendarDaysBetweenLocalYmd,
+  evaluateInfantRecipeComplementaryRules,
   extractKeyProductKeysFromIngredients,
   getIntroducingDaysPassed,
   getIntroducingDisplayDay,
+  getValidInfantRecipes,
   isIntroducingGracePeriod,
   isIntroducingPeriodActive,
   normalizeProductKey,
@@ -29,6 +31,86 @@ describe("extractKeyProductKeysFromIngredients", () => {
       2
     );
     expect(keys).toContain("zucchini");
+  });
+});
+
+describe("evaluateInfantRecipeComplementaryRules", () => {
+  const ing = (lines: Array<{ name: string; display_text?: string }>) => lines;
+
+  it("start: only one allowed vegetable row (cauliflower alone)", () => {
+    const r = evaluateInfantRecipeComplementaryRules(
+      ing([{ name: "Цветная капуста", display_text: "100 г" }]),
+      []
+    );
+    expect(r.valid).toBe(true);
+    expect(r.reason).toBe("start_ok");
+    expect(r.canonicalKeys).toEqual(["cauliflower"]);
+  });
+
+  it("start: rejects cauliflower + potato (two food rows)", () => {
+    const r = evaluateInfantRecipeComplementaryRules(
+      ing([
+        { name: "Цветная капуста", display_text: "50 г" },
+        { name: "Картофель", display_text: "30 г" },
+      ]),
+      []
+    );
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("start_multi_food_rows");
+  });
+
+  it("start: rejects single row oatmeal / porridge key", () => {
+    const r = evaluateInfantRecipeComplementaryRules(
+      ing([{ name: "Овсяная каша", display_text: "на воде" }]),
+      []
+    );
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("start_not_allowed_product");
+  });
+
+  it("after zucchini introduced: zucchini + potato allowed (one novel)", () => {
+    const r = evaluateInfantRecipeComplementaryRules(
+      ing([
+        { name: "Кабачок", display_text: "40 г" },
+        { name: "Картофель", display_text: "40 г" },
+      ]),
+      ["zucchini"]
+    );
+    expect(r.valid).toBe(true);
+    expect(r.novelKeys).toEqual(["potato"]);
+  });
+
+  it("after zucchini introduced: potato + carrot rejected (two novel)", () => {
+    const r = evaluateInfantRecipeComplementaryRules(
+      ing([
+        { name: "Картофель", display_text: "40 г" },
+        { name: "Морковь", display_text: "40 г" },
+      ]),
+      ["zucchini"]
+    );
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("after_multiple_novel_products");
+  });
+
+  it("after all key products introduced: combo only familiar — invalid for new block (second block)", () => {
+    const r = evaluateInfantRecipeComplementaryRules(
+      ing([
+        { name: "Кабачок", display_text: "40 г" },
+        { name: "Картофель", display_text: "40 г" },
+      ]),
+      ["zucchini", "potato"]
+    );
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("after_no_novel_for_new_block");
+  });
+
+  it("getValidInfantRecipes filters list", () => {
+    const recipes = [
+      { id: "a", recipe_ingredients: ing([{ name: "Кабачок", display_text: "50 г" }]) },
+      { id: "b", recipe_ingredients: ing([{ name: "Картофель", display_text: "50 г" }]) },
+    ];
+    const ok = getValidInfantRecipes(recipes, { introducedProductKeys: [], infantSlotRole: "primary" });
+    expect(ok.map((x) => x.id)).toEqual(["a"]);
   });
 });
 

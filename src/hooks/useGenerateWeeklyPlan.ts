@@ -20,6 +20,11 @@ type MemberData = {
   age_months?: number;
   ageMonths?: number;
   allergies?: string[];
+  likes?: string[];
+  dislikes?: string[];
+  introduced_product_keys?: string[];
+  introducing_product_key?: string | null;
+  introducing_started_at?: string | null;
 };
 
 const DAY_NAMES = [
@@ -302,7 +307,17 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             userId: user.id,
             memberId: memberId ?? null,
             mealType: mealKey,
-            memberData: memberData ? { allergies: memberData.allergies, likes: memberData.likes as string | string[] | undefined, dislikes: memberData.dislikes as string | string[] | undefined, age_months: memberData.age_months ?? memberData.ageMonths } : undefined,
+            memberData: memberData
+              ? {
+                  allergies: memberData.allergies,
+                  likes: memberData.likes as string | string[] | undefined,
+                  dislikes: memberData.dislikes as string | string[] | undefined,
+                  age_months: memberData.age_months ?? memberData.ageMonths,
+                  introduced_product_keys: memberData.introduced_product_keys,
+                  introducing_product_key: memberData.introducing_product_key ?? undefined,
+                  introducing_started_at: memberData.introducing_started_at ?? undefined,
+                }
+              : undefined,
             excludeRecipeIds: acc.usedRecipeIds,
             excludeTitleKeys: acc.usedTitleKeys,
             limitCandidates: 60,

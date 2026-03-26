@@ -13,7 +13,9 @@ import {
   passesProfileFilter,
   getSanityBlockedReasons,
   recipeFitsAgeMonthsRow,
+  filterPoolCandidatesForSlot,
   type MemberDataForPool,
+  type PoolRecipeRow,
 } from "@/utils/recipePool";
 import { isDebugPlanEnabled } from "@/utils/debugPlan";
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
@@ -88,7 +90,7 @@ export function useReplaceMealSlot(
     );
   }
 
-  /** Быстрая замена из пула: loose member (NULL + selected), sources seed/manual/week_ai/chat_ai, нормализация meal_type, профильные фильтры, без супов на завтрак. */
+  /** Быстрая замена из пула: те же фильтры, что `pickRecipeFromPool` / `filterPoolCandidatesForSlot`. Для прикорма (&lt;12) при слотах-носителях breakfast/lunch — общий infant-пул, без breakfast/lunch-only по `recipes.meal_type`. */
   const pickReplacementFromPool = useCallback(
     async (params: {
       mealType: string;
@@ -99,10 +101,23 @@ export function useReplaceMealSlot(
     }): Promise<{ id: string; title: string; fromLegacy?: boolean } | null> => {
       if (!user) return null;
       const slotNorm = normalizeMealType(params.mealType) ?? (params.mealType as "breakfast" | "lunch" | "snack" | "dinner");
+      const ageMonths = params.memberData?.age_months;
+      const infantCarrierRepl =
+        ageMonths != null &&
+        ageMonths < 12 &&
+        (slotNorm === "breakfast" || slotNorm === "lunch");
+
       const hasAllergies = Array.isArray(params.memberData?.allergies) && params.memberData.allergies.length > 0;
-      const selectFields = hasAllergies
-        ? "id, title, tags, description, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
-        : "id, title, tags, description, meal_type, min_age_months, max_age_months";
+      const hasIntroduced =
+        Array.isArray(params.memberData?.introduced_product_keys) &&
+        (params.memberData?.introduced_product_keys?.length ?? 0) > 0;
+      const hasIntroducing =
+        !!params.memberData?.introducing_product_key && !!params.memberData?.introducing_started_at;
+
+      const selectFields =
+        infantCarrierRepl || hasAllergies || hasIntroduced || hasIntroducing
+          ? "id, title, tags, description, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
+          : "id, title, tags, description, meal_type, min_age_months, max_age_months";
 
       let q = supabase
         .from("recipes")
@@ -124,11 +139,24 @@ export function useReplaceMealSlot(
         recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
       };
       let filtered = rows as Row[];
+
+      if (infantCarrierRepl) {
+        const poolFiltered = filterPoolCandidatesForSlot(filtered as PoolRecipeRow[], {
+          slotNorm,
+          memberData: params.memberData ?? null,
+          excludeRecipeIds: params.excludeRecipeIds,
+          excludeTitleKeys: params.excludeTitles,
+          infantSlotRole: null,
+        });
+        if (poolFiltered.length === 0) return null;
+        const shuffled = shuffle(poolFiltered);
+        return { id: shuffled[0].id, title: shuffled[0].title };
+      }
+
       filtered = filtered.filter((r) => {
         const recNorm = normalizeMealType(r.meal_type);
         return recNorm === null ? slotNorm === "snack" : recNorm === slotNorm;
       });
-      const ageMonths = params.memberData?.age_months;
       if (ageMonths != null && ageMonths < 12) {
         filtered = filtered.filter((r) =>
           recipeFitsAgeMonthsRow(r.min_age_months ?? null, r.max_age_months ?? null, ageMonths)

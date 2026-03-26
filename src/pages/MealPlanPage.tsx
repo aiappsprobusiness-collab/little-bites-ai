@@ -35,8 +35,10 @@ import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import {
   normalizeTitleKey,
-  pickRecipeFromPool,
-  listFilteredPoolRecipesForPlanSlot,
+  listInfantNewRecipeCandidates,
+  listInfantFamiliarRecipeCandidates,
+  pickInfantNewRecipe,
+  pickInfantFamiliarRecipe,
   type MemberDataForPool,
   type MealType,
 } from "@/utils/recipePool";
@@ -83,7 +85,10 @@ import { trackUsageEvent } from "@/utils/usageEvents";
 import { consumeJustCreatedMemberId } from "@/services/planFill";
 import {
   getInfantComplementaryAgeBandU12,
+  INFANT_PLAN_SLOT_FAMILIAR,
+  INFANT_PLAN_SLOT_NEW_PRODUCT,
   isInfantComplementaryPlanContext,
+  isInfantNewRecipePlanSlot,
 } from "@/utils/infantComplementaryPlan";
 import {
   getAutoReplaceLimitPerSlotPerDay,
@@ -116,13 +121,15 @@ import {
   A2HS_EVENT_AFTER_FIRST_WEEK,
 } from "@/hooks/usePWAInstall";
 import {
-  extractKeyProductKeysFromIngredients,
+  getInfantNovelProductKeysForIntroduce,
+  getInfantPrimaryIntroducingLinesFromIngredientNames,
   getIntroducingDisplayDay,
   getProductDisplayLabel,
   isIntroducingGracePeriod,
   isIntroducingPeriodActive,
   normalizeProductKeys,
   shouldAutoClearIntroducingPeriod,
+  extractProductKeysForIntroduceClick,
 } from "@/utils/introducedProducts";
 
 const A2HS_FIRST_DAY_DISPATCHED_KEY = "a2hs_first_day_dispatched";
@@ -314,6 +321,7 @@ export default function MealPlanPage() {
     primaryKey: string;
     extracted: string[];
     ingredientNames: string[];
+    recipeTitle: string | null;
   } | null>(null);
   /** Подтверждение смены продукта введения при автозамене primary-слота. */
   const [infantReplacePrimaryConfirm, setInfantReplacePrimaryConfirm] = useState<{
@@ -419,8 +427,7 @@ export default function MealPlanPage() {
   const { data: infantBreakfastPoolRows = [], isLoading: infantBreakfastPoolLoading } = useQuery({
     queryKey: [
       "infant_plan_pool",
-      "breakfast",
-      "primary",
+      "new_recipe",
       user?.id,
       mealPlanMemberId,
       infantPoolMemberData?.age_months,
@@ -430,14 +437,12 @@ export default function MealPlanPage() {
       infantPoolIntroducingKey,
     ],
     queryFn: () =>
-      listFilteredPoolRecipesForPlanSlot({
+      listInfantNewRecipeCandidates({
         supabase,
         userId: user!.id,
         memberId: mealPlanMemberId ?? "",
-        mealType: "breakfast",
         memberData: infantPoolMemberData,
         limitCandidates: 150,
-        infantSlotRole: "primary",
       }),
     enabled: infantPoolQueryEnabled,
     staleTime: 120_000,
@@ -446,8 +451,7 @@ export default function MealPlanPage() {
   const { data: infantFamiliarLunchPoolRows = [], isLoading: infantFamiliarLunchPoolLoading } = useQuery({
     queryKey: [
       "infant_plan_pool",
-      "lunch",
-      "secondary",
+      "familiar_recipe",
       user?.id,
       mealPlanMemberId,
       infantPoolMemberData?.age_months,
@@ -457,14 +461,12 @@ export default function MealPlanPage() {
       infantPoolIntroducingKey,
     ],
     queryFn: () =>
-      listFilteredPoolRecipesForPlanSlot({
+      listInfantFamiliarRecipeCandidates({
         supabase,
         userId: user!.id,
         memberId: mealPlanMemberId ?? "",
-        mealType: "lunch",
         memberData: infantPoolMemberData,
         limitCandidates: 150,
-        infantSlotRole: "secondary",
       }),
     enabled: infantPoolQueryEnabled && introducedProductKeys.length > 0,
     staleTime: 120_000,
@@ -988,16 +990,25 @@ export default function MealPlanPage() {
   }, [navigate, selectedMember?.id, toast, updateMember]);
 
   const addIntroducedFromRecipe = useCallback(
-    async (ingredientNames: string[] | undefined, forceSwitchProduct = false) => {
-      if (!selectedMember?.id || !ingredientNames?.length) return;
-      const extracted = extractKeyProductKeysFromIngredients(
-        ingredientNames.map((name) => ({ name, display_text: name }))
-      );
+    async (args: {
+      ingredientNames: string[] | undefined;
+      recipeTitle?: string | null;
+      forceSwitchProduct?: boolean;
+    }) => {
+      const { ingredientNames, recipeTitle, forceSwitchProduct = false } = args;
+      if (!selectedMember?.id) return;
+      const extracted = extractProductKeysForIntroduceClick(ingredientNames, recipeTitle ?? null);
       if (extracted.length === 0) {
         toast({ description: "Не нашли подходящий продукт для отметки." });
         return;
       }
-      const primaryKey = extracted[0];
+      const introducedSet = new Set(introducedProductKeys);
+      const novelKeys = extracted.filter((k) => !introducedSet.has(k));
+      if (novelKeys.length === 0) {
+        toast({ description: "Все продукты этого блюда уже в списке введённых." });
+        return;
+      }
+      const primaryKey = novelKeys[0];
       const m = selectedMember as MembersRow;
       const curKey = m.introducing_product_key;
       const curStarted = m.introducing_started_at;
@@ -1042,7 +1053,12 @@ export default function MealPlanPage() {
       const periodActive = !!curKey && !!curStarted && isIntroducingPeriodActive(curKey, curStarted, now);
 
       if (periodActive && !forceSwitchProduct && primaryKey !== curKey) {
-        setIntroduceConflictPayload({ primaryKey, extracted, ingredientNames });
+        setIntroduceConflictPayload({
+          primaryKey,
+          extracted,
+          ingredientNames: ingredientNames ?? [],
+          recipeTitle: recipeTitle ?? null,
+        });
         setIntroduceConflictOpen(true);
         return;
       }
@@ -1405,30 +1421,20 @@ export default function MealPlanPage() {
   }, {} as Record<string, typeof dayMealPlans[0] | null>);
 
   /**
-   * Прикорм &lt;12 мес, все возрастные группы (4–6 / 7–8 / 9–11):
-   * — «Новый продукт» (breakfast, primary): только если в пуле primary есть ≥1 кандидат.
-   * — «Уже знакомое» (lunch, secondary): только если список введённых не пуст и в пуле secondary есть ≥1 кандидат.
-   * Не привязываемся к тому, есть ли обед в плане на этот день.
+   * Прикорм &lt;12: два смысловых блока (не «завтрак/обед»).
+   * В БД: `INFANT_PLAN_SLOT_NEW_PRODUCT` / `INFANT_PLAN_SLOT_FAMILIAR` как meal_type.
+   * Второй блок показываем при любых введённых продуктах — даже если пул знакомых пока пуст (пустой слот / exhausted).
    */
   const infantSlotsForRender = useMemo(() => {
     if (!isInfantPlanUi) return null;
-    const primaryCount = infantBreakfastPoolRows.length;
-    const secondaryCount = infantFamiliarLunchPoolRows.length;
-    const hasIntroduced = introducedProductKeys.length > 0;
-    const out: Array<{ id: string; label: string }> = [];
-    if (primaryCount > 0) {
-      out.push({ id: "breakfast", label: "🆕 Новый продукт" });
-    }
-    if (hasIntroduced && secondaryCount > 0) {
-      out.push({ id: "lunch", label: "🍽 Уже знакомое" });
+    const out: Array<{ id: string; label: string }> = [
+      { id: INFANT_PLAN_SLOT_NEW_PRODUCT, label: "Сегодня можно попробовать" },
+    ];
+    if (introducedProductKeys.length > 0) {
+      out.push({ id: INFANT_PLAN_SLOT_FAMILIAR, label: "Уже знакомое" });
     }
     return out;
-  }, [
-    isInfantPlanUi,
-    infantBreakfastPoolRows.length,
-    infantFamiliarLunchPoolRows.length,
-    introducedProductKeys.length,
-  ]);
+  }, [isInfantPlanUi, introducedProductKeys.length]);
 
   const planSlotsForRender = isInfantPlanUi && infantSlotsForRender ? infantSlotsForRender : mealTypes;
 
@@ -1493,48 +1499,72 @@ export default function MealPlanPage() {
         const baseExcludeKeys = [...new Set([...replaceExcludeTitleKeysMerged, ...filledTitleKeys])];
 
         let candidatesAfterFilter: number | null = null;
-        const infantRoleForSlot = slot.id === "breakfast" ? "primary" : "secondary";
+        const isNewSlot = isInfantNewRecipePlanSlot(slot.id);
 
         if (import.meta.env.DEV || isPlanDebug()) {
-          const listed = await listFilteredPoolRecipesForPlanSlot({
-            supabase,
-            userId: user.id,
-            memberId: mealPlanMemberId,
-            mealType: slot.id as MealType,
-            memberData: infantPoolMemberData,
-            excludeRecipeIds: baseExcludeIds,
-            excludeTitleKeys: baseExcludeKeys,
-            limitCandidates: 150,
-            infantSlotRole: infantRoleForSlot,
-          });
+          const listed = isNewSlot
+            ? await listInfantNewRecipeCandidates({
+                supabase,
+                userId: user.id,
+                memberId: mealPlanMemberId,
+                memberData: infantPoolMemberData,
+                excludeRecipeIds: baseExcludeIds,
+                excludeTitleKeys: baseExcludeKeys,
+                limitCandidates: 150,
+              })
+            : await listInfantFamiliarRecipeCandidates({
+                supabase,
+                userId: user.id,
+                memberId: mealPlanMemberId,
+                memberData: infantPoolMemberData,
+                excludeRecipeIds: baseExcludeIds,
+                excludeTitleKeys: baseExcludeKeys,
+                limitCandidates: 150,
+              });
           candidatesAfterFilter = listed.length;
         }
 
-        let picked = await pickRecipeFromPool({
-          supabase,
-          userId: user.id,
-          memberId: mealPlanMemberId,
-          mealType: slot.id as MealType,
-          memberData: infantPoolMemberData,
-          excludeRecipeIds: baseExcludeIds,
-          excludeTitleKeys: baseExcludeKeys,
-          limitCandidates: 150,
-          infantSlotRole: infantRoleForSlot,
-        });
+        let picked = isNewSlot
+          ? await pickInfantNewRecipe({
+              supabase,
+              userId: user.id,
+              memberId: mealPlanMemberId,
+              memberData: infantPoolMemberData,
+              excludeRecipeIds: baseExcludeIds,
+              excludeTitleKeys: baseExcludeKeys,
+              limitCandidates: 150,
+            })
+          : await pickInfantFamiliarRecipe({
+              supabase,
+              userId: user.id,
+              memberId: mealPlanMemberId,
+              memberData: infantPoolMemberData,
+              excludeRecipeIds: baseExcludeIds,
+              excludeTitleKeys: baseExcludeKeys,
+              limitCandidates: 150,
+            });
         let usedRelaxedExcludes = false;
         if (!picked) {
           usedRelaxedExcludes = true;
-          picked = await pickRecipeFromPool({
-            supabase,
-            userId: user.id,
-            memberId: mealPlanMemberId,
-            mealType: slot.id as MealType,
-            memberData: infantPoolMemberData,
-            excludeRecipeIds: [],
-            excludeTitleKeys: [],
-            limitCandidates: 200,
-            infantSlotRole: infantRoleForSlot,
-          });
+          picked = isNewSlot
+            ? await pickInfantNewRecipe({
+                supabase,
+                userId: user.id,
+                memberId: mealPlanMemberId,
+                memberData: infantPoolMemberData,
+                excludeRecipeIds: [],
+                excludeTitleKeys: [],
+                limitCandidates: 200,
+              })
+            : await pickInfantFamiliarRecipe({
+                supabase,
+                userId: user.id,
+                memberId: mealPlanMemberId,
+                memberData: infantPoolMemberData,
+                excludeRecipeIds: [],
+                excludeTitleKeys: [],
+                limitCandidates: 200,
+              });
         }
 
         if (import.meta.env.DEV || isPlanDebug()) {
@@ -1775,6 +1805,14 @@ export default function MealPlanPage() {
                 </h2>
                 {isInfantPlanUi ? (
                   <p className="text-sm text-muted-foreground mt-0.5">{formatDayHeader(selectedDate)}</p>
+                ) : null}
+                {isInfantPlanUi && infantAgeMonths != null && infantAgeMonths < 6 ? (
+                  <p
+                    className="mt-2 rounded-xl border border-amber-500/35 bg-amber-500/[0.07] px-3 py-2 text-xs sm:text-sm text-foreground leading-snug"
+                    role="status"
+                  >
+                    Ранний старт прикорма (по согласованию с врачом)
+                  </p>
                 ) : null}
                 {isInfantPlanUi && members.length > 0 ? (
                   <div className="mt-1.5 flex w-full min-w-0 flex-wrap items-center justify-start gap-2">
@@ -2364,17 +2402,28 @@ export default function MealPlanPage() {
           ) : (
             <>
             <div className={cn("mt-3 pb-4", isInfantPlanUi ? "space-y-3" : "space-y-4")}>
-              {isInfantPlanUi && planSlotsForRender.length > 0 ? (
-                <p className="text-sm font-medium text-foreground">
-                  {infantBreakfastPoolRows.length > 0 ? "Сегодня можно попробовать:" : "Уже знакомое"}
-                </p>
-              ) : null}
               {planSlotsForRender.map((slot) => {
                 const plannedMeal = mealsByType[slot.id];
                 const recipe = plannedMeal ? getPlannedMealRecipe(plannedMeal) : null;
                 const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
                 const hasDish = !!(plannedMeal && recipeId && recipe?.title);
                 const isPrimaryEmpty = !hasDish && firstEmptySlotId === slot.id;
+                const infantPrimaryIntroLines =
+                  isInfantPlanUi && isInfantNewRecipePlanSlot(slot.id) && recipeId
+                    ? getInfantPrimaryIntroducingLinesFromIngredientNames(
+                        previews[recipeId]?.ingredientNames,
+                        introducedProductKeys
+                      )
+                    : [];
+                const showInfantPrimaryIntroLines = infantPrimaryIntroLines.length > 0;
+                const novelKeysForIntroduce =
+                  isInfantPlanUi && isInfantNewRecipePlanSlot(slot.id) && recipeId && recipe?.title
+                    ? getInfantNovelProductKeysForIntroduce(
+                        previews[recipeId]?.ingredientNames,
+                        recipe.title,
+                        introducedProductKeys
+                      )
+                    : [];
                 return (
                   <div key={slot.id}>
                     {hasDish ? (
@@ -2383,7 +2432,8 @@ export default function MealPlanPage() {
                         mealType={plannedMeal!.meal_type}
                         recipeTitle={recipe!.title}
                         recipeId={recipeId!}
-                        mealTypeLabel={slot.label}
+                        mealTypeLabel={showInfantPrimaryIntroLines ? undefined : slot.label}
+                        infantIntroducingLines={showInfantPrimaryIntroLines ? infantPrimaryIntroLines : undefined}
                         plannedDate={selectedDayKey}
                         planMemberId={mealPlanMemberId ?? null}
                         infantPlanUi={isInfantPlanUi}
@@ -2456,18 +2506,25 @@ export default function MealPlanPage() {
                               user?.id &&
                               mealPlanMemberId
                             ) {
-                              const role = slot.id === "breakfast" ? "primary" : "secondary";
-                              const picked = await pickRecipeFromPool({
-                                supabase,
-                                userId: user.id,
-                                memberId: mealPlanMemberId,
-                                mealType: slot.id as MealType,
-                                memberData: infantPoolMemberData,
-                                excludeRecipeIds: replaceExcludeRecipeIdsMerged,
-                                excludeTitleKeys: replaceExcludeTitleKeysMerged,
-                                limitCandidates: 150,
-                                infantSlotRole: role,
-                              });
+                              const picked = isInfantNewRecipePlanSlot(slot.id)
+                                ? await pickInfantNewRecipe({
+                                    supabase,
+                                    userId: user.id,
+                                    memberId: mealPlanMemberId,
+                                    memberData: infantPoolMemberData,
+                                    excludeRecipeIds: replaceExcludeRecipeIdsMerged,
+                                    excludeTitleKeys: replaceExcludeTitleKeysMerged,
+                                    limitCandidates: 150,
+                                  })
+                                : await pickInfantFamiliarRecipe({
+                                    supabase,
+                                    userId: user.id,
+                                    memberId: mealPlanMemberId,
+                                    memberData: infantPoolMemberData,
+                                    excludeRecipeIds: replaceExcludeRecipeIdsMerged,
+                                    excludeTitleKeys: replaceExcludeTitleKeysMerged,
+                                    limitCandidates: 150,
+                                  });
                               if (!picked) {
                                 await clearSlotAndOpenPoolFallback({
                                   dayKey: selectedDayKey,
@@ -2485,7 +2542,7 @@ export default function MealPlanPage() {
                               const introKey =
                                 (selectedMember as MembersRow | undefined)?.introducing_product_key?.trim() ?? null;
                               if (
-                                role === "primary" &&
+                                isInfantNewRecipePlanSlot(slot.id) &&
                                 introKey &&
                                 picked.firstNovelProductKey &&
                                 picked.firstNovelProductKey !== introKey
@@ -2687,7 +2744,10 @@ export default function MealPlanPage() {
                           }
                         } : undefined}
                       />
-                      {isInfantPlanUi && selectedMember?.id && (selectedMember.type ?? "child") !== "family" ? (
+                      {isInfantPlanUi &&
+                      selectedMember?.id &&
+                      (selectedMember.type ?? "child") !== "family" &&
+                      novelKeysForIntroduce.length > 0 ? (
                         <div className="mt-2">
                           <Button
                             type="button"
@@ -2696,23 +2756,13 @@ export default function MealPlanPage() {
                             className="h-9 w-full rounded-xl border-primary/25 text-xs font-medium text-foreground hover:bg-primary/[0.06]"
                             disabled={isUpdatingMember}
                             onClick={() => {
-                              void addIntroducedFromRecipe(previews[recipeId!]?.ingredientNames);
+                              void addIntroducedFromRecipe({
+                                ingredientNames: previews[recipeId!]?.ingredientNames,
+                                recipeTitle: recipe!.title,
+                              });
                             }}
                           >
-                            {(() => {
-                              const names = previews[recipeId!]?.ingredientNames;
-                              const keys =
-                                names?.length && names.length > 0
-                                  ? extractKeyProductKeysFromIngredients(
-                                      names.map((name) => ({ name, display_text: name })),
-                                      1,
-                                    )
-                                  : [];
-                              const label = keys.length ? getProductDisplayLabel(keys[0]) : null;
-                              return label
-                                ? `Добавить ${label} в введённые →`
-                                : "Добавить продукт в введённые →";
-                            })()}
+                            {`Добавить ${getProductDisplayLabel(novelKeysForIntroduce[0])} в введённые →`}
                           </Button>
                         </div>
                       ) : null}
@@ -3164,7 +3214,13 @@ export default function MealPlanPage() {
         cancelText="Продолжить"
         onConfirm={async () => {
           const p = introduceConflictPayload;
-          if (p) await addIntroducedFromRecipe(p.ingredientNames, true);
+          if (p) {
+            await addIntroducedFromRecipe({
+              ingredientNames: p.ingredientNames,
+              recipeTitle: p.recipeTitle,
+              forceSwitchProduct: true,
+            });
+          }
         }}
       />
 
