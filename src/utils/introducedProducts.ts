@@ -1,3 +1,5 @@
+import { formatLocalDate } from "@/utils/dateUtils";
+
 export type IngredientForProductKey = {
   name?: string | null;
   display_text?: string | null;
@@ -118,4 +120,105 @@ export function scoreInfantIntroducedMatch(params: {
   if (age <= 6) return matched * 6 - novel * 2;
   if (age <= 8) return matched * 4 - Math.max(0, novel - 1) * 1.5;
   return matched * 3 - novel * 0.5;
+}
+
+/** Разница в календарных днях между двумя датами YYYY-MM-DD (локальная полуночь). */
+export function calendarDaysBetweenLocalYmd(startYmd: string, endYmd: string): number {
+  const parse = (s: string): Date | null => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const a = parse(startYmd);
+  const b = parse(endYmd);
+  if (!a || !b) return NaN;
+  return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
+
+/**
+ * Сколько календарных дней прошло с `introducing_started_at` до `now` (в тот же день = 0).
+ * `introducing_started_at` — YYYY-MM-DD (как пишет клиент).
+ */
+export function getIntroducingDaysPassed(introducing_started_at: string | null | undefined, now: Date): number | null {
+  if (!introducing_started_at?.trim()) return null;
+  const start = introducing_started_at.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return null;
+  const today = formatLocalDate(now);
+  const diff = calendarDaysBetweenLocalYmd(start, today);
+  if (!Number.isFinite(diff) || diff < 0) return null;
+  return diff;
+}
+
+/**
+ * День 1–3 для UI только при daysPassed 0–2; иначе null (не показываем «день 4+»).
+ */
+export function getIntroducingDisplayDay(introducing_started_at: string | null | undefined, now: Date): number | null {
+  const dp = getIntroducingDaysPassed(introducing_started_at, now);
+  if (dp == null || dp > 2) return null;
+  return dp + 1;
+}
+
+/** @deprecated Используйте getIntroducingDisplayDay — то же ограничение дней 1–3. */
+export function getIntroducingDayNumber(introducing_started_at: string | null | undefined, now: Date): number | null {
+  return getIntroducingDisplayDay(introducing_started_at, now);
+}
+
+/** Автосброс после длительного перерыва: 5+ календарных дней с даты старта. */
+export function shouldAutoClearIntroducingPeriod(introducing_started_at: string | null | undefined, now: Date): boolean {
+  const dp = getIntroducingDaysPassed(introducing_started_at, now);
+  return dp != null && dp >= 5;
+}
+
+/** Активное введение (дни 1–3 в UI): приоритет в пуле, конфликт при другом продукте. */
+export function isIntroducingPeriodActive(
+  introducing_product_key: string | null | undefined,
+  introducing_started_at: string | null | undefined,
+  now: Date
+): boolean {
+  if (!introducing_product_key?.trim() || !introducing_started_at) return false;
+  const dp = getIntroducingDaysPassed(introducing_started_at, now);
+  return dp != null && dp <= 2;
+}
+
+/** Пропуск 1–2 дней после «окна» 1–3: мягкий UX без номера дня. */
+export function isIntroducingGracePeriod(
+  introducing_product_key: string | null | undefined,
+  introducing_started_at: string | null | undefined,
+  now: Date
+): boolean {
+  if (!introducing_product_key?.trim() || !introducing_started_at) return false;
+  const dp = getIntroducingDaysPassed(introducing_started_at, now);
+  return dp != null && dp >= 3 && dp <= 4;
+}
+
+/** Подбор пула прикорма: базовый soft-rank плюс приоритет текущего продукта и штраф за «лишние» ключевые продукты в периоде введения. */
+export function scoreInfantIntroducingPeriodSort(params: {
+  ageMonths: number | null | undefined;
+  introducedProductKeys: string[] | null | undefined;
+  introducingProductKey: string | null | undefined;
+  introducingPeriodActive: boolean;
+  ingredients: IngredientForProductKey[] | null | undefined;
+}): number {
+  const age = params.ageMonths;
+  if (age == null || !Number.isFinite(age) || age >= 12) return 0;
+
+  const base = scoreInfantIntroducedMatch({
+    ageMonths: params.ageMonths,
+    introducedProductKeys: params.introducedProductKeys,
+    ingredients: params.ingredients,
+  });
+
+  if (!params.introducingPeriodActive || !params.introducingProductKey) return base;
+
+  const intro = params.introducingProductKey;
+  const keyIngredients = extractKeyProductKeysFromIngredients(params.ingredients, 6);
+  const introduced = new Set((params.introducedProductKeys ?? []).filter(Boolean));
+
+  let score = base;
+  if (keyIngredients.includes(intro)) score += 50;
+
+  const novelNotIntroducing = keyIngredients.filter((k) => k !== intro && !introduced.has(k));
+  score -= novelNotIntroducing.length * 12;
+
+  return score;
 }

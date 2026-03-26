@@ -20,6 +20,8 @@ export type MealPlanMemberDataForEdge = {
   likes: string[];
   dislikes: string[];
   introduced_product_keys?: string[];
+  introducing_product_key?: string | null;
+  introducing_started_at?: string | null;
   /** Не подставлять 0 при отсутствии возраста — иначе Edge считает профиль «младенческим». */
   age_months?: number;
 };
@@ -80,6 +82,16 @@ export function useMealPlanMemberData(): {
         introduced_product_keys: Array.isArray((memberForPlan as { introduced_product_keys?: unknown }).introduced_product_keys)
           ? ((memberForPlan as { introduced_product_keys: string[] }).introduced_product_keys ?? [])
           : [],
+        introducing_product_key:
+          typeof (memberForPlan as { introducing_product_key?: unknown }).introducing_product_key === "string" &&
+          (memberForPlan as { introducing_product_key: string }).introducing_product_key.trim()
+            ? (memberForPlan as { introducing_product_key: string }).introducing_product_key.trim()
+            : null,
+        introducing_started_at:
+          typeof (memberForPlan as { introducing_started_at?: unknown }).introducing_started_at === "string" &&
+          (memberForPlan as { introducing_started_at: string }).introducing_started_at.trim()
+            ? (memberForPlan as { introducing_started_at: string }).introducing_started_at.trim().slice(0, 10)
+            : null,
       };
     }
     return null;

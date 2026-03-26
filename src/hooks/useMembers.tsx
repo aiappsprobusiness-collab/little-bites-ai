@@ -128,6 +128,14 @@ export function useMembers() {
           likes: ensureStringArray(row.likes),
           dislikes: ensureStringArray(row.dislikes),
           introduced_product_keys: ensureStringArray(row.introduced_product_keys),
+          introducing_product_key:
+            typeof row.introducing_product_key === "string" && row.introducing_product_key.trim()
+              ? row.introducing_product_key.trim()
+              : null,
+          introducing_started_at:
+            typeof row.introducing_started_at === "string" && row.introducing_started_at.trim()
+              ? row.introducing_started_at.trim().slice(0, 10)
+              : null,
           difficulty: row.difficulty != null ? String(row.difficulty) : null,
         } as MembersRow;
       });

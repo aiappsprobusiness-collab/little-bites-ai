@@ -493,9 +493,9 @@ export type Database = {
         Relationships: []
       }
       members: {
-        Row: { id: string; user_id: string; name: string; type: string; age_months: number | null; allergies: string[]; preferences: string[]; likes: string[]; dislikes: string[]; introduced_product_keys: string[]; difficulty: string | null }
-        Insert: { id?: string; user_id: string; name: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; introduced_product_keys?: string[]; difficulty?: string | null }
-        Update: { id?: string; user_id?: string; name?: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; introduced_product_keys?: string[]; difficulty?: string | null }
+        Row: { id: string; user_id: string; name: string; type: string; age_months: number | null; allergies: string[]; preferences: string[]; likes: string[]; dislikes: string[]; introduced_product_keys: string[]; introducing_product_key: string | null; introducing_started_at: string | null; difficulty: string | null }
+        Insert: { id?: string; user_id: string; name: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; introduced_product_keys?: string[]; introducing_product_key?: string | null; introducing_started_at?: string | null; difficulty?: string | null }
+        Update: { id?: string; user_id?: string; name?: string; type?: string; age_months?: number | null; allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; introduced_product_keys?: string[]; introducing_product_key?: string | null; introducing_started_at?: string | null; difficulty?: string | null }
         Relationships: []
       }
       profiles_v2: {

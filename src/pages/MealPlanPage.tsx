@@ -30,7 +30,8 @@ import { getPlanSlotChatPrefillMessage } from "@/utils/planChatPrefill";
 import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
-import { formatLocalDate } from "@/utils/dateUtils";
+import { addDaysToLocalYmd, formatLocalDate } from "@/utils/dateUtils";
+import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import {
   normalizeTitleKey,
@@ -116,8 +117,12 @@ import {
 } from "@/hooks/usePWAInstall";
 import {
   extractKeyProductKeysFromIngredients,
+  getIntroducingDisplayDay,
   getProductDisplayLabel,
+  isIntroducingGracePeriod,
+  isIntroducingPeriodActive,
   normalizeProductKeys,
+  shouldAutoClearIntroducingPeriod,
 } from "@/utils/introducedProducts";
 
 const A2HS_FIRST_DAY_DISPATCHED_KEY = "a2hs_first_day_dispatched";
@@ -304,6 +309,12 @@ export default function MealPlanPage() {
   const [shareMenuSending, setShareMenuSending] = useState(false);
   const [introducedProductsDialogOpen, setIntroducedProductsDialogOpen] = useState(false);
   const [introducedProductsInput, setIntroducedProductsInput] = useState("");
+  const [introduceConflictOpen, setIntroduceConflictOpen] = useState(false);
+  const [introduceConflictPayload, setIntroduceConflictPayload] = useState<{
+    primaryKey: string;
+    extracted: string[];
+    ingredientNames: string[];
+  } | null>(null);
 
   useEffect(() => {
     const id = consumeJustCreatedMemberId();
@@ -348,9 +359,40 @@ export default function MealPlanPage() {
       likes: "likes" in memberDataForPlan ? memberDataForPlan.likes : undefined,
       dislikes: "dislikes" in memberDataForPlan ? memberDataForPlan.dislikes : undefined,
       introduced_product_keys: "introduced_product_keys" in memberDataForPlan ? memberDataForPlan.introduced_product_keys : undefined,
+      introducing_product_key: memberDataForPlan.introducing_product_key ?? null,
+      introducing_started_at: memberDataForPlan.introducing_started_at ?? null,
       age_months: memberDataForPlan.age_months,
     };
   }, [memberDataForPlan]);
+
+  const infantPoolIntroducingKey = useMemo(
+    () =>
+      JSON.stringify({
+        k: memberDataForPlan?.introducing_product_key ?? null,
+        s: memberDataForPlan?.introducing_started_at ?? null,
+      }),
+    [memberDataForPlan?.introducing_product_key, memberDataForPlan?.introducing_started_at]
+  );
+
+  const infantIntroducingBanner = useMemo(() => {
+    if (!isInfantPlanUi || !selectedMember) return null;
+    const m = selectedMember as MembersRow;
+    const key = m.introducing_product_key;
+    const started = m.introducing_started_at;
+    if (!key?.trim() || !started) return null;
+    const now = new Date();
+    if (shouldAutoClearIntroducingPeriod(started, now)) return null;
+    const label = getProductDisplayLabel(key);
+    if (isIntroducingPeriodActive(key, started, now)) {
+      const day = getIntroducingDisplayDay(started, now);
+      if (day == null) return null;
+      return { kind: "active" as const, label, day };
+    }
+    if (isIntroducingGracePeriod(key, started, now)) {
+      return { kind: "grace" as const, label };
+    }
+    return null;
+  }, [isInfantPlanUi, selectedMember]);
 
   const infantPoolAllergiesKey = useMemo(
     () => JSON.stringify(memberDataForPlan && "allergies" in memberDataForPlan ? memberDataForPlan.allergies ?? [] : []),
@@ -377,6 +419,7 @@ export default function MealPlanPage() {
       infantPoolAllergiesKey,
       infantPoolDislikesKey,
       infantPoolIntroducedKey,
+      infantPoolIntroducingKey,
     ],
     queryFn: () =>
       listFilteredPoolRecipesForPlanSlot({
@@ -401,6 +444,7 @@ export default function MealPlanPage() {
       infantPoolAllergiesKey,
       infantPoolDislikesKey,
       infantPoolIntroducedKey,
+      infantPoolIntroducingKey,
     ],
     queryFn: () =>
       listFilteredPoolRecipesForPlanSlot({
@@ -788,19 +832,172 @@ export default function MealPlanPage() {
     }
   }, [selectedMember?.id, toast, updateMember]);
 
-  const addIntroducedFromRecipe = useCallback(async (ingredientNames: string[] | undefined) => {
-    if (!selectedMember?.id || !ingredientNames?.length) return;
-    const extracted = extractKeyProductKeysFromIngredients(
-      ingredientNames.map((name) => ({ name, display_text: name }))
-    );
-    if (extracted.length === 0) {
-      toast({ description: "Не нашли подходящий продукт для отметки." });
-      return;
+  const clearIntroducingPeriod = useCallback(async () => {
+    if (!selectedMember?.id) return;
+    try {
+      await updateMember({
+        id: selectedMember.id,
+        introducing_product_key: null,
+        introducing_started_at: null,
+      });
+      toast({ description: "Период введения завершён" });
+    } catch (e: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось сохранить",
+        description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+      });
     }
-    const next = Array.from(new Set([...introducedProductKeys, ...extracted]));
-    await saveIntroducedProductKeys(next);
-    toast({ description: `Отметили: ${extracted.map((k) => getProductDisplayLabel(k)).join(", ")}` });
-  }, [introducedProductKeys, saveIntroducedProductKeys, selectedMember?.id, toast]);
+  }, [selectedMember?.id, toast, updateMember]);
+
+  /** Grace 3–4 дня: вернуться к «дню 2» (вчера как дата старта). */
+  const continueIntroducingFromGrace = useCallback(async () => {
+    if (!selectedMember?.id) return;
+    const m = selectedMember as MembersRow;
+    const key = m.introducing_product_key;
+    if (!key?.trim()) return;
+    const today = formatLocalDate(new Date());
+    const yesterday = addDaysToLocalYmd(today, -1);
+    try {
+      await updateMember({
+        id: selectedMember.id,
+        introducing_product_key: key,
+        introducing_started_at: yesterday,
+      });
+      toast({ description: "Продолжаем введение" });
+    } catch (e: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось сохранить",
+        description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+      });
+    }
+  }, [selectedMember, toast, updateMember]);
+
+  const tryNewIntroducingProduct = useCallback(async () => {
+    if (!selectedMember?.id) return;
+    try {
+      await updateMember({
+        id: selectedMember.id,
+        introducing_product_key: null,
+        introducing_started_at: null,
+      });
+      toast({ description: "Можно начать вводить другой продукт" });
+    } catch (e: unknown) {
+      toast({
+        variant: "destructive",
+        title: "Не удалось сохранить",
+        description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+      });
+    }
+  }, [selectedMember?.id, toast, updateMember]);
+
+  const addIntroducedFromRecipe = useCallback(
+    async (ingredientNames: string[] | undefined, forceSwitchProduct = false) => {
+      if (!selectedMember?.id || !ingredientNames?.length) return;
+      const extracted = extractKeyProductKeysFromIngredients(
+        ingredientNames.map((name) => ({ name, display_text: name }))
+      );
+      if (extracted.length === 0) {
+        toast({ description: "Не нашли подходящий продукт для отметки." });
+        return;
+      }
+      const primaryKey = extracted[0];
+      const m = selectedMember as MembersRow;
+      const curKey = m.introducing_product_key;
+      const curStarted = m.introducing_started_at;
+      const now = new Date();
+
+      const inGrace =
+        !!curKey &&
+        !!curStarted &&
+        isIntroducingGracePeriod(curKey, curStarted, now);
+
+      if (inGrace) {
+        const today = formatLocalDate(now);
+        const nextKeys = Array.from(new Set([...introducedProductKeys, ...extracted]));
+        const yesterday = addDaysToLocalYmd(today, -1);
+        try {
+          if (primaryKey === curKey) {
+            await updateMember({
+              id: selectedMember.id,
+              introduced_product_keys: nextKeys,
+              introducing_product_key: curKey,
+              introducing_started_at: yesterday,
+            });
+          } else {
+            await updateMember({
+              id: selectedMember.id,
+              introduced_product_keys: nextKeys,
+              introducing_product_key: primaryKey,
+              introducing_started_at: today,
+            });
+          }
+          toast({ description: `Отметили: ${extracted.map((k) => getProductDisplayLabel(k)).join(", ")}` });
+        } catch (e: unknown) {
+          toast({
+            variant: "destructive",
+            title: "Не удалось сохранить",
+            description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+          });
+        }
+        return;
+      }
+
+      const periodActive = !!curKey && !!curStarted && isIntroducingPeriodActive(curKey, curStarted, now);
+
+      if (periodActive && !forceSwitchProduct && primaryKey !== curKey) {
+        setIntroduceConflictPayload({ primaryKey, extracted, ingredientNames });
+        setIntroduceConflictOpen(true);
+        return;
+      }
+
+      const today = formatLocalDate(now);
+      const nextKeys = Array.from(new Set([...introducedProductKeys, ...extracted]));
+
+      let nextIntroKey: string | null = curKey ?? null;
+      let nextIntroStarted: string | null = curStarted ?? null;
+
+      if (!periodActive) {
+        nextIntroKey = primaryKey;
+        nextIntroStarted = today;
+      } else if (primaryKey === curKey) {
+        nextIntroKey = curKey;
+        nextIntroStarted = curStarted;
+      } else if (forceSwitchProduct) {
+        nextIntroKey = primaryKey;
+        nextIntroStarted = today;
+      }
+
+      try {
+        await updateMember({
+          id: selectedMember.id,
+          introduced_product_keys: nextKeys,
+          introducing_product_key: nextIntroKey,
+          introducing_started_at: nextIntroStarted,
+        });
+        toast({ description: `Отметили: ${extracted.map((k) => getProductDisplayLabel(k)).join(", ")}` });
+      } catch (e: unknown) {
+        toast({
+          variant: "destructive",
+          title: "Не удалось сохранить",
+          description: e instanceof Error ? e.message : "Попробуйте ещё раз",
+        });
+      }
+    },
+    [introducedProductKeys, selectedMember, toast, updateMember]
+  );
+
+  useEffect(() => {
+    if (!selectedMember?.id || !isInfantPlanUi) return;
+    const started = (selectedMember as MembersRow).introducing_started_at;
+    if (!started || !shouldAutoClearIntroducingPeriod(started, new Date())) return;
+    void updateMember({
+      id: selectedMember.id,
+      introducing_product_key: null,
+      introducing_started_at: null,
+    });
+  }, [isInfantPlanUi, selectedMember?.id, selectedMember?.introducing_started_at, updateMember]);
 
   const planReadyToastShownRef = useRef(false);
   useEffect(() => {
@@ -1739,6 +1936,51 @@ export default function MealPlanPage() {
             ) : null}
           </motion.div>
 
+          {isInfantPlanUi && infantIntroducingBanner?.kind === "active" ? (
+            <div className="mt-2 rounded-2xl border border-primary/20 bg-primary/[0.06] px-3.5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-foreground leading-snug">
+                Продолжаем вводить: {infantIntroducingBanner.label} (день {infantIntroducingBanner.day})
+              </p>
+              <button
+                type="button"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground underline-offset-4 hover:underline shrink-0 min-h-[44px] px-2 -mx-2 text-left sm:text-right"
+                onClick={() => void clearIntroducingPeriod()}
+                disabled={isUpdatingMember}
+              >
+                Завершить введение
+              </button>
+            </div>
+          ) : null}
+          {isInfantPlanUi && infantIntroducingBanner?.kind === "grace" ? (
+            <div className="mt-2 rounded-2xl border border-border/60 bg-muted/30 px-3.5 py-3 space-y-3">
+              <p className="text-sm text-foreground leading-snug">
+                Вы недавно вводили: {infantIntroducingBanner.label}
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:flex-1 rounded-xl border-primary/30"
+                  disabled={isUpdatingMember}
+                  onClick={() => void continueIntroducingFromGrace()}
+                >
+                  Продолжить
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:flex-1 rounded-xl text-muted-foreground border-border"
+                  disabled={isUpdatingMember}
+                  onClick={() => void tryNewIntroducingProduct()}
+                >
+                  Попробовать новый продукт
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           {/* 2) Чипсы дней — только для плана 12+; в прикорме (&lt;12 мес) недельная лента скрыта */}
           {!isInfantPlanUi ? (
             <div
@@ -2645,6 +2887,26 @@ export default function MealPlanPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmActionModal
+        open={introduceConflictOpen}
+        onOpenChange={(open) => {
+          setIntroduceConflictOpen(open);
+          if (!open) setIntroduceConflictPayload(null);
+        }}
+        title="Новый продукт?"
+        description={
+          selectedMember && (selectedMember as MembersRow).introducing_product_key
+            ? `Сейчас вы вводите ${getProductDisplayLabel((selectedMember as MembersRow).introducing_product_key!)} (день ${getIntroducingDisplayDay((selectedMember as MembersRow).introducing_started_at!, new Date()) ?? "?"}). Лучше завершить введение перед новым продуктом.`
+            : ""
+        }
+        confirmText="Всё равно добавить"
+        cancelText="Продолжить"
+        onConfirm={async () => {
+          const p = introduceConflictPayload;
+          if (p) await addIntroducedFromRecipe(p.ingredientNames, true);
+        }}
+      />
 
       <ConfirmActionModal
         open={clearConfirm !== null}

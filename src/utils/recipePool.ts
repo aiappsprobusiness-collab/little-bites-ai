@@ -6,7 +6,11 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildBlockedTokens, containsAnyToken, containsAnyTokenForAllergy } from "@/utils/allergenTokens";
-import { scoreInfantIntroducedMatch, type IngredientForProductKey } from "@/utils/introducedProducts";
+import {
+  isIntroducingPeriodActive,
+  scoreInfantIntroducingPeriodSort,
+  type IngredientForProductKey,
+} from "@/utils/introducedProducts";
 
 const IS_DEV = import.meta.env.DEV;
 
@@ -93,6 +97,9 @@ export interface MemberDataForPool {
   likes?: string | string[];
   dislikes?: string | string[];
   introduced_product_keys?: string[];
+  /** Период введения одного продукта (клиент): при активном периоде усиливается приоритет рецептов с этим продуктом. */
+  introducing_product_key?: string | null;
+  introducing_started_at?: string | null;
   age_months?: number;
   age_years?: number;
 }
@@ -253,16 +260,27 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
   }
 
   const introducedKeys = Array.isArray(memberData?.introduced_product_keys) ? memberData.introduced_product_keys : [];
-  if (ageMonths != null && ageMonths < 12 && introducedKeys.length > 0) {
+  const introducingKey = memberData?.introducing_product_key ?? null;
+  const introducingStarted = memberData?.introducing_started_at ?? null;
+  const introducingPeriodActive =
+    !!introducingKey &&
+    !!introducingStarted &&
+    isIntroducingPeriodActive(introducingKey, introducingStarted, new Date());
+
+  if (ageMonths != null && ageMonths < 12 && (introducedKeys.length > 0 || introducingPeriodActive)) {
     filtered = [...filtered].sort((a, b) => {
-      const aScore = scoreInfantIntroducedMatch({
+      const aScore = scoreInfantIntroducingPeriodSort({
         ageMonths,
         introducedProductKeys: introducedKeys,
+        introducingProductKey: introducingKey,
+        introducingPeriodActive,
         ingredients: (a.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
       });
-      const bScore = scoreInfantIntroducedMatch({
+      const bScore = scoreInfantIntroducingPeriodSort({
         ageMonths,
         introducedProductKeys: introducedKeys,
+        introducingProductKey: introducingKey,
+        introducingPeriodActive,
         ingredients: (b.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
       });
       return bScore - aScore;
@@ -292,8 +310,16 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
   const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
   const hasIntroduced = Array.isArray(memberData?.introduced_product_keys) && memberData.introduced_product_keys.length > 0;
+  const hasIntroducing =
+    !!memberData?.introducing_product_key &&
+    !!memberData?.introducing_started_at &&
+    isIntroducingPeriodActive(
+      memberData.introducing_product_key,
+      memberData.introducing_started_at,
+      new Date()
+    );
 
-  const selectFields = (hasAllergies || hasIntroduced)
+  const selectFields = (hasAllergies || hasIntroduced || hasIntroducing)
     ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
     : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
@@ -334,8 +360,16 @@ export async function pickRecipeFromPool(
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
   const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
   const hasIntroduced = Array.isArray(memberData?.introduced_product_keys) && memberData.introduced_product_keys.length > 0;
+  const hasIntroducing =
+    !!memberData?.introducing_product_key &&
+    !!memberData?.introducing_started_at &&
+    isIntroducingPeriodActive(
+      memberData.introducing_product_key,
+      memberData.introducing_started_at,
+      new Date()
+    );
 
-  const selectFields = (hasAllergies || hasIntroduced)
+  const selectFields = (hasAllergies || hasIntroduced || hasIntroducing)
     ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
     : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 

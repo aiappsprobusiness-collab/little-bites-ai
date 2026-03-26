@@ -88,6 +88,10 @@ export interface MembersRow {
   dislikes: string[];
   /** Нормализованные ключи уже введённых продуктов для прикорма (<12 мес). */
   introduced_product_keys: string[];
+  /** Текущий период введения одного продукта (2–3 дня), ключ как в `introduced_product_keys`. */
+  introducing_product_key: string | null;
+  /** Дата начала периода введения (YYYY-MM-DD). */
+  introducing_started_at: string | null;
   /** Legacy DB column: easy | medium | any. Unused in app; kept for DB compat. */
   difficulty: string | null;
 }
@@ -103,6 +107,8 @@ export interface MembersInsert {
   likes?: string[];
   dislikes?: string[];
   introduced_product_keys?: string[];
+  introducing_product_key?: string | null;
+  introducing_started_at?: string | null;
   difficulty?: string | null;
 }
 export interface MembersUpdate {
@@ -117,6 +123,8 @@ export interface MembersUpdate {
   likes?: string[];
   dislikes?: string[];
   introduced_product_keys?: string[];
+  introducing_product_key?: string | null;
+  introducing_started_at?: string | null;
   difficulty?: string | null;
 }
 
