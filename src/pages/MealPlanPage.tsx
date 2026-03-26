@@ -2588,6 +2588,10 @@ export default function MealPlanPage() {
               if (!parsed.length) return;
               const normalized = normalizeProductKeys(parsed);
               if (normalized.length === 0) {
+                toast({
+                  description:
+                    "Не удалось распознать продукт по этому названию. Попробуйте другое слово (например: кабачок, яблоко) или введите на латинице.",
+                });
                 setIntroducedProductsInput("");
                 return;
               }

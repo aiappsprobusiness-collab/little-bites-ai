@@ -215,6 +215,10 @@ export default function ChildProfileEditPage() {
       if (!toAdd.length) return;
       const normalized = normalizeProductKeys(toAdd);
       if (!normalized.length) {
+        toast({
+          description:
+            "Не удалось распознать продукт по этому названию. Попробуйте другое слово (например: кабачок, яблоко).",
+        });
         setIntroducedProductsInput("");
         return;
       }

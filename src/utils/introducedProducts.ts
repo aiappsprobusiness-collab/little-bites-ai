@@ -4,35 +4,39 @@ export type IngredientForProductKey = {
   category?: string | null;
 };
 
+/**
+ * JS `\b` word boundary does NOT treat Cyrillic letters as word chars (`\w` is [A-Za-z0-9_]).
+ * Russian stems must match without `\b`, otherwise "кабачок" never matches `\bкабач`.
+ */
 const PRODUCT_ALIAS_PATTERNS: Array<{ key: string; patterns: RegExp[]; label: string }> = [
-  { key: "zucchini", label: "Кабачок", patterns: [/\bкабач/iu, /\bzucchini\b/iu] },
-  { key: "cauliflower", label: "Цветная капуста", patterns: [/\bцветн\w*\s+капуст/iu, /\bcauliflower\b/iu] },
-  { key: "broccoli", label: "Брокколи", patterns: [/\bброккол/iu, /\bbroccoli\b/iu] },
-  { key: "pumpkin", label: "Тыква", patterns: [/\bтыкв/iu, /\bpumpkin\b/iu] },
-  { key: "carrot", label: "Морковь", patterns: [/\bморков/iu, /\bcarrot\b/iu] },
-  { key: "potato", label: "Картофель", patterns: [/\bкарто/iu, /\bpotato\b/iu] },
-  { key: "apple", label: "Яблоко", patterns: [/\bяблок/iu, /\bapple\b/iu] },
-  { key: "pear", label: "Груша", patterns: [/\bгруш/iu, /\bpear\b/iu] },
-  { key: "banana", label: "Банан", patterns: [/\bбанан/iu, /\bbanana\b/iu] },
-  { key: "oatmeal", label: "Овсянка", patterns: [/\bовсян/iu, /\boat\b/iu] },
-  { key: "buckwheat", label: "Гречка", patterns: [/\bгреч/iu, /\bbuckwheat\b/iu] },
-  { key: "rice", label: "Рис", patterns: [/\bрис\w*/iu, /\brice\b/iu] },
-  { key: "turkey", label: "Индейка", patterns: [/\bиндейк/iu, /\bturkey\b/iu] },
-  { key: "chicken", label: "Курица", patterns: [/\bкуриц/iu, /\bchicken\b/iu] },
-  { key: "beef", label: "Говядина", patterns: [/\bговядин/iu, /\bbeef\b/iu] },
-  { key: "egg", label: "Яйцо", patterns: [/\bяйц/iu, /\begg\b/iu] },
-  { key: "cottage_cheese", label: "Творог", patterns: [/\bтворо/iu, /\bcottage\s*cheese\b/iu] },
-  { key: "kefir", label: "Кефир", patterns: [/\bкефир/iu, /\bkefir\b/iu] },
-  { key: "yogurt", label: "Йогурт", patterns: [/\bйогурт/iu, /\byogh?urt\b/iu] },
+  { key: "zucchini", label: "Кабачок", patterns: [/кабач/iu, /\bzucchini\b/iu] },
+  { key: "cauliflower", label: "Цветная капуста", patterns: [/цветн\w*\s+капуст/iu, /\bcauliflower\b/iu] },
+  { key: "broccoli", label: "Брокколи", patterns: [/броккол/iu, /\bbroccoli\b/iu] },
+  { key: "pumpkin", label: "Тыква", patterns: [/тыкв/iu, /\bpumpkin\b/iu] },
+  { key: "carrot", label: "Морковь", patterns: [/морков/iu, /\bcarrot\b/iu] },
+  { key: "potato", label: "Картофель", patterns: [/карто/iu, /\bpotato\b/iu] },
+  { key: "apple", label: "Яблоко", patterns: [/яблок/iu, /\bapple\b/iu] },
+  { key: "pear", label: "Груша", patterns: [/груш/iu, /\bpear\b/iu] },
+  { key: "banana", label: "Банан", patterns: [/банан/iu, /\bbanana\b/iu] },
+  { key: "oatmeal", label: "Овсянка", patterns: [/овсян/iu, /\boat\b/iu] },
+  { key: "buckwheat", label: "Гречка", patterns: [/греч/iu, /\bbuckwheat\b/iu] },
+  { key: "rice", label: "Рис", patterns: [/рис/iu, /\brice\b/iu] },
+  { key: "turkey", label: "Индейка", patterns: [/индейк/iu, /\bturkey\b/iu] },
+  { key: "chicken", label: "Курица", patterns: [/куриц/iu, /\bchicken\b/iu] },
+  { key: "beef", label: "Говядина", patterns: [/говядин/iu, /\bbeef\b/iu] },
+  { key: "egg", label: "Яйцо", patterns: [/яйц/iu, /\begg\b/iu] },
+  { key: "cottage_cheese", label: "Творог", patterns: [/творо/iu, /\bcottage\s*cheese\b/iu] },
+  { key: "kefir", label: "Кефир", patterns: [/кефир/iu, /\bkefir\b/iu] },
+  { key: "yogurt", label: "Йогурт", patterns: [/йогурт/iu, /\byogh?urt\b/iu] },
 ];
 
 const TECHNICAL_INGREDIENT_PATTERNS: RegExp[] = [
-  /\bвода\b/iu,
-  /\bкипяток\b/iu,
+  /(?:^|[\s,.;])вода(?:[\s,.;]|$)/iu,
+  /кипяток/iu,
   /\bwater\b/iu,
-  /\bмасл\w*/iu,
+  /масло/iu,
   /\boil\b/iu,
-  /\bсоль\b/iu,
+  /(?:^|[\s,.;])соль(?:[\s,.;]|$)/iu,
   /\bsalt\b/iu,
 ];
 
