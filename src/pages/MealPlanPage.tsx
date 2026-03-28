@@ -133,7 +133,7 @@ import {
 } from "@/hooks/usePWAInstall";
 import {
   getInfantNovelProductKeysForIntroduce,
-  getInfantPrimaryIntroducingLinesFromIngredientNames,
+  getInfantPrimaryProductSummaryLine,
   getIntroducingDisplayDay,
   getProductDisplayLabel,
   isIntroducingGracePeriod,
@@ -1472,14 +1472,14 @@ export default function MealPlanPage() {
     const out: Array<{ id: string; label: string; sectionHeading: string }> = [
       {
         id: INFANT_PLAN_SLOT_NEW_PRODUCT,
-        sectionHeading: "Новое блюдо для введения продукта",
+        sectionHeading: "Новый продукт",
         label: "Новинка",
       },
     ];
     if (introducedProductKeys.length > 0) {
       out.push({
         id: INFANT_PLAN_SLOT_FAMILIAR,
-        sectionHeading: "Блюдо с уже знакомым продуктом",
+        sectionHeading: "Знакомое блюдо",
         label: "Знакомое",
       });
     }
@@ -1851,53 +1851,115 @@ export default function MealPlanPage() {
               isInfantPlanUi ? "p-2.5 sm:p-3.5 mb-1.5" : "p-3 sm:p-4 mb-2",
             )}
           >
-            <div className="flex flex-col gap-2 min-[380px]:flex-row min-[380px]:items-start min-[380px]:justify-between min-[380px]:gap-3">
-              <div className="min-w-0 flex-1 pr-0 min-[380px]:pr-1">
-                <h2
-                  className={cn(
-                    "text-lg font-semibold text-foreground leading-tight tracking-tight",
-                    !isInfantPlanUi && "text-balance",
-                  )}
-                >
-                  {isInfantPlanUi ? "Прикорм на сегодня" : formatDayHeader(selectedDate)}
-                </h2>
-                {isInfantPlanUi ? (
-                  <p className="text-sm text-muted-foreground mt-0.5">{formatDayHeader(selectedDate)}</p>
-                ) : null}
-                {isInfantPlanUi && infantAgeMonths != null && infantAgeMonths < 6 ? (
-                  <p
-                    className="mt-2 rounded-xl border border-amber-500/35 bg-amber-500/[0.07] px-3 py-2 text-xs sm:text-sm text-foreground leading-snug"
-                    role="status"
-                  >
-                    Ранний старт прикорма (по согласованию с врачом)
-                  </p>
-                ) : null}
-                {isInfantPlanUi && members.length > 0 ? (
-                  <div className="mt-1.5 flex w-full min-w-0 flex-wrap items-center justify-start gap-2">
-                    <MemberSelectorButton
-                      variant="light"
-                      className="max-w-full min-h-[44px] px-2.5 sm:px-3"
-                      disabled={isAnyGenerating}
-                      leadingEmoji="👶"
-                      fitLabelWidth
-                    />
+            {isInfantPlanUi ? (
+              <>
+                <div className="flex items-start justify-between gap-2 min-w-0">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-lg font-semibold text-foreground leading-tight tracking-tight">
+                      Прикорм на сегодня
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-0.5">{formatDayHeader(selectedDate)}</p>
                   </div>
-                ) : null}
-                {isInfantPlanUi ? (
-                  <div className="mt-1.5 space-y-3 text-sm text-muted-foreground leading-relaxed max-w-none">
-                    <p className="sm:max-w-[42rem]">
+                  <div className="flex items-center gap-1 shrink-0 self-start pt-0.5">
+                    <span
+                      className={cn(
+                        "text-[10px] font-medium px-2 py-0.5 rounded-full tabular-nums",
+                        subscriptionStatus === "premium" && "bg-primary/10 text-primary",
+                        subscriptionStatus === "trial" && "bg-amber-500/12 text-amber-900/85",
+                        subscriptionStatus !== "premium" && subscriptionStatus !== "trial" && "bg-muted/70 text-muted-foreground",
+                      )}
+                    >
+                      {statusBadgeLabel}
+                    </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="p-1.5 rounded-lg text-muted-foreground/80 hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-60"
+                          disabled={isAnyGenerating}
+                          aria-label="Ещё действия"
+                        >
+                          <MoreVertical className="w-5 h-5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-52">
+                        {members.length > 0 && (
+                          <DropdownMenuItem
+                            onClick={() => setPlanProfileHelpOpen(true)}
+                            className="text-muted-foreground"
+                          >
+                            <Info className="w-4 h-4 mr-2 shrink-0" />
+                            Как учитывается профиль
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          onClick={() => setClearConfirm("day")}
+                          disabled={isAnyGenerating}
+                          className="text-muted-foreground"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2 shrink-0" />
+                          Очистить день
+                        </DropdownMenuItem>
+                        {hasAccess && (
+                          <DropdownMenuItem
+                            onClick={() => setClearConfirm("week")}
+                            disabled={isAnyGenerating}
+                            className="text-muted-foreground"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2 shrink-0" />
+                            Очистить неделю
+                          </DropdownMenuItem>
+                        )}
+                        {import.meta.env.DEV && (
+                          <DropdownMenuCheckboxItem
+                            checked={debugPlanEnabled}
+                            onCheckedChange={(checked) => {
+                              const on = checked === true;
+                              setDebugPlanInStorage(on);
+                              setDebugPlanEnabled(on);
+                            }}
+                          >
+                            Debug план (консоль: payload/response generate-plan)
+                          </DropdownMenuCheckboxItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+                <div className="w-full min-w-0 mt-1 space-y-2">
+                  {members.length > 0 ? (
+                    <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-2">
+                      <MemberSelectorButton
+                        variant="light"
+                        className="max-w-full min-h-[44px] px-2.5 sm:px-3"
+                        disabled={isAnyGenerating}
+                        leadingEmoji="👶"
+                        fitLabelWidth
+                      />
+                    </div>
+                  ) : null}
+                  {infantAgeMonths != null && infantAgeMonths < 6 ? (
+                    <p
+                      className="rounded-xl border border-amber-500/35 bg-amber-500/[0.07] px-3 py-2 text-xs sm:text-sm text-foreground leading-snug"
+                      role="status"
+                    >
+                      Ранний старт прикорма (по согласованию с врачом)
+                    </p>
+                  ) : null}
+                  <div className="space-y-3 text-sm text-muted-foreground leading-relaxed w-full min-w-0 pt-0.5">
+                    <p className="w-full min-w-0">
                       В этом возрасте основное питание — грудное молоко или смесь. Прикорм вводится постепенно,
                       обычно 1–2 раза в день.
                     </p>
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground leading-snug">
+                    <div className="flex flex-col gap-2 w-full min-w-0 items-stretch sm:items-start">
+                      <p className="text-sm text-muted-foreground leading-snug w-full min-w-0">
                         Подробнее о прикорме можно узнать в разделе:
                       </p>
                       <Link
                         to="/sos"
-                        className="group flex min-h-[44px] w-full max-w-md items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/[0.07] px-3.5 py-2.5 text-left shadow-sm transition-colors hover:bg-primary/[0.11] hover:border-primary/40 active:scale-[0.99]"
+                        className="group flex min-h-[44px] w-full max-w-[min(21rem,100%)] sm:max-w-[50%] min-w-[min(100%,11rem)] items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/[0.07] px-3.5 py-2.5 text-left shadow-sm transition-colors hover:bg-primary/[0.11] hover:border-primary/40 active:scale-[0.99]"
                       >
-                        <span className="flex min-w-0 items-center gap-2.5">
+                        <span className="flex min-w-0 flex-1 items-center gap-2.5">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background/80 text-primary ring-1 ring-primary/15">
                             <HeartHandshake className="h-4 w-4" aria-hidden />
                           </span>
@@ -1908,17 +1970,29 @@ export default function MealPlanPage() {
                           aria-hidden
                         />
                       </Link>
+                      <button
+                        type="button"
+                        className="flex min-h-[44px] w-full max-w-[min(21rem,100%)] sm:max-w-[50%] min-w-[min(100%,11rem)] items-center justify-center rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5 text-sm font-medium text-foreground/90 transition-colors hover:bg-muted/45 hover:border-border active:scale-[0.99]"
+                        onClick={() => setIntroducedProductsDialogOpen(true)}
+                      >
+                        Уже введённые продукты
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      className="flex min-h-[44px] w-full max-w-md items-center justify-center rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5 text-sm font-medium text-foreground/90 transition-colors hover:bg-muted/45 hover:border-border active:scale-[0.99]"
-                      onClick={() => setIntroducedProductsDialogOpen(true)}
-                    >
-                      Уже введённые продукты
-                    </button>
                   </div>
-                ) : null}
-                {members.length > 0 && !isInfantPlanUi ? (
+                </div>
+              </>
+            ) : (
+            <div className="flex flex-col gap-2 min-[380px]:flex-row min-[380px]:items-start min-[380px]:justify-between min-[380px]:gap-3">
+              <div className="min-w-0 flex-1 pr-0 min-[380px]:pr-1">
+                <h2
+                  className={cn(
+                    "text-lg font-semibold text-foreground leading-tight tracking-tight",
+                    "text-balance",
+                  )}
+                >
+                  {formatDayHeader(selectedDate)}
+                </h2>
+                {members.length > 0 ? (
                   <div className="mt-3 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
                     <MemberSelectorButton className="shrink-0" disabled={isAnyGenerating} />
                     <PlanGoalCompactSheet
@@ -2017,6 +2091,7 @@ export default function MealPlanPage() {
                 </DropdownMenu>
               </div>
             </div>
+            )}
             {!isInfantPlanUi ? (
               <div className="mt-4 pt-3 border-t border-border/15 space-y-2.5">
                 <Button
@@ -2481,14 +2556,13 @@ export default function MealPlanPage() {
                 const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
                 const hasDish = !!(plannedMeal && recipeId && recipe?.title);
                 const isPrimaryEmpty = !hasDish && firstEmptySlotId === slot.id;
-                const infantPrimaryIntroLines =
+                const infantPrimarySummaryLine =
                   isInfantPlanUi && isInfantNewRecipePlanSlot(slot.id) && recipeId
-                    ? getInfantPrimaryIntroducingLinesFromIngredientNames(
+                    ? getInfantPrimaryProductSummaryLine(
                         previews[recipeId]?.ingredientNames,
                         introducedProductKeys
                       )
-                    : [];
-                const showInfantPrimaryIntroLines = infantPrimaryIntroLines.length > 0;
+                    : null;
                 const novelKeysForIntroduce =
                   isInfantPlanUi && isInfantNewRecipePlanSlot(slot.id) && recipeId && recipe?.title
                     ? getInfantNovelProductKeysForIntroduce(
@@ -2498,11 +2572,18 @@ export default function MealPlanPage() {
                       )
                     : [];
                 return (
-                  <div key={slot.id} className={cn(infantSlotSectionHeading && "space-y-1.5")}>
+                  <div key={slot.id} className={cn(infantSlotSectionHeading && "space-y-1")}>
                     {infantSlotSectionHeading ? (
-                      <p className="text-xs font-semibold text-foreground/90 tracking-tight px-0.5">
-                        {infantSlotSectionHeading}
-                      </p>
+                      <div className="px-0.5 space-y-0.5">
+                        <p className="text-xs font-semibold text-foreground/90 tracking-tight">
+                          {infantSlotSectionHeading}
+                        </p>
+                        {infantPrimarySummaryLine ? (
+                          <p className="text-[11px] font-normal text-muted-foreground leading-snug">
+                            {infantPrimarySummaryLine}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
                     {hasDish ? (
                       <>
@@ -2510,8 +2591,10 @@ export default function MealPlanPage() {
                         mealType={plannedMeal!.meal_type}
                         recipeTitle={recipe!.title}
                         recipeId={recipeId!}
-                        mealTypeLabel={showInfantPrimaryIntroLines ? undefined : slot.label}
-                        infantIntroducingLines={showInfantPrimaryIntroLines ? infantPrimaryIntroLines : undefined}
+                        mealTypeLabel={
+                          !isInfantPlanUi || infantSlotSectionHeading ? slot.label : undefined
+                        }
+                        infantIntroducingLines={undefined}
                         plannedDate={selectedDayKey}
                         planMemberId={mealPlanMemberId ?? null}
                         infantPlanUi={isInfantPlanUi}

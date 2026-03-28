@@ -54,9 +54,11 @@
 | `src/components/recipe/RecipeCard.tsx` | `nutritionGoalsMaxVisible`, `nutritionGoalsQuiet` |
 | `src/components/recipe/NutritionGoalsChips.tsx` | `quiet`, документация `maxVisible` |
 | `src/components/meal-plan/MealCard.tsx` | превью плана: 1 тихая цель |
-| `docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md` | краткий UX-раздел |
+| `docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md` | UX плана, §5.4 прикорм (hero, подписи слотов) |
 | `docs/refactor/recipe-core-multilang-progress.md` | актуализация ссылок на UI целей/профиля |
-| `docs/dev/plan-tab-ui-quiet-hero-2026-03.md` | этот файл |
+| `docs/dev/plan-tab-ui-quiet-hero-2026-03.md` | этот файл (в т.ч. §7 прикорм) |
+| `src/utils/introducedProducts.ts` | `getInfantPrimaryProductSummaryLine` |
+| `src/utils/introducedProducts.test.ts` | тесты summary-line |
 
 ## Ручная проверка (dev)
 
@@ -72,6 +74,23 @@
 - [ ] Меню → «Как учитывается профиль»: корректный текст для семьи и одного члена.  
 - [ ] Карточка слота: не больше одного чипа цели, визуально спокойнее.  
 - [ ] Баннер после первого плана («План готов!»): кнопка «Отправить меню» на месте.
+
+## 7. Прикорм (&lt;12 мес) — март 2026 (точечная доработка)
+
+**Файлы:** `src/pages/MealPlanPage.tsx`, `src/utils/introducedProducts.ts` (`getInfantPrimaryProductSummaryLine`), при необходимости тесты в `introducedProducts.test.ts`.
+
+**Изменения UX:**
+
+- Плашка **«Ранний старт прикорма…»** перенесена **под** чип выбора ребёнка; основной текст и CTA идут ниже.
+- Hero прикорма: заголовок + дата + бейдж/меню — **отдельная верхняя строка**; блок с чипом и текстом на **полную ширину карточки** (убрано сжатие основного текста из‑за соседней колонки с меню в одном flex-ряду).
+- **«Помощь маме»** и **«Уже введённые продукты»** — не на всю ширину: `max-w` ~половина контейнера на `sm+`, на узком экране до ~100% с разумным пределом в `rem`.
+- Над карточками: короткие заголовки секций (**«Новый продукт»** / **«Знакомое блюдо»**), одна приглушённая строка продуктов для primary из `getInfantPrimaryProductSummaryLine`; дублирующие многострочные подписи над `MealCard` убраны.
+
+**Ручная проверка:** порядок блоков в hero; длина строк основного абзаца на широком телефоне; ширина CTA; читаемость секции над первой карточкой; второй слот; профиль 12+ и «Семья» без регрессий.
+
+Каноническое описание домена: **`docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md`** (§5.4, §10).
+
+---
 
 ## Сознательно не трогали
 

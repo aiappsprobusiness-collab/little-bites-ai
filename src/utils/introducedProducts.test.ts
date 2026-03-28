@@ -3,6 +3,7 @@ import {
   calendarDaysBetweenLocalYmd,
   evaluateInfantRecipeComplementaryRules,
   extractKeyProductKeysFromIngredients,
+  getInfantPrimaryProductSummaryLine,
   getIntroducingDaysPassed,
   getIntroducingDisplayDay,
   getValidInfantRecipes,
@@ -111,6 +112,20 @@ describe("evaluateInfantRecipeComplementaryRules", () => {
     ];
     const ok = getValidInfantRecipes(recipes, { introducedProductKeys: [], infantSlotRole: "primary" });
     expect(ok.map((x) => x.id)).toEqual(["a"]);
+  });
+});
+
+describe("getInfantPrimaryProductSummaryLine", () => {
+  it("one novel + familiar: compact separator", () => {
+    const line = getInfantPrimaryProductSummaryLine(["Кабачок", "Картофель"], ["zucchini"]);
+    expect(line).toBeTruthy();
+    expect(line!).toContain("Картофель");
+    expect(line!).toContain("знакомый:");
+    expect(line!).toMatch(/Кабачок/i);
+  });
+
+  it("invalid recipe returns null", () => {
+    expect(getInfantPrimaryProductSummaryLine(["Картофель", "Морковь"], [])).toBeNull();
   });
 });
 

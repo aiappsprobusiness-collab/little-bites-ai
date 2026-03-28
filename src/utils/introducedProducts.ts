@@ -283,6 +283,42 @@ export function getInfantPrimaryIntroducingLinesFromIngredientNames(
 }
 
 /**
+ * Одна компактная строка для плана прикорма над карточкой primary (без дублирования длинных подписей).
+ * Формат: «Яблоко · знакомый: гречка» и варианты для нескольких продуктов.
+ */
+export function getInfantPrimaryProductSummaryLine(
+  ingredientNames: string[] | null | undefined,
+  introducedProductKeys: string[]
+): string | null {
+  const ing = (ingredientNames ?? []).map((name) => ({ name, display_text: name }));
+  const ev = evaluateInfantRecipeComplementaryRules(ing, introducedProductKeys);
+  if (!ev.valid) return null;
+  const { novelKeys, familiarKeys } = partitionInfantNovelAndFamiliarKeys(ev.canonicalKeys, introducedProductKeys);
+  const novelLabels = novelKeys.map((k) => getProductDisplayLabel(k));
+  const familiarLabels = familiarKeys.map((k) => getProductDisplayLabel(k));
+
+  if (novelKeys.length === 1 && familiarLabels.length > 0) {
+    return `${novelLabels[0]} · знакомый: ${familiarLabels.join(", ")}`;
+  }
+  if (novelKeys.length === 1) {
+    return novelLabels[0];
+  }
+  if (novelLabels.length > 1 && familiarLabels.length > 0) {
+    return `${novelLabels.join(", ")} · знакомый: ${familiarLabels.join(", ")}`;
+  }
+  if (novelLabels.length > 1) {
+    return novelLabels.join(", ");
+  }
+  if (familiarLabels.length === 1) {
+    return `Знакомый: ${familiarLabels[0]}`;
+  }
+  if (familiarLabels.length > 1) {
+    return `Знакомые: ${familiarLabels.join(", ")}`;
+  }
+  return null;
+}
+
+/**
  * Ключи продуктов для кнопки «Добавить в введённые» и сохранения: все ингредиенты,
  * при отсутствии ключей — разбор названия блюда («кукурузная каша» → corn).
  */
