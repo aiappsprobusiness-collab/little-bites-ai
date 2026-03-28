@@ -368,6 +368,9 @@ export default function MealPlanPage() {
     selectedMember?.age_months != null && Number.isFinite(selectedMember.age_months)
       ? Math.max(0, Math.round(selectedMember.age_months))
       : null;
+  /** Hero плана прикорма: строка про врача только при 4–5 мес; с 6 мес не показываем. */
+  const showInfantComplementaryDoctorNotice =
+    infantAgeMonths != null && infantAgeMonths >= 4 && infantAgeMonths < 6;
   const infantAgeBandU12 = useMemo(() => getInfantComplementaryAgeBandU12(infantAgeMonths), [infantAgeMonths]);
   const introducedProductKeys = useMemo(
     () =>
@@ -1479,7 +1482,7 @@ export default function MealPlanPage() {
     if (introducedProductKeys.length > 0) {
       out.push({
         id: INFANT_PLAN_SLOT_FAMILIAR,
-        sectionHeading: "Знакомое блюдо",
+        sectionHeading: "Уже знакомое блюдо",
         label: "Знакомое",
       });
     }
@@ -1797,10 +1800,18 @@ export default function MealPlanPage() {
   }
 
   return (
-    <MobileLayout>
+    <MobileLayout
+      mainClassName={isInfantPlanUi ? "scrollbar-none !overflow-y-hidden" : undefined}
+    >
       <div className="flex flex-col min-h-0 flex-1 px-4 relative overflow-x-hidden touch-pan-y overscroll-x-none max-w-full">
         {/* Content wrapper: один скролл + subtle pattern; горизонтальный скролл/overscroll отключены */}
-        <div ref={scrollContainerRef} className="plan-page-bg relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-x-none">
+        <div
+          ref={scrollContainerRef}
+          className={cn(
+            "plan-page-bg relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-x-none",
+            isInfantPlanUi && "scrollbar-none",
+          )}
+        >
           {/* Блок приглашения к шарингу после первой генерации */}
           {justCreatedMemberId && !firstPlanShareBannerDismissed && !isInfantPlanUi && (
             <motion.div
@@ -1856,7 +1867,7 @@ export default function MealPlanPage() {
                 <div className="flex items-start justify-between gap-2 min-w-0">
                   <div className="min-w-0 flex-1">
                     <h2 className="text-lg font-semibold text-foreground leading-tight tracking-tight">
-                      Прикорм на сегодня
+                      План прикорма на сегодня
                     </h2>
                     <p className="text-sm text-muted-foreground mt-0.5">{formatDayHeader(selectedDate)}</p>
                   </div>
@@ -1938,46 +1949,51 @@ export default function MealPlanPage() {
                       />
                     </div>
                   ) : null}
-                  {infantAgeMonths != null && infantAgeMonths < 6 ? (
-                    <p
-                      className="rounded-xl border border-amber-500/35 bg-amber-500/[0.07] px-3 py-2 text-xs sm:text-sm text-foreground leading-snug"
-                      role="status"
-                    >
-                      Ранний старт прикорма (по согласованию с врачом)
-                    </p>
-                  ) : null}
-                  <div className="space-y-3 text-sm text-muted-foreground leading-relaxed w-full min-w-0 pt-0.5">
-                    <p className="w-full min-w-0">
-                      В этом возрасте основное питание — грудное молоко или смесь. Прикорм вводится постепенно,
-                      обычно 1–2 раза в день.
-                    </p>
-                    <div className="flex flex-col gap-2 w-full min-w-0 items-stretch sm:items-start">
-                      <p className="text-sm text-muted-foreground leading-snug w-full min-w-0">
-                        Подробнее о прикорме можно узнать в разделе:
+                  <div
+                    className="mt-0.5 w-full min-w-0 rounded-xl border border-border/45 bg-muted/15 px-3 py-2.5 space-y-1.5"
+                    role="region"
+                    aria-label="Справка о прикорме"
+                  >
+                    {showInfantComplementaryDoctorNotice ? (
+                      <p
+                        className="text-xs font-medium leading-snug text-amber-950/85 dark:text-amber-100/90 rounded-md bg-amber-500/[0.09] border border-amber-500/20 px-2 py-1.5"
+                        role="status"
+                      >
+                        В 4–5 месяцев прикорм вводят только по согласованию с врачом.
                       </p>
-                      <Link
-                        to="/sos"
-                        className="group flex min-h-[44px] w-full max-w-[min(21rem,100%)] sm:max-w-[50%] min-w-[min(100%,11rem)] items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/[0.07] px-3.5 py-2.5 text-left shadow-sm transition-colors hover:bg-primary/[0.11] hover:border-primary/40 active:scale-[0.99]"
-                      >
-                        <span className="flex min-w-0 flex-1 items-center gap-2.5">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background/80 text-primary ring-1 ring-primary/15">
-                            <HeartHandshake className="h-4 w-4" aria-hidden />
-                          </span>
-                          <span className="font-semibold text-foreground text-sm leading-tight">Помощь маме</span>
+                    ) : null}
+                    <p className="text-[12px] sm:text-[13px] leading-[1.45] font-normal text-muted-foreground w-full min-w-0">
+                      Основное питание — грудное молоко или смесь. Прикорм вводится постепенно, обычно 1–2 раза в день.
+                    </p>
+                    <p className="text-[11px] sm:text-xs leading-snug text-muted-foreground/80 w-full min-w-0">
+                      Подробнее о прикорме — в разделе ниже.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full min-w-0 items-stretch sm:items-start pt-1">
+                    <Link
+                      to="/sos"
+                      className="group flex min-h-[44px] w-full max-w-[min(21rem,100%)] sm:max-w-[50%] min-w-[min(100%,11rem)] items-center justify-between gap-2.5 rounded-xl border border-border/55 bg-transparent px-3 py-2 text-left transition-colors hover:bg-muted/30 hover:border-border/70 active:scale-[0.99]"
+                    >
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/40 text-muted-foreground ring-1 ring-border/50 group-hover:text-foreground group-hover:ring-border/60">
+                          <HeartHandshake className="h-3.5 w-3.5" aria-hidden />
                         </span>
-                        <ChevronRight
-                          className="h-5 w-5 shrink-0 text-primary/80 transition-transform group-hover:translate-x-0.5"
-                          aria-hidden
-                        />
-                      </Link>
-                      <button
-                        type="button"
-                        className="flex min-h-[44px] w-full max-w-[min(21rem,100%)] sm:max-w-[50%] min-w-[min(100%,11rem)] items-center justify-center rounded-xl border border-border/70 bg-muted/25 px-3 py-2.5 text-sm font-medium text-foreground/90 transition-colors hover:bg-muted/45 hover:border-border active:scale-[0.99]"
-                        onClick={() => setIntroducedProductsDialogOpen(true)}
-                      >
-                        Уже введённые продукты
-                      </button>
-                    </div>
+                        <span className="font-medium text-muted-foreground text-sm leading-tight group-hover:text-foreground">
+                          Помощь маме
+                        </span>
+                      </span>
+                      <ChevronRight
+                        className="h-4 w-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:text-muted-foreground"
+                        aria-hidden
+                      />
+                    </Link>
+                    <button
+                      type="button"
+                      className="flex min-h-10 w-full max-w-[min(21rem,100%)] sm:max-w-[50%] min-w-[min(100%,11rem)] items-center justify-center rounded-lg border border-transparent bg-transparent px-2 py-2 text-xs font-normal text-muted-foreground/90 transition-colors hover:bg-muted/25 hover:text-foreground active:scale-[0.99]"
+                      onClick={() => setIntroducedProductsDialogOpen(true)}
+                    >
+                      Уже введённые продукты
+                    </button>
                   </div>
                 </div>
               </>
@@ -2925,7 +2941,7 @@ export default function MealPlanPage() {
                               });
                             }}
                           >
-                            {`Добавить ${getProductDisplayLabel(novelKeysForIntroduce[0])} в введённые →`}
+                            {`Ввести ${getProductDisplayLabel(novelKeysForIntroduce[0])} →`}
                           </Button>
                         </div>
                       ) : null}

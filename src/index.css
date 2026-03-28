@@ -147,7 +147,8 @@
 
   html {
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    scrollbar-gutter: stable;
+    /* stable оставлял постоянную вертикальную полосу справа; auto — без резерва, скролл только при переполнении */
+    scrollbar-gutter: auto;
   }
 
   body {
