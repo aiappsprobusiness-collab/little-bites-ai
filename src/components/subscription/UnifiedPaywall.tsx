@@ -13,6 +13,7 @@ import {
   UNIFIED_PAYWALL_TITLE,
   UNIFIED_PAYWALL_SUBTITLE,
   UNIFIED_PAYWALL_BULLETS,
+  UNIFIED_PAYWALL_PRICING_CAPTION,
   UNIFIED_PAYWALL_FOOTER,
 } from "@/utils/unifiedPaywallCopy";
 import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
@@ -127,22 +128,22 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
 
             {/* Верх: при нехватке места скроллится; цены и CTA всегда внизу */}
             <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-2 sm:px-5 sm:pt-4 pr-11 space-y-3">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2.5 pb-1.5 sm:px-5 sm:pt-3 sm:pb-2 pr-11 space-y-2">
                 {paywallCustomMessage ? (
-                  <div className="shrink-0 p-2.5 rounded-xl bg-primary/10 border border-primary/20 min-w-0">
+                  <div className="shrink-0 p-2 rounded-xl bg-primary/10 border border-primary/20 min-w-0">
                     <p className="text-xs font-medium text-foreground text-center leading-snug line-clamp-4 whitespace-pre-line break-words">
                       {paywallCustomMessage}
                     </p>
                   </div>
                 ) : null}
 
-                <div className="flex justify-center shrink-0 pt-0.5">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-md shadow-amber-500/15">
+                <div className="flex justify-center shrink-0">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-md shadow-amber-500/15">
                     <Crown className="w-[18px] h-[18px] text-white" />
                   </div>
                 </div>
 
-                <div className="text-center space-y-1.5 px-0.5">
+                <div className="text-center space-y-1 px-0.5">
                   <h2 className="text-xl font-semibold leading-snug text-foreground text-balance">
                     {UNIFIED_PAYWALL_TITLE}
                   </h2>
@@ -151,7 +152,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                   </p>
                 </div>
 
-                <ul className="space-y-1.5 min-w-0 pb-0.5 mt-4">
+                <ul className="space-y-1 min-w-0 pb-0 mt-3">
                   {UNIFIED_PAYWALL_BULLETS.map((text, index) => (
                     <li key={`${text}-${index}`} className="flex items-start gap-2 text-[13px] leading-snug min-w-0">
                       <span className="w-3.5 h-3.5 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
@@ -163,10 +164,13 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                 </ul>
               </div>
 
-              <div className="shrink-0 flex flex-col gap-2.5 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 border-t border-border/40 bg-background/95 backdrop-blur-sm">
+              <div className="shrink-0 flex flex-col gap-2 px-4 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pt-2 border-t border-border/40 bg-background/95 backdrop-blur-sm">
                 {showPayForm && (
                   <>
-                    <div className="rounded-xl border border-border bg-card/60 p-2.5 space-y-1.5">
+                    <p className="text-center text-[11px] leading-snug text-muted-foreground font-normal px-1">
+                      {UNIFIED_PAYWALL_PRICING_CAPTION}
+                    </p>
+                    <div className="rounded-xl border border-border bg-card/60 p-2 space-y-1">
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -218,7 +222,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                       <Button
                         variant="default"
                         size="sm"
-                        className="w-full h-12 text-sm font-semibold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
+                        className="w-full h-12 text-sm font-semibold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm shadow-primary/20"
                         onClick={() => void handleStartTrial()}
                         disabled={isStartingTrial}
                       >
@@ -234,15 +238,15 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full h-11 py-1 rounded-xl flex flex-col gap-0 justify-center leading-none min-h-11"
+                      className="w-full h-11 py-1 rounded-xl flex flex-col gap-0 justify-center leading-none min-h-11 border-border/50 bg-muted/15 text-foreground/85 hover:bg-muted/30 hover:text-foreground font-normal"
                       onClick={handlePayPremium}
                       disabled={isStartingPayment}
                     >
                       {isStartingPayment ? (
-                        <span className="text-sm">Перенаправление…</span>
+                        <span className="text-sm font-medium">Перенаправление…</span>
                       ) : (
                         <>
-                          <span className="text-sm font-semibold leading-tight">Открыть полный доступ</span>
+                          <span className="text-sm font-medium leading-tight">Открыть полный доступ</span>
                           <span className="text-[11px] font-normal text-muted-foreground mt-0.5 leading-snug">{payLine}</span>
                         </>
                       )}
