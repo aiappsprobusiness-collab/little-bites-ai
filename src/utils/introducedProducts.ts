@@ -32,9 +32,22 @@ const PRODUCT_ALIAS_PATTERNS: Array<{ key: string; patterns: RegExp[]; label: st
   { key: "oatmeal", label: "Овсянка", patterns: [/овсян/iu, /\boat\b/iu] },
   { key: "buckwheat", label: "Гречка", patterns: [/греч/iu, /\bbuckwheat\b/iu] },
   { key: "rice", label: "Рис", patterns: [/рис/iu, /\brice\b/iu] },
-  { key: "turkey", label: "Индейка", patterns: [/индейк/iu, /\bturkey\b/iu] },
-  { key: "chicken", label: "Курица", patterns: [/куриц/iu, /\bchicken\b/iu] },
-  { key: "beef", label: "Говядина", patterns: [/говядин/iu, /\bbeef\b/iu] },
+  { key: "turkey", label: "Индейка", patterns: [/индейк/iu, /индей/iu, /\bturkey\b/iu] },
+  /** курица / куриное филе / куриный */
+  { key: "chicken", label: "Курица", patterns: [/куриц/iu, /курин/iu, /\bchicken\b/iu] },
+  /** говядина / говяжий фарш */
+  { key: "beef", label: "Говядина", patterns: [/говядин/iu, /говяж/iu, /\bbeef\b/iu] },
+  {
+    key: "salmon",
+    label: "Лосось",
+    patterns: [/лосос/iu, /с[её]мг/iu, /\bsalmon\b/iu],
+  },
+  { key: "trout", label: "Форель", patterns: [/форел/iu, /\btrout\b/iu] },
+  { key: "cod", label: "Треска", patterns: [/треск/iu, /\bcod\b/iu] },
+  { key: "hake", label: "Хек", patterns: [/хек/iu, /\bhake\b/iu] },
+  { key: "pollock", label: "Минтай", patterns: [/минта/iu, /\bpollock\b/iu] },
+  /** Неспецифичная «рыба» — после видовых, чтобы не перебивать лосось/треску и т.д. */
+  { key: "fish", label: "Рыба", patterns: [/рыба/iu, /\bfish\b/iu] },
   { key: "egg", label: "Яйцо", patterns: [/яйц/iu, /\begg\b/iu] },
   { key: "cottage_cheese", label: "Творог", patterns: [/творо/iu, /\bcottage\s*cheese\b/iu] },
   { key: "kefir", label: "Кефир", patterns: [/кефир/iu, /\bkefir\b/iu] },
@@ -159,6 +172,20 @@ function countNonTechnicalFoodIngredientRows(ingredients: IngredientForProductKe
   return n;
 }
 
+/** Есть ли пищевая строка без канонического ключа — нельзя считать familiar «всё введено» и нельзя корректно считать novel после старта. */
+function hasNonTechnicalFoodRowWithoutProductKey(
+  ingredients: IngredientForProductKey[] | null | undefined
+): boolean {
+  if (!ingredients?.length) return false;
+  for (const item of ingredients) {
+    const merged = [item.display_text ?? "", item.name ?? ""].join(" ").trim();
+    if (!merged) continue;
+    if (isTechnicalIngredient(merged)) continue;
+    if (!normalizeProductKey(merged)) return true;
+  }
+  return false;
+}
+
 export type InfantRecipeValidityResult = {
   valid: boolean;
   reason: string;
@@ -206,6 +233,14 @@ export function evaluateInfantRecipeComplementaryRules(
   if (canonicalKeys.length === 0) {
     return { valid: false, reason: "after_no_recognized_keys", canonicalKeys, novelKeys };
   }
+  if (hasNonTechnicalFoodRowWithoutProductKey(ingredients)) {
+    return {
+      valid: false,
+      reason: "after_unrecognized_food_row",
+      canonicalKeys,
+      novelKeys,
+    };
+  }
   if (novelKeys.length !== 1) {
     return {
       valid: false,
@@ -225,6 +260,14 @@ export function evaluateInfantSecondaryFamiliarOnly(
   const introducedSet = new Set(introducedProductKeys.filter(Boolean));
   const canonicalKeys = extractAllKeyProductKeysFromIngredients(ingredients, 100);
   const novelKeys = canonicalKeys.filter((k) => !introducedSet.has(k));
+  if (hasNonTechnicalFoodRowWithoutProductKey(ingredients)) {
+    return {
+      valid: false,
+      reason: "secondary_unrecognized_food_row",
+      canonicalKeys,
+      novelKeys,
+    };
+  }
   if (canonicalKeys.length === 0) {
     return { valid: false, reason: "secondary_no_keys", canonicalKeys, novelKeys };
   }
