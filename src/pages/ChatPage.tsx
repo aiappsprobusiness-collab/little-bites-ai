@@ -36,6 +36,7 @@ import { ChatModeHint } from "@/components/chat/ChatModeHint";
 import { isFamilySelected } from "@/utils/planModeUtils";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import type { LimitReachedFeature } from "@/utils/limitReachedMessages";
+import { paywallReasonFromLimitFeature } from "@/utils/paywallReasonCopy";
 import { getRewrittenQueryIfFollowUp, deriveDishHint } from "@/utils/blockedFollowUp";
 import { getRedirectOrIrrelevantMessage, getRedirectOrIrrelevantMeta, type SystemHintRoute } from "@/utils/chatRouteFallback";
 import type { BlockedMeta } from "@/types/chatBlocked";
@@ -676,6 +677,7 @@ export default function ChatPage() {
     if (!canGenerate && !isPremium) {
       sendInProgressRef.current = false;
       useAppStore.getState().setPaywallReason("limit_chat");
+      useAppStore.getState().setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }
@@ -1175,9 +1177,10 @@ export default function ChatPage() {
       trackUsageEvent("chat_generate_error", { properties: { message: err?.message ?? "Unknown error" } });
       const limitPayload = (err as { payload?: { feature: string } })?.payload;
       if (err?.message === "LIMIT_REACHED" && limitPayload?.feature) {
-        useAppStore.getState().setPaywallReason("limit_chat");
+        const feat = limitPayload.feature as LimitReachedFeature;
+        useAppStore.getState().setPaywallReason(paywallReasonFromLimitFeature(feat));
         useAppStore.getState().setPaywallCustomMessage(
-          `${getLimitReachedTitle()}\n\n${getLimitReachedMessage(limitPayload.feature as LimitReachedFeature)}`
+          `${getLimitReachedTitle()}\n\n${getLimitReachedMessage(feat)}`
         );
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
@@ -1597,6 +1600,7 @@ export default function ChatPage() {
         isOpen={showPaywall}
         onClose={() => {
           setShowPaywall(false);
+          useAppStore.getState().setPaywallReason(null);
           useAppStore.getState().setPaywallCustomMessage(null);
         }}
       />

@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
-import type { SosTopicConfig } from "@/data/sosTopics";
-import { ChevronRight, Star } from "lucide-react";
+import { getTopicDisplayTitle, type SosTopicConfig } from "@/data/sosTopics";
+import { ChevronRight, Lock, Star } from "lucide-react";
 import { IconBadge } from "@/components/ui/IconBadge";
 import { cn } from "@/lib/utils";
 
@@ -31,20 +31,22 @@ export function SosTopicGrid({
               onClick={() => (locked ? onLockedSelect() : onSelect(topic))}
               className={cn(
                 "w-full flex items-center gap-3 p-3 rounded-2xl border border-border bg-card shadow-soft text-left",
-                "hover:bg-muted/30 active:bg-muted/50 transition-colors duration-200"
+                "hover:bg-muted/30 active:bg-muted/50 transition-colors duration-200",
+                locked && "opacity-[0.93] bg-muted/10"
               )}
             >
               <IconBadge icon={topic.icon} variant={topic.badgeVariant} size="md" />
               <div className="flex-1 min-w-0 py-0.5">
                 <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 break-words">
-                  {topic.title}
+                  {getTopicDisplayTitle(topic)}
                 </p>
                 <p className="text-xs text-muted-foreground leading-snug line-clamp-2 mt-0.5 break-words">
                   {topic.shortSubtitle}
                 </p>
               </div>
               {locked && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md shrink-0">
+                <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md shrink-0">
+                  <Lock className="w-3 h-3 shrink-0 opacity-90" aria-hidden />
                   <Star className="w-3 h-3 text-premium-star shrink-0" aria-hidden />
                   Premium
                 </span>

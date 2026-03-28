@@ -98,6 +98,7 @@ export default function RecipePage() {
   const { addRecipeIngredients, isAddingToList } = useShoppingList();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const isFree = !hasAccess;
   const [searchParams] = useSearchParams();
   const { getRecipeById } = useRecipes();
@@ -579,7 +580,8 @@ export default function RecipePage() {
     if (!id || !recipe) return;
     if (recipe && isInfantRecipe(recipe)) return;
     if (!hasAccess) {
-      setPaywallCustomMessage("Список покупок доступен в Premium.");
+      setPaywallReason("shopping_list");
+      setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }
@@ -725,7 +727,8 @@ export default function RecipePage() {
             <motion.button
               type="button"
               onClick={() => {
-                setPaywallCustomMessage("Добавление в план доступно в Premium.");
+                setPaywallReason("plan_week_locked");
+                setPaywallCustomMessage(null);
                 setShowPaywall(true);
               }}
               whileTap={{ scale: 0.96 }}

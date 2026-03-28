@@ -1,7 +1,9 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Pin, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Pin, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { HelpDoctorReminderLine } from "@/components/help/HelpDoctorReminderLine";
+import { shouldShowHelpDoctorReminder, stripHelpDoctorSection } from "@/utils/stripHelpDoctorSection";
 
 type IconComponent = React.ComponentType<{ className?: string }>;
 
@@ -9,7 +11,6 @@ type IconComponent = React.ComponentType<{ className?: string }>;
 const BLOCK_PATTERNS: { pattern: RegExp; icon: IconComponent; label: string }[] = [
   { pattern: /^(?:\s*[#*]*\s*[📌]*\s*)?Коротко\s*[*#]*\s*$/im, icon: Pin, label: "Коротко" },
   { pattern: /^(?:\s*[#*]*\s*[✅]*\s*)?Что можно сделать прямо сейчас\s*[*#]*\s*$/im, icon: CheckCircle2, label: "Что можно сделать прямо сейчас" },
-  { pattern: /^(?:\s*[#*]*\s*[⚠️]*\s*)?К врачу если\s*[*#]*\s*$/im, icon: AlertTriangle, label: "К врачу если" },
 ];
 
 interface ParsedBlock {
@@ -69,15 +70,30 @@ function parseAssistantContent(content: string): (ParsedBlock | ParsedContent)[]
   return result;
 }
 
-export function HelpResponseBlocks({ content, className }: { content?: string | null; className?: string }) {
-  const safeContent = content ?? "";
+export function HelpResponseBlocks({
+  content,
+  className,
+  messageId,
+}: {
+  content?: string | null;
+  className?: string;
+  /** Если задан — мягкая строка про врача показывается у ~половины сообщений (хеш id). */
+  messageId?: string;
+}) {
+  const safeContent = stripHelpDoctorSection(content ?? "");
   const parts = parseAssistantContent(safeContent);
   const hasBlocks = parts.some((p) => p.type === "block");
 
+  const showReminder =
+    Boolean(messageId) && shouldShowHelpDoctorReminder(messageId!);
+
   if (!hasBlocks) {
     return (
-      <div className={cn("prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-foreground text-sm leading-[1.6]", className)}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{safeContent}</ReactMarkdown>
+      <div className={cn("space-y-0 text-sm leading-[1.6]", className)}>
+        <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-foreground">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{safeContent}</ReactMarkdown>
+        </div>
+        {showReminder ? <HelpDoctorReminderLine /> : null}
       </div>
     );
   }
@@ -109,6 +125,7 @@ export function HelpResponseBlocks({ content, className }: { content?: string | 
           </div>
         );
       })}
+      {showReminder ? <HelpDoctorReminderLine /> : null}
     </div>
   );
 }

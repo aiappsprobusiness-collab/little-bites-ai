@@ -43,6 +43,7 @@ export function PoolExhaustedSheet({
   const [showInfantOptions, setShowInfantOptions] = useState(false);
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const { hasAccess } = useSubscription();
   const isFree = !hasAccess;
 
@@ -60,7 +61,8 @@ export function PoolExhaustedSheet({
 
   const handleGenerateInChat = () => {
     if (isFree) {
-      setPaywallCustomMessage("Сгенерировать рецепт в чате доступно в Premium.");
+      setPaywallReason("generate_recipe");
+      setPaywallCustomMessage(null);
       setShowPaywall(true);
       onOpenChange(false);
       return;

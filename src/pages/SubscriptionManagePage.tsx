@@ -105,6 +105,8 @@ export default function SubscriptionManagePage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const {
     subscriptionStatus,
     subscriptionPlan,
@@ -242,7 +244,11 @@ export default function SubscriptionManagePage() {
                 )}
                 <Button
                   className={primaryButtonClass}
-                  onClick={() => setShowPaywall(true)}
+                  onClick={() => {
+                    setPaywallReason("fallback");
+                    setPaywallCustomMessage(null);
+                    setShowPaywall(true);
+                  }}
                 >
                   Купить Premium
                 </Button>

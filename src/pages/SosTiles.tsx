@@ -8,7 +8,12 @@ import { SosHero } from "@/components/sos/SosHero";
 import { SosTopicGrid } from "@/components/sos/SosTopicGrid";
 import { Paywall } from "@/components/subscription/Paywall";
 import { TopicConsultationSheet } from "@/components/help/TopicConsultationSheet";
-import { getSosTopicConfig, getTopicsGroupedBySection, type SosTopicConfig } from "@/data/sosTopics";
+import {
+  getSosTopicConfig,
+  getHelpMonetizationSections,
+  getTopicDisplayTitle,
+  type SosTopicConfig,
+} from "@/data/sosTopics";
 import { getChipsForTopic, getPremiumQuickChipTexts } from "@/data/helpTopicChips";
 import { getTopicById } from "@/constants/sos";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
@@ -42,9 +47,9 @@ export default function SosTiles() {
     lockedDescription?: string;
   } | null>(null);
 
-  const groupedSections = useMemo(() => {
+  const helpSections = useMemo(() => {
     try {
-      return getTopicsGroupedBySection();
+      return getHelpMonetizationSections();
     } catch {
       return [];
     }
@@ -73,23 +78,35 @@ export default function SosTiles() {
     const topicMeta = getTopicById(key);
     setInitialMessage(null);
     if (topicConfig) {
+      if (topicConfig.requiredTier === "paid" && !hasAccess) {
+        setPaywallOpen(true);
+        navigate("/sos", { replace: true });
+        return;
+      }
       trackUsageEvent("help_topic_open", { properties: { topic_id: topicConfig.id } });
       setSheetTopic({
         key: topicConfig.id,
-        title: topicConfig.title,
+        title: getTopicDisplayTitle(topicConfig),
         chips: getChipsForTopic(topicConfig.id),
-        isLocked: topicConfig.requiredTier === "paid" && !hasAccess,
-        lockedDescription: topicConfig.intro?.[0] ?? topicConfig.shortSubtitle,
+        isLocked: false,
+        lockedDescription: undefined,
       });
       setSheetOpen(true);
       navigate("/sos", { replace: true });
     } else if (topicMeta) {
+      const cfg = getSosTopicConfig(topicMeta.id);
+      if (cfg?.requiredTier === "paid" && !hasAccess) {
+        setPaywallOpen(true);
+        navigate("/sos", { replace: true });
+        return;
+      }
       trackUsageEvent("help_topic_open", { properties: { topic_id: topicMeta.id } });
       setSheetTopic({
         key: topicMeta.id,
-        title: topicMeta.label,
+        title: cfg ? getTopicDisplayTitle(cfg) : topicMeta.label,
         chips: getChipsForTopic(topicMeta.id),
         isLocked: false,
+        lockedDescription: undefined,
       });
       setSheetOpen(true);
       navigate("/sos", { replace: true });
@@ -116,20 +133,25 @@ export default function SosTiles() {
   };
 
   const handleTopicSelect = (topic: SosTopicConfig) => {
-    const locked = topic.requiredTier === "paid" && !hasAccess;
+    if (topic.requiredTier === "paid" && !hasAccess) {
+      handleLockedTopic();
+      return;
+    }
     trackUsageEvent("help_topic_open", { properties: { topic_id: topic.id } });
     setInitialMessage(null);
     setSheetTopic({
       key: topic.id,
-      title: topic.title,
+      title: getTopicDisplayTitle(topic),
       chips: getChipsForTopic(topic.id),
-      isLocked: locked,
-      lockedDescription: locked ? (topic.intro?.[0] ?? topic.shortSubtitle) : undefined,
+      isLocked: false,
+      lockedDescription: undefined,
     });
     setSheetOpen(true);
   };
 
   const handleLockedTopic = () => {
+    useAppStore.getState().setPaywallReason("sos_topic_locked");
+    useAppStore.getState().setPaywallCustomMessage(null);
     setPaywallOpen(true);
   };
 
@@ -165,7 +187,11 @@ export default function SosTiles() {
             helpLimitExceeded={helpLimitExceeded}
             disabled={helpLimitExceeded}
             hasAccess={hasAccess}
-            onPremiumChipTap={() => setPaywallOpen(true)}
+            onPremiumChipTap={() => {
+              useAppStore.getState().setPaywallReason("sos_premium_feature");
+              useAppStore.getState().setPaywallCustomMessage(null);
+              setPaywallOpen(true);
+            }}
           />
         </div>
 
@@ -177,7 +203,13 @@ export default function SosTiles() {
             </p>
             <button
               type="button"
-              onClick={() => handleOpenWithMessage(popularQuestion.text)}
+              onClick={() => {
+                if (!hasAccess && popularQuestion.access === "premium") {
+                  setPaywallOpen(true);
+                  return;
+                }
+                handleOpenWithMessage(popularQuestion.text);
+              }}
               disabled={helpLimitExceeded}
               className="w-full flex items-center gap-2 text-left py-0.5 -mx-0.5 px-0.5 hover:bg-muted/30 active:bg-muted/50 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
             >
@@ -191,8 +223,8 @@ export default function SosTiles() {
 
         {/* 3. Категории / карточки функций */}
         <div className="flex-1 min-h-0 overflow-y-auto mt-3 pb-24 space-y-4">
-          {groupedSections.map((section) => (
-            <section key={section.groupId} className="space-y-2">
+          {helpSections.map((section, idx) => (
+            <section key={`${section.title}-${idx}`} className="space-y-2">
               <h2 className="text-sm font-semibold text-foreground">{section.title}</h2>
               <SosTopicGrid
                 topics={section.topics}
@@ -220,7 +252,15 @@ export default function SosTiles() {
           lockedDescription={sheetTopic.lockedDescription}
           onOpenPremium={sheetTopic.isLocked ? handleLockedTopic : undefined}
           hasAccess={sheetTopic.key === "quick" ? hasAccess : undefined}
-          onPremiumChipTap={sheetTopic.key === "quick" ? openPaywallFromSheet : undefined}
+          onPremiumChipTap={
+            sheetTopic.key === "quick"
+              ? () => {
+                  useAppStore.getState().setPaywallReason("sos_premium_feature");
+                  useAppStore.getState().setPaywallCustomMessage(null);
+                  openPaywallFromSheet();
+                }
+              : undefined
+          }
           premiumChipTexts={sheetTopic.key === "quick" ? getPremiumQuickChipTexts() : undefined}
           onLimitReached={(payload) => {
             const used = payload?.feature === "help" && typeof payload?.used === "number"
@@ -228,6 +268,7 @@ export default function SosTiles() {
               : 2;
             setHelpUsedToday?.(used);
             refetchUsage?.();
+            useAppStore.getState().setPaywallReason("help_limit");
             useAppStore.getState().setPaywallCustomMessage(
               `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("help")}`
             );
@@ -243,8 +284,16 @@ export default function SosTiles() {
 
       <Paywall
         isOpen={paywallOpen}
-        onClose={() => setPaywallOpen(false)}
-        onSubscribe={() => setPaywallOpen(false)}
+        onClose={() => {
+          setPaywallOpen(false);
+          useAppStore.getState().setPaywallReason(null);
+          useAppStore.getState().setPaywallCustomMessage(null);
+        }}
+        onSubscribe={() => {
+          setPaywallOpen(false);
+          useAppStore.getState().setPaywallReason(null);
+          useAppStore.getState().setPaywallCustomMessage(null);
+        }}
       />
     </MobileLayout>
   );

@@ -24,20 +24,19 @@ export function SosPaywallModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-typo-title font-semibold">
-            💛 Помощь маме — доступно в Premium
+      <DialogContent className="sm:max-w-md p-4 gap-3">
+        <DialogHeader className="space-y-1">
+          <DialogTitle className="text-base font-semibold leading-tight">
+            💛 Помощь маме — в Premium
           </DialogTitle>
         </DialogHeader>
-        <p className="text-muted-foreground text-typo-muted leading-relaxed">
-          Получайте мгновенные советы от нутрициолога при запорах, аллергиях и
-          отказах от еды.
+        <p className="text-muted-foreground text-[11px] leading-snug">
+          Советы при запорах, аллергиях и отказах от еды.
         </p>
         <Button
           variant="default"
-          size="lg"
-          className="w-full mt-4 bg-primary text-primary-foreground hover:opacity-90 font-semibold"
+          size="sm"
+          className="w-full h-9 bg-primary text-primary-foreground hover:opacity-90 font-semibold rounded-lg"
           onClick={handleTryPremium}
         >
           Попробовать Premium

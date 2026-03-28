@@ -48,6 +48,7 @@ export function MemberSelectorButton({
   const { hasAccess } = useSubscription();
   const isFree = !hasAccess;
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
 
   const [showPicker, setShowPicker] = useState(false);
@@ -84,12 +85,13 @@ export function MemberSelectorButton({
       return;
     }
     if (isFreeLocked) {
-      setPaywallCustomMessage("Переключение профилей доступно в Premium");
+      setPaywallReason("switch_child");
+      setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }
     setShowPicker(true);
-  }, [disabled, isFreeLocked, onGuardClick, setPaywallCustomMessage, setShowPaywall]);
+  }, [disabled, isFreeLocked, onGuardClick, setPaywallCustomMessage, setPaywallReason, setShowPaywall]);
 
   const selectMember = useCallback(
     (id: string | "family") => {

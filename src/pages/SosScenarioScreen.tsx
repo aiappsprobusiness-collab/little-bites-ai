@@ -17,6 +17,9 @@ import {
   sanitizeSosResponse,
   stripEmojiForDisplay,
 } from "@/constants/sos";
+import { getSosTopicConfig } from "@/data/sosTopics";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useAppStore } from "@/store/useAppStore";
 import { SUPABASE_URL } from "@/integrations/supabase/client";
 
 const DISCLAIMER_TEXT =
@@ -25,6 +28,10 @@ const DISCLAIMER_TEXT =
 export default function SosScenarioScreen() {
   const { scenarioKey } = useParams<{ scenarioKey: string }>();
   const navigate = useNavigate();
+  const { hasAccess } = useSubscription();
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const { session } = useAuth();
   const { selectedMember, members, formatAge } = useFamily();
   const { messagesByScenario, appendMessage } = useSosContext();
@@ -58,6 +65,18 @@ export default function SosScenarioScreen() {
       navigate("/sos", { replace: true });
     }
   }, [scenarioKey, navigate]);
+
+  /** Premium-темы без подписки — только paywall, без экрана сценария. */
+  useEffect(() => {
+    if (!scenarioKey) return;
+    const cfg = getSosTopicConfig(scenarioKey);
+    if (cfg?.requiredTier === "paid" && !hasAccess) {
+      setPaywallReason("sos_topic_locked");
+      setPaywallCustomMessage(null);
+      setShowPaywall(true);
+      navigate("/sos", { replace: true });
+    }
+  }, [scenarioKey, hasAccess, setShowPaywall, setPaywallReason, setPaywallCustomMessage, navigate]);
 
   useEffect(() => {
     if (topic?.id === "food_diary" && memberData && !details) {

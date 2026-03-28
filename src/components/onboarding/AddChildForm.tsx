@@ -50,6 +50,7 @@ export function AddChildForm({
   const { subscriptionStatus, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
 
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
@@ -91,7 +92,8 @@ export function AddChildForm({
   const allergiesHandlers = {
     add: (raw: string) => {
       if (!hasAccess && allergies.length >= 1) {
-        setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
+        setPaywallReason("allergies_locked");
+        setPaywallCustomMessage(null);
         setShowPaywall(true);
         return;
       }
@@ -132,6 +134,7 @@ export function AddChildForm({
 
   const handleSave = async () => {
     if (isFreeLimitReached && memberCount >= 1) {
+      setPaywallReason("add_child_limit");
       setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
       setShowPaywall(true);
       return;
@@ -188,6 +191,7 @@ export function AddChildForm({
 
   const handleAddAnother = async () => {
     if (!canAddMore) {
+      setPaywallReason("add_child_limit");
       setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
       setShowPaywall(true);
       return;

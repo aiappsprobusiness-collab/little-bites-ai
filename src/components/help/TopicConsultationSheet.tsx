@@ -23,6 +23,7 @@ import {
 import type { HelpChipItem } from "@/data/helpTopicChips";
 import { HelpResponseBlocks } from "@/components/help/HelpResponseBlocks";
 import { cn } from "@/lib/utils";
+import { stripHelpDoctorSection } from "@/utils/stripHelpDoctorSection";
 import { scheduleScrollContainerToBottom } from "@/utils/scheduleScrollContainerToBottom";
 import {
   applyTextareaAutosize,
@@ -404,9 +405,10 @@ export function TopicConsultationSheet({
                       !hasAccess &&
                       isPremiumPrompt &&
                       !["Ответ занимает больше времени. Попробуйте ещё раз.", "Ошибка отправки. Попробуйте ещё раз.", "Не удалось получить ответ."].includes((m.content ?? "").trim());
+                    const bodyForDisplay = stripHelpDoctorSection(m.content ?? "");
                     const displayContent = showPreview
-                      ? truncateToPreview(m.content ?? "")
-                      : (m.content ?? "");
+                      ? truncateToPreview(bodyForDisplay)
+                      : bodyForDisplay;
 
                     return (
                       <div
@@ -428,7 +430,7 @@ export function TopicConsultationSheet({
                           <p className="break-words whitespace-pre-wrap">{m.content}</p>
                         ) : (
                           <>
-                            <HelpResponseBlocks content={displayContent} />
+                            <HelpResponseBlocks content={displayContent} messageId={m.id} />
                             {showPreview && onPremiumChipTap && (
                               <div className="mt-4 pt-3 border-t border-border/60 space-y-3">
                                 <p className="text-[13px] text-muted-foreground leading-snug">

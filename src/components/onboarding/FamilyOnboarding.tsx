@@ -33,6 +33,7 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
   const { subscriptionStatus, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
 
   const [step, setStep] = useState<1 | 2>(1);
 
@@ -42,6 +43,7 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
 
   const handleAddClick = () => {
     if (!canAddMore) {
+      setPaywallReason("add_child_limit");
       setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
       setShowPaywall(true);
       return;
@@ -55,6 +57,7 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
 
   const handleAddAnother = () => {
     if (!canAddMore) {
+      setPaywallReason("add_child_limit");
       setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
       setShowPaywall(true);
       return;

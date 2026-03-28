@@ -88,6 +88,7 @@ export default function ProfilePage() {
   } = useSubscription();
   const subscriptionLimits = getSubscriptionLimits(subscriptionStatus);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const [showMemberSheet, setShowMemberSheet] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
@@ -182,7 +183,8 @@ export default function ProfilePage() {
 
   const handleAddProfile = () => {
     if (members.length >= subscriptionLimits.maxProfiles) {
-      setPaywallCustomMessage("Добавление профилей доступно в Premium.");
+      setPaywallReason("add_child_limit");
+      setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }
@@ -191,7 +193,8 @@ export default function ProfilePage() {
 
   const handleMemberCardClick = (member: MembersRow) => {
     if (isFreeLocked && member.id !== primaryMemberId) {
-      setPaywallCustomMessage("Переключение между профилями детей доступно в Premium");
+      setPaywallReason("switch_child");
+      setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }
@@ -200,6 +203,8 @@ export default function ProfilePage() {
 
   const handleSubscriptionCta = () => {
     if (subscriptionStatus === "free") {
+      setPaywallReason("fallback");
+      setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }
@@ -275,7 +280,6 @@ export default function ProfilePage() {
             status={subscriptionStatus}
             accountEmail={user?.email ?? undefined}
             onEditClick={handleOpenNameModal}
-            freePlanLine="5 запросов в день · 1 профиль"
             trialUntilFormatted={trialUntil ? formatSubscriptionEndDate(trialUntil) : null}
             expiresAtFormatted={expiresAt ? formatSubscriptionEndDate(expiresAt) : null}
             onSubscriptionCta={handleSubscriptionCta}
@@ -314,7 +318,8 @@ export default function ProfilePage() {
                 const handleTeaserClick = (e: React.MouseEvent) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setPaywallCustomMessage("Предпочтения (любит / не любит) — настройте в Premium.");
+                  setPaywallReason("preferences_locked");
+                  setPaywallCustomMessage(null);
                   setShowPaywall(true);
                 };
                 return (

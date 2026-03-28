@@ -1,7 +1,7 @@
 import { useState, useRef, forwardRef, useMemo, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ChefHat, Heart, BookOpen, AlertCircle, CalendarPlus } from "lucide-react";
+import { Trash2, ChefHat, Heart, BookOpen, CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -19,7 +19,8 @@ import { ingredientDisplayLabel, type IngredientItem } from "@/types/recipe";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
-import { HelpSectionCard, HelpWarningCard } from "@/components/help-ui";
+import { HelpSectionCard } from "@/components/help-ui";
+import { HelpDoctorReminderLine } from "@/components/help/HelpDoctorReminderLine";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
@@ -36,6 +37,7 @@ import {
   saveShareRef,
   getShareRecipeUrl,
 } from "@/utils/usageEvents";
+import { shouldShowHelpDoctorReminder, stripHelpDoctorSection } from "@/utils/stripHelpDoctorSection";
 
 const UUID_REGEX = /\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
 
@@ -58,17 +60,6 @@ function getTextForDisplay(content: string): string {
 /** Заменяет [uuid] на markdown-ссылку article:uuid для рендера кнопки «Читать статью». */
 function injectArticleLinks(text: string): string {
   return text.replace(UUID_REGEX, (_, id) => `[Читать статью](article:${id})`);
-}
-
-/** Разбивает текст ответа Help на основной блок и блок "К врачу" / "Когда к врачу" / "Срочно к врачу" (если есть). */
-function splitHelpContent(content: string): { main: string; doctorPart: string | null } {
-  const re = /(?:^|\n)\s*(?:\*\*)?(?:К\s+врачу\s*:?|Когда\s+к\s+врачу|Срочно\s+к\s+врачу|К\s+врачу\s+если)(?:\*\*)?\s*:?\s*\n/i;
-  const match = content.match(re);
-  if (!match) return { main: content.trim(), doctorPart: null };
-  const idx = content.indexOf(match[0]);
-  const main = content.slice(0, idx).trim();
-  const doctorPart = content.slice(idx + match[0].length).trim();
-  return { main, doctorPart: doctorPart || null };
 }
 
 interface ChatMessageProps {
@@ -191,6 +182,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const chatMemberId = memberId ?? null;
     const setShowPaywall = useAppStore((s) => s.setShowPaywall);
     const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+    const setPaywallReason = useAppStore((s) => s.setPaywallReason);
     const { toast } = useToast();
     const location = useLocation();
     const planSlotState = (location.state as { fromPlanSlot?: boolean; plannedDate?: string; mealType?: string; memberId?: string } | null) ?? null;
@@ -238,7 +230,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       }
       // Free: лимит 10 избранных
       if (!showChefTip && favorites.length >= (favoritesLimit ?? 10)) {
-        setPaywallCustomMessage("Добавьте всю семью в Premium — безлимитное избранное и история.");
+        setPaywallReason("favorites_limit");
+        setPaywallCustomMessage(null);
         setShowPaywall(true);
         return;
       }
@@ -489,7 +482,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             ) : role === "assistant" ? (
               <div className={`chat-message-content text-xs select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-foreground prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-foreground prose-strong:text-foreground [&>*]:text-foreground ${forcePlainText ? "consultationCard-inner" : ""}`}>
                 {forcePlainText ? (() => {
-                  const { main, doctorPart } = splitHelpContent(displayWithArticleLinks);
+                  const main = stripHelpDoctorSection(displayWithArticleLinks);
                   const markdownProps = {
                     remarkPlugins: [remarkGfm] as const,
                     components: {
@@ -520,19 +513,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       },
                     },
                   };
+                  const showDoctorReminder = shouldShowHelpDoctorReminder(id);
                   return (
                     <>
                       <ReactMarkdown {...markdownProps}>{main}</ReactMarkdown>
-                      {doctorPart != null && (
-                        <HelpWarningCard
-                          className="mt-3"
-                          icon={<AlertCircle className="w-4 h-4 text-primary shrink-0" aria-hidden />}
-                        >
-                          <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-typo-muted">
-                            <ReactMarkdown {...markdownProps}>{doctorPart}</ReactMarkdown>
-                          </div>
-                        </HelpWarningCard>
-                      )}
+                      {showDoctorReminder ? <HelpDoctorReminderLine /> : null}
                       <p className="consultationDisclaimer">Это справочная информация.</p>
                     </>
                   );
@@ -641,7 +626,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setPaywallCustomMessage("Добавление в план доступно в Premium.");
+                          setPaywallReason("plan_week_locked");
+                          setPaywallCustomMessage(null);
                           setShowPaywall(true);
                         }}
                         className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all active:scale-95"

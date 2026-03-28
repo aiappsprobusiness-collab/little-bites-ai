@@ -12,6 +12,7 @@ interface MemberCarouselProps {
 export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselProps) {
   const { members, selectedMemberId, setSelectedMemberId, primaryMemberId, isFreeLocked, formatAge, isLoading } = useFamily();
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
 
   if (isLoading) {
     return (
@@ -48,7 +49,8 @@ export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselP
 
         const handleClick = () => {
           if (isLockedForFree) {
-            setPaywallCustomMessage("Переключение между профилями детей доступно в Premium");
+            setPaywallReason("switch_child");
+            setPaywallCustomMessage(null);
             useAppStore.getState().setShowPaywall(true);
             return;
           }

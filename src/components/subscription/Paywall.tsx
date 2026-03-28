@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Crown, Check, Heart } from "lucide-react";
@@ -7,7 +7,8 @@ import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
-// Единый источник цен с бэкендом (create-payment)
+import { getPaywallReasonCopy, resolvePaywallReason } from "@/utils/paywallReasonCopy";
+import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
 import pricing from "../../../supabase/functions/create-payment/pricing.json";
 
 interface PaywallProps {
@@ -16,15 +17,14 @@ interface PaywallProps {
   onSubscribe?: () => void;
 }
 
-const FEATURES = [
-  "Меню, адаптированное под вашего ребёнка",
-  "Замена любого блюда",
-  "До 10 профилей детей",
-  "Несколько аллергий на профиль",
-  "Предпочтения (любит / не любит)",
-  "Все 8 блоков «Помощь маме»",
-  "Безлимитный AI",
-] as const;
+/** На экране показываем 2 пункта — укладываемся в высоту без скролла */
+const BULLET_CAP = 2;
+
+function trialAccentLabel(days: number): string {
+  if (days === 1) return "1 день полного доступа бесплатно";
+  if (days >= 2 && days <= 4) return `${days} дня полного доступа бесплатно`;
+  return `${days} дней полного доступа бесплатно`;
+}
 
 export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
   const navigate = useNavigate();
@@ -43,15 +43,16 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
   } = useSubscription();
   const [pricingOption, setPricingOption] = useState<"month" | "year">("year");
   const paywallReason = useAppStore((s) => s.paywallReason);
-  /** Показывать форму оплаты, если нет доступа или активен trial (чтобы оформить подписку). */
   const showPayForm = !hasAccess || hasTrialAccess;
-  /** Триал уже был использован и истёк — не показывать кнопку Trial */
   const trialUnavailable = trialUsed && !hasTrialAccess;
+
+  const copy = useMemo(() => getPaywallReasonCopy(paywallReason), [paywallReason]);
+  const displayBullets = useMemo(() => copy.bullets.slice(0, BULLET_CAP), [copy.bullets]);
 
   useEffect(() => {
     if (isOpen) {
       trackUsageEvent("paywall_view", {
-        properties: { paywall_reason: paywallReason ?? "unknown" },
+        properties: { paywall_reason: resolvePaywallReason(paywallReason) },
       });
     }
   }, [isOpen, paywallReason]);
@@ -89,6 +90,11 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
     navigate("/subscription/manage");
   };
 
+  const payLine =
+    pricingOption === "month"
+      ? `${pricing.monthRub.toLocaleString("ru-RU")} ₽/мес`
+      : `${pricing.yearRub.toLocaleString("ru-RU")} ₽/год`;
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -96,171 +102,178 @@ export function Paywall({ isOpen, onClose, onSubscribe }: PaywallProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
           onClick={onClose}
         >
           <motion.div
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-            className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-gradient-to-b from-background via-background to-secondary/20 rounded-t-3xl sm:rounded-3xl p-6 pb-safe shadow-2xl"
+            transition={{ type: "spring", damping: 28, stiffness: 320 }}
+            className="w-full max-w-md max-h-[100dvh] sm:max-h-[min(100dvh,640px)] flex flex-col overflow-hidden bg-gradient-to-b from-background via-background to-secondary/20 rounded-t-2xl sm:rounded-2xl px-3 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Close button */}
             <button
               onClick={onClose}
-              className="absolute top-4 right-4 p-2 rounded-full bg-muted/50 hover:bg-muted transition-colors z-10"
+              className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-muted/50 hover:bg-muted transition-colors"
               aria-label="Закрыть"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
-            {/* Custom message (upsell из онбординга или при лимитах) */}
-            {paywallCustomMessage && (
-              <div className="mb-4 p-4 rounded-xl bg-primary/10 border border-primary/20 min-w-0">
-                <p className="text-typo-muted font-semibold text-foreground text-center leading-relaxed text-wrap whitespace-normal break-words">
-                  {paywallCustomMessage}
+            <div className="flex flex-col min-h-0 flex-1 gap-1.5 pt-1 pr-8">
+              {paywallCustomMessage && (
+                <div className="shrink-0 p-2 rounded-lg bg-primary/10 border border-primary/20 min-w-0">
+                  <p className="text-[11px] font-medium text-foreground text-center leading-snug line-clamp-3 whitespace-pre-line break-words">
+                    {paywallCustomMessage}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-center shrink-0 py-0.5">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-md shadow-amber-500/15">
+                  <Crown className="w-[18px] h-[18px] text-white" />
+                </div>
+              </div>
+
+              <div className="text-center shrink-0 space-y-0.5 px-0.5">
+                <h2 className="text-base font-semibold leading-tight text-foreground line-clamp-2">
+                  {copy.title}
+                </h2>
+                <p className="text-[11px] text-muted-foreground leading-snug line-clamp-2">
+                  {copy.body}
+                </p>
+                <p className="text-[11px] text-muted-foreground/90 leading-snug pt-0.5 line-clamp-1">
+                  {copy.subtitle}
                 </p>
               </div>
-            )}
 
-            {/* Crown / Premium icon — тёплый, заботливый */}
-            <div className="flex justify-center mb-5">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-lg shadow-amber-500/20">
-                <Crown className="w-8 h-8 text-white" />
-              </div>
+              <ul className="shrink-0 space-y-1 min-w-0 py-0.5">
+                {displayBullets.map((text, index) => (
+                  <li key={`${text}-${index}`} className="flex items-start gap-1.5 text-[10px] leading-snug min-w-0">
+                    <span className="w-3.5 h-3.5 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-px">
+                      <Check className="w-2 h-2 text-primary" strokeWidth={3} />
+                    </span>
+                    <span className="text-foreground/95 min-w-0 flex-1">{text}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            {/* Title */}
-            <div className="text-center mb-5">
-              <h2 className="text-typo-title font-semibold mb-2 text-foreground">
-                Продолжить без ограничений
-              </h2>
-              <p className="text-muted-foreground text-typo-muted leading-relaxed text-wrap whitespace-normal break-words">
-                Открыть неделю, замены, чат и «Помощь маме» — чтобы меню собиралось само.
-              </p>
-            </div>
-
-            {/* Features — чекмарки, тёплый тон */}
-            <div className="space-y-3 mb-6 min-w-0">
-              {FEATURES.map((text, index) => (
-                <motion.div
-                  key={text}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.05 * index }}
-                  className="flex items-start gap-3 text-typo-muted min-w-0"
-                >
-                  <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 text-primary" />
-                  </div>
-                  <span className="text-foreground min-w-0 flex-1 text-wrap whitespace-normal break-words">{text}</span>
-                </motion.div>
-              ))}
-            </div>
-
-            {showPayForm && (
-              <>
-                {/* Pricing */}
-                <div className="rounded-2xl border border-border bg-card/50 p-4 mb-5 space-y-3">
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPricingOption("month")}
-                      className={`flex-1 py-2.5 rounded-xl text-typo-muted font-semibold transition-colors ${
-                        pricingOption === "month"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
-                        {pricing.monthRub.toLocaleString("ru-RU")} ₽ / месяц
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPricingOption("year")}
-                      className={`flex-1 py-2.5 rounded-xl text-typo-muted font-semibold transition-colors ${
-                        pricingOption === "year"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                      }`}
-                    >
+            <div className="shrink-0 flex flex-col gap-1.5 pt-1.5 mt-auto border-t border-border/40">
+              {showPayForm && (
+                <>
+                  <div className="rounded-xl border border-border bg-card/50 p-2 space-y-1.5">
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setPricingOption("month")}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                          pricingOption === "month"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {pricing.monthRub.toLocaleString("ru-RU")} ₽ / мес
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPricingOption("year")}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+                          pricingOption === "year"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
                         {pricing.yearRub.toLocaleString("ru-RU")} ₽ / год
-                    </button>
+                      </button>
+                    </div>
+                    {pricingOption === "year" && (
+                      <p className="text-[10px] text-center text-muted-foreground leading-tight">
+                        Экономия ~17% · {Math.round(pricing.yearRub / 12).toLocaleString("ru-RU")} ₽/мес
+                      </p>
+                    )}
                   </div>
-                  {pricingOption === "year" && (
-                    <p className="text-typo-caption text-center text-muted-foreground">
-                      Экономия ~17% · {Math.round(pricing.yearRub / 12).toLocaleString("ru-RU")} ₽/месяц
+
+                  {!hasAccess && !trialUnavailable && (
+                    <p className="text-center text-[11px] font-semibold text-primary leading-tight">
+                      {trialAccentLabel(TRIAL_DURATION_DAYS)}
                     </p>
                   )}
-                </div>
 
-                {/* Trial: при активном trial — остаток (trialRemainingDays); при уже использованном — текст без кнопки */}
-                {hasTrialAccess && trialRemainingDays != null && (
-                  <p className="text-center text-typo-muted text-muted-foreground mb-3">
-                    Осталось {trialRemainingDays} {trialRemainingDays === 1 ? "день" : trialRemainingDays < 5 ? "дня" : "дней"}
-                  </p>
-                )}
-                {trialUnavailable && (
-                  <p className="text-center text-typo-muted text-muted-foreground mb-3">Триал уже использован</p>
-                )}
-                {!hasAccess && !trialUnavailable && (
+                  {hasTrialAccess && trialRemainingDays != null && (
+                    <p className="text-center text-[10px] text-muted-foreground">
+                      Осталось {trialRemainingDays}{" "}
+                      {trialRemainingDays === 1 ? "день" : trialRemainingDays < 5 ? "дня" : "дней"}
+                    </p>
+                  )}
+                  {trialUnavailable && (
+                    <p className="text-center text-[10px] text-muted-foreground">Триал уже использован</p>
+                  )}
+
+                  {!hasAccess && !trialUnavailable && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="w-full h-9 text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground"
+                      onClick={() => handleStartTrial()}
+                      disabled={isStartingTrial}
+                    >
+                      <Heart className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                      {isStartingTrial ? "Активация…" : "Попробовать бесплатно"}
+                    </Button>
+                  )}
+
+                  {hasTrialAccess && (
+                    <p className="text-center text-[10px] text-muted-foreground -mt-0.5">У вас активен trial</p>
+                  )}
+
                   <Button
-                    variant="default"
-                    size="lg"
-                    className="w-full mb-3 h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl"
-                    onClick={() => handleStartTrial()}
-                    disabled={isStartingTrial}
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-9 py-1 rounded-lg flex flex-col gap-0 leading-none min-h-9"
+                    onClick={handlePayPremium}
+                    disabled={isStartingPayment}
                   >
-                    <Heart className="w-5 h-5 mr-2" />
-                    {isStartingTrial ? "Активация…" : "Включить Trial (полный доступ)"}
+                    {isStartingPayment ? (
+                      <span className="text-sm">Перенаправление…</span>
+                    ) : (
+                      <>
+                        <span className="text-sm font-semibold leading-tight">Открыть полный доступ</span>
+                        <span className="text-[10px] font-normal text-muted-foreground mt-0.5">{payLine}</span>
+                      </>
+                    )}
                   </Button>
-                )}
 
-                {/* CTA: Continue with Premium (month/year) — редирект на Т-Банк */}
-                {hasTrialAccess && (
-                  <p className="text-center text-typo-caption text-muted-foreground mb-2">У вас активен trial</p>
-                )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full h-8 text-xs text-muted-foreground hover:text-foreground rounded-lg"
+                    onClick={handleContinueFree}
+                  >
+                    {paywallCustomMessage ? "Позже" : "Остаться на Free"}
+                  </Button>
+                </>
+              )}
+
+              {isPremium && (
                 <Button
                   variant="outline"
-                  size="lg"
-                  className="w-full mb-3 h-11 rounded-xl"
-                  onClick={handlePayPremium}
-                  disabled={isStartingPayment}
+                  size="sm"
+                  className="w-full h-9 rounded-lg text-sm"
+                  onClick={handleManageSubscription}
                 >
-                  {isStartingPayment ? "Перенаправление…" : `Продолжить с Premium — ${pricingOption === "month" ? `${pricing.monthRub} ₽/мес` : `${pricing.yearRub.toLocaleString("ru-RU")} ₽/год`}`}
+                  Управлять подпиской
                 </Button>
+              )}
 
-                {/* CTA: Позже / Остаться на Free (при лимите показываем «Позже») */}
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  className="w-full h-11 text-muted-foreground hover:text-foreground rounded-xl"
-                  onClick={handleContinueFree}
-                >
-                  {paywallCustomMessage ? "Позже" : "Остаться на Free"}
-                </Button>
-              </>
-            )}
-
-            {isPremium && (
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full h-12 rounded-xl"
-                onClick={handleManageSubscription}
-              >
-                Управлять подпиской
-              </Button>
-            )}
-
-            {/* Legal */}
-            <p className="text-typo-caption text-center text-muted-foreground mt-5">
-              Оплачивая подписку, вы соглашаетесь с{" "}
-              <a href="/terms" className="underline hover:text-foreground">Пользовательским соглашением</a>,{" "}
-              <a href="/privacy" className="underline hover:text-foreground">Политикой конфиденциальности</a> и{" "}
-              <a href="/subscription/terms" className="underline hover:text-foreground">Условиями подписки</a>.
-            </p>
+              <p className="text-[9px] text-center text-muted-foreground leading-tight px-1 pt-0.5">
+                Оплачивая подписку, вы соглашаетесь с{" "}
+                <a href="/terms" className="underline hover:text-foreground">условиями</a>,{" "}
+                <a href="/privacy" className="underline hover:text-foreground">конфиденциальностью</a> и{" "}
+                <a href="/subscription/terms" className="underline hover:text-foreground">подпиской</a>.
+              </p>
+            </div>
           </motion.div>
         </motion.div>
       )}

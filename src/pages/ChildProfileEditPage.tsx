@@ -43,6 +43,7 @@ export default function ChildProfileEditPage() {
   const { subscriptionStatus, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const limits = getSubscriptionLimits(subscriptionStatus);
   const isFree = subscriptionStatus === "free";
   const [name, setName] = useState("");
@@ -105,7 +106,8 @@ export default function ChildProfileEditPage() {
       const toAdd = parseTags(raw);
       if (!toAdd.length) return;
       if (activeAllergyCount >= limits.maxAllergiesPerProfile) {
-        setPaywallCustomMessage("Аллергии и исключения — в Trial");
+        setPaywallReason("allergies_locked");
+        setPaywallCustomMessage(null);
         setShowPaywall(true);
         return;
       }
@@ -127,7 +129,8 @@ export default function ChildProfileEditPage() {
     },
     setActive: (index: number, active: boolean) => {
       if (!hasAccess && active) {
-        setPaywallCustomMessage("Аллергии и исключения — в Trial");
+        setPaywallReason("allergies_locked");
+        setPaywallCustomMessage(null);
         setShowPaywall(true);
         return;
       }
@@ -145,7 +148,8 @@ export default function ChildProfileEditPage() {
     return Array.from(set).slice(0, max);
   }
   const openPaywallLikesDislikes = () => {
-    setPaywallCustomMessage("Предпочтения (любит / не любит) — в Premium.");
+    setPaywallReason("preferences_locked");
+    setPaywallCustomMessage(null);
     setShowPaywall(true);
   };
   const LIKES_GHOST_CHIPS = ["ягоды", "рыба", "овощи"];
@@ -280,7 +284,8 @@ export default function ChildProfileEditPage() {
       return;
     }
     if (activeAllergyCount > limits.maxAllergiesPerProfile) {
-      setPaywallCustomMessage("Аллергии и исключения — в Trial");
+      setPaywallReason("allergies_locked");
+      setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }
@@ -505,7 +510,7 @@ export default function ChildProfileEditPage() {
                               size="compact"
                               allowWrap
                               locked={isLocked}
-                              onLockedClick={isLocked ? () => { setPaywallCustomMessage("Аллергии и исключения — в Trial"); setShowPaywall(true); } : undefined}
+                              onLockedClick={isLocked ? () => { setPaywallReason("allergies_locked"); setPaywallCustomMessage(null); setShowPaywall(true); } : undefined}
                               removable={!isLocked}
                               onRemove={!isLocked ? () => allergiesHandlers.remove(i) : undefined}
                             />

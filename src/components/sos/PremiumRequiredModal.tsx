@@ -20,19 +20,20 @@ export function PremiumRequiredModal({
 }: PremiumRequiredModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Lock className="w-5 h-5 text-primary" />
+      <DialogContent className="sm:max-w-md p-4 gap-3">
+        <DialogHeader className="space-y-0">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <Lock className="w-4 h-4 text-primary shrink-0" />
             {title}
           </DialogTitle>
         </DialogHeader>
-        <p className="text-muted-foreground text-typo-muted">
-          Оформите подписку Premium, чтобы пользоваться этой функцией.
+        <p className="text-muted-foreground text-[11px] leading-snug">
+          Оформите Premium для этой функции.
         </p>
         <Button
           variant="default"
-          className="w-full"
+          size="sm"
+          className="w-full h-9 rounded-lg font-semibold"
           onClick={() => onOpenChange(false)}
         >
           Понятно

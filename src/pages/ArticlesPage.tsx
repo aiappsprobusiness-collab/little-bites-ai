@@ -6,6 +6,7 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Paywall } from "@/components/subscription/Paywall";
 import { useArticles, useArticle, CATEGORIES } from "@/hooks/useArticles";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAppStore } from "@/store/useAppStore";
 import { ArticleReaderModal } from "@/components/articles/ArticleReaderModal";
 import type { ArticlesRow, ArticleCategoryV2 } from "@/integrations/supabase/types-v2";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,8 @@ export default function ArticlesPage() {
     if (isLoadingUrlArticle) return;
     if (articleFromUrl) {
       if (articleFromUrl.is_premium && !hasAccess) {
+        useAppStore.getState().setPaywallReason("article_locked");
+        useAppStore.getState().setPaywallCustomMessage(null);
         setShowPaywall(true);
         setSearchParams((prev) => {
           const next = new URLSearchParams(prev);
@@ -53,6 +56,8 @@ export default function ArticlesPage() {
 
   const handleCardClick = (article: ArticlesRow) => {
     if (article.is_premium && !hasAccess) {
+      useAppStore.getState().setPaywallReason("article_locked");
+      useAppStore.getState().setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }
@@ -140,7 +145,14 @@ export default function ArticlesPage() {
         )}
       </div>
 
-      <Paywall isOpen={showPaywall} onClose={() => setShowPaywall(false)} />
+      <Paywall
+        isOpen={showPaywall}
+        onClose={() => {
+          setShowPaywall(false);
+          useAppStore.getState().setPaywallReason(null);
+          useAppStore.getState().setPaywallCustomMessage(null);
+        }}
+      />
       <ArticleReaderModal
         article={selectedArticle}
         open={readerOpen}

@@ -10,14 +10,20 @@
 
 | Файл | Назначение |
 |------|------------|
-| `src/pages/SosTiles.tsx` | Страница Help: **`MobileLayout` без хедера** (нет TopBar с заголовком вкладки — как на Плане/Чате/Избранном); **главный вход** — Hero с заголовком «Помощь маме» (см. ниже), затем компактный блок «Сегодня спрашивают», список тем по категориям, в самом низу страницы — дисклеймер про врача; sheet и paywall. `handleOpenWithMessage(text)` открывает sheet с заголовком «Помощь маме» и сообщением (в т.ч. для premium у Free — preview). При лимите — `onLimitReached`. Передаёт в sheet `popularQuestionTextIfPremium` для логики preview. |
+| `src/pages/SosTiles.tsx` | Страница Help: **`MobileLayout` без хедера**; Hero → «Сегодня спрашивают» → **две секции карточек** из `getHelpMonetizationSections()` («Популярные вопросы» = 2 free-сценария, «Разбор ситуаций» = остальные темы Premium). У Free тап по Premium-карточке **не открывает sheet** — только локальный paywall; deep-link `?scenario=` на premium без подписки — paywall и редирект на `/sos`. Free-сценарии открывают `TopicConsultationSheet` с заголовком `getTopicDisplayTitle`. |
+| `src/pages/SosScenarioScreen.tsx` | Полноэкранный сценарий `/sos/:scenarioKey`: при `requiredTier === "paid"` и `!hasAccess` — глобальный paywall (`setShowPaywall`) и возврат на `/sos`. |
+| `src/data/sosTopics.ts` | Конфиг тем: **`requiredTier`** `free` только у `food_refusal` и `urgent_help`; остальные — `paid`. **`displayTitle`** — короткий заголовок в списке и sheet. **`getHelpMonetizationSections()`** — порядок секций и тем для главной Help. |
 | `src/components/sos/SosHero.tsx` | Hero: заголовок «Помощь маме», подзаголовок «Что происходит с ребёнком?», placeholder «Например: ребёнок стал хуже есть», поле ввода и кнопка «Спросить», счётчик лимита (для Free), quick chips. Дисклеймер в Hero не показывается (перенесён в низ страницы). Для Free по тапу на premium‑чип — `onPremiumChipTap` (paywall); при отправке из поля ввода premium-текст открывается sheet и показывается preview. |
-| `src/components/sos/SosTopicGrid.tsx` | Сетка карточек тем по секциям: иконка, заголовок, подзаголовок (line-clamp-2), для Premium-тем — бейдж Star + Premium, по клику locked → paywall. |
-| `src/components/help/TopicConsultationSheet.tsx` | Нижний sheet с чатом по теме: чипсы (Free сначала, premium с иконкой Star), input, история, retry. **Preview для Free:** при ответе на premium-вопрос (из «Сегодня спрашивают» или premium-чипа) показываются первые 2–3 абзаца и блок «Продолжение ответа доступно в расширенной консультации» + кнопка «Получить полный разбор (Premium)» → paywall. Запрос для premium-вопроса у Free отправляется как обычно; обрезка только в UI. При `LIMIT_REACHED` — текст лимита в чате и `onLimitReached`. **Лента и composer (мобильный UX):** автоскролл к низу после отправки и при росте контента, если пользователь не ушёл вверх (порог как во вкладке «Чат»); поле ввода — общий helper `applyTextareaAutosize` (тот же max-height, что у `ChatInputBar`). |
+| `src/components/sos/SosTopicGrid.tsx` | Сетка карточек: заголовок из `getTopicDisplayTitle`; у Free на Premium-темах — бейдж Lock + Star + «Premium», лёгкое затемнение карточки; клик → `onLockedSelect()` (paywall). У подписчиков бейджей нет. |
+| `src/components/help/TopicConsultationSheet.tsx` | Нижний sheet с чатом по теме: чипсы (Free сначала, premium с иконкой Star), input, история, retry. **Preview для Free:** при ответе на premium-вопрос (из «Сегодня спрашивают» или premium-чипа) показываются первые 2–3 абзаца и блок «Продолжение ответа доступно в расширенной консультации» + кнопка «Получить полный разбор (Premium)» → paywall. Запрос для premium-вопроса у Free отправляется как обычно; обрезка только в UI. При `LIMIT_REACHED` — текст лимита в чате и `onLimitReached`. **Лента и composer (мобильный UX):** автоскролл к низу после отправки и при росте контента, если пользователь не ушёл вверх (порог как во вкладке «Чат»); поле ввода — общий helper `applyTextareaAutosize` (тот же max-height, что у `ChatInputBar`). Перед превью и рендером ответа из текста **убирается** секция «к врачу» (п.3 промпта модели), см. `stripHelpDoctorSection`. |
+| `src/components/help/HelpResponseBlocks.tsx` | Разбор ответа на блоки «Коротко» / «Что можно сделать прямо сейчас» (карточки с иконками). Секция **«К врачу если»** отдельным блоком **не выделяется**; текст после её заголовка отрезается в UI. В конце ответа у **~50% сообщений** (детерминированно по `messageId`) показывается мягкая строка со ссылкой на тему `urgent_help` (`HelpDoctorReminderLine`). |
+| `src/utils/stripHelpDoctorSection.ts` | `stripHelpDoctorSection` — удаляет из отображаемого текста всё от строки-заголовка секции «к врачу» до конца; `shouldShowHelpDoctorReminder` — хеш id сообщения для показа мягкой строки. |
+| `src/components/help/HelpDoctorReminderLine.tsx` | Одна строка вторичного стиля: напоминание про консультацию + ссылка «Когда обращаться к врачу» → `/sos?scenario=urgent_help`. |
+| `src/components/chat/ChatMessage.tsx` | В режиме `forcePlainText` (вкладка «Чат», режим help): та же логика отрезания секции «к врачу» и редкой мягкой строки, без карточки `HelpWarningCard`. |
 | `src/utils/scheduleScrollContainerToBottom.ts` | Отложенная прокрутка контейнера сообщений к низу (двойной rAF + `setTimeout` 0 и 80ms) — стабильно после новых сообщений и при появлении клавиатуры Android. |
 | `src/utils/textareaAutosize.ts` | Общая автовысота textarea (clamp по max px, `overflow-y` hidden / auto). Используют `ChatInputBar` и `TopicConsultationSheet`. |
-| `src/data/helpTopicChips.ts` | Quick chips для topic `"quick"`: список с полями `label`, `text`, `access: "free" \| "paid"`. **Порядок по частоте запросов:** Не хочет есть, Новый продукт, Стул малыша, Срыгивания, Аллергия, Режим кормления, затем остальные. Для темы `new_food` («Как безопасно ввести новый продукт») порядок чипсов в UI: Сколько в первый раз → Как понять, что нет аллергии → Порядок ввода овощей → Как ввести яйцо → Рыба: когда и как. Экспорт: `getPremiumQuickChipTexts()`, `isPremiumQuickChipText(text)`. |
-| `src/features/help/config/popularQuestions.ts` | Пул популярных вопросов для «Сегодня спрашивают»: тип `PopularQuestion` (id, text, category, access). Функция `getPopularQuestionForToday({ hasAccess, date? })`: ротация 1 раз в день по категории дня (Пн=nutrition, Вт=baby, Ср=allergy, Чт/Вс=routine, Пт=nutrition, Сб=baby) и индексу дня в году. Free видит только вопросы с `access: "free"` в карточке; при открытии по deep-link или с premium-вопросом дня (если доступ меняется) возможен preview. |
+| `src/data/helpTopicChips.ts` | Quick chips для topic `"quick"`: **`access` и порядок как на главной** — сначала все `free` (Не хочет есть, Когда срочно к врачу), затем все `paid` (Новый продукт → … → Наша тарелка). Экспорт: `getPremiumQuickChipTexts()`, `isPremiumQuickChipText(text)`. |
+| `src/features/help/config/popularQuestions.ts` | Пул «Сегодня спрашивают»: у **Free** в ротации только вопросы с `access: "free"` (сценарии «не ест» / срочно к врачу и близкие формулировки); остальные помечены `premium`. Тап по premium при `!hasAccess` на главной Help открывает paywall без sheet. |
 | `src/hooks/useDeepSeekAPI.tsx` | Запрос к `deepseek-chat`. При 429 и `code === 'LIMIT_REACHED'` или `error === 'LIMIT_REACHED'` бросает `Error('LIMIT_REACHED')` (payload опционален). При успешном ответе help — вызывает `refetchUsage()`. |
 | `src/hooks/useSubscription.tsx` | `helpRemaining`, `helpLimitExceeded` из `get_usage_count_today(..., "help")` и `limits.helpDailyLimit`. `refetchUsage()` инвалидирует запросы `["usage-help-today", user?.id]` и др. |
 
@@ -34,10 +40,10 @@
 
 ## 3. Quick chips (Hero и chat sheet)
 
-- **Данные:** `helpTopicChips.ts` — массив с `access: "free" \| "paid"`. **Порядок по частоте запросов:** 1) Не хочет есть, 2) Новый продукт, 3) Стул малыша, 4) Срыгивания, 5) Аллергия, 6) Режим кормления, затем «Когда срочно к врачу», «Наша тарелка».
-- **Hero:** при тапе по чипу: если `access === "paid"` и `!hasAccess` → `onPremiumChipTap()` (paywall), иначе `onOpenWithMessage(chip.text)`. Premium‑чипы для Free отображаются с иконкой Star (Lucide) и лёгким amber‑стилем.
-- **SosTiles:** `handleOpenWithMessage(text)` всегда открывает sheet и подставляет текст (в т.ч. для premium); блокировки по premium нет — у Free показывается preview ответа в sheet.
-- **TopicConsultationSheet:** при тапе по чипу: если `access === "paid"` и `!hasAccess` → `onPremiumChipTap()`, иначе вставка текста в input. При отправке premium-вопроса запрос выполняется; для Free после ответа показывается preview (первые 2–3 абзаца) и CTA «Получить полный разбор (Premium)». В sheet чипсы сортируются: Free сначала, потом Premium.
+- **Данные:** `helpTopicChips.ts` — массив с `access: "free" \| "paid"`. **Порядок монетизации:** сначала оба free-чипа, затем все premium в фиксированном списке (см. файл).
+- **Hero:** при тапе по premium-чипу у Free → **только** `onPremiumChipTap()` (paywall), без открытия sheet. Free-чипы → `onOpenWithMessage(chip.text)`.
+- **SosTiles:** открытие sheet с произвольным текстом из поля ввода по-прежнему возможно; превью для «случайно введённого» premium-текста в quick-sheet — прежняя логика sheet (если текст совпал с premium-чипом).
+- **TopicConsultationSheet** (topic `quick`): сортировка чипсов — free первыми; тап по premium без доступа → `onPremiumChipTap` (paywall).
 
 ---
 
@@ -45,19 +51,19 @@
 
 - **Расположение:** ниже Hero («Помощь маме»); визуально не конкурирует с ним — компактный, неакцентный.
 - **Вопрос дня:** `getPopularQuestionForToday({ hasAccess })`. Ротация раз в день, детерминирована по дате; категория по дню недели; внутри категории — по дню года. Free в блоке видит только вопросы с `access: "free"`; при смене доступа или тестах возможен premium-вопрос.
-- **Клик:** `handleOpenWithMessage(popularQuestion.text)` — открывается sheet с подставленным текстом. У Free при premium-вопросе дня (если показывается) — запрос отправляется, показывается preview ответа и CTA на paywall.
+- **Клик:** при `!hasAccess && popularQuestion.access === "premium"` — открывается paywall; иначе `handleOpenWithMessage(popularQuestion.text)`.
 - **Лимит:** при `helpLimitExceeded` кнопка блока `disabled`.
 - **Вёрстка:** компактный информационный блок (rounded-xl, border border-border/80, bg-muted/20), заголовок «Сегодня спрашивают» (text-[11px], uppercase), текст вопроса: `text-sm text-foreground/90`, `line-clamp-2`; без тяжёлой карточки и акцентной иконки.
 - **Передача в sheet:** при `!hasAccess && popularQuestion.access === "premium"` в sheet передаётся `popularQuestionTextIfPremium: popularQuestion.text` для отображения preview.
 
 ---
 
-## 4.1. Карточки тем (SosTopicGrid)
+## 4.1. Карточки тем (SosTopicGrid) и секции главной
 
-- **Файл:** `src/components/sos/SosTopicGrid.tsx`. Список тем по секциям на странице Help.
-- **Иконки:** используется единый компонент **IconBadge** (`src/components/ui/IconBadge.tsx`): скруглённая плашка (~36px, radius 10px) с тонкой SVG-иконкой из **lucide-react**. Иконка и оттенок плашки задаются в `src/data/sosTopics.ts` полями `icon` и `badgeVariant` (sage, sand, apricot, mint, blue, amber). Темы: питание — sage/sand, малыш/здоровье — apricot, аллергия/срочная помощь — blue. Без emoji в карточках.
-- **Premium-темы:** для Free у тем с `requiredTier === "paid"` отображается бейдж «Star + Premium» (иконка Star из Lucide, стиль amber: `text-amber-700 bg-amber-100/80`). По клику — `onLockedSelect()` (paywall).
-- **Вёрстка:** карточки компактные (padding p-3, gap 2.5), заголовок и подзаголовок по 2 строки макс. (`line-clamp-2`), слева IconBadge, стрелка 16px. Цель — помещать на экран 4–5 карточек.
+- **Секции:** не фильтры «Питание/Малыш», а две группы из `getHelpMonetizationSections()`: **«Популярные вопросы»** (`food_refusal`, `urgent_help`) и **«Разбор ситуаций»** (остальные темы).
+- **Иконки:** **IconBadge** + поля `icon` / `badgeVariant` в `sosTopics.ts`.
+- **Premium для Free:** бейдж Lock + Star + «Premium», слегка приглушённая карточка; клик → paywall (sheet темы не открывается).
+- **Подписчики:** без бейджей, обычный вид; клик открывает sheet сценария.
 
 ---
 
@@ -92,6 +98,12 @@
 
 - **Скролл:** контейнер списка сообщений — `overflow-y-auto`; после отправки пользователем выставляется флаг «держаться у низа»; при прокрутке вверх дальше порога (~120px от низа, как в `ChatPage`) флаг сбрасывается — чтение истории без принудительного скролла. Пока флаг активен, после изменений `messages` / `isSending` вызывается `scheduleScrollContainerToBottom` (`scrollTop = scrollHeight - clientHeight` с отложенными проходами).
 - **Поле ввода:** `applyTextareaAutosize` + `TEXTAREA_AUTOSIZE_DEFAULT_MAX_PX` (120) — совпадает с нижней панелью вкладки «Чат»; пересчёт в `useLayoutEffect` при изменении `input` и на `onInput` (в т.ч. после вставки текста с чипсы).
+
+### 7.1 Секция «к врачу» в ответе модели (только UI)
+
+- Промпт SOS по-прежнему просит структуру с п.3 «К врачу если»; **генерация на бэкенде не менялась**.
+- На клиенте заголовок и весь текст после него **не показываются** (список «красных флагов» из ответа пользователю не выводится).
+- Вместо отдельного предупреждающего блока с иконкой — у примерно половины сообщений внизу добавляется **спокойная** строка `text-muted-foreground` со ссылкой на тему **«Когда срочно обращаться к врачу?»** (`urgent_help`, маршрут `/sos?scenario=urgent_help`); подпись ссылки в UI: «Когда обращаться к врачу».
 
 ---
 

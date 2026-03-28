@@ -20,15 +20,20 @@ export default function FoodDiary() {
   const { hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
 
   // Нет доступа (free/expired): при открытии дневника — Paywall
   useEffect(() => {
     if (!hasAccess) {
+      setPaywallReason("sos_premium_feature");
       setPaywallCustomMessage("Готовьте для всех детей сразу с Premium — дневник и анализ тарелки.");
       setShowPaywall(true);
     }
-    return () => setPaywallCustomMessage(null);
-  }, [hasAccess, setShowPaywall, setPaywallCustomMessage]);
+    return () => {
+      setPaywallCustomMessage(null);
+      setPaywallReason(null);
+    };
+  }, [hasAccess, setShowPaywall, setPaywallCustomMessage, setPaywallReason]);
   const { selectedMember, members } = useFamily();
   const { logs, isLoading: logsLoading } = usePlateLogs(30);
   const [input, setInput] = useState("");

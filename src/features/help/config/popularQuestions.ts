@@ -15,19 +15,7 @@ export type PopularQuestion = {
 
 /** Пул популярных вопросов. Порядок влияет на ротацию внутри категории. */
 export const POPULAR_QUESTIONS: PopularQuestion[] = [
-  // Free
-  {
-    id: "free-new-product",
-    text: "Как безопасно вводить новый продукт?",
-    category: "nutrition",
-    access: "free",
-  },
-  {
-    id: "free-stool-frequency",
-    text: "Сколько раз в день должен быть стул у малыша?",
-    category: "baby",
-    access: "free",
-  },
+  // Free (только сценарии, доступные без Premium на главной Help)
   {
     id: "free-eating-less",
     text: "Ребёнок стал хуже есть — это норма?",
@@ -35,24 +23,48 @@ export const POPULAR_QUESTIONS: PopularQuestion[] = [
     access: "free",
   },
   {
+    id: "free-when-doctor-urgent",
+    text: "Когда срочно обращаться к врачу?",
+    category: "baby",
+    access: "free",
+  },
+  {
+    id: "free-refusal-general",
+    text: "Ребёнок не хочет есть — что делать?",
+    category: "baby",
+    access: "free",
+  },
+  // Premium
+  {
+    id: "free-new-product",
+    text: "Как безопасно вводить новый продукт?",
+    category: "nutrition",
+    access: "premium",
+  },
+  {
+    id: "free-stool-frequency",
+    text: "Сколько раз в день должен быть стул у малыша?",
+    category: "baby",
+    access: "premium",
+  },
+  {
     id: "free-product-not-suitable",
     text: "Как понять, что продукт не подошёл?",
     category: "nutrition",
-    access: "free",
+    access: "premium",
   },
   {
     id: "free-hard-stool",
     text: "Стул стал плотным — это запор или норма?",
     category: "baby",
-    access: "free",
+    access: "premium",
   },
   {
     id: "free-schedule-or-appetite",
     text: "Нужно ли кормить по режиму или по аппетиту?",
     category: "routine",
-    access: "free",
+    access: "premium",
   },
-  // Premium
   {
     id: "premium-vegetables",
     text: "Ребёнок не хочет есть овощи — что делать?",

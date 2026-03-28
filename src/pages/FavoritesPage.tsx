@@ -38,6 +38,7 @@ export default function FavoritesPage() {
   const { hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const locationState = location.state as {
     tab?: FavoritesTab;
     fromPlanSlot?: boolean;
@@ -76,7 +77,8 @@ export default function FavoritesPage() {
 
   const openShoppingList = () => {
     if (!hasAccess) {
-      setPaywallCustomMessage("Список продуктов доступен в Premium");
+      setPaywallReason("shopping_list");
+      setPaywallCustomMessage(null);
       setShowPaywall(true);
       return;
     }

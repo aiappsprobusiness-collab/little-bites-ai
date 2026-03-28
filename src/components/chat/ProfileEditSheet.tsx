@@ -84,6 +84,7 @@ export function ProfileEditSheet({
   const { isPremium, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const [name, setName] = useState("");
   const [birthDate, setBirthDate] = useState("");
   const [allergies, setAllergies] = useState<string[]>([]);
@@ -135,7 +136,8 @@ export function ProfileEditSheet({
     ...baseAllergiesHandlers,
     add: (raw: string) => {
       if (!isPremium && allergies.length >= 1) {
-        setPaywallCustomMessage(FAMILY_LIMIT_MESSAGE);
+        setPaywallReason("allergies_locked");
+        setPaywallCustomMessage(null);
         setShowPaywall(true);
         return;
       }
@@ -195,6 +197,7 @@ export function ProfileEditSheet({
 
     if (isCreate) {
       if (!hasAccess && members.length >= 1) {
+        setPaywallReason("add_child_limit");
         setPaywallCustomMessage(FAMILY_LIMIT_MESSAGE);
         setShowPaywall(true);
         return;

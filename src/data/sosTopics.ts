@@ -39,6 +39,8 @@ export interface SosTopicConfig {
   requiresPremium: boolean;
   /** Тир для доступа: paid = только Premium/Trial. Используется вместо индекса. */
   requiredTier: HelpRequiredTier;
+  /** Короткий заголовок на главной Help и в sheet (если не задан — `title`). */
+  displayTitle?: string;
   chipExamples: string[];
   /** Контент детальной страницы */
   intro: string[];
@@ -64,8 +66,9 @@ const TOPICS: SosTopicConfig[] = [
     icon: Carrot,
     badgeVariant: "sage",
     action: "sos",
-    requiresPremium: false,
-    requiredTier: "free",
+    displayTitle: "Новый продукт",
+    requiresPremium: true,
+    requiredTier: "paid",
     chipExamples: [
       "Как вводить яйцо?",
       "Можно ли рыбу в 8 месяцев?",
@@ -119,6 +122,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: AlertCircle,
     badgeVariant: "blue",
     action: "sos",
+    displayTitle: "Аллергия",
     requiresPremium: true,
     requiredTier: "paid",
     chipExamples: [
@@ -172,8 +176,9 @@ const TOPICS: SosTopicConfig[] = [
     icon: Activity,
     badgeVariant: "apricot",
     action: "sos",
-    requiresPremium: false,
-    requiredTier: "free",
+    displayTitle: "Стул малыша",
+    requiresPremium: true,
+    requiredTier: "paid",
     chipExamples: [
       "Зеленый стул 2 дня",
       "Жидкий после прикорма",
@@ -225,6 +230,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: Droplets,
     badgeVariant: "apricot",
     action: "sos",
+    displayTitle: "Срыгивания",
     requiresPremium: true,
     requiredTier: "paid",
     chipExamples: [
@@ -277,8 +283,9 @@ const TOPICS: SosTopicConfig[] = [
     icon: UtensilsCrossed,
     badgeVariant: "apricot",
     action: "sos",
-    requiresPremium: true,
-    requiredTier: "paid",
+    displayTitle: "Не хочет есть",
+    requiresPremium: false,
+    requiredTier: "free",
     chipExamples: [
       "Отказывается от прикорма",
       "Ест только пюре",
@@ -329,6 +336,7 @@ const TOPICS: SosTopicConfig[] = [
     icon: Clock,
     badgeVariant: "sand",
     action: "sos",
+    displayTitle: "Режим кормления",
     requiresPremium: true,
     requiredTier: "paid",
     chipExamples: [
@@ -382,6 +390,7 @@ const TOPICS: SosTopicConfig[] = [
     badgeVariant: "sand",
     action: "sos",
     prefillText: "Составь дневник питания и дай рекомендации",
+    displayTitle: "Наша тарелка",
     requiresPremium: true,
     requiredTier: "paid",
     chipExamples: [
@@ -432,8 +441,9 @@ const TOPICS: SosTopicConfig[] = [
     icon: AlertTriangle,
     badgeVariant: "blue",
     action: "sos",
-    requiresPremium: true,
-    requiredTier: "paid",
+    displayTitle: "Когда срочно к врачу",
+    requiresPremium: false,
+    requiredTier: "free",
     chipExamples: [
       "Кровь в стуле",
       "Высокая температура и понос",
@@ -487,20 +497,8 @@ export const SOS_TOPIC_ORDER: string[] = [
   "routine",
 ];
 
-/** Темы блока «Быстрая помощь» — доступны всем. */
-export const QUICK_HELP_TOPIC_IDS: string[] = [
-  "food_refusal",
-  "allergy",
-  "constipation_diarrhea",
-];
-
-/** Темы блока «Режим и развитие» — только Premium. */
-export const REGIME_TOPIC_IDS: string[] = [
-  "spitting_up",
-  "routine",
-  "food_diary",
-  "urgent_help",
-];
+/** Бесплатные сценарии Help (остальные темы — Premium). */
+export const QUICK_HELP_TOPIC_IDS: string[] = ["food_refusal", "urgent_help"];
 
 export function getSosTopicConfig(id: string): SosTopicConfig | null {
   return TOPICS.find((t) => t.id === id) ?? null;
@@ -513,6 +511,34 @@ export function getAllSosTopics(): SosTopicConfig[] {
 export function getSosTopicsInOrder(): SosTopicConfig[] {
   const byId = new Map(TOPICS.map((t) => [t.id, t]));
   return SOS_TOPIC_ORDER.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];
+}
+
+export function getTopicDisplayTitle(topic: SosTopicConfig): string {
+  return topic.displayTitle ?? topic.title;
+}
+
+const HELP_SCREEN_FREE_TOPIC_IDS = ["food_refusal", "urgent_help"] as const;
+const HELP_SCREEN_PREMIUM_TOPIC_IDS = [
+  "new_food",
+  "constipation_diarrhea",
+  "spitting_up",
+  "allergy",
+  "routine",
+  "food_diary",
+] as const;
+
+/** Темы только Premium (справочный список для аналитики/доков). */
+export const REGIME_TOPIC_IDS: string[] = [...HELP_SCREEN_PREMIUM_TOPIC_IDS];
+
+/** Две секции главной «Помощь маме»: бесплатные сценарии сверху, затем Premium. */
+export function getHelpMonetizationSections(): { title: string; topics: SosTopicConfig[] }[] {
+  const byId = new Map(TOPICS.map((t) => [t.id, t]));
+  const free = HELP_SCREEN_FREE_TOPIC_IDS.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];
+  const premium = HELP_SCREEN_PREMIUM_TOPIC_IDS.map((id) => byId.get(id)).filter(Boolean) as SosTopicConfig[];
+  return [
+    { title: "Популярные вопросы", topics: free },
+    { title: "Разбор ситуаций", topics: premium },
+  ];
 }
 
 /** Категория темы для фильтра на главной Help. */

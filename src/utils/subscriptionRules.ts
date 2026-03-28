@@ -4,6 +4,9 @@
  * Trial = 100% функционал Premium (3 дня). Free — ограничения.
  */
 
+/** Длительность trial при активации по кнопке (см. миграции profiles_v2.trial_until). */
+export const TRIAL_DURATION_DAYS = 3;
+
 export type SubscriptionTier = "free" | "trial" | "premium";
 
 export interface SubscriptionLimitsConfig {
