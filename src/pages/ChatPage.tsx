@@ -26,7 +26,7 @@ import type { Profile } from "@/domain/generation";
 import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type ParsedRecipe } from "@/utils/parseChatRecipes";
 import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
-import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
+import { MemberSelectorButton, type MemberSelectorButtonProps } from "@/components/family/MemberSelectorButton";
 import { ChatHeaderMenuButton } from "@/components/chat/ChatHeaderMenuButton";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { getQuickPromptsForMode } from "@/utils/quickPrompts";
@@ -1352,6 +1352,19 @@ export default function ChatPage() {
     return `Аллергии: ${first}${rest}`;
   }, [mode, selectedMemberId, selectedMember, members]);
 
+  /** Как на Плане прикорма: &lt;12 мес — 👶 + ширина по тексту (без max-w-[100px] / обрезания). */
+  const recipesInfantProfileChipProps = useMemo(():
+    | Pick<MemberSelectorButtonProps, "leadingEmoji" | "fitLabelWidth">
+    | undefined => {
+    if (mode !== "recipes") return undefined;
+    if (selectedMemberId === "family" || selectedMemberId == null) return undefined;
+    const m = selectedMember?.age_months;
+    if (m != null && Number.isFinite(m) && m < 12) {
+      return { leadingEmoji: "👶", fitLabelWidth: true };
+    }
+    return undefined;
+  }, [mode, selectedMemberId, selectedMember?.age_months]);
+
   const chatHeaderTrailing = (
     <>
       <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} label={statusBadgeLabel} />
@@ -1385,7 +1398,11 @@ export default function ChatPage() {
           <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm pt-2 pb-2">
             <TabProfileMenuRow
               profileSlot={
-                <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
+                <MemberSelectorButton
+                  onProfileChange={() => setMessages([])}
+                  className="shrink-0"
+                  {...(recipesInfantProfileChipProps ?? {})}
+                />
               }
               trailing={chatHeaderTrailing}
             />
@@ -1476,6 +1493,7 @@ export default function ChatPage() {
               profileChangeStatus={profileChangeStatus}
               headerMeta={chatHeaderMeta}
               headerRight={chatHeaderTrailing}
+              memberSelectorProps={recipesInfantProfileChipProps}
             />
           )}
 

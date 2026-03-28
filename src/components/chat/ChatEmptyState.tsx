@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
+import { MemberSelectorButton, type MemberSelectorButtonProps } from "@/components/family/MemberSelectorButton";
 import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +39,8 @@ export interface ChatEmptyStateProps {
   headerMeta?: React.ReactNode;
   /** Справа в первой строке: бейдж подписки + кнопка меню ⋮ (как на вкладке План). */
   headerRight?: React.ReactNode;
+  /** Синхрон с Планом прикорма: для &lt;12 мес — `leadingEmoji` + `fitLabelWidth`. */
+  memberSelectorProps?: Pick<MemberSelectorButtonProps, "leadingEmoji" | "fitLabelWidth">;
   /** Класс контейнера. */
   className?: string;
 }
@@ -56,6 +58,7 @@ export function ChatEmptyState({
   profileChangeStatus,
   headerMeta,
   headerRight,
+  memberSelectorProps,
   className,
 }: ChatEmptyStateProps) {
   const welcomeLine1 = isFamily
@@ -70,7 +73,11 @@ export function ChatEmptyState({
         className="shrink-0"
         profileSlot={
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <MemberSelectorButton onProfileChange={onProfileChange} className="shrink-0" />
+            <MemberSelectorButton
+              onProfileChange={onProfileChange}
+              className="shrink-0"
+              {...memberSelectorProps}
+            />
             {headerMeta != null && <div className="min-w-0 flex-1">{headerMeta}</div>}
           </div>
         }

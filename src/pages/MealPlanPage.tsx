@@ -1807,6 +1807,88 @@ export default function MealPlanPage() {
   return (
     <MobileLayout mainClassName={isInfantPlanUi ? "scrollbar-none !overflow-y-hidden" : undefined}>
       <div className="flex flex-col min-h-0 flex-1 px-4 relative overflow-x-hidden touch-pan-y overscroll-x-none max-w-full">
+        {/* Верхний ряд — снаружи скролла, как на вкладке Чат (иначе ряд оказывается на высоте «тела» чата, а не sticky-хедера). */}
+        <div className="sticky top-0 z-10 shrink-0 bg-background/95 backdrop-blur-sm pt-2 pb-2">
+          <TabProfileMenuRow
+            profileSlot={
+              members.length > 0 ? (
+                isInfantPlanUi ? (
+                  <MemberSelectorButton
+                    className="shrink-0"
+                    disabled={isAnyGenerating}
+                    leadingEmoji="👶"
+                    fitLabelWidth
+                  />
+                ) : (
+                  <MemberSelectorButton className="shrink-0" disabled={isAnyGenerating} />
+                )
+              ) : (
+                <span className="block min-h-[44px] w-full min-w-0" aria-hidden />
+              )
+            }
+            trailing={
+              <>
+                <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} label={statusBadgeLabel} />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <TabOverflowIconButton disabled={isAnyGenerating} aria-label="Ещё действия" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    {members.length > 0 && (
+                      <DropdownMenuItem
+                        onClick={() => setPlanProfileHelpOpen(true)}
+                        className="text-muted-foreground"
+                      >
+                        <Info className="w-4 h-4 mr-2 shrink-0" />
+                        Как учитывается профиль
+                      </DropdownMenuItem>
+                    )}
+                    {hasAccess && !isInfantPlanUi && (
+                      <DropdownMenuItem
+                        onClick={() => openShareWeekPreview()}
+                        disabled={isAnyGenerating || isWeekPlansLoading}
+                        className="text-muted-foreground"
+                      >
+                        <ShareIosIcon className="w-4 h-4 mr-2 shrink-0" />
+                        Отправить меню на неделю
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      onClick={() => setClearConfirm("day")}
+                      disabled={isAnyGenerating}
+                      className="text-muted-foreground"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2 shrink-0" />
+                      Очистить день
+                    </DropdownMenuItem>
+                    {hasAccess && (
+                      <DropdownMenuItem
+                        onClick={() => setClearConfirm("week")}
+                        disabled={isAnyGenerating}
+                        className="text-muted-foreground"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2 shrink-0" />
+                        Очистить неделю
+                      </DropdownMenuItem>
+                    )}
+                    {import.meta.env.DEV && (
+                      <DropdownMenuCheckboxItem
+                        checked={debugPlanEnabled}
+                        onCheckedChange={(checked) => {
+                          const on = checked === true;
+                          setDebugPlanInStorage(on);
+                          setDebugPlanEnabled(on);
+                        }}
+                      >
+                        Debug план (консоль: payload/response generate-plan)
+                      </DropdownMenuCheckboxItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            }
+          />
+        </div>
         {/* Content wrapper: один скролл + subtle pattern; горизонтальный скролл/overscroll отключены */}
         <div
           ref={scrollContainerRef}
@@ -1815,88 +1897,6 @@ export default function MealPlanPage() {
             isInfantPlanUi && "scrollbar-none",
           )}
         >
-          <div className="sticky top-0 z-10 shrink-0 bg-background/95 backdrop-blur-sm pt-2 pb-2">
-            <TabProfileMenuRow
-              profileSlot={
-                members.length > 0 ? (
-                  isInfantPlanUi ? (
-                    <MemberSelectorButton
-                      variant="light"
-                      leadingEmoji="👶"
-                      className="max-w-full min-h-[44px] shrink-0 px-2.5 sm:px-3"
-                      disabled={isAnyGenerating}
-                      fitLabelWidth
-                    />
-                  ) : (
-                    <MemberSelectorButton className="shrink-0" disabled={isAnyGenerating} />
-                  )
-                ) : (
-                  <span className="block min-h-[44px] w-full min-w-0" aria-hidden />
-                )
-              }
-              trailing={
-                <>
-                  <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} label={statusBadgeLabel} />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <TabOverflowIconButton disabled={isAnyGenerating} aria-label="Ещё действия" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      {members.length > 0 && (
-                        <DropdownMenuItem
-                          onClick={() => setPlanProfileHelpOpen(true)}
-                          className="text-muted-foreground"
-                        >
-                          <Info className="w-4 h-4 mr-2 shrink-0" />
-                          Как учитывается профиль
-                        </DropdownMenuItem>
-                      )}
-                      {hasAccess && !isInfantPlanUi && (
-                        <DropdownMenuItem
-                          onClick={() => openShareWeekPreview()}
-                          disabled={isAnyGenerating || isWeekPlansLoading}
-                          className="text-muted-foreground"
-                        >
-                          <ShareIosIcon className="w-4 h-4 mr-2 shrink-0" />
-                          Отправить меню на неделю
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        onClick={() => setClearConfirm("day")}
-                        disabled={isAnyGenerating}
-                        className="text-muted-foreground"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2 shrink-0" />
-                        Очистить день
-                      </DropdownMenuItem>
-                      {hasAccess && (
-                        <DropdownMenuItem
-                          onClick={() => setClearConfirm("week")}
-                          disabled={isAnyGenerating}
-                          className="text-muted-foreground"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2 shrink-0" />
-                          Очистить неделю
-                        </DropdownMenuItem>
-                      )}
-                      {import.meta.env.DEV && (
-                        <DropdownMenuCheckboxItem
-                          checked={debugPlanEnabled}
-                          onCheckedChange={(checked) => {
-                            const on = checked === true;
-                            setDebugPlanInStorage(on);
-                            setDebugPlanEnabled(on);
-                          }}
-                        >
-                          Debug план (консоль: payload/response generate-plan)
-                        </DropdownMenuCheckboxItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              }
-            />
-          </div>
           {/* Блок приглашения к шарингу после первой генерации */}
           {justCreatedMemberId && !firstPlanShareBannerDismissed && !isInfantPlanUi && (
             <motion.div
