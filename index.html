@@ -14,7 +14,8 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/icons/mom-recipes-app-icon-512.png" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#6F8F72" />
+    <!-- На старте совпадает с фоном splash (без «серой полосы» до первого кадра UI) -->
+    <meta name="theme-color" content="#E8F1EC" />
     <!-- PWA / iOS standalone -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -36,9 +37,34 @@
     <meta name="twitter:title" content="Mom Recipes — План питания для семьи" />
     <meta name="twitter:description" content="Умное планирование рациона для всей семьи." />
     <meta name="twitter:image" content="https://momrecipes.online/og/og-onion.jpg?v=2" />
+
+    <!-- Критичный splash: до загрузки main.tsx (иначе пустой WebView и «мигание») -->
+    <link rel="preload" href="/splash/splash-screen.png" as="image" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background-color: #e8f1ec;
+      }
+      #splash-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background-color: #e8f1ec;
+        background-image: url(/splash/splash-screen.png);
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        opacity: 1;
+      }
+    </style>
   </head>
 
   <body>
+    <script>
+      window.__momRecipesSplashStartMs = Date.now();
+    </script>
     <div id="splash-screen" role="img" aria-label="Mom Recipes"></div>
     <div id="root"></div>
     <!-- PWA: Service Worker registered in main.tsx (production). Offline fallback: /offline.html -->

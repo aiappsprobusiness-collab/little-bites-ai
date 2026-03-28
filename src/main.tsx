@@ -11,6 +11,8 @@ declare global {
     __promptPWAInstall?: () => Promise<void>;
     __swRegistration?: ServiceWorkerRegistration;
     __skipWaitingTriggered?: boolean;
+    /** Время старта показа splash (inline в index.html) */
+    __momRecipesSplashStartMs?: number;
   }
 }
 
@@ -75,14 +77,33 @@ disableDoubleTapZoom();
 
 createRoot(document.getElementById("root")!).render(<App />);
 
-// Скрытие splash после загрузки (короткая задержка — без двойной задержки с системным splash)
-window.addEventListener("load", () => {
+/** Минимум показа брендированного splash (мс); плюс ждём window.load, чтобы не мигать на медленной сети */
+const SPLASH_MIN_VISIBLE_MS = 2800;
+const SPLASH_FADE_OUT_MS = 400;
+
+function hideSplashWhenReady() {
   const splash = document.getElementById("splash-screen");
-  if (splash) {
-    setTimeout(() => {
-      splash.style.opacity = "0";
-      splash.style.transition = "opacity 250ms ease-out";
-      setTimeout(() => splash.remove(), 250);
-    }, 400);
-  }
-});
+  if (!splash) return;
+
+  const start =
+    typeof window.__momRecipesSplashStartMs === "number"
+      ? window.__momRecipesSplashStartMs
+      : Date.now();
+
+  const fadeOut = () => {
+    splash.style.pointerEvents = "none";
+    splash.style.opacity = "0";
+    splash.style.transition = `opacity ${SPLASH_FADE_OUT_MS}ms ease-out`;
+    setTimeout(() => splash.remove(), SPLASH_FADE_OUT_MS);
+  };
+
+  const elapsed = Date.now() - start;
+  const wait = Math.max(0, SPLASH_MIN_VISIBLE_MS - elapsed);
+  setTimeout(fadeOut, wait);
+}
+
+if (document.readyState === "complete") {
+  hideSplashWhenReady();
+} else {
+  window.addEventListener("load", hideSplashWhenReady);
+}

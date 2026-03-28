@@ -9,9 +9,9 @@
 | **Иконка приложения (PWA/Android)** | `public/manifest.json` → `icons[]` |
 | **Favicon / иконка вкладки** | `index.html` → `link rel="icon"` |
 | **Apple Touch Icon (iOS)** | `index.html` → `link rel="apple-touch-icon"` |
-| **Цвет темы (полоска в Android Chrome)** | `index.html` → `meta name="theme-color"`, `manifest.json` → `theme_color` |
+| **Цвет темы (статус-бар / PWA chrome)** | `index.html` → `meta name="theme-color"`, `manifest.json` → `theme_color` (на старте совпадают с фоном splash `#E8F1EC`) |
 | **Системный splash (Capacitor Android)** | `capacitor.config.ts` / `capacitor.config.json` → `plugins.SplashScreen` |
-| **Кастомный splash (HTML)** | `index.html` → `#splash-screen`, `src/styles/splash.css`, `src/main.tsx` (скрытие по `load`) |
+| **Кастомный splash (HTML)** | `index.html` → inline `<style>` + `#splash-screen` + `preload` картинки (первый кадр до JS); `src/styles/splash.css` — те же правила после бандла; `src/main.tsx` — скрытие после `window.load` и минимум ~2800 ms с момента `window.__momRecipesSplashStartMs`, fade-out ~400 ms |
 
 ## Maskable-иконка (Android)
 
@@ -25,6 +25,6 @@
 ## Splash
 
 - **Первый экран (системный):** у Capacitor задаётся в `capacitor.config` (`backgroundColor: "#E8F1EC"`, при необходимости drawable). У PWA Chrome использует `background_color` и иконки из manifest.
-- **Второй экран (кастомный):** HTML `#splash-screen` (пустой div), в `src/styles/splash.css` — полноэкранный фон через `background-image` и `background-size: cover` (картинка из `/splash/splash-screen.png`). Скрывается по событию `load` в `main.tsx` (задержка 400 ms + 250 ms fade).
+- **Второй экран (кастомный):** полноэкранный фон `/splash/splash-screen.png` задаётся **сразу в `index.html` (inline CSS)**, чтобы не было пустого WebView до загрузки `main.tsx`. После бандла правила повторяются в `src/styles/splash.css` (нужно держать в синхроне с inline). Скрытие: `main.tsx` ждёт `window.load`, не раньше **2800 ms** с inline-метки времени, затем **~400 ms** fade-out. Подробности и чеклист: `docs/dev/splash-startup-2026-03-progress.md`.
 
 Документация не является source-of-truth для архитектуры чата/БД; при изменении логики PWA/splash этот файл стоит обновить.

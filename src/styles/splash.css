@@ -1,17 +1,16 @@
-/* Полноэкранный splash: картинка как фон, cover — без пустых полей на мобильном */
+/**
+ * Splash: критичные стили продублированы в index.html (inline), чтобы первый кадр
+ * совпадал с брендированным экраном до загрузки JS. Менять визуал — в обоих местах.
+ * Этот файл подключается после бандла и закрепляет те же правила (без анимации появления).
+ */
 #splash-screen {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background-color: #E8F1EC;
+  background-color: #e8f1ec;
   background-image: url(/splash/splash-screen.png);
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  animation: splashFadeIn 0.5s ease;
-}
-
-@keyframes splashFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  opacity: 1;
 }

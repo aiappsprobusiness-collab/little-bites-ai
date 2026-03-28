@@ -12,6 +12,7 @@ const OFFLINE_URL = "/offline.html";
 const PRECACHE_ASSETS = [
   "/manifest.json",
   "/offline.html",
+  "/splash/splash-screen.png",
   "/icon-192.png",
   "/icon-512.png",
   "/icon-512-maskable.png",
