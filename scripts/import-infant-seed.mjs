@@ -1,7 +1,7 @@
 /**
  * Импорт infant seed из data/infant-seed-recipes.json в Supabase (service role).
  * Идемпотентность: поиск существующей строки по
- * (user_id, source=seed, locale, norm_title, min_age_months, max_age_months),
+ * (user_id, source=seed, locale, norm_title, min_age_months, max_age_months, meal_type),
  * затем UPDATE + замена ингредиентов/шагов или INSERT.
  *
  * Переменные окружения:
@@ -14,7 +14,8 @@
  *   --purge        перед вставкой удалить рецепты этого владельца с тегом batch из файла
  *   --purge-only   только удалить батч (по тегу), без чтения JSON и без вставки
  *
- * Опционально: INFANT_SEED_BATCH_TAG — для --purge-only, если JSON не нужен.
+ * Опционально: SEED_CATALOG_BATCH_TAG или INFANT_SEED_BATCH_TAG — для --purge-only, если JSON не нужен.
+ * Опционально: --file=относительный/абсолютный путь к bundle JSON; либо SEED_CATALOG_JSON (от корня репо или абсолютный).
  *
  * Запуск: node scripts/import-infant-seed.mjs
  */
@@ -22,7 +23,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname, join, isAbsolute } from "path";
 import { randomUUID } from "crypto";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -86,7 +87,18 @@ function assertSupabaseServiceRoleKey(key) {
   }
 }
 
-const jsonPath = join(root, "data", "infant-seed-recipes.json");
+function resolveJsonPath() {
+  const arg = process.argv.find((a) => a.startsWith("--file="));
+  if (arg) {
+    const p = arg.slice("--file=".length);
+    return isAbsolute(p) ? p : join(root, p);
+  }
+  const fromEnv = process.env.SEED_CATALOG_JSON;
+  if (fromEnv) return isAbsolute(fromEnv) ? fromEnv : join(root, fromEnv);
+  return join(root, "data", "infant-seed-recipes.json");
+}
+
+const jsonPath = resolveJsonPath();
 
 /** Грубое соответствие enum product_category для списка покупок */
 function inferIngredientCategory(name) {
@@ -118,7 +130,9 @@ if (!CATALOG_USER_ID) {
 }
 
 const defaultBatchTag =
-  process.env.INFANT_SEED_BATCH_TAG || "infant_curated_v2";
+  process.env.SEED_CATALOG_BATCH_TAG ||
+  process.env.INFANT_SEED_BATCH_TAG ||
+  "infant_curated_v2";
 
 let bundle = null;
 let recipes = [];
@@ -126,7 +140,10 @@ let batchTag = defaultBatchTag;
 
 if (!purgeOnly) {
   if (!existsSync(jsonPath)) {
-    console.error("Нет файла", jsonPath, "— сначала: node scripts/generate-infant-seed-json.mjs");
+    console.error("Нет файла", jsonPath);
+    console.error(
+      "Для infant: npm run seed:infant:json. Для toddler: npm run seed:toddler:json или --file=data/toddler-seed/toddler-catalog-recipes.json"
+    );
     process.exit(1);
   }
   bundle = JSON.parse(readFileSync(jsonPath, "utf8"));
@@ -170,7 +187,7 @@ async function purgeBatch() {
 
 async function findExistingRecipeId(r) {
   const nt = normTitle(r.title);
-  const { data, error } = await supabase
+  let q = supabase
     .from("recipes")
     .select("id")
     .eq("user_id", CATALOG_USER_ID)
@@ -178,8 +195,11 @@ async function findExistingRecipeId(r) {
     .eq("locale", "ru")
     .eq("norm_title", nt)
     .eq("min_age_months", r.min_age_months)
-    .eq("max_age_months", r.max_age_months)
-    .maybeSingle();
+    .eq("max_age_months", r.max_age_months);
+  if (r.meal_type != null && r.meal_type !== "") {
+    q = q.eq("meal_type", r.meal_type);
+  }
+  const { data, error } = await q.maybeSingle();
   if (error) {
     console.error("findExistingRecipeId:", error);
     return null;

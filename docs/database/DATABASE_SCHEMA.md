@@ -126,7 +126,7 @@ RLS: по `auth.uid() = user_id`. Лимиты Free: 1 член семьи, 1 а
 | source_products     | text[]                 | |
 | source              | text                   | chat_ai \| week_ai \| starter \| seed \| manual \| user_custom |
 | meal_type           | text                   | breakfast \| lunch \| snack \| dinner (только эти четыре; `create_user_recipe` / `update_user_recipe` не сохраняют `other` и прочие значения — в NULL) |
-| nutrition_goals     | jsonb NOT NULL DEFAULT '[]' | Goals для UI/плана: ключи balanced, iron_support, brain_development, weight_gain, gentle_digestion, energy_boost (CHECK whitelist). Человекочитаемые подписи только на клиенте: `GOAL_LABELS` в `src/utils/nutritionGoals.ts`. |
+| nutrition_goals     | jsonb NOT NULL DEFAULT '[]' | Goals для UI/плана: ключи balanced, iron_support, brain_development, weight_gain, gentle_digestion, energy_boost (CHECK whitelist). В curated-сидах допускаются алиасы (напр. energy, satiety) — в JSON для импорта их приводит `normalizeNutritionGoalsForDb` в `scripts/toddler-seed/nutritionGoalsDb.mjs`; на клиенте нормализация — `normalizeNutritionGoals` в `src/utils/nutritionGoals.ts`. Подписи в UI: `GOAL_LABELS`. |
 | steps               | jsonb DEFAULT '[]'     | Шаги (альтернатива recipe_steps) |
 | chef_advice         | text                   | Совет шефа (LLM + quality gate в deepseek-chat, first-pass; **без** второго полного LLM-вызова рецепта при отклонении совета); может быть NULL. Для `user_custom` опционально. |
 | advice              | text                   | Альтернативный короткий совет; может быть NULL. Для `chat_ai` / `week_ai` / `manual` триггер `recipes_validate_not_empty` требует только непустой `description`, не требует ни `chef_advice`, ни `advice`. |
@@ -148,7 +148,7 @@ RLS: по `auth.uid() = user_id`. Лимиты Free: 1 член семьи, 1 а
 
 RLS: SELECT — публичные или свои (или private + owner). INSERT/UPDATE/DELETE — владелец по user_id или owner_user_id для user_custom.
 
-**Индекс для seed-каталога (идемпотентный импорт):** частичный уникальный индекс `recipes_seed_catalog_identity_v1` на `(user_id, locale, norm_title, min_age_months, max_age_months)` при `source = 'seed'` и `norm_title IS NOT NULL` — см. миграция `20260325130000_recipes_seed_catalog_unique.sql`, скрипт `scripts/import-infant-seed.mjs`.
+**Индекс для seed-каталога (идемпотентный импорт):** частичный уникальный индекс `recipes_seed_catalog_identity_v2` на `(user_id, locale, norm_title, min_age_months, max_age_months, meal_type)` при `source = 'seed'`, `norm_title IS NOT NULL`, `meal_type IS NOT NULL` — см. миграции `20260325130000_recipes_seed_catalog_unique.sql` (v1, заменён) и `20260328120000_recipes_seed_catalog_identity_meal_type.sql` (v2), скрипт `scripts/import-infant-seed.mjs` (infant + toddler каталоги, опционально `--file=...`).
 
 ---
 

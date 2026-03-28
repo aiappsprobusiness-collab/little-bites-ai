@@ -1,0 +1,5988 @@
+{
+  "version": 1,
+  "batchTag": "adult_216_1200_curated_v1",
+  "generatedAt": "2026-03-28T14:06:50.140Z",
+  "sourceFile": "C:\\Projects\\little-bites-ai\\data\\toddler-seed\\adult_216_1200_months_multimeal.source.txt",
+  "count": 74,
+  "summary": {
+    "byMealType": {
+      "breakfast": 20,
+      "dinner": 19,
+      "lunch": 16,
+      "snack": 19
+    },
+    "bySeedSet": {
+      "adult_216_1200_months_breakfast_stage1": 20,
+      "adult_216_1200_months_lunch_stage1": 16,
+      "adult_216_1200_months_dinner_stage1": 19,
+      "adult_216_1200_months_snack_stage1": 19
+    }
+  },
+  "recipes": [
+    {
+      "title": "Овсяная каша с бананом и орехами",
+      "description": "Сбалансированный завтрак с медленными углеводами и полезными жирами, который обеспечивает длительную сытость и стабильный уровень энергии. Банан добавляет естественную сладость и калий для поддержки мышц.",
+      "chef_advice": "Добавляйте орехи в готовую кашу, чтобы сохранить их текстуру. Для более кремовой консистенции используйте смесь молока и воды.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 320,
+      "proteins": 10,
+      "fats": 12,
+      "carbs": 45,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "овсяные хлопья",
+          "amount": null,
+          "unit": null,
+          "display_text": "овсяные хлопья — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 150 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 100 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "банан",
+          "amount": null,
+          "unit": null,
+          "display_text": "банан — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        },
+        {
+          "name": "грецкие орехи",
+          "amount": null,
+          "unit": null,
+          "display_text": "грецкие орехи — 10 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 4,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Смешайте молоко и воду и доведите до кипения."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте овсяные хлопья и варите 5–7 минут."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Нарежьте банан."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Переложите кашу в тарелку."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Добавьте банан и орехи."
+        }
+      ]
+    },
+    {
+      "title": "Омлет с помидорами и зеленью",
+      "description": "Белковый завтрак, который помогает поддерживать мышечную массу и даёт длительное насыщение. Свежие овощи добавляют витамины и лёгкость блюду.",
+      "chef_advice": "Готовьте омлет на слабом огне под крышкой. Зелень добавляйте в самом конце.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 280,
+      "proteins": 16,
+      "fats": 20,
+      "carbs": 6,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "яйца",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйца — 2 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 50 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "помидор",
+          "amount": null,
+          "unit": null,
+          "display_text": "помидор — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "укроп",
+          "amount": null,
+          "unit": null,
+          "display_text": "укроп — 5 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        },
+        {
+          "name": "растительное масло",
+          "amount": null,
+          "unit": null,
+          "display_text": "растительное масло — 1 ч.л.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 4,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Взбейте яйца с молоком."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте помидор."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Разогрейте масло."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Вылейте смесь и добавьте помидоры."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Готовьте 5–6 минут под крышкой."
+        }
+      ]
+    },
+    {
+      "title": "Творог с ягодами и мёдом",
+      "description": "Лёгкий белковый завтрак, который поддерживает восстановление мышц и даёт ощущение сытости. Ягоды добавляют антиоксиданты.",
+      "chef_advice": "Используйте творог средней жирности. Ягоды можно слегка размять.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 250,
+      "proteins": 18,
+      "fats": 8,
+      "carbs": 20,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "ягоды",
+          "amount": null,
+          "unit": null,
+          "display_text": "ягоды — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "мёд",
+          "amount": null,
+          "unit": null,
+          "display_text": "мёд — 1 ч.л.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Выложите творог."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте ягоды."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Полейте мёдом."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Перемешайте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Гречневая каша с яйцом",
+      "description": "Питательный завтрак с сочетанием сложных углеводов и белка для устойчивой энергии. Гречка богата железом.",
+      "chef_advice": "Яйцо лучше приготовить всмятку для мягкости.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 300,
+      "proteins": 12,
+      "fats": 8,
+      "carbs": 45,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "гречка",
+          "amount": null,
+          "unit": null,
+          "display_text": "гречка — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 150 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Промойте гречку."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Отварите 15 минут."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Сварите яйцо."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Выложите кашу."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте с яйцом."
+        }
+      ]
+    },
+    {
+      "title": "Рисовая каша с яблоком",
+      "description": "Мягкий завтрак с углеводами, который легко усваивается и даёт энергию на утро. Яблоко добавляет клетчатку.",
+      "chef_advice": "Добавляйте яблоко в конце варки.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 290,
+      "proteins": 8,
+      "fats": 6,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "рис",
+          "amount": null,
+          "unit": null,
+          "display_text": "рис — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 200 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "яблоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "яблоко — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Промойте рис."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Варите в молоке 20 минут."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Натрите яблоко."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте в кашу."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Перемешайте."
+        }
+      ]
+    },
+    {
+      "title": "Тосты с авокадо и яйцом",
+      "description": "Сытный завтрак с полезными жирами и белком, который поддерживает энергию и концентрацию. Авокадо обеспечивает кремовую текстуру.",
+      "chef_advice": "Авокадо разминайте вилкой прямо перед подачей.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 350,
+      "proteins": 12,
+      "fats": 20,
+      "carbs": 30,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "хлеб цельнозерновой",
+          "amount": null,
+          "unit": null,
+          "display_text": "хлеб цельнозерновой — 2 ломтика",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "авокадо",
+          "amount": null,
+          "unit": null,
+          "display_text": "авокадо — 0.5 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Поджарьте хлеб."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Разомните авокадо."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Сварите яйцо."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Намажьте авокадо на тост."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Добавьте яйцо."
+        }
+      ]
+    },
+    {
+      "title": "Пшённая каша с тыквой",
+      "description": "Тёплый завтрак с витаминами и клетчаткой, который поддерживает пищеварение. Тыква добавляет мягкую сладость.",
+      "chef_advice": "Тыкву лучше заранее запечь или потушить.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 300,
+      "proteins": 9,
+      "fats": 7,
+      "carbs": 48,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "пшено",
+          "amount": null,
+          "unit": null,
+          "display_text": "пшено — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "тыква",
+          "amount": null,
+          "unit": null,
+          "display_text": "тыква — 100 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 200 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Промойте пшено."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте тыкву."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Варите вместе 20 минут."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Перемешайте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Сырники классические",
+      "description": "Белковый завтрак с мягкой текстурой, который помогает сохранять сытость. Подходит для спокойного начала дня.",
+      "chef_advice": "Не добавляйте много муки, чтобы сохранить нежность.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 320,
+      "proteins": 20,
+      "fats": 14,
+      "carbs": 25,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 200 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "мука",
+          "amount": null,
+          "unit": null,
+          "display_text": "мука — 2 ст.л.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Смешайте ингредиенты."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Сформируйте сырники."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Разогрейте сковороду."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Обжарьте с двух сторон."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Йогурт с гранолой",
+      "description": "Быстрый завтрак с балансом белков и углеводов, который даёт энергию без тяжести. Подходит для активного утра.",
+      "chef_advice": "Добавляйте гранолу перед подачей.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 280,
+      "proteins": 10,
+      "fats": 8,
+      "carbs": 40,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "йогурт",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт — 200 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "гранола",
+          "amount": null,
+          "unit": null,
+          "display_text": "гранола — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Выложите йогурт."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте гранолу."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Перемешайте."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Подавайте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Можно добавить ягоды."
+        }
+      ]
+    },
+    {
+      "title": "Блины с творогом",
+      "description": "Сытный завтрак с сочетанием углеводов и белка, который поддерживает энергию и насыщение. Творог делает блюдо более питательным.",
+      "chef_advice": "Начинку добавляйте в тёплые блины.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 350,
+      "proteins": 15,
+      "fats": 12,
+      "carbs": 45,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "блины",
+          "amount": null,
+          "unit": null,
+          "display_text": "блины — 3 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 100 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Разогрейте блины."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Выложите творог."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Сверните."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Подавайте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Можно добавить ягоды."
+        }
+      ]
+    },
+    {
+      "title": "Овсяноблин с сыром",
+      "description": "Питательный завтрак с балансом белка и углеводов, который поддерживает длительное насыщение. Подходит для активного начала дня.",
+      "chef_advice": "Жарьте овсяноблин на среднем огне, чтобы он равномерно пропёкся. Сыр добавляйте в середину, чтобы он расплавился.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 310,
+      "proteins": 16,
+      "fats": 14,
+      "carbs": 30,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "овсяные хлопья",
+          "amount": null,
+          "unit": null,
+          "display_text": "овсяные хлопья — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "сыр",
+          "amount": null,
+          "unit": null,
+          "display_text": "сыр — 30 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Смешайте яйцо и овсяные хлопья."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Разогрейте сковороду."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Вылейте смесь."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте сыр."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Сложите и готовьте ещё 2–3 минуты."
+        }
+      ]
+    },
+    {
+      "title": "Панкейки с ягодами",
+      "description": "Мягкий завтрак с углеводами и лёгкой сладостью, который даёт быстрый заряд энергии. Ягоды добавляют свежесть и витамины.",
+      "chef_advice": "Жарьте панкейки на слабом огне для равномерной текстуры. Ягоды добавляйте при подаче.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 330,
+      "proteins": 10,
+      "fats": 8,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "мука",
+          "amount": null,
+          "unit": null,
+          "display_text": "мука — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 150 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "ягоды",
+          "amount": null,
+          "unit": null,
+          "display_text": "ягоды — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Смешайте ингредиенты."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Разогрейте сковороду."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Вылейте тесто порциями."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Обжарьте с двух сторон."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте с ягодами."
+        }
+      ]
+    },
+    {
+      "title": "Киноа с фруктами",
+      "description": "Питательный завтрак с растительным белком и клетчаткой, который поддерживает энергию и лёгкость. Фрукты добавляют естественную сладость.",
+      "chef_advice": "Тщательно промывайте киноа перед варкой, чтобы убрать горечь. Фрукты добавляйте свежими.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 300,
+      "proteins": 9,
+      "fats": 5,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "киноа",
+          "amount": null,
+          "unit": null,
+          "display_text": "киноа — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 150 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "фрукты",
+          "amount": null,
+          "unit": null,
+          "display_text": "фрукты — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Промойте киноа."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Варите 15 минут."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Нарежьте фрукты."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Смешайте с киноа."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Тосты с творожным сыром и лососем",
+      "description": "Сытный завтрак с белком и полезными жирами, который поддерживает концентрацию и энергию. Лосось добавляет насыщенный вкус.",
+      "chef_advice": "Хлеб слегка поджарьте для текстуры. Лосось выкладывайте тонкими ломтиками.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 360,
+      "proteins": 18,
+      "fats": 18,
+      "carbs": 30,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "хлеб",
+          "amount": null,
+          "unit": null,
+          "display_text": "хлеб — 2 ломтика",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "творожный сыр",
+          "amount": null,
+          "unit": null,
+          "display_text": "творожный сыр — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "лосось слабосолёный",
+          "amount": null,
+          "unit": null,
+          "display_text": "лосось слабосолёный — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Поджарьте хлеб."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Намажьте сыр."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Выложите лосось."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Соберите тост."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Яичница с овощами",
+      "description": "Белковый завтрак с овощами, который даёт насыщение и поддерживает уровень энергии. Лёгкое и питательное блюдо.",
+      "chef_advice": "Овощи слегка обжарьте перед добавлением яиц. Не пересушивайте яичницу.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 270,
+      "proteins": 15,
+      "fats": 18,
+      "carbs": 8,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "яйца",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйца — 2 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "перец",
+          "amount": null,
+          "unit": null,
+          "display_text": "перец — 0.5 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "помидор",
+          "amount": null,
+          "unit": null,
+          "display_text": "помидор — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте овощи."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Обжарьте их."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте яйца."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Готовьте до готовности."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Манка с ягодами",
+      "description": "Лёгкий углеводный завтрак, который быстро даёт энергию и комфортно усваивается. Ягоды добавляют вкус и витамины.",
+      "chef_advice": "Всыпайте манку тонкой струйкой, чтобы избежать комков.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 280,
+      "proteins": 9,
+      "fats": 6,
+      "carbs": 45,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "манка",
+          "amount": null,
+          "unit": null,
+          "display_text": "манка — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 250 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "ягоды",
+          "amount": null,
+          "unit": null,
+          "display_text": "ягоды — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Доведите молоко до кипения."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Всыпьте манку."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Варите 5 минут."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте ягоды."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Кукурузная каша с молоком",
+      "description": "Сытный завтрак с углеводами, который даёт энергию и хорошо подходит для начала дня. Обладает мягкой текстурой.",
+      "chef_advice": "Варите кашу на слабом огне и помешивайте, чтобы избежать пригорания.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 300,
+      "proteins": 8,
+      "fats": 7,
+      "carbs": 48,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "кукурузная крупа",
+          "amount": null,
+          "unit": null,
+          "display_text": "кукурузная крупа — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 200 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Залейте крупу молоком."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Доведите до кипения."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Варите 15 минут."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Перемешайте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Лаваш с курицей и овощами",
+      "description": "Сбалансированный завтрак с белком и углеводами, который обеспечивает длительное насыщение. Удобен для активного утра.",
+      "chef_advice": "Начинку распределяйте равномерно и сворачивайте плотно.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 340,
+      "proteins": 20,
+      "fats": 10,
+      "carbs": 35,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "лаваш",
+          "amount": null,
+          "unit": null,
+          "display_text": "лаваш — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "курица",
+          "amount": null,
+          "unit": null,
+          "display_text": "курица — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "огурец",
+          "amount": null,
+          "unit": null,
+          "display_text": "огурец — 0.5 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте курицу."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Выложите на лаваш."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Сверните рулетом."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Булгур с молоком и фруктами",
+      "description": "Питательный завтрак с медленными углеводами, который поддерживает стабильный уровень энергии. Фрукты добавляют вкус и витамины.",
+      "chef_advice": "Булгур сначала промойте и варите до мягкости.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 310,
+      "proteins": 9,
+      "fats": 6,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "булгур",
+          "amount": null,
+          "unit": null,
+          "display_text": "булгур — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 200 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "фрукты",
+          "amount": null,
+          "unit": null,
+          "display_text": "фрукты — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Промойте булгур."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Варите 15 минут."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте молоко."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте фрукты."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Смузи с бананом и йогуртом",
+      "description": "Быстрый завтрак с углеводами и белком, который даёт энергию и лёгкость. Подходит для утренней спешки.",
+      "chef_advice": "Используйте холодные ингредиенты для лучшей текстуры.",
+      "meal_type": "breakfast",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 260,
+      "proteins": 9,
+      "fats": 5,
+      "carbs": 45,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_breakfast_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "банан",
+          "amount": null,
+          "unit": null,
+          "display_text": "банан — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "йогурт",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт — 150 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Очистите банан."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте йогурт."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Взбейте в блендере."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Перелейте в стакан."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Куриный суп с овощами",
+      "description": "Лёгкий обед с белком и овощами, который поддерживает энергию и не перегружает пищеварение. Тёплый бульон помогает быстрее восстановить силы в середине дня.",
+      "chef_advice": "Варите бульон на слабом огне без активного кипения. Овощи добавляйте по очереди, чтобы сохранить текстуру.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 320,
+      "proteins": 28,
+      "fats": 10,
+      "carbs": 30,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": true,
+      "ingredients": [
+        {
+          "name": "куриное филе",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриное филе — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 1 л",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 4,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте курицу и залейте водой."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Доведите до кипения и снимите пену."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте нарезанные овощи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Варите 25 минут на слабом огне."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Гречка с курицей и овощами",
+      "description": "Сытный обед с балансом белка и сложных углеводов, который даёт длительное насыщение и стабильную энергию. Овощи добавляют клетчатку и витамины.",
+      "chef_advice": "Обжаривайте курицу отдельно до румяности. Гречку добавляйте в уже готовый бульон.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 420,
+      "proteins": 30,
+      "fats": 12,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "гречка",
+          "amount": null,
+          "unit": null,
+          "display_text": "гречка — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "куриное филе",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриное филе — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Промойте гречку."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Обжарьте курицу кусочками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Залейте водой и добавьте гречку."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Готовьте 20 минут."
+        }
+      ]
+    },
+    {
+      "title": "Суп-пюре из брокколи",
+      "description": "Лёгкий обед с высоким содержанием клетчатки и витаминов, который поддерживает пищеварение и даёт ощущение лёгкости. Подходит для разгрузочного питания.",
+      "chef_advice": "Не переваривайте брокколи, чтобы сохранить цвет. Взбивайте до однородной кремовой текстуры.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 220,
+      "proteins": 8,
+      "fats": 5,
+      "carbs": 30,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": true,
+      "ingredients": [
+        {
+          "name": "брокколи",
+          "amount": null,
+          "unit": null,
+          "display_text": "брокколи — 300 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 100 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 800 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте овощи."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Отварите 15 минут."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Слейте часть воды."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Измельчите блендером."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Рис с индейкой",
+      "description": "Сбалансированный обед с нежирным белком и углеводами для устойчивой энергии. Индейка легко усваивается и подходит для регулярного питания.",
+      "chef_advice": "Готовьте рис отдельно, чтобы он был рассыпчатым. Индейку не пересушивайте.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 400,
+      "proteins": 32,
+      "fats": 8,
+      "carbs": 55,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "рис",
+          "amount": null,
+          "unit": null,
+          "display_text": "рис — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "филе индейки",
+          "amount": null,
+          "unit": null,
+          "display_text": "филе индейки — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите рис."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Обжарьте индейку."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Соедините ингредиенты."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Прогрейте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Овощной суп с фрикадельками",
+      "description": "Питательный обед с белком и овощами, который поддерживает сытость и энергию. Лёгкий бульон не перегружает организм.",
+      "chef_advice": "Фрикадельки формируйте влажными руками. Добавляйте их в кипящий бульон.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 360,
+      "proteins": 26,
+      "fats": 14,
+      "carbs": 32,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": true,
+      "ingredients": [
+        {
+          "name": "фарш говяжий",
+          "amount": null,
+          "unit": null,
+          "display_text": "фарш говяжий — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 1 л",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Сформируйте фрикадельки."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Доведите воду до кипения."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте фрикадельки."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Варите 20 минут."
+        }
+      ]
+    },
+    {
+      "title": "Паста с курицей и шпинатом",
+      "description": "Сытный обед с углеводами и белком, который даёт энергию и поддерживает насыщение. Шпинат добавляет витамины.",
+      "chef_advice": "Пасту варите до состояния аль денте. Шпинат добавляйте в конце.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 450,
+      "proteins": 28,
+      "fats": 10,
+      "carbs": 60,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "паста",
+          "amount": null,
+          "unit": null,
+          "display_text": "паста — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "куриное филе",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриное филе — 120 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "шпинат",
+          "amount": null,
+          "unit": null,
+          "display_text": "шпинат — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите пасту."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Обжарьте курицу."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте шпинат."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Смешайте с пастой."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Картофельное пюре с котлетой",
+      "description": "Классический обед с балансом белка и углеводов, который обеспечивает сытость и комфорт. Подходит для плотного приёма пищи.",
+      "chef_advice": "Пюре делайте с тёплым молоком. Котлету жарьте на среднем огне.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 500,
+      "proteins": 25,
+      "fats": 18,
+      "carbs": 55,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 200 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "фарш",
+          "amount": null,
+          "unit": null,
+          "display_text": "фарш — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 50 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите картофель."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Сделайте пюре."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Сформируйте котлету."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Обжарьте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте вместе."
+        }
+      ]
+    },
+    {
+      "title": "Суп с чечевицей",
+      "description": "Питательный обед с растительным белком и клетчаткой, который поддерживает энергию и насыщение.",
+      "chef_advice": "Чечевицу не нужно замачивать. Варите до мягкости.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 350,
+      "proteins": 18,
+      "fats": 6,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": true,
+      "ingredients": [
+        {
+          "name": "чечевица",
+          "amount": null,
+          "unit": null,
+          "display_text": "чечевица — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Промойте чечевицу."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте в воду."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Варите 25 минут."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Тушёная говядина с овощами",
+      "description": "Сытный обед с высоким содержанием белка и железа, который поддерживает силу и энергию.",
+      "chef_advice": "Тушите говядину долго на слабом огне.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 480,
+      "proteins": 35,
+      "fats": 25,
+      "carbs": 15,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "говядина",
+          "amount": null,
+          "unit": null,
+          "display_text": "говядина — 200 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте мясо."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Обжарьте."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Тушите 40 минут."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Рисовый суп с курицей",
+      "description": "Лёгкий обед с мягкой текстурой, который поддерживает комфортное пищеварение и даёт энергию.",
+      "chef_advice": "Рис добавляйте в начале варки.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 330,
+      "proteins": 24,
+      "fats": 8,
+      "carbs": 40,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": true,
+      "ingredients": [
+        {
+          "name": "рис",
+          "amount": null,
+          "unit": null,
+          "display_text": "рис — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "курица",
+          "amount": null,
+          "unit": null,
+          "display_text": "курица — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 1 л",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Доведите воду до кипения."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте курицу."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте рис."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Варите 25 минут."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Плов с курицей",
+      "description": "Сытный обед с углеводами и белком, который даёт длительное насыщение и энергию.",
+      "chef_advice": "Не перемешивайте плов во время приготовления.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 470,
+      "proteins": 28,
+      "fats": 12,
+      "carbs": 65,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "рис",
+          "amount": null,
+          "unit": null,
+          "display_text": "рис — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "курица",
+          "amount": null,
+          "unit": null,
+          "display_text": "курица — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Обжарьте курицу."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте рис."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Залейте водой."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Готовьте 25 минут."
+        }
+      ]
+    },
+    {
+      "title": "Овощное рагу с курицей",
+      "description": "Лёгкий обед с белком и клетчаткой, который поддерживает насыщение без тяжести.",
+      "chef_advice": "Добавляйте овощи слоями.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 340,
+      "proteins": 26,
+      "fats": 10,
+      "carbs": 25,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "курица",
+          "amount": null,
+          "unit": null,
+          "display_text": "курица — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "кабачок",
+          "amount": null,
+          "unit": null,
+          "display_text": "кабачок — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте ингредиенты."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Обжарьте курицу."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Тушите 20 минут."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Суп с макаронами и курицей",
+      "description": "Тёплый обед с лёгкой текстурой, который поддерживает энергию и комфорт.",
+      "chef_advice": "Добавляйте макароны в конце.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 360,
+      "proteins": 24,
+      "fats": 9,
+      "carbs": 45,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": true,
+      "ingredients": [
+        {
+          "name": "макароны",
+          "amount": null,
+          "unit": null,
+          "display_text": "макароны — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "курица",
+          "amount": null,
+          "unit": null,
+          "display_text": "курица — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 1 л",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Доведите воду до кипения."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте курицу."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте макароны."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Варите 20 минут."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Булгур с индейкой",
+      "description": "Сытный обед с клетчаткой и белком, который даёт длительное насыщение.",
+      "chef_advice": "Булгур запаривайте кипятком.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 430,
+      "proteins": 30,
+      "fats": 10,
+      "carbs": 55,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "булгур",
+          "amount": null,
+          "unit": null,
+          "display_text": "булгур — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "индейка",
+          "amount": null,
+          "unit": null,
+          "display_text": "индейка — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Залейте булгур кипятком."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Обжарьте индейку."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Смешайте."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Прогрейте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Картофельный суп-пюре",
+      "description": "Мягкий обед с кремовой текстурой, который даёт энергию и комфорт.",
+      "chef_advice": "Добавляйте тёплое молоко при взбивании.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 280,
+      "proteins": 6,
+      "fats": 8,
+      "carbs": 45,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": true,
+      "ingredients": [
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 300 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 100 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите картофель."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Слейте воду."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте молоко."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Измельчите."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Курица с рисом и овощами",
+      "description": "Сбалансированный обед с белком и углеводами, который поддерживает энергию.",
+      "chef_advice": "Готовьте всё в одной сковороде.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 450,
+      "proteins": 28,
+      "fats": 12,
+      "carbs": 60,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_lunch_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "курица",
+          "amount": null,
+          "unit": null,
+          "display_text": "курица — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "рис",
+          "amount": null,
+          "unit": null,
+          "display_text": "рис — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "овощи",
+          "amount": null,
+          "unit": null,
+          "display_text": "овощи — 100 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Обжарьте курицу."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте рис."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Залейте водой."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Готовьте 25 минут."
+        }
+      ]
+    },
+    {
+      "title": "Куриные тефтели с картофельным пюре",
+      "description": "Сытный ужин с мягкой текстурой, который помогает спокойно завершить день и поддерживает длительное насыщение. Курица даёт белок, а картофель делает блюдо комфортным для вечернего приёма пищи.",
+      "chef_advice": "Тефтели делайте небольшими, чтобы они равномерно приготовились и остались сочными. Пюре лучше взбивать с тёплой жидкостью, тогда оно получится более нежным.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 470,
+      "proteins": 30,
+      "fats": 16,
+      "carbs": 48,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "куриный фарш",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриный фарш — 180 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 220 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 60 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Смешайте фарш с мелко нарезанным луком."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Сформируйте небольшие тефтели."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Доведите тефтели до готовности."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Отварите картофель до мягкости."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Разомните картофель с тёплым молоком."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тефтели с пюре."
+        }
+      ]
+    },
+    {
+      "title": "Индейка с рисом и кабачком",
+      "description": "Лёгкий, но сытный ужин с нежирным белком и мягкими овощами помогает сохранить сытость без тяжести. Рис делает блюдо более спокойным и подходящим для вечера.",
+      "chef_advice": "Индейку не пересушивайте и готовьте на умеренном огне. Кабачок лучше добавлять ближе к концу, чтобы он сохранил мягкую текстуру.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 430,
+      "proteins": 34,
+      "fats": 8,
+      "carbs": 52,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "филе индейки",
+          "amount": null,
+          "unit": null,
+          "display_text": "филе индейки — 180 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "рис",
+          "amount": null,
+          "unit": null,
+          "display_text": "рис — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "кабачок",
+          "amount": null,
+          "unit": null,
+          "display_text": "кабачок — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 150 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите рис до готовности."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте индейку небольшими кусочками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Кабачок нарежьте кубиками."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Готовьте индейку до мягкости."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Добавьте кабачок и доведите до готовности."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте с рисом."
+        }
+      ]
+    },
+    {
+      "title": "Запечённая рыба с картофелем",
+      "description": "Сбалансированный ужин с белком и сложными углеводами помогает поддерживать сытость и не перегружает пищеварение. Запекание сохраняет мягкую текстуру и чистый вкус ингредиентов.",
+      "chef_advice": "Картофель режьте одинаковыми кусочками, чтобы он приготовился равномерно. Рыбу запекайте недолго, чтобы она осталась сочной.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 410,
+      "proteins": 31,
+      "fats": 10,
+      "carbs": 46,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "филе белой рыбы",
+          "amount": null,
+          "unit": null,
+          "display_text": "филе белой рыбы — 180 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 220 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "растительное масло",
+          "amount": null,
+          "unit": null,
+          "display_text": "растительное масло — 1 ч.л.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте картофель и морковь."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Выложите овощи в форму."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Сверху положите рыбу."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Слегка сбрызните маслом."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Запекайте до готовности."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Гречка с курицей и брокколи",
+      "description": "Плотный ужин с белком, клетчаткой и сложными углеводами помогает поддерживать стабильную сытость до сна. Брокколи добавляет свежесть и делает вкус мягче.",
+      "chef_advice": "Брокколи лучше готовить недолго, чтобы сохранить цвет и текстуру. Курицу нарезайте мелко, чтобы она быстрее приготовилась и осталась сочной.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 445,
+      "proteins": 33,
+      "fats": 10,
+      "carbs": 48,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "гречка",
+          "amount": null,
+          "unit": null,
+          "display_text": "гречка — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "куриное филе",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриное филе — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "брокколи",
+          "amount": null,
+          "unit": null,
+          "display_text": "брокколи — 120 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите гречку до готовности."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте курицу небольшими кусочками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Подготовьте брокколи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Доведите курицу до готовности."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Добавьте брокколи и прогрейте."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте с гречкой."
+        }
+      ]
+    },
+    {
+      "title": "Творожная запеканка с яблоком",
+      "description": "Мягкий ужин с белком и умеренной сладостью подходит для спокойного завершения дня. Яблоко делает вкус более нежным и привычным.",
+      "chef_advice": "Яблоко нарезайте мелко или натирайте, чтобы запеканка была более ровной по текстуре. Не пересушивайте её в духовке.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 360,
+      "proteins": 28,
+      "fats": 14,
+      "carbs": 28,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 220 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "яблоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "яблоко — 100 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "манка",
+          "amount": null,
+          "unit": null,
+          "display_text": "манка — 15 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Смешайте творог, яйцо и манку."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте мелко нарезанное яблоко."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Переложите массу в форму."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Разровняйте верх."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Запекайте до готовности."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплой."
+        }
+      ]
+    },
+    {
+      "title": "Овощное рагу с индейкой",
+      "description": "Нежное рагу с белком и овощами помогает поддерживать сытость и остаётся комфортным для вечернего меню. Овощи делают блюдо сочным и более лёгким.",
+      "chef_advice": "Режьте овощи одинаковыми кубиками, чтобы они готовились равномерно. Индейку лучше сначала быстро прогреть отдельно, а потом тушить с овощами.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 390,
+      "proteins": 30,
+      "fats": 9,
+      "carbs": 42,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "филе индейки",
+          "amount": null,
+          "unit": null,
+          "display_text": "филе индейки — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "кабачок",
+          "amount": null,
+          "unit": null,
+          "display_text": "кабачок — 140 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 140 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте индейку и овощи."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Слегка прогрейте индейку."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте овощи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Накройте крышкой."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Тушите до мягкости."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Макароны с курицей и сыром",
+      "description": "Сытный ужин с белком и углеводами помогает восстановить силы после активного дня. Сыр делает вкус более насыщенным, а курица поддерживает длительное насыщение.",
+      "chef_advice": "Не переваривайте макароны, чтобы блюдо не стало слишком мягким. Сыр лучше добавлять в горячее блюдо перед подачей.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 490,
+      "proteins": 32,
+      "fats": 14,
+      "carbs": 56,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain",
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "макароны",
+          "amount": null,
+          "unit": null,
+          "display_text": "макароны — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "куриное филе",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриное филе — 160 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "сыр",
+          "amount": null,
+          "unit": null,
+          "display_text": "сыр — 25 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите макароны до готовности."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте курицу кусочками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Доведите курицу до готовности."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Смешайте макароны с курицей."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Добавьте тёртый сыр."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Рыбные котлеты с рисом",
+      "description": "Белковый ужин с мягкой текстурой помогает сохранить сытость без тяжести и хорошо подходит для общего стола. Рис дополняет блюдо и делает его более спокойным для вечера.",
+      "chef_advice": "Фарш для котлет делайте более однородным, чтобы они держали форму. Рис лучше подавать рассыпчатым, без лишней влаги.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 430,
+      "proteins": 31,
+      "fats": 11,
+      "carbs": 48,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "рыбный фарш",
+          "amount": null,
+          "unit": null,
+          "display_text": "рыбный фарш — 180 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "рис",
+          "amount": null,
+          "unit": null,
+          "display_text": "рис — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 30 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Смешайте фарш, яйцо и мелко нарезанный лук."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Сформируйте котлеты."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Доведите котлеты до готовности."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Отварите рис."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте котлеты с рисом."
+        }
+      ]
+    },
+    {
+      "title": "Картофельная запеканка с говядиной",
+      "description": "Плотный ужин с белком и углеводами помогает надолго сохранить сытость и подходит для общего семейного стола. Запекание делает текстуру мягкой и удобной.",
+      "chef_advice": "Картофель лучше заранее отварить и слегка размять, тогда слои соединятся ровнее. Говядину готовьте до мягкости перед сборкой запеканки.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 520,
+      "proteins": 32,
+      "fats": 20,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 220 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "говядина",
+          "amount": null,
+          "unit": null,
+          "display_text": "говядина — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите картофель и слегка разомните."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Говядину мелко нарежьте и доведите до мягкости."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Подготовьте форму."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Выложите картофель и мясо слоями."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Смажьте сверху яйцом."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Запекайте до готовности."
+        }
+      ]
+    },
+    {
+      "title": "Булгур с индейкой и овощами",
+      "description": "Сбалансированный ужин с клетчаткой, белком и сложными углеводами помогает поддерживать сытость и не перегружает вечернее меню. Овощи делают вкус мягче и свежее.",
+      "chef_advice": "Булгур не переваривайте, чтобы он сохранил рассыпчатость. Овощи лучше прогреть отдельно до мягкости, а потом смешать с крупой.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 455,
+      "proteins": 31,
+      "fats": 10,
+      "carbs": 56,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "булгур",
+          "amount": null,
+          "unit": null,
+          "display_text": "булгур — 75 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "филе индейки",
+          "amount": null,
+          "unit": null,
+          "display_text": "филе индейки — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "кабачок",
+          "amount": null,
+          "unit": null,
+          "display_text": "кабачок — 120 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите булгур до готовности."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте индейку небольшими кусочками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Подготовьте овощи."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Доведите индейку и овощи до готовности."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Соедините всё вместе."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Курица с тушёной капустой",
+      "description": "Спокойный ужин с белком и овощами помогает поддерживать сытость и остаётся относительно лёгким для вечера. Капуста делает блюдо сочным и более насыщенным по вкусу.",
+      "chef_advice": "Капусту тушите под крышкой на слабом огне, чтобы она оставалась мягкой. Курицу добавляйте ближе к середине процесса, чтобы она не пересохла.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 365,
+      "proteins": 31,
+      "fats": 9,
+      "carbs": 24,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "куриное филе",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриное филе — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "капуста белокочанная",
+          "amount": null,
+          "unit": null,
+          "display_text": "капуста белокочанная — 220 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нашинкуйте капусту."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте курицу и овощи."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Начните тушить капусту с морковью и луком."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте курицу."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Доведите блюдо до мягкости."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Запечённая индейка с картофелем и морковью",
+      "description": "Сытный ужин с простым составом и мягкой текстурой помогает надолго сохранить чувство сытости. Запекание делает вкус более насыщенным без лишней сложности.",
+      "chef_advice": "Овощи режьте примерно одинаковыми кусочками, чтобы они приготовились одновременно. Индейку не запекайте слишком долго, чтобы она осталась сочной.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 465,
+      "proteins": 34,
+      "fats": 11,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "филе индейки",
+          "amount": null,
+          "unit": null,
+          "display_text": "филе индейки — 180 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 200 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 90 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "растительное масло",
+          "amount": null,
+          "unit": null,
+          "display_text": "растительное масло — 1 ч.л.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте индейку и овощи."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Выложите всё в форму."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Слегка сбрызните маслом."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Перемешайте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Запекайте до готовности."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Рис с говядиной и овощами",
+      "description": "Плотный ужин с белком и углеводами помогает восстановить силы после дня и сохраняет сытость надолго. Овощи делают вкус более сбалансированным.",
+      "chef_advice": "Рис готовьте отдельно, чтобы он оставался рассыпчатым. Говядину нарезайте небольшими кусочками, тогда она быстрее станет мягкой.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 500,
+      "proteins": 31,
+      "fats": 15,
+      "carbs": 58,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "рис",
+          "amount": null,
+          "unit": null,
+          "display_text": "рис — 75 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "говядина",
+          "amount": null,
+          "unit": null,
+          "display_text": "говядина — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите рис до готовности."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте говядину и овощи."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Доведите говядину до мягкости."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте овощи и прогрейте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Смешайте с рисом."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Омлет с брокколи и сыром",
+      "description": "Белковый ужин с мягкой текстурой помогает поддерживать сытость без тяжести и хорошо подходит для спокойного вечера. Брокколи и сыр делают вкус более насыщенным.",
+      "chef_advice": "Брокколи заранее доведите до мягкости и мелко нарежьте. Омлет готовьте под крышкой, чтобы он получился особенно нежным.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 340,
+      "proteins": 24,
+      "fats": 24,
+      "carbs": 6,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "яйца",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйца — 3 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "брокколи",
+          "amount": null,
+          "unit": null,
+          "display_text": "брокколи — 90 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "сыр",
+          "amount": null,
+          "unit": null,
+          "display_text": "сыр — 25 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 40 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Подготовьте брокколи до мягкости."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Взбейте яйца с молоком."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте брокколи и сыр."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Перелейте на сковороду."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Готовьте под крышкой до готовности."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Запеканка из макарон и курицы",
+      "description": "Сытный ужин с мягкой текстурой помогает долго сохранять сытость и хорошо подходит для общего стола. Курица добавляет белок, а запекание объединяет вкус блюда.",
+      "chef_advice": "Макароны не переваривайте до сборки, чтобы запеканка не получилась слишком мягкой. Сверху можно добавить немного сыра для более насыщенного вкуса.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 505,
+      "proteins": 33,
+      "fats": 14,
+      "carbs": 58,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "макароны",
+          "amount": null,
+          "unit": null,
+          "display_text": "макароны — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "куриное филе",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриное филе — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "сыр",
+          "amount": null,
+          "unit": null,
+          "display_text": "сыр — 20 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите макароны до полуготовности."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте и приготовьте курицу."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Смешайте макароны, курицу и яйцо."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Переложите в форму."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Посыпьте сыром."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Запекайте до готовности."
+        }
+      ]
+    },
+    {
+      "title": "Тушёная рыба с овощами",
+      "description": "Лёгкий белковый ужин помогает поддерживать сытость и не создаёт ощущения тяжести. Овощи делают блюдо более сочным и мягким по вкусу.",
+      "chef_advice": "Рыбу тушите недолго, чтобы она не пересохла. Овощи можно сначала слегка прогреть отдельно, а затем соединить с рыбой.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 315,
+      "proteins": 30,
+      "fats": 8,
+      "carbs": 18,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "филе белой рыбы",
+          "amount": null,
+          "unit": null,
+          "display_text": "филе белой рыбы — 180 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "кабачок",
+          "amount": null,
+          "unit": null,
+          "display_text": "кабачок — 140 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "лук",
+          "amount": null,
+          "unit": null,
+          "display_text": "лук — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте овощи и рыбу."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Подготовьте овощи до мягкости."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте рыбу."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Накройте крышкой."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Доведите до готовности."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Гречневая запеканка с творогом",
+      "description": "Необычный ужин с белком и сложными углеводами помогает поддерживать сытость и остаётся комфортным по текстуре. Творог делает блюдо более мягким и питательным.",
+      "chef_advice": "Гречку лучше заранее отварить до полной мягкости. Творожную часть не пересушивайте, чтобы запеканка оставалась нежной.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 430,
+      "proteins": 25,
+      "fats": 13,
+      "carbs": 50,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "гречка",
+          "amount": null,
+          "unit": null,
+          "display_text": "гречка — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 160 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "яйцо",
+          "amount": null,
+          "unit": null,
+          "display_text": "яйцо — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "молоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "молоко — 40 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите гречку до готовности."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Смешайте творог, яйцо и молоко."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Соедините с гречкой."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Переложите в форму."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Запекайте до готовности."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплой."
+        }
+      ]
+    },
+    {
+      "title": "Курица с булгуром и морковью",
+      "description": "Сытный ужин с белком и медленными углеводами помогает сохранить стабильную сытость и поддерживает восстановление сил. Морковь делает вкус мягче и спокойнее.",
+      "chef_advice": "Булгур не переваривайте, чтобы он остался рассыпчатым. Морковь лучше мелко нарезать или натереть, если нужна более мягкая текстура.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 460,
+      "proteins": 32,
+      "fats": 10,
+      "carbs": 55,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "куриное филе",
+          "amount": null,
+          "unit": null,
+          "display_text": "куриное филе — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "булгур",
+          "amount": null,
+          "unit": null,
+          "display_text": "булгур — 75 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "вода",
+          "amount": null,
+          "unit": null,
+          "display_text": "вода — 180 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите булгур до готовности."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте курицу небольшими кусочками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Подготовьте морковь."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Доведите курицу и морковь до готовности."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Смешайте с булгуром."
+        },
+        {
+          "step_number": 6,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Картофель с творогом и зеленью",
+      "description": "Простой ужин с мягкой текстурой, который помогает поддерживать сытость без лишней тяжести. Творог добавляет белок, а зелень делает вкус более свежим.",
+      "chef_advice": "Картофель подавайте тёплым, а творог смешивайте с зеленью непосредственно перед подачей. Так вкус остаётся более чистым и свежим.",
+      "meal_type": "dinner",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 370,
+      "proteins": 21,
+      "fats": 9,
+      "carbs": 49,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_dinner_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "картофель",
+          "amount": null,
+          "unit": null,
+          "display_text": "картофель — 220 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 140 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "зелень",
+          "amount": null,
+          "unit": null,
+          "display_text": "зелень — 8 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "йогурт натуральный",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт натуральный — 30 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Отварите картофель до мягкости."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Смешайте творог, йогурт и мелко нарезанную зелень."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Переложите картофель на тарелку."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте творожную смесь."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте блюдо тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Творог с ягодами и мёдом",
+      "description": "Лёгкий перекус с белком помогает поддерживать сытость между основными приёмами пищи и не создаёт ощущения тяжести. Ягоды добавляют свежесть вкуса и природную сладость.",
+      "chef_advice": "Используйте творог средней жирности для более мягкой текстуры. Мёд лучше добавлять прямо перед подачей, чтобы вкус оставался ярким.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 230,
+      "proteins": 18,
+      "fats": 7,
+      "carbs": 20,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 150 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "ягоды",
+          "amount": null,
+          "unit": null,
+          "display_text": "ягоды — 60 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "мёд",
+          "amount": null,
+          "unit": null,
+          "display_text": "мёд — 1 ч.л.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Выложите творог в миску."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте ягоды."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Полейте мёдом."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Аккуратно перемешайте."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    },
+    {
+      "title": "Йогурт с бананом и орехами",
+      "description": "Сбалансированный перекус с белком, углеводами и полезными жирами помогает поддерживать энергию и концентрацию. Банан делает вкус мягким и естественно сладким.",
+      "chef_advice": "Орехи добавляйте непосредственно перед подачей, чтобы они оставались хрустящими. Банан лучше нарезать крупными кусочками для более приятной текстуры.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 290,
+      "proteins": 11,
+      "fats": 11,
+      "carbs": 36,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "йогурт натуральный",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт натуральный — 180 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "банан",
+          "amount": null,
+          "unit": null,
+          "display_text": "банан — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "орехи",
+          "amount": null,
+          "unit": null,
+          "display_text": "орехи — 15 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Выложите йогурт в миску."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте банан."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте банан к йогурту."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Посыпьте орехами."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    },
+    {
+      "title": "Яблоко с арахисовой пастой",
+      "description": "Простой перекус с сочетанием клетчатки и полезных жиров помогает дольше сохранять сытость и поддерживает ровную энергию. Яблоко добавляет свежесть и лёгкость.",
+      "chef_advice": "Нарезайте яблоко дольками одинаковой толщины, чтобы его было удобнее есть с пастой. Пасту лучше брать без лишнего сахара.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 210,
+      "proteins": 6,
+      "fats": 10,
+      "carbs": 26,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain",
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "яблоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "яблоко — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "арахисовая паста",
+          "amount": null,
+          "unit": null,
+          "display_text": "арахисовая паста — 20 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Вымойте яблоко."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте его дольками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Выложите арахисовую пасту рядом."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Подавайте перекус сразу."
+        }
+      ]
+    },
+    {
+      "title": "Сэндвич с творожным сыром и огурцом",
+      "description": "Лёгкий перекус с мягким вкусом помогает поддерживать сытость без перегрузки. Огурец добавляет свежесть, а творожный сыр делает текстуру более нежной.",
+      "chef_advice": "Хлеб можно слегка подсушить для более приятной текстуры. Огурец лучше нарезать тонкими ломтиками, чтобы сэндвич было удобнее есть.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 240,
+      "proteins": 8,
+      "fats": 8,
+      "carbs": 31,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "хлеб цельнозерновой",
+          "amount": null,
+          "unit": null,
+          "display_text": "хлеб цельнозерновой — 2 ломтика",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "творожный сыр",
+          "amount": null,
+          "unit": null,
+          "display_text": "творожный сыр — 35 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "огурец",
+          "amount": null,
+          "unit": null,
+          "display_text": "огурец — 0.5 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Подготовьте хлеб."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Намажьте творожный сыр."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Нарежьте огурец тонкими ломтиками."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Выложите огурец на хлеб."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Соберите сэндвич и подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Запечённое яблоко с творогом",
+      "description": "Тёплый перекус с белком и мягкой фруктовой основой помогает поддерживать сытость и создаёт комфортное ощущение после еды. Яблоко делает вкус более нежным и уютным.",
+      "chef_advice": "Запекайте яблоко до полной мягкости, но не пересушивайте. Творог добавляйте уже после запекания, чтобы он сохранил нежную текстуру.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 190,
+      "proteins": 11,
+      "fats": 4,
+      "carbs": 27,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "яблоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "яблоко — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 80 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "корица",
+          "amount": null,
+          "unit": null,
+          "display_text": "корица — щепотка",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Удалите сердцевину у яблока."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Запекайте яблоко до мягкости."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте внутрь творог."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Посыпьте щепоткой корицы."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте тёплым."
+        }
+      ]
+    },
+    {
+      "title": "Овсяное печенье с бананом",
+      "description": "Мягкий углеводный перекус помогает быстро поддержать энергию и хорошо подходит для активной части дня. Банан делает вкус естественно сладким без лишней сложности.",
+      "chef_advice": "Используйте спелый банан, чтобы масса легко связывалась без дополнительного сахара. Не делайте печенье слишком толстым, чтобы оно осталось мягким.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 180,
+      "proteins": 4,
+      "fats": 2,
+      "carbs": 37,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "банан",
+          "amount": null,
+          "unit": null,
+          "display_text": "банан — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "овсяные хлопья",
+          "amount": null,
+          "unit": null,
+          "display_text": "овсяные хлопья — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Разомните банан вилкой."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте овсяные хлопья."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Перемешайте до однородной массы."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Сформируйте небольшие печенья."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Запекайте до готовности."
+        }
+      ]
+    },
+    {
+      "title": "Хумус с овощными палочками",
+      "description": "Насыщающий перекус с растительным белком и клетчаткой помогает поддерживать энергию без тяжести. Овощи добавляют свежесть и хрустящую текстуру.",
+      "chef_advice": "Овощи нарезайте палочками примерно одной толщины, чтобы их было удобно макать в хумус. Хумус лучше достать заранее, чтобы вкус был мягче.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 220,
+      "proteins": 7,
+      "fats": 10,
+      "carbs": 24,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "хумус",
+          "amount": null,
+          "unit": null,
+          "display_text": "хумус — 70 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "морковь",
+          "amount": null,
+          "unit": null,
+          "display_text": "морковь — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "огурец",
+          "amount": null,
+          "unit": null,
+          "display_text": "огурец — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        },
+        {
+          "name": "сладкий перец",
+          "amount": null,
+          "unit": null,
+          "display_text": "сладкий перец — 0.5 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 3,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Очистите и нарежьте овощи палочками."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Переложите хумус в миску."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Разложите овощи рядом."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    },
+    {
+      "title": "Смузи с бананом и йогуртом",
+      "description": "Быстрый перекус с белком и углеводами помогает поддерживать энергию и подходит для насыщенного дня. Йогурт делает текстуру мягкой и кремовой.",
+      "chef_advice": "Используйте охлаждённые ингредиенты для более плотной текстуры. Банан лучше брать спелый, чтобы вкус был мягким и естественно сладким.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 210,
+      "proteins": 8,
+      "fats": 4,
+      "carbs": 36,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "банан",
+          "amount": null,
+          "unit": null,
+          "display_text": "банан — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "йогурт натуральный",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт натуральный — 180 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Очистите банан."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Переложите банан в блендер."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте йогурт."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Взбейте до однородности."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Перелейте в стакан и подавайте."
+        }
+      ]
+    },
+    {
+      "title": "Тост с авокадо",
+      "description": "Перекус с полезными жирами и сложными углеводами помогает дольше сохранять сытость и поддерживает концентрацию. Авокадо делает вкус мягким и кремовым.",
+      "chef_advice": "Авокадо разминайте прямо перед подачей, чтобы масса не потемнела. Хлеб можно слегка подсушить для более контрастной текстуры.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 220,
+      "proteins": 4,
+      "fats": 14,
+      "carbs": 20,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "хлеб цельнозерновой",
+          "amount": null,
+          "unit": null,
+          "display_text": "хлеб цельнозерновой — 1 ломтик",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "авокадо",
+          "amount": null,
+          "unit": null,
+          "display_text": "авокадо — 0.5 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "лимонный сок",
+          "amount": null,
+          "unit": null,
+          "display_text": "лимонный сок — 1 ч.л.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Подсушите хлеб."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Разомните авокадо вилкой."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте немного лимонного сока."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Намажьте массу на хлеб."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    },
+    {
+      "title": "Йогурт с гранолой и яблоком",
+      "description": "Хрустящий перекус с белком и углеводами помогает быстро поддержать энергию и надолго сохранить лёгкую сытость. Яблоко делает вкус свежее и ярче.",
+      "chef_advice": "Гранолу добавляйте прямо перед подачей, чтобы она не размокла. Яблоко лучше нарезать мелкими кубиками для более ровной текстуры.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 260,
+      "proteins": 9,
+      "fats": 7,
+      "carbs": 39,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "йогурт натуральный",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт натуральный — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "гранола",
+          "amount": null,
+          "unit": null,
+          "display_text": "гранола — 35 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "яблоко",
+          "amount": null,
+          "unit": null,
+          "display_text": "яблоко — 0.5 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Выложите йогурт в миску."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте яблоко мелкими кубиками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте яблоко к йогурту."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Посыпьте гранолой."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    },
+    {
+      "title": "Банан с орехами",
+      "description": "Простой перекус с сочетанием быстрых углеводов и полезных жиров помогает поддерживать энергию между основными приёмами пищи. Орехи делают его более сытным.",
+      "chef_advice": "Орехи лучше слегка измельчить, если нужен более удобный формат подачи. Банан подавайте свежим, не нарезая слишком заранее.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 190,
+      "proteins": 4,
+      "fats": 8,
+      "carbs": 28,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "банан",
+          "amount": null,
+          "unit": null,
+          "display_text": "банан — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "орехи",
+          "amount": null,
+          "unit": null,
+          "display_text": "орехи — 15 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Очистите банан."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Подготовьте орехи."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Подавайте банан с орехами."
+        }
+      ]
+    },
+    {
+      "title": "Творожный крем с грушей",
+      "description": "Нежный перекус с белком и мягким фруктовым вкусом помогает поддерживать сытость без перегрузки. Груша делает текстуру более деликатной и приятной.",
+      "chef_advice": "Если груша плотная, слегка доведите её до мягкости. Творог можно заранее размять ложкой или пробить блендером для более кремовой структуры.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 220,
+      "proteins": 17,
+      "fats": 6,
+      "carbs": 22,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "творог",
+          "amount": null,
+          "unit": null,
+          "display_text": "творог — 140 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "груша",
+          "amount": null,
+          "unit": null,
+          "display_text": "груша — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "йогурт натуральный",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт натуральный — 30 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Подготовьте грушу."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Смешайте творог с йогуртом."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте мелко нарезанную грушу."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Перемешайте до мягкой массы."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте охлаждённым или комнатной температуры."
+        }
+      ]
+    },
+    {
+      "title": "Овсяный батончик домашний",
+      "description": "Плотный перекус с углеводами и клетчаткой помогает поддерживать энергию в течение дня и удобен для быстрого перекуса. Натуральная сладость делает вкус мягким и понятным.",
+      "chef_advice": "Не делайте слой слишком толстым, чтобы батончик лучше держал форму после запекания. После духовки дайте ему полностью остыть перед нарезкой.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 230,
+      "proteins": 5,
+      "fats": 7,
+      "carbs": 36,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "energy_boost",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "овсяные хлопья",
+          "amount": null,
+          "unit": null,
+          "display_text": "овсяные хлопья — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "банан",
+          "amount": null,
+          "unit": null,
+          "display_text": "банан — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "орехи",
+          "amount": null,
+          "unit": null,
+          "display_text": "орехи — 10 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Разомните банан вилкой."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Смешайте его с овсяными хлопьями и орехами."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Переложите массу в небольшую форму."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Запекайте до готовности."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Остудите и нарежьте."
+        }
+      ]
+    },
+    {
+      "title": "Сыр и цельнозерновые хлебцы",
+      "description": "Простой белково-углеводный перекус помогает быстро поддержать сытость и не требует долгой подготовки. Хлебцы добавляют хрусткость и делают вкус более выразительным.",
+      "chef_advice": "Сыр лучше нарезать тонкими ломтиками, чтобы перекус был легче по текстуре. Хлебцы подавайте сразу, чтобы они оставались хрустящими.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 210,
+      "proteins": 11,
+      "fats": 11,
+      "carbs": 16,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "weight_gain",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "сыр",
+          "amount": null,
+          "unit": null,
+          "display_text": "сыр — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "цельнозерновые хлебцы",
+          "amount": null,
+          "unit": null,
+          "display_text": "цельнозерновые хлебцы — 3 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Нарежьте сыр ломтиками."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Разложите хлебцы на тарелке."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Добавьте сыр."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    },
+    {
+      "title": "Кефир с бананом",
+      "description": "Лёгкий перекус с белком и углеводами помогает поддерживать энергию и остаётся комфортным для пищеварения. Банан делает вкус мягче и приятнее.",
+      "chef_advice": "Подавайте кефир охлаждённым, а банан нарезайте непосредственно перед подачей. Для более однородного варианта можно сделать быстрый коктейль.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 210,
+      "proteins": 8,
+      "fats": 5,
+      "carbs": 32,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "energy_boost"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "кефир",
+          "amount": null,
+          "unit": null,
+          "display_text": "кефир — 250 мл",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "банан",
+          "amount": null,
+          "unit": null,
+          "display_text": "банан — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Налейте кефир в стакан."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Очистите и нарежьте банан."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Подавайте кефир с бананом отдельно или вместе."
+        }
+      ]
+    },
+    {
+      "title": "Тост с хумусом",
+      "description": "Перекус с растительным белком и сложными углеводами помогает поддерживать ровную энергию и даёт комфортную сытость. Хумус делает вкус более мягким и насыщенным.",
+      "chef_advice": "Хлеб слегка подсушите, чтобы текстура была контрастнее. Хумус намазывайте толстым, но ровным слоем.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 180,
+      "proteins": 6,
+      "fats": 6,
+      "carbs": 24,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "хлеб цельнозерновой",
+          "amount": null,
+          "unit": null,
+          "display_text": "хлеб цельнозерновой — 1 ломтик",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "хумус",
+          "amount": null,
+          "unit": null,
+          "display_text": "хумус — 40 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Подсушите хлеб."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Намажьте хумус на тост."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    },
+    {
+      "title": "Груша с йогуртом",
+      "description": "Мягкий фруктовый перекус с белковой основой помогает поддерживать сытость и остаётся лёгким для пищеварения. Груша делает вкус спокойным и свежим.",
+      "chef_advice": "Если груша жёсткая, лучше нарезать её тоньше. Йогурт можно подать отдельно или использовать как мягкий соус для фруктов.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 170,
+      "proteins": 6,
+      "fats": 3,
+      "carbs": 28,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "gentle_digestion",
+        "balanced"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "груша",
+          "amount": null,
+          "unit": null,
+          "display_text": "груша — 1 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "йогурт натуральный",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт натуральный — 120 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Вымойте грушу."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте её дольками."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Выложите йогурт в миску."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Подавайте грушу с йогуртом."
+        }
+      ]
+    },
+    {
+      "title": "Мини-сэндвич с сыром и помидором",
+      "description": "Быстрый перекус с белком и углеводами помогает убрать голод между основными приёмами пищи и поддерживает энергию. Помидор добавляет свежесть и сочность.",
+      "chef_advice": "Помидор нарезайте тонко, чтобы сэндвич не стал слишком влажным. Хлеб можно слегка подсушить для более приятной текстуры.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 230,
+      "proteins": 10,
+      "fats": 9,
+      "carbs": 26,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "weight_gain"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "хлеб",
+          "amount": null,
+          "unit": null,
+          "display_text": "хлеб — 2 ломтика",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "сыр",
+          "amount": null,
+          "unit": null,
+          "display_text": "сыр — 30 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "помидор",
+          "amount": null,
+          "unit": null,
+          "display_text": "помидор — 0.5 шт.",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Подготовьте хлеб."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Нарежьте сыр и помидор."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Соберите сэндвич."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Разрежьте на две части."
+        },
+        {
+          "step_number": 5,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    },
+    {
+      "title": "Йогурт с ягодами и семенами",
+      "description": "Лёгкий перекус с белком, клетчаткой и полезными жирами помогает поддерживать сытость и концентрацию. Ягоды делают вкус ярче и свежее.",
+      "chef_advice": "Семена добавляйте в самом конце, чтобы они не размокли слишком быстро. Для более насыщенного вкуса используйте смесь разных ягод.",
+      "meal_type": "snack",
+      "cooking_time_minutes": 15,
+      "min_age_months": 216,
+      "max_age_months": 1200,
+      "calories": 190,
+      "proteins": 9,
+      "fats": 7,
+      "carbs": 21,
+      "tags": [
+        "adult",
+        "adult_216_1200_curated_v1",
+        "adult_216_1200_months_snack_stage1"
+      ],
+      "nutrition_goals": [
+        "balanced",
+        "gentle_digestion"
+      ],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "йогурт натуральный",
+          "amount": null,
+          "unit": null,
+          "display_text": "йогурт натуральный — 170 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": null
+        },
+        {
+          "name": "ягоды",
+          "amount": null,
+          "unit": null,
+          "display_text": "ягоды — 50 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 1,
+          "category": null
+        },
+        {
+          "name": "семена",
+          "amount": null,
+          "unit": null,
+          "display_text": "семена — 10 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 2,
+          "category": null
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Выложите йогурт в миску."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Добавьте ягоды."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Посыпьте семенами."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Подавайте сразу."
+        }
+      ]
+    }
+  ]
+}

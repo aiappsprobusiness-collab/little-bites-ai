@@ -283,8 +283,8 @@ function containsAnyToken(haystack: string, tokens: string[]): boolean {
 }
 const AGE_RESTRICTED = ["острый", "кофе", "гриб"];
 const INFANT_FORBIDDEN_12 = ["свинина", "говядина", "стейк", "жарен", "копчен", "колбас"];
-/** Hard-guard для 12–24 мес: без жёстких кусочков, стейка, жареного, котлет, запеканок (грубая текстура). */
-const TODDLER_UNDER_24_FORBIDDEN = ["стейк", "жарен", "копчен", "колбас", "бекон", "отбивн", "котлет", "запеканк", "кусоч"];
+/** Hard-guard до 24 мес: обработанное/жёсткое мясо и жареное (подстроки в title+description). Без «кусоч»/«котлет»/«запеканк» — ложные срабатывания на «мягкие кусочки», котлетки, творожную запеканку. */
+const TODDLER_UNDER_24_FORBIDDEN = ["стейк", "жарен", "копчен", "колбас", "бекон", "отбивн"];
 function recipeFitsAgeRange(r: RecipeRowPool, ageMonths: number): boolean {
   const max = r.max_age_months;
   if (max != null && ageMonths > max) return false;
@@ -386,20 +386,45 @@ function trustOrder(t: string | null | undefined): number {
   return 2; // candidate, null
 }
 
-/** Pool: blocked excluded; trusted first, then starter/seed, then candidate; within tier by score DESC. */
+const POOL_SELECT_FIELDS =
+  "id, title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text)";
+const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
+/** Все curated seed/starter должны попадать в память: при одном LIMIT по score почти все рецепты имеют score=0, и первые N строк из БД — случайные, без каталога infant/toddler. */
+const POOL_SEED_CATALOG_FETCH_LIMIT = 600;
+
+/**
+ * Pool: две выборки (seed/starter целиком + manual/week_ai/chat_ai с лимитом), merge по id;
+ * сортировка: trust tier, затем score DESC.
+ */
 async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _memberId: string | null, limitCandidates: number): Promise<RecipeRowPool[]> {
-  const { data: rows, error } = await supabase
-    .from("recipes")
-    .select("id, title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text)")
-    .in("source", ["seed", "starter", "manual", "week_ai", "chat_ai"])
-    .or("trust_level.is.null,trust_level.neq.blocked")
-    .order("score", { ascending: false })
-    .limit(limitCandidates);
-  if (error) {
-    safeWarn("generate-plan fetchPoolCandidates", error.message);
-    return [];
+  const [seedRes, otherRes] = await Promise.all([
+    supabase
+      .from("recipes")
+      .select(POOL_SELECT_FIELDS)
+      .in("source", ["seed", "starter"])
+      .or(POOL_TRUST_OR)
+      .order("score", { ascending: false })
+      .limit(POOL_SEED_CATALOG_FETCH_LIMIT),
+    supabase
+      .from("recipes")
+      .select(POOL_SELECT_FIELDS)
+      .in("source", ["manual", "week_ai", "chat_ai"])
+      .or(POOL_TRUST_OR)
+      .order("score", { ascending: false })
+      .limit(Math.max(limitCandidates, 200)),
+  ]);
+  if (seedRes.error) safeWarn("generate-plan fetchPoolCandidates seed", seedRes.error.message);
+  if (otherRes.error) safeWarn("generate-plan fetchPoolCandidates other", otherRes.error.message);
+  if (seedRes.error && otherRes.error) return [];
+
+  const byId = new Map<string, RecipeRowPool>();
+  for (const row of (seedRes.data ?? []) as RecipeRowPool[]) {
+    byId.set(row.id, row);
   }
-  const list = (rows ?? []) as RecipeRowPool[];
+  for (const row of (otherRes.data ?? []) as RecipeRowPool[]) {
+    if (!byId.has(row.id)) byId.set(row.id, row);
+  }
+  const list = [...byId.values()];
   list.sort((a, b) => {
     const oa = trustOrder(a.trust_level);
     const ob = trustOrder(b.trust_level);

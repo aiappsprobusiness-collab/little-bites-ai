@@ -11,6 +11,20 @@ export type NutritionGoal = (typeof NUTRITION_GOALS)[number];
 
 const GOAL_SET = new Set<string>(NUTRITION_GOALS);
 
+/** Алиасы из curated-сидов / LLM → ключи БД (см. recipes_nutrition_goals_check, scripts/toddler-seed/nutritionGoalsDb.mjs). */
+const ALIAS_TO_CANONICAL: Record<string, NutritionGoal> = {
+  balance: "balanced",
+  iron: "iron_support",
+  brain: "brain_development",
+  weight: "weight_gain",
+  digestion: "gentle_digestion",
+  energy: "energy_boost",
+  satiety: "weight_gain",
+  protein: "balanced",
+  lightness: "gentle_digestion",
+  fiber: "gentle_digestion",
+};
+
 /**
  * Единый mapping подписей для UI (ключи БД + короткие алиасы).
  * Ключи в БД не меняются.
@@ -36,9 +50,11 @@ export function normalizeNutritionGoals(input: unknown): NutritionGoal[] {
   for (const raw of input) {
     if (typeof raw !== "string") continue;
     const key = raw.trim().toLowerCase();
-    if (!GOAL_SET.has(key) || seen.has(key)) continue;
-    seen.add(key);
-    out.push(key as NutritionGoal);
+    if (!key) continue;
+    const canonical = (GOAL_SET.has(key) ? key : ALIAS_TO_CANONICAL[key]) as NutritionGoal | undefined;
+    if (!canonical || !GOAL_SET.has(canonical) || seen.has(canonical)) continue;
+    seen.add(canonical);
+    out.push(canonical);
   }
   return out;
 }

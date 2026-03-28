@@ -16,7 +16,8 @@
 
 - **Поля пула:** `source = seed`, `locale = ru`, `trust_level = trusted`, `nutrition_goals = []` (отбор в плане для младенцев — по `min_age_months` / `max_age_months` и правилам generate-plan, не по целям). Текст «подсказки для мамы» хранится в `chef_advice`. На клиенте для infant-рецептов этот контент подписывается как **«Подсказка для мамы»**, а `description` берётся напрямую из `recipes.description` (про текстуру/этап прикорма). Группа 9–11 мес остаётся в infant UX-path (<12), но допускает более плотные текстуры, мягкие кусочки и finger food в curated-пуле.
 
-- **Идемпотентность:** повторный запуск ищет строку по `(user_id, source, locale, norm_title, min_age_months, max_age_months)` и делает **UPDATE** + замену ингредиентов/шагов, иначе **INSERT**. В БД: частичный уникальный индекс `recipes_seed_catalog_identity_v1` (миграция `20260325130000_recipes_seed_catalog_unique.sql`).
+- **Идемпотентность:** повторный запуск ищет строку по `(user_id, source, locale, norm_title, min_age_months, max_age_months, meal_type)` и делает **UPDATE** + замену ингредиентов/шагов, иначе **INSERT**. В БД: частичный уникальный индекс `recipes_seed_catalog_identity_v2` (миграция `20260328120000_recipes_seed_catalog_identity_meal_type.sql`; v1 заменён).
+- **Другой JSON-файл:** `node scripts/import-infant-seed.mjs --file=path/to/bundle.json` или `SEED_CATALOG_JSON=data/...`. Для toddler, child 37–96 / 97–216 и adult 216–1200 мес: **`docs/dev/toddler-seed-import.md`**, `npm run seed:toddler:import` / `seed:child:import` / `seed:child:teen:import` / `seed:adult:import`.
 
 Тег батча в `tags`: **`infant_curated_v2`** (удаление импортированного батча: `--purge`). Старый тег **`infant_curated_batch1`** (программная генерация 180 рецептов) при необходимости чистите отдельно: `INFANT_SEED_BATCH_TAG=infant_curated_batch1 node scripts/import-infant-seed.mjs --purge-only`.
 

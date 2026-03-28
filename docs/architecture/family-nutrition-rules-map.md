@@ -38,7 +38,7 @@
 
 ### Infant safety rules
 
-- **Rule:** Возраст <12 мес: без соли, сахара, мёда, цельного молока; мягкие текстуры; правила в промпте. 12–24 мес: без стейка, жареного, копчёного, твёрдых кусочков (INFANT_FORBIDDEN_12, TODDLER_UNDER_24_FORBIDDEN в generate-plan). 12–35 мес: блок kid-safety в промпте (KID_SAFETY_1_3_INSTRUCTION): минимум соли/сахара, без фритюра/острого/копчёного, избегать риска подавиться.
+- **Rule:** Возраст <12 мес: без соли, сахара, мёда, цельного молока; мягкие текстуры; правила в промпте. 12–24 мес: в **пуле плана** — INFANT_FORBIDDEN_12 и TODDLER_UNDER_24_FORBIDDEN (стейк, жареное, копчёное, колбаса, бекон, отбивные; без подстрок «кусоч»/«котлет»/«запеканк» из‑за ложных срабатываний на мягкие блюда). В **промпте** чата по‑прежнему мягкая еда без жёстких кусочков. 12–35 мес: блок kid-safety в промпте (KID_SAFETY_1_3_INSTRUCTION): минимум соли/сахара, без фритюра/острого/копчёного, избегать риска подавиться.
 - **Where:** Edge: промпты deepseek-chat (SAFETY_RULES, RECIPE_SYSTEM_RULES_V3, AGE_CONTEXTS_SHORT.infant, getAgeCategoryRules); KID_SAFETY_1_3_INSTRUCTION при applyKidFilter (familyMode.getFamilyPromptMembers); generate-plan recipeBlockedByInfantKeywords (AGE_RESTRICTED, INFANT_FORBIDDEN_12, TODDLER_UNDER_24_FORBIDDEN). Client: отдельного фильтра по ключевым словам для младенцев нет; возраст передаётся на Edge.
 - **Docs:** chat_recipe_generation, system-prompts-map (guardrails).
 
