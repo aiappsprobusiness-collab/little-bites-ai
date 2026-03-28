@@ -2864,7 +2864,7 @@ export default function MealPlanPage() {
                               });
                             }}
                           >
-                            {`Ввести ${getProductDisplayLabel(novelKeysForIntroduce[0])} →`}
+                            {`Начать ввод: ${getProductDisplayLabel(novelKeysForIntroduce[0])}`}
                           </Button>
                         </div>
                       ) : null}

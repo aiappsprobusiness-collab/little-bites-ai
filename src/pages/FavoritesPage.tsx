@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { BookOpen, Heart, MessageCircle, Plus, Lock, ShoppingCart, ChevronLeft } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { TabEmptyState } from "@/components/ui/TabEmptyState";
-import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { Button } from "@/components/ui/button";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMyRecipes } from "@/hooks/useMyRecipes";
@@ -35,7 +34,7 @@ export default function FavoritesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { members, selectedMemberId } = useFamily();
+  const { members } = useFamily();
   const { hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
@@ -83,8 +82,7 @@ export default function FavoritesPage() {
     }
     setTab("shopping_list");
   };
-  const favoritesFilter = selectedMemberId === null || selectedMemberId === "family" ? "family" : selectedMemberId;
-  const { favorites, removeFavorite } = useFavorites(favoritesFilter, { queryEnabled: tab === "favorites" });
+  const { favorites, removeFavorite } = useFavorites("all", { queryEnabled: tab === "favorites" });
   const { myRecipes } = useMyRecipes();
   const [addToPlanRecipe, setAddToPlanRecipe] = useState<{
     id: string;
@@ -99,9 +97,8 @@ export default function FavoritesPage() {
   const [ingredientFilterMode, setIngredientFilterMode] = useState<IngredientFilterMode>("include");
 
   const scope = tab === "favorites" ? "favorites" : "my_recipes";
-  const memberIdForFilter = favoritesFilter === "family" || favoritesFilter === "all" ? null : favoritesFilter;
   const { allowedRecipeIds } = useRecipeIdsByIngredients(ingredientFilterTerms, scope, {
-    memberId: tab === "favorites" ? memberIdForFilter : null,
+    memberId: null,
     mode: ingredientFilterMode,
     enabled: true,
   });
@@ -199,18 +196,6 @@ export default function FavoritesPage() {
                   Мои рецепты
                 </button>
               </div>
-              <div className="flex items-center justify-between gap-3 min-h-[36px]">
-                <MemberSelectorButton variant="light" className="shrink min-w-0 max-w-[min(100%,11rem)]" />
-                <button
-                  type="button"
-                  onClick={openShoppingList}
-                  className="shrink-0 inline-flex items-center gap-1.5 text-xs text-muted-foreground/85 hover:text-foreground py-1.5 pl-2 -mr-1 transition-colors"
-                >
-                  <ShoppingCart className="w-3.5 h-3.5 opacity-60" aria-hidden />
-                  Покупки
-                  {!hasAccess && <Lock className="w-3 h-3 opacity-50" aria-hidden />}
-                </button>
-              </div>
             </>
           ) : (
             <button
@@ -231,6 +216,17 @@ export default function FavoritesPage() {
           mode={ingredientFilterMode}
           onModeChange={setIngredientFilterMode}
           className="mb-4"
+          endSlot={
+            <button
+              type="button"
+              onClick={openShoppingList}
+              className="shrink-0 inline-flex items-center gap-1.5 text-xs text-muted-foreground/85 hover:text-foreground py-1.5 px-1 -mr-1 transition-colors whitespace-nowrap"
+            >
+              <ShoppingCart className="w-3.5 h-3.5 opacity-60 shrink-0" aria-hidden />
+              Покупки
+              {!hasAccess && <Lock className="w-3 h-3 opacity-50 shrink-0" aria-hidden />}
+            </button>
+          }
         />
         )}
 

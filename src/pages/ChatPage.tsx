@@ -1394,8 +1394,8 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Sticky hero: только при наличии сообщений */}
-        {mode === "recipes" && members.length > 0 && messages.length > 0 && (
+        {/* Sticky hero: всегда для режима рецептов (как План / заполненный чат), независимо от пустой истории */}
+        {mode === "recipes" && members.length > 0 && (
           <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm pt-2 pb-2">
             <TabProfileMenuRow
               profileSlot={
@@ -1490,11 +1490,6 @@ export default function ChatPage() {
                 markHintsSeen();
                 textareaRef.current?.focus();
               }}
-              onProfileChange={() => setMessages([])}
-              profileChangeStatus={profileChangeStatus}
-              headerMeta={chatHeaderMeta}
-              headerRight={chatHeaderTrailing}
-              memberSelectorProps={recipesInfantProfileChipProps}
             />
           )}
 

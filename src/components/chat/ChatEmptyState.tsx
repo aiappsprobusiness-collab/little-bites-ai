@@ -1,6 +1,4 @@
 import { motion } from "framer-motion";
-import { MemberSelectorButton, type MemberSelectorButtonProps } from "@/components/family/MemberSelectorButton";
-import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,34 +29,19 @@ export interface ChatEmptyStateProps {
   suggestions?: readonly string[];
   /** Клик по подсказке: подставить текст в поле ввода. */
   onSuggestionClick: (text: string) => void;
-  /** При смене профиля (очистка чата). */
-  onProfileChange?: () => void;
-  /** Краткий статус при смене профиля (опционально). */
-  profileChangeStatus?: string | null;
-  /** Дополнительный контент под pill (например, лимиты). */
-  headerMeta?: React.ReactNode;
-  /** Справа в первой строке: бейдж подписки + кнопка меню ⋮ (как на вкладке План). */
-  headerRight?: React.ReactNode;
-  /** Синхрон с Планом прикорма: для &lt;12 мес — `leadingEmoji` + `fitLabelWidth`. */
-  memberSelectorProps?: Pick<MemberSelectorButtonProps, "leadingEmoji" | "fitLabelWidth">;
   /** Класс контейнера. */
   className?: string;
 }
 
 /**
- * Пустое состояние вкладки «Чат» (режим рецептов): pill профиля, приветственная карточка, крупные подсказки-плашки.
- * Показывается только при messages.length === 0.
+ * Пустое состояние вкладки «Чат» (режим рецептов): приветственная карточка и крупные подсказки-плашки.
+ * Шапка (профиль + ⋮) рендерится в ChatPage sticky — здесь только контент ленты.
  */
 export function ChatEmptyState({
   profileName,
   isFamily,
   suggestions = EMPTY_STATE_QUICK_SUGGESTIONS,
   onSuggestionClick,
-  onProfileChange,
-  profileChangeStatus,
-  headerMeta,
-  headerRight,
-  memberSelectorProps,
   className,
 }: ChatEmptyStateProps) {
   const welcomeLine1 = isFamily
@@ -68,32 +51,6 @@ export function ChatEmptyState({
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
-      {/* Верхняя строка: как на Плане — профиль | бейдж + ⋮ */}
-      <TabProfileMenuRow
-        className="shrink-0"
-        profileSlot={
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-            <MemberSelectorButton
-              onProfileChange={onProfileChange}
-              className="shrink-0"
-              {...memberSelectorProps}
-            />
-            {headerMeta != null && <div className="min-w-0 flex-1">{headerMeta}</div>}
-          </div>
-        }
-        trailing={headerRight}
-      />
-      {profileChangeStatus && (
-        <motion.span
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="block text-[12px] text-muted-foreground truncate"
-        >
-          {profileChangeStatus}
-        </motion.span>
-      )}
-
       {/* Приветственная карточка — tinted surface (bg-primary-light), не белый */}
       <motion.div
         initial={{ opacity: 0, y: 6 }}

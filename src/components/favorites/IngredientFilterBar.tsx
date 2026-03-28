@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, type ReactNode } from "react";
 import { X, RotateCcw, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ export interface IngredientFilterBarProps {
   /** Плейсхолдер поля поиска. */
   placeholder?: string;
   disabled?: boolean;
+  /** Слот справа от поля поиска в первой строке (напр. «Покупки» на экране избранного). */
+  endSlot?: ReactNode;
 }
 
 const DEFAULT_PLACEHOLDER = "Найти по ингредиенту…";
@@ -35,6 +37,7 @@ export function IngredientFilterBar({
   className,
   placeholder = DEFAULT_PLACEHOLDER,
   disabled = false,
+  endSlot,
 }: IngredientFilterBarProps) {
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -97,6 +100,7 @@ export function IngredientFilterBar({
             aria-label="Добавить ингредиент для фильтра"
           />
         </div>
+        {endSlot}
         {onModeChange && (
           <div
             className="flex shrink-0 rounded-full border border-border/45 bg-muted/20 p-0.5"
