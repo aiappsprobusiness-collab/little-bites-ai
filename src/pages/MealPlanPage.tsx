@@ -110,7 +110,7 @@ import {
   isInfantAutoreplaceContext,
   type InfantPoolExhaustedReason,
 } from "@/utils/infantAutoreplace";
-import { FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
+import { FF_UNIFIED_PAYWALL, FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
 import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/WeekPreviewPaywallSheet";
 import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingListFromPlanSheet";
 import { TagListEditor } from "@/components/ui/tag-list-editor";
@@ -2074,7 +2074,11 @@ export default function MealPlanPage() {
                   )}
                   onClick={async () => {
                     if (isFree) {
-                      if (FF_WEEK_PAYWALL_PREVIEW) {
+                      if (FF_UNIFIED_PAYWALL) {
+                        setPaywallReason("week_preview");
+                        setPaywallCustomMessage(null);
+                        setShowPaywall(true);
+                      } else if (FF_WEEK_PAYWALL_PREVIEW) {
                         setShowWeekPreviewSheet(true);
                       } else {
                         setPaywallReason("plan_week_locked");
@@ -2257,7 +2261,11 @@ export default function MealPlanPage() {
                     isLocked={isDayLockedForFree}
                     onClick={() => {
                       if (isDayLockedForFree) {
-                        if (FF_WEEK_PAYWALL_PREVIEW) {
+                        if (FF_UNIFIED_PAYWALL) {
+                          setPaywallReason("week_preview");
+                          setPaywallCustomMessage(null);
+                          setShowPaywall(true);
+                        } else if (FF_WEEK_PAYWALL_PREVIEW) {
                           setShowWeekPreviewSheet(true);
                         } else {
                           toast({
@@ -3131,14 +3139,14 @@ export default function MealPlanPage() {
         </div>
       </div>
 
-      {FF_WEEK_PAYWALL_PREVIEW && (
+      {FF_WEEK_PAYWALL_PREVIEW && !FF_UNIFIED_PAYWALL ? (
         <WeekPreviewPaywallSheet
           open={showWeekPreviewSheet}
           onOpenChange={setShowWeekPreviewSheet}
           previewDayLabel={weekPreviewData.previewDayLabel}
           previewMeals={weekPreviewData.previewMeals}
         />
-      )}
+      ) : null}
 
       <PoolExhaustedSheet
         open={!!poolExhaustedContext}

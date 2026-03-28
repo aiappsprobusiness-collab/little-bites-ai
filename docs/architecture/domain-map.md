@@ -28,7 +28,7 @@
 
 - **Назначение:** тариф (free / trial / premium), срок премиума, лимиты запросов.
 - **Таблицы:** `profiles_v2` (status, premium_until, trial_*, requests_today, last_reset), `subscriptions` (платежи Т-Банк; RLS service_role). Аудит плана: `subscription_plan_audit`.
-- **UI:** Paywall (`Paywall.tsx`), SubscriptionCard, TrialSoftBanner, PaymentResult, create-payment flow. Контекстные заголовки, абзац под ними и буллеты — `src/utils/paywallReasonCopy.ts` (`getPaywallReasonCopy` по `paywall_reason`; отдельный глобальный подзаголовок не используется); социальное усиление и блок trial — в разметке Paywall.
+- **UI:** Paywall (`Paywall.tsx` → по умолчанию `UnifiedPaywall`, legacy — `LegacyPaywall` при `VITE_FF_UNIFIED_PAYWALL=false`), SubscriptionCard, TrialSoftBanner, PaymentResult, create-payment flow. Единый копирайт и пункты ценности — `src/utils/unifiedPaywallCopy.ts`; контекстный legacy-текст — `src/utils/paywallReasonCopy.ts` (`paywall_reason` остаётся для аналитики). Социальное усиление / trial — в разметке paywall.
 - **Edge:** `create-payment` (создание заказа), `payment-webhook` (подтверждение, обновление profiles_v2 и subscriptions, запись в subscription_plan_audit).
 - **Зависимости:** все фичи с лимитами и gating смотрят на profiles_v2.status / premium_until / trial_*.
 

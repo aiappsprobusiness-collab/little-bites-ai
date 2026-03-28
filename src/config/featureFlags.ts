@@ -12,3 +12,9 @@ export const FF_AUTO_FILL_AFTER_MEMBER_CREATE =
 export const FF_WEEK_PAYWALL_PREVIEW =
   import.meta.env.VITE_FF_WEEK_PAYWALL_PREVIEW !== "false";
 
+/**
+ * Единый paywall (один UI и тексты для всех точек входа Premium).
+ * По умолчанию включён. Откат на контекстный legacy-paywall: `VITE_FF_UNIFIED_PAYWALL=false`.
+ */
+export const FF_UNIFIED_PAYWALL = import.meta.env.VITE_FF_UNIFIED_PAYWALL !== "false";
+

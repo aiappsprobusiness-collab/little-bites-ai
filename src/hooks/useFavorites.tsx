@@ -5,6 +5,7 @@ import { safeError } from "@/utils/safeLogger";
 import { getAppLocale } from '@/utils/appLocale';
 import { useAuth } from './useAuth';
 import { useAppStore } from '@/store/useAppStore';
+import { FF_UNIFIED_PAYWALL } from "@/config/featureFlags";
 import { trackUsageEvent } from '@/utils/usageEvents';
 import type { RecipeSuggestion } from '@/services/deepseek';
 
@@ -336,7 +337,13 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
     },
     onError: (err: Error & { code?: string }) => {
       if (err.code === 'favorites_limit_reached') {
-        useAppStore.getState().setShowFavoritesLimitSheet(true);
+        if (FF_UNIFIED_PAYWALL) {
+          useAppStore.getState().setPaywallReason("favorites_limit");
+          useAppStore.getState().setPaywallCustomMessage(null);
+          useAppStore.getState().setShowPaywall(true);
+        } else {
+          useAppStore.getState().setShowFavoritesLimitSheet(true);
+        }
       }
     },
   });

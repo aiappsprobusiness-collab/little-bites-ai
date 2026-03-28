@@ -40,6 +40,7 @@ import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
 import { FavoritesLimitSheet } from "./components/plan/FavoritesLimitSheet";
+import { FF_UNIFIED_PAYWALL } from "./config/featureFlags";
 import { DinnerReminderBanner } from "./components/DinnerReminderBanner";
 import { useAppStore } from "./store/useAppStore";
 import { useSubscription } from "./hooks/useSubscription";
@@ -158,7 +159,7 @@ const App = () => (
             <PWAInstall />
             <PWAUpdateToast />
             <GlobalPaywall />
-            <FavoritesLimitSheet />
+            {!FF_UNIFIED_PAYWALL ? <FavoritesLimitSheet /> : null}
             <TrialSoftBanner />
             <DinnerReminderBanner />
             <Routes>

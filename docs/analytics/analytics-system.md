@@ -190,9 +190,9 @@
 | member_create_start | AddChildForm | usage_events | то же | Начало создания члена семьи |
 | member_create_success | AddChildForm | usage_events | properties: { member_id } | Успешное создание |
 | **Paywall / trial / purchase** |
-| paywall_view | Paywall | usage_events | properties: { source, paywall_reason } | Показ paywall |
-| paywall_primary_click | Paywall, WeekPreviewPaywallSheet | usage_events | properties: { source } опционально | Клик по основной кнопке |
-| paywall_secondary_click | Paywall | usage_events | — | Клик по вторичной кнопке |
+| paywall_view | Paywall (Unified / Legacy) | usage_events | properties: { paywall_reason } (и др. при наличии) | Показ paywall |
+| paywall_primary_click | Paywall, WeekPreviewPaywallSheet | usage_events | properties: { source } и/или { paywall_reason } опционально | Клик по основной кнопке |
+| paywall_secondary_click | Paywall | usage_events | properties: { paywall_reason } опционально (UnifiedPaywall) | Клик по вторичной кнопке |
 | trial_started | Paywall, WeekPreviewPaywallSheet | usage_events | то же | После успешного start_trial() |
 | purchase_start | useSubscription | usage_events | properties: { plan } | Начало оплаты |
 | purchase_success | PaymentResult | usage_events | properties: { order_id } | Успешная оплата |
