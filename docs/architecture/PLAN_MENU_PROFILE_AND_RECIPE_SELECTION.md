@@ -58,6 +58,7 @@
 - Набор «запрещённых» токенов строится из списка аллергий пользователя и словаря алиасов (БКМ, глютен, яйца, рыба, орехи, курица и т.д.). Примеры: БКМ → молоко, сливки, йогурт, сыр, творог, казеин и т.д.; «курица» → кур, куриц, chicken.  
 - Для **аллергий** используется проверка по **подстроке** (без требования границы слова), чтобы формы вроде «орехами», «ореховый» блокировались токеном «орех».  
 - **Ложный матч нут/nut:** нут (chickpea) не считается орехом: при токене «nut» текст, содержащий кириллическое «нут», не считается совпадением (явное исключение в `containsAnyTokenForAllergy` / `recipeMatchesAllergyTokens`).
+- **Яйца:** отдельный токен «белок» для аллергии на яйца **не используется** (см. §4.1 в [ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md](../decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md)).
 
 Подробнее: [ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md](../decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md), [family-nutrition-rules-map.md](./family-nutrition-rules-map.md).
 
@@ -73,7 +74,7 @@ Dislikes — **жёсткое исключение**: рецепт, содерж
 
 - **Edge:** `preferenceRules.buildDislikeTokens(memberData)` — каждый пункт из `member_data.dislikes` нормализуется и разбивается на слова; для длинных слов (≥4 символа) добавляется вариант без последней буквы (stem). Проверка по тем же полям рецепта, что и для аллергий: title, description, recipe_ingredients (name, display_text).
 
-- **Клиент:** `recipePool.getDislikeTokens(memberData)` — по смыслу то же: массив dislikes → токенизация (слова от 2 символов). Проверка по title, description, tags (без ингредиентов, т.к. они не подгружаются в пул на клиенте).
+- **Клиент:** `recipePool.getDislikeTokens(memberData)` — массив dislikes → токенизация (слова от 2 символов), как на Edge по входу. Проверка в `passesProfileFilter` идёт по **одному объединённому тексту** с **title, description, tags и ингредиентами** (`recipe_ingredients.name`, `display_text`), через `containsAnyToken` (граница слова). Если `dislikes` непусты, в SELECT пула подмешиваются строки ингредиентов (`memberHasDislikesForPool`), иначе фильтр не имел бы смысла.
 
 ### 3.3 Где применяется
 
@@ -179,8 +180,8 @@ Dislikes — **жёсткое исключение**: рецепт, содерж
 
 ### 6.2 Клиент
 
-- **«Подобрать рецепты»** при определённых сценариях может использовать клиентский пул (`useGenerateWeeklyPlan` → `pickRecipeFromPool`): те же фильтры по профилю (аллергии, dislikes, возраст по `age_months`), по слоту (meal_type, завтрак без супа, sanity), но **без ингредиентов** в запросе к БД — только title, description, tags. Поэтому на клиенте проверка по ингредиентам не выполняется.
-- **Замена слота из пула** (`useReplaceMealSlot.pickReplacementFromPool`): те же клиентские фильтры (passesProfileFilter по allergies, dislikes, age), без скоринга по likes.
+- **«Подобрать рецепты»** при определённых сценариях может использовать клиентский пул (`useGenerateWeeklyPlan` → `pickRecipeFromPool`): те же фильтры по профилю (аллергии, dislikes, возраст по `age_months`), по слоту (meal_type, завтрак без супа, sanity). **Источники** в `.in("source", …)` совпадают с Edge: **`POOL_SOURCES`** в `recipeCanonical.ts` — `seed`, **`starter`**, `manual`, `week_ai`, `chat_ai`. В SELECT подмешиваются **`recipe_ingredients`**, если нужны аллергии, **непустые dislikes**, прикорм (introduced/introducing) или роль infant-слота — тогда `passesProfileFilter` учитывает ингредиенты для аллергий и dislikes.
+- **Замена слота из пула** (`useReplaceMealSlot.pickReplacementFromPool`): те же источники и те же фильтры (`passesProfileFilter`), без скоринга по likes.
 - **Прикорм (&lt;12 мес), только UI:** `filterPoolCandidatesForSlot`, `listFilteredPoolRecipesForPlanSlot` и `pickRecipeFromPool` в `recipePool.ts` — единая цепочка; опционально **`infantSlotRole`**: `primary` (новый продукт) / `secondary` (только введённые продукты по ключам ингредиентов). При `primary`/`secondary` кандидаты **не** режутся по совпадению `recipes.meal_type` со слотом плана (завтрак/обед в БД — только куда сохранить выбор; каши в seed чаще `breakfast`, второй слот раньше запрашивал `lunch` и получал пустой пул). **не** подменяют Edge generate-plan.
 - **Прикорм (&lt;12 мес), блок «Сегодня можно попробовать» (в БД `meal_type` = `INFANT_PLAN_SLOT_NEW_PRODUCT` = `breakfast`):** `evaluateInfantRecipeComplementaryRules`. **Старт (0 введённых):** одна строка продукта из `ALLOWED_START_PRODUCT_KEYS`. **После старта:** **ровно один** новый продукт среди распознанных ключей; каждая пищевая строка ингредиента должна дать ключ — иначе рецепт отклоняется (нельзя надёжно посчитать новизну). Смешанный «1 новый + знакомые» — только здесь, не во втором блоке. Подпись в UI плана: `getInfantPrimaryProductSummaryLine` (компактная одна строка); `getInfantPrimaryIntroducingLinesFromIngredientNames` остаётся для других сценариев/совместимости. Подбор: `pickInfantNewRecipe` / `listInfantNewRecipeCandidates` (не смешивать с знакомым блоком).
 - **Блок «Уже знакомое»** (`INFANT_PLAN_SLOT_FAMILIAR` = `lunch`): `evaluateInfantSecondaryFamiliarOnly` — среди **всех** пищевых строк ингредиентов (не технических) каждая должна дать канонический ключ (`normalizeProductKey`); иначе рецепт **не** в familiar. Среди распознанных ключей **не** должно быть новинок относительно `introduced_product_keys` (смешанный «знакомый + новый» — только в primary). `pickInfantFamiliarRecipe` / `listInfantFamiliarRecipeCandidates`. На экране **два слота** рендерятся по наличию введённых продуктов, **не** по числу кандидатов в пуле (второй блок не скрывается из‑за пустого пула при непустом `introduced_product_keys`).
@@ -196,8 +197,8 @@ Dislikes — **жёсткое исключение**: рецепт, содерж
 
 | Фактор | Режим «Семья» | Один профиль | Где учитывается |
 |--------|----------------|--------------|------------------|
-| **Аллергии** | Объединённый список всех членов | allergies выбранного профиля | Edge: title, description, recipe_ingredients. Клиент: title, description, tags (без ингредиентов). |
-| **Не любит** | Объединённый список всех членов | dislikes выбранного профиля | То же: жёсткое исключение по токенам. Edge — с ингредиентами, клиент — без. |
+| **Аллергии** | Объединённый список всех членов | allergies выбранного профиля | Edge и клиентский пул: title, description, tags, recipe_ingredients (при непустых аллергиях на клиенте строки ингредиентов подгружаются в запрос). Матч: подстроки токенов (`containsAnyTokenForAllergy` / `recipeMatchesAllergyTokens`). |
+| **Не любит** | Объединённый список всех членов | dislikes выбранного профиля | Edge и клиентский пул: те же поля, включая ингредиенты при непустых dislikes на клиенте. На клиенте матч dislikes — `containsAnyToken` (граница слова); на Edge — `recipeMatchesTokens` / `includesTokenSoft` (для коротких токенов возможны мелкие отличия от границ слова). |
 | **Любит** | В `member_data` на клиенте может быть объединённый список | likes выбранного профиля в payload | **generate-plan:** не влияет на пул. **Чат:** мягкий сигнал в промпте (likesFavoring). Клиентский пул — без приоритета по likes. |
 | **Возраст** | Не применяется (общий стол) | age_months: фильтр min/max_age, ключевые слова до 12 мес, 12–24 мес, &lt;36 мес | Edge: recipeFitsAgeRange, recipeBlockedByInfantKeywords, memberAgeContext. Клиент: age_months &lt; 36 → AGE_RESTRICTED_TOKENS (остро, кофе, грибы). |
 | **Семейный ужин** | Только для слота «ужин»: исключение стейк/редкое мясо и т.д.; при нехватке кандидатов — fallback без фильтра | Не используется | Только Edge, только при member_id = null. |

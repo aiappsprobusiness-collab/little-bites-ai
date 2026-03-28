@@ -6,7 +6,7 @@
 import {
   buildBlockedTokens,
   getBlockedTokensPerAllergy,
-  containsAnyToken,
+  containsAnyTokenForAllergy,
 } from "@/utils/allergenTokens";
 
 export interface ChatAllergyCheckResult {
@@ -33,14 +33,14 @@ export function checkChatAllergyBlock(
   const blockedTokens = buildBlockedTokens(list);
   if (blockedTokens.length === 0) return { blocked: false, found: [] };
 
-  if (!containsAnyToken(messageLower, blockedTokens).hit) {
+  if (!containsAnyTokenForAllergy(messageLower, blockedTokens).hit) {
     return { blocked: false, found: [] };
   }
 
   const perAllergy = getBlockedTokensPerAllergy(list);
   const found: string[] = [];
   for (const { allergy, tokens } of perAllergy) {
-    if (containsAnyToken(messageLower, tokens).hit) {
+    if (containsAnyTokenForAllergy(messageLower, tokens).hit) {
       found.push(allergy);
     }
   }

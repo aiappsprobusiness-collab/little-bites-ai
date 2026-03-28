@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { normalizeAllergyInput, expandAllergyToTokens } from "./allergyAliases";
+import { normalizeAllergyInput, expandAllergyToTokens, buildBlockedTokensFromAllergies } from "./allergyAliases";
+import { containsAnyTokenForAllergy } from "./allergenTokens";
 
 describe("normalizeAllergyInput", () => {
   it('normalizes "БКМ" to canonical "белок коровьего молока"', () => {
@@ -41,5 +42,32 @@ describe("expandAllergyToTokens", () => {
     const { tokens } = expandAllergyToTokens("БКМ");
     expect(tokens).toContain("козий");
     expect(tokens).toContain("козье");
+  });
+
+  it("яйца: токены не содержат голое «белок» (ложные срабатывания на описаниях)", () => {
+    const { tokens } = expandAllergyToTokens("яйца");
+    expect(tokens).not.toContain("белок");
+  });
+});
+
+describe("egg allergy blocking (containsAnyTokenForAllergy + buildBlockedTokensFromAllergies)", () => {
+  const eggTokens = () => buildBlockedTokensFromAllergies(["яйца"]);
+
+  it.each([
+    ["источник белка"],
+    ["даёт белок"],
+    ["богато белком"],
+  ])("не блокирует описание: %s", (text) => {
+    expect(containsAnyTokenForAllergy(text, eggTokens()).hit).toBe(false);
+  });
+
+  it.each([
+    ["яйцо"],
+    ["яичный белок"],
+    ["белок яйца"],
+    ["egg"],
+    ["egg white"],
+  ])("блокирует: %s", (text) => {
+    expect(containsAnyTokenForAllergy(text, eggTokens()).hit).toBe(true);
   });
 });

@@ -1,5 +1,33 @@
 import { passesPreferenceFilters } from "./preferenceRules.ts";
 
+Deno.test("passesPreferenceFilters allows egg allergy when text only says «даёт белок» (no egg)", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Овсяная каша с бананом",
+      description: "Мягкая каша даёт белок и сытость утром.",
+      recipe_ingredients: [{ name: "овсяные хлопья" }, { name: "банан" }],
+    },
+    { allergies: ["яйца"] },
+  );
+  if (!allowed) {
+    throw new Error("«даёт белок» in description must not block on egg allergy");
+  }
+});
+
+Deno.test("passesPreferenceFilters blocks egg allergy when ingredient is яйцо", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Омлет с овощами",
+      description: "Сытный завтрак",
+      recipe_ingredients: [{ name: "яйцо куриное", display_text: "1 шт." }],
+    },
+    { allergies: ["яйца"] },
+  );
+  if (allowed) {
+    throw new Error("Expected egg allergy to block recipe with яйцо in ingredients");
+  }
+});
+
 Deno.test("passesPreferenceFilters blocks nut allergy for recipe with орехами in title", () => {
   const allowed = passesPreferenceFilters(
     {

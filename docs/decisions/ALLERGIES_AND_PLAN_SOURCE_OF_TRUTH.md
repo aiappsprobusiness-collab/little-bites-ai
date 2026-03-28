@@ -18,18 +18,25 @@
 - **Edge (generate-plan):**
   - `fetchPoolCandidates(supabase, userId, memberId, limit)` — только выборка рецептов из БД (source in seed/starter/manual/week_ai/chat_ai), без фильтра по аллергиям.
   - `pickFromPool(...)` — все фильтры: exclude ids/titleKeys, mainIngredient, mealType, breakfast no-soup, lunch soup-only, sanity, **profile (аллергии, предпочтения, возраст)**, goals-hints. Аллергии применяются в `passesProfileFilter` → `checkAllergyWithDetail` по полям рецепта: title, description, recipe_ingredients (name, display_text). Не по `recipe_ingredients.category`.
-- **Клиент:** `src/utils/recipePool.ts` — `pickRecipeFromPool` и `passesProfileFilter` используются при подборе рецептов по кнопке «Подобрать рецепты» (weekly generation). Логика аллергий там совпадает по смыслу с Edge (токены из allergies + dairy expansion), но без единого словаря (курица/орехи и т.д.) — только tokenize(allergy) и молоко.
+- **Клиент:** `src/utils/recipePool.ts` — `pickRecipeFromPool` и `passesProfileFilter` при подборе из пула используют **те же** токены аллергенов, что и Edge: `buildBlockedTokensFromAllergies` / `allergyAliases.ts` (и fallback из `allergensDictionary.ts`), плюс `containsAnyTokenForAllergy` для матча по тексту рецепта.
 
-**Разрыв (до исправления):** для «курица» токенизация даёт слово «курица»; в названии «Суп с курицей и овощами» подстрока «курица» не входит в «курицей», поэтому рецепт не отфильтровывался. Нужен единый словарь расширенных токенов (кур, куриц, chicken и т.д.) и использование его и в плане, и в чате.
+**Исторический разрыв (курица):** для свободного ввода «курица» без попадания в словарь алиасов теоретически возможны расхождения с Edge; при вводе из подсказок словаря клиент и Edge согласованы по куриным токенам.
 
 ## 4. Как рецепт проверяется на аллерген
 
 - **Поля:** title, description, ingredients (в Edge — `recipe_ingredients.name`, `recipe_ingredients.display_text`). Не используются: `recipe_ingredients.category`, tags как единственный источник (tags участвуют в общем тексте в recipePool, в Edge только title/description/ingredients).
-- **Метод:** набор «запрещённых токенов» (blockedTokens) строится из аллергий профиля (+ расширения для молока, курицы, орехов и т.д.). Текст рецепта (title + description + ingredients) приводится к нижнему регистру; если в нём есть подстрока из blockedTokens — рецепт запрещён.
+- **Метод:** набор «запрещённых токенов» (blockedTokens) строится из аллергий профиля (+ расширения для молока, курицы, орехов и т.д.). Текст рецепта (title + description + ingredients) приводится к нижнему регистру; если в нём есть подстрока из blockedTokens — рецепт запрещён (в generate-plan / `preferenceRules` — подстрока; в части чата для отдельных проверок может использоваться `containsAnyToken` с границей слова — см. код).
+
+### 4.1 Аллергия на яйца и слово «белок»
+
+- В словаре `ALLERGY_ALIASES` для канонического **«яйца»** **нет** отдельного токена **«белок»**: иначе ложные срабатывания на нейтральные фразы в описаниях («даёт белок», «источник белка»).
+- Для яйца остаются токены вроде **яйц**, **яичн**, **желтк**, **egg** / **eggs** и **явные подстроки**: **белок яйц…**, **яичный белок**, **egg white**.
+- Клиентский `allergensDictionary` (fallback по категории eggs) синхронизирован с этой политикой.
 
 ## 5. Где в чате стоит guard на аллерген и почему «не удалось распознать рецепт»
 
-- **Guard:** в `src/hooks/useDeepSeekAPI.tsx` перед вызовом API вызывается `checkChatAllergyBlock(lastUserMessage, memberData?.allergies)`. При `blocked && found.length > 0` возвращается `{ message: "У нас аллергия на ..." }` без вызова DeepSeek.
+- **Guard:** в `src/hooks/useDeepSeekAPI.tsx` перед вызовом API вызывается `checkChatAllergyBlock(lastUserMessage, memberData?.allergies)`. При `blocked && found.length > 0` возвращается `{ message: "У нас аллергия на ..." }` без вызова DeepSeek. Матч по тексту запроса — **`containsAnyTokenForAllergy`** (подстроки токенов, как в плане), а не граница слова.
+- **Профильный пречек:** `checkChatRequestAgainstProfile` (`chatBlockedCheck.ts`) для аллергий и dislikes в запросе использует тот же **`containsAnyTokenForAllergy`**, чтобы русские формы («луком», «курицей», «ягодный») обрабатывались согласованно с планом.
 - **Проблема «не удалось распознать рецепт»:** при таком ответе в ответе нет `recipes`; клиент (ChatPage) парсит ответ как рецепт, не находит рецепт и подставляет сообщение по умолчанию «Не удалось распознать рецепт. Попробуйте уточнить запрос.» вместо текста отказа по аллергии. Нужно: возвращать флаг (например `blockedByAllergy: true`) и на клиенте показывать именно сообщение отказа.
 - **Второй разрыв (исправлен):** в словаре аллергенов (_shared/allergyAliases.ts и клиент) для блокировки запроса добавлены прилагательные и формы («ореховый», «яичный», «молочный» и т.д.). Запрос «ореховый пудинг» при аллергии на орехи теперь блокируется до вызова модели (findMatchedTokens по границам слов), показывается понятное сообщение без подмены блюда.
 

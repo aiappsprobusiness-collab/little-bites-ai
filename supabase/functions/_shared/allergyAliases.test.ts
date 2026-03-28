@@ -36,3 +36,13 @@ Deno.test("buildBlockedTokensFromAllergies: CMPA and БКМ yield same tokens", 
   const milkInBkm = fromBkm.some((t) => t === "milk" || t.includes("молок"));
   if (!milkInCmpa || !milkInBkm) throw new Error("Both CMPA and БКМ should expand to milk/молок tokens");
 });
+
+Deno.test("яйца: expanded tokens must not include standalone «белок» substring token", () => {
+  const tokens = buildBlockedTokensFromAllergies(["яйца"]);
+  if (tokens.includes("белок")) {
+    throw new Error("Egg allergy tokens must not include bare «белок» (false positives on descriptions)");
+  }
+  if (!tokens.some((t) => t.includes("яйц") || t === "egg" || t.includes("egg"))) {
+    throw new Error("Egg allergy tokens should still include яйц/egg markers");
+  }
+});

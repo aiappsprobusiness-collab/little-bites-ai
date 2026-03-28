@@ -1,11 +1,11 @@
 /**
- * Pool-first v1: подбор рецептов из пула (seed, manual, week_ai) для Premium weekly генерации.
- * Используется при подборе рецептов по кнопке «Подобрать рецепты».
+ * Pool-first v1: подбор из пула (источники как в Edge generate-plan: seed, starter, manual, week_ai, chat_ai).
  * Токены аллергенов — из allergenTokens (в унисон с Edge _shared/allergens).
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildBlockedTokens, containsAnyToken, containsAnyTokenForAllergy } from "@/utils/allergenTokens";
+import { POOL_SOURCES } from "@/utils/recipeCanonical";
 import {
   isIntroducingPeriodActive,
   extractAllKeyProductKeysFromIngredients,
@@ -222,6 +222,13 @@ function getDislikeTokens(memberData: MemberDataForPool | null | undefined): str
   return [...tokens];
 }
 
+/** Есть ли непустые dislikes — тогда в запросе пула нужны `recipe_ingredients` (паритет с Edge). */
+export function memberHasDislikesForPool(memberData: MemberDataForPool | null | undefined): boolean {
+  const list = memberData?.dislikes;
+  if (!Array.isArray(list) || list.length === 0) return false;
+  return list.some((d) => String(d ?? "").trim().length > 0);
+}
+
 /** Токены для возраста < 3: остро, кофе, грибы. */
 const AGE_RESTRICTED_TOKENS = ["остр", "кофе", "гриб"];
 
@@ -235,13 +242,16 @@ export function passesProfileFilter(
   },
   memberData: MemberDataForPool | null | undefined
 ): { pass: boolean; reason?: string } {
+  const ingredientsText = (recipe.recipe_ingredients ?? [])
+    .map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" "))
+    .join(" ");
+  const textWithIngredients = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" "), ingredientsText]
+    .join(" ")
+    .toLowerCase();
+
   const allergyTokens = getAllergyTokens(memberData);
   if (allergyTokens.length > 0) {
-    const ingredientsText = (recipe.recipe_ingredients ?? [])
-      .map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" "))
-      .join(" ");
-    const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" "), ingredientsText].join(" ").toLowerCase();
-    if (containsAnyTokenForAllergy(text, allergyTokens).hit) {
+    if (containsAnyTokenForAllergy(textWithIngredients, allergyTokens).hit) {
       if (IS_DEV) console.log("[DEBUG] pool filter: allergy hit", { title: recipe.title, tokens: allergyTokens });
       return { pass: false, reason: "allergy" };
     }
@@ -249,8 +259,7 @@ export function passesProfileFilter(
 
   const dislikeTokens = getDislikeTokens(memberData);
   if (dislikeTokens.length > 0) {
-    const text = [recipe.title, recipe.description ?? "", (recipe.tags ?? []).join(" ")].join(" ");
-    if (containsAnyToken(text, dislikeTokens).hit) {
+    if (containsAnyToken(textWithIngredients, dislikeTokens).hit) {
       if (IS_DEV) console.log("[DEBUG] pool filter: dislike hit", { title: recipe.title, tokens: dislikeTokens });
       return { pass: false, reason: "preference" };
     }
@@ -450,6 +459,7 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
 
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
   const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
+  const hasDislikes = memberHasDislikesForPool(memberData ?? null);
   const hasIntroduced = Array.isArray(memberData?.introduced_product_keys) && memberData.introduced_product_keys.length > 0;
   const hasIntroducing =
     !!memberData?.introducing_product_key &&
@@ -464,9 +474,10 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
   const needsIngredientsForInfantRole =
     resolvedListInfantRole === "primary" || resolvedListInfantRole === "secondary";
 
-  const selectFields = (hasAllergies || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole)
-    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
-    : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
+  const selectFields =
+    hasAllergies || hasDislikes || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole
+      ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
+      : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
   const ageMonthsForPool =
     memberData?.age_months ??
@@ -475,7 +486,7 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
   let poolQuery = supabase
     .from("recipes")
     .select(selectFields)
-    .in("source", ["seed", "manual", "week_ai", "chat_ai"]);
+    .in("source", [...POOL_SOURCES]);
   poolQuery = applyUnder12PoolAgeMonthsSqlFilter(poolQuery, ageMonthsForPool);
   const { data: rows, error } = await poolQuery.order("created_at", { ascending: false }).limit(limitCandidates);
 
@@ -517,6 +528,7 @@ export async function pickRecipeFromPool(
   const excludeSet = new Set(excludeRecipeIds);
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
   const hasAllergies = Array.isArray(memberData?.allergies) && memberData.allergies.length > 0;
+  const hasDislikes = memberHasDislikesForPool(memberData ?? null);
   const hasIntroduced = Array.isArray(memberData?.introduced_product_keys) && memberData.introduced_product_keys.length > 0;
   const hasIntroducing =
     !!memberData?.introducing_product_key &&
@@ -531,15 +543,16 @@ export async function pickRecipeFromPool(
   const needsIngredientsForInfantRole =
     resolvedInfantSlotRole === "primary" || resolvedInfantSlotRole === "secondary";
 
-  const selectFields = (hasAllergies || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole)
-    ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
-    : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
+  const selectFields =
+    hasAllergies || hasDislikes || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole
+      ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
+      : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
   const ageMonthsForPool =
     memberData?.age_months ??
     (memberData?.age_years != null && Number.isFinite(memberData.age_years) ? memberData.age_years * 12 : null);
 
-  let q = supabase.from("recipes").select(selectFields).in("source", ["seed", "manual", "week_ai", "chat_ai"]);
+  let q = supabase.from("recipes").select(selectFields).in("source", [...POOL_SOURCES]);
   q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
   q = q.order("created_at", { ascending: false }).limit(limitCandidates);
 

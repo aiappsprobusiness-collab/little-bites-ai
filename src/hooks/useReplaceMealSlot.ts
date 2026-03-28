@@ -15,9 +15,11 @@ import {
   recipeFitsAgeMonthsRow,
   applyUnder12PoolAgeMonthsSqlFilter,
   filterPoolCandidatesForSlot,
+  memberHasDislikesForPool,
   type MemberDataForPool,
   type PoolRecipeRow,
 } from "@/utils/recipePool";
+import { POOL_SOURCES } from "@/utils/recipeCanonical";
 import { isDebugPlanEnabled } from "@/utils/debugPlan";
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
 
@@ -109,6 +111,7 @@ export function useReplaceMealSlot(
         (slotNorm === "breakfast" || slotNorm === "lunch");
 
       const hasAllergies = Array.isArray(params.memberData?.allergies) && params.memberData.allergies.length > 0;
+      const hasDislikes = memberHasDislikesForPool(params.memberData ?? null);
       const hasIntroduced =
         Array.isArray(params.memberData?.introduced_product_keys) &&
         (params.memberData?.introduced_product_keys?.length ?? 0) > 0;
@@ -116,7 +119,7 @@ export function useReplaceMealSlot(
         !!params.memberData?.introducing_product_key && !!params.memberData?.introducing_started_at;
 
       const selectFields =
-        infantCarrierRepl || hasAllergies || hasIntroduced || hasIntroducing
+        infantCarrierRepl || hasAllergies || hasDislikes || hasIntroduced || hasIntroducing
           ? "id, title, tags, description, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
           : "id, title, tags, description, meal_type, min_age_months, max_age_months";
 
@@ -126,7 +129,7 @@ export function useReplaceMealSlot(
           ? params.memberData.age_years * 12
           : null);
 
-      let q = supabase.from("recipes").select(selectFields).in("source", ["seed", "manual", "week_ai", "chat_ai"]);
+      let q = supabase.from("recipes").select(selectFields).in("source", [...POOL_SOURCES]);
       q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
       const { data: rows, error } = await q.order("created_at", { ascending: false }).limit(80);
       if (error || !rows?.length) return null;

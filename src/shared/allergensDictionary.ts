@@ -71,7 +71,7 @@ export const ALLERGEN_TOKENS: Record<AllergenKey, string[]> = {
     "cashew",
     "walnut",
   ],
-  eggs: ["яйц", "яичн", "яичный", "egg", "eggs"],
+  eggs: ["яйц", "яичн", "яичный", "желтк", "egg", "eggs", "белок яйц", "яичный белок", "egg white"],
   fish: [
     "рыб",
     "рыбный",
