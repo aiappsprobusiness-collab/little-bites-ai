@@ -17,7 +17,6 @@ export {
 export {
   isDescriptionIncomplete,
   isDescriptionInvalid,
-  repairDescriptionOnly,
   sanitizeRecipeText,
   sanitizeMealMentions,
   getMinimalRecipe,
@@ -45,7 +44,16 @@ export {
   pickCanonicalDescription,
   explainCanonicalDescriptionRejection,
   explainChefAdviceRejectionWhenNull,
+  detectDescriptionDishType,
 } from "./sanitizeAndRepair.ts";
+
+export { repairChatRecipeDescription, repairDescriptionOnly } from "./chatDescriptionRepair.ts";
+export {
+  resolveChatRecipeCanonicalDescription,
+  type ChatCanonicalDescriptionSource,
+  type ResolveChatRecipeDescriptionResult,
+} from "./resolveChatRecipeCanonicalDescription.ts";
+export { buildEmergencyChatRecipeDescription } from "./chatEmergencyDescription.ts";
 
 export { isChefAdviceLowValue } from "./chefAdviceQuality.ts";
 export { isChatDescriptionDebugEnabled } from "./chatDescriptionDebug.ts";

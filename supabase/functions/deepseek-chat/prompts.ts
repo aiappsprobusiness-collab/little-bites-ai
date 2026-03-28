@@ -122,7 +122,7 @@ export const RECIPE_STRICT_JSON_CONTRACT = `
 
 {
   "title": string,
-  "description": string (1–2 предложения; длина ${DESCRIPTION_QUALITY_MIN_LENGTH}–${DESCRIPTION_MAX_LENGTH} симв.; если два предложения — не короче ${DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH} симв.; оба закончить . ! или ?; живой тон),
+  "description": string (1–2 предложения; длина ${DESCRIPTION_QUALITY_MIN_LENGTH}–${DESCRIPTION_MAX_LENGTH} симв.; если два предложения — не короче ${DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH} симв.; оба закончить . ! или ?; живой тон; сенсорика и/или польза),
   "ingredients": [ { "name": string, "amount": string } ] (макс. 10),
   "steps": string[] (5–7 шагов, макс. 150 символов на шаг),
   "cookingTime": number,
@@ -132,7 +132,7 @@ export const RECIPE_STRICT_JSON_CONTRACT = `
   "nutrition": { "kcal_per_serving": number, "protein_g_per_serving": number, "fat_g_per_serving": number, "carbs_g_per_serving": number, "is_estimate": true }
 }
 
-ОПИСАНИЕ: как в поле description выше (до ${DESCRIPTION_MAX_LENGTH} симв.). Не дублировать title и не начинать с названия блюда. Без мед. обещаний. Без сценариев «в дорогу»/«в контейнер»/«для ребёнка» без запроса пользователя. Хотя бы одно предложение с нутритивным акцентом (белок, клетчатка, железо, сытость, энергия, пищеварение и т.д.). Маркетинговые штампы отсекаются на сервере — не используй их.
+ОПИСАНИЕ: как в поле description выше (до ${DESCRIPTION_MAX_LENGTH} симв.). Не дублировать title и не начинать с названия блюда. Без мед. обещаний. Без сценариев «в дорогу»/«в контейнер»/«для ребёнка» без запроса пользователя. Хотя бы в одном предложении — нутритивный акцент (белок, клетчатка, сытость, энергия, пищеварение и т.д.) или явная сенсорика блюда (текстура, аромат, сочность, температура). Маркетинговые штампы отсекаются на сервере — не используй их.
 
 [CHEF_ADVICE — поле chefAdvice в JSON]
 ${CHEF_ADVICE_RULES}
@@ -159,14 +159,14 @@ export const RECIPE_ONE_ONLY_RULE = `
 `;
 
 /**
- * V3: компактные правила для recipe-path. description — канон для БД и чата (LLM-first + gate); chefAdvice — null при слабом тексте.
+ * V3: компактные правила для recipe-path. description — канон для БД и чата (LLM-first + gate + опциональный repair + emergency fallback); chefAdvice — null при слабом тексте.
  * Верхний лимит description = DESCRIPTION_MAX_LENGTH (210), совпадает с Zod и passesDescriptionQualityGate — не ориентироваться на устаревший ориентир ~160 симв.
  */
 export const RECIPE_SYSTEM_RULES_V3 = `
 Верни ровно 1 JSON-объект рецепта. Без текста до/после, без markdown.
 Поля: title, description, ingredients [{name, amount}] до 10, steps 5–7 (до 150 симв. каждая), cookingTime, mealType, servings, chefAdvice (null или по правилам ниже), nutrition (kcal_per_serving, protein/fat/carbs, is_estimate: true).
 mealType только: breakfast|lunch|dinner|snack.
-description: 1–2 коротких предложения; от ${DESCRIPTION_QUALITY_MIN_LENGTH} до ${DESCRIPTION_MAX_LENGTH} симв. включительно (макс. = лимит поля в JSON на сервере — используй при необходимости до ${DESCRIPTION_MAX_LENGTH}, не укорачивай до ~160); при двух предложениях не короче ${DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH} симв.; последнее предложение закончить . ! или ?; краткий нутритивный/польза-акцент (белок, клетчатка, сытость, энергия и т.п.) хотя бы в одном предложении. Не повторять title и не начинать с названия блюда. Без мед. обещаний; без «в дорогу»/контейнер/«для ребёнка» без запроса пользователя. Штампы режутся на сервере — не используй.
+description: 1–2 коротких предложения; от ${DESCRIPTION_QUALITY_MIN_LENGTH} до ${DESCRIPTION_MAX_LENGTH} симв. включительно (макс. = лимит поля в JSON на сервере — используй при необходимости до ${DESCRIPTION_MAX_LENGTH}, не укорачивай до ~160); при двух предложениях не короче ${DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH} симв.; последнее предложение закончить . ! или ?; в тексте — нутритивный/бытовой акцент (белок, клетчатка, сытость, энергия, пищеварение и т.п.) или сенсорика (текстура, аромат, сочность), желательно и то и другое в двух предложениях. Не повторять title и не начинать с названия блюда. Без мед. обещаний; без «в дорогу»/контейнер/«для ребёнка» без запроса пользователя. Штампы режутся на сервере — не используй.
 
 [CHEF_ADVICE]
 ${CHEF_ADVICE_RULES}

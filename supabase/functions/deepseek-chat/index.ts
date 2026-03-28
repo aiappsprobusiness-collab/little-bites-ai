@@ -61,11 +61,10 @@ import {
   passesChefAdviceQualityGate,
   isChefAdviceDebugEnabled,
   isChatDescriptionDebugEnabled,
-  pickCanonicalDescription,
   prepareChefAdvicePipeline,
   explainChefAdviceRejectionWhenNull,
+  resolveChatRecipeCanonicalDescription,
 } from "./domain/recipe_io/index.ts";
-import { buildRecipeBenefitDescription } from "../_shared/recipeBenefitDescription.ts";
 import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsistencyGuard.ts";
 import { checkRequestContextLeak, textContainsRequestContextLeak, cleanStepFromRequestContextLeak } from "../_shared/requestContextLeakGuard.ts";
 import { checkTitleLexicon } from "../_shared/titleLexiconGuard.ts";
@@ -83,7 +82,7 @@ const corsHeaders: Record<string, string> = {
   "Access-Control-Max-Age": "86400",
 };
 
-/** Ограничение длины ответа рецепта (chefAdvice ≤220; description канон LLM-first ≤210 при gate, иначе benefit). */
+/** Ограничение длины ответа рецепта (chefAdvice ≤220; description канон ≤210 после gate / repair / emergency). */
 const RECIPE_MAX_TOKENS = 1600;
 
 const AGE_RANGE_BY_CATEGORY: Record<string, { min: number; max: number }> = {
@@ -995,7 +994,7 @@ serve(async (req) => {
             requestId,
             rawLlmDescriptionFailsGate: true,
             note:
-              "Сырой validated.description не прошёл gate; финальный текст после санитайзеров — pickCanonicalDescription (LLM или benefit). Промпт и гейт согласованы на макс. 210 симв.",
+              "Сырой validated.description не прошёл gate; финал после санитайзеров — resolveChatRecipeCanonicalDescription (сырой LLM → repair → emergency). Промпт и гейт согласованы на макс. 210 симв.",
           }));
         }
         if (!adviceOk) {
@@ -1071,7 +1070,7 @@ serve(async (req) => {
           safeLog("Recipe ingredients: applied heuristic fallback (retry disabled)", requestId);
         }
         logPerf("ingredient_normalize_ms", tIngredientNormalizeStart, requestId);
-        // Канонический recipes.description — pickCanonicalDescription в RECIPE_SANITIZED (LLM-first или benefit fallback).
+        // Канонический recipes.description — resolveChatRecipeCanonicalDescription в RECIPE_SANITIZED (llm_raw / llm_repair / emergency_fallback).
         // chef_advice: без детерминированных заглушек — финальное значение задаётся в RECIPE_SANITIZED (enforceChefAdvice → null при слабом совете).
         assistantMessage = JSON.stringify(validated);
         responseRecipes = [validated as Record<string, unknown>];
@@ -1264,28 +1263,30 @@ serve(async (req) => {
         }));
       }
       const finalTitleForBenefit = ((recipe.title ?? "") as string).trim();
-      const deterministicBenefitDescription = buildRecipeBenefitDescription({
-        stableKey: `${requestId}:${finalTitleForBenefit}`,
-        goals: inferredGoals,
-        title: finalTitleForBenefit,
-      });
-      const canonicalPick = pickCanonicalDescription({
+      const canonicalResolved = await resolveChatRecipeCanonicalDescription({
         sanitizedLlmDescription: currentDesc,
         title: finalTitleForBenefit,
-        deterministicFallback: deterministicBenefitDescription,
+        ingredientNames: ingNamesForEnforce,
+        apiKey: DEEPSEEK_API_KEY,
+        requestId,
+        log: (line) => safeLog(line),
       });
-      canonicalDbDescriptionForPersist = canonicalPick.description;
-      (recipe as Record<string, unknown>).description = canonicalPick.description;
+      canonicalDbDescriptionForPersist = canonicalResolved.description;
+      (recipe as Record<string, unknown>).description = canonicalResolved.description;
       assistantMessage = JSON.stringify(recipe);
       if (isChatDescriptionDebugEnabled()) {
+        const fromLlm =
+          canonicalResolved.source === "llm_raw" || canonicalResolved.source === "llm_repair";
         console.log(JSON.stringify({
           tag: "CHAT_DESCRIPTION_DEBUG",
           request_id: requestId,
           raw_llm_description: rawLlmDescriptionForDebug,
-          llm_description_accepted: canonicalPick.source === "llm",
-          rejection_reason: canonicalPick.rejectionReason,
-          final_description_source: canonicalPick.source,
-          final_description: canonicalPick.description,
+          llm_description_accepted: fromLlm,
+          rejection_reason: fromLlm
+            ? null
+            : (canonicalResolved.rejectionReasonAfterRepair ?? canonicalResolved.rejectionReasonRaw),
+          final_description_source: canonicalResolved.source,
+          final_description: canonicalResolved.description,
         }));
       }
       const finalChefAdvice = (recipe.chefAdvice as string | null) ?? null;
@@ -1314,7 +1315,7 @@ serve(async (req) => {
       safeLog(JSON.stringify({
         tag: "RECIPE_SANITIZED",
         requestId,
-        canonicalDescriptionSource: canonicalPick.source,
+        canonicalDescriptionSource: canonicalResolved.source,
         descriptionLength: (recipe.description as string)?.length,
         chefAdviceLength: finalChefAdviceStr.length,
         titleIngredientConsistencyGuardTriggered: consistency.triggered,
@@ -1485,7 +1486,7 @@ serve(async (req) => {
           savedRecipeId = recipeId ?? null;
           if (savedRecipeId) {
             safeLog(JSON.stringify({ tag: "RECIPE_SAVED", recipeIdSuffix: savedRecipeId.slice(-6), requestId }));
-            // description уже в payload и в ответе — pickCanonicalDescription (LLM-first или benefit); не перезаписывать benefit-builder после insert.
+            // description уже в payload и в ответе — resolveChatRecipeCanonicalDescription; не перезаписывать после insert.
           }
         } catch (err) {
           safeWarn("Failed to save recipe to DB, continuing without recipe_id:", serializeError(err));

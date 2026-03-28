@@ -29,9 +29,9 @@ export const DESCRIPTION_QUALITY_TWO_SENTENCE_MIN_LENGTH = 45;
 
 /**
  * Минимум «сильных» токенов из title, при котором включается semantic anchoring (fail-open ниже порога).
- * 3+ снижает ложные срабатывания на коротких названиях («Овсянка с изюмом» + описание про кашу).
+ * 4+ смягчает ложные отбрасывания живых описаний при длинных названиях; короткие названия остаются fail-open.
  */
-export const DESCRIPTION_TITLE_ANCHOR_MIN_STRONG_TOKENS = 3;
+export const DESCRIPTION_TITLE_ANCHOR_MIN_STRONG_TOKENS = 4;
 
 /** Минимальная длина description; ниже — подставляем fallback. */
 const DESCRIPTION_MIN_FOR_VALID = 60;
@@ -47,7 +47,7 @@ export function isDescriptionIncomplete(desc: string | null | undefined): boolea
   return false;
 }
 
-function normalizeSpaces(s: string): string {
+export function normalizeSpaces(s: string): string {
   return (s ?? "").replace(/\s+/g, " ").trim();
 }
 
@@ -151,7 +151,7 @@ const DESCRIPTION_BENEFIT_BY_TYPE: Record<string, [string, string][]> = {
   ],
 };
 
-function detectDescriptionDishType(title: string, ingredients: string[] = [], mealType?: string): string {
+export function detectDescriptionDishType(title: string, ingredients: string[] = [], mealType?: string): string {
   const text = [title, ...ingredients].join(" ").toLowerCase();
   if (/\b(каша|овсянк|пшён|рисовая|гречневые|размазня)\b/.test(text)) return "porridge";
   if (/\b(творог|запеканк|сырник)\b/.test(text)) return "cottage";
@@ -347,10 +347,10 @@ export function descriptionHasProfileAdaptationLeak(text: string | null | undefi
 /** Фразы в description: при наличии — подставляем fallback. */
 const DESCRIPTION_FORBIDDEN_PHRASES = [
   "это блюдо",
+  "этот вариант",
   "идеально подходит",
   "идеально сочетается",
   "приятный вкус",
-  "приятная текстура",
   "универсальный",
   "подходит для всей семьи",
   "сбалансированное блюдо",
@@ -362,15 +362,20 @@ const DESCRIPTION_FORBIDDEN_PHRASES = [
   "главный ингредиент",
   "отличный выбор для разнообразия",
   "отличный вариант",
+  "отличный выбор",
   "полезное и вкусное блюдо",
   "разнообразия рациона",
   "готовится быстро",
   "хранится в холодильнике",
   "можно подавать",
+  "можно использовать",
   "получается ароматным",
   "сытное, но не тяжёлое",
   "легко повторить",
   "подходит для",
+  "хорошо вписывается",
+  "легко вписывается",
+  "вариант для дней",
   "лечит",
   "излечивает",
   "вылечит",
@@ -572,6 +577,26 @@ function hasNutritionalMarker(text: string): boolean {
   return DESCRIPTION_NUTRITIONAL_MARKERS.some((m) => t.includes(m));
 }
 
+/** Сенсорика блюда — альтернатива «чисто нутритивному» маркеру в quality gate. */
+const DESCRIPTION_SENSORY_MARKERS = [
+  "текстур", "нежн", "мягк", "кремов", "хруст", "аромат", "сочн", "сочная", "сочное",
+  "насыщен", "деликатн", "бархат", "воздушн", "пикант", "дымч", "золотист",
+  "хрустящ", "шелковист", "тающ", "сладков", "терпк", "умами", "густ",
+  "сливочн", "огненн", "янтарн",
+];
+
+/** true, если есть нутритивный ИЛИ сенсорный «якорь» (живое описание). */
+export function hasNutritionalOrSensoryDescriptionCue(text: string): boolean {
+  const t = (text ?? "").toLowerCase();
+  if (hasNutritionalMarker(text)) return true;
+  return DESCRIPTION_SENSORY_MARKERS.some((m) => t.includes(m));
+}
+
+function hasSensoryDescriptionMarker(text: string): boolean {
+  const t = (text ?? "").toLowerCase();
+  return DESCRIPTION_SENSORY_MARKERS.some((m) => t.includes(m));
+}
+
 /** Служебные и слишком общие слова title — не считаются «сильными» для anchoring. */
 const DESCRIPTION_TITLE_ANCHOR_STOP_WORDS = new Set([
   "а", "без", "в", "во", "для", "до", "за", "и", "из", "к", "ко", "ли", "на", "над", "не", "ни", "но", "о", "об", "от",
@@ -638,6 +663,13 @@ export function descriptionPassesTitleAnchoringHeuristic(desc: string, title: st
   if (!tit) return true;
   const strong = extractStrongTitleTokensForDescriptionAnchoring(tit);
   if (strong.length < DESCRIPTION_TITLE_ANCHOR_MIN_STRONG_TOKENS) return true;
+  /** Сенсорика + бытовая польза часто не повторяют лексему из длинного title; без сенсорики не ослабляем (иначе проходят «универсальные» тексты про белок/сытость). */
+  if (hasSensoryDescriptionMarker(desc)) {
+    const t = desc.toLowerCase();
+    const humanBenefit =
+      /сытост|энерг|комфорт|лёгкост|легкост|пищевар|тонус|насыщ|утолен|аппетит|бодрост/i.test(t);
+    if (humanBenefit) return true;
+  }
   const corpusNorm = normalizeTitleKey(desc);
   if (!corpusNorm) return false;
   const corpusWords = corpusNorm.split(/\s+/).filter(Boolean);
@@ -677,7 +709,7 @@ function lastSentenceComplete(text: string): boolean {
 }
 
 /**
- * Quality gate для LLM description → канон БД / ответ: 1–2 предложения, длина, без штампов/leak, нутритивный маркер.
+ * Quality gate для LLM description → канон БД / ответ: 1–2 предложения, длина, без штампов/leak, нутритивный или сенсорный маркер.
  * Верхняя граница = DESCRIPTION_MAX_LENGTH (210), как в Zod и в recipe-path промпте — снижает ложный fallback из‑за рассинхрона с моделью.
  */
 export function passesDescriptionQualityGate(
@@ -692,7 +724,7 @@ export function passesDescriptionQualityGate(
   if (descriptionFailsQualityGate(t)) return false;
   if (options?.title && descriptionStartsWithTitle(t, options.title)) return false;
   if (!lastSentenceComplete(t)) return false;
-  if (!hasNutritionalMarker(t)) return false;
+  if (!hasNutritionalOrSensoryDescriptionCue(t)) return false;
   if (options?.title && !descriptionPassesTitleAnchoringHeuristic(t, options.title)) return false;
   return true;
 }
@@ -717,7 +749,7 @@ export function explainCanonicalDescriptionRejection(
   if (descriptionFailsQualityGate(t)) return "forbidden_phrase_or_stamp";
   if (options?.title && descriptionStartsWithTitle(t, options.title)) return "repeats_title_or_starts_like_title";
   if (!lastSentenceComplete(t)) return "incomplete_final_sentence";
-  if (!hasNutritionalMarker(t)) return "missing_nutritional_marker";
+  if (!hasNutritionalOrSensoryDescriptionCue(t)) return "missing_nutritional_or_sensory_cue";
   if (options?.title && !descriptionPassesTitleAnchoringHeuristic(t, options.title)) {
     return "missing_title_anchoring";
   }
@@ -860,36 +892,6 @@ export function explainChefAdviceRejectionWhenNull(options: {
     return `low_value:${low.reason}`;
   }
   return "unknown";
-}
-
-/** Один короткий вызов LLM только для description: польза блюда, 2 предложения, макс. 210. */
-export async function repairDescriptionOnly(current: string, apiKey: string): Promise<string | null> {
-  const sys = "Верни ТОЛЬКО JSON: {\"description\": \"...\"}. Ровно 2 коротких предложения, макс. 210 символов. Предложение 1 — основная польза блюда. Предложение 2 — 1–2 нутритивных акцента (белок, клетчатка, железо, кальций, витамин C, бета-каротин, сытость, энергия, пищеварение). Не начинать с названия блюда. Запрещено: «это блюдо», «в составе», «подходит для», «приятная текстура», «разнообразие рациона». Оба предложения закончить точкой.";
-  const user = `Исправь описание: «${current.slice(0, 250)}». Дай 2 законченных предложения о пользе, макс. 210 символов.`;
-  try {
-    const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-        max_tokens: 128,
-        temperature: 0.3,
-      }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
-    const raw = data?.choices?.[0]?.message?.content?.trim();
-    if (!raw) return null;
-    const match = raw.match(/\{\s*"description"\s*:\s*"([^"]*(?:\\.[^"]*)*)"\s*\}/) || raw.match(/"description"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
-    if (match && match[1]) {
-      const desc = match[1].replace(/\\"/g, '"');
-      return enforceDescription(desc, {}).slice(0, DESCRIPTION_MAX_LENGTH);
-    }
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 const FORBIDDEN_PATTERNS = [
