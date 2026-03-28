@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { getPaywallReasonCopy, resolvePaywallReason } from "@/utils/paywallReasonCopy";
 import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
+import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
 import pricing from "../../../supabase/functions/create-payment/pricing.json";
 
 export interface PaywallSharedProps {
@@ -277,12 +278,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                 </Button>
               )}
 
-              <p className="text-[10px] text-center text-muted-foreground leading-relaxed px-1 pt-0.5">
-                Оплачивая подписку, вы соглашаетесь с{" "}
-                <a href="/terms" className="underline hover:text-foreground">условиями</a>,{" "}
-                <a href="/privacy" className="underline hover:text-foreground">конфиденциальностью</a> и{" "}
-                <a href="/subscription/terms" className="underline hover:text-foreground">подпиской</a>.
-              </p>
+              <PaywallLegalConsentNote className="text-[10px] px-1 pt-0.5 leading-relaxed" />
             </div>
           </motion.div>
         </motion.div>

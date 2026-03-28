@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -9,12 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { trackUsageEvent, captureAttributionFromLocationOnce } from "@/utils/usageEvents";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
+import { LEGAL_TERMS_VERSION } from "@/constants/legalVersions";
 
 const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
@@ -25,6 +27,10 @@ const signupSchema = z.object({
   displayName: z.string().min(2, "Имя должно быть минимум 2 символа"),
   email: z.string().email("Введите корректный email"),
   password: z.string().min(6, "Пароль должен быть минимум 6 символов"),
+  acceptLegal: z.boolean().refine((v) => v === true, {
+    message:
+      "Чтобы продолжить, примите Пользовательское соглашение и Политику конфиденциальности.",
+  }),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -74,7 +80,7 @@ export default function AuthPage() {
 
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { displayName: "", email: "", password: "" },
+    defaultValues: { displayName: "", email: "", password: "", acceptLegal: false },
   });
 
   const onLogin = async (data: LoginFormData) => {
@@ -102,7 +108,9 @@ export default function AuthPage() {
     trackUsageEvent("cta_start_click");
     trackUsageEvent("auth_start");
     try {
-      const { error } = await signUp(data.email, data.password, data.displayName);
+      const { error } = await signUp(data.email, data.password, data.displayName, {
+        acceptedTermsVersion: data.acceptLegal ? LEGAL_TERMS_VERSION : undefined,
+      });
       if (error) {
         trackUsageEvent("auth_error", { properties: { message: error.message } });
         toast({ variant: "destructive", title: "Ошибка регистрации", description: error.message });
@@ -315,6 +323,42 @@ export default function AuthPage() {
                           </FormItem>
                           );
                         }}
+                      />
+                      <FormField
+                        control={signupForm.control}
+                        name="acceptLegal"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start gap-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={(c) => field.onChange(c === true)}
+                                className="mt-0.5"
+                              />
+                            </FormControl>
+                            <div className="space-y-1.5 leading-snug">
+                              <FormLabel className="text-sm font-normal text-foreground cursor-pointer !block">
+                                Я принимаю{" "}
+                                <Link
+                                  to="/terms"
+                                  className="text-primary underline underline-offset-2 font-medium"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Пользовательское соглашение
+                                </Link>
+                                {" "}и{" "}
+                                <Link
+                                  to="/privacy"
+                                  className="text-primary underline underline-offset-2 font-medium"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Политику конфиденциальности
+                                </Link>
+                              </FormLabel>
+                              <FormMessage className="!mt-0 text-[13px] font-normal !text-muted-foreground" />
+                            </div>
+                          </FormItem>
+                        )}
                       />
                       <Button
                         type="submit"

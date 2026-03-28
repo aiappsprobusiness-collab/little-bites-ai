@@ -13,7 +13,12 @@ interface AuthContextType {
   loading: boolean;
   /** true только после завершения первичного getSession(). Нужно, чтобы не показывать ложный empty state при медленном восстановлении сессии, stale storage и edge cases в Android browser. */
   authReady: boolean;
-  signUp: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName?: string,
+    options?: { acceptedTermsVersion?: string },
+  ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
@@ -61,20 +66,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, displayName?: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    displayName?: string,
+    options?: { acceptedTermsVersion?: string },
+  ) => {
     try {
-      const { error } = await supabase.auth.signUp({
+      const userData: Record<string, string> = {};
+      if (displayName != null && displayName !== '') {
+        userData.display_name = displayName;
+      }
+      if (options?.acceptedTermsVersion) {
+        userData.accepted_terms_version = options.acceptedTermsVersion;
+      }
+
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            display_name: displayName,
-          },
+          data: userData,
         },
       });
       if (error) return { error };
-      // Supabase может вернуть user=null при включённом email confirmation — это нормально
+
+      if (options?.acceptedTermsVersion && data.session?.user?.id) {
+        const at = new Date().toISOString();
+        const { error: patchErr } = await supabase
+          .from('profiles_v2')
+          .update({
+            accepted_terms_at: at,
+            accepted_terms_version: options.acceptedTermsVersion,
+          })
+          .eq('user_id', data.session.user.id);
+        if (patchErr) {
+          console.warn('[useAuth] Не удалось записать согласие в profiles_v2 (есть сессия):', patchErr);
+        }
+      }
+
+      // Supabase может вернуть user=null/session=null при включённом email confirmation — согласие тогда только через триггер + metadata
       return { error: null };
     } catch (err) {
       const e = err as Error;

@@ -67,6 +67,8 @@ export interface MealCardProps {
   onDelete?: () => void;
   /** При включённом __PLAN_DEBUG / ?debugPool=1: показывать бейдж DB или AI. */
   debugSource?: "db" | "ai";
+  /** План дня: любое осмысленное действие со слотом (открытие рецепта, замена, удаление). */
+  onPlanSlotInteraction?: () => void;
   /** Прикорм &lt;12 мес в плане: более плотная превью-карточка под мобильный Android. */
   infantPlanUi?: boolean;
   /** Прикорм primary: явные строки «Новый продукт: …» / «Знакомый продукт: …» вместо общего бейджа слота. */
@@ -105,6 +107,7 @@ export function MealCard({
   replaceShowsLock = false,
   onDelete,
   debugSource,
+  onPlanSlotInteraction,
   infantPlanUi = false,
   infantIntroducingLines,
   calories: nutritionCalories,
@@ -130,6 +133,7 @@ export function MealCard({
   const showPlaceholderChips = compact && isLoadingPreviews && chips.length === 0 && extraCount === 0;
 
   const handleClick = () => {
+    onPlanSlotInteraction?.();
     navigate(`/recipe/${recipeId}`, {
       state: {
         fromMealPlan: true,
@@ -145,6 +149,7 @@ export function MealCard({
   const [replaceSpin, setReplaceSpin] = useState(false);
   const handleReplaceClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    onPlanSlotInteraction?.();
     if (!isReplaceLoading) {
       setReplaceSpin(true);
       setTimeout(() => setReplaceSpin(false), 400);
@@ -154,6 +159,7 @@ export function MealCard({
   const showActions = !isLoadingPreviews && (onToggleFavorite ?? onShare ?? onReplace ?? onDelete) != null;
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    onPlanSlotInteraction?.();
     onToggleFavorite?.(recipeId, !isFavorite);
   };
   const handleShareClick = (e: React.MouseEvent) => {
@@ -263,6 +269,7 @@ export function MealCard({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      onPlanSlotInteraction?.();
                       onDelete();
                     }}
                     className={cn(

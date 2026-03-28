@@ -16,6 +16,8 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import { useAppStore } from "@/store/useAppStore";
+import { FriendlyLimitDialog } from "@/components/subscription/FriendlyLimitDialog";
+import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
 import { normalizeAllergyToken } from "@/utils/allergyAliases";
 import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
 import {
@@ -84,6 +86,7 @@ export default function ProfilePage() {
   const [generatingDone, setGeneratingDone] = useState(false);
   const [showIosInstallDialog, setShowIosInstallDialog] = useState(false);
   const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
+  const [showProfileCapDialog, setShowProfileCapDialog] = useState(false);
   const onboardingFirstProfileRef = useRef(false);
   const { canInstall, promptInstall, isInstalled, isIOSDevice } = usePWAInstall();
   const showAppSection = !isInstalled && !isStandalone();
@@ -98,14 +101,30 @@ export default function ProfilePage() {
 
   // После magic link / email confirmation: открыть модалку «Новый профиль», только если профилей нет
   useEffect(() => {
-    if (searchParams.get("openCreateProfile") !== "1" || !authReady || isLoading || members.length > 0) return;
+    if (searchParams.get("openCreateProfile") !== "1" || !authReady || isLoading) return;
+    const lim = getSubscriptionLimits(subscriptionStatus).maxProfiles;
+    if (members.length >= lim) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("openCreateProfile");
+        return next;
+      }, { replace: true });
+      if (hasAccess) setShowProfileCapDialog(true);
+      else {
+        setPaywallReason("add_child_limit");
+        setPaywallCustomMessage(null);
+        setShowPaywall(true);
+      }
+      return;
+    }
+    if (members.length > 0) return;
     setShowMemberSheet(true);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("openCreateProfile");
       return next;
     }, { replace: true });
-  }, [searchParams, authReady, isLoading, members.length, setSearchParams]);
+  }, [searchParams, authReady, isLoading, members.length, setSearchParams, subscriptionStatus, hasAccess, setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
 
   const handleMemberCreated = (memberId: string) => {
     setShowMemberSheet(false);
@@ -161,6 +180,10 @@ export default function ProfilePage() {
 
   const handleAddProfile = () => {
     if (members.length >= subscriptionLimits.maxProfiles) {
+      if (hasAccess) {
+        setShowProfileCapDialog(true);
+        return;
+      }
       setPaywallReason("add_child_limit");
       setPaywallCustomMessage(null);
       setShowPaywall(true);
@@ -327,8 +350,7 @@ export default function ProfilePage() {
                   whileTap={{ scale: 0.98 }}
                   transition={{ duration: 0.12 }}
                   onClick={handleAddProfile}
-                  disabled={members.length >= subscriptionLimits.maxProfiles}
-                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-border/70 bg-muted/30 text-foreground hover:bg-muted/50 h-10 text-sm font-medium transition-colors disabled:opacity-60"
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-border/70 bg-muted/30 text-foreground hover:bg-muted/50 h-10 text-sm font-medium transition-colors"
                 >
                   <Plus className="h-4 w-4" strokeWidth={2} />
                   Добавить профиль
@@ -511,6 +533,13 @@ export default function ProfilePage() {
         createMode={true}
         onCreated={handleMemberCreated}
         skipFillAndRedirectWhenCreated={members.length === 0}
+      />
+
+      <FriendlyLimitDialog
+        open={showProfileCapDialog}
+        onOpenChange={setShowProfileCapDialog}
+        title={PREMIUM_PROFILES_MAX_TITLE}
+        description={PREMIUM_PROFILES_MAX_BODY}
       />
 
       {showGeneratingScreen && (

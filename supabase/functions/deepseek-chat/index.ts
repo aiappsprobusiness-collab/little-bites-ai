@@ -22,6 +22,11 @@ import { safeLog, safeError, safeWarn } from "../_shared/safeLogger.ts";
 import { canonicalizeRecipePayload } from "../_shared/recipeCanonical.ts";
 import { serializeError } from "../_shared/logging.ts";
 import {
+  FREE_AI_DAILY_LIMIT,
+  PAID_CHAT_DAILY_LIMIT,
+  PAID_HELP_DAILY_LIMIT,
+} from "../_shared/subscriptionLimits.ts";
+import {
   parseAndValidateRecipeJsonFromString,
   getRecipeOrFallback,
   getLastValidationError,
@@ -202,12 +207,6 @@ async function fetchRecentTitleKeys(
     return [];
   }
 }
-const FREE_AI_DAILY_LIMIT = 2;
-
-function getAiDailyLimitForStatus(isPremiumOrTrial: boolean): number | null {
-  return isPremiumOrTrial ? null : FREE_AI_DAILY_LIMIT;
-}
-
 interface ChatRequest {
   messages: Array<{ role: string; content: string }>;
   memberData?: MemberData | null;
@@ -452,8 +451,8 @@ serve(async (req) => {
 
     const targetIsFamily = targetIsFamilyRaw;
 
-    // SOS-консультант (Помощь маме): Free — лимит 2/день по фиче help; Premium/Trial — без лимита
-    const FREE_FEATURE_LIMIT = 2;
+    // SOS (Помощь маме): Free — 2/день; Premium/Trial — скрытый лимит по usage_events.help
+    const FREE_FEATURE_LIMIT = FREE_AI_DAILY_LIMIT;
     if (type === "sos_consultant" && userId && supabase && !isPremiumUser) {
       const { data: helpUsed } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "help" });
       const used = typeof helpUsed === "number" ? helpUsed : 0;
@@ -469,7 +468,28 @@ serve(async (req) => {
         );
       }
     }
-    // Чат-рецепт: Free — лимит 2/день по фиче chat_recipe (план/help не тратят этот лимит)
+    if (type === "sos_consultant" && userId && supabase && isPremiumUser) {
+      const { data: helpUsedPaid } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "help" });
+      const usedHelpPaid = typeof helpUsedPaid === "number" ? helpUsedPaid : 0;
+      if (usedHelpPaid >= PAID_HELP_DAILY_LIMIT) {
+        return new Response(
+          JSON.stringify({
+            error: "PREMIUM_DAILY_LIMIT_REACHED",
+            code: "PREMIUM_DAILY_LIMIT_REACHED",
+            message: "Сегодняшний лимит запросов исчерпан.",
+            payload: {
+              feature: "help",
+              limit: PAID_HELP_DAILY_LIMIT,
+              used: usedHelpPaid,
+              limit_kind: "premium_daily",
+              subscription_status: subscriptionStatus,
+            },
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+    // Чат-рецепт: Free — 2/день chat_recipe; Premium/Trial — скрытый дневной лимит (plan/help/from_plan_replace не тратят chat_recipe)
     if ((type === "chat" || type === "recipe") && !fromPlanReplace && userId && supabase && !isPremiumUser) {
       const { data: chatRecipeUsed } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "chat_recipe" });
       const used = typeof chatRecipeUsed === "number" ? chatRecipeUsed : 0;
@@ -480,6 +500,27 @@ serve(async (req) => {
             code: "LIMIT_REACHED",
             message: "Лимит на сегодня исчерпан.",
             payload: { feature: "chat_recipe", limit: FREE_FEATURE_LIMIT, used },
+          }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+    if ((type === "chat" || type === "recipe") && !fromPlanReplace && userId && supabase && isPremiumUser) {
+      const { data: chatUsedPaid } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "chat_recipe" });
+      const usedChatPaid = typeof chatUsedPaid === "number" ? chatUsedPaid : 0;
+      if (usedChatPaid >= PAID_CHAT_DAILY_LIMIT) {
+        return new Response(
+          JSON.stringify({
+            error: "PREMIUM_DAILY_LIMIT_REACHED",
+            code: "PREMIUM_DAILY_LIMIT_REACHED",
+            message: "Сегодняшний лимит генераций исчерпан.",
+            payload: {
+              feature: "chat_recipe",
+              limit: PAID_CHAT_DAILY_LIMIT,
+              used: usedChatPaid,
+              limit_kind: "premium_daily",
+              subscription_status: subscriptionStatus,
+            },
           }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );

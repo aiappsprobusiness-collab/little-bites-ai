@@ -7,6 +7,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { SosHero } from "@/components/sos/SosHero";
 import { SosTopicGrid } from "@/components/sos/SosTopicGrid";
 import { Paywall } from "@/components/subscription/Paywall";
+import { FriendlyLimitDialog } from "@/components/subscription/FriendlyLimitDialog";
 import { TopicConsultationSheet } from "@/components/help/TopicConsultationSheet";
 import {
   getSosTopicConfig,
@@ -19,6 +20,8 @@ import { getTopicById } from "@/constants/sos";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { PREMIUM_HELP_LIMIT_BODY, PREMIUM_HELP_LIMIT_TITLE } from "@/utils/friendlyLimitCopy";
+import { PREMIUM_TRIAL_HELP_DAILY_LIMIT } from "@/utils/subscriptionRules";
 import { getPopularQuestionForToday } from "@/features/help/config/popularQuestions";
 import { ChevronRight } from "lucide-react";
 
@@ -35,8 +38,12 @@ export default function SosTiles() {
   const helpRemaining =
     rawHelpRemaining != null && Number.isFinite(rawHelpRemaining) ? rawHelpRemaining : null;
   const helpLimitExceeded = Boolean(subscription.helpLimitExceeded);
+  const subscriptionStatus = subscription.subscriptionStatus;
+  const helpUsedCount = subscription.helpUsed ?? 0;
+  const helpDailyLimitVal = subscription.helpDailyLimit ?? PREMIUM_TRIAL_HELP_DAILY_LIMIT;
 
   const [paywallOpen, setPaywallOpen] = useState(false);
+  const [friendlyHelpLimitOpen, setFriendlyHelpLimitOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [initialMessage, setInitialMessage] = useState<string | null>(null);
   const [sheetTopic, setSheetTopic] = useState<{
@@ -167,6 +174,24 @@ export default function SosTiles() {
     setInitialMessage(null);
   };
 
+  const handlePremiumHelpLimitReached = (payload?: { limit?: number; used?: number }) => {
+    const used = typeof payload?.used === "number" ? payload.used : helpUsedCount;
+    const lim = typeof payload?.limit === "number" ? payload.limit : helpDailyLimitVal;
+    setHelpUsedToday(used);
+    refetchUsage();
+    setFriendlyHelpLimitOpen(true);
+    trackUsageEvent("premium_help_limit_reached", {
+      memberId: selectedMember?.id ?? null,
+      properties: {
+        subscription_status: subscriptionStatus,
+        feature: "help_mama",
+        daily_count: used,
+        daily_limit: lim,
+        entry_point: "help_tab",
+      },
+    });
+  };
+
   /** Вопрос дня для карточки «Сегодня спрашивают»: Free видит только free-вопросы. */
   const popularQuestion = getPopularQuestionForToday({ hasAccess });
 
@@ -185,7 +210,7 @@ export default function SosTiles() {
             onOpenWithMessage={handleOpenWithMessage}
             helpRemaining={helpRemaining}
             helpLimitExceeded={helpLimitExceeded}
-            disabled={helpLimitExceeded}
+            disabled={helpLimitExceeded && !hasAccess}
             hasAccess={hasAccess}
             onPremiumChipTap={() => {
               useAppStore.getState().setPaywallReason("sos_premium_feature");
@@ -210,7 +235,7 @@ export default function SosTiles() {
                 }
                 handleOpenWithMessage(popularQuestion.text);
               }}
-              disabled={helpLimitExceeded}
+              disabled={helpLimitExceeded && !hasAccess}
               className="w-full flex items-center gap-2 text-left py-0.5 -mx-0.5 px-0.5 hover:bg-muted/30 active:bg-muted/50 rounded-lg transition-colors disabled:opacity-50 disabled:pointer-events-none"
             >
               <span className="flex-1 text-sm text-foreground/90 leading-snug line-clamp-2 text-ellipsis break-words min-w-0">
@@ -262,7 +287,14 @@ export default function SosTiles() {
               : undefined
           }
           premiumChipTexts={sheetTopic.key === "quick" ? getPremiumQuickChipTexts() : undefined}
+          premiumHelpLimitGate={
+            hasAccess && helpLimitExceeded
+              ? { used: helpUsedCount, limit: helpDailyLimitVal, blocked: true }
+              : undefined
+          }
+          onPremiumHelpLimit={handlePremiumHelpLimitReached}
           onLimitReached={(payload) => {
+            if (hasAccess) return;
             const used = payload?.feature === "help" && typeof payload?.used === "number"
               ? payload.used
               : 2;
@@ -294,6 +326,14 @@ export default function SosTiles() {
           useAppStore.getState().setPaywallReason(null);
           useAppStore.getState().setPaywallCustomMessage(null);
         }}
+      />
+
+      <FriendlyLimitDialog
+        open={friendlyHelpLimitOpen}
+        onOpenChange={setFriendlyHelpLimitOpen}
+        title={PREMIUM_HELP_LIMIT_TITLE}
+        description={PREMIUM_HELP_LIMIT_BODY}
+        secondaryLabel="Попробовать завтра"
       />
     </MobileLayout>
   );

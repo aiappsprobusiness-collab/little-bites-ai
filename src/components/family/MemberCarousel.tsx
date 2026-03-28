@@ -2,6 +2,8 @@ import { motion } from 'framer-motion';
 import { Plus, Check, Lock } from 'lucide-react';
 import { useFamily } from '@/contexts/FamilyContext';
 import { useAppStore } from '@/store/useAppStore';
+import { useSubscription } from '@/hooks/useSubscription';
+import { getSubscriptionLimits } from '@/utils/subscriptionRules';
 import { cn } from '@/lib/utils';
 
 interface MemberCarouselProps {
@@ -11,6 +13,8 @@ interface MemberCarouselProps {
 
 export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselProps) {
   const { members, selectedMemberId, setSelectedMemberId, primaryMemberId, isFreeLocked, formatAge, isLoading } = useFamily();
+  const { subscriptionStatus } = useSubscription();
+  const maxMembers = getSubscriptionLimits(subscriptionStatus).maxProfiles;
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
 
@@ -42,7 +46,7 @@ export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselP
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-      {members.slice(0, 10).map((member) => {
+      {members.map((member) => {
         const isSelected = selectedMemberId === member.id;
         const isPrimary = member.id === primaryMemberId;
         const isLockedForFree = isFreeLocked && !isPrimary;
@@ -119,7 +123,7 @@ export function MemberCarousel({ onAddMember, compact = false }: MemberCarouselP
         );
       })}
 
-      {members.length < 10 && onAddMember && (
+      {members.length < maxMembers && onAddMember && (
         <motion.button
           whileTap={{ scale: 0.95 }}
           onClick={onAddMember}

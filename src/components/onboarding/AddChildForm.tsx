@@ -10,6 +10,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
+import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { normalizeAllergyInput } from "@/utils/allergyAliases";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
@@ -60,7 +61,6 @@ export function AddChildForm({
   const [likesInput, setLikesInput] = useState("");
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [dislikesInput, setDislikesInput] = useState("");
-  const MAX_CHIPS = 20;
 
   const maxMembers = getMaxMembersByTariff(subscriptionStatus);
   const canAddMore = memberCount < maxMembers;
@@ -102,7 +102,11 @@ export function AddChildForm({
         const existing = new Set(allergies.map((s) => s.trim().toLowerCase()));
         const added = toAdd.filter((v) => !existing.has(v.toLowerCase()));
         added.forEach((v) => existing.add(v.toLowerCase()));
-        if (added.length) setAllergies((prev) => [...prev, ...added].slice(0, 20));
+        if (added.length) {
+          setAllergies((prev) =>
+            [...prev, ...added].slice(0, limits.maxAllergiesPerProfile)
+          );
+        }
       }
       setAllergyInput("");
     },
@@ -111,12 +115,12 @@ export function AddChildForm({
   };
 
   const likesHandlers = {
-    add: addToList(setLikes, setLikesInput, MAX_CHIPS),
+    add: addToList(setLikes, setLikesInput, limits.maxLikesTagsPerProfile),
     remove: removeFromList(setLikes),
     edit: editInList(setLikes, setLikesInput),
   };
   const dislikesHandlers = {
-    add: addToList(setDislikes, setDislikesInput, MAX_CHIPS),
+    add: addToList(setDislikes, setDislikesInput, limits.maxDislikesTagsPerProfile),
     remove: removeFromList(setDislikes),
     edit: editInList(setDislikes, setDislikesInput),
   };
@@ -191,6 +195,13 @@ export function AddChildForm({
 
   const handleAddAnother = async () => {
     if (!canAddMore) {
+      if (hasAccess) {
+        toast({
+          title: PREMIUM_PROFILES_MAX_TITLE,
+          description: PREMIUM_PROFILES_MAX_BODY.replace(/\n/g, " "),
+        });
+        return;
+      }
       setPaywallReason("add_child_limit");
       setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
       setShowPaywall(true);

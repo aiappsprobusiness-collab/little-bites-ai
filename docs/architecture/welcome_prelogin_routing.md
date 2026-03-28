@@ -16,7 +16,7 @@
 - `src/App.tsx` — добавлены маршруты `/welcome`, `/prelogin`, root `/` отдаёт `<RootRedirect />`
 - `src/pages/SharedPlanPage.tsx` — CTA «Собрать свой план» ведёт на `/welcome` с сохранением query (entry_point, share_ref, share_type); сохранение атрибуции; трекинг share_day_plan_cta_click / share_week_plan_cta_click
 - `src/pages/PublicRecipeSharePage.tsx` — публичная страница рецепта по `/r/:shareRef` (вместо редиректа на `/recipe/:id`). При not_found — сообщение и кнопка на `/welcome`.
-- `src/pages/AuthPage.tsx` — событие `auth_page_view` вместо `landing_view`; ссылка «Попробовать пример без регистрации» → `/welcome` с трекингом share_recipe_cta_click при наличии share-атрибуции; поддержка `location.state.tab === 'signup'` для дефолтной вкладки
+- `src/pages/AuthPage.tsx` — событие `auth_page_view` вместо `landing_view`; ссылка «Попробовать пример без регистрации» → `/welcome` с трекингом share_recipe_cta_click при наличии share-атрибуции; поддержка `location.state.tab === 'signup'` для дефолтной вкладки; на регистрации обязательный чекбокс согласия со ссылками на `/terms` и `/privacy` (см. `docs/dev/legal-copy-and-auth-consent.md`)
 - `src/utils/usageEvents.ts` — экспорт `hasShareRecipeAttribution()` для проверки прихода по shared recipe
 
 ---

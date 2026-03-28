@@ -40,3 +40,19 @@
 
 - **`docs/architecture/domain-map.md`** — блок Subscription & Trial.
 - **`docs/analytics/analytics-system.md`** — события paywall (уточнены properties).
+- **`docs/dev/legal-copy-and-auth-consent.md`** — юртексты, чекбокс на регистрации, сноска согласия под оплатой (`PaywallLegalConsentNote`).
+
+## Юридическое усиление (март 2026)
+
+- Сноска «Оплачивая подписку…» вынесена в **`PaywallLegalConsentNote`** (ссылки через `Link`).
+- Копирайт paywall слегка смягчён в **`unifiedPaywallCopy.ts`** (без медицинских обещаний в подзаголовке/буллетах).
+- Доп. пункты в канонических юртекстах: as is, изменение сервиса и документов (`TermsContent`), срок хранения (`PrivacyContent`), возвраты (`SubscriptionContent`); см. **`docs/dev/legal-copy-and-auth-consent.md`**.
+
+## Лимиты подписки и скрытые Premium-ограничения (март 2026)
+
+- **Единая конфигурация лимитов тарифов:** `src/utils/subscriptionRules.ts` (в т.ч. `PREMIUM_TRIAL_CHAT_DAILY_LIMIT`, `PREMIUM_TRIAL_HELP_DAILY_LIMIT`, профили 1 / 7, аллергии, likes/dislikes).
+- **Зеркало для Edge:** `supabase/functions/_shared/subscriptionLimits.ts` (синхронизировать при смене чисел).
+- **Суточные лимиты Premium/Trial (не в paywall):** 20 успешных `chat_recipe` и 20 `help` за сутки UTC — счётчик `usage_events` + `get_usage_count_today`; проверка на Edge в `deepseek-chat` (ответ `PREMIUM_DAILY_LIMIT_REACHED`); клиент `useSubscription` + мягкий UI `FriendlyLimitDialog`, события `premium_chat_limit_reached` / `premium_help_limit_reached`.
+- **Профили и теги:** лимиты на UI и в `useMembers` (`memberPayloadLimits.ts`); на БД — триггер `20260329120000_members_subscription_limits_trigger.sql`.
+- **Free «Добавить профиль»:** при достижении лимита открывается paywall без экрана создания (`ProfilePage`, `HomePage`, редирект с `/profile/child/new` в `ChildProfileEditPage`).
+- **Paywall-копирайт:** в unified bullets и `paywallReasonCopy` указано **до 7 профилей** (скрытые 20/20 в маркетинг не выносились).

@@ -5,6 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChefHat, Clock, Utensils, Coffee, Cookie, Plus, Calendar } from 'lucide-react';
 import { useFamily } from '@/contexts/FamilyContext';
+import { useSubscription } from '@/hooks/useSubscription';
+import { getSubscriptionLimits } from '@/utils/subscriptionRules';
 import { useMealPlans } from '@/hooks/useMealPlans';
 import { useRecipes } from '@/hooks/useRecipes';
 import { useChatRecipes } from '@/hooks/useChatRecipes';
@@ -36,6 +38,8 @@ export function FamilyDashboard({ onAddMember }: FamilyDashboardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { members, selectedMember, formatAge } = useFamily();
+  const { subscriptionStatus } = useSubscription();
+  const memberCap = getSubscriptionLimits(subscriptionStatus).maxProfiles;
   const { getMealPlansByDate, createMealPlan, isCreating } = useMealPlans(selectedMember?.id);
   // Для выбора рецепта в план — всегда все рецепты пользователя (любой рецепт можно добавить любому ребёнку)
   const { recipes } = useRecipes();
@@ -150,7 +154,7 @@ export function FamilyDashboard({ onAddMember }: FamilyDashboardProps) {
           <h2 className="text-typo-title font-semibold flex items-center gap-2">
             👨‍👩‍👧‍👦 Семья
             <span className="text-sm font-normal text-muted-foreground">
-              ({members.length}/10)
+              ({members.length}/{memberCap})
             </span>
           </h2>
         </div>

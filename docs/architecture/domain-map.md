@@ -20,7 +20,8 @@
 
 - **Назначение:** идентификация пользователя, профиль с тарифом и лимитами.
 - **Таблицы:** `auth.users` (Supabase Auth), `public.profiles_v2` (status, daily_limit, premium_until, trial_*, plan_initialized, email). Триггер при регистрации создаёт строку в `profiles_v2`.
-- **UI:** AuthPage, AuthCallbackPage, RootRedirect (/, /welcome, /prelogin), ProfilePage, SubscriptionCard.
+- **UI:** AuthPage (регистрация: обязательное согласие с `/terms` и `/privacy`), AuthCallbackPage, RootRedirect (/, /welcome, /prelogin), ProfilePage, SubscriptionCard.
+- **Правовые тексты (единый контент):** `src/components/legal/TermsContent.tsx`, `PrivacyContent.tsx`, `SubscriptionContent.tsx` — см. `docs/dev/legal-copy-and-auth-consent.md`.
 - **Edge/Services:** нет отдельной Edge для профиля; чтение/обновление через Supabase client. Trial: RPC start_trial, trial_on_signup_and_cancel.
 - **Зависимости:** от профиля зависят subscription gating, лимиты, семейный режим (Premium/Trial).
 

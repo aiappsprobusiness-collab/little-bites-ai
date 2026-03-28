@@ -24,6 +24,8 @@ import { normalizeAllergyToken } from "@/utils/allergyAliases";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
+import { getSubscriptionLimits } from "@/utils/subscriptionRules";
+import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
 import { Calendar } from "lucide-react";
 
 function parseTags(s: string): string[] {
@@ -81,7 +83,8 @@ export function ProfileEditSheet({
   const { toast } = useToast();
   const navigate = useNavigate();
   const { members, updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
-  const { isPremium, hasAccess } = useSubscription();
+  const { hasAccess, subscriptionStatus } = useSubscription();
+  const limits = getSubscriptionLimits(subscriptionStatus);
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
@@ -135,22 +138,32 @@ export function ProfileEditSheet({
   const allergiesHandlers = {
     ...baseAllergiesHandlers,
     add: (raw: string) => {
-      if (!isPremium && allergies.length >= 1) {
+      if (!hasAccess && allergies.length >= 1) {
         setPaywallReason("allergies_locked");
         setPaywallCustomMessage(null);
         setShowPaywall(true);
+        return;
+      }
+      if (hasAccess && allergies.length >= limits.maxAllergiesPerProfile) {
+        toast({
+          title: "Лимит аллергий",
+          description: `В Premium можно указать до ${limits.maxAllergiesPerProfile} аллергий на профиль.`,
+        });
         return;
       }
       const toAdd = parseTags(raw).map(normalizeAllergyToken).filter(Boolean);
       if (toAdd.length) {
         const existing = new Set(allergies.map((s) => s.trim().toLowerCase()));
         const added = toAdd.filter((v) => !existing.has(v.trim().toLowerCase()));
-        if (added.length) setAllergies((prev) => [...prev, ...added].slice(0, 20));
+        if (added.length) {
+          setAllergies((prev) =>
+            [...prev, ...added].slice(0, limits.maxAllergiesPerProfile)
+          );
+        }
         setAllergyInput("");
       }
     },
   };
-  const MAX_CHIPS = 20;
   function normalizeAndDedup(list: string[], toAdd: string[], max: number): string[] {
     const normalized = toAdd.map((s) => s.trim().toLowerCase()).filter(Boolean);
     const set = new Set([...list.map((s) => s.trim().toLowerCase()), ...normalized]);
@@ -159,7 +172,11 @@ export function ProfileEditSheet({
   const likesHandlers = {
     add: (raw: string) => {
       const toAdd = parseTags(raw);
-      if (toAdd.length) setLikes((prev) => normalizeAndDedup(prev, toAdd, MAX_CHIPS));
+      if (toAdd.length) {
+        setLikes((prev) =>
+          normalizeAndDedup(prev, toAdd, limits.maxLikesTagsPerProfile)
+        );
+      }
       setLikesInput("");
     },
     remove: (index: number) => setLikes((prev) => prev.filter((_, i) => i !== index)),
@@ -171,7 +188,11 @@ export function ProfileEditSheet({
   const dislikesHandlers = {
     add: (raw: string) => {
       const toAdd = parseTags(raw);
-      if (toAdd.length) setDislikes((prev) => normalizeAndDedup(prev, toAdd, MAX_CHIPS));
+      if (toAdd.length) {
+        setDislikes((prev) =>
+          normalizeAndDedup(prev, toAdd, limits.maxDislikesTagsPerProfile)
+        );
+      }
       setDislikesInput("");
     },
     remove: (index: number) => setDislikes((prev) => prev.filter((_, i) => i !== index)),
@@ -196,10 +217,17 @@ export function ProfileEditSheet({
     const type = memberTypeFromAgeMonths(ageMonths);
 
     if (isCreate) {
-      if (!hasAccess && members.length >= 1) {
+      if (!hasAccess && members.length >= limits.maxProfiles) {
         setPaywallReason("add_child_limit");
         setPaywallCustomMessage(FAMILY_LIMIT_MESSAGE);
         setShowPaywall(true);
+        return;
+      }
+      if (hasAccess && members.length >= limits.maxProfiles) {
+        toast({
+          title: PREMIUM_PROFILES_MAX_TITLE,
+          description: PREMIUM_PROFILES_MAX_BODY.replace(/\n/g, " "),
+        });
         return;
       }
       try {
@@ -208,7 +236,7 @@ export function ProfileEditSheet({
           type,
           age_months: ageMonths || null,
           allergies,
-          ...(isPremium && { likes, dislikes }),
+          ...(hasAccess && { likes, dislikes }),
         });
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен`, duration: 2000 });
         onOpenChange(false);
@@ -246,7 +274,7 @@ export function ProfileEditSheet({
         type: typeToSave,
         age_months: ageMonths || null,
         allergies,
-        ...(isPremium && { likes, dislikes }),
+        ...(hasAccess && { likes, dislikes }),
       });
       toast({ title: "Профиль обновлён", description: "Рекомендации учитывают новые данные." });
       onOpenChange(false);
@@ -333,7 +361,7 @@ export function ProfileEditSheet({
             placeholder="Например: БКМ, орехи"
             helperText="Введите через запятую или нажмите Enter"
           />
-          {isPremium && (
+          {hasAccess && (
             <>
               <TagListEditor
                 label="Любит"

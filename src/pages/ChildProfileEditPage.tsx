@@ -18,9 +18,11 @@ import {
 import { ArrowLeft, Loader2, Plus, Trash2, UtensilsCrossed } from "lucide-react";
 import { useMembers, birthDateToAgeMonths, ageMonthsToBirthDate, memberTypeFromAgeMonths, formatAgeFromMonths } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
+import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
 import { normalizeAllergyToken } from "@/utils/allergyAliases";
 import { getProductDisplayLabel, normalizeProductKeys } from "@/utils/introducedProducts";
 import { PreferenceChip } from "@/components/profile/PreferenceChip";
@@ -41,6 +43,7 @@ export default function ChildProfileEditPage() {
   const { toast } = useToast();
   const { members, createMember, updateMember, deleteMember, isCreating, isUpdating, isDeleting } = useMembers();
   const { subscriptionStatus, hasAccess } = useSubscription();
+  const { authReady } = useAuth();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
@@ -65,6 +68,24 @@ export default function ChildProfileEditPage() {
   const isNew = id === "new";
   const member = !isNew && id ? members.find((m) => m.id === id) : null;
   const activeAllergyCount = allergyItems.filter((i) => i.is_active).length;
+
+  useEffect(() => {
+    if (!isNew || !authReady) return;
+    const lim = getSubscriptionLimits(subscriptionStatus);
+    if (members.length >= lim.maxProfiles) {
+      navigate("/profile", { replace: true });
+      if (hasAccess) {
+        toast({
+          title: PREMIUM_PROFILES_MAX_TITLE,
+          description: PREMIUM_PROFILES_MAX_BODY.replace(/\n/g, " "),
+        });
+      } else {
+        setPaywallReason("add_child_limit");
+        setPaywallCustomMessage(null);
+        setShowPaywall(true);
+      }
+    }
+  }, [isNew, authReady, members.length, subscriptionStatus, hasAccess, navigate, toast, setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
 
   useEffect(() => {
     if (isNew) {
@@ -106,6 +127,13 @@ export default function ChildProfileEditPage() {
       const toAdd = parseTags(raw);
       if (!toAdd.length) return;
       if (activeAllergyCount >= limits.maxAllergiesPerProfile) {
+        if (hasAccess) {
+          toast({
+            title: "Лимит аллергий",
+            description: `Можно указать до ${limits.maxAllergiesPerProfile} аллергий на профиль.`,
+          });
+          return;
+        }
         setPaywallReason("allergies_locked");
         setPaywallCustomMessage(null);
         setShowPaywall(true);
@@ -138,7 +166,7 @@ export default function ChildProfileEditPage() {
     },
   };
 
-  const MAX_CHIPS = 20;
+  const INTRO_PRODUCTS_MAX = 20;
   function normalizeChip(s: string): string {
     return s.trim().toLowerCase();
   }
@@ -168,7 +196,7 @@ export default function ChildProfileEditPage() {
         return;
       }
       const toAdd = parseTags(raw);
-      if (toAdd.length) setLikes((prev) => addDedup(prev, toAdd, MAX_CHIPS));
+      if (toAdd.length) setLikes((prev) => addDedup(prev, toAdd, limits.maxLikesTagsPerProfile));
       setLikesInput("");
     },
     remove: (index: number) => {
@@ -194,7 +222,7 @@ export default function ChildProfileEditPage() {
         return;
       }
       const toAdd = parseTags(raw);
-      if (toAdd.length) setDislikes((prev) => addDedup(prev, toAdd, MAX_CHIPS));
+      if (toAdd.length) setDislikes((prev) => addDedup(prev, toAdd, limits.maxDislikesTagsPerProfile));
       setDislikesInput("");
     },
     remove: (index: number) => {
@@ -226,7 +254,7 @@ export default function ChildProfileEditPage() {
         setIntroducedProductsInput("");
         return;
       }
-      setIntroducedProductKeys((prev) => addDedup(prev, normalized, MAX_CHIPS));
+      setIntroducedProductKeys((prev) => addDedup(prev, normalized, INTRO_PRODUCTS_MAX));
       setIntroducedProductsInput("");
     },
     remove: (index: number) => {
@@ -284,6 +312,14 @@ export default function ChildProfileEditPage() {
       return;
     }
     if (activeAllergyCount > limits.maxAllergiesPerProfile) {
+      if (hasAccess) {
+        toast({
+          variant: "destructive",
+          title: "Слишком много аллергий",
+          description: `Оставьте не больше ${limits.maxAllergiesPerProfile} активных аллергий.`,
+        });
+        return;
+      }
       setPaywallReason("allergies_locked");
       setPaywallCustomMessage(null);
       setShowPaywall(true);

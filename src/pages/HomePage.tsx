@@ -9,6 +9,12 @@ import { FamilyDashboard } from "@/components/family/FamilyDashboard";
 import { ChefHat, Loader2, LayoutGrid, List, Grid3x3, Square, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFamily } from "@/contexts/FamilyContext";
+import { useSubscription } from "@/hooks/useSubscription";
+import { getSubscriptionLimits } from "@/utils/subscriptionRules";
+import { useAppStore } from "@/store/useAppStore";
+import { Paywall } from "@/components/subscription/Paywall";
+import { FriendlyLimitDialog } from "@/components/subscription/FriendlyLimitDialog";
+import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import {
@@ -34,16 +40,36 @@ type ViewMode = 'list' | 'large' | 'medium' | 'small';
 export default function HomePage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedMember } = useFamily();
+  const { selectedMember, members } = useFamily();
+  const { subscriptionStatus, hasAccess } = useSubscription();
+  const setShowPaywall = useAppStore((s) => s.setShowPaywall);
+  const setPaywallReason = useAppStore((s) => s.setPaywallReason);
+  const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
+  const showPaywall = useAppStore((s) => s.showPaywall);
   const { recentRecipes, isLoading: isLoadingRecipes } = useRecipes();
   const { favoriteRecipeIds } = useFavorites();
   const { createMember, isCreating } = useMembers();
 
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [showProfileCapDialog, setShowProfileCapDialog] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
   const [newMemberBirthDate, setNewMemberBirthDate] = useState("");
   const [newMemberAllergies, setNewMemberAllergies] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('medium');
+
+  const handleOpenAddMember = () => {
+    const lim = getSubscriptionLimits(subscriptionStatus).maxProfiles;
+    if (members.length >= lim) {
+      if (hasAccess) setShowProfileCapDialog(true);
+      else {
+        setPaywallReason("add_child_limit");
+        setPaywallCustomMessage(null);
+        setShowPaywall(true);
+      }
+      return;
+    }
+    setIsAddMemberOpen(true);
+  };
 
   const handleAddMember = async () => {
     if (!newMemberName.trim() || !newMemberBirthDate) return;
@@ -146,7 +172,7 @@ export default function HomePage() {
         </motion.div>
 
         {/* Family Dashboard with Carousel */}
-        <FamilyDashboard onAddMember={() => setIsAddMemberOpen(true)} />
+        <FamilyDashboard onAddMember={handleOpenAddMember} />
 
         {/* Recent Recipes */}
         <div>
@@ -265,6 +291,27 @@ export default function HomePage() {
         </div>
 
       </div>
+
+      <Paywall
+        isOpen={showPaywall}
+        onClose={() => {
+          setShowPaywall(false);
+          setPaywallReason(null);
+          setPaywallCustomMessage(null);
+        }}
+        onSubscribe={() => {
+          setShowPaywall(false);
+          setPaywallReason(null);
+          setPaywallCustomMessage(null);
+        }}
+      />
+
+      <FriendlyLimitDialog
+        open={showProfileCapDialog}
+        onOpenChange={setShowProfileCapDialog}
+        title={PREMIUM_PROFILES_MAX_TITLE}
+        description={PREMIUM_PROFILES_MAX_BODY}
+      />
 
       {/* Add Member Dialog */}
       <Dialog open={isAddMemberOpen} onOpenChange={setIsAddMemberOpen}>

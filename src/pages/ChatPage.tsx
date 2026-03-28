@@ -6,6 +6,7 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { SubscriptionTierBadge } from "@/components/layout/SubscriptionTierBadge";
 import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
 import { Paywall } from "@/components/subscription/Paywall";
+import { FriendlyLimitDialog } from "@/components/subscription/FriendlyLimitDialog";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatEmptyState, EMPTY_STATE_QUICK_SUGGESTIONS } from "@/components/chat/ChatEmptyState";
 import { ChatInputBar } from "@/components/chat/ChatInputBar";
@@ -45,6 +46,13 @@ import { trackUsageEvent } from "@/utils/usageEvents";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { A2HS_EVENT_AFTER_FIRST_RECIPE, A2HS_EVENT_AFTER_TWO_RECIPES } from "@/hooks/usePWAInstall";
+import {
+  PREMIUM_CHAT_LIMIT_BODY,
+  PREMIUM_CHAT_LIMIT_TITLE,
+  PREMIUM_HELP_LIMIT_BODY,
+  PREMIUM_HELP_LIMIT_TITLE,
+} from "@/utils/friendlyLimitCopy";
+import { PREMIUM_TRIAL_CHAT_DAILY_LIMIT, PREMIUM_TRIAL_HELP_DAILY_LIMIT } from "@/utils/subscriptionRules";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
 /** Порог (px) от низа скролла: если пользователь в пределах — автоскролл вниз при новых сообщениях. */
@@ -197,7 +205,22 @@ export default function ChatPage() {
   const { toast } = useToast();
   const { user, loading: authLoading, authReady } = useAuth();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
-  const { canGenerate, canSendAi, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining, aiDailyLimit, hasAccess } = useSubscription();
+  const {
+    canGenerate,
+    remaining,
+    dailyLimit,
+    usedToday,
+    subscriptionStatus,
+    isTrial,
+    trialDaysRemaining,
+    aiDailyLimit,
+    hasAccess,
+    helpLimitExceeded,
+    helpUsed,
+    helpDailyLimit,
+    refetchUsage,
+    setHelpUsedToday,
+  } = useSubscription();
   const isFree = subscriptionStatus === "free";
   const statusBadgeLabel =
     subscriptionStatus === "premium" ? "Premium" : subscriptionStatus === "trial" ? "Триал" : "Free";
@@ -209,6 +232,8 @@ export default function ChatPage() {
   /** Истина только после того, как локальный messages синхронизирован с historyMessages (пустой или с историей). Не показываем ChatEmptyState пока false. */
   const [isChatBootstrapped, setIsChatBootstrapped] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [friendlyLimitOpen, setFriendlyLimitOpen] = useState(false);
+  const [friendlyLimitKind, setFriendlyLimitKind] = useState<"chat" | "help" | null>(null);
   const [showHintsModal, setShowHintsModal] = useState(false);
   const [badgeVisible, setBadgeVisible] = useState(false);
   const [openArticleId, setOpenArticleId] = useState<string | null>(null);
@@ -669,16 +694,64 @@ export default function ChatPage() {
   const hasUserMessage = messages.some((m) => m.role === "user");
 
   const sendInProgressRef = useRef(false);
+
+  const openPremiumDailyLimitDialog = useCallback(
+    (kind: "chat" | "help", usedCount: number, limitCount: number) => {
+      setFriendlyLimitKind(kind);
+      setFriendlyLimitOpen(true);
+      const feature = kind === "chat" ? "chat" : "help_mama";
+      trackUsageEvent(kind === "chat" ? "premium_chat_limit_reached" : "premium_help_limit_reached", {
+        memberId: selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : null,
+        properties: {
+          ...(user?.id ? { user_id: user.id } : {}),
+          subscription_status: subscriptionStatus,
+          feature,
+          daily_count: usedCount,
+          daily_limit: limitCount,
+          entry_point: mode === "help" ? "chat_help_tab" : "chat_recipes_tab",
+        },
+      });
+    },
+    [selectedMemberId, subscriptionStatus, user?.id, mode]
+  );
+
   const handleSend = useCallback(async (text?: string) => {
     const toSend = (text ?? input).trim();
     if (!toSend || isChatting || sendInProgressRef.current) return;
     if (messages.every((m) => m.role !== "user")) markHintsSeen();
     sendInProgressRef.current = true;
-    if (!canGenerate && !isPremium) {
+
+    if (mode === "help" && helpLimitExceeded) {
       sendInProgressRef.current = false;
-      useAppStore.getState().setPaywallReason("limit_chat");
-      useAppStore.getState().setPaywallCustomMessage(null);
-      setShowPaywall(true);
+      if (hasAccess) {
+        openPremiumDailyLimitDialog(
+          "help",
+          helpUsed,
+          helpDailyLimit ?? PREMIUM_TRIAL_HELP_DAILY_LIMIT
+        );
+      } else {
+        useAppStore.getState().setPaywallReason("help_limit");
+        useAppStore.getState().setPaywallCustomMessage(
+          `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("help")}`
+        );
+        setShowPaywall(true);
+      }
+      return;
+    }
+
+    if (!canGenerate) {
+      sendInProgressRef.current = false;
+      if (hasAccess) {
+        openPremiumDailyLimitDialog(
+          "chat",
+          usedToday,
+          aiDailyLimit ?? PREMIUM_TRIAL_CHAT_DAILY_LIMIT
+        );
+      } else {
+        useAppStore.getState().setPaywallReason("limit_chat");
+        useAppStore.getState().setPaywallCustomMessage(null);
+        setShowPaywall(true);
+      }
       return;
     }
 
@@ -918,12 +991,12 @@ export default function ChatPage() {
         const displayMessage = rawMessage || fallbackMeta?.message || "";
         const systemHintType: SystemHintRoute =
           apiRoute === "assistant_topic" ? "assistant_topic_redirect"
-          : apiRoute === "irrelevant" ? "assistant_irrelevant"
-          : apiRoute === "under_12_curated_recipe_block" ||
-              apiRoute === "under_6_recipe_block" ||
-              apiRoute === "infant_recipe_rejected"
-            ? "curated_under_12_recipe"
-          : fallbackMeta?.route ?? "assistant_irrelevant";
+            : apiRoute === "irrelevant" ? "assistant_irrelevant"
+              : apiRoute === "under_12_curated_recipe_block" ||
+                apiRoute === "under_6_recipe_block" ||
+                apiRoute === "infant_recipe_rejected"
+                ? "curated_under_12_recipe"
+                : fallbackMeta?.route ?? "assistant_irrelevant";
         const topicKey = apiTopicKey ?? fallbackMeta?.topicKey;
         const topicTitle = apiTopicTitle ?? fallbackMeta?.topicTitle;
         const topicShortTitle = apiTopicShortTitle ?? fallbackMeta?.topicShortTitle;
@@ -933,16 +1006,16 @@ export default function ChatPage() {
           prev.map((m) =>
             m.id === assistantMessageId
               ? {
-                  ...m,
-                  content: displayMessage,
-                  rawContent: undefined,
-                  isStreaming: false,
-                  preParsedRecipe: null,
-                  systemHintType,
-                  topicKey,
-                  topicTitle,
-                  topicShortTitle,
-                }
+                ...m,
+                content: displayMessage,
+                rawContent: undefined,
+                isStreaming: false,
+                preParsedRecipe: null,
+                systemHintType,
+                topicKey,
+                topicTitle,
+                topicShortTitle,
+              }
               : m
           )
         );
@@ -986,16 +1059,16 @@ export default function ChatPage() {
             prev.map((m) =>
               m.id === assistantMessageId
                 ? {
-                    ...m,
-                    content: fallbackMeta.message,
-                    rawContent: undefined,
-                    isStreaming: false,
-                    preParsedRecipe: null,
-                    systemHintType: fallbackMeta.route,
-                    topicKey: fallbackMeta.topicKey,
-                    topicTitle: fallbackMeta.topicTitle,
-                    topicShortTitle: fallbackMeta.topicShortTitle,
-                  }
+                  ...m,
+                  content: fallbackMeta.message,
+                  rawContent: undefined,
+                  isStreaming: false,
+                  preParsedRecipe: null,
+                  systemHintType: fallbackMeta.route,
+                  topicKey: fallbackMeta.topicKey,
+                  topicTitle: fallbackMeta.topicTitle,
+                  topicShortTitle: fallbackMeta.topicShortTitle,
+                }
                 : m
             )
           );
@@ -1174,6 +1247,20 @@ export default function ChatPage() {
         toast({ title: "Остановлено" });
         return;
       }
+      if (err?.message === "PREMIUM_DAILY_LIMIT_REACHED") {
+        const payload = (err as { payload?: { feature?: string; limit?: number; used?: number } })?.payload;
+        const isHelpFeat = payload?.feature === "help";
+        const kind = isHelpFeat ? ("help" as const) : ("chat" as const);
+        const lim =
+          payload?.limit ??
+          (isHelpFeat ? PREMIUM_TRIAL_HELP_DAILY_LIMIT : PREMIUM_TRIAL_CHAT_DAILY_LIMIT);
+        const u = payload?.used ?? (isHelpFeat ? helpUsed : usedToday);
+        if (isHelpFeat) setHelpUsedToday(u);
+        refetchUsage();
+        openPremiumDailyLimitDialog(kind, u, lim);
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+        return;
+      }
       trackUsageEvent("chat_generate_error", { properties: { message: err?.message ?? "Unknown error" } });
       const limitPayload = (err as { payload?: { feature: string } })?.payload;
       if (err?.message === "LIMIT_REACHED" && limitPayload?.feature) {
@@ -1212,7 +1299,31 @@ export default function ChatPage() {
     } finally {
       sendInProgressRef.current = false;
     }
-  }, [input, isChatting, canGenerate, isPremium, hasAccess, usedToday, messages, selectedMemberId, selectedMember, members, memberIdForSave, chat, saveRecipesFromChat, saveChat, toast, markHintsSeen]);
+  }, [
+    input,
+    isChatting,
+    canGenerate,
+    hasAccess,
+    usedToday,
+    helpLimitExceeded,
+    helpUsed,
+    helpDailyLimit,
+    mode,
+    messages,
+    selectedMemberId,
+    selectedMember,
+    members,
+    memberIdForSave,
+    chat,
+    saveRecipesFromChat,
+    saveChat,
+    toast,
+    markHintsSeen,
+    openPremiumDailyLimitDialog,
+    aiDailyLimit,
+    setHelpUsedToday,
+    refetchUsage,
+  ]);
 
   /**
    * Предзаполнение input из location.state (План → чат, скан продуктов и т.д.).
@@ -1577,7 +1688,7 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Нижняя панель ввода: тот же composer, что в «Помощь маме»; меню (⋮) — в хедере вкладки. */}
+        {/* Нижняя панель ввода: тот же composer, что в «Помощь маме»; меню (⋮) — в хедере вкладки. ИИ-дисклеймер — только в «Что умеет помощник» (AssistantAboutSheet). */}
         <ChatInputBar
           ref={textareaRef}
           value={input}
@@ -1594,6 +1705,17 @@ export default function ChatPage() {
       <AssistantAboutSheet
         open={showAboutAssistant}
         onOpenChange={setShowAboutAssistant}
+      />
+
+      <FriendlyLimitDialog
+        open={friendlyLimitOpen}
+        onOpenChange={(open) => {
+          setFriendlyLimitOpen(open);
+          if (!open) setFriendlyLimitKind(null);
+        }}
+        title={friendlyLimitKind === "help" ? PREMIUM_HELP_LIMIT_TITLE : PREMIUM_CHAT_LIMIT_TITLE}
+        description={friendlyLimitKind === "help" ? PREMIUM_HELP_LIMIT_BODY : PREMIUM_CHAT_LIMIT_BODY}
+        secondaryLabel="Попробовать завтра"
       />
 
       <Paywall

@@ -17,6 +17,7 @@ import {
   UNIFIED_PAYWALL_PREMIUM_LINE,
   UNIFIED_PAYWALL_FOOTER,
 } from "@/utils/unifiedPaywallCopy";
+import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
 import pricing from "../../../supabase/functions/create-payment/pricing.json";
 import type { PaywallSharedProps } from "./LegacyPaywall";
 
@@ -278,12 +279,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                   </Button>
                 ) : null}
 
-                <p className="text-[9px] text-center text-muted-foreground leading-snug px-0.5">
-                  Оплачивая подписку, вы соглашаетесь с{" "}
-                  <a href="/terms" className="underline hover:text-foreground">условиями</a>,{" "}
-                  <a href="/privacy" className="underline hover:text-foreground">конфиденциальностью</a> и{" "}
-                  <a href="/subscription/terms" className="underline hover:text-foreground">подпиской</a>.
-                </p>
+                <PaywallLegalConsentNote className="text-[9px] px-0.5" />
               </div>
             </div>
           </motion.div>

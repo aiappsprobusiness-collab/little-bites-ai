@@ -7,17 +7,30 @@
 /** Длительность trial при активации по кнопке (см. миграции profiles_v2.trial_until). */
 export const TRIAL_DURATION_DAYS = 3;
 
+/** Суточный лимит генераций рецепта в чате для Premium/Trial (скрытый продуктовый лимит). */
+export const PREMIUM_TRIAL_CHAT_DAILY_LIMIT = 20;
+/** Суточный лимит запросов «Помощь маме» для Premium/Trial. */
+export const PREMIUM_TRIAL_HELP_DAILY_LIMIT = 20;
+
 export type SubscriptionTier = "free" | "trial" | "premium";
 
 export interface SubscriptionLimitsConfig {
+  /** Максимум профилей членов семьи (создание). */
   maxProfiles: number;
   maxActiveProfiles: number;
   maxAllergiesPerProfile: number;
+  /** Макс. тегов «любит» на профиль (Premium/Trial). */
+  maxLikesTagsPerProfile: number;
+  /** Макс. тегов «не любит» на профиль (Premium/Trial). */
+  maxDislikesTagsPerProfile: number;
   preferencesEnabled: boolean;
   helpUnlockedBlocks: number;
-  /** null = лимит отсутствует (безлимит). number = макс. AI-запросов в день. */
+  /**
+   * Макс. успешных генераций рецепта в чате за сутки (UTC), счётчик — usage_events.feature = chat_recipe.
+   * null только для внутренних исключений; у тарифов задано явное число.
+   */
   aiDailyLimit: number | null;
-  /** Лимит вопросов к Помощнику (help) в день. null = безлимит. */
+  /** Лимит запросов help за сутки (UTC), счётчик — usage_events.feature = help. */
   helpDailyLimit: number | null;
 }
 
@@ -26,22 +39,26 @@ export const SUBSCRIPTION_LIMITS: {
   paid: SubscriptionLimitsConfig;
 } = {
   free: {
-    maxProfiles: 10,
+    maxProfiles: 1,
     maxActiveProfiles: 1,
     maxAllergiesPerProfile: 1,
+    maxLikesTagsPerProfile: 0,
+    maxDislikesTagsPerProfile: 0,
     preferencesEnabled: false,
     helpUnlockedBlocks: 3,
     aiDailyLimit: 2,
     helpDailyLimit: 2,
   },
   paid: {
-    maxProfiles: 10,
-    maxActiveProfiles: 10,
-    maxAllergiesPerProfile: 10,
+    maxProfiles: 7,
+    maxActiveProfiles: 7,
+    maxAllergiesPerProfile: 7,
+    maxLikesTagsPerProfile: 5,
+    maxDislikesTagsPerProfile: 5,
     preferencesEnabled: true,
     helpUnlockedBlocks: 8,
-    aiDailyLimit: null,
-    helpDailyLimit: null,
+    aiDailyLimit: PREMIUM_TRIAL_CHAT_DAILY_LIMIT,
+    helpDailyLimit: PREMIUM_TRIAL_HELP_DAILY_LIMIT,
   },
 };
 

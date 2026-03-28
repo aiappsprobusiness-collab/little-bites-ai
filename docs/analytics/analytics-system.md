@@ -5,7 +5,7 @@
 Аналитика в проекте Little Bites строится на **событиях в Supabase**: таблицы `usage_events`, `token_usage_log`, `subscription_plan_audit`, `plan_generation_jobs`, а также вспомогательные таблицы `chat_history`, `plate_logs`, `share_refs`. События пишутся с **фронтенда** (через Edge Function `track-usage-event` и напрямую в часть таблиц) и с **Edge Functions** (deepseek-chat, generate-plan, payment-webhook). Отдельной внешней системы аналитики (Amplitude/Mixpanel и т.п.) в коде нет — всё хранится в БД.
 
 Основные цели текущей реализации:
-- **Лимиты Free**: учёт по фичам `chat_recipe`, `plan_fill_day`, `help` (2 использования в день на фичу).
+- **Лимиты по фичам**: учёт по `usage_events` и RPC `get_usage_count_today` (сутки UTC). **Free:** `chat_recipe` и `help` — 2/день каждая. **Premium/Trial:** те же фичи для **скрытых** продуктовых лимитов **20/день** (чат-рецепт и «Помощь маме»); пороги в `src/utils/subscriptionRules.ts` и зеркале Edge `supabase/functions/_shared/subscriptionLimits.ts`.
 - **Trial/Premium flow**: события auth, paywall, trial_started, purchase_*.
 - **Вирусность**: атрибуция по share_ref, entry_point, UTM; короткие ссылки `/r/:shareRef`.
 - **AI usage**: токены по типам действий в `token_usage_log`.
@@ -214,6 +214,8 @@
 | help_answer_received | ChatPage | usage_events | — | Получен ответ «Мы рядом» |
 | help_open | SosTiles | usage_events | — | Открытие раздела помощи |
 | help_topic_open | SosTiles | usage_events | properties: { topic_id } | Открытие темы помощи |
+| premium_chat_limit_reached | ChatPage | usage_events | properties: { user_id?, subscription_status, feature: `chat`, daily_count, daily_limit, entry_point }; member_id опционально | Достигнут скрытый дневной лимит генераций чата (Premium/Trial) |
+| premium_help_limit_reached | ChatPage (режим help), SosTiles / TopicConsultationSheet | usage_events | properties: { subscription_status, feature: `help_mama`, daily_count, daily_limit, entry_point }; member_id опционально | Достигнут скрытый дневной лимит «Помощь маме» |
 | **Share / viral** |
 | share_click | ChatMessage, RecipePage | usage_events | properties: recipe_id, share_ref, channel, source_screen | Клик «Поделиться» (рецепт) |
 | share_landing_view | PublicRecipeSharePage | usage_events | properties: recipe_id, share_ref, source (short_link), share_type | Просмотр публичной страницы рецепта по /r/:shareRef |

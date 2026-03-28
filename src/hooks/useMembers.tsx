@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useSubscription } from "./useSubscription";
+import { getSubscriptionLimits, type SubscriptionTier } from "@/utils/subscriptionRules";
+import { clampMemberPayloadForTier } from "@/utils/memberPayloadLimits";
 import { logMembersProfileLoadStart, logMembersLoadDone } from "@/utils/authSessionDebug";
 import type { MembersRow, MembersInsert, MembersUpdate, AllergyItemRow } from "@/integrations/supabase/types-v2";
 import { ensureStringArray } from "@/utils/typeUtils";
@@ -91,7 +94,9 @@ export type Member = MembersRow;
 
 export function useMembers() {
   const { user, authReady } = useAuth();
+  const { subscriptionStatus } = useSubscription();
   const queryClient = useQueryClient();
+  const tier = subscriptionStatus as SubscriptionTier;
 
   const { data: members = [], isLoading, error } = useQuery({
     queryKey: ["members", user?.id],
@@ -146,10 +151,19 @@ export function useMembers() {
   const createMember = useMutation({
     mutationFn: async (input: Omit<MembersInsert, "user_id">) => {
       if (!user) throw new Error("User not authenticated");
+      const lim = getSubscriptionLimits(tier);
+      if (members.length >= lim.maxProfiles) {
+        throw new Error(
+          lim.maxProfiles <= 1
+            ? "Достигнут лимит профилей на Free. Оформите Premium, чтобы добавить ещё."
+            : "Достигнут лимит профилей. Удалите одного члена семьи, чтобы добавить нового."
+        );
+      }
       const payload = normalizeMemberPayload({
         ...input,
         user_id: user.id,
       } as Record<string, unknown>) as MembersInsert;
+      clampMemberPayloadForTier(payload as unknown as Record<string, unknown>, tier);
       const { data, error } = await supabase.from("members").insert(payload).select().single();
       if (error) {
         safeError("Supabase Error (members):", error.message, error.details);
@@ -167,6 +181,7 @@ export function useMembers() {
       const { id, ...rest } = payload;
       if (!id) throw new Error("member id required");
       const normalized = normalizeMemberPayload(rest as Record<string, unknown>) as MembersUpdate;
+      clampMemberPayloadForTier(normalized as unknown as Record<string, unknown>, tier);
       const { data, error } = await supabase
         .from("members")
         .update(normalized)

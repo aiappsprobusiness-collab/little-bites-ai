@@ -238,6 +238,23 @@ export function useDeepSeekAPI() {
         const error = await response.json().catch(() => ({}));
         if (response.status === 429) {
           const code = error?.code ?? error?.error;
+          if (
+            code === 'PREMIUM_DAILY_LIMIT_REACHED' ||
+            error?.error === 'PREMIUM_DAILY_LIMIT_REACHED'
+          ) {
+            refetchUsage?.();
+            const e = new Error('PREMIUM_DAILY_LIMIT_REACHED') as Error & {
+              payload?: {
+                feature: string;
+                limit: number;
+                used: number;
+                limit_kind?: string;
+                subscription_status?: string;
+              };
+            };
+            if (error?.payload) e.payload = error.payload;
+            throw e;
+          }
           if (code === 'LIMIT_REACHED' || error?.error === 'LIMIT_REACHED') {
             if (isHelpMode) refetchUsage?.();
             const e = new Error('LIMIT_REACHED') as Error & { payload?: { feature: string; limit: number; used: number } };

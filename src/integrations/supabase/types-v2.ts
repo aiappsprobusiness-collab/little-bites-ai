@@ -18,7 +18,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
-// v2: profiles schema — user_id FK auth.users, status, daily_limit, last_reset, premium_until, requests_today, trial_until, trial_used, trial_started_at, email, plan_initialized
+// v2: profiles schema — user_id FK auth.users, status, daily_limit, last_reset, premium_until, requests_today (легаси), trial_until, trial_used, trial_started_at, email, plan_initialized. Дневные лимиты чата в приложении — usage_events + get_usage_count_today.
 export interface ProfilesV2Row {
   id: string;
   user_id: string;
@@ -32,6 +32,9 @@ export interface ProfilesV2Row {
   trial_started_at: string | null;
   email: string | null;
   plan_initialized: boolean;
+  /** Согласие с соглашением и политикой при регистрации */
+  accepted_terms_at: string | null;
+  accepted_terms_version: string | null;
 }
 export interface ProfilesV2Insert {
   id?: string;
@@ -46,6 +49,8 @@ export interface ProfilesV2Insert {
   trial_started_at?: string | null;
   email?: string | null;
   plan_initialized?: boolean;
+  accepted_terms_at?: string | null;
+  accepted_terms_version?: string | null;
 }
 export interface ProfilesV2Update {
   id?: string;
@@ -60,6 +65,8 @@ export interface ProfilesV2Update {
   trial_started_at?: string | null;
   email?: string | null;
   plan_initialized?: boolean;
+  accepted_terms_at?: string | null;
+  accepted_terms_version?: string | null;
 }
 
 /** Один элемент аллергии (allergy_items в members). */

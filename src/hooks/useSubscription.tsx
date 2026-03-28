@@ -56,7 +56,7 @@ export function useSubscription() {
     enabled: authReady && !!user,
   });
 
-  /** Для free: лимит проверяется по usage_events (фича chat_recipe), а не по profiles_v2.requests_today. */
+  /** Успешные генерации рецепта в чате за сутки (UTC): usage_events.feature = chat_recipe (Free и Premium/Trial). */
   const { data: chatRecipeUsedToday } = useQuery({
     queryKey: ["usage-chat-recipe-today", user?.id],
     queryFn: async () => {
@@ -68,7 +68,7 @@ export function useSubscription() {
       if (error) throw error;
       return typeof data === "number" ? data : 0;
     },
-    enabled: authReady && !!user && (profileV2 == null || profileV2.status === "free"),
+    enabled: authReady && !!user,
   });
 
   /** Использовано вопросов к Помощнику (help) сегодня. Нужно для отображения лимита на вкладке Help. */
@@ -122,24 +122,24 @@ export function useSubscription() {
   /** Платный premium всегда приоритетнее trial: при активной оплате UI показывает premium. */
   const effectiveStatus = hasPremiumAccess ? "premium" : hasTrialAccess ? "trial" : "free";
 
-  /** У free лимит считается по usage_events (chat_recipe), у trial/premium — по profiles_v2.requests_today. */
-  const usedTodayFromProfile = profileV2?.requests_today ?? 0;
   const usedTodayFromEvents = chatRecipeUsedToday ?? 0;
-  const usedToday = effectiveStatus === "free" ? usedTodayFromEvents : usedTodayFromProfile;
+  const usedToday = usedTodayFromEvents;
 
   const dailyLimitFromDb = profileV2?.daily_limit ?? 5;
   const limits = getSubscriptionLimits(effectiveStatus);
   const aiDailyLimit = limits.aiDailyLimit;
   const effectiveDailyLimit = aiDailyLimit ?? dailyLimitFromDb;
   const remaining = aiDailyLimit === null ? null : Math.max(0, aiDailyLimit - usedToday);
-  const limitExceeded = isAiDailyLimitExceeded(usedToday, aiDailyLimit);
-  const canGenerate = hasUnlimitedAccess ? true : hasAccess ? true : !limitExceeded;
+  const limitExceeded =
+    !hasUnlimitedAccess && isAiDailyLimitExceeded(usedToday, aiDailyLimit);
+  const canGenerate = hasUnlimitedAccess ? true : !limitExceeded;
   const canSendAi = !limitExceeded;
 
-  const helpDailyLimit = limits.helpDailyLimit ?? (effectiveStatus === "free" ? 2 : null);
+  const helpDailyLimit = limits.helpDailyLimit;
   const helpUsed = helpUsedToday ?? 0;
   const helpRemaining = helpDailyLimit === null ? null : Math.max(0, helpDailyLimit - helpUsed);
-  const helpLimitExceeded = helpDailyLimit !== null && helpUsed >= helpDailyLimit;
+  const helpLimitExceeded =
+    !hasUnlimitedAccess && helpDailyLimit !== null && helpUsed >= helpDailyLimit;
 
   /** Дни до окончания trial (то же значение для UI). */
   const trialDaysRemaining = trialRemainingDays;
@@ -289,6 +289,7 @@ export function useSubscription() {
     isPremium,
     hasPremiumAccess,
     hasAccess,
+    hasUnlimitedAccess,
     hasTrialAccess,
     trialRemainingMs,
     trialRemainingDays,
@@ -305,6 +306,8 @@ export function useSubscription() {
     trialDaysRemaining,
     favoritesLimit,
     helpRemaining,
+    helpDailyLimit,
+    helpUsed,
     helpLimitExceeded,
     isLoading: isLoadingProfile,
     incrementUsage: incrementUsage.mutateAsync,

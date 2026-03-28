@@ -60,8 +60,12 @@ export interface TopicConsultationSheetProps {
   onPremiumChipTap?: () => void;
   /** Для quick topic: тексты premium-чипов. Fail-safe: не отправлять такие сообщения Free пользователю. */
   premiumChipTexts?: string[];
-  /** При LIMIT_REACHED (help 2/день) — открыть paywall; payload.used обновляет счётчик оставшихся запросов. */
+  /** При LIMIT_REACHED (help 2/день у Free) — открыть paywall; payload.used обновляет счётчик. */
   onLimitReached?: (payload?: { feature: string; limit: number; used: number }) => void;
+  /** Premium/Trial: дневной лимит help исчерпан (ответ 429 PREMIUM_DAILY_LIMIT_REACHED). */
+  onPremiumHelpLimit?: (payload?: { feature?: string; limit?: number; used?: number }) => void;
+  /** У Premium/Trial при исчерпанном лимите — не вызывать API, сразу мягкий ответ и onPremiumHelpLimit. */
+  premiumHelpLimitGate?: { used: number; limit: number; blocked: boolean };
   /** При открытии sheet подставить этот текст в поле ввода (hero чипсы / карточка «Сегодня спрашивают» / тема). Без автоотправки — отправка только по кнопке. */
   initialMessage?: string | null;
   onInitialMessageSent?: () => void;
@@ -82,6 +86,8 @@ export function TopicConsultationSheet({
   onPremiumChipTap,
   premiumChipTexts,
   onLimitReached,
+  onPremiumHelpLimit,
+  premiumHelpLimitGate,
   initialMessage,
   onInitialMessageSent,
   popularQuestionTextIfPremium = null,
@@ -180,6 +186,31 @@ export function TopicConsultationSheet({
         timestamp: new Date().toISOString(),
       };
 
+      if (premiumHelpLimitGate?.blocked) {
+        const soft =
+          "Сегодня вы уже использовали доступное количество запросов. Лимит обновится завтра — спасибо, что пользуетесь Premium.";
+        const assistantFinal: TopicSessionMessage = {
+          id: assistantId,
+          role: "assistant",
+          content: soft,
+          timestamp: new Date().toISOString(),
+        };
+        stickToBottomRef.current = true;
+        setMessages((prev) => {
+          const next = [...prev, userMsg, assistantFinal].slice(-MAX_MESSAGES);
+          upsertMessage(memberId, topicKey, userMsg);
+          upsertMessage(memberId, topicKey, assistantFinal);
+          return next;
+        });
+        setInput("");
+        onPremiumHelpLimit?.({
+          feature: "help",
+          limit: premiumHelpLimitGate.limit,
+          used: premiumHelpLimitGate.used,
+        });
+        return;
+      }
+
       stickToBottomRef.current = true;
 
       setMessages((prev) => {
@@ -221,6 +252,22 @@ export function TopicConsultationSheet({
       } catch (err) {
         const msg = (err as { message?: string })?.message;
         const payload = (err as { payload?: { feature: string; limit: number; used: number } })?.payload;
+        const premiumPayload = (err as { payload?: { feature?: string; limit?: number; used?: number } })?.payload;
+        if (msg === "PREMIUM_DAILY_LIMIT_REACHED") {
+          onPremiumHelpLimit?.(premiumPayload);
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? {
+                    ...m,
+                    content:
+                      "Сегодня вы уже использовали доступное количество запросов. Лимит обновится завтра — спасибо, что пользуетесь Premium.",
+                  }
+                : m
+            )
+          );
+          return;
+        }
         if (msg === "LIMIT_REACHED" && onLimitReached) {
           onLimitReached(payload);
         }
@@ -237,7 +284,19 @@ export function TopicConsultationSheet({
         setIsSending(false);
       }
     },
-    [memberId, topicKey, messages, chat, isLocked, hasAccess, premiumChipTexts, onPremiumChipTap, onLimitReached]
+    [
+      memberId,
+      topicKey,
+      messages,
+      chat,
+      isLocked,
+      hasAccess,
+      premiumChipTexts,
+      onPremiumChipTap,
+      onLimitReached,
+      onPremiumHelpLimit,
+      premiumHelpLimitGate,
+    ]
   );
 
   const handleSubmit = (e: React.FormEvent) => {
