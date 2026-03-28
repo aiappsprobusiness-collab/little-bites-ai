@@ -1579,7 +1579,7 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Нижняя панель ввода: pill-инпут, кнопка отправки. Меню (⋮) — в хедере вкладки. */}
+        {/* Нижняя панель ввода: тот же composer, что в «Помощь маме»; меню (⋮) — в хедере вкладки. */}
         <ChatInputBar
           ref={textareaRef}
           value={input}

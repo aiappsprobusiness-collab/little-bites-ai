@@ -18,8 +18,8 @@
 ## Разметка и дизайн
 
 - Поле ввода — **`<textarea>`** (обёртка shadcn `Textarea`), не однострочный `<input>`.
-- Ряд: `flex`, поле слева (`flex-1`), круглая кнопка отправки справа; границы/цвета pill-поля и кнопки — как в текущих классах компонента (не менять без явной задачи на редизайн).
-- **Под строкой ввода** (в той же нижней панели `ChatInputBar`, ниже ряда textarea + кнопка) — статический текст-дисклеймер про генерацию рецептов ИИ: только отображение, не в историю и не в API. Текст и будущий ключ i18n — в `ChatInputBar` (константа + TODO `chat.disclaimer.ai_generated`). Визуал: класс **`chat-disclaimer`** в `src/index.css` — центр, ~11.5px/400, `letter-spacing` ~0.2px, `max-width` 300px, `margin` 6px auto 0, цвет `hsl(var(--muted-foreground) / 0.55)`, `pointer-events`/`user-select` отключены. Корень `ChatPage` без вертикального `overflow-hidden`, чтобы панель не обрезалась.
+- **Визуальный эталон** — нижний composer в **`TopicConsultationSheet`** (вкладка «Помощь маме»): контейнер `border-t`, `bg-background`, отступы `p-4 pt-2`; ряд `flex gap-2 items-end`; поле `rounded-xl`, `border-primary/20`, `focus-visible:border-primary/40`, `py-2.5 px-3`, `min-h-[44px]` / `max-h-[120px]`; кнопка отправки — `Button` `size="icon"` с классами `h-11 w-11 rounded-xl` (как в sheet).
+- Дисклеймер про генерацию рецептов ИИ **не** под полем ввода: текст в конце sheet **«Что умеет помощник»** (`AssistantAboutSheet.tsx`, константа + TODO `chat.disclaimer.ai_generated`).
 
 ---
 
