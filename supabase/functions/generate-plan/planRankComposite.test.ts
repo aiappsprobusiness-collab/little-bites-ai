@@ -4,10 +4,14 @@ import {
   type ScoredCandidateRow,
 } from "./culturalPlanDebug.ts";
 import {
+  buildAlignedRankSalt,
+  computeCompositeScore,
   dbScoreContribution,
+  explainRankingTail,
   explorationPickActive,
   EXPLORATION_CANDIDATE_BOOST,
   isCandidateTrustLevel,
+  rankJitterFromSeed,
   stableSortPoolForRanking,
   trustRankingBonus,
 } from "./planRankComposite.ts";
@@ -67,7 +71,7 @@ Deno.test("compareScoredForSlot: with composite, core beats candidate at similar
     compositeWithCultural: slotAfter + trustRankingBonus(trust),
     compositeWithoutCultural: slotAfter + trustRankingBonus(trust),
   });
-  const cand = base("c1", "candidate", 50);
+  const cand = base("c1", "candidate", 46);
   const core = base("k1", "core", 45);
   const sorted = [cand, core].sort((a, b) => compareScoredForSlot(a, b, "with_cultural"));
   assertEquals(sorted[0]!.r.id, "k1");
@@ -98,6 +102,54 @@ Deno.test("compareScoredForSlot: same trust, higher db contribution wins", () =>
   };
   const sorted = [low, high].sort((a, b) => compareScoredForSlot(a, b, "with_cultural"));
   assertEquals(sorted[0]!.r.id, "high");
+});
+
+Deno.test("candidate with strong db score can beat core at same slot-fit (softer trust gap)", () => {
+  const slot = 40;
+  const cand = trustRankingBonus("candidate") + dbScoreContribution(50) + slot;
+  const core = trustRankingBonus("core") + dbScoreContribution(0) + slot;
+  assertEquals(cand > core, true);
+});
+
+Deno.test("exploration alone does not flip core vs candidate when slot-fit favors core", () => {
+  const slotCore = 42;
+  const slotCand = 40;
+  const core = slotCore + trustRankingBonus("core") + dbScoreContribution(0);
+  const candWithExpl =
+    slotCand + trustRankingBonus("candidate") + dbScoreContribution(0) + EXPLORATION_CANDIDATE_BOOST;
+  assertEquals(core > candWithExpl, true);
+});
+
+Deno.test("rankJitterFromSeed: same salt and recipeId gives same value", () => {
+  const j1 = rankJitterFromSeed("u|breakfast|pool|2026-03-01", "recipe-uuid-1");
+  const j2 = rankJitterFromSeed("u|breakfast|pool|2026-03-01", "recipe-uuid-1");
+  assertEquals(j1, j2);
+  assertEquals(j1 >= 0 && j1 < 2.6, true);
+});
+
+Deno.test("buildAlignedRankSalt: pool and replace shapes", () => {
+  assertEquals(
+    buildAlignedRankSalt({ kind: "pool", userId: "u1", mealType: "lunch", dayKey: "2026-01-02" }),
+    "u1|lunch|pool|2026-01-02",
+  );
+  assertEquals(
+    buildAlignedRankSalt({ kind: "replace", userId: "u1", mealType: "lunch", dayKey: "2026-01-02", variant: "infant" }),
+    "u1|lunch|replace|2026-01-02|infant",
+  );
+});
+
+Deno.test("computeCompositeScore equals slotFit plus explainRankingTail", () => {
+  const salt = "u|snack|pool|2026-01-03|infant_primary";
+  const rid = "r1";
+  const tail = explainRankingTail("core", 5, rid, salt);
+  const total = computeCompositeScore({
+    slotFit: 30,
+    trustLevel: "core",
+    score: 5,
+    recipeId: rid,
+    rankSalt: salt,
+  });
+  assertEquals(total, 30 + tail.trustBonus + tail.dbContribution + tail.explorationBoost + tail.jitter);
 });
 
 Deno.test("exploration boost: candidate with boost beats peer candidate without (same trust)", () => {

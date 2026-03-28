@@ -10,9 +10,11 @@
 - **Доступ (RLS):** любой авторизованный пользователь может **читать** строки с `source IN ('seed','starter','manual','week_ai','chat_ai')` и не заблокированным `trust_level` (см. миграцию `20260227120000_recipes_pool_select_authenticated.sql`). Каталоги infant/toddler живут под `user_id` сервисного владельца импорта, но видны всем для чтения как pool.
 - **Условия запроса:** тот же набор `source`, `trust_level IS NULL OR trust_level != 'blocked'`.
 - **Две выборки и merge:** (1) `source IN ('seed','starter')` с лимитом **600** — чтобы curated-каталог (сотни рецептов с `score = 0`) **всегда** попадал в память; (2) `source IN ('manual','week_ai','chat_ai')` с лимитом `max(limitCandidates, 200)` (для дня `limitCandidates = 120`, для недели — `280`). Иначе при **одном** запросе `ORDER BY score DESC LIMIT 120` почти все строки с нулевым score дают **произвольный** срез БД, и детские каталоги часто **не входят** в выборку → 0 кандидатов после фильтра по возрасту/слоту.
-- **После merge:** предварительная сортировка по `trustOrder` и `score` DESC (как раньше) — только для порядка строк в памяти; **финальный выбор слота** в `pickFromPoolInMemory` / `pickBestRecipeForSlotWithGoalScoring` — по **composite** (slot-fit + trust bonus + `recipes.score` + controlled exploration + jitter), см. `planRankComposite.ts` и `docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md` §6.1.
+- **После merge:** предварительная сортировка по `trustOrder` и `score` DESC — для порядка в памяти; **финальный выбор слота** — по **`computeCompositeScore`** (slot-fit Edge + trust + `recipes.score` + exploration + **`rankJitterFromSeed(rankSalt, recipeId)`**). Соль **`rank_salt`** задаётся **`buildAlignedRankSalt`** (см. `shared/planRankTrustShared.ts`, §6.1–6.3 в `PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md`).
 
-Клиентский пул для UI («подобрать рецепты» и т.п.) использует свою выборку; логика composite относится к **Edge generate-plan**; расхождение с клиентом намеренно до отдельного этапа.
+**Клиент** (`recipePool.ts`, `poolRankLite.ts`, `useReplaceMealSlot`): та же выборка по `source` и **`POOL_TRUST_OR`**, тот же **`computeCompositeScore`** и те же **`rank_salt`**, что и Edge при совпадении контекста (`plannedDayKey`, `mealType`, infant-вариант). Полный slot-fit Edge на клиенте **не** воспроизводится — остаётся **slot-fit-lite**; см. §6.2–**6.3** `PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md` (**Client ↔ Edge ranking synchronization**).
+
+**Диагностика сравнения:** Edge — лог **`RANK_DEBUG`** (рядом с `CHAT_PLAN_RANK_PICK` при rank-debug); клиент — консоль **`RANK_DEBUG`** при `?rankDebug=1` или `?debugPool=1`.
 
 **Клиент (`recipePool.ts`, `useReplaceMealSlot`):** для возраста профиля **&lt; 12 мес** к запросу в `recipes` добавляется PostgREST-фильтр по `min_age_months` / `max_age_months` (эквивалент `recipeFitsAgeMonthsRow`), **до** `ORDER BY created_at DESC` и `LIMIT`. Иначе после массового импорта каталога 12+ мес последние N строк по дате создания могут не содержать ни одной строки, подходящей младенцу, и вкладка прикорма показывает «Пока нет подходящих вариантов…», хотя infant seed в базе есть.
 
@@ -50,7 +52,7 @@
 3. **Завтрак:** рецепты с «суп» в названии не подставляются на завтрак.
 4. **Санity-правила:** тяжёлые блюда не на завтрак, супы не на полдник и т.д.
 5. **Профиль (аллергии/предпочтения):** рецепты, содержащие ингредиенты из списка аллергий профиля, отбрасываются; учитываются предпочтения при скоринге.
-6. **Скоринг:** оставшиеся кандидаты сортируются (разнообразие белков, источник и т.д.), случайный выбор среди топ-10.
+6. **Ранжирование (клиент, fast-path):** после фильтров — **ranking-lite** (trust_level, `recipes.score`, slot-fit-lite, exploration, jitter), не случайный топ-10. Edge generate-plan использует полный composite (см. `generate-plan`).
 
 Если после всех фильтров кандидатов для слота не остаётся — слот остаётся пустым (режим «только пул», без AI).
 

@@ -1591,6 +1591,7 @@ export default function MealPlanPage() {
               excludeRecipeIds: baseExcludeIds,
               excludeTitleKeys: baseExcludeKeys,
               limitCandidates: 150,
+              plannedDayKey: selectedDayKey,
             })
           : await pickInfantFamiliarRecipe({
               supabase,
@@ -1600,6 +1601,7 @@ export default function MealPlanPage() {
               excludeRecipeIds: baseExcludeIds,
               excludeTitleKeys: baseExcludeKeys,
               limitCandidates: 150,
+              plannedDayKey: selectedDayKey,
             });
         let usedRelaxedExcludes = false;
         if (!picked) {
@@ -1613,6 +1615,7 @@ export default function MealPlanPage() {
                 excludeRecipeIds: [],
                 excludeTitleKeys: [],
                 limitCandidates: 200,
+                plannedDayKey: selectedDayKey,
               })
             : await pickInfantFamiliarRecipe({
                 supabase,
@@ -1622,6 +1625,7 @@ export default function MealPlanPage() {
                 excludeRecipeIds: [],
                 excludeTitleKeys: [],
                 limitCandidates: 200,
+                plannedDayKey: selectedDayKey,
               });
         }
 
@@ -2609,6 +2613,7 @@ export default function MealPlanPage() {
                                     excludeRecipeIds: infantDayReplaceExcludeRecipeIdsMerged,
                                     excludeTitleKeys: infantDayReplaceExcludeTitleKeysMerged,
                                     limitCandidates: 150,
+                                    plannedDayKey: selectedDayKey,
                                   })
                                 : await pickInfantFamiliarRecipe({
                                     supabase,
@@ -2618,6 +2623,7 @@ export default function MealPlanPage() {
                                     excludeRecipeIds: infantDayReplaceExcludeRecipeIdsMerged,
                                     excludeTitleKeys: infantDayReplaceExcludeTitleKeysMerged,
                                     limitCandidates: 150,
+                                    plannedDayKey: selectedDayKey,
                                   });
                               if (!picked) {
                                 await clearSlotAndOpenPoolFallback({

@@ -16,25 +16,19 @@ import {
   applyUnder12PoolAgeMonthsSqlFilter,
   filterPoolCandidatesForSlot,
   memberHasDislikesForPool,
+  computeSlotFitForPoolRow,
+  POOL_TRUST_OR,
   type MemberDataForPool,
   type PoolRecipeRow,
 } from "@/utils/recipePool";
+import { buildAlignedRankSalt } from "@shared/planRankTrustShared";
+import { pickFromPoolRankingLite, type PoolRankLiteRow } from "@/utils/poolRankLite";
 import { POOL_SOURCES } from "@/utils/recipeCanonical";
 import { isDebugPlanEnabled } from "@/utils/debugPlan";
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
 
 const MEAL_SWAP_FREE_KEY = "mealSwap_free";
 const FREE_SWAP_LIMIT_PER_DAY = 2;
-
-/** Fisher–Yates shuffle, returns new array. */
-function shuffle<T>(arr: T[]): T[] {
-  const out = [...arr];
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
 
 function getStoredFreeSwap(dayKey: string): { dayKey: string; count: number } {
   if (typeof localStorage === "undefined") return { dayKey: "", count: 0 };
@@ -120,8 +114,8 @@ export function useReplaceMealSlot(
 
       const selectFields =
         infantCarrierRepl || hasAllergies || hasDislikes || hasIntroduced || hasIntroducing
-          ? "id, title, tags, description, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
-          : "id, title, tags, description, meal_type, min_age_months, max_age_months";
+          ? "id, title, tags, description, meal_type, min_age_months, max_age_months, trust_level, score, cooking_time_minutes, recipe_ingredients(name, display_text)"
+          : "id, title, tags, description, meal_type, min_age_months, max_age_months, trust_level, score, cooking_time_minutes";
 
       const ageMonthsForPool =
         params.memberData?.age_months ??
@@ -129,7 +123,11 @@ export function useReplaceMealSlot(
           ? params.memberData.age_years * 12
           : null);
 
-      let q = supabase.from("recipes").select(selectFields).in("source", [...POOL_SOURCES]);
+      let q = supabase
+        .from("recipes")
+        .select(selectFields)
+        .in("source", [...POOL_SOURCES])
+        .or(POOL_TRUST_OR);
       q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
       const { data: rows, error } = await q.order("created_at", { ascending: false }).limit(80);
       if (error || !rows?.length) return null;
@@ -142,9 +140,28 @@ export function useReplaceMealSlot(
         meal_type?: string | null;
         min_age_months?: number | null;
         max_age_months?: number | null;
+        trust_level?: string | null;
+        score?: number | null;
+        cooking_time_minutes?: number | null;
         recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
       };
       let filtered = rows as Row[];
+
+      const pickRanked = (cands: PoolRecipeRow[], rankSalt: string) => {
+        const ranked = pickFromPoolRankingLite(cands as PoolRankLiteRow[], {
+          rankSalt,
+          getSlotFit: (row) =>
+            computeSlotFitForPoolRow(row as PoolRecipeRow, {
+              slotNorm,
+              memberData: params.memberData ?? null,
+              infantSlotRole: null,
+            }),
+        });
+        if (import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debugPool") === "1") {
+          console.log("[POOL DEBUG replace-slot]", { rankSalt, pool_rank_lite: ranked?.debug });
+        }
+        return ranked ? { id: ranked.row.id, title: ranked.row.title } : null;
+      };
 
       if (infantCarrierRepl) {
         const poolFiltered = filterPoolCandidatesForSlot(filtered as PoolRecipeRow[], {
@@ -155,8 +172,14 @@ export function useReplaceMealSlot(
           infantSlotRole: null,
         });
         if (poolFiltered.length === 0) return null;
-        const shuffled = shuffle(poolFiltered);
-        return { id: shuffled[0].id, title: shuffled[0].title };
+        const salt = buildAlignedRankSalt({
+          kind: "replace",
+          userId: user.id,
+          mealType: params.mealType,
+          dayKey: params.dayKey,
+          variant: "infant",
+        });
+        return pickRanked(poolFiltered, salt);
       }
 
       filtered = filtered.filter((r) => {
@@ -179,8 +202,15 @@ export function useReplaceMealSlot(
         params.excludeTitles
       );
       if (afterPool.length === 0) return null;
-      const shuffled = shuffle(afterPool);
-      return { id: shuffled[0].id, title: shuffled[0].title };
+      const idSet = new Set(afterPool.map((x) => x.id));
+      const fullRows = filtered.filter((r) => idSet.has(r.id)) as PoolRecipeRow[];
+      const salt = buildAlignedRankSalt({
+        kind: "replace",
+        userId: user.id,
+        mealType: params.mealType,
+        dayKey: params.dayKey,
+      });
+      return pickRanked(fullRows, salt);
     },
     [user, memberId]
   );

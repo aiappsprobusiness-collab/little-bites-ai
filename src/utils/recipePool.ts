@@ -16,8 +16,13 @@ import {
   scoreInfantIntroducingPeriodSort,
   type IngredientForProductKey,
 } from "@/utils/introducedProducts";
+import { buildAlignedRankSalt } from "@shared/planRankTrustShared";
+import { pickFromPoolRankingLite, type PoolRankLiteRow } from "@/utils/poolRankLite";
 
 const IS_DEV = import.meta.env.DEV;
+
+/** Как Edge `POOL_TRUST_OR`: в пул подбора не попадают рецепты с `trust_level = blocked`. */
+export const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
 
 /** [POOL DEBUG] логи только при ?debugPool=1 (не спамим в проде). */
 function isDebugPool(): boolean {
@@ -144,6 +149,10 @@ export interface PickRecipeFromPoolArgs {
   limitCandidates?: number;
   /** Прикорм: роль слота primary/secondary (новинка vs только введённые), не «завтрак/обед». */
   infantSlotRole?: InfantSlotRole | null;
+  /** Соль ранжирования: день плана (как на Edge generate-plan). */
+  plannedDayKey?: string;
+  /** Суффикс соли (infant_primary / infant_secondary) — см. shared buildAlignedRankSalt. */
+  rankVariant?: string;
 }
 
 function computeFirstNovelProductKeyForPoolRow(
@@ -172,6 +181,8 @@ export type PoolRecipeRow = {
   meal_type?: string | null;
   min_age_months?: number | null;
   max_age_months?: number | null;
+  trust_level?: string | null;
+  score?: number | null;
   recipe_ingredients?: Array<{ name?: string; display_text?: string; category?: string | null }> | null;
 };
 
@@ -439,6 +450,71 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
   return filtered;
 }
 
+/**
+ * Proxy slot-fit для client ranking-lite (согласован по масштабу с trust/db в shared/planRankTrustShared).
+ * Прикорм: те же сигналы, что сортировка в filterPoolCandidatesForSlot; 12+ — лёгкий бонус по времени готовки.
+ */
+export function computeSlotFitForPoolRow(
+  r: PoolRecipeRow,
+  ctx: {
+    slotNorm: MealType;
+    memberData?: MemberDataForPool | null;
+    infantSlotRole?: InfantSlotRole | null;
+  },
+): number {
+  const ageMonths =
+    ctx.memberData?.age_months ??
+    (ctx.memberData?.age_years != null ? ctx.memberData.age_years * 12 : null);
+  const role = resolveInfantSlotRoleForPool(ctx.slotNorm, ctx.memberData ?? null, ctx.infantSlotRole ?? null);
+
+  if (ageMonths != null && ageMonths < 12 && role === "secondary") {
+    const introducedKeys = Array.isArray(ctx.memberData?.introduced_product_keys)
+      ? ctx.memberData.introduced_product_keys.filter((k): k is string => Boolean(k))
+      : [];
+    const raw = scoreInfantIntroducedMatch({
+      ageMonths,
+      introducedProductKeys: introducedKeys,
+      ingredients: (r.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
+    });
+    return 10 + Math.max(-12, Math.min(28, raw * 0.35));
+  }
+
+  if (ageMonths != null && ageMonths < 12 && role === "primary") {
+    const introducedKeys = Array.isArray(ctx.memberData?.introduced_product_keys)
+      ? ctx.memberData.introduced_product_keys.filter((k): k is string => Boolean(k))
+      : [];
+    const introducingKey = ctx.memberData?.introducing_product_key ?? null;
+    const introducingStarted = ctx.memberData?.introducing_started_at ?? null;
+    const introducingPeriodActive =
+      !!introducingKey &&
+      !!introducingStarted &&
+      isIntroducingPeriodActive(introducingKey, introducingStarted, new Date());
+    const raw = scoreInfantIntroducingPeriodSort({
+      ageMonths,
+      introducedProductKeys: introducedKeys,
+      introducingProductKey: introducingKey,
+      introducingPeriodActive,
+      ingredients: (r.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
+    });
+    return 8 + Math.max(-15, Math.min(32, raw * 0.22));
+  }
+
+  let f = 12;
+  const c = r.cooking_time_minutes;
+  if (c != null && c > 0) {
+    if (c > 40) f -= 4;
+    else if (c <= 20) f += 5;
+    else if (c <= 45) f += 2;
+  }
+  const infantUnified =
+    ageMonths != null && ageMonths < 12 && (role === "primary" || role === "secondary");
+  if (!infantUnified) {
+    const recNorm = normalizeMealType(r.meal_type);
+    if (recNorm === ctx.slotNorm) f += 3;
+  }
+  return f;
+}
+
 export type ListFilteredPoolRecipesArgs = Omit<PickRecipeFromPoolArgs, "excludeRecipeIds" | "excludeTitleKeys"> & {
   excludeRecipeIds?: string[];
   excludeTitleKeys?: string[];
@@ -476,8 +552,8 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
 
   const selectFields =
     hasAllergies || hasDislikes || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole
-      ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
-      : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
+      ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score, recipe_ingredients(name, display_text, category)"
+      : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score";
 
   const ageMonthsForPool =
     memberData?.age_months ??
@@ -486,7 +562,8 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
   let poolQuery = supabase
     .from("recipes")
     .select(selectFields)
-    .in("source", [...POOL_SOURCES]);
+    .in("source", [...POOL_SOURCES])
+    .or(POOL_TRUST_OR);
   poolQuery = applyUnder12PoolAgeMonthsSqlFilter(poolQuery, ageMonthsForPool);
   const { data: rows, error } = await poolQuery.order("created_at", { ascending: false }).limit(limitCandidates);
 
@@ -523,6 +600,8 @@ export async function pickRecipeFromPool(
     excludeTitleKeys,
     limitCandidates = 60,
     infantSlotRole,
+    plannedDayKey,
+    rankVariant,
   } = args;
 
   const excludeSet = new Set(excludeRecipeIds);
@@ -545,14 +624,18 @@ export async function pickRecipeFromPool(
 
   const selectFields =
     hasAllergies || hasDislikes || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole
-      ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
-      : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
+      ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score, recipe_ingredients(name, display_text, category)"
+      : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score";
 
   const ageMonthsForPool =
     memberData?.age_months ??
     (memberData?.age_years != null && Number.isFinite(memberData.age_years) ? memberData.age_years * 12 : null);
 
-  let q = supabase.from("recipes").select(selectFields).in("source", [...POOL_SOURCES]);
+  let q = supabase
+    .from("recipes")
+    .select(selectFields)
+    .in("source", [...POOL_SOURCES])
+    .or(POOL_TRUST_OR);
   q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
   q = q.order("created_at", { ascending: false }).limit(limitCandidates);
 
@@ -608,10 +691,38 @@ export async function pickRecipeFromPool(
     return null;
   }
 
-  const topN = Math.min(15, filtered.length);
-  const fromTop = filtered.slice(0, topN);
-  const idx = Math.floor(Math.random() * fromTop.length);
-  const picked = fromTop[idx];
+  const rankSalt = buildAlignedRankSalt({
+    kind: "pool",
+    userId,
+    mealType,
+    dayKey: plannedDayKey,
+    variant: rankVariant,
+  });
+  const ranked = pickFromPoolRankingLite(filtered as PoolRankLiteRow[], {
+    rankSalt,
+    getSlotFit: (row) =>
+      computeSlotFitForPoolRow(row as PoolRecipeRow, {
+        slotNorm,
+        memberData,
+        infantSlotRole: infantSlotRole ?? null,
+      }),
+  });
+  if (!ranked) {
+    if (isDebugPool()) {
+      console.log("[POOL DEBUG]", {
+        mealType,
+        memberId,
+        candidatesFromDb,
+        candidatesAfterMealType,
+        afterFiltersCount: filtered.length,
+        pickedSource: "db",
+        pickedRecipeId: null,
+        rejectReason: "all_blocked_trust",
+      });
+    }
+    return null;
+  }
+  const picked = ranked.row as PoolRecipeRow;
 
   if (isDebugPool()) {
     console.log("[POOL DEBUG]", {
@@ -623,6 +734,7 @@ export async function pickRecipeFromPool(
       pickedSource: "db",
       pickedRecipeId: picked.id,
       rejectReason: undefined,
+      pool_rank_lite: ranked.debug,
     });
   }
 
@@ -646,6 +758,7 @@ export async function pickInfantNewRecipe(args: PickArgsWithoutInfantSlot): Prom
     ...args,
     mealType: "snack",
     infantSlotRole: "primary",
+    rankVariant: args.rankVariant ?? "infant_primary",
   });
 }
 
@@ -655,6 +768,7 @@ export async function pickInfantFamiliarRecipe(args: PickArgsWithoutInfantSlot):
     ...args,
     mealType: "snack",
     infantSlotRole: "secondary",
+    rankVariant: args.rankVariant ?? "infant_secondary",
   });
 }
 

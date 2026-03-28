@@ -54,6 +54,12 @@
 - Каталожный пул: **seed** с `trust_level = core` (импорт curated); starter — отдельная линия без автоперевода в core в этом этапе.
 - Feedback (like/dislike, план) — вспомогательный сигнал; автоматический переход candidate → trusted по правилам дополняет кураторский каталог, но **core ≠ trusted** по смыслу.
 
+## Подбор в плане (ranking, не feedback)
+
+- Пороги **candidate → trusted / blocked** и SQL **`recompute_recipe_score_and_trust`** при настройке composite **не менялись**.
+- В **generate-plan** и в **клиентском fast-path** для выбора победителя после фильтров используются **одни и те же аддитивные бонусы** (`shared/planRankTrustShared.ts`): trust tier, вклад `recipes.score`, умеренный exploration для candidate/null, jitter. Цель — рост пула: хороший candidate может конкурировать с каталогом за счёт score и fit, без «непроницаемого» каталога.
+- Рецепты с **`trust_level = blocked`** в пул подбора не попадают (Edge и клиент).
+
 ---
 
 ## Launch strategy (RU)

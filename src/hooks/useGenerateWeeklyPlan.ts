@@ -321,6 +321,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             excludeRecipeIds: acc.usedRecipeIds,
             excludeTitleKeys: acc.usedTitleKeys,
             limitCandidates: 60,
+            plannedDayKey: dateStr,
           });
 
           if (poolRecipe) {
