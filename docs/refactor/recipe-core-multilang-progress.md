@@ -705,3 +705,9 @@ To enable automatic translation:
 - **Индекс по trust_level:** на Stage 1 не добавлен. Выборка пула фильтрует по source (существующий idx_recipes_pool_user_created) и по trust_level в приложении; при росте объёма можно добавить частичный индекс WHERE source IN (...) AND (trust_level IS NULL OR trust_level <> 'blocked').
 - **source_lang в deepseek-chat:** передаётся null — надёжного источника языка запроса на Stage 1 нет; при появлении заголовка/контекста локали можно передавать его в source_lang.
 - **user_custom в backfill:** для существующих рецептов с source = 'user_custom' выставлен trust_level = 'trusted' (рецепт пользователя).
+
+---
+
+## Связанно: прикорм на «План» (март 2026, вне multilang-стадий)
+
+Исправления infant UI, дневных exclude для клиентского пула и `skipInvalidate` после replace — см. **§7** в `docs/dev/POOL_AND_CHAT_RECIPES.md` и обновлённый **`docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md`** (§5.4, §6.2, таблица «Исключение повторов»).

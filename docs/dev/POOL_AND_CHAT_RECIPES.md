@@ -116,7 +116,7 @@
 ## 6. Infant replace fallback (&lt;12 мес)
 
 - Для infant-flow (`age_months < 12`, не family) автозамена по кнопке ↻ для **Premium/Trial** ограничена: максимум **5 успешных автозамен на один слот в рамках одного дня**.
-- Подбор замены на экране плана: **`pickRecipeFromPool`** с **`infantSlotRole`**: `primary` (завтрак — новый продукт) и `secondary` (обед — только продукты из `introduced_product_keys`); сохранение слота — **`replaceSlotWithRecipe`**. Edge **`replace_slot`** для этого UI не вызывается.
+- Подбор замены на экране плана: **`pickInfantNewRecipe`** / **`pickInfantFamiliarRecipe`** (внутри — `pickRecipeFromPool` + явный **`infantSlotRole`**: `primary` = новый продукт, `secondary` = только `introduced_product_keys`). В **`meal_plans_v2`** строки по-прежнему могут храниться под техническими **`breakfast` / `lunch`**; UI и подбор не трактуют это как «завтрак/обед». Сохранение — **`replaceSlotWithRecipe`** (для спокойного UX после успеха — с **`skipInvalidate`** + `applyReplaceSlotToPlanCache`). Edge **`replace_slot`** для этого UI не вызывается.
 - Если задан **`introducing_product_key`**, а новый primary-рецепт вводит **другой** ключ продукта — показывается подтверждение; при «Да» сбрасываются `introducing_product_key` / `introducing_started_at` и применяется выбранный рецепт.
 - Лимит считается по ключу `dayKey + mealType` (per-slot-per-day), а не глобально на день.
 - После достижения лимита или исчерпания кандидатов показывается **infant-specific** `PoolExhaustedSheet`:
@@ -125,3 +125,12 @@
   - возврат идёт к уже подходившим вариантам для текущего слота/дня.
 - Для **Free** поведение не меняется: попытка замены ведёт в paywall.
 - Для обычного flow `12+` и взрослых остаётся прежний generic fallback (избранное/чат).
+
+---
+
+## 7. Журнал: прикорм на вкладке «План» (март 2026)
+
+- **Root cause ложного исчерпания пула:** клиентский infant replace/fill использовал те же `exclude`, что и 12+ — **все** `recipe_id` / title за **всю неделю** плюс session. При большом пуле это сужало кандидатов после 2–3 замен. **Исправление:** `infantDayReplaceExcludeRecipeIdsMerged` / `infantDayReplaceExcludeTitleKeysMerged` — только **выбранный день** + session для этой даты (`MealPlanPage`).
+- **Дёрганье экрана:** после успешной infant-замены/добора убран лишний **`invalidateQueries(['meal_plans_v2'])`** там, где сразу вызывается **`applyReplaceSlotToPlanCache`**; `replaceSlotWithRecipe` принимает **`{ skipInvalidate: true }`**.
+- **Файлы:** `src/pages/MealPlanPage.tsx`, `src/hooks/useReplaceMealSlot.ts`, `src/components/plan/PoolExhaustedSheet.tsx`, `src/utils/recipePool.ts` (комментарии), документ **`docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md`**.
+- **Ручная проверка:** 5 замен на один infant-слот за день (Premium); смена варианта без «мигания» всего экрана; пустой новый пользователь — одна карточка primary; с введёнными — две роли; Free — paywall на ↻.

@@ -113,10 +113,10 @@ export interface MemberDataForPool {
 export type InfantSlotRole = "primary" | "secondary";
 
 /**
- * Если роль не задана и возраст &lt;12 мес — по умолчанию только для носителей прикорма в плане:
- * `breakfast` = primary (новинка), `lunch` = secondary (знакомое). Для `snack`/`dinner` роль не
- * выводится — подбор как у 12+ по совпадению `recipes.meal_type` со слотом (pool-first недели и т.д.).
- * Явный `explicit` перекрывает.
+ * Если роль не задана и возраст &lt;12 мес — по умолчанию только для **технических** carrier-слотов
+ * `breakfast` / `lunch` в строке плана: `breakfast` → primary, `lunch` → secondary.
+ * Для `snack`/`dinner` роль не выводится — подбор как у 12+ по `recipes.meal_type` со слотом.
+ * Экран прикорма и `pickInfant*` задают роль явно (`mealType: snack` + `infantSlotRole`). Явный `explicit` перекрывает.
  */
 export function resolveInfantSlotRoleForPool(
   slotNorm: MealType,
@@ -142,7 +142,7 @@ export interface PickRecipeFromPoolArgs {
   excludeRecipeIds: string[];
   excludeTitleKeys: string[];
   limitCandidates?: number;
-  /** Прикорм: разделение кандидатов для завтрака (новинка) и обеда (только знакомое). */
+  /** Прикорм: роль слота primary/secondary (новинка vs только введённые), не «завтрак/обед». */
   infantSlotRole?: InfantSlotRole | null;
 }
 

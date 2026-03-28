@@ -181,12 +181,15 @@ export function useReplaceMealSlot(
 
   /** Выполнить замену слота на выбранный рецепт (обновляет meal_plans_v2). */
   const replaceSlotWithRecipe = useCallback(
-    async (params: {
-      dayKey: string;
-      mealType: string;
-      recipeId: string;
-      recipeTitle: string;
-    }) => {
+    async (
+      params: {
+        dayKey: string;
+        mealType: string;
+        recipeId: string;
+        recipeTitle: string;
+      },
+      opts?: { skipInvalidate?: boolean }
+    ) => {
       await createMealPlan({
         member_id: memberId ?? null,
         child_id: memberId ?? null,
@@ -195,7 +198,9 @@ export function useReplaceMealSlot(
         recipe_id: params.recipeId,
         title: params.recipeTitle,
       });
-      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+      if (!opts?.skipInvalidate) {
+        queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+      }
     },
     [createMealPlan, memberId, options?.startKey, options?.endKey, queryClient, user?.id]
   );
