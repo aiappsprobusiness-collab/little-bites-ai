@@ -13,6 +13,7 @@ import {
   passesProfileFilter,
   getSanityBlockedReasons,
   recipeFitsAgeMonthsRow,
+  applyUnder12PoolAgeMonthsSqlFilter,
   filterPoolCandidatesForSlot,
   type MemberDataForPool,
   type PoolRecipeRow,
@@ -119,13 +120,15 @@ export function useReplaceMealSlot(
           ? "id, title, tags, description, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text)"
           : "id, title, tags, description, meal_type, min_age_months, max_age_months";
 
-      let q = supabase
-        .from("recipes")
-        .select(selectFields)
-        .in("source", ["seed", "manual", "week_ai", "chat_ai"])
-        .order("created_at", { ascending: false })
-        .limit(80);
-      const { data: rows, error } = await q;
+      const ageMonthsForPool =
+        params.memberData?.age_months ??
+        (params.memberData?.age_years != null && Number.isFinite(params.memberData.age_years)
+          ? params.memberData.age_years * 12
+          : null);
+
+      let q = supabase.from("recipes").select(selectFields).in("source", ["seed", "manual", "week_ai", "chat_ai"]);
+      q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
+      const { data: rows, error } = await q.order("created_at", { ascending: false }).limit(80);
       if (error || !rows?.length) return null;
 
       type Row = {

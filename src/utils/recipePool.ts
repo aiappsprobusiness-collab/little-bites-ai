@@ -188,6 +188,21 @@ export function recipeFitsAgeMonthsRow(
   return true;
 }
 
+/**
+ * PostgREST: AND (min IS NULL OR min ≤ age) AND (max IS NULL OR max ≥ age) — эквивалент recipeFitsAgeMonthsRow до limit/order.
+ * Без этого `ORDER BY created_at DESC LIMIT N` забивает выборку недавно импортированными рецептами 12+ мес, и прикорм <12 не попадает в окно.
+ */
+export function applyUnder12PoolAgeMonthsSqlFilter<T extends { or: (filters: string) => T }>(
+  query: T,
+  ageMonths: number | null | undefined
+): T {
+  if (ageMonths == null || !Number.isFinite(ageMonths) || ageMonths >= 12) return query;
+  const a = Math.round(ageMonths);
+  return query
+    .or(`min_age_months.is.null,min_age_months.lte.${a}`)
+    .or(`max_age_months.is.null,max_age_months.gte.${a}`);
+}
+
 /** Токены аллергенов из allergenTokens (курица→кур/куриц, орехи→орех, молоко→dairy и т.д.). */
 function getAllergyTokens(memberData: MemberDataForPool | null | undefined): string[] {
   return buildBlockedTokens(memberData?.allergies);
@@ -453,12 +468,16 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
     ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
     : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
-  const { data: rows, error } = await supabase
+  const ageMonthsForPool =
+    memberData?.age_months ??
+    (memberData?.age_years != null && Number.isFinite(memberData.age_years) ? memberData.age_years * 12 : null);
+
+  let poolQuery = supabase
     .from("recipes")
     .select(selectFields)
-    .in("source", ["seed", "manual", "week_ai", "chat_ai"])
-    .order("created_at", { ascending: false })
-    .limit(limitCandidates);
+    .in("source", ["seed", "manual", "week_ai", "chat_ai"]);
+  poolQuery = applyUnder12PoolAgeMonthsSqlFilter(poolQuery, ageMonthsForPool);
+  const { data: rows, error } = await poolQuery.order("created_at", { ascending: false }).limit(limitCandidates);
 
   if (error || !rows?.length) return [];
 
@@ -516,12 +535,13 @@ export async function pickRecipeFromPool(
     ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, recipe_ingredients(name, display_text, category)"
     : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months";
 
-  let q = supabase
-    .from("recipes")
-    .select(selectFields)
-    .in("source", ["seed", "manual", "week_ai", "chat_ai"])
-    .order("created_at", { ascending: false })
-    .limit(limitCandidates);
+  const ageMonthsForPool =
+    memberData?.age_months ??
+    (memberData?.age_years != null && Number.isFinite(memberData.age_years) ? memberData.age_years * 12 : null);
+
+  let q = supabase.from("recipes").select(selectFields).in("source", ["seed", "manual", "week_ai", "chat_ai"]);
+  q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
+  q = q.order("created_at", { ascending: false }).limit(limitCandidates);
 
   if (excludeRecipeIds.length > 0 && excludeRecipeIds.length < 50) {
     const idsList = excludeRecipeIds.join(",");

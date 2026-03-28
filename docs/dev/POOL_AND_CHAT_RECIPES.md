@@ -4,18 +4,21 @@
 
 **Пул рецептов** — это таблица **`public.recipes`** в Supabase (ваш проект → Table Editor → `recipes`).
 
-Выборка для пула (в Edge Function `generate-plan`, функция `pickFromPool`):
+Выборка для подстановки в план (Edge Function **`generate-plan`**, `fetchPoolCandidates` → фильтры и `pickFromPoolInMemory`):
 
 - **Таблица:** `public.recipes`
-- **Условия:**
-  - `user_id = auth.uid()` (рецепты текущего пользователя)
-  - `source IN ('seed', 'starter', 'manual', 'week_ai', 'chat_ai')`
-- **Сортировка:** `created_at DESC`
-- **Лимит кандидатов:** 60 (затем фильтрация по типу приёма, аллергиям и т.д.)
+- **Доступ (RLS):** любой авторизованный пользователь может **читать** строки с `source IN ('seed','starter','manual','week_ai','chat_ai')` и не заблокированным `trust_level` (см. миграцию `20260227120000_recipes_pool_select_authenticated.sql`). Каталоги infant/toddler живут под `user_id` сервисного владельца импорта, но видны всем для чтения как pool.
+- **Условия запроса:** тот же набор `source`, `trust_level IS NULL OR trust_level != 'blocked'`.
+- **Две выборки и merge:** (1) `source IN ('seed','starter')` с лимитом **600** — чтобы curated-каталог (сотни рецептов с `score = 0`) **всегда** попадал в память; (2) `source IN ('manual','week_ai','chat_ai')` с лимитом `max(limitCandidates, 200)` (для дня `limitCandidates = 120`, для недели — `280`). Иначе при **одном** запросе `ORDER BY score DESC LIMIT 120` почти все строки с нулевым score дают **произвольный** срез БД, и детские каталоги часто **не входят** в выборку → 0 кандидатов после фильтра по возрасту/слоту.
+- **После merge:** сортировка по уровню доверия (`trustOrder`), затем по `score` DESC; дальше — фильтры по слоту, возрасту, аллергиям и т.д.
 
-То есть пул — это **все рецепты пользователя** с указанными источниками, без привязки к схеме/базе по «адресу»: используется обычный Supabase-клиент `.from("recipes")` (схема `public` по умолчанию).
+Клиентский пул для UI («подобрать рецепты» и т.п.) использует свою выборку; логика выше относится к **generate-plan**.
+
+**Клиент (`recipePool.ts`, `useReplaceMealSlot`):** для возраста профиля **&lt; 12 мес** к запросу в `recipes` добавляется PostgREST-фильтр по `min_age_months` / `max_age_months` (эквивалент `recipeFitsAgeMonthsRow`), **до** `ORDER BY created_at DESC` и `LIMIT`. Иначе после массового импорта каталога 12+ мес последние N строк по дате создания могут не содержать ни одной строки, подходящей младенцу, и вкладка прикорма показывает «Пока нет подходящих вариантов…», хотя infant seed в базе есть.
 
 **Curated infant seed (4–6, 7–8 и 9–11 мес):** импорт и идемпотентность — `docs/dev/infant-seed-import.md` (`source = seed`, `trust_level = trusted`, возраст по `min_age_months` / `max_age_months`).
+
+**Curated toddler seed (12–36 мес):** отдельный snapshot и импорт — `docs/dev/toddler-seed-import.md`, тег батча `toddler_curated_v1`.
 
 Для режима «прикорм» на клиенте (когда возраст профиля < 12 мес) подбор из пула опирается на `min_age_months/max_age_months` рецепта (через age-range фильтр), без использования `nutrition_goals` как основного механизма выбора. В UI для найденных infant-рецептов блок подсказки маркируется как **«Подсказка для мамы»**, а `description` показывается как текст рецепта (про текстуру/этап прикорма). На экране рецепта кнопка **«Добавить в покупки»** для таких рецептов скрыта (`RecipePage`, `isInfantRecipe`).
 
