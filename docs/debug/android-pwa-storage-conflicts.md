@@ -80,7 +80,7 @@
 |------|------------|
 | `onboarding_attribution` | Attribution онбординга. |
 | `a2hs_*` | Счётчики/флаги установки PWA (attempt_count, dismissed_forever, trigger_source, first_day/week/recipe dispatched и т.д.). |
-| `dinner_reminder_enabled`, `dinner_reminder_shown_date` | Напоминание об ужине. |
+| `dinner_reminder_enabled`, `dinner_reminder_shown_date` | Баннер напоминания об ужине (`DinnerReminderBanner`); переключателя в профиле нет — ключ может остаться от старых сессий. |
 | `mealPlan_mutedWeekKey` | Скрытая неделя в плане. |
 | `little-bites-app-store` | Zustand persist (например версия). |
 | `mr_anon_id`, `last_touch_*`, `last_touch_entry_point` и т.д. | Аналитика/usage (usageEvents). |

@@ -1,7 +1,9 @@
+import { LEGAL_DOCUMENT_BODY_CLASS } from "./legalDocumentBodyClass";
+
 export function TermsContent() {
   return (
-    <>
-      <h1 className="text-2xl font-bold">Пользовательское соглашение</h1>
+    <div className={LEGAL_DOCUMENT_BODY_CLASS}>
+      <h1>Пользовательское соглашение</h1>
 
       <p>
         Настоящее Пользовательское соглашение регулирует отношения между
@@ -10,38 +12,41 @@ export function TermsContent() {
         Пользователем сервиса Mom Recipes.
       </p>
 
-      <h2 className="text-typo-title font-semibold mt-6">1. Общие положения</h2>
+      <h2>1. Общие положения</h2>
       <p>
         Mom Recipes — это сервис с использованием искусственного интеллекта для
         генерации рецептов для детей и семьи.
       </p>
 
-      <h2 className="text-typo-title font-semibold mt-6">2. Регистрация и использование</h2>
+      <h2>2. Регистрация и использование</h2>
       <p>
         Пользователь может использовать вымышленные данные профилей детей и
         семьи. Ответственность за корректность вводимых данных лежит на
         Пользователе.
       </p>
 
-      <h2 className="text-typo-title font-semibold mt-6">3. Подписка</h2>
+      <h2>3. Подписка</h2>
       <p>
         Бесплатная версия ограничена. Полный функционал доступен по подписке
         Premium (месяц / год / trial 3 дня).
       </p>
 
-      <h2 className="text-typo-title font-semibold mt-6">4. Ответственность</h2>
+      <h2>4. Ответственность</h2>
       <p>
         Рецепты носят рекомендательный характер и не являются медицинскими или
         диетологическими предписаниями.
       </p>
 
-      <h2 className="text-typo-title font-semibold mt-6">5. Контакты</h2>
+      <h2>5. Контакты</h2>
       <p>
-        Исполнитель: ИП Иванов Дмитрий Вячеславович<br />
+        Исполнитель: ИП Иванов Дмитрий Вячеславович
+        <br />
         Юр. адрес: 309181, Россия, Белгородская обл., г. Губкин, ул. Кирова, д. 67А,
-        кв. 73<br />
-        Email: <a href="mailto:aiapps.probusiness@gmail.com" className="underline text-primary">aiapps.probusiness@gmail.com</a>
+        кв. 73
+        <br />
+        Email:{" "}
+        <a href="mailto:aiapps.probusiness@gmail.com">aiapps.probusiness@gmail.com</a>
       </p>
-    </>
+    </div>
   );
 }

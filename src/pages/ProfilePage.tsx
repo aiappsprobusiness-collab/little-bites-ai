@@ -6,10 +6,8 @@ import {
   Plus,
   LogOut,
   ChevronRight,
-  Bell,
   HelpCircle,
   FileText,
-  Lock,
   Download,
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -33,7 +31,6 @@ import { PrivacyContent } from "@/components/legal/PrivacyContent";
 import { SubscriptionContent } from "@/components/legal/SubscriptionContent";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
@@ -45,19 +42,6 @@ import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { isStandalone } from "@/utils/standalone";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
-
-const DINNER_REMINDER_STORAGE_KEY = "dinner_reminder_enabled";
-
-function getDinnerReminderEnabled(): boolean {
-  if (typeof localStorage === "undefined") return false;
-  return localStorage.getItem(DINNER_REMINDER_STORAGE_KEY) === "1";
-}
-
-function setDinnerReminderEnabled(enabled: boolean): void {
-  if (typeof localStorage === "undefined") return;
-  if (enabled) localStorage.setItem(DINNER_REMINDER_STORAGE_KEY, "1");
-  else localStorage.removeItem(DINNER_REMINDER_STORAGE_KEY);
-}
 
 function memberAvatar(_member: MembersRow, index: number): string {
   return VEGETABLE_EMOJIS[index % VEGETABLE_EMOJIS.length];
@@ -95,7 +79,6 @@ export default function ProfilePage() {
   const [showLegalModal, setShowLegalModal] = useState(false);
   const [editName, setEditName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
-  const [dinnerReminderEnabled, setDinnerReminderEnabledState] = useState(getDinnerReminderEnabled);
   const [showGeneratingScreen, setShowGeneratingScreen] = useState(false);
   const [onboardingMemberId, setOnboardingMemberId] = useState<string | null>(null);
   const [generatingDone, setGeneratingDone] = useState(false);
@@ -123,11 +106,6 @@ export default function ProfilePage() {
       return next;
     }, { replace: true });
   }, [searchParams, authReady, isLoading, members.length, setSearchParams]);
-
-  const handleDinnerReminderChange = (checked: boolean) => {
-    setDinnerReminderEnabledState(checked);
-    setDinnerReminderEnabled(checked);
-  };
 
   const handleMemberCreated = (memberId: string) => {
     setShowMemberSheet(false);
@@ -390,14 +368,6 @@ export default function ProfilePage() {
           {/* Утилиты: одна карточка, строки 48–52px, мелкие иконки и шевроны */}
           <section className="flex flex-col gap-2">
             <div className="rounded-2xl border border-border/70 bg-card overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
-              <div className="w-full flex items-center gap-3 px-4 min-h-[50px] border-b border-border/20">
-                <Bell className="h-[18px] w-[18px] text-muted-foreground/80 shrink-0" strokeWidth={2} />
-                <span className="text-foreground text-sm flex-1">Напоминать про ужин</span>
-                <Switch
-                  checked={dinnerReminderEnabled}
-                  onCheckedChange={handleDinnerReminderChange}
-                />
-              </div>
               <a
                 href="mailto:momrecipesai@gmail.com"
                 className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm border-b border-border/20"
@@ -486,53 +456,48 @@ export default function ProfilePage() {
       </Dialog>
 
       <Dialog open={showLegalModal} onOpenChange={setShowLegalModal}>
-        <DialogContent className="sm:max-w-md flex flex-col max-h-[85vh] p-0 gap-0 overflow-hidden">
-          <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
-            <DialogTitle>Правовая информация</DialogTitle>
+        <DialogContent className="flex h-[min(85vh,calc(100vh-2rem))] w-[min(100vw-2rem,42rem)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
+          <DialogHeader className="shrink-0 space-y-1 px-5 pb-3 pt-5 text-center sm:text-center">
+            <DialogTitle className="text-xl font-bold leading-snug tracking-tight sm:text-2xl">
+              Правовая информация
+            </DialogTitle>
           </DialogHeader>
-          <Tabs defaultValue="terms" className="flex flex-col min-h-0 flex-1 flex overflow-hidden">
-            <TabsList className="grid w-full grid-cols-3 h-auto flex-wrap gap-1 p-1 mx-6 shrink-0">
-              <TabsTrigger value="terms" className="text-xs whitespace-nowrap py-2">
-                Соглашение
-              </TabsTrigger>
-              <TabsTrigger value="privacy" className="text-xs whitespace-nowrap py-2">
-                Конфиденциальность
-              </TabsTrigger>
-              <TabsTrigger value="subscription" className="text-xs whitespace-nowrap py-2">
-                Подписка
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="terms" className="flex flex-col min-h-0 mt-0 flex-1 overflow-hidden data-[state=inactive]:hidden">
-              <div className="relative flex-1 min-h-0 flex flex-col">
-                <div
-                  className="overflow-y-auto px-6 pb-6 pt-2 flex-1 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-2 [&_p]:text-sm [&_p]:leading-[1.55] [&_p]:mb-4 [&_p:last-child]:mb-0"
-                  style={{ maxHeight: "calc(85vh - 140px)" }}
-                >
-                  <TermsContent />
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none shrink-0" />
+          <Tabs defaultValue="terms" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="shrink-0 px-4 pb-2">
+              <TabsList className="mx-auto grid h-auto w-full max-w-md grid-cols-3 gap-1 p-1.5">
+                <TabsTrigger value="terms" className="px-2 py-2 text-xs sm:text-sm">
+                  Соглашение
+                </TabsTrigger>
+                <TabsTrigger value="privacy" className="px-2 py-2 text-xs sm:text-sm">
+                  Конфиденциальность
+                </TabsTrigger>
+                <TabsTrigger value="subscription" className="px-2 py-2 text-xs sm:text-sm">
+                  Подписка
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent
+              value="terms"
+              className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:ring-0 data-[state=inactive]:hidden"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-1">
+                <TermsContent />
               </div>
             </TabsContent>
-            <TabsContent value="privacy" className="flex flex-col min-h-0 mt-0 flex-1 overflow-hidden data-[state=inactive]:hidden">
-              <div className="relative flex-1 min-h-0 flex flex-col">
-                <div
-                  className="overflow-y-auto px-6 pb-6 pt-2 flex-1 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-2 [&_p]:text-sm [&_p]:leading-[1.55] [&_p]:mb-4 [&_p:last-child]:mb-0"
-                  style={{ maxHeight: "calc(85vh - 140px)" }}
-                >
-                  <PrivacyContent />
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none shrink-0" />
+            <TabsContent
+              value="privacy"
+              className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:ring-0 data-[state=inactive]:hidden"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-1">
+                <PrivacyContent />
               </div>
             </TabsContent>
-            <TabsContent value="subscription" className="flex flex-col min-h-0 mt-0 flex-1 overflow-hidden data-[state=inactive]:hidden">
-              <div className="relative flex-1 min-h-0 flex flex-col">
-                <div
-                  className="overflow-y-auto px-6 pb-6 pt-2 flex-1 [&_h1]:text-lg [&_h1]:font-bold [&_h1]:mb-3 [&_h2]:text-base [&_h2]:font-semibold [&_h2]:mt-4 [&_h2]:mb-2 [&_p]:text-sm [&_p]:leading-[1.55] [&_p]:mb-4 [&_p:last-child]:mb-0"
-                  style={{ maxHeight: "calc(85vh - 140px)" }}
-                >
-                  <SubscriptionContent />
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-background to-transparent pointer-events-none shrink-0" />
+            <TabsContent
+              value="subscription"
+              className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden focus-visible:ring-0 data-[state=inactive]:hidden"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6 pt-1">
+                <SubscriptionContent />
               </div>
             </TabsContent>
           </Tabs>
