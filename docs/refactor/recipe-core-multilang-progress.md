@@ -58,6 +58,7 @@
 - [x] Stage 4.3.3 — MealCard: бейдж «Под вашу цель» + короткое пояснение; строка «Подобрано с акцентом…»; при отсутствии совпадений по цели — дисклеймер
 - [x] Stage 4.3.4 — goals UI: на Плане `PlanGoalCompactSheet` — пилюля-селектор рядом с профилем + bottom sheet; ранее — свёртка до 3 + «…» в hero; убраны сводка «Подобрано с акцентом…» и лишние бейджи на карточках
 - [x] Stage 4.3.5 — `PlanGoalChipsRow`: плавные переходы состояния + лёгкий `active:scale-[0.98]`; у locked чипов без press-scale
+- [x] Stage 4.3.5b (март 2026) — **снят** выбор цели на вкладке «План»: удалены `PlanGoalChipsRow`, `planGoalSelect`, передача `selected_goal` с клиента; в `generate-plan` убран скрытый bias `balanced` и дневные preferred/blocked по nutrition goal тегам. Детали: `docs/dev/meal-plan-nutrition-goals-2026-03-progress.md`.
 - [x] Stage 4.3.6 — deterministic benefit text: единый модуль `supabase/functions/_shared/recipeBenefitDescription.ts` (реэкспорт в `src/utils/recipeBenefitDescription.ts`); для **`source = chat_ai`** **канонический `recipes.description`** = **LLM-first** (`pickCanonicalDescription`), fallback = тот же **builder** (универсальный текст по `nutrition_goals` + seed), **без** child/adult/family в пулах; контекстным остаётся только **заголовок** блока (`getBenefitLabel` по возрасту/профилю). Устаревший `recipeDescriptionComposer` не используется.
 - [ ] Stage 4.4 — Cultural / Cuisine-aware Pool Ranking (metadata + soft scoring + observability in generate-plan; see section below)
 - [ ] Stage 5 — plan page refactor

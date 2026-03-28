@@ -1,6 +1,6 @@
 # План (вкладка): тихий hero и иерархия CTA (март 2026)
 
-Документ фиксирует **намеренные UX/UI-решения** после локальной чистки шума на экране Плана. Логика генерации, paywall и API **не менялись**, кроме переноса действий в меню.
+Документ фиксирует **намеренные UX/UI-решения** после локальной чистки шума на экране Плана. **Обновление (март 2026):** логика `generate-plan` и фронт перестали использовать выбор цели питания в Плане — см. §3 и `docs/dev/meal-plan-nutrition-goals-2026-03-progress.md`.
 
 ## Что изменили в UI
 
@@ -17,12 +17,9 @@
    - Строки «Учитываем все особенности профиля» и блок семейного режима с иконкой **убраны из hero**.  
    - Тот же смысл доступен из меню «Ещё» → **«Как учитывается профиль»** (нижний sheet с `PlanProfileHelpBody`).
 
-3. **Цели подбора**  
-   - В hero цель — **селектор-пилюля** (`rounded-full`, `ChevronDown`, `max-w-[140px]`): визуально рядом с профилем, но **тише** — `bg-muted/60 border border-border` (как `MemberSelectorButton variant="light"`), иконка раскрытия `text-muted-foreground`. Профиль остаётся **акцентнее** (`bg-primary-pill`).  
-   - **Расположение:** под заголовком с датой, **одна строка** `flex flex-wrap items-center justify-start gap-3` — пилюля профиля и пилюля цели **рядом** (слева направо), при нехватке ширины — перенос.  
-   - Во время генерации оба селектора **disabled** (`isAnyGenerating`), как у профиля.  
-   - Выбор цели — **`Dialog`** в том же формате, что «Выберите профиль»: `rounded-2xl max-w-[90vw]`, `DialogTitle` (`text-typo-title font-semibold`), список строк `py-3 px-4 rounded-xl`, выбранный пункт `bg-primary-light font-medium text-text-main`; заблокированные цели (Free) — 🔒, клик закрывает диалог и открывает paywall. Логика выбора как у прежних чипсов (повторный выбор активной строки → `onChange(null)`).  
-   - Сохранены: `selectGoalForEdge`, paywall на премиум-целях для Free.
+3. **Цели подбора (обновление март 2026)**  
+   - Селектор цели питания под датой **убран**: nutrition goals не задают приоритет подбора плана; теги по-прежнему на карточках блюд и в рецепте.  
+   - Компонент `PlanGoalChipsRow` / `PlanGoalCompactSheet` и утилита `planGoalSelect` **удалены**; `usePlanGenerationJob` больше не шлёт `selected_goal` в `generate-plan`.
 
 4. **Главные действия в hero (иерархия)**  
    Порядок сверху вниз, **одна колонка**:
@@ -49,7 +46,7 @@
 | Файл | Изменение |
 |------|-----------|
 | `src/pages/MealPlanPage.tsx` | Hero, CTA, меню (шаринг недели, справка), sheet справки |
-| `src/components/plan/PlanGoalChipsRow.tsx` | `density`, `PlanGoalCompactSheet` |
+| *(удалено)* `PlanGoalChipsRow.tsx` | заменено нейтральным подбором без UI цели; см. `docs/dev/meal-plan-nutrition-goals-2026-03-progress.md` |
 | `src/components/plan/PlanModeHint.tsx` | Заменён на `PlanProfileHelpBody` (без hero-виджета) |
 | `src/components/recipe/RecipeCard.tsx` | `nutritionGoalsMaxVisible`, `nutritionGoalsQuiet` |
 | `src/components/recipe/NutritionGoalsChips.tsx` | `quiet`, документация `maxVisible` |

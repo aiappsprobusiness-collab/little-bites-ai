@@ -40,9 +40,7 @@ import { useNavigate, useLocation, useSearchParams, Link } from "react-router-do
 import { MealCard, MealCardSkeleton } from "@/components/meal-plan/MealCard";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { PlanProfileHelpBody } from "@/components/plan/PlanModeHint";
-import { PlanGoalCompactSheet } from "@/components/plan/PlanGoalChipsRow";
 import { isFamilySelected } from "@/utils/planModeUtils";
-import { selectGoalForEdge } from "@/utils/planGoalSelect";
 import { getPlanSlotChatPrefillMessage } from "@/utils/planChatPrefill";
 import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -529,15 +527,6 @@ export default function MealPlanPage() {
   } = usePlanGenerationJob(memberIdForPlan, planGenType);
 
   const [poolUpgradeLoading, setPoolUpgradeLoading] = useState(false);
-  /** По умолчанию «Баланс»; повторный клик по чипу — сброс (null). Free: на Edge уходит только без selected_goal (см. selectGoalForEdge). */
-  const [planGoalSelection, setPlanGoalSelection] = useState<string | null>("balanced");
-  const selectedGoalForGeneratePlan = selectGoalForEdge(hasAccess, planGoalSelection);
-
-  useEffect(() => {
-    if (!hasAccess && planGoalSelection != null && planGoalSelection !== "balanced") {
-      setPlanGoalSelection("balanced");
-    }
-  }, [hasAccess, planGoalSelection]);
   const isAnyGenerating = isPlanGenerating || poolUpgradeLoading || isPlanPartialTimeBudget;
 
   const [statusPhraseIndex, setStatusPhraseIndex] = useState(0);
@@ -1315,7 +1304,6 @@ export default function MealPlanPage() {
       member_data: memberDataForPlan,
       day_key: todayKey,
       day_keys: getRollingDayKeys(),
-      ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
     })
       .then(() => {
         setPlanInitialized();
@@ -2018,24 +2006,6 @@ export default function MealPlanPage() {
               >
                 {formatDayHeader(selectedDate)}
               </h2>
-              {members.length > 0 ? (
-                <div className="mt-1 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
-                  <PlanGoalCompactSheet
-                    value={planGoalSelection}
-                    onChange={setPlanGoalSelection}
-                    className="shrink-0"
-                    disabled={isAnyGenerating}
-                    hasPremiumAccess={hasAccess}
-                    onLockedGoalClick={() => {
-                      useAppStore.getState().setPaywallReason("plan_goal_select");
-                      useAppStore.getState().setPaywallCustomMessage(
-                        "Эти блюда подбираются с учётом цели питания. В Premium и Trial можно выбрать фокус подбора (Железо, Концентрация и др.).",
-                      );
-                      useAppStore.getState().setShowPaywall(true);
-                    }}
-                  />
-                </div>
-              ) : null}
               {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
                 <span className="text-xs text-slate-500">DB: {dayDbCount} | AI: {dayAiCount}</span>
               )}
@@ -2059,7 +2029,6 @@ export default function MealPlanPage() {
                         member_data: memberDataForPlan,
                         day_key: selectedDayKey,
                         day_keys: dayKeys,
-                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
                       });
                       trackUsageEvent("plan_fill_day_success");
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
@@ -2108,7 +2077,8 @@ export default function MealPlanPage() {
                       if (FF_WEEK_PAYWALL_PREVIEW) {
                         setShowWeekPreviewSheet(true);
                       } else {
-                        setPaywallCustomMessage("Заполнение недели доступно в Premium. Попробуйте Trial или оформите подписку.");
+                        setPaywallReason("plan_week_locked");
+                        setPaywallCustomMessage(null);
                         setShowPaywall(true);
                       }
                       return;
@@ -2126,7 +2096,6 @@ export default function MealPlanPage() {
                         member_data: memberDataForPlan,
                         start_key: getRollingStartKey(),
                         day_keys: getRollingDayKeys(),
-                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
                       });
                       setMutedWeekKeyAndStorage(null);
                       await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
@@ -2431,7 +2400,6 @@ export default function MealPlanPage() {
                           member_data: memberDataForPlan,
                           day_key: selectedDayKey,
                           day_keys: dayKeys,
-                          ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
                         });
                         trackUsageEvent("plan_fill_day_success");
                         await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
@@ -2571,7 +2539,8 @@ export default function MealPlanPage() {
                             return;
                           }
                           if (isFree) {
-                            setPaywallCustomMessage("Замена любого блюда доступна в Premium.");
+                            setPaywallReason(isInfantPlanUi ? "new_product" : "meal_replace");
+                            setPaywallCustomMessage(null);
                             setShowPaywall(true);
                             return;
                           }
@@ -2771,6 +2740,7 @@ export default function MealPlanPage() {
                             } else {
                               const code = (result as { code?: string }).code;
                               if (code === "LIMIT_REACHED") {
+                                setPaywallReason("plan_refresh");
                                 setPaywallCustomMessage(
                                   `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_refresh")}`
                                 );
@@ -2792,7 +2762,8 @@ export default function MealPlanPage() {
                                     description: "2 замены в день (Free). В Premium — без ограничений.",
                                   });
                                 } else if (err === "premium_required") {
-                                  setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
+                                  setPaywallReason("meal_replace");
+                                  setPaywallCustomMessage(null);
                                   setShowPaywall(true);
                                 } else {
                                   toast({
@@ -2916,7 +2887,8 @@ export default function MealPlanPage() {
                             onClick={async () => {
                               if (replacingSlotKey != null) return;
                               if (isFree) {
-                                setPaywallCustomMessage("Подбор рецептов и замена блюд — в Premium.");
+                                setPaywallReason("meal_replace");
+                                setPaywallCustomMessage(null);
                                 setShowPaywall(true);
                                 return;
                               }
@@ -2966,6 +2938,7 @@ export default function MealPlanPage() {
                                 } else {
                                   const code = (result as { code?: string }).code;
                                   if (code === "LIMIT_REACHED") {
+                                    setPaywallReason("plan_refresh");
                                     setPaywallCustomMessage(
                                       `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_refresh")}`
                                     );
@@ -2985,7 +2958,8 @@ export default function MealPlanPage() {
                                         description: "2 замены в день (Free). В Premium — без ограничений.",
                                       });
                                     } else if (err === "premium_required") {
-                                      setPaywallCustomMessage("Замена блюда с подбором рецепта доступна в Premium.");
+                                      setPaywallReason("meal_replace");
+                                      setPaywallCustomMessage(null);
                                       setShowPaywall(true);
                                     } else {
                                       toast({
@@ -3042,7 +3016,8 @@ export default function MealPlanPage() {
                   disabled={isAnyGenerating || !user}
                   onClick={() => {
                     if (!hasAccess) {
-                      setPaywallCustomMessage("Список продуктов доступен в Premium");
+                      setPaywallReason("shopping_list");
+                      setPaywallCustomMessage(null);
                       setShowPaywall(true);
                       return;
                     }
@@ -3119,7 +3094,6 @@ export default function MealPlanPage() {
                         member_data: memberDataForPlan,
                         day_key: formatLocalDate(rollingDates[6]),
                         day_keys: dayKeys,
-                        ...(selectedGoalForGeneratePlan ? { selected_goal: selectedGoalForGeneratePlan } : {}),
                       });
                       queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                       const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
