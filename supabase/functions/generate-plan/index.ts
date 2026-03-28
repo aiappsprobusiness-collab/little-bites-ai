@@ -34,6 +34,17 @@ import {
   finalizeCulturalSummary,
   type ScoredCandidateRow,
 } from "./culturalPlanDebug.ts";
+import { trustOrder } from "./trustLevelTier.ts";
+import {
+  buildRankSalt,
+  dbScoreContribution,
+  explorationPickActive,
+  EXPLORATION_CANDIDATE_BOOST,
+  isCandidateTrustLevel,
+  rankJitter,
+  stableSortPoolForRanking,
+  trustRankingBonus,
+} from "./planRankComposite.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -264,17 +275,11 @@ function getPrevDayKey(dayKey: string): string {
 function normalizeTitleKey(title: string): string {
   return (title ?? "").trim().toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
 }
-/** Shuffle array in place for variety when re-filling plan (same pool order would yield same recipes). */
-function shuffleArray<T>(arr: T[]): void {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const rnd = typeof crypto !== "undefined" && crypto.getRandomValues
-      ? (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 0x100000000
-      : Math.random();
-    const j = Math.floor(rnd * (i + 1));
-    const tmp = arr[i];
-    arr[i] = arr[j] as T;
-    arr[j] = tmp as T;
+function defaultRankRng(): number {
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    return (crypto.getRandomValues(new Uint32Array(1))[0] as number) / 0x100000000;
   }
+  return Math.random();
 }
 function containsAnyToken(haystack: string, tokens: string[]): boolean {
   if (!haystack || tokens.length === 0) return false;
@@ -379,13 +384,6 @@ function getCheapFilteredCount(
   return filtered.length;
 }
 
-/** Trust order for pool: trusted first, then starter/seed, then candidate. Lower = higher priority. */
-function trustOrder(t: string | null | undefined): number {
-  if (t === "trusted") return 0;
-  if (t === "starter" || t === "seed") return 1;
-  return 2; // candidate, null
-}
-
 const POOL_SELECT_FIELDS =
   "id, title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text)";
 const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
@@ -454,8 +452,10 @@ function pickFromPoolInMemory(
     dayGoalUsage?: Record<string, number>;
     /** Stage 4.3: возраст/семья/soft-mode — только скоринг. */
     familyScoring?: FamilyScoringContext | null;
-    /** Stage 4.4.2: day_key / request_id для CHAT_PLAN_CULTURAL_DEBUG. */
-    planPickDebug?: { day_key?: string; request_id?: string };
+    /** Stage 4.4.2 / ranking: day_key, request_id, meal_slot (salt для exploration). */
+    planPickDebug?: { day_key?: string; request_id?: string; meal_slot?: string };
+    /** Тесты: фиксированный RNG для детерминированного ranking. */
+    rankRng?: () => number;
     /** Stage 4.4.3: накопление CHAT_PLAN_CULTURAL_SUMMARY (только при CHAT_PLAN_CULTURAL_DEBUG). */
     culturalSummaryAccumulator?: CulturalSummaryAccumulator | null;
   }
@@ -532,7 +532,11 @@ function pickFromPoolInMemory(
     selectedGoal,
     dayGoalUsage,
     familyScoring,
-    { includeCulturalComparison },
+    {
+      includeCulturalComparison,
+      planPickDebug: { ...goalHints?.planPickDebug, meal_slot: slot },
+      rng: goalHints?.rankRng,
+    },
   );
   if (!scoredPick) return null;
   const {
@@ -713,6 +717,10 @@ const POOL_LIMIT_WEEK = 280;
 /** Min candidates for family dinner before we fall back to pool without family-dinner filter. */
 const MIN_FAMILY_DINNER = 5;
 const debugPool = () => typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_POOL") === "true";
+/** Лог финального composite-ranking (победитель, trust, db score, exploration). */
+const debugPlanRank = () =>
+  typeof Deno !== "undefined" &&
+  (Deno.env?.get?.("CHAT_PLAN_RANK_DEBUG") === "true" || Deno.env?.get?.("DEBUG_POOL") === "true");
 /** Stage 4.4.2: подробные логи familiarity / cultural bonus (Supabase secrets / env function). */
 const debugCulturalPlan = () => typeof Deno !== "undefined" && Deno.env?.get?.("CHAT_PLAN_CULTURAL_DEBUG") === "true";
 
@@ -765,8 +773,9 @@ function computeGoalPriorityBonus(
   return bonus;
 }
 
-function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecipeCtx): number {
-  const recencyScore = Math.max(0, 3 - Math.floor(rankIndex / 20));
+function scoreRecipeForSlot(r: RecipeRowPool, stableIndex: number, ctx: ScoreRecipeCtx): number {
+  /** Слабый tie-break по стабильному порядку (после trust/db в merge); не заменяет composite. */
+  const recencyScore = Math.max(0, 2 - Math.floor(stableIndex / 55));
   const titleTokens = (r.title ?? "").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((t) => t.length >= 2 && !STOP_WORDS.has(t)).slice(0, 3);
   let varietyPenalty = 0;
   if (titleTokens.length > 0) {
@@ -797,14 +806,21 @@ function scoreRecipeForSlot(r: RecipeRowPool, rankIndex: number, ctx: ScoreRecip
   if (ctx.blockedGoals && goals.some((g) => ctx.blockedGoals!.has(g))) goalsScore -= 3;
   return recencyScore - varietyPenalty - baseDiversityPenalty + goalsScore;
 }
-/** Stage 4.2 + 4.3 + 4.4.2: trust tier → затем base + goal + age + soft + cultural; tie-break goal > age > soft. */
+/**
+ * После eligibility: стабильный порядок → slot-fit → composite = slot-fit + trustRankingBonus + dbScore + exploration + jitter.
+ * Shuffle убран; exploration для candidate детерминирован от salt (day|request|meal).
+ */
 function pickBestRecipeForSlotWithGoalScoring(
   candidates: RecipeRowPool[],
   ctx: ScoreRecipeCtx,
   selectedGoal: string | undefined,
   dayGoalUsage: Record<string, number> | undefined,
   familyScoring: FamilyScoringContext | null | undefined,
-  options?: { includeCulturalComparison?: boolean },
+  options?: {
+    includeCulturalComparison?: boolean;
+    planPickDebug?: { day_key?: string; request_id?: string; meal_slot?: string };
+    rng?: () => number;
+  },
 ): {
   r: RecipeRowPool;
   goalBonus: number;
@@ -817,13 +833,17 @@ function pickBestRecipeForSlotWithGoalScoring(
   culturalComparison?: CulturalPickComparison | null;
 } | null {
   if (candidates.length === 0) return null;
-  shuffleArray(candidates);
+  const stable = stableSortPoolForRanking(candidates);
+  const rng = options?.rng ?? defaultRankRng;
+  const rankSalt = buildRankSalt(options?.planPickDebug ?? {});
+  const exploreSlot = explorationPickActive(rankSalt);
+
   const sel = selectedGoal && GOAL_SET.has(selectedGoal) && selectedGoal !== "balanced" ? selectedGoal : undefined;
   const eligible = familyScoring?.eligibleMembers ?? [];
   const softMode = familyScoring?.softMode === true;
 
-  const scored: ScoredCandidateRow[] = candidates.map((r, rankIndex) => {
-    const baseScore = scoreRecipeForSlot(r, rankIndex, ctx);
+  const scored: ScoredCandidateRow[] = stable.map((r, stableIndex) => {
+    const baseScore = scoreRecipeForSlot(r, stableIndex, ctx);
     const goals = normalizeNutritionGoals(r.nutrition_goals);
     const goalBonus = computeGoalPriorityBonus(goals, sel, dayGoalUsage);
     const ageBonus = computeAgeBonusForRecipe(goals, eligible);
@@ -831,6 +851,13 @@ function pickBestRecipeForSlotWithGoalScoring(
     const culturalBonus = computeCulturalFamiliarityBonus(r.familiarity);
     const finalBeforeCultural = baseScore + goalBonus + ageBonus + softBonus;
     const finalScoreAfterCultural = finalBeforeCultural + culturalBonus;
+    const tBonus = trustRankingBonus(r.trust_level);
+    const dbC = dbScoreContribution(r.score);
+    const explorationBoost =
+      exploreSlot && isCandidateTrustLevel(r.trust_level) ? EXPLORATION_CANDIDATE_BOOST : 0;
+    const jitter = rankJitter(rng);
+    const compositeWithoutCultural = finalBeforeCultural + tBonus + dbC + explorationBoost + jitter;
+    const compositeWithCultural = finalScoreAfterCultural + tBonus + dbC + explorationBoost + jitter;
     return {
       r,
       finalScoreAfterCultural,
@@ -841,11 +868,43 @@ function pickBestRecipeForSlotWithGoalScoring(
       baseScore,
       finalBeforeCultural,
       trustTier: trustOrder(r.trust_level),
+      compositeWithCultural,
+      compositeWithoutCultural,
+      trustRankingBonus: tBonus,
+      dbScoreContribution: dbC,
+      explorationBoost,
+      rankJitter: jitter,
     };
   });
   const culturalComparison = options?.includeCulturalComparison ? buildCulturalPickComparison(scored) : undefined;
   const sortedForProd = [...scored].sort((a, b) => compareScoredForSlot(a, b, "with_cultural"));
   const top = sortedForProd[0]!;
+  if (debugPlanRank()) {
+    const top3 = sortedForProd.slice(0, 3).map((row) => ({
+      id: row.r.id,
+      title: row.r.title,
+      trust_level: row.r.trust_level ?? null,
+      recipes_score: (row.r as RecipeRowPool).score ?? null,
+      slot_fit_before_cultural: row.finalBeforeCultural,
+      slot_fit_after_cultural: row.finalScoreAfterCultural,
+      trust_ranking_bonus: row.trustRankingBonus,
+      db_score_contribution: row.dbScoreContribution,
+      exploration_boost: row.explorationBoost,
+      rank_jitter: row.rankJitter,
+      composite_final: row.compositeWithCultural,
+    }));
+    safeLog("CHAT_PLAN_RANK_PICK", {
+      rank_salt: rankSalt,
+      exploration_slot_active: exploreSlot,
+      winner_id: top.r.id,
+      winner_title: top.r.title,
+      winner_trust_level: top.r.trust_level ?? null,
+      winner_recipes_score: (top.r as RecipeRowPool).score ?? null,
+      winner_composite: top.compositeWithCultural,
+      winner_exploration_boost: top.explorationBoost,
+      top3,
+    });
+  }
   return {
     r: top.r,
     goalBonus: top.goalBonus,
@@ -931,8 +990,9 @@ function pickInfantComplementaryFromPool(
     selectedGoalForScoring?: string;
     dayGoalUsage?: Record<string, number>;
     familyScoring?: FamilyScoringContext | null;
-    planPickDebug?: { day_key?: string; request_id?: string };
+    planPickDebug?: { day_key?: string; request_id?: string; meal_slot?: string };
     culturalSummaryAccumulator?: CulturalSummaryAccumulator | null;
+    rankRng?: () => number;
   },
 ): {
   id: string;
@@ -959,7 +1019,11 @@ function pickInfantComplementaryFromPool(
     goalHints.selectedGoalForScoring,
     goalHints.dayGoalUsage,
     goalHints.familyScoring,
-    { includeCulturalComparison: debugCulturalPlan() },
+    {
+      includeCulturalComparison: debugCulturalPlan(),
+      planPickDebug: goalHints.planPickDebug,
+      rng: goalHints.rankRng,
+    },
   );
   if (!scoredPick) return null;
   const best = scoredPick.r;
@@ -1113,7 +1177,7 @@ serve(async (req) => {
         selectedGoalForScoring,
         dayGoalUsage: {},
         familyScoring: replaceFamilyScoring,
-        planPickDebug: { day_key: dayKey, request_id: "replace_slot" },
+        planPickDebug: { day_key: dayKey, request_id: "replace_slot", meal_slot: mealType },
         culturalSummaryAccumulator: replaceCulturalSummaryAcc,
       };
       let picked: { id: string; title: string } | null = null;
@@ -1422,7 +1486,7 @@ serve(async (req) => {
           selectedGoalForScoring,
           dayGoalUsage: { ...dayGoalCounts },
           familyScoring: familyScoringCtx,
-          planPickDebug: { day_key: dayKey, request_id: requestId },
+          planPickDebug: { day_key: dayKey, request_id: requestId, meal_slot: "infant_breakfast" },
           culturalSummaryAccumulator: culturalSummaryAcc,
         };
 
@@ -1461,6 +1525,7 @@ serve(async (req) => {
           const goalHints2 = {
             ...goalHintsBase,
             dayGoalUsage: { ...dayGoalCounts },
+            planPickDebug: { day_key: dayKey, request_id: requestId, meal_slot: "infant_lunch" },
           };
           const picked2 = pickInfantComplementaryFromPool(
             poolCandidates,
@@ -1552,7 +1617,7 @@ serve(async (req) => {
               selectedGoalForScoring,
               dayGoalUsage: { ...dayGoalCounts },
               familyScoring: familyScoringCtx,
-              planPickDebug: { day_key: dayKey, request_id: requestId },
+              planPickDebug: { day_key: dayKey, request_id: requestId, meal_slot: mealKey },
               culturalSummaryAccumulator: culturalSummaryAcc,
             }
           );
@@ -1564,7 +1629,7 @@ serve(async (req) => {
               selectedGoalForScoring,
               dayGoalUsage: { ...dayGoalCounts },
               familyScoring: familyScoringCtx,
-              planPickDebug: { day_key: dayKey, request_id: requestId },
+              planPickDebug: { day_key: dayKey, request_id: requestId, meal_slot: mealKey },
               culturalSummaryAccumulator: culturalSummaryAcc,
             });
           }

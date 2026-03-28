@@ -10,13 +10,13 @@
 - **Доступ (RLS):** любой авторизованный пользователь может **читать** строки с `source IN ('seed','starter','manual','week_ai','chat_ai')` и не заблокированным `trust_level` (см. миграцию `20260227120000_recipes_pool_select_authenticated.sql`). Каталоги infant/toddler живут под `user_id` сервисного владельца импорта, но видны всем для чтения как pool.
 - **Условия запроса:** тот же набор `source`, `trust_level IS NULL OR trust_level != 'blocked'`.
 - **Две выборки и merge:** (1) `source IN ('seed','starter')` с лимитом **600** — чтобы curated-каталог (сотни рецептов с `score = 0`) **всегда** попадал в память; (2) `source IN ('manual','week_ai','chat_ai')` с лимитом `max(limitCandidates, 200)` (для дня `limitCandidates = 120`, для недели — `280`). Иначе при **одном** запросе `ORDER BY score DESC LIMIT 120` почти все строки с нулевым score дают **произвольный** срез БД, и детские каталоги часто **не входят** в выборку → 0 кандидатов после фильтра по возрасту/слоту.
-- **После merge:** сортировка по уровню доверия (`trustOrder`), затем по `score` DESC; дальше — фильтры по слоту, возрасту, аллергиям и т.д.
+- **После merge:** предварительная сортировка по `trustOrder` и `score` DESC (как раньше) — только для порядка строк в памяти; **финальный выбор слота** в `pickFromPoolInMemory` / `pickBestRecipeForSlotWithGoalScoring` — по **composite** (slot-fit + trust bonus + `recipes.score` + controlled exploration + jitter), см. `planRankComposite.ts` и `docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md` §6.1.
 
-Клиентский пул для UI («подобрать рецепты» и т.п.) использует свою выборку; логика выше относится к **generate-plan**.
+Клиентский пул для UI («подобрать рецепты» и т.п.) использует свою выборку; логика composite относится к **Edge generate-plan**; расхождение с клиентом намеренно до отдельного этапа.
 
 **Клиент (`recipePool.ts`, `useReplaceMealSlot`):** для возраста профиля **&lt; 12 мес** к запросу в `recipes` добавляется PostgREST-фильтр по `min_age_months` / `max_age_months` (эквивалент `recipeFitsAgeMonthsRow`), **до** `ORDER BY created_at DESC` и `LIMIT`. Иначе после массового импорта каталога 12+ мес последние N строк по дате создания могут не содержать ни одной строки, подходящей младенцу, и вкладка прикорма показывает «Пока нет подходящих вариантов…», хотя infant seed в базе есть.
 
-**Curated infant seed (4–6, 7–8 и 9–11 мес):** импорт и идемпотентность — `docs/dev/infant-seed-import.md` (`source = seed`, `trust_level = trusted`, возраст по `min_age_months` / `max_age_months`).
+**Curated infant seed (4–6, 7–8 и 9–11 мес):** импорт и идемпотентность — `docs/dev/infant-seed-import.md` (`source = seed`, `trust_level = core` — curated каталог; **trusted** = поведенческое доверие, не синоним seed-каталога).
 
 **Curated toddler seed (12–36 мес):** отдельный snapshot и импорт — `docs/dev/toddler-seed-import.md`, тег батча `toddler_curated_v1`.
 

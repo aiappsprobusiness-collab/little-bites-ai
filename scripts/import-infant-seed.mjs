@@ -229,7 +229,7 @@ function buildRecipeRow(r, id) {
     servings_base: r.servings_base ?? 1,
     servings_recommended: r.servings_recommended ?? 1,
     locale: "ru",
-    trust_level: "trusted",
+    trust_level: "core",
     calories: r.calories ?? null,
     proteins: r.proteins ?? null,
     fats: r.fats ?? null,

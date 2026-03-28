@@ -5,6 +5,9 @@ import {
   type CulturalFamiliarityCountKey,
   culturalFamiliarityCountKey,
 } from "./culturalPlanScoring.ts";
+import { trustLevelKeyForMetrics } from "./trustLevelTier.ts";
+
+export { trustLevelKeyForMetrics };
 
 /** Минимальные поля рецепта для сэмплов и сравнения. */
 export type RecipeRowForCulturalDebug = {
@@ -24,6 +27,13 @@ export type ScoredCandidateRow = {
   baseScore: number;
   finalBeforeCultural: number;
   trustTier: number;
+  /** Composite rank (slot-fit + trust + db score + exploration + jitter); если задан — основной ключ сортировки в generate-plan. */
+  compositeWithCultural?: number;
+  compositeWithoutCultural?: number;
+  trustRankingBonus?: number;
+  dbScoreContribution?: number;
+  explorationBoost?: number;
+  rankJitter?: number;
 };
 
 export type CompactCandidateSnapshot = {
@@ -45,21 +55,22 @@ export type CulturalPickComparison = {
   top_candidates_after_cultural: CompactCandidateSnapshot[];
 };
 
-/** Ключ для агрегатов по trust (как в пуле). */
-export function trustLevelKeyForMetrics(t: string | null | undefined): string {
-  if (t === "trusted") return "trusted";
-  if (t === "starter" || t === "seed") return "starter_or_seed";
-  return "candidate_or_null";
-}
-
 /**
- * Тот же порядок, что в pickBestRecipeForSlotWithGoalScoring: trust → score → goal → age → soft → id.
+ * Сортировка кандидатов: при заданных composite* — по ним (generate-plan); иначе legacy trustTier → slot-fit → goal → age → soft → id.
  */
 export function compareScoredForSlot(
   a: ScoredCandidateRow,
   b: ScoredCandidateRow,
   mode: "with_cultural" | "without_cultural",
 ): number {
+  if (mode === "with_cultural" && a.compositeWithCultural != null && b.compositeWithCultural != null) {
+    const d = b.compositeWithCultural - a.compositeWithCultural;
+    if (Math.abs(d) > 1e-9) return d > 0 ? 1 : -1;
+  }
+  if (mode === "without_cultural" && a.compositeWithoutCultural != null && b.compositeWithoutCultural != null) {
+    const d = b.compositeWithoutCultural - a.compositeWithoutCultural;
+    if (Math.abs(d) > 1e-9) return d > 0 ? 1 : -1;
+  }
   if (a.trustTier !== b.trustTier) return a.trustTier - b.trustTier;
   const scoreA = mode === "with_cultural" ? a.finalScoreAfterCultural : a.finalBeforeCultural;
   const scoreB = mode === "with_cultural" ? b.finalScoreAfterCultural : b.finalBeforeCultural;

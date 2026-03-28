@@ -37,7 +37,7 @@ node scripts/import-infant-seed.mjs --purge-only
 
 ## Поля
 
-Как у infant curated: `source = seed`, `locale = ru`, `trust_level = trusted`, КБЖУ, `nutrition_goals` (whitelist в `src/utils/nutritionGoals.ts`), `min_age_months` / `max_age_months` в диапазоне **12–36**.
+Как у infant curated: `source = seed`, `locale = ru`, `trust_level = core` (curated каталог), КБЖУ, `nutrition_goals` (whitelist в `src/utils/nutritionGoals.ts`), `min_age_months` / `max_age_months` в диапазоне **12–36**.
 
 **Деплой фронта / Edge не требуется** — только Postgres и при необходимости пуш репозитория с данными/скриптами.
 

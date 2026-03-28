@@ -1382,7 +1382,8 @@ export default function ChatPage() {
 
   return (
     <MobileLayout showNav>
-      <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg overflow-hidden">
+      {/* Только overflow-x-hidden: вертикальный overflow:hidden обрезал нижнюю панель (дисклеймер под инпутом). */}
+      <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg">
         {/* Sticky header в режиме «Помощник»: бейдж + меню — та же сетка, что План / Чат */}
         {mode === "help" && (
           <div className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm pt-2 pb-2">

@@ -324,6 +324,15 @@ Checklist:
 - [x] future plan signal limits documented
 - [x] seed pool strategy documented
 
+## Trust level `core` (catalog vs behavioral, 20260329100000)
+
+- **`core`** — вручную curated каталожные рецепты с `source = seed` (импорт infant/toddler и т.д.). Не заменяет **`trusted`**: trusted = поведенчески подтверждённый класс (candidate → trusted, manual).
+- **Дефолты `create_recipe_with_steps`:** seed → `core`, starter → `starter`, manual → `trusted`, chat_ai/week_ai → `candidate`.
+- **Backfill:** существующие `source = seed` с `trust_level IN ('trusted','seed')` → `core`.
+- **`recompute_recipe_score_and_trust`:** для `core` как для `trusted` — только обновление `score`, без candidate-переходов.
+- **generate-plan:** `trustOrder` в `trustLevelTier.ts` — для предсортировки пула; **финальный выбор слота** — `planRankComposite.ts` (бонусы `trustRankingBonus`, `dbScoreContribution`, exploration от salt, jitter). Лог: `CHAT_PLAN_RANK_DEBUG` / `DEBUG_POOL`.
+- **Файлы:** миграция `20260329100000_recipe_trust_level_core.sql`, `generate-plan/trustLevelTier.ts`, `scripts/import-infant-seed.mjs` (`trust_level: "core"`).
+
 ## Stage 1 scope
 - [x] migration added
 - [x] recipes.locale added
