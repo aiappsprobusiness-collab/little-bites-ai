@@ -46,6 +46,7 @@
 
 - Сноска «Оплачивая подписку…» вынесена в **`PaywallLegalConsentNote`** (ссылки через `Link`).
 - Копирайт paywall слегка смягчён в **`unifiedPaywallCopy.ts`** (без медицинских обещаний в подзаголовке/буллетах).
+- Верх unified paywall облегчён: компактный заголовок (`text-xl`), короткий подзаголовок, без отдельного блока «Free vs Premium»; буллеты и формулировки — только в **`unifiedPaywallCopy.ts`**.
 - Доп. пункты в канонических юртекстах: as is, изменение сервиса и документов (`TermsContent`), срок хранения (`PrivacyContent`), возвраты (`SubscriptionContent`); см. **`docs/dev/legal-copy-and-auth-consent.md`**.
 
 ## Лимиты подписки и скрытые Premium-ограничения (март 2026)

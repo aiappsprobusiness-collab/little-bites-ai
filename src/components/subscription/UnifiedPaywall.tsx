@@ -13,8 +13,6 @@ import {
   UNIFIED_PAYWALL_TITLE,
   UNIFIED_PAYWALL_SUBTITLE,
   UNIFIED_PAYWALL_BULLETS,
-  UNIFIED_PAYWALL_FREE_LINE,
-  UNIFIED_PAYWALL_PREMIUM_LINE,
   UNIFIED_PAYWALL_FOOTER,
 } from "@/utils/unifiedPaywallCopy";
 import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
@@ -129,7 +127,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
 
             {/* Верх: при нехватке места скроллится; цены и CTA всегда внизу */}
             <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-2 sm:px-5 sm:pt-4 pr-11 space-y-2.5">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-2 sm:px-5 sm:pt-4 pr-11 space-y-3">
                 {paywallCustomMessage ? (
                   <div className="shrink-0 p-2.5 rounded-xl bg-primary/10 border border-primary/20 min-w-0">
                     <p className="text-xs font-medium text-foreground text-center leading-snug line-clamp-4 whitespace-pre-line break-words">
@@ -144,8 +142,8 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                   </div>
                 </div>
 
-                <div className="text-center space-y-1 px-0.5">
-                  <h2 className="text-base sm:text-lg font-semibold leading-snug text-foreground text-balance">
+                <div className="text-center space-y-1.5 px-0.5">
+                  <h2 className="text-xl font-semibold leading-snug text-foreground text-balance">
                     {UNIFIED_PAYWALL_TITLE}
                   </h2>
                   <p className="text-sm text-muted-foreground leading-snug text-balance">
@@ -153,21 +151,16 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                   </p>
                 </div>
 
-                <ul className="space-y-1.5 min-w-0 pb-0.5">
+                <ul className="space-y-1.5 min-w-0 pb-0.5 mt-4">
                   {UNIFIED_PAYWALL_BULLETS.map((text, index) => (
                     <li key={`${text}-${index}`} className="flex items-start gap-2 text-[13px] leading-snug min-w-0">
                       <span className="w-3.5 h-3.5 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
                         <Check className="w-2 h-2 text-primary" strokeWidth={3} />
                       </span>
-                      <span className="text-foreground/95 min-w-0 flex-1">{text}</span>
+                      <span className="text-foreground/90 min-w-0 flex-1">{text}</span>
                     </li>
                   ))}
                 </ul>
-
-                <div className="rounded-xl border border-border/80 bg-muted/25 px-3 py-2.5 space-y-0.5 text-left shrink-0">
-                  <p className="text-[13px] font-semibold text-foreground leading-snug">{UNIFIED_PAYWALL_FREE_LINE}</p>
-                  <p className="text-[13px] font-medium text-primary leading-snug">{UNIFIED_PAYWALL_PREMIUM_LINE}</p>
-                </div>
               </div>
 
               <div className="shrink-0 flex flex-col gap-2.5 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 border-t border-border/40 bg-background/95 backdrop-blur-sm">

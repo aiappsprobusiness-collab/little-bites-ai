@@ -1,4 +1,5 @@
 import { LEGAL_DOCUMENT_BODY_CLASS } from "./legalDocumentBodyClass";
+import { LegalDocumentRevisionFooter } from "./LegalDocumentRevisionFooter";
 
 export function PrivacyContent() {
   return (
@@ -107,6 +108,7 @@ export function PrivacyContent() {
         Email:{" "}
         <a href="mailto:aiapps.probusiness@gmail.com">aiapps.probusiness@gmail.com</a>
       </p>
+      <LegalDocumentRevisionFooter />
     </div>
   );
 }

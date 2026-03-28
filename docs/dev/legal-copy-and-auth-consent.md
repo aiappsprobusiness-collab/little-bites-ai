@@ -10,6 +10,13 @@
 
 Страницы-обёртки: `src/pages/legal/Terms.tsx`, `Privacy.tsx`, `Subscription.tsx` — только layout + тот же `*Content`.
 
+### Версия юридических документов
+
+- Отображается внизу каждого документа (после всех разделов), в потоке текста: спокойный блок `text-sm text-muted-foreground`, без жирного начертания и без лишних разделителей.
+- **Источник строки версии:** `src/constants/legalVersions.ts` — константа `LEGAL_TERMS_VERSION` (в JSX не хардкодить дату).
+- **Реализация:** один общий компонент `src/components/legal/LegalDocumentRevisionFooter.tsx`, подключённый в `TermsContent.tsx`, `PrivacyContent.tsx`, `SubscriptionContent.tsx` (одна и та же дата во всех трёх).
+- **Используется для:** (1) логирования согласия при регистрации (`accepted_terms_version` в metadata / `profiles_v2`); (2) отображения пользователю актуальной редакции на `/terms`, `/privacy`, `/subscription/terms` и во вкладках профиля.
+
 ## Регистрация
 
 - На вкладке «Начать» в `src/pages/AuthPage.tsx` обязательный чекбокс **без значения по умолчанию** (`acceptLegal: false`), валидация через zod.

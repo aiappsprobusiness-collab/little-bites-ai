@@ -1,4 +1,5 @@
 import { LEGAL_DOCUMENT_BODY_CLASS } from "./legalDocumentBodyClass";
+import { LegalDocumentRevisionFooter } from "./LegalDocumentRevisionFooter";
 
 export function SubscriptionContent() {
   return (
@@ -78,6 +79,7 @@ export function SubscriptionContent() {
         Email для поддержки:{" "}
         <a href="mailto:aiapps.probusiness@gmail.com">aiapps.probusiness@gmail.com</a>
       </p>
+      <LegalDocumentRevisionFooter />
     </div>
   );
 }
