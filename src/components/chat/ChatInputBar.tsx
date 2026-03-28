@@ -3,9 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-
-/** ~5 строк при line-height 20px; дальше — скролл внутри textarea */
-const CHAT_INPUT_MAX_HEIGHT_PX = 120;
+import {
+  applyTextareaAutosize,
+  TEXTAREA_AUTOSIZE_DEFAULT_MAX_PX,
+} from "@/utils/textareaAutosize";
 
 /**
  * TODO(i18n): вынести в словарь ключ `chat.disclaimer.ai_generated`.
@@ -68,10 +69,7 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
     );
 
     const syncTextareaHeight = useCallback(() => {
-      const el = innerRef.current;
-      if (!el) return;
-      el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, CHAT_INPUT_MAX_HEIGHT_PX)}px`;
+      applyTextareaAutosize(innerRef.current, TEXTAREA_AUTOSIZE_DEFAULT_MAX_PX);
     }, []);
 
     useLayoutEffect(() => {
@@ -122,7 +120,7 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
               disabled={disabled}
               rows={1}
               className={cn(
-                "min-h-[44px] max-h-[120px] w-full min-w-0 resize-none overflow-y-auto leading-5",
+                "min-h-[44px] max-h-[120px] w-full min-w-0 resize-none leading-5 scrollbar-none",
                 "rounded-full bg-[#FFFFFF] border border-[#E6E6E6]",
                 "py-3 px-4 text-sm placeholder:text-muted-foreground",
                 "transition-[height] duration-100 ease-out",

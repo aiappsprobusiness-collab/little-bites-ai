@@ -13,7 +13,9 @@
 | `src/pages/SosTiles.tsx` | Страница Help: **`MobileLayout` без хедера** (нет TopBar с заголовком вкладки — как на Плане/Чате/Избранном); **главный вход** — Hero с заголовком «Помощь маме» (см. ниже), затем компактный блок «Сегодня спрашивают», список тем по категориям, в самом низу страницы — дисклеймер про врача; sheet и paywall. `handleOpenWithMessage(text)` открывает sheet с заголовком «Помощь маме» и сообщением (в т.ч. для premium у Free — preview). При лимите — `onLimitReached`. Передаёт в sheet `popularQuestionTextIfPremium` для логики preview. |
 | `src/components/sos/SosHero.tsx` | Hero: заголовок «Помощь маме», подзаголовок «Что происходит с ребёнком?», placeholder «Например: ребёнок стал хуже есть», поле ввода и кнопка «Спросить», счётчик лимита (для Free), quick chips. Дисклеймер в Hero не показывается (перенесён в низ страницы). Для Free по тапу на premium‑чип — `onPremiumChipTap` (paywall); при отправке из поля ввода premium-текст открывается sheet и показывается preview. |
 | `src/components/sos/SosTopicGrid.tsx` | Сетка карточек тем по секциям: иконка, заголовок, подзаголовок (line-clamp-2), для Premium-тем — бейдж Star + Premium, по клику locked → paywall. |
-| `src/components/help/TopicConsultationSheet.tsx` | Нижний sheet с чатом по теме: чипсы (Free сначала, premium с иконкой Star), input, история, retry. **Preview для Free:** при ответе на premium-вопрос (из «Сегодня спрашивают» или premium-чипа) показываются первые 2–3 абзаца и блок «Продолжение ответа доступно в расширенной консультации» + кнопка «Получить полный разбор (Premium)» → paywall. Запрос для premium-вопроса у Free отправляется как обычно; обрезка только в UI. При `LIMIT_REACHED` — текст лимита в чате и `onLimitReached`. |
+| `src/components/help/TopicConsultationSheet.tsx` | Нижний sheet с чатом по теме: чипсы (Free сначала, premium с иконкой Star), input, история, retry. **Preview для Free:** при ответе на premium-вопрос (из «Сегодня спрашивают» или premium-чипа) показываются первые 2–3 абзаца и блок «Продолжение ответа доступно в расширенной консультации» + кнопка «Получить полный разбор (Premium)» → paywall. Запрос для premium-вопроса у Free отправляется как обычно; обрезка только в UI. При `LIMIT_REACHED` — текст лимита в чате и `onLimitReached`. **Лента и composer (мобильный UX):** автоскролл к низу после отправки и при росте контента, если пользователь не ушёл вверх (порог как во вкладке «Чат»); поле ввода — общий helper `applyTextareaAutosize` (тот же max-height, что у `ChatInputBar`). |
+| `src/utils/scheduleScrollContainerToBottom.ts` | Отложенная прокрутка контейнера сообщений к низу (двойной rAF + `setTimeout` 0 и 80ms) — стабильно после новых сообщений и при появлении клавиатуры Android. |
+| `src/utils/textareaAutosize.ts` | Общая автовысота textarea (clamp по max px, `overflow-y` hidden / auto). Используют `ChatInputBar` и `TopicConsultationSheet`. |
 | `src/data/helpTopicChips.ts` | Quick chips для topic `"quick"`: список с полями `label`, `text`, `access: "free" \| "paid"`. **Порядок по частоте запросов:** Не хочет есть, Новый продукт, Стул малыша, Срыгивания, Аллергия, Режим кормления, затем остальные. Для темы `new_food` («Как безопасно ввести новый продукт») порядок чипсов в UI: Сколько в первый раз → Как понять, что нет аллергии → Порядок ввода овощей → Как ввести яйцо → Рыба: когда и как. Экспорт: `getPremiumQuickChipTexts()`, `isPremiumQuickChipText(text)`. |
 | `src/features/help/config/popularQuestions.ts` | Пул популярных вопросов для «Сегодня спрашивают»: тип `PopularQuestion` (id, text, category, access). Функция `getPopularQuestionForToday({ hasAccess, date? })`: ротация 1 раз в день по категории дня (Пн=nutrition, Вт=baby, Ср=allergy, Чт/Вс=routine, Пт=nutrition, Сб=baby) и индексу дня в году. Free видит только вопросы с `access: "free"` в карточке; при открытии по deep-link или с premium-вопросом дня (если доступ меняется) возможен preview. |
 | `src/hooks/useDeepSeekAPI.tsx` | Запрос к `deepseek-chat`. При 429 и `code === 'LIMIT_REACHED'` или `error === 'LIMIT_REACHED'` бросает `Error('LIMIT_REACHED')` (payload опционален). При успешном ответе help — вызывает `refetchUsage()`. |
@@ -86,7 +88,14 @@
 
 ---
 
-## 7. Расширение
+## 7. Sheet: автоскролл ленты и autosize поля ввода
+
+- **Скролл:** контейнер списка сообщений — `overflow-y-auto`; после отправки пользователем выставляется флаг «держаться у низа»; при прокрутке вверх дальше порога (~120px от низа, как в `ChatPage`) флаг сбрасывается — чтение истории без принудительного скролла. Пока флаг активен, после изменений `messages` / `isSending` вызывается `scheduleScrollContainerToBottom` (`scrollTop = scrollHeight - clientHeight` с отложенными проходами).
+- **Поле ввода:** `applyTextareaAutosize` + `TEXTAREA_AUTOSIZE_DEFAULT_MAX_PX` (120) — совпадает с нижней панелью вкладки «Чат»; пересчёт в `useLayoutEffect` при изменении `input` и на `onInput` (в т.ч. после вставки текста с чипсы).
+
+---
+
+## 8. Расширение
 
 - **Тексты и чипсы:** правки в `helpTopicChips.ts` и в `popularQuestions.ts`.
 - **Категории дня / ротация:** правки в `popularQuestions.ts` (`CATEGORY_BY_DAY_OF_WEEK`, логика в `getPopularQuestionForToday`).

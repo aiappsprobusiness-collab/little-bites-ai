@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { Send, Loader2, MoreVertical, X, Star } from "lucide-react";
 import {
   Sheet,
@@ -23,8 +23,16 @@ import {
 import type { HelpChipItem } from "@/data/helpTopicChips";
 import { HelpResponseBlocks } from "@/components/help/HelpResponseBlocks";
 import { cn } from "@/lib/utils";
+import { scheduleScrollContainerToBottom } from "@/utils/scheduleScrollContainerToBottom";
+import {
+  applyTextareaAutosize,
+  TEXTAREA_AUTOSIZE_DEFAULT_MAX_PX,
+} from "@/utils/textareaAutosize";
 
 const MAX_MESSAGES = 12;
+
+/** Как во вкладке «Чат»: ниже порога считаем, что пользователь у низа ленты. */
+const NEAR_BOTTOM_THRESHOLD_PX = 120;
 
 /** Первые 2–3 абзаца для preview Free-пользователя. */
 function truncateToPreview(content: string, maxParagraphs = 3): string {
@@ -88,14 +96,13 @@ export function TopicConsultationSheet({
   const [messages, setMessages] = useState<TopicSessionMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const lastAssistantMessageRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  /** При отправке сообщения считаем, что пользователь у низа; скроллим к ответу только тогда */
-  const wasUserAtBottomRef = useRef(false);
+  /** У низа ленты: после отправки = true; сбрасывается, если ушли вверх дальше NEAR_BOTTOM_THRESHOLD_PX */
+  const stickToBottomRef = useRef(false);
   /** Чтобы при сбросе initialMessage родителем не затирать уже подставленный текст */
   const initialPrefillConsumedRef = useRef(false);
+  const wasSheetOpenRef = useRef(false);
 
   const loadSession = useCallback(() => {
     if (!memberId || !topicKey) return;
@@ -105,6 +112,10 @@ export function TopicConsultationSheet({
 
   useEffect(() => {
     if (isOpen) {
+      if (!wasSheetOpenRef.current) {
+        stickToBottomRef.current = false;
+      }
+      wasSheetOpenRef.current = true;
       loadSession();
       if (initialMessage?.trim()) {
         setInput(initialMessage);
@@ -115,6 +126,7 @@ export function TopicConsultationSheet({
         setInput("");
       }
     } else {
+      wasSheetOpenRef.current = false;
       initialPrefillConsumedRef.current = false;
     }
   }, [isOpen, initialMessage, loadSession, onInitialMessageSent]);
@@ -123,17 +135,30 @@ export function TopicConsultationSheet({
     if (isOpen && memberId && topicKey) loadSession();
   }, [memberId, topicKey, isOpen, loadSession]);
 
-  // После появления нового ответа ассистента — скролл к началу сообщения только если пользователь сам отправил (был у низа)
-  const lastMessage = messages[messages.length - 1];
-  const lastIsAssistantWithContent =
-    lastMessage?.role === "assistant" && lastMessage.content.length > 0;
-
   useEffect(() => {
-    if (!lastIsAssistantWithContent || isSending) return;
-    if (!wasUserAtBottomRef.current) return;
-    wasUserAtBottomRef.current = false;
-    lastAssistantMessageRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-  }, [lastIsAssistantWithContent, isSending]);
+    stickToBottomRef.current = false;
+  }, [topicKey, memberId]);
+
+  const syncComposerHeight = useCallback(() => {
+    applyTextareaAutosize(inputRef.current, TEXTAREA_AUTOSIZE_DEFAULT_MAX_PX);
+  }, []);
+
+  useLayoutEffect(() => {
+    syncComposerHeight();
+  }, [input, syncComposerHeight]);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    stickToBottomRef.current = dist <= NEAR_BOTTOM_THRESHOLD_PX;
+  }, []);
+
+  // Прокрутка к низу после отправки и при росте ленты (ответ, «Думаю…»), только пока пользователь не ушёл вверх
+  useLayoutEffect(() => {
+    if (!stickToBottomRef.current) return;
+    scheduleScrollContainerToBottom(messagesScrollRef.current);
+  }, [messages, isSending]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -154,7 +179,7 @@ export function TopicConsultationSheet({
         timestamp: new Date().toISOString(),
       };
 
-      wasUserAtBottomRef.current = true;
+      stickToBottomRef.current = true;
 
       setMessages((prev) => {
         const next = [...prev, userMsg, assistantPlaceholder].slice(-MAX_MESSAGES);
@@ -355,7 +380,9 @@ export function TopicConsultationSheet({
               {/* Messages */}
               <div
                 ref={messagesScrollRef}
+                onScroll={handleMessagesScroll}
                 className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-2 min-h-0"
+                style={{ WebkitOverflowScrolling: "touch" }}
               >
                 <div className="space-y-3 pb-4">
                   {messages.map((m, index) => {
@@ -384,7 +411,6 @@ export function TopicConsultationSheet({
                     return (
                       <div
                         key={m.id}
-                        ref={isLastAssistant ? lastAssistantMessageRef : undefined}
                         className={cn(
                           "flex",
                           m.role === "user" ? "justify-end" : "justify-start"
@@ -450,11 +476,10 @@ export function TopicConsultationSheet({
                       </div>
                     </div>
                   )}
-                  <div ref={messagesEndRef} />
                 </div>
               </div>
 
-              {/* Composer Help: input на всю ширину, до 2 строк; компактная кнопка Send */}
+              {/* Composer Help: autosize как ChatInputBar; компактная кнопка Send */}
               <form
                 onSubmit={handleSubmit}
                 className="shrink-0 p-4 pt-2 border-t border-border bg-background"
@@ -464,9 +489,10 @@ export function TopicConsultationSheet({
                     ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
+                    onInput={syncComposerHeight}
                     placeholder="Напишите, что происходит…"
-                    rows={2}
-                    className="flex-1 min-w-0 min-h-[48px] max-h-[4.5rem] resize-none rounded-xl border-border focus-visible:border-primary/40 border-primary/20"
+                    rows={1}
+                    className="flex-1 min-w-0 min-h-[44px] max-h-[120px] resize-none scrollbar-none rounded-xl border-border focus-visible:border-primary/40 border-primary/20 leading-5 text-sm py-2.5 px-3"
                     disabled={isSending}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {

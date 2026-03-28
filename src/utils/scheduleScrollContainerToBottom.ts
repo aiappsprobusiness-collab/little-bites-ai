@@ -1,6 +1,7 @@
-import { scrollContainerToBottom } from "./scrollContainerToBottom";
-
-export { scrollContainerToBottom } from "./scrollContainerToBottom";
+/** Мгновенная прокрутка контейнера сообщений к низу (юнит-тесты + внутренний вызов). */
+export function scrollContainerToBottom(container: HTMLElement): void {
+  container.scrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+}
 
 /**
  * Прокрутка flex-ребёнка с overflow-auto к низу после смены DOM (новые сообщения, индикатор «Думаю…», клавиатура Android).
