@@ -302,6 +302,27 @@
     background-color: #FCFCFA;
   }
 
+  /**
+   * Дисклеймер под полем ввода чата (ChatGPT-подобный: центр, мелкий, вторичный).
+   * Цвет — токен --muted-foreground + alpha (без хардкода серого).
+   */
+  .chat-disclaimer {
+    margin: 6px auto 0;
+    max-width: 300px;
+    padding: 0;
+    border: none;
+    background: none;
+    text-align: center;
+    font-size: 11.5px;
+    line-height: 1.4;
+    font-weight: 400;
+    letter-spacing: 0.2px;
+    color: hsl(var(--muted-foreground) / 0.55);
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
   /** Типографика: H1 24px/700, Section/Header 18px/600, Body 15px/400–500, Subtext 13–14px/muted. Токены: text-typo-h1, text-typo-header, text-typo-body, text-typo-subtext. */
 
   /** AI thinking: 3 точки с staggered анимацией (~1.2s цикл). */

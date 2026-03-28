@@ -152,14 +152,7 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
           </button>
         </div>
 
-        <p
-          className={cn(
-            "mt-1.5 w-full min-w-0 max-w-full text-pretty",
-            "text-typo-caption leading-snug text-muted-foreground/65"
-          )}
-        >
-          {CHAT_AI_DISCLAIMER_TEXT}
-        </p>
+        <p className="chat-disclaimer">{CHAT_AI_DISCLAIMER_TEXT}</p>
       </div>
     );
   }
