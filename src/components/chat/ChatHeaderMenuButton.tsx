@@ -1,6 +1,6 @@
-import { MoreVertical } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ChatActionsMenu } from "@/components/chat/ChatActionsMenu";
+import { TabOverflowIconButton } from "@/components/layout/TabOverflowIconButton";
 import { cn } from "@/lib/utils";
 
 export interface ChatHeaderMenuButtonProps {
@@ -27,19 +27,11 @@ export function ChatHeaderMenuButton({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
+        <TabOverflowIconButton
           aria-label="Дополнительные действия"
           aria-expanded={open}
-          className={cn(
-            "h-10 w-10 shrink-0 rounded-full flex items-center justify-center",
-            "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground",
-            "active:scale-95 transition-all",
-            className
-          )}
-        >
-          <MoreVertical className="w-5 h-5" aria-hidden />
-        </button>
+          className={className}
+        />
       </PopoverTrigger>
       <PopoverContent
         side="bottom"

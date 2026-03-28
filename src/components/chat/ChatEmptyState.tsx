@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
+import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,7 +37,7 @@ export interface ChatEmptyStateProps {
   profileChangeStatus?: string | null;
   /** Дополнительный контент под pill (например, лимиты). */
   headerMeta?: React.ReactNode;
-  /** Элемент справа в первой строке (например, кнопка меню ⋮). */
+  /** Справа в первой строке: бейдж подписки + кнопка меню ⋮ (как на вкладке План). */
   headerRight?: React.ReactNode;
   /** Класс контейнера. */
   className?: string;
@@ -64,17 +65,17 @@ export function ChatEmptyState({
 
   return (
     <div className={cn("flex flex-col gap-4", className)}>
-      {/* Верхняя строка: pill профиля слева, headerRight (меню ⋮) справа */}
-      <div className="shrink-0 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
-          <MemberSelectorButton
-            onProfileChange={onProfileChange}
-            className="shrink-0"
-          />
-          {headerMeta != null && <div className="min-w-0 flex-1">{headerMeta}</div>}
-        </div>
-        {headerRight != null && <div className="shrink-0">{headerRight}</div>}
-      </div>
+      {/* Верхняя строка: как на Плане — профиль | бейдж + ⋮ */}
+      <TabProfileMenuRow
+        className="shrink-0"
+        profileSlot={
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <MemberSelectorButton onProfileChange={onProfileChange} className="shrink-0" />
+            {headerMeta != null && <div className="min-w-0 flex-1">{headerMeta}</div>}
+          </div>
+        }
+        trailing={headerRight}
+      />
       {profileChangeStatus && (
         <motion.span
           initial={{ opacity: 0 }}

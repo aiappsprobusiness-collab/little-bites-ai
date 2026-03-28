@@ -107,7 +107,7 @@ export default function SosTiles() {
   const handleOpenWithMessage = (text: string) => {
     setSheetTopic({
       key: "quick",
-      title: "Помощник рядом",
+      title: "Помощь маме",
       chips: getChipsForTopic("quick"),
       isLocked: false,
     });
@@ -157,7 +157,7 @@ export default function SosTiles() {
           </p>
         )}
 
-        {/* 1. Главный вход: блок «Помощник рядом» */}
+        {/* 1. Главный вход: hero с вопросом и быстрыми чипами */}
         <div className="shrink-0 pb-2">
           <SosHero
             onOpenWithMessage={handleOpenWithMessage}

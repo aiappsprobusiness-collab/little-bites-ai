@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { SubscriptionTierBadge } from "@/components/layout/SubscriptionTierBadge";
+import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
 import { Paywall } from "@/components/subscription/Paywall";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatEmptyState, EMPTY_STATE_QUICK_SUGGESTIONS } from "@/components/chat/ChatEmptyState";
@@ -196,6 +198,8 @@ export default function ChatPage() {
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isLoading: isLoadingMembers } = useFamily();
   const { canGenerate, canSendAi, isPremium, remaining, dailyLimit, usedToday, subscriptionStatus, isTrial, trialDaysRemaining, aiDailyLimit, hasAccess } = useSubscription();
   const isFree = subscriptionStatus === "free";
+  const statusBadgeLabel =
+    subscriptionStatus === "premium" ? "Premium" : subscriptionStatus === "trial" ? "Триал" : "Free";
   const { chat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage, archiveChat } = useChatHistory(selectedMemberId ?? null);
   const { saveRecipesFromChat } = useChatRecipes();
@@ -402,7 +406,7 @@ export default function ChatPage() {
     };
   }, [mode, messages.length]);
 
-  // Fade-in бейджа «Помощник рядом» при входе в help mode
+  // Fade-in бейджа консультации при входе в help mode
   useEffect(() => {
     if (mode !== "help") {
       setBadgeVisible(false);
@@ -1348,39 +1352,43 @@ export default function ChatPage() {
     return `Аллергии: ${first}${rest}`;
   }, [mode, selectedMemberId, selectedMember, members]);
 
+  const chatHeaderTrailing = (
+    <>
+      <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} label={statusBadgeLabel} />
+      <ChatHeaderMenuButton
+        open={showActionsMenu}
+        onOpenChange={setShowActionsMenu}
+        onNewChat={() => setShowClearConfirm(true)}
+        onAboutAssistant={() => setShowAboutAssistant(true)}
+        onWriteUs={() => {
+          window.location.href = "mailto:momrecipesai@gmail.com";
+        }}
+      />
+    </>
+  );
+
   return (
     <MobileLayout showNav>
       <div className="flex flex-col min-h-0 flex-1 container mx-auto max-w-full overflow-x-hidden px-4 chat-page-bg overflow-hidden">
-        {/* Sticky header в режиме «Помощник»: меню (⋮) справа */}
+        {/* Sticky header в режиме «Помощник»: бейдж + меню — та же сетка, что План / Чат */}
         {mode === "help" && (
-          <div className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-2 pb-2 flex justify-end">
-            <ChatHeaderMenuButton
-              open={showActionsMenu}
-              onOpenChange={setShowActionsMenu}
-              onNewChat={() => setShowClearConfirm(true)}
-              onAboutAssistant={() => setShowAboutAssistant(true)}
-              onWriteUs={() => {
-                window.location.href = "mailto:momrecipesai@gmail.com";
-              }}
+          <div className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm pt-2 pb-2">
+            <TabProfileMenuRow
+              profileSlot={<span className="block min-h-[44px] w-full min-w-0 flex-1" aria-hidden />}
+              trailing={chatHeaderTrailing}
             />
           </div>
         )}
 
-        {/* Sticky hero: только при наличии сообщений; меню (⋮) справа */}
+        {/* Sticky hero: только при наличии сообщений */}
         {mode === "recipes" && members.length > 0 && messages.length > 0 && (
-          <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 pt-2 pb-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
-              <ChatHeaderMenuButton
-                open={showActionsMenu}
-                onOpenChange={setShowActionsMenu}
-                onNewChat={() => setShowClearConfirm(true)}
-                onAboutAssistant={() => setShowAboutAssistant(true)}
-                onWriteUs={() => {
-                  window.location.href = "mailto:momrecipesai@gmail.com";
-                }}
-              />
-            </div>
+          <div ref={chatHeroRef} className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur-sm pt-2 pb-2">
+            <TabProfileMenuRow
+              profileSlot={
+                <MemberSelectorButton onProfileChange={() => setMessages([])} className="shrink-0" />
+              }
+              trailing={chatHeaderTrailing}
+            />
             {!isFamilySelected(selectedMemberId, members) && (
               <div className="mt-1.5">
                 <ChatModeHint mode="member" />
@@ -1394,7 +1402,7 @@ export default function ChatPage() {
         <div
           ref={messagesContainerRef}
           onScroll={handleMessagesScroll}
-          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-0.5 space-y-3 pb-3 px-4"
+          className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain py-0.5 space-y-3 pb-3"
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {/* Статус при смене профиля: 1.5 сек, плавное появление/исчезновение (резерв 20px без сдвига) */}
@@ -1467,17 +1475,7 @@ export default function ChatPage() {
               onProfileChange={() => setMessages([])}
               profileChangeStatus={profileChangeStatus}
               headerMeta={chatHeaderMeta}
-              headerRight={
-                <ChatHeaderMenuButton
-                  open={showActionsMenu}
-                  onOpenChange={setShowActionsMenu}
-                  onNewChat={() => setShowClearConfirm(true)}
-                  onAboutAssistant={() => setShowAboutAssistant(true)}
-                  onWriteUs={() => {
-                    window.location.href = "mailto:momrecipesai@gmail.com";
-                  }}
-                />
-              }
+              headerRight={chatHeaderTrailing}
             />
           )}
 

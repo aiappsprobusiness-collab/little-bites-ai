@@ -1,6 +1,6 @@
-# Вкладка «Помощник рядом»: реализация UX и лимитов
+# Вкладка «Помощь маме»: реализация UX и лимитов
 
-Документ описывает, **как реализованы** последние правки вкладки Help: дисклеймер, quick chips (Free/Premium), карточка «Сегодня спрашивают», лимит вопросов и paywall. Используется для поддержки и отладки.
+Документ описывает, **как реализованы** последние правки вкладки Help (в навигации — «Помощь маме»): дисклеймер, quick chips (Free/Premium), карточка «Сегодня спрашивают», лимит вопросов и paywall. Используется для поддержки и отладки.
 
 **Связанный документ:** [help-tab-functionality-description-ru.md](../help-tab-functionality-description-ru.md) — общее описание функционала для пользователя и промптов.
 
@@ -10,11 +10,11 @@
 
 | Файл | Назначение |
 |------|------------|
-| `src/pages/SosTiles.tsx` | Страница Help: **главный вход** — блок «Помощник рядом» (Hero первым), затем компактный блок «Сегодня спрашивают», список тем по категориям, в самом низу страницы — дисклеймер про врача; sheet и paywall. `handleOpenWithMessage(text)` открывает sheet с сообщением (в т.ч. для premium у Free — preview). При лимите — `onLimitReached`. Передаёт в sheet `popularQuestionTextIfPremium` для логики preview. |
-| `src/components/sos/SosHero.tsx` | Hero: заголовок «Помощник рядом», подзаголовок «Что происходит с ребёнком?», placeholder «Например: ребёнок стал хуже есть», поле ввода и кнопка «Спросить», счётчик лимита (для Free), quick chips. Дисклеймер в Hero не показывается (перенесён в низ страницы). Для Free по тапу на premium‑чип — `onPremiumChipTap` (paywall); при отправке из поля ввода premium-текст открывается sheet и показывается preview. |
+| `src/pages/SosTiles.tsx` | Страница Help: **`MobileLayout` без хедера** (нет TopBar с заголовком вкладки — как на Плане/Чате/Избранном); **главный вход** — Hero с заголовком «Помощь маме» (см. ниже), затем компактный блок «Сегодня спрашивают», список тем по категориям, в самом низу страницы — дисклеймер про врача; sheet и paywall. `handleOpenWithMessage(text)` открывает sheet с заголовком «Помощь маме» и сообщением (в т.ч. для premium у Free — preview). При лимите — `onLimitReached`. Передаёт в sheet `popularQuestionTextIfPremium` для логики preview. |
+| `src/components/sos/SosHero.tsx` | Hero: заголовок «Помощь маме», подзаголовок «Что происходит с ребёнком?», placeholder «Например: ребёнок стал хуже есть», поле ввода и кнопка «Спросить», счётчик лимита (для Free), quick chips. Дисклеймер в Hero не показывается (перенесён в низ страницы). Для Free по тапу на premium‑чип — `onPremiumChipTap` (paywall); при отправке из поля ввода premium-текст открывается sheet и показывается preview. |
 | `src/components/sos/SosTopicGrid.tsx` | Сетка карточек тем по секциям: иконка, заголовок, подзаголовок (line-clamp-2), для Premium-тем — бейдж Star + Premium, по клику locked → paywall. |
 | `src/components/help/TopicConsultationSheet.tsx` | Нижний sheet с чатом по теме: чипсы (Free сначала, premium с иконкой Star), input, история, retry. **Preview для Free:** при ответе на premium-вопрос (из «Сегодня спрашивают» или premium-чипа) показываются первые 2–3 абзаца и блок «Продолжение ответа доступно в расширенной консультации» + кнопка «Получить полный разбор (Premium)» → paywall. Запрос для premium-вопроса у Free отправляется как обычно; обрезка только в UI. При `LIMIT_REACHED` — текст лимита в чате и `onLimitReached`. |
-| `src/data/helpTopicChips.ts` | Quick chips для topic `"quick"`: список с полями `label`, `text`, `access: "free" \| "paid"`. **Порядок по частоте запросов:** Не хочет есть, Новый продукт, Стул малыша, Срыгивания, Аллергия, Режим кормления, затем остальные. Экспорт: `getPremiumQuickChipTexts()`, `isPremiumQuickChipText(text)`. |
+| `src/data/helpTopicChips.ts` | Quick chips для topic `"quick"`: список с полями `label`, `text`, `access: "free" \| "paid"`. **Порядок по частоте запросов:** Не хочет есть, Новый продукт, Стул малыша, Срыгивания, Аллергия, Режим кормления, затем остальные. Для темы `new_food` («Как безопасно ввести новый продукт») порядок чипсов в UI: Сколько в первый раз → Как понять, что нет аллергии → Порядок ввода овощей → Как ввести яйцо → Рыба: когда и как. Экспорт: `getPremiumQuickChipTexts()`, `isPremiumQuickChipText(text)`. |
 | `src/features/help/config/popularQuestions.ts` | Пул популярных вопросов для «Сегодня спрашивают»: тип `PopularQuestion` (id, text, category, access). Функция `getPopularQuestionForToday({ hasAccess, date? })`: ротация 1 раз в день по категории дня (Пн=nutrition, Вт=baby, Ср=allergy, Чт/Вс=routine, Пт=nutrition, Сб=baby) и индексу дня в году. Free видит только вопросы с `access: "free"` в карточке; при открытии по deep-link или с premium-вопросом дня (если доступ меняется) возможен preview. |
 | `src/hooks/useDeepSeekAPI.tsx` | Запрос к `deepseek-chat`. При 429 и `code === 'LIMIT_REACHED'` или `error === 'LIMIT_REACHED'` бросает `Error('LIMIT_REACHED')` (payload опционален). При успешном ответе help — вызывает `refetchUsage()`. |
 | `src/hooks/useSubscription.tsx` | `helpRemaining`, `helpLimitExceeded` из `get_usage_count_today(..., "help")` и `limits.helpDailyLimit`. `refetchUsage()` инвалидирует запросы `["usage-help-today", user?.id]` и др. |
@@ -23,7 +23,7 @@
 
 ## 2. Hero: placeholder, подсказка (дисклеймер — внизу страницы)
 
-- **Заголовок:** «Помощник рядом»; подзаголовок: «Что происходит с ребёнком?».
+- **Заголовок:** «Помощь маме»; подзаголовок: «Что происходит с ребёнком?».
 - **Placeholder поля ввода:** «Например: ребёнок стал хуже есть».
 - **Дисклеймер:** в Hero не отображается; перенесён в самый низ страницы Help (SosTiles), после всех секций карточек — малозаметный сервисный текст «Ответы носят информационный характер и не заменяют консультацию врача.» (text-[11px], text-muted-foreground/90, по центру).
 - **Файл:** `SosHero.tsx` (hero), `SosTiles.tsx` (дисклеймер внизу).
@@ -41,7 +41,7 @@
 
 ## 4. Блок «Сегодня спрашивают» (вторичный, ниже Hero)
 
-- **Расположение:** ниже главного блока «Помощник рядом» (Hero); визуально не конкурирует с ним — компактный, неакцентный.
+- **Расположение:** ниже Hero («Помощь маме»); визуально не конкурирует с ним — компактный, неакцентный.
 - **Вопрос дня:** `getPopularQuestionForToday({ hasAccess })`. Ротация раз в день, детерминирована по дате; категория по дню недели; внутри категории — по дню года. Free в блоке видит только вопросы с `access: "free"`; при смене доступа или тестах возможен premium-вопрос.
 - **Клик:** `handleOpenWithMessage(popularQuestion.text)` — открывается sheet с подставленным текстом. У Free при premium-вопросе дня (если показывается) — запрос отправляется, показывается preview ответа и CTA на paywall.
 - **Лимит:** при `helpLimitExceeded` кнопка блока `disabled`.

@@ -2,16 +2,21 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { SubscriptionTierBadge } from "@/components/layout/SubscriptionTierBadge";
+import { TabOverflowIconButton } from "@/components/layout/TabOverflowIconButton";
+import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
+import { TabEmptyState } from "@/components/ui/TabEmptyState";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Calendar as CalendarIcon,
+  CalendarDays,
   Check,
+  ClipboardList,
   ChevronRight,
   HeartHandshake,
   Info,
   Loader2,
-  MoreVertical,
   Plus,
   ShoppingCart,
   Sparkles,
@@ -1800,9 +1805,7 @@ export default function MealPlanPage() {
   }
 
   return (
-    <MobileLayout
-      mainClassName={isInfantPlanUi ? "scrollbar-none !overflow-y-hidden" : undefined}
-    >
+    <MobileLayout mainClassName={isInfantPlanUi ? "scrollbar-none !overflow-y-hidden" : undefined}>
       <div className="flex flex-col min-h-0 flex-1 px-4 relative overflow-x-hidden touch-pan-y overscroll-x-none max-w-full">
         {/* Content wrapper: один скролл + subtle pattern; горизонтальный скролл/overscroll отключены */}
         <div
@@ -1812,6 +1815,88 @@ export default function MealPlanPage() {
             isInfantPlanUi && "scrollbar-none",
           )}
         >
+          <div className="sticky top-0 z-10 shrink-0 bg-background/95 backdrop-blur-sm pt-2 pb-2">
+            <TabProfileMenuRow
+              profileSlot={
+                members.length > 0 ? (
+                  isInfantPlanUi ? (
+                    <MemberSelectorButton
+                      variant="light"
+                      leadingEmoji="👶"
+                      className="max-w-full min-h-[44px] shrink-0 px-2.5 sm:px-3"
+                      disabled={isAnyGenerating}
+                      fitLabelWidth
+                    />
+                  ) : (
+                    <MemberSelectorButton className="shrink-0" disabled={isAnyGenerating} />
+                  )
+                ) : (
+                  <span className="block min-h-[44px] w-full min-w-0" aria-hidden />
+                )
+              }
+              trailing={
+                <>
+                  <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} label={statusBadgeLabel} />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <TabOverflowIconButton disabled={isAnyGenerating} aria-label="Ещё действия" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-52">
+                      {members.length > 0 && (
+                        <DropdownMenuItem
+                          onClick={() => setPlanProfileHelpOpen(true)}
+                          className="text-muted-foreground"
+                        >
+                          <Info className="w-4 h-4 mr-2 shrink-0" />
+                          Как учитывается профиль
+                        </DropdownMenuItem>
+                      )}
+                      {hasAccess && !isInfantPlanUi && (
+                        <DropdownMenuItem
+                          onClick={() => openShareWeekPreview()}
+                          disabled={isAnyGenerating || isWeekPlansLoading}
+                          className="text-muted-foreground"
+                        >
+                          <ShareIosIcon className="w-4 h-4 mr-2 shrink-0" />
+                          Отправить меню на неделю
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() => setClearConfirm("day")}
+                        disabled={isAnyGenerating}
+                        className="text-muted-foreground"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2 shrink-0" />
+                        Очистить день
+                      </DropdownMenuItem>
+                      {hasAccess && (
+                        <DropdownMenuItem
+                          onClick={() => setClearConfirm("week")}
+                          disabled={isAnyGenerating}
+                          className="text-muted-foreground"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2 shrink-0" />
+                          Очистить неделю
+                        </DropdownMenuItem>
+                      )}
+                      {import.meta.env.DEV && (
+                        <DropdownMenuCheckboxItem
+                          checked={debugPlanEnabled}
+                          onCheckedChange={(checked) => {
+                            const on = checked === true;
+                            setDebugPlanInStorage(on);
+                            setDebugPlanEnabled(on);
+                          }}
+                        >
+                          Debug план (консоль: payload/response generate-plan)
+                        </DropdownMenuCheckboxItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              }
+            />
+          </div>
           {/* Блок приглашения к шарингу после первой генерации */}
           {justCreatedMemberId && !firstPlanShareBannerDismissed && !isInfantPlanUi && (
             <motion.div
@@ -1864,91 +1949,13 @@ export default function MealPlanPage() {
           >
             {isInfantPlanUi ? (
               <>
-                <div className="flex items-start justify-between gap-2 min-w-0">
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-lg font-semibold text-foreground leading-tight tracking-tight">
-                      План прикорма на сегодня
-                    </h2>
-                    <p className="text-sm text-muted-foreground mt-0.5">{formatDayHeader(selectedDate)}</p>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0 self-start pt-0.5">
-                    <span
-                      className={cn(
-                        "text-[10px] font-medium px-2 py-0.5 rounded-full tabular-nums",
-                        subscriptionStatus === "premium" && "bg-primary/10 text-primary",
-                        subscriptionStatus === "trial" && "bg-amber-500/12 text-amber-900/85",
-                        subscriptionStatus !== "premium" && subscriptionStatus !== "trial" && "bg-muted/70 text-muted-foreground",
-                      )}
-                    >
-                      {statusBadgeLabel}
-                    </span>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          className="p-1.5 rounded-lg text-muted-foreground/80 hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-60"
-                          disabled={isAnyGenerating}
-                          aria-label="Ещё действия"
-                        >
-                          <MoreVertical className="w-5 h-5" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-52">
-                        {members.length > 0 && (
-                          <DropdownMenuItem
-                            onClick={() => setPlanProfileHelpOpen(true)}
-                            className="text-muted-foreground"
-                          >
-                            <Info className="w-4 h-4 mr-2 shrink-0" />
-                            Как учитывается профиль
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          onClick={() => setClearConfirm("day")}
-                          disabled={isAnyGenerating}
-                          className="text-muted-foreground"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2 shrink-0" />
-                          Очистить день
-                        </DropdownMenuItem>
-                        {hasAccess && (
-                          <DropdownMenuItem
-                            onClick={() => setClearConfirm("week")}
-                            disabled={isAnyGenerating}
-                            className="text-muted-foreground"
-                          >
-                            <Trash2 className="w-4 h-4 mr-2 shrink-0" />
-                            Очистить неделю
-                          </DropdownMenuItem>
-                        )}
-                        {import.meta.env.DEV && (
-                          <DropdownMenuCheckboxItem
-                            checked={debugPlanEnabled}
-                            onCheckedChange={(checked) => {
-                              const on = checked === true;
-                              setDebugPlanInStorage(on);
-                              setDebugPlanEnabled(on);
-                            }}
-                          >
-                            Debug план (консоль: payload/response generate-plan)
-                          </DropdownMenuCheckboxItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-foreground leading-tight tracking-tight">
+                    План прикорма на сегодня
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">{formatDayHeader(selectedDate)}</p>
                 </div>
                 <div className="w-full min-w-0 mt-1 space-y-2">
-                  {members.length > 0 ? (
-                    <div className="flex w-full min-w-0 flex-wrap items-center justify-start gap-2">
-                      <MemberSelectorButton
-                        variant="light"
-                        className="max-w-full min-h-[44px] px-2.5 sm:px-3"
-                        disabled={isAnyGenerating}
-                        leadingEmoji="👶"
-                        fitLabelWidth
-                      />
-                    </div>
-                  ) : null}
                   <div
                     className="mt-0.5 w-full min-w-0 rounded-xl border border-border/45 bg-muted/15 px-3 py-2.5 space-y-1.5"
                     role="region"
@@ -1998,114 +2005,36 @@ export default function MealPlanPage() {
                 </div>
               </>
             ) : (
-            <div className="flex flex-col gap-2 min-[380px]:flex-row min-[380px]:items-start min-[380px]:justify-between min-[380px]:gap-3">
-              <div className="min-w-0 flex-1 pr-0 min-[380px]:pr-1">
-                <h2
-                  className={cn(
-                    "text-lg font-semibold text-foreground leading-tight tracking-tight",
-                    "text-balance",
-                  )}
-                >
-                  {formatDayHeader(selectedDate)}
-                </h2>
-                {members.length > 0 ? (
-                  <div className="mt-3 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
-                    <MemberSelectorButton className="shrink-0" disabled={isAnyGenerating} />
-                    <PlanGoalCompactSheet
-                      value={planGoalSelection}
-                      onChange={setPlanGoalSelection}
-                      className="shrink-0"
-                      disabled={isAnyGenerating}
-                      hasPremiumAccess={hasAccess}
-                      onLockedGoalClick={() => {
-                        useAppStore.getState().setPaywallReason("plan_goal_select");
-                        useAppStore.getState().setPaywallCustomMessage(
-                          "Эти блюда подбираются с учётом цели питания. В Premium и Trial можно выбрать фокус подбора (Железо, Концентрация и др.).",
-                        );
-                        useAppStore.getState().setShowPaywall(true);
-                      }}
-                    />
-                  </div>
-                ) : null}
-                {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
-                  <span className="text-xs text-slate-500">DB: {dayDbCount} | AI: {dayAiCount}</span>
+            <div className="flex min-w-0 flex-col gap-2">
+              <h2
+                className={cn(
+                  "text-lg font-semibold text-foreground leading-tight tracking-tight",
+                  "text-balance",
                 )}
-              </div>
-              <div className="flex items-center gap-1 shrink-0 self-end min-[380px]:self-start">
-                <span
-                  className={cn(
-                    "text-[10px] font-medium px-2 py-0.5 rounded-full tabular-nums",
-                    subscriptionStatus === "premium" && "bg-primary/10 text-primary",
-                    subscriptionStatus === "trial" && "bg-amber-500/12 text-amber-900/85",
-                    subscriptionStatus !== "premium" && subscriptionStatus !== "trial" && "bg-muted/70 text-muted-foreground",
-                  )}
-                >
-                  {statusBadgeLabel}
-                </span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      className="p-1.5 rounded-lg text-muted-foreground/80 hover:text-foreground hover:bg-muted/60 transition-colors disabled:opacity-60"
-                      disabled={isAnyGenerating}
-                      aria-label="Ещё действия"
-                    >
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52">
-                    {members.length > 0 && (
-                      <DropdownMenuItem
-                        onClick={() => setPlanProfileHelpOpen(true)}
-                        className="text-muted-foreground"
-                      >
-                        <Info className="w-4 h-4 mr-2 shrink-0" />
-                        Как учитывается профиль
-                      </DropdownMenuItem>
-                    )}
-                    {hasAccess && !isInfantPlanUi && (
-                      <DropdownMenuItem
-                        onClick={() => openShareWeekPreview()}
-                        disabled={isAnyGenerating || isWeekPlansLoading}
-                        className="text-muted-foreground"
-                      >
-                        <ShareIosIcon className="w-4 h-4 mr-2 shrink-0" />
-                        Отправить меню на неделю
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() => setClearConfirm("day")}
-                      disabled={isAnyGenerating}
-                      className="text-muted-foreground"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2 shrink-0" />
-                      Очистить день
-                    </DropdownMenuItem>
-                    {hasAccess && (
-                      <DropdownMenuItem
-                        onClick={() => setClearConfirm("week")}
-                        disabled={isAnyGenerating}
-                        className="text-muted-foreground"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2 shrink-0" />
-                        Очистить неделю
-                      </DropdownMenuItem>
-                    )}
-                    {import.meta.env.DEV && (
-                      <DropdownMenuCheckboxItem
-                        checked={debugPlanEnabled}
-                        onCheckedChange={(checked) => {
-                          const on = checked === true;
-                          setDebugPlanInStorage(on);
-                          setDebugPlanEnabled(on);
-                        }}
-                      >
-                        Debug план (консоль: payload/response generate-plan)
-                      </DropdownMenuCheckboxItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              >
+                {formatDayHeader(selectedDate)}
+              </h2>
+              {members.length > 0 ? (
+                <div className="mt-1 flex w-full min-w-0 flex-wrap items-center justify-start gap-3">
+                  <PlanGoalCompactSheet
+                    value={planGoalSelection}
+                    onChange={setPlanGoalSelection}
+                    className="shrink-0"
+                    disabled={isAnyGenerating}
+                    hasPremiumAccess={hasAccess}
+                    onLockedGoalClick={() => {
+                      useAppStore.getState().setPaywallReason("plan_goal_select");
+                      useAppStore.getState().setPaywallCustomMessage(
+                        "Эти блюда подбираются с учётом цели питания. В Premium и Trial можно выбрать фокус подбора (Железо, Концентрация и др.).",
+                      );
+                      useAppStore.getState().setShowPaywall(true);
+                    }}
+                  />
+                </div>
+              ) : null}
+              {planDebug && (dayDbCount > 0 || dayAiCount > 0) && (
+                <span className="text-xs text-slate-500">DB: {dayDbCount} | AI: {dayAiCount}</span>
+              )}
             </div>
             )}
             {!isInfantPlanUi ? (
@@ -2452,44 +2381,41 @@ export default function MealPlanPage() {
               </div>
             </>
           ) : isEmptyDay && !(isInfantPlanUi && !isAdultNoRecipesEmpty) ? (
-            <div className="mt-2 rounded-2xl border border-primary-border/60 bg-primary-light/30 p-4 text-center">
-              <p className="text-4xl mb-1.5" aria-hidden>{isAdultNoRecipesEmpty ? "📋" : "✨"}</p>
-              <h3 className="text-plan-hero-title font-semibold text-foreground mb-1">
-                {isAdultNoRecipesEmpty ? "Недостаточно рецептов в пуле для этого профиля" : "План на день пока пуст"}
-              </h3>
-              <p className="text-plan-secondary text-muted-foreground text-sm mb-3">
-                {isAdultNoRecipesEmpty
-                  ? "Добавьте рецепты для взрослых через Чат (например: «Подберите обед на понедельник») или Избранное."
-                  : "Нажмите «Собрать день» или подберите рецепт для нужного приёма пищи."}
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                {isAdultNoRecipesEmpty ? (
-                <Button
-                  size="sm"
-                  className="rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-soft"
-                  onClick={() =>
-                    navigate("/chat", {
-                      state: {
-                        fromPlanSlot: true,
-                        plannedDate: selectedDayKey,
-                        mealType: firstEmptySlotId ?? "breakfast",
-                        memberId: memberIdForPlan ?? undefined,
-                        prefillMessage: getPlanSlotChatPrefillMessage(firstEmptySlotId ?? "breakfast"),
-                        prefillOnly: true,
-                      },
-                    })
-                  }
-                >
-                  <Plus className="w-4 h-4 mr-1.5 shrink-0" />
-                  Сгенерировать в чате
-                </Button>
-                ) : !isInfantPlanUi ? (
-                  <>
-                  <Button
-                    size="sm"
-                    className="rounded-2xl bg-primary hover:opacity-90 text-white border-0 shadow-soft"
-                    disabled={isAnyGenerating || (isFree && todayIndex < 0)}
-                    onClick={async () => {
+            <>
+              {isAdultNoRecipesEmpty ? (
+                <TabEmptyState
+                  className="mt-2"
+                  icon={ClipboardList}
+                  title="Недостаточно рецептов в пуле для этого профиля"
+                  description="Добавьте рецепты для взрослых через Чат (например: «Подберите обед на понедельник») или Избранное."
+                  primaryAction={{
+                    label: "Сгенерировать в чате",
+                    icon: Plus,
+                    onClick: () =>
+                      navigate("/chat", {
+                        state: {
+                          fromPlanSlot: true,
+                          plannedDate: selectedDayKey,
+                          mealType: firstEmptySlotId ?? "breakfast",
+                          memberId: memberIdForPlan ?? undefined,
+                          prefillMessage: getPlanSlotChatPrefillMessage(firstEmptySlotId ?? "breakfast"),
+                          prefillOnly: true,
+                        },
+                      }),
+                  }}
+                />
+              ) : !isInfantPlanUi ? (
+                <TabEmptyState
+                  className="mt-2"
+                  icon={CalendarDays}
+                  title="План на день пока пуст"
+                  description="Соберите рацион на день или подберите блюда вручную"
+                  previewLine="Завтрак • Обед • Ужин • Перекус"
+                  primaryAction={{
+                    label: "Собрать день",
+                    icon: Sparkles,
+                    disabled: isAnyGenerating || (isFree && todayIndex < 0),
+                    onClick: async () => {
                       if (isAnyGenerating) return;
                       trackUsageEvent("plan_fill_day_click");
                       if (import.meta.env.DEV) console.info("[FILL] source=POOL only", { type: "day", day_key: selectedDayKey });
@@ -2530,35 +2456,26 @@ export default function MealPlanPage() {
                       } finally {
                         setPoolUpgradeLoading(false);
                       }
-                    }}
-                  >
-                    <Sparkles className="w-4 h-4 mr-1.5 shrink-0" />
-                    Собрать день
-                  </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-2xl border-primary-border"
-                  onClick={() =>
-                    navigate("/chat", {
-                      state: {
-                        fromPlanSlot: true,
-                        plannedDate: selectedDayKey,
-                        mealType: firstEmptySlotId ?? "breakfast",
-                        memberId: memberIdForPlan ?? undefined,
-                        prefillMessage: getPlanSlotChatPrefillMessage(firstEmptySlotId ?? "breakfast"),
-                        prefillOnly: true,
-                      },
-                    })
-                  }
-                >
-                  <Plus className="w-4 h-4 mr-1.5 shrink-0" />
-                  {isAdultNoRecipesEmpty ? "Сгенерировать в чате" : "Подобрать рецепт"}
-                </Button>
-                  </>
-                ) : null}
-              </div>
-            </div>
+                    },
+                  }}
+                  secondaryAction={{
+                    label: "Подобрать рецепт",
+                    variant: "outline",
+                    onClick: () =>
+                      navigate("/chat", {
+                        state: {
+                          fromPlanSlot: true,
+                          plannedDate: selectedDayKey,
+                          mealType: firstEmptySlotId ?? "breakfast",
+                          memberId: memberIdForPlan ?? undefined,
+                          prefillMessage: getPlanSlotChatPrefillMessage(firstEmptySlotId ?? "breakfast"),
+                          prefillOnly: true,
+                        },
+                      }),
+                  }}
+                />
+              ) : null}
+            </>
           ) : (
             <>
             <div className={cn("mt-3 pb-4", isInfantPlanUi ? "space-y-3" : "space-y-4")}>

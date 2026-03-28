@@ -59,7 +59,7 @@ export function SosHero({
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="text-base font-semibold text-foreground tracking-tight">
-            Помощник рядом
+            Помощь маме
           </h2>
           <p className="text-xs text-muted-foreground mt-1 leading-snug">
             Что происходит с ребёнком?

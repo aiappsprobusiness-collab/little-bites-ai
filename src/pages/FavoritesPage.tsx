@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import { Heart, MessageCircle, Plus, Lock, ShoppingCart, ChevronLeft } from "lucide-react";
+import { BookOpen, Heart, MessageCircle, Plus, Lock, ShoppingCart, ChevronLeft } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { TabEmptyState } from "@/components/ui/TabEmptyState";
 import { MemberSelectorButton } from "@/components/family/MemberSelectorButton";
 import { Button } from "@/components/ui/button";
 import { useFavorites } from "@/hooks/useFavorites";
@@ -253,28 +254,16 @@ export default function FavoritesPage() {
         {tab === "my_recipes" && (
           <>
             {myRecipes.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="flex flex-col items-center justify-center text-center py-12 px-4"
-              >
-                <div className="rounded-2xl border border-border bg-card shadow-soft p-8 w-full max-w-sm">
-                  <h3 className="text-xl font-semibold text-foreground mb-2">
-                    Пока нет своих рецептов
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                    Создайте рецепт — он будет храниться только у вас и его можно добавлять в план.
-                  </p>
-                  <Button
-                    onClick={openCreateForm}
-                    className="gap-2 bg-primary hover:opacity-90 text-primary-foreground rounded-xl"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Создать свой рецепт
-                  </Button>
-                </div>
-              </motion.div>
+              <TabEmptyState
+                icon={BookOpen}
+                title="Пока нет ваших рецептов"
+                description="Добавьте свой рецепт, чтобы использовать его в плане"
+                primaryAction={{
+                  label: "Добавить рецепт",
+                  icon: Plus,
+                  onClick: openCreateForm,
+                }}
+              />
             ) : myRecipesFiltered.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">
                 По выбранным ингредиентам ничего не найдено. Измените фильтр или сбросьте его.
@@ -339,31 +328,16 @@ export default function FavoritesPage() {
         {tab === "favorites" && (
           <>
             {favorites.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="flex flex-col items-center justify-center text-center py-12 px-4"
-              >
-                <div className="rounded-2xl border border-border bg-card shadow-soft p-8 w-full max-w-sm">
-                  <div className="flex justify-center mb-2">
-                    <Heart className="w-10 h-10 text-primary/40 stroke-[1.5]" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-foreground mb-2">
-                    Пока нет избранных рецептов
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
-                    Добавляйте понравившиеся рецепты сердечком — они появятся здесь.
-                  </p>
-                  <Button
-                    onClick={() => navigate("/chat")}
-                    className="gap-2 bg-primary hover:opacity-90 text-primary-foreground rounded-xl"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    Перейти в чат
-                  </Button>
-                </div>
-              </motion.div>
+              <TabEmptyState
+                icon={Heart}
+                title="Пока нет сохранённых рецептов"
+                description="Сохраняйте блюда, чтобы быстро добавлять их в план"
+                primaryAction={{
+                  label: "Перейти в чат",
+                  icon: MessageCircle,
+                  onClick: () => navigate("/chat"),
+                }}
+              />
             ) : favoritesFiltered.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">
                 По выбранным ингредиентам ничего не найдено. Измените фильтр или сбросьте его.

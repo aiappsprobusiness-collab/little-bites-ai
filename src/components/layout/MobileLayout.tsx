@@ -24,6 +24,7 @@ export const APP_HEADER_ICON = (
  */
 interface MobileLayoutProps {
   children: ReactNode;
+  /** Если не заданы title, headerCenter, headerLeft, headerRight и headerBrand — хедер не рендерится (корневые вкладки без TopBar). */
   title?: string;
   showNav?: boolean;
   headerLeft?: ReactNode;
