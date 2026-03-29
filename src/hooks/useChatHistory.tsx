@@ -16,6 +16,8 @@ export function useChatHistory(selectedMemberId: string | null) {
 
   const { data: messages = [], isLoading, refetch } = useQuery({
     queryKey: ['chat_history', user?.id, threadKey],
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       if (!user) return [];
 

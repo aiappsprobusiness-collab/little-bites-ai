@@ -113,4 +113,13 @@ describe("checkChatRequestAgainstProfile", () => {
     expect(result!.blocked_by).toBe("allergy");
     expect(result!.message).toMatch(/аллергия/);
   });
+
+  it('blocks "дай ужин с яйцом" and "…яйцами" when allergy яйца (тот же стем «яйц», что и на Edge после сведения правил)', () => {
+    const member = { name: "Малыш", allergies: ["яйца"], dislikes: [] };
+    for (const text of ["дай ужин с яйцом", "дай ужин с яйцами"]) {
+      const result = checkChatRequestAgainstProfile({ text, member });
+      expect(result).not.toBeNull();
+      expect(result!.blocked_by).toBe("allergy");
+    }
+  });
 });

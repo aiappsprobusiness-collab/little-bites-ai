@@ -140,11 +140,16 @@ const CHAT_PLACEHOLDER_SUGGESTIONS = [
 
 const HELP_CHAT_STORAGE_KEY = "help_chat_messages_v1";
 
+/** После save в chat_history не меняем id сообщений (стабильный React key); для API удаления — UUID строки истории. */
+const CHAT_HISTORY_SYNC_SKIP_MS = 15_000;
+
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  /** UUID строки chat_history (пара user+assistant); не подставлять в key, чтобы не было моргания после сохранения. */
+  chatHistoryRowId?: string;
   rawContent?: string;
   /** Пока true, ответ ещё стримится; не показываем сырой JSON. */
   isStreaming?: boolean;
@@ -261,6 +266,9 @@ export default function ChatPage() {
   const streamDoneForMessageIdRef = useRef<string | null>(null);
   /** Сразу после показа рецепта не синхронизировать с историей 5 с, чтобы не перезаписывать messages и не вызывать моргание/перепрыгивание скролла. */
   const skipHistorySyncUntilRef = useRef<number>(0);
+  /** Актуальные строки истории из query — чтобы отбрасывать опоздавший ответ supabase после смены треда. */
+  const historyMessagesRef = useRef(historyMessages);
+  historyMessagesRef.current = historyMessages;
   /** Статус-индикатор при смене профиля: текст на 1.5 сек. */
   const [profileChangeStatus, setProfileChangeStatus] = useState<string | null>(null);
   const profileChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -485,15 +493,41 @@ export default function ChatPage() {
       setMessages([]);
       return;
     }
-    setIsChatBootstrapped(false);
     if (Date.now() < skipHistorySyncUntilRef.current) return;
+    setIsChatBootstrapped(false);
     const recipeIds = [...new Set(historyMessages.map((m: { recipe_id?: string | null }) => m.recipe_id).filter(Boolean))] as string[];
+    /** Снимок id строк на момент старта эффекта — опоздавший fetch рецептов не должен затирать локальную ленту. */
+    const threadIdsAtEffectStart = historyMessages.map((m: { id: string }) => m.id).join("|");
     const isBlockedRefusalResponse = (response: string) => {
       const r = (response ?? "").trim();
+      if (!r) return false;
+      if (r.includes("⚠️") && r.includes("аллерг") && r.includes("Попробуйте изменить запрос")) {
+        return true;
+      }
+      if (
+        r.includes("Внимание: у ") &&
+        r.includes("аллерг") &&
+        r.includes("Мы не можем предложить рецепт с этим ингредиентом")
+      ) {
+        return true;
+      }
+      if (
+        (r.includes("Попробуйте изменить запрос") || r.includes("Измените запрос")) &&
+        r.includes("выберите другой профиль") &&
+        (r.includes("аллерг") || r.includes("не любит"))
+      ) {
+        return true;
+      }
+      if (
+        r.includes("Измените запрос или выберите другой профиль") &&
+        (r.includes("аллерг") || r.includes("не любит"))
+      ) {
+        return true;
+      }
       const hasBlockedPhrase =
         r.includes("Смените профиль или замените аллерген на новый ингредиент") ||
         r.includes("Поэтому рецепт с этим ингредиентом я не предложу");
-      return hasBlockedPhrase && (r.includes("аллерги") || r.includes("не любит"));
+      return hasBlockedPhrase && (r.includes("аллерг") || r.includes("не любит"));
     };
     /** Ответ редиректа в Помощник или нерелевантный: не парсить как рецепт при загрузке из истории */
     const isRedirectOrIrrelevantResponse = (response: string) => {
@@ -513,18 +547,22 @@ export default function ChatPage() {
           role: "user",
           content: msg.message ?? "",
           timestamp: new Date(msg.created_at),
+          chatHistoryRowId: msg.id,
         });
         if (msg.response) {
-          const isBlocked = !msg.recipe_id && isBlockedRefusalResponse(msg.response);
           const blockedMetaFromDb = msg.meta && typeof msg.meta === "object" && (msg.meta as { blocked?: boolean }).blocked === true
             ? (msg.meta as BlockedMeta)
             : undefined;
+          const isBlocked =
+            !msg.recipe_id &&
+            (blockedMetaFromDb != null || isBlockedRefusalResponse(msg.response));
           if (isBlocked) {
             formatted.push({
               id: `${msg.id}-assistant`,
               role: "assistant",
               content: msg.response,
               timestamp: new Date(msg.created_at),
+              chatHistoryRowId: msg.id,
               rawContent: undefined,
               preParsedRecipe: null,
               recipeId: undefined,
@@ -552,6 +590,7 @@ export default function ChatPage() {
               role: "assistant",
               content: msg.response,
               timestamp: new Date(msg.created_at),
+              chatHistoryRowId: msg.id,
               rawContent: undefined,
               preParsedRecipe: null,
               recipeId: undefined,
@@ -570,6 +609,7 @@ export default function ChatPage() {
               role: "assistant",
               content: displayText,
               timestamp: new Date(msg.created_at),
+              chatHistoryRowId: msg.id,
               rawContent: msg.response,
               preParsedRecipe: recipes[0] ?? null,
               recipeId: msg.recipe_id ?? undefined,
@@ -579,16 +619,23 @@ export default function ChatPage() {
       });
       setMessages(formatted);
     };
+    const canApplyAsyncRecipeFetch = () => {
+      if (Date.now() < skipHistorySyncUntilRef.current) return false;
+      const nowKey = historyMessagesRef.current.map((m: { id: string }) => m.id).join("|");
+      return nowKey === threadIdsAtEffectStart;
+    };
     if (recipeIds.length === 0) {
       formatWithRecipeMap({});
       setIsChatBootstrapped(true);
       return;
     }
+    let cancelled = false;
     supabase
       .from("recipes")
       .select("id, title, description, cooking_time_minutes, meal_type, chef_advice, advice, calories, proteins, fats, carbs, nutrition_goals, recipe_ingredients(name, display_text, canonical_amount, canonical_unit), recipe_steps(instruction, step_number)")
       .in("id", recipeIds)
       .then(({ data: rows, error }) => {
+        if (cancelled || !canApplyAsyncRecipeFetch()) return;
         const recipeMap: Record<string, ParsedRecipe> = {};
         if (error) {
           formatWithRecipeMap({});
@@ -640,6 +687,9 @@ export default function ChatPage() {
         formatWithRecipeMap(recipeMap);
         setIsChatBootstrapped(true);
       });
+    return () => {
+      cancelled = true;
+    };
   }, [mode, historySignature]);
 
   const handleMessagesScroll = useCallback(() => {
@@ -962,6 +1012,7 @@ export default function ChatPage() {
               : m
           )
         );
+        skipHistorySyncUntilRef.current = Date.now() + CHAT_HISTORY_SYNC_SKIP_MS;
         try {
           const historyId = await saveChat({
             message: userMessage.content,
@@ -972,11 +1023,11 @@ export default function ChatPage() {
           });
           if (historyId) {
             setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id === userMessage.id) return { ...m, id: `${historyId}-user` };
-                if (m.id === assistantMessageId) return { ...m, id: `${historyId}-assistant` };
-                return m;
-              })
+              prev.map((m) =>
+                m.id === userMessage.id || m.id === assistantMessageId
+                  ? { ...m, chatHistoryRowId: historyId }
+                  : m
+              )
             );
           }
         } catch (e) {
@@ -1001,7 +1052,7 @@ export default function ChatPage() {
         const topicTitle = apiTopicTitle ?? fallbackMeta?.topicTitle;
         const topicShortTitle = apiTopicShortTitle ?? fallbackMeta?.topicShortTitle;
         streamDoneForMessageIdRef.current = assistantMessageId;
-        skipHistorySyncUntilRef.current = Date.now() + 5_000;
+        skipHistorySyncUntilRef.current = Date.now() + CHAT_HISTORY_SYNC_SKIP_MS;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
@@ -1020,7 +1071,7 @@ export default function ChatPage() {
           )
         );
         try {
-          await saveChat({
+          const historyId = await saveChat({
             message: userMessage.content,
             response: displayMessage,
             recipeId: null,
@@ -1030,6 +1081,15 @@ export default function ChatPage() {
               ...(systemHintType === "assistant_topic_redirect" && topicKey != null && { topicKey, topicTitle, topicShortTitle }),
             },
           });
+          if (historyId) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === userMessage.id || m.id === assistantMessageId
+                  ? { ...m, chatHistoryRowId: historyId }
+                  : m
+              )
+            );
+          }
         } catch (e) {
           safeError("Failed to save redirect/irrelevant to chat history:", e);
         }
@@ -1054,7 +1114,7 @@ export default function ChatPage() {
         const fallbackMeta = getRedirectOrIrrelevantMeta(userMessage.content);
         if (fallbackMeta) {
           streamDoneForMessageIdRef.current = assistantMessageId;
-          skipHistorySyncUntilRef.current = Date.now() + 5_000;
+          skipHistorySyncUntilRef.current = Date.now() + CHAT_HISTORY_SYNC_SKIP_MS;
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMessageId
@@ -1073,7 +1133,7 @@ export default function ChatPage() {
             )
           );
           try {
-            await saveChat({
+            const historyId = await saveChat({
               message: userMessage.content,
               response: fallbackMeta.message,
               recipeId: null,
@@ -1087,6 +1147,15 @@ export default function ChatPage() {
                 }),
               },
             });
+            if (historyId) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === userMessage.id || m.id === assistantMessageId
+                    ? { ...m, chatHistoryRowId: historyId }
+                    : m
+                )
+              );
+            }
           } catch (e) {
             safeError("Failed to save fallback redirect/irrelevant to chat history:", e);
           }
@@ -1156,7 +1225,7 @@ export default function ChatPage() {
         }
 
         streamDoneForMessageIdRef.current = assistantMessageId;
-        skipHistorySyncUntilRef.current = Date.now() + 5_000;
+        skipHistorySyncUntilRef.current = Date.now() + CHAT_HISTORY_SYNC_SKIP_MS;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
@@ -1215,11 +1284,11 @@ export default function ChatPage() {
           });
           if (historyId) {
             setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id === userMessage.id) return { ...m, id: `${historyId}-user` };
-                if (m.id === assistantMessageId) return { ...m, id: `${historyId}-assistant` };
-                return m;
-              })
+              prev.map((m) =>
+                m.id === userMessage.id || m.id === assistantMessageId
+                  ? { ...m, chatHistoryRowId: historyId }
+                  : m
+              )
             );
           }
         } catch (e) {
@@ -1232,11 +1301,11 @@ export default function ChatPage() {
           });
           if (historyIdFallback) {
             setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id === userMessage.id) return { ...m, id: `${historyIdFallback}-user` };
-                if (m.id === assistantMessageId) return { ...m, id: `${historyIdFallback}-assistant` };
-                return m;
-              })
+              prev.map((m) =>
+                m.id === userMessage.id || m.id === assistantMessageId
+                  ? { ...m, chatHistoryRowId: historyIdFallback }
+                  : m
+              )
             );
           }
         }
@@ -1367,16 +1436,31 @@ export default function ChatPage() {
   const isChatHistoryId = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 
   const handleDeleteMessage = async (messageId: string) => {
-    const originalId = messageId.replace(/-user$/, "").replace(/-assistant$/, "");
-    const removeFromState = () => setMessages((prev) => prev.filter((m) => !m.id.startsWith(originalId)));
+    const base = messageId.replace(/-user$/, "").replace(/-assistant$/, "");
+    const clicked = messages.find((m) => m.id === messageId);
+    const rowId: string | null =
+      clicked?.chatHistoryRowId ?? (isChatHistoryId(base) ? base : null);
 
-    if (!isChatHistoryId(originalId)) {
+    const removeFromState = () =>
+      setMessages((prev) =>
+        prev.filter((m) => {
+          if (rowId != null) {
+            if (m.chatHistoryRowId === rowId) return false;
+            const mb = m.id.replace(/-user$/, "").replace(/-assistant$/, "");
+            if (isChatHistoryId(mb) && mb === rowId) return false;
+            return true;
+          }
+          return !m.id.startsWith(base);
+        })
+      );
+
+    if (rowId == null) {
       removeFromState();
       toast({ title: "Сообщение удалено" });
       return;
     }
     try {
-      await deleteMessage(originalId);
+      await deleteMessage(rowId);
       removeFromState();
       toast({ title: "Сообщение удалено" });
     } catch {

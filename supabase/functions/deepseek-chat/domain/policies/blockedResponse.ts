@@ -50,24 +50,21 @@ export function buildBlockedMessageEdge(
   profileName: string,
   blockedBy: BlockedBy,
   matchedDisplay: string[],
-  suggestedAlternatives: string[],
-  intendedDishHint: string
+  _suggestedAlternatives: string[],
+  _intendedDishHint: string
 ): string {
   const items = matchedDisplay.length > 0 ? matchedDisplay.join(", ") : "это";
-  let line1: string;
   if (blockedBy === "allergy") {
-    const who =
-      !profileName || profileName === "Семья" || /выбранного профиля/i.test(profileName)
-        ? "выбранного профиля"
-        : `профиля «${profileName}»`;
-    line1 = `Внимание: у ${who} аллергия на ${items}. Мы не можем предложить рецепт с этим ингредиентом. Измените запрос или выберите другой профиль.`;
-  } else {
-    line1 = `Профиль «${profileName}» не любит: ${items}. Измените запрос или выберите другой профиль.`;
+    const named =
+      profileName &&
+      profileName !== "Семья" &&
+      !/выбранного профиля/i.test(profileName);
+    if (named) {
+      return `⚠️ У профиля «${profileName}» аллергия на ${items}.\n\nПопробуйте изменить запрос или выбрать другой профиль.`;
+    }
+    return `⚠️ У выбранного профиля аллергия на ${items}.\n\nПопробуйте изменить запрос или выбрать другой профиль.`;
   }
-  const firstAlt = suggestedAlternatives[0] ?? "банан";
-  const dishWord = intendedDishHint || "десерт";
-  const line2 = `Напишите: «вариант с ${firstAlt}» или просто «${firstAlt}» — и я предложу тот же ${dishWord} без ${items}.`;
-  return `${line1}\n\n${line2}`;
+  return `Профиль «${profileName}» не любит: ${items}. Измените запрос или выберите другой профиль.`;
 }
 
 export interface BlockedResponsePayload {

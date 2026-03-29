@@ -42,7 +42,7 @@ export function isChatBlockedResponse(
   );
 }
 
-/** До 3 альтернатив по смыслу (для подсказки «Попробуйте заменить на»). */
+/** До 3 альтернатив по смыслу (для dislike и meta.follow-up; в текст аллергии не вставляются). */
 const ALTERNATIVES: Record<string, string[]> = {
   куриц: ["индейка", "говядина", "рыба"],
   курица: ["индейка", "говядина", "рыба"],
@@ -84,7 +84,7 @@ function findAlternatives(matched: string[]): string[] {
 
 /**
  * Собирает сообщение для пользователя при блокировке.
- * Аллергия: понятное объяснение + что делать. Dislike: кратко + альтернативы.
+ * Аллергия: один абзац без подсказок-замен. Dislike: кратко; опционально строка «Попробуйте заменить на».
  */
 export function buildBlockedMessage(
   profileName: string,
@@ -93,16 +93,17 @@ export function buildBlockedMessage(
   options?: { addAlternatives?: boolean }
 ): string {
   const items = matched.length > 0 ? matched.join(", ") : "это";
-  let line1: string;
   if (blockedBy === "allergy") {
-    const who =
-      !profileName || profileName === "Семья" || /выбранного профиля/i.test(profileName)
-        ? "выбранного профиля"
-        : `профиля «${profileName}»`;
-    line1 = `Внимание: у ${who} аллергия на ${items}. Мы не можем предложить рецепт с этим ингредиентом. Измените запрос или выберите другой профиль.`;
-  } else {
-    line1 = `Профиль «${profileName}» не любит: ${items}. Измените запрос или выберите другой профиль.`;
+    const named =
+      profileName &&
+      profileName !== "Семья" &&
+      !/выбранного профиля/i.test(profileName);
+    if (named) {
+      return `⚠️ У профиля «${profileName}» аллергия на ${items}.\n\nПопробуйте изменить запрос или выбрать другой профиль.`;
+    }
+    return `⚠️ У выбранного профиля аллергия на ${items}.\n\nПопробуйте изменить запрос или выбрать другой профиль.`;
   }
+  const line1 = `Профиль «${profileName}» не любит: ${items}. Измените запрос или выберите другой профиль.`;
   if (options?.addAlternatives !== false && matched.length > 0) {
     const alts = findAlternatives(matched);
     const line2 = `Попробуйте заменить на: ${alts.join(", ")}.`;

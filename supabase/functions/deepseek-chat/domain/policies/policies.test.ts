@@ -69,6 +69,32 @@ Deno.test("NOT blocked: запрос без аллергена", () => {
   }
 });
 
+Deno.test("blocked by allergy: яйцом и яйцами при аллергии яйца — блок (как клиент, подстрока стема)", () => {
+  for (const userMessage of ["дай ужин с яйцом", "дай ужин с яйцами"]) {
+    const payload = checkRecipeRequestBlocked({
+      userMessage,
+      allergiesList: ["яйца"],
+      dislikesList: [],
+      profileName: "Малыш",
+    });
+    if (!payload?.blocked || payload.blocked_by !== "allergy") {
+      throw new Error(`Expected block for "${userMessage}", got: ${JSON.stringify(payload)}`);
+    }
+  }
+});
+
+Deno.test("NOT blocked: запеканка — подстрока «орех» не входит в слово", () => {
+  const payload = checkRecipeRequestBlocked({
+    userMessage: "запеканка с творогом",
+    allergiesList: ["орехи"],
+    dislikesList: [],
+    profileName: "Ребёнок",
+  });
+  if (payload !== null) {
+    throw new Error(`Expected no false positive on запеканка, got: ${JSON.stringify(payload)}`);
+  }
+});
+
 Deno.test("findMatchedTokens: запеканка не матчит орех (граница слова)", () => {
   const set = buildBlockedTokenSet({ allergies: ["орехи"], dislikes: [] });
   const item = set.allergyItems[0];

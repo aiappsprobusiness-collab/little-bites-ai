@@ -3,7 +3,8 @@
  * Возвращает payload для ответа 200 JSON при блокировке, иначе null.
  */
 
-import { buildBlockedTokenSet, findMatchedTokens, textWithoutExclusionPhrases } from "../../../_shared/blockedTokens.ts";
+import { buildBlockedTokenSet, textWithoutExclusionPhrases } from "../../../_shared/blockedTokens.ts";
+import { containsAnyTokenForAllergy } from "../../../_shared/allergensDictionary.ts";
 import type { BlockedBy } from "./blockedResponse.ts";
 import {
   getSuggestedAlternatives,
@@ -20,9 +21,12 @@ export function checkRecipeRequestBlocked(params: {
 }): BlockedResponsePayload | null {
   const { userMessage, allergiesList, dislikesList, profileName } = params;
   const tokenSet = buildBlockedTokenSet({ allergies: allergiesList, dislikes: dislikesList });
-  const messageForBlockCheck = textWithoutExclusionPhrases(userMessage);
+  const messageForBlockCheck = textWithoutExclusionPhrases(userMessage).toLowerCase();
 
-  const allergyMatch = tokenSet.allergyItems.find((item) => findMatchedTokens(messageForBlockCheck, item.tokens).length > 0);
+  /** Как на клиенте (checkChatRequestAgainstProfile): подстрока по токенам, иначе стем «яйц» не ловит «яйцом»/«яйцами» при границе слова. */
+  const allergyMatch = tokenSet.allergyItems.find((item) =>
+    containsAnyTokenForAllergy(messageForBlockCheck, item.tokens).hit
+  );
   if (allergyMatch) {
     const blockedItems = [allergyMatch.display];
     const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
@@ -40,7 +44,9 @@ export function checkRecipeRequestBlocked(params: {
     };
   }
 
-  const dislikeMatch = tokenSet.dislikeItems.find((item) => findMatchedTokens(messageForBlockCheck, item.tokens).length > 0);
+  const dislikeMatch = tokenSet.dislikeItems.find((item) =>
+    containsAnyTokenForAllergy(messageForBlockCheck, item.tokens).hit
+  );
   if (dislikeMatch) {
     const blockedItems = [dislikeMatch.display];
     const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
