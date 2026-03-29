@@ -16,6 +16,11 @@ import {
   scoreInfantIntroducingPeriodSort,
   type IngredientForProductKey,
 } from "@/utils/introducedProducts";
+import {
+  addKeyIngredientKeysToCounts,
+  computeWeeklyKeyIngredientPenaltyCalibrated,
+  deriveKeyIngredientSignals,
+} from "@shared/keyIngredientSignals";
 import { buildAlignedRankSalt } from "@shared/planRankTrustShared";
 import { pickFromPoolRankingLite, type PoolRankLiteRow } from "@/utils/poolRankLite";
 
@@ -31,6 +36,142 @@ function isDebugPool(): boolean {
 }
 
 /** Нормализованный ключ названия для сравнения и исключения дублей. */
+const PLAN_INGREDIENT_FETCH_CHUNK = 80;
+
+const MEAL_PLAN_SLOT_KEYS = ["breakfast", "lunch", "snack", "dinner"] as const;
+
+/** 7 календарных дней: `dayKey` и 6 предыдущих (как окно replace_slot на Edge). */
+export function buildSevenDayPlanKeysEndingAt(dayKey: string): string[] {
+  const [y, m, d] = dayKey.split("-").map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return [dayKey];
+  const out: string[] = [];
+  for (let delta = 0; delta < 7; delta++) {
+    const dt = new Date(y, m - 1, d);
+    dt.setDate(dt.getDate() - delta);
+    out.push(
+      `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`,
+    );
+  }
+  return out;
+}
+
+export async function fetchUsedKeyIngredientCountsForRecipeIds(
+  supabase: SupabaseClient,
+  recipeIds: string[],
+): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  const ids = [...new Set(recipeIds.filter((x): x is string => typeof x === "string" && x.length > 0))];
+  for (let i = 0; i < ids.length; i += PLAN_INGREDIENT_FETCH_CHUNK) {
+    const slice = ids.slice(i, i + PLAN_INGREDIENT_FETCH_CHUNK);
+    const { data } = await supabase
+      .from("recipes")
+      .select("id, title, description, recipe_ingredients(name, display_text)")
+      .in("id", slice);
+    for (const row of data ?? []) {
+      const sig = deriveKeyIngredientSignals(row as PoolRecipeRow);
+      addKeyIngredientKeysToCounts(sig.keys, counts);
+    }
+  }
+  return counts;
+}
+
+export type KeyIngredientClientSlot = { recipeId: string; mealKey: string };
+
+/**
+ * Инкремент глобальных и per-meal счётчиков по списку слотов плана (как на Edge).
+ */
+export async function mergeKeyIngredientCountsFromPlanSlots(
+  supabase: SupabaseClient,
+  slots: KeyIngredientClientSlot[],
+  intoGlobal: Record<string, number>,
+  intoByMeal: Record<string, Record<string, number>>,
+): Promise<void> {
+  if (slots.length === 0) return;
+  const idSet = new Set(slots.map((s) => s.recipeId).filter((id) => id.length > 0));
+  const ids = [...idSet];
+  const idToRow = new Map<string, PoolRecipeRow>();
+
+  for (let i = 0; i < ids.length; i += PLAN_INGREDIENT_FETCH_CHUNK) {
+    const slice = ids.slice(i, i + PLAN_INGREDIENT_FETCH_CHUNK);
+    const { data } = await supabase
+      .from("recipes")
+      .select("id, title, description, recipe_ingredients(name, display_text)")
+      .in("id", slice);
+    for (const row of data ?? []) {
+      const r = row as PoolRecipeRow;
+      if (r.id) idToRow.set(r.id, r);
+    }
+  }
+
+  for (const { recipeId, mealKey } of slots) {
+    const row = idToRow.get(recipeId);
+    if (!row) continue;
+    const sig = deriveKeyIngredientSignals(row);
+    addKeyIngredientKeysToCounts(sig.keys, intoGlobal, mealKey, intoByMeal);
+  }
+}
+
+export async function collectRecipeIdsFromPlansExcludingSlotClient(
+  supabase: SupabaseClient,
+  userId: string,
+  memberId: string | null,
+  plannedDates: string[],
+  excludeDayKey: string,
+  excludeMealKey: string,
+): Promise<string[]> {
+  if (plannedDates.length === 0) return [];
+  let q = supabase
+    .from("meal_plans_v2")
+    .select("planned_date, meals")
+    .eq("user_id", userId)
+    .in("planned_date", plannedDates);
+  if (memberId == null || memberId === "") q = q.is("member_id", null);
+  else q = q.eq("member_id", memberId);
+  const { data } = await q;
+  const ids: string[] = [];
+  for (const row of data ?? []) {
+    const dk = (row as { planned_date?: string }).planned_date;
+    const meals = (row as { meals?: Record<string, { recipe_id?: string }> }).meals ?? {};
+    for (const mk of MEAL_PLAN_SLOT_KEYS) {
+      if (dk === excludeDayKey && mk === excludeMealKey) continue;
+      const rid = meals[mk]?.recipe_id;
+      if (typeof rid === "string" && rid.length > 0) ids.push(rid);
+    }
+  }
+  return ids;
+}
+
+/** Пары (recipe_id, meal) для окна плана, исключая один слот — для byMealType + глобальных счётчиков. */
+export async function collectRecipeSlotsFromPlansExcludingSlotClient(
+  supabase: SupabaseClient,
+  userId: string,
+  memberId: string | null,
+  plannedDates: string[],
+  excludeDayKey: string,
+  excludeMealKey: string,
+): Promise<KeyIngredientClientSlot[]> {
+  if (plannedDates.length === 0) return [];
+  let q = supabase
+    .from("meal_plans_v2")
+    .select("planned_date, meals")
+    .eq("user_id", userId)
+    .in("planned_date", plannedDates);
+  if (memberId == null || memberId === "") q = q.is("member_id", null);
+  else q = q.eq("member_id", memberId);
+  const { data } = await q;
+  const out: KeyIngredientClientSlot[] = [];
+  for (const row of data ?? []) {
+    const dk = (row as { planned_date?: string }).planned_date;
+    const meals = (row as { meals?: Record<string, { recipe_id?: string }> }).meals ?? {};
+    for (const mk of MEAL_PLAN_SLOT_KEYS) {
+      if (dk === excludeDayKey && mk === excludeMealKey) continue;
+      const rid = meals[mk]?.recipe_id;
+      if (typeof rid === "string" && rid.length > 0) out.push({ recipeId: rid, mealKey: mk });
+    }
+  }
+  return out;
+}
+
 export function normalizeTitleKey(title: string): string {
   return (title ?? "")
     .trim()
@@ -153,6 +294,13 @@ export interface PickRecipeFromPoolArgs {
   plannedDayKey?: string;
   /** Суффикс соли (infant_primary / infant_secondary) — см. shared buildAlignedRankSalt. */
   rankVariant?: string;
+  /**
+   * Недельный контекст: мягкий штраф за повтор ключевых продуктов (как generate-plan).
+   * Объект мутируется после удачного pick (инкремент ключей выбранного рецепта).
+   */
+  usedKeyIngredientCounts?: Record<string, number>;
+  /** Счётчики по типу приёма (breakfast/snack — доп. штраф в slot-fit). */
+  usedKeyIngredientCountsByMealType?: Record<string, Record<string, number>>;
 }
 
 function computeFirstNovelProductKeyForPoolRow(
@@ -460,6 +608,8 @@ export function computeSlotFitForPoolRow(
     slotNorm: MealType;
     memberData?: MemberDataForPool | null;
     infantSlotRole?: InfantSlotRole | null;
+    usedKeyIngredientCounts?: Record<string, number> | null;
+    usedKeyIngredientCountsByMealType?: Record<string, Record<string, number>> | null;
   },
 ): number {
   const ageMonths =
@@ -512,6 +662,15 @@ export function computeSlotFitForPoolRow(
     const recNorm = normalizeMealType(r.meal_type);
     if (recNorm === ctx.slotNorm) f += 3;
   }
+  if (ctx.usedKeyIngredientCounts != null) {
+    const sig = deriveKeyIngredientSignals(r);
+    const { penalty } = computeWeeklyKeyIngredientPenaltyCalibrated(sig, {
+      usedGlobal: ctx.usedKeyIngredientCounts,
+      usedByMeal: ctx.usedKeyIngredientCountsByMealType ?? null,
+      mealSlot: ctx.slotNorm,
+    });
+    f -= penalty;
+  }
   return f;
 }
 
@@ -531,6 +690,8 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
     excludeTitleKeys = [],
     limitCandidates = 150,
     infantSlotRole,
+    usedKeyIngredientCounts,
+    usedKeyIngredientCountsByMealType,
   } = args;
 
   const slotNorm = normalizeMealType(mealType) ?? (mealType as MealType);
@@ -549,9 +710,16 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
   const resolvedListInfantRole = resolveInfantSlotRoleForPool(slotNorm, memberData ?? null, infantSlotRole ?? null);
   const needsIngredientsForInfantRole =
     resolvedListInfantRole === "primary" || resolvedListInfantRole === "secondary";
+  const needsIngredientsForWeeklyDiversity =
+    usedKeyIngredientCounts != null || usedKeyIngredientCountsByMealType != null;
 
   const selectFields =
-    hasAllergies || hasDislikes || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole
+    hasAllergies ||
+    hasDislikes ||
+    hasIntroduced ||
+    hasIntroducing ||
+    needsIngredientsForInfantRole ||
+    needsIngredientsForWeeklyDiversity
       ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score, recipe_ingredients(name, display_text, category)"
       : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score";
 
@@ -602,6 +770,8 @@ export async function pickRecipeFromPool(
     infantSlotRole,
     plannedDayKey,
     rankVariant,
+    usedKeyIngredientCounts,
+    usedKeyIngredientCountsByMealType,
   } = args;
 
   const excludeSet = new Set(excludeRecipeIds);
@@ -621,9 +791,16 @@ export async function pickRecipeFromPool(
   const resolvedInfantSlotRole = resolveInfantSlotRoleForPool(slotNorm, memberData ?? null, infantSlotRole ?? null);
   const needsIngredientsForInfantRole =
     resolvedInfantSlotRole === "primary" || resolvedInfantSlotRole === "secondary";
+  const needsIngredientsForWeeklyDiversity =
+    usedKeyIngredientCounts != null || usedKeyIngredientCountsByMealType != null;
 
   const selectFields =
-    hasAllergies || hasDislikes || hasIntroduced || hasIntroducing || needsIngredientsForInfantRole
+    hasAllergies ||
+    hasDislikes ||
+    hasIntroduced ||
+    hasIntroducing ||
+    needsIngredientsForInfantRole ||
+    needsIngredientsForWeeklyDiversity
       ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score, recipe_ingredients(name, display_text, category)"
       : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score";
 
@@ -705,6 +882,8 @@ export async function pickRecipeFromPool(
         slotNorm,
         memberData,
         infantSlotRole: infantSlotRole ?? null,
+        usedKeyIngredientCounts: usedKeyIngredientCounts ?? null,
+        usedKeyIngredientCountsByMealType: usedKeyIngredientCountsByMealType ?? null,
       }),
   });
   if (!ranked) {
@@ -742,6 +921,16 @@ export async function pickRecipeFromPool(
     ? memberData.introduced_product_keys.filter((k): k is string => Boolean(k))
     : [];
   const firstNovelProductKey = computeFirstNovelProductKeyForPoolRow(picked, introducedKeysForNovel);
+
+  if (usedKeyIngredientCounts != null) {
+    const sig = deriveKeyIngredientSignals(picked);
+    addKeyIngredientKeysToCounts(
+      sig.keys,
+      usedKeyIngredientCounts,
+      mealType,
+      usedKeyIngredientCountsByMealType,
+    );
+  }
 
   return { id: picked.id, title: picked.title, firstNovelProductKey };
 }

@@ -9,7 +9,12 @@ import { formatLocalDate } from "@/utils/dateUtils";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey } from "@/utils/dateRange";
 import { resolveUnit } from "@/utils/productUtils";
 import { extractSingleJsonObject, extractChefAdvice, extractAdvice } from "@/utils/parseChatRecipes";
-import { pickRecipeFromPool, normalizeTitleKey } from "@/utils/recipePool";
+import {
+  pickRecipeFromPool,
+  normalizeTitleKey,
+  mergeKeyIngredientCountsFromPlanSlots,
+  type KeyIngredientClientSlot,
+} from "@/utils/recipePool";
 
 const DAY_ABBREV = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 import type { Tables } from "@/integrations/supabase/types";
@@ -52,6 +57,10 @@ export interface WeekContextAccumulated {
   usedRecipeIds: string[];
   /** Для pool-first: normalizeTitleKey уже выбранных блюд. */
   usedTitleKeys: string[];
+  /** Счётчики ключевых продуктов за окно недели (мягкий штраф при pick из пула). */
+  usedKeyIngredientCounts: Record<string, number>;
+  /** По типу приёма — для breakfast/snack meal-aware штрафа (как generate-plan). */
+  usedKeyIngredientCountsByMealType: Record<string, Record<string, number>>;
 }
 
 /** Эвристика базы завтрака по названию/ингредиентам (без ML). */
@@ -228,10 +237,22 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           }
           if (options?.usePool && weekContext && typeof weekContext === "object" && !Array.isArray(weekContext)) {
             const acc = weekContext as WeekContextAccumulated;
+            const slots: KeyIngredientClientSlot[] = [];
             for (const slot of MEAL_KEYS) {
               const slotData = existingMeals[slot];
-              if (slotData?.recipe_id) acc.usedRecipeIds.push(slotData.recipe_id);
+              if (slotData?.recipe_id) {
+                acc.usedRecipeIds.push(slotData.recipe_id);
+                slots.push({ recipeId: slotData.recipe_id, mealKey: slot });
+              }
               if (slotData?.title) acc.usedTitleKeys.push(normalizeTitleKey(slotData.title));
+            }
+            if (slots.length > 0) {
+              await mergeKeyIngredientCountsFromPlanSlots(
+                supabase,
+                slots,
+                acc.usedKeyIngredientCounts,
+                acc.usedKeyIngredientCountsByMealType,
+              );
             }
           }
           setCompletedDays((prev) => ({ ...prev, [dayIndex]: true }));
@@ -322,6 +343,8 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             excludeTitleKeys: acc.usedTitleKeys,
             limitCandidates: 60,
             plannedDayKey: dateStr,
+            usedKeyIngredientCounts: acc.usedKeyIngredientCounts,
+            usedKeyIngredientCountsByMealType: acc.usedKeyIngredientCountsByMealType,
           });
 
           if (poolRecipe) {
@@ -497,14 +520,21 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           chosenBreakfastBases: [],
           usedRecipeIds: [],
           usedTitleKeys: [],
+          usedKeyIngredientCounts: {},
+          usedKeyIngredientCountsByMealType: {},
         };
-        (weekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string; recipe_id?: string }> }) => {
-          if (!p.planned_date || p.planned_date === dateStr) return;
-          const meals = p.meals ?? {};
-          (["breakfast", "lunch", "snack", "dinner"] as const).forEach((mealKey) => {
+        for (const p of weekPlans || []) {
+          const pr = p as { planned_date?: string; meals?: Record<string, { title?: string; recipe_id?: string }> };
+          if (!pr.planned_date || pr.planned_date === dateStr) continue;
+          const meals = pr.meals ?? {};
+          const slots: KeyIngredientClientSlot[] = [];
+          for (const mealKey of MEAL_KEYS) {
             const slot = meals[mealKey];
             const title = slot?.title?.trim();
-            if (slot?.recipe_id) accumulated.usedRecipeIds.push(slot.recipe_id);
+            if (slot?.recipe_id) {
+              accumulated.usedRecipeIds.push(slot.recipe_id);
+              slots.push({ recipeId: slot.recipe_id, mealKey });
+            }
             if (title) {
               accumulated.chosenTitles.push(title);
               accumulated.usedTitleKeys.push(normalizeTitleKey(title));
@@ -513,8 +543,16 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
                 accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
               }
             }
-          });
-        });
+          }
+          if (slots.length > 0 && user?.id) {
+            await mergeKeyIngredientCountsFromPlanSlots(
+              supabase,
+              slots,
+              accumulated.usedKeyIngredientCounts,
+              accumulated.usedKeyIngredientCountsByMealType,
+            );
+          }
+        }
 
         let deleteQuery = supabase
           .from("meal_plans_v2")
@@ -594,13 +632,20 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
         chosenBreakfastBases: [],
         usedRecipeIds: [],
         usedTitleKeys: [],
+        usedKeyIngredientCounts: {},
+        usedKeyIngredientCountsByMealType: {},
       };
-      (initialWeekPlans || []).forEach((p: { planned_date?: string; meals?: Record<string, { title?: string; recipe_id?: string }> }) => {
-        const meals = p.meals ?? {};
-        (["breakfast", "lunch", "snack", "dinner"] as const).forEach((mealKey) => {
+      for (const p of initialWeekPlans || []) {
+        const pr = p as { planned_date?: string; meals?: Record<string, { title?: string; recipe_id?: string }> };
+        const meals = pr.meals ?? {};
+        const slots: KeyIngredientClientSlot[] = [];
+        for (const mealKey of MEAL_KEYS) {
           const slot = meals[mealKey];
           const title = slot?.title?.trim();
-          if (slot?.recipe_id) accumulated.usedRecipeIds.push(slot.recipe_id);
+          if (slot?.recipe_id) {
+            accumulated.usedRecipeIds.push(slot.recipe_id);
+            slots.push({ recipeId: slot.recipe_id, mealKey });
+          }
           if (title) {
             accumulated.chosenTitles.push(title);
             accumulated.usedTitleKeys.push(normalizeTitleKey(title));
@@ -609,8 +654,16 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
               accumulated.chosenBreakfastBases.push(classifyBreakfastBase(title));
             }
           }
-        });
-      });
+        }
+        if (slots.length > 0) {
+          await mergeKeyIngredientCountsFromPlanSlots(
+            supabase,
+            slots,
+            accumulated.usedKeyIngredientCounts,
+            accumulated.usedKeyIngredientCountsByMealType,
+          );
+        }
+      }
 
       for (const batch of batchedIndices) {
         const keys = batch.map((i) => formatLocalDate(rollingDates[i]));

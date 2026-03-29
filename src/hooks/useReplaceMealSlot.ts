@@ -18,6 +18,9 @@ import {
   memberHasDislikesForPool,
   computeSlotFitForPoolRow,
   POOL_TRUST_OR,
+  buildSevenDayPlanKeysEndingAt,
+  collectRecipeSlotsFromPlansExcludingSlotClient,
+  mergeKeyIngredientCountsFromPlanSlots,
   type MemberDataForPool,
   type PoolRecipeRow,
 } from "@/utils/recipePool";
@@ -112,8 +115,16 @@ export function useReplaceMealSlot(
       const hasIntroducing =
         !!params.memberData?.introducing_product_key && !!params.memberData?.introducing_started_at;
 
+      const needsIngredientDiversity =
+        !infantCarrierRepl && (ageMonths == null || ageMonths >= 12);
+
       const selectFields =
-        infantCarrierRepl || hasAllergies || hasDislikes || hasIntroduced || hasIntroducing
+        infantCarrierRepl ||
+        hasAllergies ||
+        hasDislikes ||
+        hasIntroduced ||
+        hasIntroducing ||
+        needsIngredientDiversity
           ? "id, title, tags, description, meal_type, min_age_months, max_age_months, trust_level, score, cooking_time_minutes, recipe_ingredients(name, display_text)"
           : "id, title, tags, description, meal_type, min_age_months, max_age_months, trust_level, score, cooking_time_minutes";
 
@@ -147,7 +158,31 @@ export function useReplaceMealSlot(
       };
       let filtered = rows as Row[];
 
-      const pickRanked = (cands: PoolRecipeRow[], rankSalt: string) => {
+      let replaceUsedKeyIngredientCounts: Record<string, number> | undefined;
+      let replaceUsedKeyIngredientCountsByMeal: Record<string, Record<string, number>> | undefined;
+      if (needsIngredientDiversity && user?.id) {
+        const windowKeys = buildSevenDayPlanKeysEndingAt(params.dayKey);
+        const slotsForIng = await collectRecipeSlotsFromPlansExcludingSlotClient(
+          supabase,
+          user.id,
+          memberId ?? null,
+          windowKeys,
+          params.dayKey,
+          params.mealType,
+        );
+        const g: Record<string, number> = {};
+        const m: Record<string, Record<string, number>> = {};
+        await mergeKeyIngredientCountsFromPlanSlots(supabase, slotsForIng, g, m);
+        replaceUsedKeyIngredientCounts = g;
+        replaceUsedKeyIngredientCountsByMeal = m;
+      }
+
+      const pickRanked = (
+        cands: PoolRecipeRow[],
+        rankSalt: string,
+        ingCounts?: Record<string, number>,
+        ingByMeal?: Record<string, Record<string, number>>,
+      ) => {
         const ranked = pickFromPoolRankingLite(cands as PoolRankLiteRow[], {
           rankSalt,
           getSlotFit: (row) =>
@@ -155,6 +190,8 @@ export function useReplaceMealSlot(
               slotNorm,
               memberData: params.memberData ?? null,
               infantSlotRole: null,
+              usedKeyIngredientCounts: ingCounts ?? null,
+              usedKeyIngredientCountsByMealType: ingByMeal ?? null,
             }),
         });
         if (import.meta.env.DEV && typeof window !== "undefined" && new URLSearchParams(window.location.search).get("debugPool") === "1") {
@@ -179,7 +216,7 @@ export function useReplaceMealSlot(
           dayKey: params.dayKey,
           variant: "infant",
         });
-        return pickRanked(poolFiltered, salt);
+        return pickRanked(poolFiltered, salt, undefined, undefined);
       }
 
       filtered = filtered.filter((r) => {
@@ -210,7 +247,7 @@ export function useReplaceMealSlot(
         mealType: params.mealType,
         dayKey: params.dayKey,
       });
-      return pickRanked(fullRows, salt);
+      return pickRanked(fullRows, salt, replaceUsedKeyIngredientCounts, replaceUsedKeyIngredientCountsByMeal);
     },
     [user, memberId]
   );

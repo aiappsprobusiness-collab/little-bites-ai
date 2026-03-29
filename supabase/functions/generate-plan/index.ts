@@ -16,7 +16,17 @@ import { getMemberAgeContext, isAdultContext } from "../_shared/memberAgeContext
 import { buildFamilyMemberDataForPlan } from "../_shared/familyMode.ts";
 import { normalizeSlotForWrite } from "../_shared/mealJson.ts";
 import { isFamilyDinnerCandidate } from "../_shared/plan/familyDinnerFilter.ts";
+import {
+  collectRecipeSlotsFromMealPlansExcludingSlot,
+  fetchAndMergeKeyIngredientCountsForSlotEntries,
+  fetchKeyIngredientSlotEntriesForDateKeys,
+} from "../_shared/plan/planIngredientCounts.ts";
 import { inferPrimaryBase } from "../_shared/primaryBase.ts";
+import {
+  addKeyIngredientKeysToCounts,
+  computeWeeklyKeyIngredientPenaltyCalibrated,
+  deriveKeyIngredientSignals,
+} from "../../../shared/keyIngredientSignals.ts";
 import { passesPreferenceFilters } from "./preferenceRules.ts";
 import {
   type CulturalFamiliarityCountKey,
@@ -445,6 +455,10 @@ function pickFromPoolInMemory(
     dayGoalUsage?: Record<string, number>;
     /** Stage 4.3: возраст/семья/soft-mode — только скоринг. */
     familyScoring?: FamilyScoringContext | null;
+    /** Неделя / replace: счётчики ключевых продуктов (мягкий штраф, не фильтр). */
+    usedKeyIngredientCounts?: Record<string, number>;
+    /** Задел: счётчики по типу приёма (пока не дают отдельного штрафа). */
+    usedKeyIngredientCountsByMealType?: Record<string, Record<string, number>>;
     /** Stage 4.4.2 / ranking: day_key, request_id, meal_slot (salt для exploration). */
     planPickDebug?: { day_key?: string; request_id?: string; meal_slot?: string; rank_salt?: string };
     /** Тесты: фиксированный RNG для детерминированного ranking. */
@@ -514,6 +528,9 @@ function pickFromPoolInMemory(
   const ctx: ScoreRecipeCtx = {
     recentSignatures,
     usedBaseCounts,
+    usedKeyIngredientCounts: goalHints?.usedKeyIngredientCounts,
+    usedKeyIngredientCountsByMealType: goalHints?.usedKeyIngredientCountsByMealType ?? null,
+    ingredientPenaltyMealSlot: slot,
     preferredGoals: goalHints?.preferredGoals,
     blockedGoals: goalHints?.blockedGoals,
     requireBalanced: goalHints?.requireBalanced,
@@ -714,6 +731,9 @@ const debugPool = () => typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_PO
 const debugPlanRank = () =>
   typeof Deno !== "undefined" &&
   (Deno.env?.get?.("CHAT_PLAN_RANK_DEBUG") === "true" || Deno.env?.get?.("DEBUG_POOL") === "true");
+/** Ключевые продукты / weekly ingredient diversity (без спама в проде). */
+const debugPlanKeyIngredients = () =>
+  typeof Deno !== "undefined" && Deno.env?.get?.("DEBUG_PLAN_KEY_INGREDIENTS") === "true";
 /** Stage 4.4.2: подробные логи familiarity / cultural bonus (Supabase secrets / env function). */
 const debugCulturalPlan = () => typeof Deno !== "undefined" && Deno.env?.get?.("CHAT_PLAN_CULTURAL_DEBUG") === "true";
 
@@ -739,6 +759,15 @@ type ScoreRecipeCtx = {
   recentSignatures: Set<string>;
   /** Week only: counts per primary base for diversity penalty. */
   usedBaseCounts?: Record<string, number>;
+  /**
+   * Week / replace_slot: сколько раз канонический ключ продукта уже встретился в других блюдах окна.
+   * Мягкий штраф в scoreRecipeForSlot (не hard filter).
+   */
+  usedKeyIngredientCounts?: Record<string, number> | null;
+  /** Счётчики по слоту приёма (breakfast/snack — доп. мягкий штраф для степлеров). */
+  usedKeyIngredientCountsByMealType?: Record<string, Record<string, number>> | null;
+  /** Текущий слот для meal-aware штрафа (совпадает с нормализованным meal_type). */
+  ingredientPenaltyMealSlot?: string | null;
   preferredGoals?: Set<string>;
   blockedGoals?: Set<string>;
   requireBalanced?: boolean;
@@ -800,7 +829,22 @@ function scoreRecipeForSlot(r: RecipeRowPool, stableIndex: number, ctx: ScoreRec
   if (ctx.requireBalanced) goalsScore += goals.includes("balanced") ? 10 : -4;
   if (ctx.preferredGoals && goals.some((g) => ctx.preferredGoals!.has(g))) goalsScore += 4;
   if (ctx.blockedGoals && goals.some((g) => ctx.blockedGoals!.has(g))) goalsScore -= 3;
-  return recencyScore - varietyPenalty - baseDiversityPenalty + goalsScore;
+  let ingredientDiversityPenalty = 0;
+  if (ctx.usedKeyIngredientCounts != null) {
+    const sig = deriveKeyIngredientSignals(r);
+    ingredientDiversityPenalty = computeWeeklyKeyIngredientPenaltyCalibrated(sig, {
+      usedGlobal: ctx.usedKeyIngredientCounts,
+      usedByMeal: ctx.usedKeyIngredientCountsByMealType ?? null,
+      mealSlot: ctx.ingredientPenaltyMealSlot ?? null,
+    }).penalty;
+  }
+  return (
+    recencyScore -
+    varietyPenalty -
+    baseDiversityPenalty -
+    ingredientDiversityPenalty +
+    goalsScore
+  );
 }
 /**
  * После eligibility: стабильный порядок → slot-fit → composite через computeCompositeScore (shared).
@@ -926,6 +970,64 @@ function pickBestRecipeForSlotWithGoalScoring(
         jitter: row.rank_jitter,
         total: row.composite_final,
       })),
+    });
+  }
+  if (debugPlanKeyIngredients() && ctx.usedKeyIngredientCounts != null) {
+    const top3Ing = sortedForProd.slice(0, 3).map((row, idx) => {
+      const sig = deriveKeyIngredientSignals(row.r as RecipeRowPool);
+      const res = computeWeeklyKeyIngredientPenaltyCalibrated(sig, {
+        usedGlobal: ctx.usedKeyIngredientCounts,
+        usedByMeal: ctx.usedKeyIngredientCountsByMealType ?? null,
+        mealSlot: ctx.ingredientPenaltyMealSlot ?? null,
+      });
+      const rank = idx + 1;
+      const winner = rank === 1;
+      const next = sortedForProd[idx + 1];
+      let vs_next: { next_id: string; delta_penalty: number; delta_composite: number; note: string } | null = null;
+      if (winner && next) {
+        const sigN = deriveKeyIngredientSignals(next.r as RecipeRowPool);
+        const resN = computeWeeklyKeyIngredientPenaltyCalibrated(sigN, {
+          usedGlobal: ctx.usedKeyIngredientCounts,
+          usedByMeal: ctx.usedKeyIngredientCountsByMealType ?? null,
+          mealSlot: ctx.ingredientPenaltyMealSlot ?? null,
+        });
+        const dPen = resN.penalty - res.penalty;
+        const dComp = row.compositeWithCultural - next.compositeWithCultural;
+        const note =
+          dPen > 0 && dComp >= 0
+            ? "lower_ingredient_penalty_vs_next"
+            : dComp > 0
+              ? "composite_tie_break"
+              : "close_call";
+        vs_next = {
+          next_id: next.r.id,
+          delta_penalty: Math.round(dPen * 100) / 100,
+          delta_composite: Math.round(dComp * 100) / 100,
+          note,
+        };
+      }
+      return {
+        id: row.r.id,
+        title: row.r.title,
+        rank,
+        key_ingredients: sig.keys,
+        primary_key: sig.primaryKey,
+        ingredient_penalty: res.penalty,
+        ingredient_primary_subtotal: res.primarySubtotal,
+        ingredient_secondary_subtotal: res.secondarySubtotal,
+        ingredient_meal_slot_subtotal: res.mealSlotSubtotal,
+        ingredient_subtotal_before_total_cap: res.ingredientSubtotalBeforeTotalCap,
+        prior_uses: res.priorUses,
+        breakdown: res.breakdown,
+        base_score_after_ingredient_penalty: row.baseScore,
+        composite: row.compositeWithCultural,
+        vs_next,
+      };
+    });
+    safeLog("PLAN_KEY_INGREDIENT_RANK_DEBUG", {
+      rank_salt: rankSalt,
+      meal_slot: ctx.ingredientPenaltyMealSlot ?? null,
+      top3: top3Ing,
     });
   }
   return {
@@ -1202,6 +1304,25 @@ serve(async (req) => {
         dayKey,
         variant: isInfantReplace ? "infant" : undefined,
       });
+      const replaceUsedKeyIngredientCounts: Record<string, number> = {};
+      const replaceUsedKeyIngredientCountsByMealType: Record<string, Record<string, number>> = {};
+      const applyReplaceIngredientDiversity = !isInfantComplementaryPlan(replaceMemberData, memberId);
+      if (applyReplaceIngredientDiversity) {
+        const slotsForIng = await collectRecipeSlotsFromMealPlansExcludingSlot(
+          supabase,
+          userId,
+          effectiveMemberId,
+          dateKeys,
+          dayKey,
+          mealType,
+        );
+        await fetchAndMergeKeyIngredientCountsForSlotEntries(
+          supabase,
+          slotsForIng,
+          replaceUsedKeyIngredientCounts,
+          replaceUsedKeyIngredientCountsByMealType,
+        );
+      }
       const replaceGoalHints = {
         preferredGoals: undefined,
         blockedGoals: undefined,
@@ -1209,6 +1330,10 @@ serve(async (req) => {
         selectedGoalForScoring,
         dayGoalUsage: {},
         familyScoring: replaceFamilyScoring,
+        usedKeyIngredientCounts: applyReplaceIngredientDiversity ? replaceUsedKeyIngredientCounts : undefined,
+        usedKeyIngredientCountsByMealType: applyReplaceIngredientDiversity
+          ? replaceUsedKeyIngredientCountsByMealType
+          : undefined,
         planPickDebug: {
           day_key: dayKey,
           request_id: "replace_slot",
@@ -1467,6 +1592,23 @@ serve(async (req) => {
     /** Week only: counts per primary base for diversity (cap + penalty). */
     const usedBaseCounts: Record<string, number> = dayKeys.length > 1 ? {} : ({} as Record<string, number>);
     const useBaseDiversity = dayKeys.length > 1;
+    const usedKeyIngredientCounts: Record<string, number> = {};
+    const usedKeyIngredientCountsByMealType: Record<string, Record<string, number>> = {};
+    if (useBaseDiversity && dayKeys.length > 0) {
+      const ingredientSeedDateKeys = [...new Set([...dayKeys, ...getLastNDaysKeys(dayKeys[0], 4)])];
+      const slotEntriesForSeed = await fetchKeyIngredientSlotEntriesForDateKeys(
+        supabase,
+        userId,
+        effectiveMemberId,
+        ingredientSeedDateKeys,
+      );
+      await fetchAndMergeKeyIngredientCountsForSlotEntries(
+        supabase,
+        slotEntriesForSeed,
+        usedKeyIngredientCounts,
+        usedKeyIngredientCountsByMealType,
+      );
+    }
     const weekGoalCounts: Record<string, number> = {};
     const culturalSummaryAcc = debugCulturalPlan() ? createEmptyCulturalSummaryAccumulator() : undefined;
     let infantDaysWithMeal = 0;
@@ -1616,6 +1758,8 @@ serve(async (req) => {
             selectedGoalForScoring,
             dayGoalUsage: { ...dayGoalCounts },
             familyScoring: familyScoringCtx,
+            usedKeyIngredientCounts: useBaseDiversity ? usedKeyIngredientCounts : undefined,
+            usedKeyIngredientCountsByMealType: useBaseDiversity ? usedKeyIngredientCountsByMealType : undefined,
             planPickDebug: {
               day_key: dayKey,
               request_id: requestId,
@@ -1659,6 +1803,18 @@ serve(async (req) => {
             usedCategoriesByMealType[mealKey]?.add(inferDishCategoryKey(picked.title, null, null));
             if (useBaseDiversity) {
               usedBaseCounts[picked.primaryBase] = (usedBaseCounts[picked.primaryBase] ?? 0) + 1;
+            }
+            if (useBaseDiversity) {
+              const pickedRow = poolCandidates.find((r) => r.id === picked.id);
+              if (pickedRow) {
+                const sig = deriveKeyIngredientSignals(pickedRow);
+                addKeyIngredientKeysToCounts(
+                  sig.keys,
+                  usedKeyIngredientCounts,
+                  mealKey,
+                  usedKeyIngredientCountsByMealType,
+                );
+              }
             }
             const pickedGoals = normalizeNutritionGoals(
               poolCandidates.find((r) => r.id === picked!.id)?.nutrition_goals

@@ -1,4 +1,10 @@
 import { formatLocalDate } from "@/utils/dateUtils";
+import {
+  extractKeyProductKeysFromIngredients as extractKeyProductKeysFromIngredientsShared,
+  getKeyIngredientLabel,
+  isTechnicalIngredientText,
+  normalizeProductKey as normalizeProductKeyFromShared,
+} from "@shared/keyIngredientSignals";
 
 export type IngredientForProductKey = {
   name?: string | null;
@@ -6,81 +12,8 @@ export type IngredientForProductKey = {
   category?: string | null;
 };
 
-/**
- * Ключи продуктов для прикорма: русские названия → канонический ключ.
- *
- * **RegExp в JS:** `\w` = только `[A-Za-z0-9_]` — **не** матчит кириллицу. Для русских
- * окончаний после стема используйте `[а-яё]*` или `\p{L}+` с флагом `u`, никогда `\w*`.
- * Граница `\b` тоже не считает кириллицу «словесной» как в Perl; для RU-стемов —
- * подстроки без `\b` на кириллице (ниже) или явные классы букв.
- */
-const PRODUCT_ALIAS_PATTERNS: Array<{ key: string; patterns: RegExp[]; label: string }> = [
-  { key: "corn", label: "Кукуруза", patterns: [/кукуруз/iu, /\bcorn\b/iu] },
-  { key: "zucchini", label: "Кабачок", patterns: [/кабач/iu, /\bzucchini\b/iu] },
-  {
-    key: "cauliflower",
-    label: "Цветная капуста",
-    patterns: [/цветн[а-яё]*\s+капуст/iu, /\bcauliflower\b/iu],
-  },
-  { key: "broccoli", label: "Брокколи", patterns: [/броккол/iu, /\bbroccoli\b/iu] },
-  { key: "pumpkin", label: "Тыква", patterns: [/тыкв/iu, /\bpumpkin\b/iu] },
-  { key: "carrot", label: "Морковь", patterns: [/морков/iu, /\bcarrot\b/iu] },
-  { key: "potato", label: "Картофель", patterns: [/карто/iu, /\bpotato\b/iu] },
-  { key: "apple", label: "Яблоко", patterns: [/яблок/iu, /\bapple\b/iu] },
-  { key: "pear", label: "Груша", patterns: [/груш/iu, /\bpear\b/iu] },
-  { key: "banana", label: "Банан", patterns: [/банан/iu, /\bbanana\b/iu] },
-  { key: "oatmeal", label: "Овсянка", patterns: [/овсян/iu, /\boat\b/iu] },
-  { key: "buckwheat", label: "Гречка", patterns: [/греч/iu, /\bbuckwheat\b/iu] },
-  { key: "rice", label: "Рис", patterns: [/рис/iu, /\brice\b/iu] },
-  { key: "turkey", label: "Индейка", patterns: [/индейк/iu, /индей/iu, /\bturkey\b/iu] },
-  /** курица / куриное филе / куриный */
-  { key: "chicken", label: "Курица", patterns: [/куриц/iu, /курин/iu, /\bchicken\b/iu] },
-  /** говядина / говяжий фарш */
-  { key: "beef", label: "Говядина", patterns: [/говядин/iu, /говяж/iu, /\bbeef\b/iu] },
-  {
-    key: "salmon",
-    label: "Лосось",
-    patterns: [/лосос/iu, /с[её]мг/iu, /\bsalmon\b/iu],
-  },
-  { key: "trout", label: "Форель", patterns: [/форел/iu, /\btrout\b/iu] },
-  { key: "cod", label: "Треска", patterns: [/треск/iu, /\bcod\b/iu] },
-  { key: "hake", label: "Хек", patterns: [/хек/iu, /\bhake\b/iu] },
-  { key: "pollock", label: "Минтай", patterns: [/минта/iu, /\bpollock\b/iu] },
-  /** Неспецифичная «рыба» — после видовых, чтобы не перебивать лосось/треску и т.д. */
-  { key: "fish", label: "Рыба", patterns: [/рыба/iu, /\bfish\b/iu] },
-  { key: "egg", label: "Яйцо", patterns: [/яйц/iu, /\begg\b/iu] },
-  { key: "cottage_cheese", label: "Творог", patterns: [/творо/iu, /\bcottage\s*cheese\b/iu] },
-  { key: "kefir", label: "Кефир", patterns: [/кефир/iu, /\bkefir\b/iu] },
-  { key: "yogurt", label: "Йогурт", patterns: [/йогурт/iu, /\byogh?urt\b/iu] },
-];
-
-const TECHNICAL_INGREDIENT_PATTERNS: RegExp[] = [
-  /(?:^|[\s,.;])вода(?:[\s,.;]|$)/iu,
-  /кипяток/iu,
-  /\bwater\b/iu,
-  /масло/iu,
-  /\boil\b/iu,
-  /(?:^|[\s,.;])соль(?:[\s,.;]|$)/iu,
-  /\bsalt\b/iu,
-];
-
-function normalizeText(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export function normalizeProductKey(raw: string | null | undefined): string | null {
-  if (typeof raw !== "string") return null;
-  const text = normalizeText(raw);
-  if (!text) return null;
-  for (const item of PRODUCT_ALIAS_PATTERNS) {
-    if (item.patterns.some((rx) => rx.test(text))) return item.key;
-  }
-  return null;
+  return normalizeProductKeyFromShared(raw);
 }
 
 /**
@@ -101,34 +34,14 @@ export function normalizeProductKeys(values: Array<string | null | undefined>): 
 }
 
 export function getProductDisplayLabel(productKey: string): string {
-  const found = PRODUCT_ALIAS_PATTERNS.find((item) => item.key === productKey);
-  return found?.label ?? productKey;
-}
-
-function isTechnicalIngredient(text: string): boolean {
-  return TECHNICAL_INGREDIENT_PATTERNS.some((rx) => rx.test(text));
+  return getKeyIngredientLabel(productKey);
 }
 
 export function extractKeyProductKeysFromIngredients(
   ingredients: IngredientForProductKey[] | null | undefined,
   maxKeys = 2
 ): string[] {
-  if (!ingredients?.length) return [];
-  const result: string[] = [];
-  const seen = new Set<string>();
-
-  for (const item of ingredients) {
-    const merged = [item.display_text ?? "", item.name ?? ""].join(" ").trim();
-    if (!merged) continue;
-    if (isTechnicalIngredient(merged)) continue;
-    const key = normalizeProductKey(merged);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    result.push(key);
-    if (result.length >= maxKeys) break;
-  }
-
-  return result;
+  return extractKeyProductKeysFromIngredientsShared(ingredients, maxKeys);
 }
 
 /** Все распознанные ключевые продукты (до maxKeys) — для правил прикорма «новый + введённые». */
@@ -136,7 +49,7 @@ export function extractAllKeyProductKeysFromIngredients(
   ingredients: IngredientForProductKey[] | null | undefined,
   maxKeys = 100
 ): string[] {
-  return extractKeyProductKeysFromIngredients(ingredients, maxKeys);
+  return extractKeyProductKeysFromIngredientsShared(ingredients, maxKeys);
 }
 
 export function partitionInfantNovelAndFamiliarKeys(
@@ -166,7 +79,7 @@ function countNonTechnicalFoodIngredientRows(ingredients: IngredientForProductKe
   for (const item of ingredients) {
     const merged = [item.display_text ?? "", item.name ?? ""].join(" ").trim();
     if (!merged) continue;
-    if (isTechnicalIngredient(merged)) continue;
+    if (isTechnicalIngredientText(merged)) continue;
     n++;
   }
   return n;
@@ -180,7 +93,7 @@ function hasNonTechnicalFoodRowWithoutProductKey(
   for (const item of ingredients) {
     const merged = [item.display_text ?? "", item.name ?? ""].join(" ").trim();
     if (!merged) continue;
-    if (isTechnicalIngredient(merged)) continue;
+    if (isTechnicalIngredientText(merged)) continue;
     if (!normalizeProductKey(merged)) return true;
   }
   return false;
