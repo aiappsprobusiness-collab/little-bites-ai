@@ -2208,7 +2208,7 @@ export default function MealPlanPage() {
                     Продолжаем вводить: {infantIntroducingBanner.label} (день {infantIntroducingBanner.day})
                   </p>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Пошаговое введение — 3 дня; затем окно наблюдения за реакцией (обычно 3–5 дней, как в «Помощь маме»).
+                    Пошаговое введение и окно наблюдения за реакцией обычно составляют от трех до пяти дней.
                   </p>
                 </div>
                 <button
