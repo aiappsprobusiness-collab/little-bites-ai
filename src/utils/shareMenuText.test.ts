@@ -39,15 +39,57 @@ describe("shareMenuText", () => {
   });
 
   describe("buildWeekMenuShareBody", () => {
-    it("builds lines for each day", () => {
-      const text = buildWeekMenuShareBody([
-        { dayShort: "Пн", brief: "Каша, суп" },
-        { dayShort: "Вт", brief: "—" },
-      ]);
-      expect(text).toContain("Меню на неделю 👇");
+    const fixedOpts = { headerIndex: 0, ctaIndex: 0 } as const;
+
+    it("formats each day as a block with meal lines and week-specific emojis", () => {
+      const text = buildWeekMenuShareBody(
+        [
+          {
+            dayShort: "Вс",
+            meals: [
+              { meal_type: "breakfast", title: "Рисовая каша с бананом" },
+              { meal_type: "lunch", title: "Тыквенный суп-пюре с рисом" },
+            ],
+          },
+          {
+            dayShort: "Пн",
+            meals: [
+              { meal_type: "breakfast", title: "Киноа с фруктами" },
+              { meal_type: "lunch", title: "Рыбный суп с треской и картофелем" },
+            ],
+          },
+        ],
+        fixedOpts
+      );
+      expect(text).toContain("Посмотри, какое меню получилось на неделю 👇");
+      expect(text).toContain("Вс");
+      expect(text).toContain("🍚 Завтрак: Рисовая каша с бананом");
+      expect(text).toContain("🥣 Обед: Тыквенный суп-пюре с рисом");
+      expect(text).toContain("Пн");
+      expect(text).toContain("🍚 Завтрак: Киноа с фруктами");
+      expect(text).toContain("🥣 Обед: Рыбный суп с треской и картофелем");
+      expect(text).toContain("🛒 Список продуктов соберётся автоматически:");
+      expect(text).not.toMatch(/,\s*Тыквенный/);
+    });
+
+    it("skips empty days and uses legacy brief line when meals absent", () => {
+      const text = buildWeekMenuShareBody(
+        [
+          { dayShort: "Пн", brief: "Каша, суп" },
+          { dayShort: "Вт", brief: "—" },
+        ],
+        fixedOpts
+      );
       expect(text).toContain("Пн — Каша, суп");
-      expect(text).toContain("Вт — —");
-      expect(text).toContain("Список продуктов можно собрать в приложении");
+      expect(text).not.toContain("Вт");
+    });
+
+    it("picks CTA by ctaIndex", () => {
+      const text = buildWeekMenuShareBody(
+        [{ dayShort: "Пн", meals: [{ meal_type: "lunch", title: "Суп" }] }],
+        { headerIndex: 0, ctaIndex: 1 }
+      );
+      expect(text).toContain("👉 Открыть меню и собрать список продуктов:");
     });
   });
 

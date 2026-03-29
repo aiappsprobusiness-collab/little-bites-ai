@@ -121,7 +121,7 @@ import {
   buildDayMenuShareBody,
   buildWeekMenuShareBody,
   getShareIntroText,
-  weekMealsBrief,
+  pickWeekMenuShareTextIndices,
 } from "@/utils/shareMenuText";
 import {
   Dialog,
@@ -328,7 +328,12 @@ export default function MealPlanPage() {
       meals: Array<{ meal_type: string; label: string; title: string }>;
       shareIntro: string;
     }
-    | { kind: "week"; days: SharedPlanPayloadWeek["days"] }
+    | {
+        kind: "week";
+        days: SharedPlanPayloadWeek["days"];
+        headerIndex: number;
+        ctaIndex: number;
+      }
     | null
   >(null);
   const [shareMenuSending, setShareMenuSending] = useState(false);
@@ -1407,7 +1412,8 @@ export default function MealPlanPage() {
       const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
       return { date: dayKey, label: capitalized, meals };
     });
-    setShareMenuPreview({ kind: "week", days });
+    const { headerIndex, ctaIndex } = pickWeekMenuShareTextIndices();
+    setShareMenuPreview({ kind: "week", days, headerIndex, ctaIndex });
   }, [user?.id, dayKeys, weekPlans, rollingDates]);
 
   const confirmShareMenuPreview = useCallback(async () => {
@@ -1445,9 +1451,12 @@ export default function MealPlanPage() {
       });
       const dayRows = shareMenuPreview.days.map((d, i) => ({
         dayShort: getDayLabel(rollingDates[i]),
-        brief: weekMealsBrief(d.meals),
+        meals: d.meals.map((m) => ({ meal_type: m.slot, title: m.title })),
       }));
-      const body = buildWeekMenuShareBody(dayRows);
+      const body = buildWeekMenuShareBody(dayRows, {
+        headerIndex: shareMenuPreview.headerIndex,
+        ctaIndex: shareMenuPreview.ctaIndex,
+      });
       const fullText = appendShareLinkOnce(body, url);
       let sharedOk = false;
       if (typeof navigator !== "undefined" && navigator.share) {
@@ -1487,8 +1496,12 @@ export default function MealPlanPage() {
     return buildWeekMenuShareBody(
       shareMenuPreview.days.map((d, i) => ({
         dayShort: getDayLabel(rollingDates[i]),
-        brief: weekMealsBrief(d.meals),
+        meals: d.meals.map((m) => ({ meal_type: m.slot, title: m.title })),
       })),
+      {
+        headerIndex: shareMenuPreview.headerIndex,
+        ctaIndex: shareMenuPreview.ctaIndex,
+      },
     );
   }, [shareMenuPreview, rollingDates]);
 

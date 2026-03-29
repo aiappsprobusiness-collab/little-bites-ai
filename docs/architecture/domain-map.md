@@ -86,7 +86,7 @@
 
 - **Назначение:** короткие ссылки на рецепт (/r/:shareRef) и на план дня (/p/:ref); OG-превью для ботов; атрибуция (share_ref, entry_point, UTM).
 - **Таблицы:** `share_refs` (share_ref, recipe_id), `shared_plans` (ref, user_id, member_id, payload jsonb). Запись share_refs с клиента (saveShareRef в usageEvents).
-- **UI:** PublicRecipeSharePage (/r/:shareRef), SharedPlanPage (/p/:ref), шаринг рецепта в чате; план дня/недели — превью «Ваше меню» → системный share или копирование (`src/utils/shareMenuText.ts`, динамическое вступление дня — `getShareIntroText` в `src/utils/shareDayMenuText.ts`, MealPlanPage).
+- **UI:** PublicRecipeSharePage (/r/:shareRef), SharedPlanPage (/p/:ref), шаринг рецепта в чате; план дня/недели — превью «Ваше меню» → системный share или копирование (`src/utils/shareMenuText.ts`, динамическое вступление дня — `getShareIntroText` в `src/utils/shareDayMenuText.ts`, MealPlanPage). Формат текстов шаринга: `docs/architecture/share_flows.md`.
 - **Edge:** `share-og` (GET ?ref=shareRef → HTML с OG, редирект на /r/:shareRef), `share-og-plan` (GET ?ref=ref → OG для плана). track-usage-event для share_landing_view, share_click и др.
 - **Зависимости:** recipes, meal_plans_v2; usage_events для вирусной аналитики.
 
