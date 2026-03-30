@@ -72,6 +72,18 @@ export default function PublicRecipeSharePage() {
     });
   }, [decodedRef, recipe]);
 
+  useEffect(() => {
+    if (!recipe?.id) return;
+    trackUsageEvent("recipe_view", {
+      properties: {
+        recipe_id: recipe.id,
+        source: "shared",
+        is_public: true,
+        share_ref: decodedRef,
+      },
+    });
+  }, [recipe?.id, decodedRef]);
+
   const handleCta = () => {
     trackLandingEvent("share_recipe_cta_click", {
       share_ref: decodedRef,

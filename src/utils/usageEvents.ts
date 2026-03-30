@@ -1,11 +1,20 @@
 /**
  * Аналитика trial flow и вирусности через usage_events.
  * Fire-and-forget: клиент не зависит от ответа edge.
- * Singleton: cooldown 60s при 401/404/network, дедуп 2s по feature+page+entry_point.
+ *
+ * Защита от дублей: короткое окно dedup по feature+page+entry+fingerprint свойств;
+ * для «view»-событий окно длиннее, для действий — короче (см. VIEW_STYLE_FEATURES).
+ * Ошибки track-usage-event: backoff только по конкретному feature (не глобальный silence 60s).
+ *
+ * Лимитные feature (chat_recipe, help, plan_fill_day, plan_refresh) с клиента не отправляются
+ * (см. trackUsageClientPolicy + Edge track-usage-event).
  */
 
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "@/integrations/supabase/client";
 import { supabase } from "@/integrations/supabase/client";
+import { getOnboardingAttribution } from "@/utils/onboardingAttribution";
+import { isClientForbiddenUsageFeature } from "@/utils/trackUsageClientPolicy";
+import { getAnalyticsPlatform } from "@/utils/analyticsPlatform";
 
 const ANON_ID_KEY = "mr_anon_id";
 const SESSION_ID_KEY = "mr_session_id";
@@ -15,8 +24,31 @@ const LAST_SHARE_CHANNEL_KEY = "last_touch_share_channel";
 const LAST_SHARE_REF_KEY = "last_touch_share_ref";
 const LAST_SHARE_TYPE_KEY = "last_touch_share_type";
 const TRACK_EDGE_PATH = "/functions/v1/track-usage-event";
-const COOLDOWN_MS = 60_000;
-const DEDUP_MS = 2_000;
+
+/** «Пассивные» просмотры — более длинное окно анти-дубля. */
+const VIEW_STYLE_FEATURES = new Set<string>([
+  "landing_view",
+  "prelogin_view",
+  "auth_page_view",
+  "plan_view_day",
+  "chat_open",
+  "help_open",
+  "paywall_view",
+  "share_landing_view",
+  "shared_plan_view",
+  "shared_plan_not_found_view",
+  "recipe_view",
+]);
+
+const VIEW_DEDUP_MS = 4_000;
+const ACTION_DEDUP_MS = 550;
+const FEATURE_BACKOFF_MS = 12_000;
+const DEDUP_CACHE_TTL_CLEANUP = 90_000;
+const DEDUP_MAX_ENTRIES = 80;
+const FEATURE_BACKOFF_MAX = 40;
+
+const featureFailureUntil = new Map<string, number>();
+const dedupSentAt = new Map<string, number>();
 
 function randomUuid(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -51,13 +83,82 @@ export function getOrCreateSessionId(): string {
   return id;
 }
 
-/** Singleton: cooldown и дедуп, один раз лог при входе в cooldown. */
-const trackerState = {
-  cooldownUntil: 0,
-  lastDedupKey: "",
-  lastDedupTime: 0,
-  cooldownLogged: false,
-};
+function pruneFeatureBackoff(now: number) {
+  for (const [k, until] of featureFailureUntil) {
+    if (until <= now) featureFailureUntil.delete(k);
+  }
+  while (featureFailureUntil.size > FEATURE_BACKOFF_MAX) {
+    const first = featureFailureUntil.keys().next().value;
+    if (first === undefined) break;
+    featureFailureUntil.delete(first);
+  }
+}
+
+function isInFeatureBackoff(feature: string, now: number): boolean {
+  const until = featureFailureUntil.get(feature);
+  return until != null && now < until;
+}
+
+function recordFeatureFailure(feature: string, now: number) {
+  featureFailureUntil.set(feature, now + FEATURE_BACKOFF_MS);
+  pruneFeatureBackoff(now);
+}
+
+function recordFeatureSuccess(feature: string) {
+  featureFailureUntil.delete(feature);
+}
+
+function pruneDedup(now: number) {
+  for (const [k, t] of dedupSentAt) {
+    if (now - t > DEDUP_CACHE_TTL_CLEANUP) dedupSentAt.delete(k);
+  }
+  while (dedupSentAt.size > DEDUP_MAX_ENTRIES) {
+    let oldestKey: string | undefined;
+    let oldestT = Infinity;
+    for (const [k, t] of dedupSentAt) {
+      if (t < oldestT) {
+        oldestT = t;
+        oldestKey = k;
+      }
+    }
+    if (oldestKey === undefined) break;
+    dedupSentAt.delete(oldestKey);
+  }
+}
+
+function propsFingerprint(properties: Record<string, unknown> | undefined): string {
+  if (!properties || Object.keys(properties).length === 0) return "_";
+  const keys = Object.keys(properties).sort();
+  const parts: string[] = [];
+  for (const k of keys) {
+    try {
+      parts.push(`${k}:${JSON.stringify(properties[k])}`);
+    } catch {
+      parts.push(`${k}:[!]`);
+    }
+  }
+  return parts.join("|");
+}
+
+function shouldSkipDedup(
+  feature: string,
+  page: string,
+  entryPoint: string,
+  fp: string,
+  now: number
+): boolean {
+  const isView = VIEW_STYLE_FEATURES.has(feature);
+  const kind = isView ? "v" : "a";
+  const windowMs = isView ? VIEW_DEDUP_MS : ACTION_DEDUP_MS;
+  const key = `${kind}|${feature}|${page}|${entryPoint}|${fp}`;
+  const last = dedupSentAt.get(key);
+  if (last != null && now - last < windowMs) {
+    return true;
+  }
+  dedupSentAt.set(key, now);
+  pruneDedup(now);
+  return false;
+}
 
 export interface StoredUtm {
   utm_source?: string;
@@ -65,6 +166,17 @@ export interface StoredUtm {
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
+}
+
+function storedUtmHasAny(utm: StoredUtm | null | undefined): boolean {
+  if (!utm) return false;
+  return Boolean(
+    utm.utm_source ||
+      utm.utm_medium ||
+      utm.utm_campaign ||
+      utm.utm_content ||
+      utm.utm_term
+  );
 }
 
 /**
@@ -180,6 +292,45 @@ export function hasShareRecipeAttribution(): boolean {
   return getStoredEntryPoint() === "share_recipe" || getStoredShareRef() != null;
 }
 
+function mergeOnboardingIntoProperties(
+  properties: Record<string, unknown>,
+  ob: ReturnType<typeof getOnboardingAttribution>
+): Record<string, unknown> {
+  if (!ob) return properties;
+  const onboarding: Record<string, unknown> = {};
+  if (ob.first_landing_path) onboarding.first_landing_path = ob.first_landing_path;
+  if (ob.entry_point) onboarding.onboarding_entry_point = ob.entry_point;
+  if (ob.shareRef) onboarding.onboarding_share_ref = ob.shareRef;
+  if (ob.ref) onboarding.onboarding_ref = ob.ref;
+  if (ob.share_type) onboarding.onboarding_share_type = ob.share_type;
+  if (ob.source) onboarding.onboarding_utm_source = ob.source;
+  if (ob.medium) onboarding.onboarding_utm_medium = ob.medium;
+  if (ob.campaign) onboarding.onboarding_utm_campaign = ob.campaign;
+  if (ob.content) onboarding.onboarding_utm_content = ob.content;
+  if (ob.term) onboarding.onboarding_utm_term = ob.term;
+  if (Object.keys(onboarding).length === 0) return properties;
+  return { ...properties, onboarding };
+}
+
+function resolveUtmForBody(
+  ob: ReturnType<typeof getOnboardingAttribution>
+): StoredUtm | undefined {
+  const stored = getStoredUtm();
+  if (storedUtmHasAny(stored)) {
+    return stored ?? undefined;
+  }
+  if (ob && (ob.source || ob.medium || ob.campaign || ob.content || ob.term)) {
+    return {
+      utm_source: ob.source,
+      utm_medium: ob.medium,
+      utm_campaign: ob.campaign,
+      utm_content: ob.content,
+      utm_term: ob.term,
+    };
+  }
+  return stored ?? undefined;
+}
+
 export interface TrackUsageEventOptions {
   memberId?: string | null;
   properties?: Record<string, unknown>;
@@ -187,14 +338,24 @@ export interface TrackUsageEventOptions {
 
 /**
  * Отправить событие в usage_events (fire-and-forget).
- * Автоматически добавляет: anon_id, session_id, page, entry_point, utm, share_ref, share_channel в properties.
- * Cooldown 60s при 401/404/network; дедуп 2s по feature+page+entry_point. apikey обязателен для anon.
+ * Автоматически добавляет: anon_id, session_id, page, entry_point, utm, share_ref, share_channel,
+ * onboarding-контекст (properties.onboarding + fallback колонок utm_* из onboarding_attribution).
  */
 export function trackUsageEvent(
   feature: string,
   options: TrackUsageEventOptions = {}
 ): void {
   if (!feature || typeof feature !== "string") return;
+  const featureKey = feature.trim();
+  if (!featureKey) return;
+
+  if (isClientForbiddenUsageFeature(featureKey)) {
+    if (import.meta.env.DEV) {
+      console.warn("[usageEvents] skip limit-sensitive feature (server-only):", featureKey);
+    }
+    return;
+  }
+
   const baseUrl = SUPABASE_URL?.replace(/\/$/, "");
   const anonKey = SUPABASE_PUBLISHABLE_KEY;
   if (!baseUrl || !anonKey) return;
@@ -202,36 +363,35 @@ export function trackUsageEvent(
   const now = Date.now();
   const page = typeof window !== "undefined" ? window.location.pathname || "" : "";
   const entryPoint = getStoredEntryPoint() ?? "";
-  const dedupKey = `${feature}|${page}|${entryPoint}`;
+  const ob = getOnboardingAttribution();
 
-  if (now < trackerState.cooldownUntil) return;
-  if (
-    trackerState.lastDedupKey === dedupKey &&
-    now - trackerState.lastDedupTime < DEDUP_MS
-  ) {
-    return;
-  }
-
-  if (now >= trackerState.cooldownUntil) trackerState.cooldownLogged = false;
-  trackerState.lastDedupKey = dedupKey;
-  trackerState.lastDedupTime = now;
-
-  const anonId = getOrCreateAnonId();
-  const sessionId = getOrCreateSessionId();
-  const utm = getStoredUtm() ?? undefined;
+  const rawProps: Record<string, unknown> = {
+    ...(options.properties ?? {}),
+  };
   const shareRef = getStoredShareRef() ?? undefined;
   const shareChannel = getStoredShareChannel() ?? undefined;
   const shareType = getStoredShareType() ?? undefined;
+  if (shareRef !== undefined) rawProps.share_ref = shareRef;
+  if (shareChannel !== undefined) rawProps.share_channel = shareChannel;
+  if (shareType !== undefined) rawProps.share_type = shareType;
 
-  const properties: Record<string, unknown> = {
-    ...(options.properties ?? {}),
-  };
-  if (shareRef !== undefined) properties.share_ref = shareRef;
-  if (shareChannel !== undefined) properties.share_channel = shareChannel;
-  if (shareType !== undefined) properties.share_type = shareType;
+  const merged = mergeOnboardingIntoProperties(rawProps, ob);
+  const properties = { ...merged, platform: getAnalyticsPlatform() };
+  const fp = propsFingerprint(options.properties);
+
+  if (isInFeatureBackoff(featureKey, now)) {
+    return;
+  }
+  if (shouldSkipDedup(featureKey, page, entryPoint, fp, now)) {
+    return;
+  }
+
+  const anonId = getOrCreateAnonId();
+  const sessionId = getOrCreateSessionId();
+  const utm = resolveUtmForBody(ob);
 
   const body = {
-    feature: feature.trim(),
+    feature: featureKey,
     anon_id: anonId,
     session_id: sessionId,
     member_id: options.memberId ?? null,
@@ -242,7 +402,7 @@ export function trackUsageEvent(
   };
 
   if (import.meta.env.DEV) {
-    console.debug("[usageEvents]", feature, body);
+    console.debug("[usageEvents]", featureKey, body);
   }
 
   const url = `${baseUrl}${TRACK_EDGE_PATH}`;
@@ -263,22 +423,18 @@ export function trackUsageEvent(
     })
       .then((res) => {
         if (!res.ok) {
-          trackerState.cooldownUntil = now + COOLDOWN_MS;
-          if (!trackerState.cooldownLogged) {
-            trackerState.cooldownLogged = true;
-            if (import.meta.env.DEV) {
-              console.warn("[usageEvents] track-usage-event failed, cooldown 60s:", res.status);
-            }
+          recordFeatureFailure(featureKey, Date.now());
+          if (import.meta.env.DEV) {
+            console.warn("[usageEvents] track-usage-event failed, feature backoff:", featureKey, res.status);
           }
+        } else {
+          recordFeatureSuccess(featureKey);
         }
       })
       .catch(() => {
-        trackerState.cooldownUntil = now + COOLDOWN_MS;
-        if (!trackerState.cooldownLogged) {
-          trackerState.cooldownLogged = true;
-          if (import.meta.env.DEV) {
-            console.warn("[usageEvents] track-usage-event network error, cooldown 60s");
-          }
+        recordFeatureFailure(featureKey, Date.now());
+        if (import.meta.env.DEV) {
+          console.warn("[usageEvents] track-usage-event network error, feature backoff:", featureKey);
         }
       });
   });
@@ -329,6 +485,20 @@ export function getShortShareUrl(shareRef: string, baseUrl: string): string {
  * Сохранить share_ref в БД (share_refs). Вызывать при шаринге от имени authenticated.
  * Возвращает true при успехе, false при ошибке (например, RLS или дубликат).
  */
+/**
+ * Событие начала viral funnel: ref записан (recipe или план — через отдельные вызовы).
+ * Вызывать после успешного persist ref, до UI share sheet.
+ */
+export function trackShareLinkCreated(properties: {
+  share_type: "recipe" | "day_plan" | "week_plan";
+  share_ref: string;
+  surface: string;
+  recipe_id?: string;
+  has_native_share?: boolean;
+}): void {
+  trackUsageEvent("share_link_created", { properties });
+}
+
 export async function saveShareRef(recipeId: string, shareRef: string): Promise<boolean> {
   try {
     const { error } = await supabase.from("share_refs").insert({

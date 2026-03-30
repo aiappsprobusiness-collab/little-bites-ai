@@ -3,7 +3,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
-import { generateShareRef } from "@/utils/usageEvents";
+import { generateShareRef, trackUsageEvent } from "@/utils/usageEvents";
 
 const SHARE_PLAN_BASE = "https://momrecipes.online";
 
@@ -45,7 +45,17 @@ export async function createSharedPlan(
       member_id: memberId,
       payload,
     });
-    if (!error) return { ref, url: `${SHARE_PLAN_BASE}/p/${ref}` };
+    if (!error) {
+      const shareType = isSharedPlanWeek(payload) ? "week_plan" : "day_plan";
+      trackUsageEvent("share_link_created", {
+        properties: {
+          share_type: shareType,
+          share_ref: ref,
+          surface: "meal_plan_share",
+        },
+      });
+      return { ref, url: `${SHARE_PLAN_BASE}/p/${ref}` };
+    }
     if (error.code === "23505") {
       ref = generateShareRef();
       continue;

@@ -15,7 +15,6 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { trackUsageEvent, captureAttributionFromLocationOnce } from "@/utils/usageEvents";
-import { trackLandingEvent } from "@/utils/landingAnalytics";
 import { LEGAL_TERMS_VERSION } from "@/constants/legalVersions";
 
 const loginSchema = z.object({

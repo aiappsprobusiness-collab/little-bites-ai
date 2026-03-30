@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useRecipes } from "@/hooks/useRecipes";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { getMealLabel } from "@/data/mealLabels";
@@ -12,6 +13,7 @@ import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader
 import { cn } from "@/lib/utils";
 import type { PublicRecipePayload } from "@/services/publicRecipeShare";
 import { getChefAdviceCardPresentation, isInfantRecipe } from "@/utils/infantRecipe";
+import { trackUsageEvent } from "@/utils/usageEvents";
 
 const WELCOME_RECIPE_ID = "4dcaf358-5aea-4806-89c1-ffe02e96d8e3";
 
@@ -20,6 +22,10 @@ export interface WelcomeRecipeBlockProps {
   recipe?: PublicRecipePayload | null;
   /** Показывать лоадер (для публичной страницы, пока рецепт грузится) */
   isLoading?: boolean;
+  /** Один раз: демо-рецепт с лендинга отрисован (landing_demo_open). */
+  onLandingDemoRecipeShown?: () => void;
+  /** Секция демо попала в viewport (для landing_demo_save_click при последующем CTA). */
+  onLandingDemoSectionVisible?: () => void;
 }
 
 function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem[] {
@@ -56,8 +62,15 @@ function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem
 }
 
 /** Read-only recipe block for welcome: same look as in-app recipe (meal chip, time, calories, BJU, title, description, ingredients, chef advice, steps). Optional max-height + fade. */
-export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingProp }: WelcomeRecipeBlockProps = {}) {
+export function WelcomeRecipeBlock({
+  recipe: recipeProp,
+  isLoading: isLoadingProp,
+  onLandingDemoRecipeShown,
+  onLandingDemoSectionVisible,
+}: WelcomeRecipeBlockProps = {}) {
   const { getRecipeById } = useRecipes();
+  const sectionRef = useRef<HTMLElement>(null);
+  const demoOpenTrackedRef = useRef(false);
   /** Не запрашивать демо из БД, если рецепт передан снаружи — иначе ошибка get_recipe_full у анона скрывала бы весь блок. */
   const welcomeFetchId = recipeProp === undefined ? WELCOME_RECIPE_ID : "";
   const { data: recipeFromHook, isLoading: isLoadingHook, error } = getRecipeById(welcomeFetchId);
@@ -65,6 +78,44 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
   const useHookRecipe = recipeProp === undefined;
   const isLoading = useHookRecipe ? isLoadingHook : (isLoadingProp ?? false);
   const recipe = useHookRecipe ? recipeFromHook : recipeProp;
+
+  useEffect(() => {
+    if (!onLandingDemoRecipeShown || !recipe || demoOpenTrackedRef.current) return;
+    demoOpenTrackedRef.current = true;
+    onLandingDemoRecipeShown();
+  }, [recipe, onLandingDemoRecipeShown]);
+
+  /** Демо на лендинге: recipe_view только для внутренней загрузки WELCOME_RECIPE_ID (не /r/ страница). */
+  useEffect(() => {
+    if (!recipe || recipeProp !== undefined || recipeViewTrackedRef.current) return;
+    const rid = (recipe as { id?: string }).id;
+    if (!rid) return;
+    recipeViewTrackedRef.current = true;
+    trackUsageEvent("recipe_view", {
+      properties: {
+        recipe_id: rid,
+        source: "welcome_demo",
+        is_public: false,
+      },
+    });
+  }, [recipe, recipeProp]);
+
+  useEffect(() => {
+    if (!onLandingDemoSectionVisible || !recipe) return;
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          onLandingDemoSectionVisible();
+          io.disconnect();
+        }
+      },
+      { threshold: 0.12, rootMargin: "0px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [recipe, onLandingDemoSectionVisible]);
 
   if (isLoading) {
     return (
@@ -137,7 +188,7 @@ export function WelcomeRecipeBlock({ recipe: recipeProp, isLoading: isLoadingPro
   });
 
   return (
-    <section className="mb-10">
+    <section ref={sectionRef} className="mb-10">
       <div
         className={cn(
           "relative rounded-2xl overflow-hidden",

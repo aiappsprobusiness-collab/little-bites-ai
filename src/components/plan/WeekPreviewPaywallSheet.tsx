@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Lock, Heart, Check } from "lucide-react";
 import {
   Sheet,
@@ -58,6 +58,17 @@ export function WeekPreviewPaywallSheet({
   const trialUnavailable = trialUsed && !hasTrialAccess;
   const showPayForm = !hasAccess || hasTrialAccess;
   const copy = useMemo(() => getPaywallReasonCopy("week_preview"), []);
+
+  useEffect(() => {
+    if (!open) return;
+    trackUsageEvent("paywall_view", {
+      properties: {
+        paywall_reason: "week_preview",
+        source: "week_preview",
+        paywall_surface: "week_preview_sheet",
+      },
+    });
+  }, [open]);
 
   const handleStartTrial = async () => {
     trackUsageEvent("paywall_primary_click", { properties: { source: "week_preview" } });

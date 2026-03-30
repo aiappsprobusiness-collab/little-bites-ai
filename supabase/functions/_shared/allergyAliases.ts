@@ -4,6 +4,14 @@
  */
 
 import { buildBlockedTokens as buildBlockedTokensLegacy } from "./allergensDictionary.ts";
+import {
+  BEEF_VEAL_BLOCK_TOKENS,
+  CHICKEN_ONLY_BLOCK_TOKENS,
+  getMeatUmbrellaBlockTokens,
+  MINCE_MEAT_TOKENS,
+  PORK_BLOCK_TOKENS,
+  TURKEY_ONLY_BLOCK_TOKENS,
+} from "./meatAllergyTokens.ts";
 
 export type AllergyAlias = {
   canonical: string;
@@ -29,7 +37,7 @@ export const ALLERGY_ALIASES: AllergyAlias[] = [
     canonical: "глютен",
     display: "глютен",
     aliases: ["глютен", "целиакия", "gluten", "celiac"],
-    tokens: ["глютен", "пшениц", "рож", "ячмен", "овес", "мук", "манк", "булгур", "кускус", "макарон", "хлеб", "выпечк", "gluten", "wheat", "rye", "barley", "oats"],
+    tokens: ["глютен", "пшениц", "рож", "ячмен", "овес", "мук", "манк", "булгур", "кускус", "макарон", "паст", "лазань", "хлеб", "выпечк", "gluten", "wheat", "rye", "barley", "oats"],
   },
   {
     canonical: "яйца",
@@ -119,6 +127,60 @@ export const ALLERGY_ALIASES: AllergyAlias[] = [
     aliases: ["сульфиты", "sulfites", "e220", "e-220"],
     tokens: ["сульфит", "sulfite", "e220", "e-220"],
   },
+  {
+    canonical: "яблоко",
+    display: "яблоко",
+    aliases: ["яблоко", "яблоки", "apple", "apples"],
+    tokens: ["яблок", "яблоко", "яблоч", "apple"],
+  },
+  {
+    canonical: "банан",
+    display: "банан",
+    aliases: ["банан", "бананы", "banana", "bananas"],
+    tokens: ["банан", "banana"],
+  },
+  {
+    canonical: "мясо",
+    display: "мясо",
+    aliases: ["мясо", "meat"],
+    tokens: [...getMeatUmbrellaBlockTokens()],
+  },
+  {
+    canonical: "говядина",
+    display: "говядина",
+    aliases: ["говядина", "beef"],
+    tokens: [...BEEF_VEAL_BLOCK_TOKENS],
+  },
+  {
+    canonical: "телятина",
+    display: "телятина",
+    aliases: ["телятина", "veal"],
+    tokens: [...BEEF_VEAL_BLOCK_TOKENS],
+  },
+  {
+    canonical: "свинина",
+    display: "свинина",
+    aliases: ["свинина", "pork"],
+    tokens: [...PORK_BLOCK_TOKENS],
+  },
+  {
+    canonical: "курица",
+    display: "курица",
+    aliases: ["курица", "chicken"],
+    tokens: [...CHICKEN_ONLY_BLOCK_TOKENS],
+  },
+  {
+    canonical: "индейка",
+    display: "индейка",
+    aliases: ["индейка", "turkey"],
+    tokens: [...TURKEY_ONLY_BLOCK_TOKENS],
+  },
+  {
+    canonical: "фарш",
+    display: "фарш",
+    aliases: ["фарш", "mince", "ground meat"],
+    tokens: [...MINCE_MEAT_TOKENS],
+  },
 ];
 
 function normalizeInput(s: string): string {
@@ -154,4 +216,19 @@ export function buildBlockedTokensFromAllergies(allergies: string[] | null | und
     }
   }
   return [...set];
+}
+
+/** Для аудита: каждая аллергия → canonical (если из словаря) и её токены до объединения. */
+export function expandAllergiesToCanonicalBlockedGroups(
+  allergies: string[] | null | undefined,
+): Array<{ allergy: string; canonical?: string; tokens: string[] }> {
+  const list = Array.isArray(allergies) ? allergies : allergies ? [String(allergies)] : [];
+  const out: Array<{ allergy: string; canonical?: string; tokens: string[] }> = [];
+  for (const a of list) {
+    const s = String(a).trim();
+    if (!s) continue;
+    const { canonical, tokens } = expandAllergyToTokens(s);
+    out.push({ allergy: s, canonical, tokens: [...tokens] });
+  }
+  return out;
 }

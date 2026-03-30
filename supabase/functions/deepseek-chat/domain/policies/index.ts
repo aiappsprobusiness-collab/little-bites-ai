@@ -9,6 +9,7 @@ export {
   getSuggestedAlternatives,
   extractIntendedDishHint,
   buildBlockedMessageEdge,
+  buildAllergyBlockedResponsePayload,
   type BlockedBy,
   type BlockedResponsePayload,
 } from "./blockedResponse.ts";

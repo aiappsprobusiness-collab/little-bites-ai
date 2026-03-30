@@ -20,12 +20,13 @@
   - `pickFromPool(...)` — все фильтры: exclude ids/titleKeys, mainIngredient, mealType, breakfast no-soup, lunch soup-only, sanity, **profile (аллергии, предпочтения, возраст)**, goals-hints. Аллергии применяются в `passesProfileFilter` → `checkAllergyWithDetail` по полям рецепта: title, description, recipe_ingredients (name, display_text). Не по `recipe_ingredients.category`.
 - **Клиент:** `src/utils/recipePool.ts` — `pickRecipeFromPool` и `passesProfileFilter` при подборе из пула используют **те же** токены аллергенов, что и Edge: `buildBlockedTokensFromAllergies` / `allergyAliases.ts` (и fallback из `allergensDictionary.ts`), плюс `containsAnyTokenForAllergy` для матча по тексту рецепта.
 
-**Исторический разрыв (курица):** для свободного ввода «курица» без попадания в словарь алиасов теоретически возможны расхождения с Edge; при вводе из подсказок словаря клиент и Edge согласованы по куриным токенам.
+**Мясо (umbrella):** аллергия **«мясо»** / `meat` задаётся в `ALLERGY_ALIASES` и разворачивается в объединение токенов из `src/shared/meatAllergyTokens.ts` (копия в Edge через `npm run sync:allergens`): птица (курица, индейка), КРС (говядина/телятина), свинина, фарш/mince/ground *, лексемы «мясо»/склонения/`meat`, плюс распространённые виды (баранина, утка, гусь, кролик и т.д.). **Рыба и морепродукты в эту группу не входят** — остаются отдельными каноническими аллергиями («рыба», «морепродукты»). Узкие записи **«говядина»**, **«курица»**, **«индейка»**, **«свинина»**, **«фарш»** дают только свои подмножества токенов (говядина и телятина сознательно делят один набор стемов `говяд`/`телят`/`beef`/`veal`).
 
 ## 4. Как рецепт проверяется на аллерген
 
-- **Поля:** title, description, ingredients (в Edge — `recipe_ingredients.name`, `recipe_ingredients.display_text`). Не используются: `recipe_ingredients.category`, tags как единственный источник (tags участвуют в общем тексте в recipePool, в Edge только title/description/ingredients).
-- **Метод:** набор «запрещённых токенов» (blockedTokens) строится из аллергий профиля (+ расширения для молока, курицы, орехов и т.д.). Текст рецепта (title + description + ingredients) приводится к нижнему регистру; если в нём есть подстрока из blockedTokens — рецепт запрещён (в generate-plan / `preferenceRules` — подстрока; в части чата для отдельных проверок может использоваться `containsAnyToken` с границей слова — см. код).
+- **Поля:** title, description, ingredients (в Edge — `recipe_ingredients.name`, `recipe_ingredients.display_text`). Не используются: **`recipe_ingredients.category` не является источником истины для аллергий** (ни Edge generate-plan, ни клиентский пул). В клиентском `passesProfileFilter` в общий текст дополнительно попадают **tags**; на Edge в `preferenceRules` для аллергий tags не склеиваются — возможен редкий расход только если аллерген указан только в tags и нигде больше.
+- **Метод:** набор «запрещённых токенов» (blockedTokens) строится из аллергий профиля через `buildBlockedTokensFromAllergies` / `expandAllergyToTokens` (`allergyAliases.ts` + fallback `allergensDictionary.ts`). Матч токена к тексту — **подстрока** с исключением nut/нут; общая реализация: `src/shared/recipeAllergyMatch.ts` (синхронизируется в `_shared/recipeAllergyMatch.ts`). В generate-plan / `preferenceRules.ts` используется этот же матч. В **`allergensDictionary.containsAnyToken`** (граница слова) для плана не опираемся — там другой контракт; `isRecipeAllowedByAllergens` в `_shared/allergens.ts` остаётся для прочих вызовов и может отличаться от фильтра плана (по границе слова).
+- **Синхронизация Edge:** `npm run sync:allergens` копирует `allergensDictionary.ts`, `meatAllergyTokens.ts`, `recipeAllergyMatch.ts`, **`chatRecipeAllergySafety.ts`** из `src/shared/` в `supabase/functions/_shared/`. Словарь `ALLERGY_ALIASES` по-прежнему дублируется в `src/utils/allergyAliases.ts` и `supabase/functions/_shared/allergyAliases.ts` — при правках алиасов/токенов править **оба** файла (или один коммит на пару).
 
 ### 4.1 Аллергия на яйца и слово «белок»
 
@@ -37,17 +38,50 @@
 
 В **deepseek-chat** признак Premium для промпта и лимитов берётся из **`profiles_v2.status`**, а не из **`premium_until`**. В **useSubscription** доступ Premium определяется в том числе по **дате `premium_until`**. Если в БД `status` ещё `free`, а оплаченный период уже открыт по дате, пользователь видит Premium, а Edge обрабатывает запрос как Free — в т.ч. **обрезка списка аллергий до одной** (`promptByTariff` + `index.ts`). Подробнее: `docs/architecture/chat_recipe_generation.md` §5, тесты `src/utils/subscriptionChatEdgeParity.test.ts`.
 
-## 5. Где в чате стоит guard на аллерген и почему «не удалось распознать рецепт»
+## 5. Чат: двухэтапный allergy guard и канонический отказ
 
-- **Guard:** в `src/hooks/useDeepSeekAPI.tsx` перед вызовом API вызывается `checkChatAllergyBlock(lastUserMessage, memberData?.allergies)`. При `blocked && found.length > 0` возвращается `{ message: "У нас аллергия на ..." }` без вызова DeepSeek. Матч по тексту запроса — **`containsAnyTokenForAllergy`** (подстроки токенов, как в плане), а не граница слова.
-- **Профильный пречек:** `checkChatRequestAgainstProfile` (`chatBlockedCheck.ts`) для аллергий и dislikes в запросе использует тот же **`containsAnyTokenForAllergy`**, чтобы русские формы («луком», «курицей», «ягодный») обрабатывались согласованно с планом.
-- **Проблема «не удалось распознать рецепт» (исторически):** если ответ без `recipes` ошибочно парсился только как рецепт. Сейчас: флаг `blocked` / `blockedByAllergy` в ответе API и **`meta.blocked` в chat_history**; при загрузке истории отказ по профилю не прогоняется через `parseRecipesFromChat`. Без распознавания `meta.blocked` после refetch истории возможно краткое «моргание» (сначала текст отказа, затем подмена на fallback парсера).
-- **Второй разрыв (исправлен):** в словаре аллергенов (_shared/allergyAliases.ts и клиент) для блокировки запроса добавлены прилагательные и формы («ореховый», «яичный», «молочный» и т.д.). Запрос «ореховый пудинг» при аллергии на орехи блокируется до вызова модели (**подстрока по токенам**, `containsAnyTokenForAllergy` — на клиенте и на Edge в `checkRecipeRequestBlocked`; ложное «орех» в «запеканка» не срабатывает, т.к. подстроки нет). Ранее на Edge использовалась граница слова (`findMatchedTokens`), из‑за чего стем «яйц» не ловил «яйцом»/«яйцами».
+### 5.1 Pre-request (до LLM)
+
+- **Клиент:** `useDeepSeekAPI` → `checkChatRequestAgainstProfile` (`chatBlockedCheck.ts`): аллергии + dislikes, фразы «без X» вырезаются через `textWithoutExclusionPhrases`. Токены — `buildBlockedTokensFromAllergies` / `expandAllergyToTokens` (`allergyAliases.ts`), матч — **`containsAnyTokenForAllergy`** (подстрока, как в плане), не граница слова.
+- **Edge:** `deepseek-chat/index.ts` → `checkRecipeRequestBlocked` (тот же `containsAnyTokenForAllergy` по токенам из `getBlockedTokensFromAllergies`). **Списки аллергий/dislikes для политики берутся из полного профиля:** для «Семья» — объединение по **`allMembers` из БД**, для одного профиля — `memberDataNorm`, **не** усечённые до одной аллергии варианты для промпта по тарифу (иначе вторая+ аллергия не участвовала бы в блокировке запроса).
+
+### 5.2 Post-recipe (после JSON рецепта от модели)
+
+- **Где:** `deepseek-chat/index.ts`, сразу после успешной валидации/сборки `responseRecipes`, **до** `usage_events` «chat_recipe» и до тяжёлого пайплайна санитайзеров.
+- **Не выполняется** при `from_plan_replace` (кандидат уже прошёл фильтр плана).
+- **Логика:** `chatRecipeRecordToAllergyFields` + `findFirstAllergyConflictInRecipeFields` (`src/shared/chatRecipeAllergySafety.ts`, синхронизация в `_shared`) и **`expandAllergiesToCanonicalBlockedGroups`** для групп токенов; внутри — **`listAllergyTokenHitsInRecipeFields`** / тот же контракт матча, что **`recipeAllergyMatch`** и `preferenceRules` (title, description, `ingredients[].name`, `ingredients[].display_text` / `displayText`; **без tags**, как в плане для аллергий).
+- **Ответ при конфликте:** тот же JSON, что и при pre-block: `blocked: true`, `blocked_by: "allergy"`, `message`, `blocked_items`, `suggested_alternatives`, `original_query`, `intended_dish_hint` — через **`buildAllergyBlockedResponsePayload`** (`blockedResponse.ts`). Лог: **`CHAT_RECIPE_ALLERGY_SAFETY_REJECTION`** (поле, токен, snippet).
+
+### 5.3 Канонический текст отказа (аллергия)
+
+- **Клиент и Edge:** `buildBlockedMessage` / `buildBlockedMessageEdge` — формулировка вида: «У профиля … указана аллергия на … Попробуйте изменить запрос или выбрать другой профиль.» (без эмодзи в тексте отказа).
+
+### 5.4 Клиентский `validateRecipe` (после ответа)
+
+- Для **аллергий** используется **`containsAnyTokenForAllergy`** по тексту **title + description + имена и display_text ингредиентов** (согласовано с post-check Edge). Dislikes по-прежнему без description (меньше ложных срабатываний).
+
+### 5.5 Почему раньше могло быть «не удалось распознать рецепт»
+
+- Ответ с `blocked: true` без массива `recipes` не должен гоняться через `parseRecipesFromChat` как рецепт: в `ChatPage` учитываются `blocked` / `blockedByAllergy` / `blockedByDislike` и готовый `message`. SSE-ветка в `useDeepSeekAPI` при `event: done` также пробрасывает поля `blocked*`, если появятся.
+
+### 5.6 Вспомогательный модуль `checkChatAllergyBlock`
+
+- `src/utils/chatAllergyCheck.ts` — узкий helper (тот же словарь токенов); основной путь чата — **`checkChatRequestAgainstProfile`** (аллергии + dislikes + «без X»).
+
+### 5.7 Аудит чата
+
+- **`npm run audit:chat-allergy`** — `scripts/audit-chat-allergy-guard.ts`: pre-request и post-recipe на тех же хелперах, сценарии «мясо», БКМ, рыба, орехи, глютен, яблоко и др. Подробнее: **`docs/dev/CHAT_ALLERGY_GUARD.md`**.
 
 ## 6. Единый helper аллергенов (после внедрения)
 
 - **Edge:** `supabase/functions/_shared/allergens.ts` — `buildAllergenSet({ allergies[] })` → `{ blockedTokens }`, `isRecipeAllowedByAllergens(recipe, allergenSet)` → `{ allowed: boolean, reason?: string }`. Используется в generate-plan в pickFromPool (фильтр до soup-only) и при AI fallback в system prompt.
 - **Клиент (чат):** тот же словарь токенов для пред-проверки запроса: при матче — не вызывать модель, вернуть отказ с именем профиля. Подсказки-замены в тексте для аллергии не выводятся; для dislike опционально — см. `buildBlockedMessage` / `docs/dev/CHAT_BLOCKED_BEHAVIOR.md`. В `meta` по-прежнему можно хранить `suggested_alternatives` для follow-up.
+
+### 6.1 Dev: аудит и объяснение отсева кандидата
+
+- **CLI:** `npm run audit:plan-allergy` — `scripts/audit-plan-allergy-debug.ts`, те же `buildBlockedTokensFromAllergies` / `explainAllergyFilterOnRecipe` / `passesPreferenceFilters`, плюс проверка паритета списка токенов client/Edge для «мясо».
+- **Клиент (только dev/тесты):** `src/utils/planCandidateFilterExplain.ts` — `explainPoolCandidateRejection` (шаги как у `filterPoolCandidatesForSlot` до прикорма), `explainAllergyFilterOnRecipe` (поля + токены).
+- **Группы по аллергиям:** `expandAllergiesToCanonicalBlockedGroups(allergies)` в `allergyAliases.ts`.
 
 ## 7. Предпочтения («любит ягоды»)
 

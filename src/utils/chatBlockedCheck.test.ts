@@ -122,4 +122,31 @@ describe("checkChatRequestAgainstProfile", () => {
       expect(result!.blocked_by).toBe("allergy");
     }
   });
+
+  it('blocks meaty query when allergy «мясо» (umbrella SoT)', () => {
+    const member = { name: "Ребёнок", allergies: ["мясо"], dislikes: [] };
+    for (const text of ["дай что-то мясное", "сделай суп с курицей", "тефтели из говядины"]) {
+      const result = checkChatRequestAgainstProfile({ text, member });
+      expect(result).not.toBeNull();
+      expect(result!.blocked_by).toBe("allergy");
+      expect(result!.matched.some((m) => m.toLowerCase().includes("мяс"))).toBe(true);
+    }
+  });
+
+  it('does NOT block neutral soup query when allergy «мясо»', () => {
+    const result = checkChatRequestAgainstProfile({
+      text: "дай суп на ужин",
+      member: { name: "Ребёнок", allergies: ["мясо"], dislikes: [] },
+    });
+    expect(result).toBeNull();
+  });
+
+  it('blocks «что-то молочное» when allergy БКМ', () => {
+    const result = checkChatRequestAgainstProfile({
+      text: "хочу что-то молочное",
+      member: { name: "Маша", allergies: ["БКМ"], dislikes: [] },
+    });
+    expect(result).not.toBeNull();
+    expect(result!.blocked_by).toBe("allergy");
+  });
 });

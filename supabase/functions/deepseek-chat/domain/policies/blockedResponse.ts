@@ -60,11 +60,34 @@ export function buildBlockedMessageEdge(
       profileName !== "Семья" &&
       !/выбранного профиля/i.test(profileName);
     if (named) {
-      return `⚠️ У профиля «${profileName}» аллергия на ${items}.\n\nПопробуйте изменить запрос или выбрать другой профиль.`;
+      return `У профиля «${profileName}» указана аллергия на ${items}. Попробуйте изменить запрос или выбрать другой профиль.`;
     }
-    return `⚠️ У выбранного профиля аллергия на ${items}.\n\nПопробуйте изменить запрос или выбрать другой профиль.`;
+    return `У профиля указана аллергия на ${items}. Попробуйте изменить запрос или выбрать другой профиль.`;
   }
   return `Профиль «${profileName}» не любит: ${items}. Измените запрос или выберите другой профиль.`;
+}
+
+/** Ответ 200 JSON при блокировке по аллергии (pre-request и post-recipe safety). */
+export function buildAllergyBlockedResponsePayload(params: {
+  profileName: string;
+  blockedItems: string[];
+  userMessage: string;
+}): BlockedResponsePayload {
+  const { profileName, blockedItems, userMessage } = params;
+  const suggestedAlternatives = getSuggestedAlternatives(blockedItems);
+  const first = blockedItems[0] ?? "";
+  const intendedDishHint = extractIntendedDishHint(userMessage, first);
+  const message = buildBlockedMessageEdge(profileName, "allergy", blockedItems, suggestedAlternatives, intendedDishHint);
+  return {
+    blocked: true,
+    blocked_by: "allergy",
+    profile_name: profileName,
+    blocked_items: blockedItems,
+    suggested_alternatives: suggestedAlternatives,
+    original_query: userMessage,
+    intended_dish_hint: intendedDishHint || undefined,
+    message,
+  };
 }
 
 export interface BlockedResponsePayload {

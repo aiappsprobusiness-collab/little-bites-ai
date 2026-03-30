@@ -21,6 +21,7 @@ import {
   getShortShareUrl,
   saveShareRef,
   getShareRecipeUrl,
+  trackShareLinkCreated,
 } from "@/utils/usageEvents";
 import { supabase } from "@/integrations/supabase/client";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
@@ -106,6 +107,7 @@ export default function RecipePage() {
   const state = location.state as {
     fromMealPlan?: boolean;
     fromFavorites?: boolean;
+    fromChat?: boolean;
     preloadedTitle?: string;
     mealTypeLabel?: string;
     memberId?: string;
@@ -133,6 +135,25 @@ export default function RecipePage() {
       trackUsageEvent("share_landing_view", { properties: { recipe_id: id } });
     }
   }, [id, searchParams]);
+
+  /** SoT «открыл экран рецепта» в приложении: один раз на загрузку контента (dedup в trackUsageEvent). */
+  useEffect(() => {
+    if (!id || !recipe || error) return;
+    const ep = searchParams.get("ep");
+    const sr = searchParams.get("sr");
+    let source: "plan" | "favorites" | "shared" | "welcome_demo" | "chat" | "other" = "other";
+    if (state?.fromMealPlan) source = "plan";
+    else if (state?.fromFavorites) source = "favorites";
+    else if (state?.fromChat) source = "chat";
+    else if (ep === "share_recipe" || sr) source = "shared";
+    trackUsageEvent("recipe_view", {
+      properties: {
+        recipe_id: id,
+        source,
+        is_public: false,
+      },
+    });
+  }, [id, recipe, error, state?.fromMealPlan, state?.fromFavorites, state?.fromChat, searchParams]);
   const fromMealPlan = state?.fromMealPlan;
   const fromFavorites = state?.fromFavorites;
   const mealTypeLabel = state?.mealTypeLabel;
@@ -234,6 +255,15 @@ export default function RecipePage() {
     const usedNativeShare = typeof navigator !== "undefined" && !!navigator.share;
     const channel = getShareChannelFromContext(usedNativeShare, false);
     const saved = await saveShareRef(id, shareRef);
+    if (saved) {
+      trackShareLinkCreated({
+        share_type: "recipe",
+        share_ref: shareRef,
+        surface: "recipe_page",
+        recipe_id: id,
+        has_native_share: usedNativeShare,
+      });
+    }
     const shareUrl = saved
       ? getShortShareUrl(shareRef, SHARE_APP_URL)
       : getShareRecipeUrl(id, channel, shareRef, SHARE_APP_URL);

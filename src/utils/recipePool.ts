@@ -24,7 +24,10 @@ import {
 import { buildAlignedRankSalt } from "@shared/planRankTrustShared";
 import { pickFromPoolRankingLite, type PoolRankLiteRow } from "@/utils/poolRankLite";
 
-const IS_DEV = import.meta.env.DEV;
+/** Vite: import.meta.env.DEV; Node/tsx (audit scripts): без env — false. */
+const IS_DEV =
+  typeof import.meta !== "undefined" &&
+  Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
 /** Как Edge `POOL_TRUST_OR`: в пул подбора не попадают рецепты с `trust_level = blocked`. */
 export const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";

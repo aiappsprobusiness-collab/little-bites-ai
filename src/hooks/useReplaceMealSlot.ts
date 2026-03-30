@@ -29,6 +29,7 @@ import { pickFromPoolRankingLite, type PoolRankLiteRow } from "@/utils/poolRankL
 import { POOL_SOURCES } from "@/utils/recipeCanonical";
 import { isDebugPlanEnabled } from "@/utils/debugPlan";
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
+import { trackUsageEvent } from "@/utils/usageEvents";
 
 const MEAL_SWAP_FREE_KEY = "mealSwap_free";
 const FREE_SWAP_LIMIT_PER_DAY = 2;
@@ -260,16 +261,45 @@ export function useReplaceMealSlot(
         mealType: string;
         recipeId: string;
         recipeTitle: string;
+        /** Источник для usage_events plan_slot_replace_success */
+        replaceAnalyticsSource?: "pool_pick" | "ai_chat" | "assign";
       },
-      opts?: { skipInvalidate?: boolean }
+      opts?: { skipInvalidate?: boolean; skipAttempt?: boolean }
     ) => {
-      await createMealPlan({
-        member_id: memberId ?? null,
-        child_id: memberId ?? null,
-        planned_date: params.dayKey,
+      const baseProps = {
+        day_key: params.dayKey,
         meal_type: params.mealType,
-        recipe_id: params.recipeId,
-        title: params.recipeTitle,
+        source: params.replaceAnalyticsSource ?? "assign",
+      };
+      if (!opts?.skipAttempt) {
+        trackUsageEvent("plan_slot_replace_attempt", {
+          memberId: memberId ?? null,
+          properties: baseProps,
+        });
+      }
+      try {
+        await createMealPlan({
+          member_id: memberId ?? null,
+          child_id: memberId ?? null,
+          planned_date: params.dayKey,
+          meal_type: params.mealType,
+          recipe_id: params.recipeId,
+          title: params.recipeTitle,
+        });
+      } catch {
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: {
+            ...baseProps,
+            reason: "persist_error",
+            error_type: "meal_plan_write",
+          },
+        });
+        throw new Error("meal_plan_write_failed");
+      }
+      trackUsageEvent("plan_slot_replace_success", {
+        memberId: memberId ?? null,
+        properties: baseProps,
       });
       if (!opts?.skipInvalidate) {
         queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
@@ -289,9 +319,22 @@ export function useReplaceMealSlot(
       memberData?: MemberDataForPool | null;
       currentRecipeId?: string | null;
     }): Promise<"ok" | "ok_legacy" | "limit" | "not_found"> => {
+      const poolBase = {
+        day_key: params.dayKey,
+        meal_type: params.mealType,
+        source: "pool_pick" as const,
+      };
       if (params.isFree && getFreeSwapUsedForDay(params.dayKey)) {
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...poolBase, reason: "free_limit" },
+        });
         return "limit";
       }
+      trackUsageEvent("plan_slot_replace_attempt", {
+        memberId: memberId ?? null,
+        properties: poolBase,
+      });
       const picked = await pickReplacementFromPool({
         mealType: params.mealType,
         dayKey: params.dayKey,
@@ -300,18 +343,26 @@ export function useReplaceMealSlot(
         memberData: params.memberData,
       });
       if (!picked || (params.currentRecipeId != null && picked.id === params.currentRecipeId)) {
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...poolBase, reason: "pool_empty" },
+        });
         return "not_found";
       }
       setFreeSwapUsedForDay(params.dayKey);
-      await replaceSlotWithRecipe({
-        dayKey: params.dayKey,
-        mealType: params.mealType,
-        recipeId: picked.id,
-        recipeTitle: picked.title,
-      });
+      await replaceSlotWithRecipe(
+        {
+          dayKey: params.dayKey,
+          mealType: params.mealType,
+          recipeId: picked.id,
+          recipeTitle: picked.title,
+          replaceAnalyticsSource: "pool_pick",
+        },
+        { skipAttempt: true }
+      );
       return picked.fromLegacy ? "ok_legacy" : "ok";
     },
-    [getFreeSwapUsedForDay, pickReplacementFromPool, replaceSlotWithRecipe, setFreeSwapUsedForDay]
+    [getFreeSwapUsedForDay, pickReplacementFromPool, replaceSlotWithRecipe, setFreeSwapUsedForDay, memberId]
   );
 
   /** AI-замена: один рецепт через Edge (type recipe). Запрещена для free. */
@@ -324,6 +375,15 @@ export function useReplaceMealSlot(
     }): Promise<"ok" | "error"> => {
       if (!hasAccess) throw new Error("AI replacement is not allowed for free");
       if (!user || !session?.access_token) return "error";
+      const aiBase = {
+        day_key: params.dayKey,
+        meal_type: params.mealType,
+        source: "ai_chat" as const,
+      };
+      trackUsageEvent("plan_slot_replace_attempt", {
+        memberId: memberId ?? null,
+        properties: aiBase,
+      });
       const mealLabel =
         params.mealType === "breakfast"
           ? "завтрак"
@@ -361,6 +421,10 @@ export function useReplaceMealSlot(
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...aiBase, reason: "chat_http_error" },
+        });
         throw new Error(err?.message || `HTTP ${res.status}`);
       }
       const data = (await res.json()) as {
@@ -370,6 +434,10 @@ export function useReplaceMealSlot(
         route?: string;
       };
       if (data.route === "under_12_curated_recipe_block") {
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...aiBase, reason: "policy_curated_block" },
+        });
         throw new Error(
           typeof data.message === "string" && data.message.trim()
             ? data.message
@@ -381,21 +449,46 @@ export function useReplaceMealSlot(
         data.recipes?.[0]?.title ?? (typeof data.message === "string" ? data.message.slice(0, 100) : "Рецепт");
       if (recipeId) {
         if (params.mealType === "breakfast" && (isSoupLikeTitle(title) || getSanityBlockedReasons(title, "breakfast").length > 0)) {
+          trackUsageEvent("plan_slot_replace_fail", {
+            memberId: memberId ?? null,
+            properties: { ...aiBase, reason: "validation_breakfast" },
+          });
           throw new Error("Рецепт не подходит для завтрака (суп/рагу). Попробуйте ещё раз.");
         }
-        await replaceSlotWithRecipe({
-          dayKey: params.dayKey,
-          mealType: params.mealType,
-          recipeId,
-          recipeTitle: title,
-        });
+        await replaceSlotWithRecipe(
+          {
+            dayKey: params.dayKey,
+            mealType: params.mealType,
+            recipeId,
+            recipeTitle: title,
+            replaceAnalyticsSource: "ai_chat",
+          },
+          { skipAttempt: true }
+        );
         return "ok";
       }
       const raw = data.message ?? "";
       const jsonStr = extractSingleJsonObject(raw);
-      if (!jsonStr) throw new Error("Нет рецепта в ответе");
-      const parsed = JSON.parse(jsonStr) as { title?: string; ingredients?: unknown[]; steps?: unknown[] };
-      const recipe = await createRecipe({
+      if (!jsonStr) {
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...aiBase, reason: "no_recipe_json" },
+        });
+        throw new Error("Нет рецепта в ответе");
+      }
+      let parsed: { title?: string; ingredients?: unknown[]; steps?: unknown[] };
+      try {
+        parsed = JSON.parse(jsonStr) as { title?: string; ingredients?: unknown[]; steps?: unknown[] };
+      } catch {
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...aiBase, reason: "parse_error" },
+        });
+        throw new Error("Нет рецепта в ответе");
+      }
+      let recipe: Awaited<ReturnType<typeof createRecipe>>;
+      try {
+        recipe = await createRecipe({
         source: "chat_ai",
         recipe: {
           title: parsed.title ?? "Рецепт",
@@ -419,15 +512,30 @@ export function useReplaceMealSlot(
           image_url: null,
         })),
       });
+      } catch {
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...aiBase, reason: "recipe_create_error" },
+        });
+        throw new Error("Не удалось сохранить рецепт");
+      }
       if (params.mealType === "breakfast" && (isSoupLikeTitle(recipe.title) || getSanityBlockedReasons(recipe.title, "breakfast").length > 0)) {
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...aiBase, reason: "validation_breakfast" },
+        });
         throw new Error("Рецепт не подходит для завтрака (суп/рагу). Попробуйте ещё раз.");
       }
-      await replaceSlotWithRecipe({
-        dayKey: params.dayKey,
-        mealType: params.mealType,
-        recipeId: recipe.id,
-        recipeTitle: recipe.title,
-      });
+      await replaceSlotWithRecipe(
+        {
+          dayKey: params.dayKey,
+          mealType: params.mealType,
+          recipeId: recipe.id,
+          recipeTitle: recipe.title,
+          replaceAnalyticsSource: "ai_chat",
+        },
+        { skipAttempt: true }
+      );
       queryClient.invalidateQueries({ queryKey: ["recipes", user?.id] });
       return "ok";
     },
@@ -466,6 +574,16 @@ export function useReplaceMealSlot(
       const { data: { session: freshSession } } = await supabase.auth.getSession();
       const token = freshSession?.access_token ?? undefined;
       if (!token) return { ok: false, error: "unauthorized" };
+
+      const autoBase = {
+        day_key: params.dayKey,
+        meal_type: params.mealType,
+        source: "auto" as const,
+      };
+      trackUsageEvent("plan_slot_replace_attempt", {
+        memberId: memberId ?? null,
+        properties: autoBase,
+      });
 
       const doRequest = async (attempt: number) => {
         const replaceBody: Record<string, unknown> = {
@@ -516,13 +634,29 @@ export function useReplaceMealSlot(
 
       if (!res.ok) {
         if (res.status === 429 && (data as { code?: string }).code === "LIMIT_REACHED") {
+          trackUsageEvent("plan_slot_replace_fail", {
+            memberId: memberId ?? null,
+            properties: { ...autoBase, reason: "limit_reached" },
+          });
           return { ok: false, error: "LIMIT_REACHED", code: "LIMIT_REACHED", requestId, reason: "limit_reached" };
         }
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: { ...autoBase, reason: "http_error" },
+        });
         return { ok: false, error: (data as { error?: string }).error ?? `Ошибка ${res.status}`, requestId, reason: "http_error" };
       }
       if (data.error === "replace_failed") {
         const failReason = data.reasonIfAi ?? data.reason ?? "ai_failed";
         const code = data.code;
+        trackUsageEvent("plan_slot_replace_fail", {
+          memberId: memberId ?? null,
+          properties: {
+            ...autoBase,
+            reason: String(failReason).slice(0, 120),
+            fail_code: code ?? "replace_failed",
+          },
+        });
         return {
           ok: false,
           error: code === "pool_exhausted" || code === "pool_exhausted_retry" ? "Нет подходящих рецептов в пуле" : failReason === "no_recipe_in_response" ? "Не удалось подобрать рецепт" : "Не удалось заменить",
@@ -537,16 +671,31 @@ export function useReplaceMealSlot(
           didCountFreeSwap = true;
           setFreeSwapUsedForDay(params.dayKey);
         }
+        const planSource =
+          (data.plan_source === "pool" || data.plan_source === "ai" ? data.plan_source : data.pickedSource) ?? "pool";
+        trackUsageEvent("plan_slot_replace_success", {
+          memberId: memberId ?? null,
+          properties: {
+            day_key: params.dayKey,
+            meal_type: params.mealType,
+            source: data.pickedSource === "pool" ? "auto_pool" : "auto_ai",
+            plan_source: planSource,
+          },
+        });
         return {
           ok: true,
           pickedSource: data.pickedSource,
           newRecipeId: recipeId,
           title: data.title,
-          plan_source: (data.plan_source === "pool" || data.plan_source === "ai" ? data.plan_source : data.pickedSource) ?? "pool",
+          plan_source: planSource,
           requestId,
           reason: reason ?? "ok",
         };
       }
+      trackUsageEvent("plan_slot_replace_fail", {
+        memberId: memberId ?? null,
+        properties: { ...autoBase, reason: "unknown_response" },
+      });
       return { ok: false, error: "unknown_response", code: data.code, requestId, reason: "unknown_response" };
     },
     [user?.id, memberId, hasAccess, getFreeSwapUsedForDay, setFreeSwapUsedForDay]

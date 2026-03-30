@@ -38,7 +38,12 @@ import {
   type RecipeJson,
 } from "./recipeSchema.ts";
 import { getSystemPromptForType, generateRecipeSystemPromptV3, applyPromptTemplate, normalizeMemberData, findYoungestMember, getAgeMonths, type MemberData } from "./buildPrompt.ts";
-import { checkRecipeRequestBlocked } from "./domain/policies/index.ts";
+import { checkRecipeRequestBlocked, buildAllergyBlockedResponsePayload } from "./domain/policies/index.ts";
+import { expandAllergiesToCanonicalBlockedGroups } from "../_shared/allergyAliases.ts";
+import {
+  chatRecipeRecordToAllergyFields,
+  findFirstAllergyConflictInRecipeFields,
+} from "../_shared/chatRecipeAllergySafety.ts";
 import {
   getFamilyPromptMembers,
   buildFamilyMemberDataForChat,
@@ -646,17 +651,18 @@ serve(async (req) => {
       }));
     }
 
-    // Policy block: аллергия/dislikes в запросе — отказ без вызова модели (исключение: «без X»)
+    // Policy block: аллергия/dislikes в запросе — отказ без вызова модели (исключение: «без X»).
+    // Полные списки аллергий/dislikes профиля (не усечённые для промпта по тарифу).
     if ((type === "chat" || type === "recipe") && isRecipeRequest) {
       const profileName = targetIsFamily
         ? "Семья"
         : ((memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля");
-      const allergiesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
-        ? [...new Set(allMembersForPrompt.flatMap((m) => m.allergies ?? []))]
-        : (memberDataForPrompt?.allergies ?? []);
-      const dislikesList: string[] = targetIsFamily && allMembersForPrompt.length > 0
-        ? [...new Set(allMembersForPrompt.flatMap((m) => (m as MemberData).dislikes ?? []).filter(Boolean))]
-        : ((memberDataForPrompt as MemberData)?.dislikes ?? []);
+      const allergiesList: string[] = targetIsFamily && allMembers.length > 0
+        ? [...new Set(allMembers.flatMap((m) => m.allergies ?? []))]
+        : (memberDataNorm?.allergies ?? []);
+      const dislikesList: string[] = targetIsFamily && allMembers.length > 0
+        ? [...new Set(allMembers.flatMap((m) => (m as MemberData).dislikes ?? []).filter(Boolean))]
+        : ((memberDataNorm as MemberData)?.dislikes ?? []);
 
       const blockedPayload = checkRecipeRequestBlocked({
         userMessage,
@@ -1123,6 +1129,42 @@ serve(async (req) => {
         assistantMessage = JSON.stringify(validated);
         usedFallbackRecipe = true;
       }
+
+      // Post-recipe safety: тот же матч токенов, что в плане (recipeAllergyMatch); без fromPlanReplace — план уже отфильтрован.
+      if (!fromPlanReplace && responseRecipes.length > 0) {
+        const allergiesListPost: string[] = targetIsFamily && allMembers.length > 0
+          ? [...new Set(allMembers.flatMap((m) => m.allergies ?? []))]
+          : (memberDataNorm?.allergies ?? []);
+        if (allergiesListPost.length > 0) {
+          const profileNamePost = targetIsFamily
+            ? "Семья"
+            : ((memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля");
+          const recipeRec = responseRecipes[0] as Record<string, unknown>;
+          const fields = chatRecipeRecordToAllergyFields(recipeRec);
+          const groups = expandAllergiesToCanonicalBlockedGroups(allergiesListPost).map((g) => ({
+            profileAllergy: g.allergy,
+            tokens: g.tokens,
+          }));
+          const conflict = findFirstAllergyConflictInRecipeFields(fields, groups);
+          if (conflict) {
+            console.log(JSON.stringify({
+              tag: "CHAT_RECIPE_ALLERGY_SAFETY_REJECTION",
+              requestId,
+              profile_allergy: conflict.profileAllergy,
+              field: conflict.detail.field,
+              token: conflict.detail.token,
+              snippet: conflict.detail.snippet,
+            }));
+            const payload = buildAllergyBlockedResponsePayload({
+              profileName: profileNamePost,
+              blockedItems: [conflict.profileAllergy],
+              userMessage,
+            });
+            return new Response(JSON.stringify(payload), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        }
+      }
+
       safeLog(JSON.stringify({
         tag: "RECIPE_VALIDATION_RESULT",
         requestId,

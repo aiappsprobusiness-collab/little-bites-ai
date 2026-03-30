@@ -324,7 +324,7 @@ export function useDeepSeekAPI() {
               if (data === '[DONE]') continue;
               try {
                 const parsed = JSON.parse(data);
-                if (eventType === 'done' && (parsed?.recipe_id !== undefined || parsed?.recipes !== undefined)) {
+                if (eventType === 'done' && (parsed?.recipe_id !== undefined || parsed?.recipes !== undefined || parsed?.blocked === true)) {
                   await refetchUsage();
                   if (typeof performance !== 'undefined' && performance.mark) {
                     performance.mark('chat_recipe_ready');
@@ -339,6 +339,17 @@ export function useDeepSeekAPI() {
                     message: typeof parsed.message === 'string' ? parsed.message : fullContent,
                     recipes: Array.isArray(parsed.recipes) ? parsed.recipes : [],
                     recipe_id: parsed.recipe_id ?? null,
+                    ...(parsed.blocked !== undefined && { blocked: parsed.blocked }),
+                    ...(parsed.blocked_by !== undefined && { blocked_by: parsed.blocked_by }),
+                    ...(parsed.profile_name !== undefined && { profile_name: parsed.profile_name }),
+                    ...(parsed.blocked_items !== undefined && { blocked_items: parsed.blocked_items }),
+                    ...(parsed.matched !== undefined && { matched: parsed.matched }),
+                    ...(parsed.suggested_alternatives !== undefined && { suggested_alternatives: parsed.suggested_alternatives }),
+                    ...(parsed.original_query !== undefined && { original_query: parsed.original_query }),
+                    ...(parsed.intended_dish_hint !== undefined && { intended_dish_hint: parsed.intended_dish_hint }),
+                    ...(parsed.blockedByAllergy !== undefined && { blockedByAllergy: parsed.blockedByAllergy }),
+                    ...(parsed.blockedByDislike !== undefined && { blockedByDislike: parsed.blockedByDislike }),
+                    ...(parsed.route !== undefined && { route: parsed.route }),
                   };
                 }
                 const content = typeof parsed?.delta === 'string'

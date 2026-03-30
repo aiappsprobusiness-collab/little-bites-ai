@@ -1,4 +1,8 @@
 import { getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
+import {
+  allergyTokenMatchesInPreferenceText,
+  normalizeRecipeTextForPreferenceMatch,
+} from "../_shared/recipeAllergyMatch.ts";
 
 export type PreferenceMemberData = {
   allergies?: string[] | null;
@@ -12,27 +16,11 @@ export type PreferenceRecipe = {
 };
 
 function normalizePreferenceText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizeRecipeTextForPreferenceMatch(text);
 }
 
-/** Chickpea (нут) — не орех; не матчить токен "nut" по подстроке в слове "нут". */
-const CHICKPEA_CYRILLIC = "\u043d\u0443\u0442"; // нут
-
-/**
- * Strict allergy match: substring in title+description+ingredients.
- * Uses substring (not word boundary) so "орехами", "ореховый" are blocked by token "орех".
- * Excludes false positive: token "nut" must not match Cyrillic "нут" (chickpea).
- */
-function textContainsAllergyToken(text: string, token: string): boolean {
-  if (!token || token.length < 2) return false;
-  const lower = text.toLowerCase();
-  if (!lower.includes(token)) return false;
-  if (token === "nut" && lower.includes(CHICKPEA_CYRILLIC)) return false;
-  return true;
+function textContainsAllergyToken(normalizedRecipeText: string, token: string): boolean {
+  return allergyTokenMatchesInPreferenceText(normalizedRecipeText, token);
 }
 
 export function recipeMatchesAllergyTokens(recipe: PreferenceRecipe, tokens: string[], includeIngredients = true): boolean {

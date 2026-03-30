@@ -48,17 +48,18 @@
 ### 2.2 Где проверяется
 
 - **Edge (generate-plan):**  
-  В `pickFromPoolInMemory` кандидаты фильтруются через `passesProfileFilter` → `passesPreferenceFilters` (модуль `preferenceRules.ts`). Там для аллергий используются токены из `getBlockedTokensFromAllergies(memberData?.allergies)` (словарь из `_shared/allergyAliases.ts` + `allergens.ts`). Проверяется текст рецепта: **title, description, recipe_ingredients** (поля `name`, `display_text`). Поле `recipe_ingredients.category` не используется.
+  В `pickFromPoolInMemory` кандидаты фильтруются через `passesProfileFilter` → `passesPreferenceFilters` (модуль `preferenceRules.ts`). Там для аллергий используются токены из `getBlockedTokensFromAllergies(memberData?.allergies)` (словарь из `_shared/allergyAliases.ts` + `allergens.ts`). Проверяется текст рецепта: **title, description, recipe_ingredients** (поля `name`, `display_text`). Поле **`recipe_ingredients.category` не используется** для аллергий. Матч токена — подстрока, правило вынесено в `_shared/recipeAllergyMatch.ts` (копия из `src/shared/`, синхронизация `npm run sync:allergens`).
 
 - **Клиент** (подбор из пула при «Подобрать рецепты», замена слота из пула, `useReplaceMealSlot`, `useGenerateWeeklyPlan` при pool):  
-  В `recipePool.ts`: `passesProfileFilter` использует `containsAnyTokenForAllergy` (подстрока, без границы слова) и при наличии аллергий у профиля запрос к `recipes` **подгружает** `recipe_ingredients(name, display_text)`, так что проверка аллергий на клиенте выполняется по **title, description, tags и ингредиентам** — в одну сторону с Edge.
+  В `recipePool.ts`: `passesProfileFilter` использует `containsAnyTokenForAllergy` (подстрока, без границы слова) и при наличии аллергий у профиля запрос к `recipes` **подгружает** `recipe_ingredients(name, display_text)`, так что проверка аллергий на клиенте выполняется по **title, description, tags и ингредиентам**. Edge в `preferenceRules` tags в аллергенный текст **не** добавляет — теоретический мелкий разрыв, если аллерген указан только в tags.
 
 ### 2.3 Токены и алиасы
 
-- Набор «запрещённых» токенов строится из списка аллергий пользователя и словаря алиасов (БКМ, глютен, яйца, рыба, орехи, курица и т.д.). Примеры: БКМ → молоко, сливки, йогурт, сыр, творог, казеин и т.д.; «курица» → кур, куриц, chicken.  
-- Для **аллергий** используется проверка по **подстроке** (без требования границы слова), чтобы формы вроде «орехами», «ореховый» блокировались токеном «орех».  
+- Набор «запрещённых» токенов строится из списка аллергий пользователя и словаря алиасов (БКМ, глютен, яйца, рыба, орехи, **мясо**, **курица**, **индейка**, **говядина**, **свинина**, **фарш** и т.д.). Примеры: БКМ → молоко, сливки, йогурт, сыр, творог, казеин и т.д.; **«мясо»** / `meat` → umbrella-токены из `src/shared/meatAllergyTokens.ts` (птица, КРС/телятина, свинина, фарш, лексемы мяса/meat, часть дичи); **«курица»** → узкие стемы (`куриц`, `курин`, `chicken`, …) **без** «птиц»/poultry, чтобы аллергия только на курицу не резала утку и наоборот; **«говядина»** и **«телятина»** делят один набор стемов (`говяд`, `телят`, `beef`, `veal`).  
+- Для **аллергий** используется проверка по **подстроке** (без требования границы слова), чтобы формы вроде «орехами», «ореховый» блокировались токеном «орех». Общая реализация: `recipeAllergyMatch.ts` (`allergyTokenMatchesInPreferenceText`).  
 - **Ложный матч нут/nut:** нут (chickpea) не считается орехом: при токене «nut» текст, содержащий кириллическое «нут», не считается совпадением (явное исключение в `containsAnyTokenForAllergy` / `recipeMatchesAllergyTokens`).
 - **Яйца:** отдельный токен «белок» для аллергии на яйца **не используется** (см. §4.1 в [ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md](../decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md)).
+- **Dev:** объяснение отсева кандидата пула — `src/utils/planCandidateFilterExplain.ts` (`explainPoolCandidateRejection`, `explainAllergyFilterOnRecipe`); CLI `npm run audit:plan-allergy`.
 
 Подробнее: [ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md](../decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md), [family-nutrition-rules-map.md](./family-nutrition-rules-map.md).
 

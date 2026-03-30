@@ -391,6 +391,34 @@ RLS: по user_id.
 
 ---
 
+### Схема `analytics` (Stage 3, только VIEW)
+
+Схема не хранит таблицы; предназначена для продуктовой аналитики поверх `public.usage_events`.
+
+#### `analytics.usage_events_enriched`
+
+VIEW: те же строки, что в `usage_events`, плюс производные поля. Миграции: `20260331180000_analytics_usage_events_enriched_view.sql`, затем **`20260401120000_analytics_usage_events_enriched_stage5.sql`** (Stage 5).
+
+| Колонка | Описание |
+|---------|----------|
+| id | Как в `usage_events` |
+| event_timestamp | `created_at` |
+| event_date_utc | Дата (UTC) |
+| feature_raw, canonical_feature | Значение `feature` |
+| event_group | acquisition, auth, paywall, meal_plan, chat, share, … (CASE по taxonomy Stage 2) |
+| event_type | view, click, outcome, server_quota, limit_ui, other |
+| user_id, anon_id, session_id, member_id, page, entry_point | Как в базовой таблице |
+| utm_* | Как в базовой таблице |
+| properties, onboarding_json | jsonb и вложенный onboarding |
+| prop_recipe_id, prop_share_ref, prop_plan_ref, prop_paywall_reason, prop_source, prop_cta_target, prop_plan_scope, prop_plan_source, prop_share_type, prop_entry_point | Из `properties` |
+| onboarding_first_landing_path, onboarding_entry_point | Из `properties.onboarding` |
+| is_authenticated | `user_id IS NOT NULL` |
+| platform | `properties->>'platform'` (web / pwa / ios / android / unknown), Stage 5 |
+
+`GRANT USAGE` на схему и `SELECT` на view — для `authenticated` и `service_role`. Полное описание воронок и gaps: [docs/analytics/product-metrics-layer.md](../analytics/product-metrics-layer.md).
+
+---
+
 ### `public.plan_generation_jobs`
 
 Фоновая генерация плана (день/неделя). Для прогресса в UI.

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,11 @@ export default function LandingOnboardingScreen() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const landingDemoSectionSeenRef = useRef(false);
+
+  const onDemoSectionBecameVisible = useCallback(() => {
+    landingDemoSectionSeenRef.current = true;
+  }, []);
 
   useEffect(() => {
     if (user) return;
@@ -51,11 +56,15 @@ export default function LandingOnboardingScreen() {
   };
 
   const goToAuth = () => {
+    trackLandingEvent("landing_cta_login_click");
     const search = buildAuthParams();
     navigate(search ? `/auth?${search}` : "/auth", { replace: true });
   };
 
   const goToFreeCta = () => {
+    if (landingDemoSectionSeenRef.current) {
+      trackLandingEvent("landing_demo_save_click");
+    }
     trackLandingEvent("landing_cta_free_click");
     const search = buildAuthParams();
     navigate(search ? `/auth?${search}` : "/auth", { replace: true, state: { tab: "signup" } });
@@ -141,7 +150,12 @@ export default function LandingOnboardingScreen() {
           <h2 id="welcome-recipe-title" className="text-lg font-semibold text-foreground mb-3">
             Как выглядит рецепт в приложении
           </h2>
-          <WelcomeRecipeBlock recipe={WELCOME_LANDING_DEMO_RECIPE} isLoading={false} />
+          <WelcomeRecipeBlock
+            recipe={WELCOME_LANDING_DEMO_RECIPE}
+            isLoading={false}
+            onLandingDemoRecipeShown={() => trackLandingEvent("landing_demo_open")}
+            onLandingDemoSectionVisible={onDemoSectionBecameVisible}
+          />
         </section>
 
         {/* E) Инфо перед CTA */}

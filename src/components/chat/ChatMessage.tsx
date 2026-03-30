@@ -36,6 +36,7 @@ import {
   getShortShareUrl,
   saveShareRef,
   getShareRecipeUrl,
+  trackShareLinkCreated,
 } from "@/utils/usageEvents";
 import { shouldShowHelpDoctorReminder, stripHelpDoctorSection } from "@/utils/stripHelpDoctorSection";
 
@@ -352,6 +353,15 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       let shareUrl = SHARE_APP_URL;
       if (rid) {
         const saved = await saveShareRef(rid, shareRef);
+        if (saved) {
+          trackShareLinkCreated({
+            share_type: "recipe",
+            share_ref: shareRef,
+            surface: "chat",
+            recipe_id: rid,
+            has_native_share: usedNativeShare,
+          });
+        }
         shareUrl = saved
           ? getShortShareUrl(shareRef, SHARE_APP_URL)
           : getShareRecipeUrl(rid, channel, shareRef, SHARE_APP_URL);

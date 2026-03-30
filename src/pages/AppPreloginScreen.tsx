@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
+import { trackUsageEvent } from "@/utils/usageEvents";
 
 /**
  * Pre-login экран для standalone PWA.
@@ -22,10 +23,12 @@ export default function AppPreloginScreen() {
   }, [user, location.pathname, location.search]);
 
   const goToLogin = () => {
+    trackUsageEvent("prelogin_cta_click", { properties: { target: "login" } });
     navigate("/auth", { replace: true });
   };
 
   const goToSignup = () => {
+    trackUsageEvent("prelogin_cta_click", { properties: { target: "signup" } });
     navigate("/auth", { replace: true, state: { tab: "signup" } });
   };
 

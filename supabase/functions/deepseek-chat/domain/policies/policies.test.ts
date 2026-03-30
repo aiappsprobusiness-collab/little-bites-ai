@@ -121,3 +121,34 @@ Deno.test("blocked response contract: message and suggested_alternatives present
     throw new Error("blocked payload must have suggested_alternatives array");
   }
 });
+
+Deno.test("blocked by allergy: мясо + курица/говядина/мясное (umbrella)", () => {
+  for (
+    const userMessage of ["дай что-то мясное", "сделай суп с курицей", "тефтели из говядины"]
+  ) {
+    const payload = checkRecipeRequestBlocked({
+      userMessage,
+      allergiesList: ["мясо"],
+      dislikesList: [],
+      profileName: "Ребёнок",
+    });
+    if (!payload?.blocked || payload.blocked_by !== "allergy") {
+      throw new Error(`Expected block for "${userMessage}", got: ${JSON.stringify(payload)}`);
+    }
+    if (!payload.blocked_items.some((x) => x.toLowerCase().includes("мяс"))) {
+      throw new Error(`Expected мясо in blocked_items, got: ${payload.blocked_items.join(", ")}`);
+    }
+  }
+});
+
+Deno.test("NOT blocked: нейтральный суп при аллергии мясо", () => {
+  const payload = checkRecipeRequestBlocked({
+    userMessage: "дай суп на ужин",
+    allergiesList: ["мясо"],
+    dislikesList: [],
+    profileName: "Ребёнок",
+  });
+  if (payload !== null) {
+    throw new Error(`Expected no pre-block for neutral query, got: ${JSON.stringify(payload)}`);
+  }
+});

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { isClientForbiddenUsageFeature } from "../_shared/trackUsageClientPolicy.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -75,6 +76,14 @@ serve(async (req) => {
     const feature = typeof body.feature === "string" ? body.feature.trim() : "";
     if (!feature) {
       return jsonResponse({ ok: false, error: "feature required" }, 400);
+    }
+
+    /** Лимитные фичи — только серверные вставки; клиент не может засорять get_usage_count_today. */
+    if (isClientForbiddenUsageFeature(feature)) {
+      return jsonResponse(
+        { ok: false, error: "forbidden_feature", detail: "limit_sensitive_features_not_via_client" },
+        200
+      );
     }
 
     const authHeader = req.headers.get("Authorization");

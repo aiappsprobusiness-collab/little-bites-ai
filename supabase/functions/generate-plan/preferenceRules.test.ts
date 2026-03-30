@@ -1,4 +1,5 @@
 import { passesPreferenceFilters } from "./preferenceRules.ts";
+import { buildBlockedTokensFromAllergies } from "../_shared/allergyAliases.ts";
 
 Deno.test("passesPreferenceFilters allows egg allergy when text only says «даёт белок» (no egg)", () => {
   const allowed = passesPreferenceFilters(
@@ -102,5 +103,47 @@ Deno.test("passesPreferenceFilters blocks dislike found only in ingredients", ()
 
   if (allowed) {
     throw new Error("Expected dislike to block recipe by ingredients");
+  }
+});
+
+Deno.test("passesPreferenceFilters: мясо блокирует курицу и не блокирует овощное блюдо", () => {
+  if (
+    passesPreferenceFilters(
+      { title: "Курица с рисом", description: "", recipe_ingredients: [] },
+      { allergies: ["мясо"] },
+    )
+  ) {
+    throw new Error("Expected meat allergy to block chicken");
+  }
+  if (
+    !passesPreferenceFilters(
+      {
+        title: "Овощное рагу",
+        description: "",
+        recipe_ingredients: [{ name: "кабачок" }],
+      },
+      { allergies: ["мясо"] },
+    )
+  ) {
+    throw new Error("Expected meat allergy to allow vegetable dish");
+  }
+});
+
+Deno.test("passesPreferenceFilters: только курица+индейка — говядина разрешена", () => {
+  if (
+    !passesPreferenceFilters(
+      { title: "Гуляш из говядины", description: "", recipe_ingredients: [] },
+      { allergies: ["курица", "индейка"] },
+    )
+  ) {
+    throw new Error("Beef should be allowed when allergy is chicken+turkey only");
+  }
+});
+
+Deno.test("buildBlockedTokensFromAllergies мясо содержит курицу/говядину/фарш", () => {
+  const t = buildBlockedTokensFromAllergies(["мясо"]);
+  const need = ["куриц", "говяд", "индейк", "свинин", "фарш", "chicken"];
+  for (const n of need) {
+    if (!t.includes(n)) throw new Error(`Expected meat tokens to include ${n}`);
   }
 });

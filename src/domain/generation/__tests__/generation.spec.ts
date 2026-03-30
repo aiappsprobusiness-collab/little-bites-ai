@@ -96,6 +96,30 @@ describe("validateRecipe", () => {
     expect(res.errors.some((e) => e.includes("Preference") || e.includes("Вегетарианское"))).toBe(true);
   });
 
+  it("rejects recipe when allergy мясо and chicken appears in description (substring match как план)", () => {
+    const ctx = {
+      mode: "single" as const,
+      target: {
+        id: "1",
+        name: "Child",
+        role: "child" as const,
+        allergies: ["мясо"],
+        preferences: [],
+      },
+    };
+
+    const recipe = {
+      title: "Овощной суп",
+      description: "Подаём с куриным филе.",
+      ingredients: [{ name: "морковь", amount: "1" }],
+      steps: ["Сварить"],
+    };
+
+    const res = validateRecipe(recipe, ctx);
+    expect(res.ok).toBe(false);
+    expect(res.errors.some((e) => e.includes("Allergy"))).toBe(true);
+  });
+
   it("rejects invalid recipe format (missing title)", () => {
     const ctx = {
       mode: "single" as const,

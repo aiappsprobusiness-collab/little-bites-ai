@@ -118,6 +118,7 @@
 | Что такое пул? | Рецепты пользователя из таблицы **`public.recipes`** с `source IN ('seed','starter','manual','week_ai','chat_ai')`. |
 | Как для профиля берётся блюдо? | Для «Семья» — все такие рецепты пользователя; для ребёнка — его рецепты + с `member_id IS NULL`. Дальше фильтр по типу приёма, аллергиям, sanity и скоринг. |
 | Сохраняются ли блюда из чата в пул? | Да, в **`public.recipes`** через RPC `create_recipe_with_steps`, с **`meal_type`** и **тегами** (`chat`, `chat_<meal_type>`). |
+| Аллергии в чате | Pre-check + post-check на тех же токенах, что план (`recipeAllergyMatch`, `allergyAliases`). См. **`docs/dev/CHAT_ALLERGY_GUARD.md`**. |
 
 ---
 

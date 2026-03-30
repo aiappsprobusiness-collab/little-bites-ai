@@ -1,5 +1,5 @@
 import type { GenerationContext } from "./types";
-import { buildBlockedTokens, containsAnyToken } from "@/utils/allergenTokens";
+import { buildBlockedTokens, containsAnyToken, containsAnyTokenForAllergy } from "@/utils/allergenTokens";
 
 /** Words that indicate vegetarian preference → ban meat/fish in recipe text. */
 const VEGETARIAN_BANNED = [
@@ -9,11 +9,36 @@ const VEGETARIAN_BANNED = [
 ];
 
 /**
- * Текст рецепта только из названия и имён ингредиентов — для проверки аллергий и dislikes.
- * Не включает description, steps, nutrition, чтобы избежать ложных срабатываний
- * (например «белок» в описании пользы = нутриент, а не яйцо).
+ * Текст для аллергий: title + description + ингредиенты (name, display_text) — в унисон с планом / post-check чата (подстрока по токенам).
  */
-function getRecipeTextForConstraintCheck(recipe: Record<string, unknown>): string {
+function getRecipeTextForAllergyCheck(recipe: Record<string, unknown>): string {
+  const parts: string[] = [];
+  const title = typeof recipe.title === "string" ? recipe.title : "";
+  if (title.trim()) parts.push(title.trim());
+  const desc = typeof recipe.description === "string" ? recipe.description : "";
+  if (desc.trim()) parts.push(desc.trim());
+  const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  for (const ing of ings) {
+    if (typeof ing === "string" && ing.trim()) {
+      parts.push(ing.trim());
+    } else if (ing && typeof ing === "object") {
+      const o = ing as Record<string, unknown>;
+      const name = typeof o.name === "string" ? o.name.trim() : "";
+      const dt =
+        typeof o.display_text === "string"
+          ? o.display_text.trim()
+          : typeof o.displayText === "string"
+            ? o.displayText.trim()
+            : "";
+      if (name) parts.push(name);
+      if (dt) parts.push(dt);
+    }
+  }
+  return parts.join(" ").toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Dislikes: без description (меньше ложных срабатываний). */
+function getRecipeTextForDislikeCheck(recipe: Record<string, unknown>): string {
   const parts: string[] = [];
   const title = typeof recipe.title === "string" ? recipe.title : "";
   if (title.trim()) parts.push(title.trim());
@@ -41,7 +66,8 @@ export function validateRecipe(
   }
 
   const rec = recipe as Record<string, unknown>;
-  const constraintText = getRecipeTextForConstraintCheck(rec);
+  const allergyText = getRecipeTextForAllergyCheck(rec);
+  const dislikeText = getRecipeTextForDislikeCheck(rec);
 
   const profiles =
     ctx.mode === "family" && ctx.targets?.length
@@ -52,14 +78,14 @@ export function validateRecipe(
 
   for (const p of profiles) {
     const blockedTokens = buildBlockedTokens(p.allergies ?? []);
-    if (blockedTokens.length > 0 && containsAnyToken(constraintText, blockedTokens).hit) {
+    if (blockedTokens.length > 0 && containsAnyTokenForAllergy(allergyText, blockedTokens).hit) {
       const allergyList = (p.allergies ?? []).filter(Boolean).join(", ");
       if (allergyList) errors.push(`Allergy violation: ${allergyList}`);
     }
 
     for (const d of p.dislikes || []) {
       const tokens = buildBlockedTokens([d]);
-      if (tokens.length > 0 && containsAnyToken(constraintText, tokens).hit) {
+      if (tokens.length > 0 && containsAnyToken(dislikeText, tokens).hit) {
         errors.push(`Dislike violation: ${d}`);
       }
     }
@@ -67,7 +93,7 @@ export function validateRecipe(
     for (const pref of p.preferences || []) {
       const lowered = String(pref).toLowerCase().trim();
       if (lowered.includes("вегетариан") || lowered.includes("vegetarian")) {
-        const hasBanned = VEGETARIAN_BANNED.some((b) => constraintText.includes(b));
+        const hasBanned = VEGETARIAN_BANNED.some((b) => allergyText.includes(b));
         if (hasBanned) {
           errors.push(`Preference violation: ${pref}`);
         }
@@ -75,7 +101,7 @@ export function validateRecipe(
       }
       if (lowered.includes("не") || lowered.includes("без")) {
         const banned = lowered.replace(/не|без/gi, "").trim();
-        if (banned.length > 1 && constraintText.includes(banned)) {
+        if (banned.length > 1 && allergyText.includes(banned)) {
           errors.push(`Preference violation: ${pref}`);
         }
       }

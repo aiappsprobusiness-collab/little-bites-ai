@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { getSharedPlanByRef, type SharedPlanPayload, isSharedPlanWeek } from "@/services/sharedPlan";
 import { Button } from "@/components/ui/button";
 import { Loader2, Sparkles } from "lucide-react";
 import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
+import { trackUsageEvent } from "@/utils/usageEvents";
 
 const SOCIAL_PROOF_TEXT = "12 000 семей уже используют MomRecipes";
 
@@ -21,18 +22,20 @@ function formatDateLabel(dateStr: string): string {
 }
 
 export default function SharedPlanPage() {
-  const { ref } = useParams<{ ref: string }>();
+  const { ref: planLinkRef } = useParams<{ ref: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const [plan, setPlan] = useState<SharedPlanPayload | null>(null);
   const [status, setStatus] = useState<"loading" | "found" | "not_found">("loading");
+  const sharedPlanViewTrackedKey = useRef<string | null>(null);
+  const sharedPlanNotFoundTrackedKey = useRef<string | null>(null);
 
   useEffect(() => {
     saveOnboardingAttribution(location.pathname, location.search);
   }, [location.pathname, location.search]);
 
   useEffect(() => {
-    const r = ref?.trim();
+    const r = planLinkRef?.trim();
     if (!r) {
       setStatus("not_found");
       return;
@@ -47,19 +50,52 @@ export default function SharedPlanPage() {
         }
       })
       .catch(() => setStatus("not_found"));
-  }, [ref]);
+  }, [planLinkRef]);
+
+  useEffect(() => {
+    if (status !== "found" || !plan) return;
+    const key = planLinkRef?.trim();
+    if (!key || sharedPlanViewTrackedKey.current === key) return;
+    sharedPlanViewTrackedKey.current = key;
+    trackUsageEvent("shared_plan_view", {
+      properties: {
+        plan_ref: key,
+        plan_scope: isSharedPlanWeek(plan) ? "week" : "day",
+        cta_variant: "open_app",
+      },
+    });
+  }, [status, plan, planLinkRef]);
+
+  useEffect(() => {
+    if (status !== "not_found") return;
+    const key = planLinkRef?.trim();
+    if (!key || sharedPlanNotFoundTrackedKey.current === key) return;
+    sharedPlanNotFoundTrackedKey.current = key;
+    trackUsageEvent("shared_plan_not_found_view", {
+      properties: { plan_ref: key },
+    });
+  }, [status, planLinkRef]);
 
   const handleOpenApp = (isWeek: boolean) => {
+    const ref = planLinkRef?.trim() ?? "";
     if (isWeek) {
-      trackLandingEvent("share_week_plan_cta_click");
+      trackLandingEvent("share_week_plan_cta_click", {
+        plan_ref: ref,
+        share_type: "week_plan",
+        entry_point: "shared_week_plan",
+      });
     } else {
-      trackLandingEvent("share_day_plan_cta_click");
+      trackLandingEvent("share_day_plan_cta_click", {
+        plan_ref: ref,
+        share_type: "day_plan",
+        entry_point: "shared_day_plan",
+      });
     }
     const entryPoint = isWeek ? "shared_week_plan" : "shared_day_plan";
     const shareType = isWeek ? "week_plan" : "day_plan";
     const params = new URLSearchParams(location.search);
     params.set("entry_point", entryPoint);
-    params.set("share_ref", ref ?? "");
+    params.set("share_ref", planLinkRef ?? "");
     params.set("share_type", shareType);
     navigate(`/welcome?${params.toString()}`, { replace: true });
   };

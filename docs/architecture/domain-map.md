@@ -157,7 +157,7 @@
 ### Flow: Generate recipe in chat
 
 1. Выбор профиля или «Семья» (FamilyContext); сбор контекста (buildGenerationContext, derivePayloadFromContext).
-2. Проверка блокировки на клиенте (checkChatRequestAgainstProfile); при блоке — сообщение без вызова API.
+2. Проверка блокировки на клиенте (`checkChatRequestAgainstProfile`); при блоке — сообщение без вызова API. На Edge — pre-check + **post-recipe allergy safety** (`chatRecipeAllergySafety`, тот же матч, что план). См. `docs/decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md` §5, `docs/dev/CHAT_ALLERGY_GUARD.md`.
 3. POST deepseek-chat (memberData, messages, generationContextBlock и др.); проверка лимита get_usage_count_today(chat_recipe); при лимите — 429.
 4. Edge: policy block, сборка промпта, вызов модели, парсинг/валидация, create_recipe_with_steps, запись usage_events (chat_recipe).
 5. Клиент: сохранение обмена в chat_history (saveChatMutation); отображение рецепта.
@@ -194,8 +194,8 @@
 ## Cross-Cutting Concerns
 
 - **Subscription gating:** проверки по profiles_v2.status и premium_until/trial_* в приложении и на Edge (deepseek-chat, generate-plan — лимиты, семейный режим). Не менять без учёта payment-webhook и profiles_v2.
-- **Free limits:** фичи chat_recipe, plan_fill_day, help — 2/день; учёт через get_usage_count_today и запись в usage_events с Edge (и с клиента для части событий). Сутки UTC.
-- **Analytics:** единая точка с фронта — track-usage-event; Edge пишут usage_events, token_usage_log, plate_logs, plan_generation_jobs, subscription_plan_audit. Нет внешней аналитической системы.
+- **Free limits:** фичи chat_recipe, plan_fill_day, help — 2/день; учёт через get_usage_count_today и запись в usage_events **только с Edge** (лимитные feature с клиента блокируются). Сутки UTC.
+- **Analytics:** с фронта — track-usage-event (продуктовые события); Edge — лимиты + token/plate/jobs/audit. Таксономия и legacy mapping: `docs/decisions/ANALYTICS_EVENT_TAXONOMY_STAGE2.md`. Нет внешней аналитической системы.
 - **RLS:** доступ к данным по auth.uid(); subscriptions и subscription_plan_audit — service_role. share_refs/shared_plans — SELECT для anon по ref.
 - **Legacy compatibility:** см. Known Legacy; при изменениях не ломать обратную совместимость с child_id, recipe_data.
 - **Async generation jobs:** plan_generation_jobs для прогресса «Заполнить день/неделю»; отмена через action cancel.
