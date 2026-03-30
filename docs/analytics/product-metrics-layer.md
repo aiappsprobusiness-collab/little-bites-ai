@@ -97,3 +97,9 @@ Stage 5 зафиксирован в [STAGE5_TELEMETRY_ADDITIONS.md](../decisions
 
 - MV по `event_date_utc` для тяжёлых дашбордов.
 - Единая функция `analytics.funnel_counts(p_from, p_to, p_name)` — по желанию.
+
+---
+
+## 8. Stage 6: dashboard pack
+
+Готовые запросы для Metabase / SQL Editor: каталог **[dashboard-pack.md](./dashboard-pack.md)** и файлы `docs/analytics/sql/dashboard_*.sql`. Новых таблиц и view в БД Stage 6 не добавляет; определения DAU / activated / retention выровнены с существующими воронками и `retention_d1_d7_d30.sql`.

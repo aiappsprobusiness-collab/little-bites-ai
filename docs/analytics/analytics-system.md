@@ -12,6 +12,8 @@
 
 **Stage 5 (telemetry):** [STAGE5_TELEMETRY_ADDITIONS.md](../decisions/STAGE5_TELEMETRY_ADDITIONS.md) — `recipe_view`, `share_link_created`, replace attempt/fail, `platform` в payload; миграция view `analytics.usage_events_enriched`.
 
+**Stage 6 (dashboards):** [dashboard-pack.md](./dashboard-pack.md) — набор дашбордов и SQL `docs/analytics/sql/dashboard_*.sql` без изменений схемы БД.
+
 ## Overview
 
 Аналитика в проекте Little Bites строится на **событиях в Supabase**: таблицы `usage_events`, `token_usage_log`, `subscription_plan_audit`, `plan_generation_jobs`, а также вспомогательные таблицы `chat_history`, `plate_logs`, `share_refs`. События пишутся с **фронтенда** (через Edge Function `track-usage-event` и напрямую в часть таблиц) и с **Edge Functions** (deepseek-chat, generate-plan, payment-webhook). Отдельной внешней системы аналитики (Amplitude/Mixpanel и т.п.) в коде нет — всё хранится в БД.

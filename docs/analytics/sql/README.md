@@ -27,6 +27,19 @@
 | [wau_mau_stickiness.sql](./wau_mau_stickiness.sql) | DAU, WAU, MAU, stickiness |
 | [product_health_summary.sql](./product_health_summary.sql) | Сводный health по окну |
 
+## Stage 6 — dashboard-ready SQL
+
+Один файл ≈ одна карточка/график в BI. Список дашбордов, SoT и gaps: **[dashboard-pack.md](../dashboard-pack.md)**.
+
+| Префикс файла | Назначение |
+|----------------|------------|
+| `dashboard_exec_*` | Executive: KPI, тренды, health flags |
+| `dashboard_acquisition_*`, `dashboard_activation_*`, `dashboard_signup_*` | Вход, воронка, пути, недельные когорты |
+| `dashboard_share_*` | Share / virality |
+| `dashboard_paywall_*`, `dashboard_purchase_*`, `dashboard_trial_*` | Paywall и монетизация |
+| `dashboard_retention_*`, `dashboard_cohort_*` | Retention и когорты |
+| `dashboard_recipe_*`, `dashboard_replace_*`, `dashboard_favorites_*`, `dashboard_core_*` | Engagement |
+
 **Определения когорт и retention:** [retention-and-cohorts.md](../retention-and-cohorts.md).
 
 **View в БД:** после миграции `20260331180000_analytics_usage_events_enriched_view.sql` доступен `analytics.usage_events_enriched`.

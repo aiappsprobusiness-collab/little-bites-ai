@@ -103,3 +103,9 @@ Unified/Legacy часто **не** шлют `paywall_surface` — bucket `(null_
 Реализовано: см. [STAGE5_TELEMETRY_ADDITIONS.md](../decisions/STAGE5_TELEMETRY_ADDITIONS.md) (`recipe_view`, `share_link_created`, `platform`, replace attempt/fail, `plan_ref` на CTA плана).
 
 Дальше по желанию: просмотр рецепта в sheet без `/recipe/:id`; более явные checkout-события; MV для тяжёлых отчётов.
+
+---
+
+## 6. Stage 6 (dashboard pack)
+
+Готовые **dashboard**-запросы с теми же определениями retention / entry bucket / signup week: [dashboard-pack.md](./dashboard-pack.md), файлы `sql/dashboard_retention_*.sql`, `sql/dashboard_cohort_*.sql`. Схема БД не менялась.
