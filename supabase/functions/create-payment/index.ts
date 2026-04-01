@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { safeLog } from "../_shared/safeLogger.ts";
-import pricing from "./pricing.json" with { type: "json" };
+import pricing from "../_shared/subscriptionPricing.json" with { type: "json" };
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",

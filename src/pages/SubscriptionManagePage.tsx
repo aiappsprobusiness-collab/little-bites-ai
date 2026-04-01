@@ -8,6 +8,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { SUBSCRIPTION_PRICES } from "@/utils/subscriptionPricing";
 
 /** Форматирование даты для отображения. */
 function formatDate(iso: string | null): string {
@@ -219,18 +220,20 @@ export default function SubscriptionManagePage() {
               <div className="space-y-3">
                 <Button
                   className={primaryButtonClass}
-                  onClick={() => handlePayment("month")}
+                  onClick={() => handlePayment("year")}
                   disabled={isStartingPayment}
                 >
-                  {isStartingPayment ? "Перенаправление…" : "Купить месяц"}
+                  {isStartingPayment
+                    ? "Перенаправление…"
+                    : `Купить год — ${SUBSCRIPTION_PRICES.yearly.toLocaleString("ru-RU")} ₽`}
                 </Button>
                 <Button
                   variant="outline"
                   className={secondaryButtonClass}
-                  onClick={() => handlePayment("year")}
+                  onClick={() => handlePayment("month")}
                   disabled={isStartingPayment}
                 >
-                  Купить год (выгоднее)
+                  Месяц — {SUBSCRIPTION_PRICES.monthly.toLocaleString("ru-RU")} ₽
                 </Button>
               </div>
             )}
@@ -244,6 +247,16 @@ export default function SubscriptionManagePage() {
                 )}
                 <Button
                   className={primaryButtonClass}
+                  onClick={() => handlePayment("year")}
+                  disabled={isStartingPayment}
+                >
+                  {isStartingPayment
+                    ? "Перенаправление…"
+                    : `Купить год — ${SUBSCRIPTION_PRICES.yearly.toLocaleString("ru-RU")} ₽`}
+                </Button>
+                <Button
+                  variant="outline"
+                  className={secondaryButtonClass}
                   onClick={() => {
                     setPaywallReason("fallback");
                     setPaywallCustomMessage(null);
@@ -251,14 +264,6 @@ export default function SubscriptionManagePage() {
                   }}
                 >
                   Купить Premium
-                </Button>
-                <Button
-                  variant="outline"
-                  className={secondaryButtonClass}
-                  onClick={() => handlePayment("year")}
-                  disabled={isStartingPayment}
-                >
-                  Купить год (выгоднее)
                 </Button>
               </div>
             )}
@@ -270,7 +275,9 @@ export default function SubscriptionManagePage() {
                   onClick={() => handlePayment("year")}
                   disabled={isStartingPayment}
                 >
-                  {isStartingPayment ? "Перенаправление…" : "Перейти на год (выгоднее)"}
+                  {isStartingPayment
+                    ? "Перенаправление…"
+                    : `Перейти на год — ${SUBSCRIPTION_PRICES.yearly.toLocaleString("ru-RU")} ₽`}
                 </Button>
                 <Button
                   variant="outline"
@@ -278,7 +285,7 @@ export default function SubscriptionManagePage() {
                   onClick={() => handlePayment("month")}
                   disabled={isStartingPayment}
                 >
-                  Продлить месяц
+                  Продлить месяц — {SUBSCRIPTION_PRICES.monthly.toLocaleString("ru-RU")} ₽
                 </Button>
                 <Button
                   variant="outline"
@@ -286,7 +293,7 @@ export default function SubscriptionManagePage() {
                   onClick={() => handlePayment("year")}
                   disabled={isStartingPayment}
                 >
-                  Продлить год
+                  Продлить год — {SUBSCRIPTION_PRICES.yearly.toLocaleString("ru-RU")} ₽
                 </Button>
                 {hasAccess && (
                   <button

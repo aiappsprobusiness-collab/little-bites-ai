@@ -12,7 +12,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
-import pricing from "../../../supabase/functions/create-payment/pricing.json";
+import { SUBSCRIPTION_PRICES, YEARLY_PER_MONTH } from "@/utils/subscriptionPricing";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
 
 const MEAL_EMOJIS: Record<string, string> = {
@@ -178,7 +178,7 @@ export function WeekPreviewPaywallSheet({
                 <>
                   <span className="font-semibold leading-tight">Открыть полный доступ</span>
                   <span className="text-[11px] font-normal text-muted-foreground mt-0.5 leading-relaxed">
-                    от {pricing.monthRub} ₽ в месяц
+                    от {SUBSCRIPTION_PRICES.yearly.toLocaleString("ru-RU")} ₽ в год (~{YEARLY_PER_MONTH} ₽/мес)
                   </span>
                 </>
               )}

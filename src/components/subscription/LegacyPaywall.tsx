@@ -10,7 +10,8 @@ import { trackUsageEvent } from "@/utils/usageEvents";
 import { getPaywallReasonCopy, resolvePaywallReason } from "@/utils/paywallReasonCopy";
 import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
 import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
-import pricing from "../../../supabase/functions/create-payment/pricing.json";
+import { PaywallSubscriptionPlans } from "@/components/subscription/PaywallSubscriptionPlans";
+import { paywallSubscribeCtaLabel } from "@/utils/subscriptionPricing";
 
 export interface PaywallSharedProps {
   isOpen: boolean;
@@ -91,11 +92,6 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
     navigate("/subscription/manage");
   };
 
-  const payLine =
-    pricingOption === "month"
-      ? `${pricing.monthRub.toLocaleString("ru-RU")} ₽/мес`
-      : `${pricing.yearRub.toLocaleString("ru-RU")} ₽/год`;
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -169,36 +165,8 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
             <div className="shrink-0 flex flex-col gap-3 pt-3 mt-auto border-t border-border/40">
               {showPayForm && (
                 <>
-                  <div className="rounded-xl border border-border bg-card/50 p-3 space-y-2">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPricingOption("month")}
-                        className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                          pricingOption === "month"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                        }`}
-                      >
-                        {pricing.monthRub.toLocaleString("ru-RU")} ₽ / мес
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPricingOption("year")}
-                        className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-colors ${
-                          pricingOption === "year"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                        }`}
-                      >
-                        {pricing.yearRub.toLocaleString("ru-RU")} ₽ / год
-                      </button>
-                    </div>
-                    {pricingOption === "year" && (
-                      <p className="text-[11px] text-center text-muted-foreground leading-relaxed">
-                        Экономия ~17% · {Math.round(pricing.yearRub / 12).toLocaleString("ru-RU")} ₽/мес
-                      </p>
-                    )}
+                  <div className="rounded-xl border border-border bg-card/50 p-3">
+                    <PaywallSubscriptionPlans value={pricingOption} onChange={setPricingOption} density="compact" />
                   </div>
 
                   {!hasAccess && !trialUnavailable && (
@@ -249,10 +217,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                     {isStartingPayment ? (
                       <span className="text-sm">Перенаправление…</span>
                     ) : (
-                      <>
-                        <span className="text-sm font-semibold leading-tight">Открыть полный доступ</span>
-                        <span className="text-[11px] font-normal text-muted-foreground mt-0.5 leading-relaxed">{payLine}</span>
-                      </>
+                      <span className="text-sm font-semibold leading-tight">{paywallSubscribeCtaLabel(pricingOption)}</span>
                     )}
                   </Button>
 

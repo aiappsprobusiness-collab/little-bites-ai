@@ -50,6 +50,12 @@
 - Над блоком месяц/год — микро-подпись **`UNIFIED_PAYWALL_PRICING_CAPTION`** в том же файле копирайта.
 - Доп. пункты в канонических юртекстах: as is, изменение сервиса и документов (`TermsContent`), срок хранения (`PrivacyContent`), возвраты (`SubscriptionContent`); см. **`docs/dev/legal-copy-and-auth-consent.md`**.
 
+## Цены подписки (₽) и оплата Т-Банк
+
+- **Клиент (отображение и CTA):** `src/utils/subscriptionPricing.ts` — `SUBSCRIPTION_PRICES`, подпись кнопки `paywallSubscribeCtaLabel`, эквивалент года в месяц `YEARLY_PER_MONTH`.
+- **Выбор плана в paywall:** `src/components/subscription/PaywallSubscriptionPlans.tsx` (используют `UnifiedPaywall` и `LegacyPaywall`). По умолчанию выбран **год**.
+- **Edge (копейки для Init и сверки webhook):** `supabase/functions/_shared/subscriptionPricing.json` — те же числа, что в `SUBSCRIPTION_PRICES`; импортируют **`create-payment`** и **`payment-webhook`**.
+
 ## Лимиты подписки и скрытые Premium-ограничения (март 2026)
 
 - **Единая конфигурация лимитов тарифов:** `src/utils/subscriptionRules.ts` (в т.ч. `PREMIUM_TRIAL_CHAT_DAILY_LIMIT`, `PREMIUM_TRIAL_HELP_DAILY_LIMIT`, профили 1 / 7, аллергии, likes/dislikes).

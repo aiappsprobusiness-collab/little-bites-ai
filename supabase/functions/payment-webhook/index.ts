@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { safeLog, safeError } from "../_shared/safeLogger.ts";
+import pricing from "../_shared/subscriptionPricing.json" with { type: "json" };
 
 /** Подпись уведомления T-Bank EACQ: все параметры кроме Token и вложенных (Data, Receipt); добавить Password; сортировка по ключу; конкатенация только значений; SHA-256 hex. */
 function buildTokenString(params: Record<string, unknown>, secret: string): string {
@@ -86,8 +87,8 @@ serve(async (req) => {
     }
 
     const amountFromNotification = body.Amount != null ? Number(body.Amount) : null;
-    const monthKopecks = 29900;
-    const yearKopecks = 299000;
+    const monthKopecks = pricing.monthRub * 100;
+    const yearKopecks = pricing.yearRub * 100;
     const amountTolerance = 1;
 
     const dataObj = body.DATA ?? body.Data ?? body.data;
