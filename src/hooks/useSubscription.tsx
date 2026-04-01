@@ -4,6 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { logMembersProfileLoadStart } from "@/utils/authSessionDebug";
 import { getSubscriptionLimits, isAiDailyLimitExceeded } from "@/utils/subscriptionRules";
+import { useAppStore } from "@/store/useAppStore";
+import { hasSeenTrialActivatedModal } from "@/utils/trialActivatedModalStorage";
+import { getMsUntilTrialEnd } from "@/utils/trialLifecycle";
 
 /** Единая логика доступа: true если подписка активна (premium/trial) и не истекла. */
 export function hasPremiumAccessFromSubscription(subscription: {
@@ -99,12 +102,10 @@ export function useSubscription() {
   const trialUsed = profileV2?.trial_used ?? false;
   const planInitialized = profileV2?.plan_initialized ?? false;
 
-  /** Trial: источник истины — trial_until. Доступ пока trial_until > now(). */
-  const hasTrialAccess =
-    trialUntil != null && trialUntil !== "" && new Date(trialUntil) > new Date();
-  const trialRemainingMs = hasTrialAccess
-    ? new Date(trialUntil!).getTime() - Date.now()
-    : 0;
+  /** Trial: источник истины — trial_until (см. `getMsUntilTrialEnd` в trialLifecycle). */
+  const trialMsRemaining = getMsUntilTrialEnd(trialUntil);
+  const hasTrialAccess = trialMsRemaining != null && trialMsRemaining > 0;
+  const trialRemainingMs = hasTrialAccess ? trialMsRemaining! : 0;
   /** ceil для UX (1.5 дня → 2); min 1 день при любом положительном остатке. */
   const trialRemainingDays = hasTrialAccess
     ? Math.max(1, Math.ceil(trialRemainingMs / 86_400_000))
@@ -208,7 +209,7 @@ export function useSubscription() {
 
   /** Активировать trial по кнопке. RPC возвращает { result, trial_until }. */
   const startTrial = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<{ activated: boolean }> => {
       if (!user) throw new Error("User not authenticated");
       const { data, error } = await supabase.rpc("start_trial");
       if (error) throw error;
@@ -218,15 +219,23 @@ export function useSubscription() {
         throw new Error("TRIAL_ALREADY_USED");
       }
       if (result === "already_active") {
-        return;
+        return { activated: false };
       }
       if (result !== "activated") {
         throw new Error(payload?.error ?? "Не удалось активировать триал");
       }
+      return { activated: true };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["subscription-plan", user?.id] });
+      if (
+        data?.activated &&
+        user?.id &&
+        !hasSeenTrialActivatedModal(user.id)
+      ) {
+        useAppStore.getState().setShowTrialActivatedModal(true);
+      }
     },
   });
 

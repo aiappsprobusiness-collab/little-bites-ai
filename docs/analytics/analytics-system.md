@@ -218,7 +218,7 @@ Read-only слой поверх `public.usage_events`: `event_group`, `event_typ
 | member_create_start | AddChildForm | usage_events | то же | Начало создания члена семьи |
 | member_create_success | AddChildForm | usage_events | properties: { member_id } | Успешное создание |
 | **Paywall / trial / purchase** |
-| paywall_view | Paywall (Unified / Legacy), WeekPreviewPaywallSheet | usage_events | Unified/Legacy: `paywall_reason`; week preview sheet: `paywall_reason`, `source`, `paywall_surface` | Показ paywall или нижнего sheet превью недели |
+| paywall_view | Paywall (Unified / Legacy), WeekPreviewPaywallSheet | usage_events | Unified/Legacy: `paywall_reason` (в т.ч. `trial_ending_soon`, `trial_expired` при открытии из `TrialLifecycleModalsHost`); week preview sheet: `paywall_reason`, `source`, `paywall_surface` | Показ paywall или нижнего sheet превью недели |
 | paywall_primary_click | Paywall, WeekPreviewPaywallSheet | usage_events | properties: { source } и/или { paywall_reason } опционально | Клик по основной кнопке |
 | paywall_secondary_click | Paywall | usage_events | properties: { paywall_reason } опционально (UnifiedPaywall) | Клик по вторичной кнопке |
 | trial_started | Paywall, WeekPreviewPaywallSheet | usage_events | то же | После успешного start_trial() |

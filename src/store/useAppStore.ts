@@ -15,6 +15,9 @@ interface AppState {
   setPaywallReason: (v: string | null) => void;
   showFavoritesLimitSheet: boolean;
   setShowFavoritesLimitSheet: (v: boolean) => void;
+  /** После успешного start_trial (один показ, пока не закрыли — см. trialActivatedModalStorage) */
+  showTrialActivatedModal: boolean;
+  setShowTrialActivatedModal: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -30,6 +33,8 @@ export const useAppStore = create<AppState>()(
       setPaywallReason: (v) => set({ paywallReason: v }),
       showFavoritesLimitSheet: false,
       setShowFavoritesLimitSheet: (v) => set((s) => ({ ...s, showFavoritesLimitSheet: v })),
+      showTrialActivatedModal: false,
+      setShowTrialActivatedModal: (v) => set({ showTrialActivatedModal: v }),
     }),
     { name: STORAGE_KEY, partialize: (s) => ({ _version: s._version }) }
   )

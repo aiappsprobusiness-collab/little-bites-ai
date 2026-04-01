@@ -24,6 +24,8 @@ export type PaywallReasonKey =
   | "favorites_limit"
   | "new_product"
   | "article_locked"
+  | "trial_ending_soon"
+  | "trial_expired"
   | "fallback";
 
 export interface PaywallReasonCopy {
@@ -216,6 +218,16 @@ const COPY: Record<PaywallReasonKey, PaywallReasonCopy> = {
       "Удобная навигация по разделам",
       "Дополняет план и раздел помощи",
     ],
+  },
+  trial_ending_soon: {
+    title: "Пробный период скоро закончится",
+    body: "Оформите Premium, чтобы не потерять полный доступ к плану и рецептам.",
+    bullets: FALLBACK.bullets,
+  },
+  trial_expired: {
+    title: "Пробный доступ завершён",
+    body: "Продолжайте пользоваться всеми функциями с подпиской Premium.",
+    bullets: FALLBACK.bullets,
   },
   fallback: FALLBACK,
 };

@@ -29,7 +29,7 @@
 
 - **Назначение:** тариф (free / trial / premium), срок премиума, лимиты запросов.
 - **Таблицы:** `profiles_v2` (status, premium_until, trial_*, requests_today, last_reset), `subscriptions` (платежи Т-Банк; RLS service_role). Аудит плана: `subscription_plan_audit`.
-- **UI:** Paywall (`Paywall.tsx` → по умолчанию `UnifiedPaywall`, legacy — `LegacyPaywall` при `VITE_FF_UNIFIED_PAYWALL=false`), SubscriptionCard, TrialSoftBanner, PaymentResult, create-payment flow. Единый копирайт и пункты ценности — `src/utils/unifiedPaywallCopy.ts`; контекстный legacy-текст — `src/utils/paywallReasonCopy.ts` (`paywall_reason` остаётся для аналитики). Социальное усиление / trial — в разметке paywall.
+- **UI:** Paywall (`Paywall.tsx` → по умолчанию `UnifiedPaywall`, legacy — `LegacyPaywall` при `VITE_FF_UNIFIED_PAYWALL=false`), trial lifecycle (клиент, без новых полей БД): `src/utils/trialLifecycle.ts` (единые проверки по `trial_until` / `trial_used` / premium), после `start_trial` — `TrialActivatedModal` (`trialActivatedModalStorage` + `useAppStore`), напоминание ≤24 ч и экран после окончания — `TrialLifecycleModalsHost` + `TrialLifecycleModal` (`trialLifecycleStorage`). Чип тарифа в хедере — `SubscriptionTierBadge` + `subscriptionTierDisplay`. SubscriptionCard, TrialSoftBanner (effective trial, не premium), PaymentResult, create-payment flow. Копирайт paywall — `unifiedPaywallCopy.ts` / `paywallReasonCopy.ts` (в т.ч. `trial_ending_soon`, `trial_expired` для открытия paywall из lifecycle).
 - **Edge:** `create-payment` (Init, сумма и `plan` из `_shared/subscriptionPricing.json`), `payment-webhook` (подпись Т-Банка, затем **сверка Amount с тарифом строки `subscriptions`** — без совпадения RPC не вызывается; идемпотентность по `status=confirmed` / `was_updated`). См. `docs/dev/PAYMENT_WEBHOOK_PREMIUM_VALIDATION.md`.
 - **Зависимости:** все фичи с лимитами и gating смотрят на profiles_v2.status / premium_until / trial_*.
 
@@ -178,9 +178,10 @@
 
 ### Flow: Start trial / premium
 
-1. Paywall (кнопка «Попробовать» или «Оформить»); trial: start_trial RPC → profiles_v2.trial_*; purchase: create-payment Edge → редирект на оплату.
-2. После оплаты: Т-Банк вызывает payment-webhook; обновление subscriptions и profiles_v2 (status, premium_until); запись subscription_plan_audit.
-3. Домены: Subscription & Trial, Payments, Analytics (trial_started, purchase_success).
+1. Paywall (кнопка «Попробовать» или «Оформить»); trial: `start_trial` RPC → `profiles_v2.trial_*`; при ответе `activated` клиент инвалидирует профиль и при необходимости показывает `TrialActivatedModal` (не повторять после закрытия — ключ в localStorage на `user_id`). Purchase: create-payment Edge → редирект на оплату.
+2. Клиентский lifecycle (MVP): при активном trial и остатке ≤24 ч — однократное `TrialLifecycleModal` «скоро конец» (`trialLifecycleStorage`); после истечения `trial_until` (и `trial_used`, без premium) — однократное модальное «доступ завершён»; CTA Premium открывает глобальный paywall с `paywall_reason` `trial_ending_soon` / `trial_expired`.
+3. После оплаты: Т-Банк вызывает payment-webhook; обновление subscriptions и profiles_v2 (status, premium_until); запись subscription_plan_audit.
+4. Домены: Subscription & Trial, Payments, Analytics (trial_started, purchase_success, paywall_view с новыми reason при необходимости).
 
 ### Flow: Share recipe or plan
 

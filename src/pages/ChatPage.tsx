@@ -216,8 +216,6 @@ export default function ChatPage() {
     dailyLimit,
     usedToday,
     subscriptionStatus,
-    isTrial,
-    trialDaysRemaining,
     aiDailyLimit,
     hasAccess,
     helpLimitExceeded,
@@ -1497,13 +1495,7 @@ export default function ChatPage() {
   const ageLabel = ageMonths != null ? (ageMonths < 12 ? `${ageMonths} мес` : `${Math.floor(ageMonths / 12)} ${ageMonths % 12 === 0 ? "лет" : "г."}`) : null;
 
   const chatHeaderMeta =
-    mode !== "help" && isTrial && trialDaysRemaining !== null
-      ? (
-        <span className="text-typo-caption text-amber-700 dark:text-amber-400 font-medium">
-          Trial: осталось {trialDaysRemaining} {trialDaysRemaining === 1 ? "день" : trialDaysRemaining < 5 ? "дня" : "дней"}
-        </span>
-      )
-      : mode !== "help" && isFree && aiDailyLimit !== null
+    mode !== "help" && isFree && aiDailyLimit !== null
         ? (
           <span className="block">
             <span className="text-[11px] text-muted-foreground/80 block">

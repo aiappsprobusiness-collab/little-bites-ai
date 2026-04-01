@@ -39,12 +39,16 @@ import { PaymentSuccess, PaymentFail } from "./pages/PaymentResult";
 import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
+import { TrialActivatedModal } from "./components/subscription/TrialActivatedModal";
+import { TrialLifecycleModalsHost } from "./components/subscription/TrialLifecycleModalsHost";
 import { FavoritesLimitSheet } from "./components/plan/FavoritesLimitSheet";
 import { FF_UNIFIED_PAYWALL } from "./config/featureFlags";
 import { DinnerReminderBanner } from "./components/DinnerReminderBanner";
 import { useAppStore } from "./store/useAppStore";
 import { useSubscription } from "./hooks/useSubscription";
+import { useAuth } from "./hooks/useAuth";
 import { captureAttributionFromLocationOnce } from "./utils/usageEvents";
+import { isEffectiveTrialTier, TRIAL_ENDING_SOON_MS } from "./utils/trialLifecycle";
 
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
@@ -116,13 +120,34 @@ function GlobalPaywall() {
   );
 }
 
-/** Мягкий баннер: при trial и остатке ≤24ч — «сегодня/завтра», иначе «через N дней». */
+function TrialActivatedModalHost() {
+  const { user } = useAuth();
+  const show = useAppStore((s) => s.showTrialActivatedModal);
+  const setShow = useAppStore((s) => s.setShowTrialActivatedModal);
+
+  useEffect(() => {
+    if (!user) setShow(false);
+  }, [user, setShow]);
+
+  if (!user) return null;
+
+  return (
+    <TrialActivatedModal
+      open={show}
+      userId={user.id}
+      onClose={() => setShow(false)}
+    />
+  );
+}
+
+/** Мягкий баннер: при effective trial и остатке ≤24ч — «сегодня/завтра», иначе «через N дней». */
 function TrialSoftBanner() {
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
-  const { hasTrialAccess, trialRemainingMs, trialRemainingDays } = useSubscription();
+  const { trialUntil, hasPremiumAccess, trialRemainingMs, trialRemainingDays } = useSubscription();
+  const trialUx = isEffectiveTrialTier(trialUntil, hasPremiumAccess);
   useEffect(() => {
-    if (!hasTrialAccess) return;
-    if (trialRemainingMs <= 86_400_000) {
+    if (!trialUx) return;
+    if (trialRemainingMs <= TRIAL_ENDING_SOON_MS) {
       const endOfTrial = new Date(Date.now() + trialRemainingMs);
       const now = new Date();
       const isToday =
@@ -135,7 +160,7 @@ function TrialSoftBanner() {
         trialRemainingDays === 1 ? "день" : trialRemainingDays < 5 ? "дня" : "дней";
       setPaywallCustomMessage(`Триал заканчивается через ${trialRemainingDays} ${days}`);
     }
-  }, [hasTrialAccess, trialRemainingMs, trialRemainingDays, setPaywallCustomMessage]);
+  }, [trialUx, trialRemainingMs, trialRemainingDays, setPaywallCustomMessage]);
   return null;
 }
 
@@ -159,6 +184,8 @@ const App = () => (
             <PWAInstall />
             <PWAUpdateToast />
             <GlobalPaywall />
+            <TrialActivatedModalHost />
+            <TrialLifecycleModalsHost />
             {!FF_UNIFIED_PAYWALL ? <FavoritesLimitSheet /> : null}
             <TrialSoftBanner />
             <DinnerReminderBanner />
