@@ -34,7 +34,7 @@ export default function AppPreloginScreen() {
 
   if (loading) {
     return (
-      <div className="min-h-screen min-h-dvh flex items-center justify-center gradient-hero">
+      <div className="min-h-screen min-h-dvh flex items-center justify-center bg-[#E8F1EC]">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
           <p className="text-muted-foreground">Загрузка...</p>

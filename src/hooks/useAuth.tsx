@@ -66,6 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (loading) return;
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("perf") !== "1") return;
+    console.log("[perf] auth bootstrap ready (loading false)", performance.now());
+  }, [loading]);
+
   const signUp = async (
     email: string,
     password: string,

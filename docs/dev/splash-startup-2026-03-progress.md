@@ -12,7 +12,7 @@
 - В **`index.html`** добавлены inline-стили для `html/body` и `#splash-screen`, **preload** фона `/splash/splash-screen.png`, метка времени `window.__momRecipesSplashStartMs` для единого отсчёта длительности.
 - Убрана анимация появления с нулевой прозрачности; **`src/styles/splash.css`** дублирует правила после загрузки бандла (комментарий про синхронизацию с `index.html`).
 - В **`main.tsx`**: скрытие splash только после **`window.load`** и не раньше **2800 ms** с момента inline-метки; плавный fade-out **400 ms**.
-- **`capacitor.config.ts` / `.json`**: `launchShowDuration` **3000 ms** (согласовано с минимальным показом в WebView).
+- **`capacitor.config.ts` / `.json`**: параметры SplashScreen для **опциональных** нативных сборок; **основной канал — PWA** (без `cap sync`). Старт для пользователей с сайта: `index.html` + `main.tsx` + manifest; см. **`docs/dev/STARTUP_UI_AND_PLAN_LOADING.md`**.
 - **`public/manifest.json`**: `theme_color` приведён к **`#E8F1EC`** (как фон splash), чтобы PWA/Chrome не контрастировали с брендированным первым кадром.
 - **`public/sw.js`**: в precache добавлен **`/splash/splash-screen.png`** для повторных запусков с активным SW.
 
@@ -23,10 +23,11 @@
 | Первый кадр (до JS) | `index.html` — `<style>` + `#splash-screen`, `preload` изображения |
 | Те же правила после бандла | `src/styles/splash.css` (должен совпадать с inline) |
 | Минимальная длительность и fade-out | `src/main.tsx` — `SPLASH_MIN_VISIBLE_MS`, `SPLASH_FADE_OUT_MS`, `window.__momRecipesSplashStartMs` |
-| Нативный Android (Capacitor) | `capacitor.config.ts` / `capacitor.config.json` → `plugins.SplashScreen`; drawable `splash` в Android-проекте (генерация: `npm run generate:capacitor-icons` / `@capacitor/assets`, исходник — тот же визуал, что `public/splash/splash-screen.png`) |
+| Установленная PWA (Chrome / Safari) | `public/manifest.json` → `background_color` / `theme_color` / `icons`; `index.html` → `theme-color`, splash overlay |
+| Опционально: Capacitor | `capacitor.config.*` + нативные ассеты (не обязательно для PWA с домашнего экрана) |
 | PWA meta | `index.html` → `theme-color`, `public/manifest.json` → `background_color` / `theme_color` |
 
-Подробнее см. обновлённый **`docs/dev/PWA_ICONS_AND_SPLASH.md`**.
+Подробнее: **`docs/dev/PWA_ICONS_AND_SPLASH.md`**, **`docs/dev/STARTUP_UI_AND_PLAN_LOADING.md`**.
 
 ## Как проверить
 

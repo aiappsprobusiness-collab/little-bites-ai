@@ -77,9 +77,23 @@ disableDoubleTapZoom();
 
 createRoot(document.getElementById("root")!).render(<App />);
 
-/** Минимум показа брендированного splash (мс); плюс ждём window.load, чтобы не мигать на медленной сети */
+/** Минимум показа брендированного splash (мс); плюс ждём window.load, чтобы не мигать на медленной сети (PWA / браузер). */
 const SPLASH_MIN_VISIBLE_MS = 2800;
 const SPLASH_FADE_OUT_MS = 400;
+
+function isStartupPerf(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("perf") === "1";
+}
+
+if (typeof window !== "undefined" && isStartupPerf()) {
+  console.log("[perf] pwa react root render (sync)", performance.now());
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      console.log("[perf] pwa first frames after root (rAF×2)", performance.now());
+    });
+  });
+}
 
 function hideSplashWhenReady() {
   const splash = document.getElementById("splash-screen");
@@ -91,6 +105,9 @@ function hideSplashWhenReady() {
       : Date.now();
 
   const fadeOut = () => {
+    if (isStartupPerf()) {
+      console.log("[perf] pwa html splash fade start", performance.now());
+    }
     splash.style.pointerEvents = "none";
     splash.style.opacity = "0";
     splash.style.transition = `opacity ${SPLASH_FADE_OUT_MS}ms ease-out`;
@@ -99,6 +116,9 @@ function hideSplashWhenReady() {
 
   const elapsed = Date.now() - start;
   const wait = Math.max(0, SPLASH_MIN_VISIBLE_MS - elapsed);
+  if (isStartupPerf()) {
+    console.log("[perf] pwa splash hide schedule ms", { wait, elapsed, min: SPLASH_MIN_VISIBLE_MS });
+  }
   setTimeout(fadeOut, wait);
 }
 

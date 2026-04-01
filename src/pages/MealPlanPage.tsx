@@ -46,6 +46,7 @@ import { PoolExhaustedSheet } from "@/components/plan/PoolExhaustedSheet";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { addDaysToLocalYmd, formatLocalDate } from "@/utils/dateUtils";
+import { MEAL_PLAN_DATE_QUERY_PARAM } from "@/utils/mealPlanNavigation";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import {
@@ -316,7 +317,7 @@ export default function MealPlanPage() {
   const { user, authReady } = useAuth();
   const { updateMember, isUpdating: isUpdatingMember } = useMembers();
   const { selectedMember, members, selectedMemberId, setSelectedMemberId, isFreeLocked, isLoading: isMembersLoading } = useFamily();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [justCreatedMemberId, setJustCreatedMemberIdState] = useState<string | null>(null);
   const [showWeekPreviewSheet, setShowWeekPreviewSheet] = useState(false);
   const [shoppingBuildSheetOpen, setShoppingBuildSheetOpen] = useState(false);
@@ -558,6 +559,53 @@ export default function MealPlanPage() {
   const endKey = getRollingEndKey();
   const rollingDates = useMemo(() => getRolling7Dates(), [startKey]);
   const todayKey = formatLocalDate(new Date());
+  const todayIndex = useMemo(
+    () => rollingDates.findIndex((d) => formatLocalDate(d) === todayKey),
+    [rollingDates, todayKey]
+  );
+  const dateFromUrl = searchParams.get(MEAL_PLAN_DATE_QUERY_PARAM);
+  /** Индекс дня в rolling-7: из `?date=`, иначе для Free — «сегодня», для Premium — первый день диапазона. */
+  const selectedDay = useMemo(() => {
+    if (rollingDates.length === 0) return 0;
+    if (dateFromUrl) {
+      const idx = rollingDates.findIndex((d) => formatLocalDate(d) === dateFromUrl);
+      if (idx >= 0) return idx;
+    }
+    if (isFree && todayIndex >= 0) return todayIndex;
+    return 0;
+  }, [dateFromUrl, rollingDates, isFree, todayIndex]);
+
+  const selectPlanDayIndex = useCallback(
+    (index: number) => {
+      if (isFree) return;
+      const d = rollingDates[index];
+      if (!d) return;
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set(MEAL_PLAN_DATE_QUERY_PARAM, formatLocalDate(d));
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [isFree, rollingDates, setSearchParams]
+  );
+
+  /** Free: день зафиксирован на «сегодня» — держим `?date=` в синхроне с URL (шаринг, возврат). */
+  useEffect(() => {
+    if (!isFree || todayIndex < 0 || rollingDates.length === 0) return;
+    const expected = formatLocalDate(rollingDates[todayIndex]);
+    if (dateFromUrl === expected) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set(MEAL_PLAN_DATE_QUERY_PARAM, expected);
+        return next;
+      },
+      { replace: true }
+    );
+  }, [isFree, todayIndex, rollingDates, dateFromUrl, setSearchParams]);
 
   const initialPlanRanRef = useRef(false);
   /** Инкремент при каждом запуске клиентского добора прикорма — отмена предыдущего async при смене дня/данных. */
@@ -668,30 +716,24 @@ export default function MealPlanPage() {
     const stored = getStoredJobId(user.id, memberIdForPlan, startKey);
     if (stored) refetchJob();
   }, [user?.id, memberIdForPlan, startKey, refetchJob]);
-  const [selectedDay, setSelectedDay] = useState(0);
 
   // При смене дня (startKey) сбрасываем мьют, чтобы не тянуть его с прошлой недели
   useEffect(() => {
     if (!mutedWeekKey) return;
     if (mutedWeekKey !== startKey) {
       setMutedWeekKey(null);
-      if (typeof localStorage !== "undefined") localStorage.removeItem(MUTED_WEEK_STORAGE_KEY);
+      if (typeof localStorage !== "undefined") localStorage.removeItem(MEAL_PLAN_MUTED_WEEK_STORAGE_KEY);
     }
   }, [startKey, mutedWeekKey]);
 
-  // Синхронизация URL ?memberId= & ?date= при заходе на План (редирект после создания члена семьи)
+  // Синхронизация URL ?memberId= при заходе на План (редирект после создания члена семьи). День недели — из ?date= через selectedDay (useMemo выше).
   useEffect(() => {
     if (location.pathname !== "/meal-plan" || members.length === 0) return;
     const urlMemberId = searchParams.get("memberId");
-    const urlDate = searchParams.get("date");
     if (urlMemberId && members.some((m) => m.id === urlMemberId)) {
       setSelectedMemberId(urlMemberId);
     }
-    if (urlDate && rollingDates.length > 0) {
-      const idx = rollingDates.findIndex((d) => formatLocalDate(d) === urlDate);
-      if (idx >= 0) setSelectedDay(idx);
-    }
-  }, [location.pathname, searchParams, members, rollingDates, setSelectedMemberId]);
+  }, [location.pathname, searchParams, members, setSelectedMemberId]);
 
   const { replaceMealSlotAuto, getFreeSwapUsedForDay, replaceSlotWithRecipe } = useReplaceMealSlot(
     memberIdForPlan,
@@ -717,7 +759,6 @@ export default function MealPlanPage() {
     const wasOnPlan = prevPathnameRef.current === "/meal-plan";
     prevPathnameRef.current = location.pathname;
     if (isOnPlan && !wasOnPlan) {
-      setSelectedDay(0);
       setPlanSoftChatDismissed(false);
       setPlanSoftChatRevealUnlocked(false);
       requestAnimationFrame(() => scrollContainerRef.current?.scrollTo(0, 0));
@@ -732,15 +773,6 @@ export default function MealPlanPage() {
     const t = setTimeout(() => setCtaGlow(false), 1200);
     return () => clearTimeout(t);
   }, [location.pathname]);
-
-  const todayIndex = useMemo(() => rollingDates.findIndex((d) => formatLocalDate(d) === todayKey), [rollingDates, todayKey]);
-
-  useEffect(() => {
-    if (isFree && todayIndex >= 0 && selectedDay !== todayIndex) {
-      if (import.meta.env.DEV) console.log("[DEBUG] free day locked to today");
-      setSelectedDay(todayIndex);
-    }
-  }, [isFree, todayIndex, selectedDay]);
 
   const selectedDate = rollingDates[selectedDay];
   const selectedDayKey = formatLocalDate(selectedDate);
@@ -793,9 +825,29 @@ export default function MealPlanPage() {
   );
 
   const { data: dayMealPlans = [], isLoading, isFetching } = getMealPlansByDate(selectedDate);
-  /** Актуальные планы дня для проверок внутри async автодобора прикорма (избегаем гонок). */
-  const dayMealPlansRef = useRef(dayMealPlans);
-  dayMealPlansRef.current = dayMealPlans;
+  const {
+    data: weekPlans = [],
+    isLoading: isWeekPlansLoading,
+    isSuccess: isWeekPlansSuccess,
+  } = getMealPlans(rollingDates[0], rollingDates[6]);
+
+  const dayMealPlansFromWeek = useMemo(
+    () => weekPlans.filter((p) => p.planned_date === selectedDayKey),
+    [weekPlans, selectedDayKey]
+  );
+
+  /**
+   * После успешного ответа недельного запроса список приёмов — срез недели (в т.ч. пустой день без лишнего скелетона при смене дня/refetch дня).
+   * До успеха недели — посуточный query; при ошибке недели остаёмся на посуточном пути.
+   */
+  const planMealsForSelectedDay = isWeekPlansSuccess ? dayMealPlansFromWeek : dayMealPlans;
+
+  /** Скелетон блока приёмов только пока неделя ещё не успешно загружена и идёт посуточный fetch. */
+  const showPlanMealsSkeleton = !isWeekPlansSuccess && (isLoading || isFetching);
+
+  /** Актуальные планы выбранного дня для async автодобора прикорма (совпадают с тем, что видит пользователь). */
+  const dayMealPlansRef = useRef(planMealsForSelectedDay);
+  dayMealPlansRef.current = planMealsForSelectedDay;
   const { data: rowExistsData } = getMealPlanRowExists(selectedDate);
 
   const clearSlotAndOpenPoolFallback = useCallback(
@@ -859,7 +911,7 @@ export default function MealPlanPage() {
       for (const k of Object.keys(next)) {
         if (!k.startsWith(`${selectedDayKey}_`)) continue;
         const mealTypeRest = k.slice(selectedDayKey.length + 1);
-        const occupied = dayMealPlans.some(
+        const occupied = planMealsForSelectedDay.some(
           (p) => p.planned_date === selectedDayKey && p.meal_type === mealTypeRest && !!p.recipe_id
         );
         if (!occupied) {
@@ -869,12 +921,12 @@ export default function MealPlanPage() {
       }
       return changed ? next : prev;
     });
-  }, [selectedDayKey, dayMealPlans]);
-  /** Единый источник: dayMealPlans (развёрнутые слоты из одной строки). Пустой день только когда загрузка завершена и слотов с recipe_id нет. При refetch после fill не показываем empty. */
-  const hasNoDishes = dayMealPlans.filter((p) => p.recipe_id).length === 0;
+  }, [selectedDayKey, planMealsForSelectedDay]);
+  /** Единый источник для UI: planMealsForSelectedDay. Пустой день только когда нет скелетона и слотов с recipe_id нет. */
+  const hasNoDishes = planMealsForSelectedDay.filter((p) => p.recipe_id).length === 0;
   /** Есть хотя бы одно блюдо в плане выбранного дня — для CTA «Отправить меню». */
   const dayHasShareableMeals = !hasNoDishes;
-  const isEmptyDay = !isLoading && !isFetching && hasNoDishes;
+  const isEmptyDay = !showPlanMealsSkeleton && hasNoDishes;
   /** Последняя генерация завершилась с сообщением «нет рецептов для взрослого» — показываем отдельный empty state. */
   const isAdultNoRecipesEmpty =
     isEmptyDay && !!planJob?.status && planJob.status === "done" && (planJob.error_text ?? "").includes("взрослого профиля");
@@ -1166,7 +1218,7 @@ export default function MealPlanPage() {
   const planReadyToastShownRef = useRef(false);
   useEffect(() => {
     if (!justCreatedMemberId || planReadyToastShownRef.current) return;
-    if (isLoading || isFetching) return;
+    if (showPlanMealsSkeleton) return;
     planReadyToastShownRef.current = true;
     // Не сбрасываем justCreatedMemberId здесь — баннер «План готов» / «Отправить меню» остаётся до закрытия пользователем
     const t = toast({
@@ -1175,13 +1227,13 @@ export default function MealPlanPage() {
     });
     const timeoutId = setTimeout(() => t.dismiss(), 2000);
     return () => clearTimeout(timeoutId);
-  }, [justCreatedMemberId, isLoading, isFetching, toast]);
+  }, [justCreatedMemberId, showPlanMealsSkeleton, toast]);
 
   const renderStartRef = useRef(0);
   if (isPerf()) renderStartRef.current = performance.now();
   useEffect(() => {
     if (isPlanDebug() || isPerf()) {
-      console.log("[PLAN render]", { selectedDayKey, mealsCount: dayMealPlans.length });
+      console.log("[PLAN render]", { selectedDayKey, mealsCount: planMealsForSelectedDay.length });
     }
     if (isPerf()) {
       const start = renderStartRef.current;
@@ -1190,16 +1242,15 @@ export default function MealPlanPage() {
         console.log("[perf] render list (rAF)", elapsed.toFixed(2), "ms");
       });
     }
-  }, [selectedDayKey, dayMealPlans.length]);
+  }, [selectedDayKey, planMealsForSelectedDay.length]);
 
-  /** Только валидные recipe_id для превью; broken-слоты (recipe_id null) не попадают в dayMealPlans. */
+  /** Только валидные recipe_id для превью; broken-слоты (recipe_id null) не попадают в список. */
   const recipeIdsForPreviews = useMemo(
-    () => dayMealPlans.map((m) => m.recipe_id).filter((id): id is string => !!id),
-    [dayMealPlans]
+    () => planMealsForSelectedDay.map((m) => m.recipe_id).filter((id): id is string => !!id),
+    [planMealsForSelectedDay]
   );
   const { previews, isLoading: isLoadingPreviews } = useRecipePreviewsByIds(recipeIdsForPreviews);
 
-  const { data: weekPlans = [], isLoading: isWeekPlansLoading } = getMealPlans(rollingDates[0], rollingDates[6]);
   const dayKeys = useMemo(() => rollingDates.map((d) => formatLocalDate(d)), [rollingDates]);
 
   const weekPreviewData = useMemo((): { previewDayLabel: string; previewMeals: PreviewMeal[] } => {
@@ -1382,7 +1433,7 @@ export default function MealPlanPage() {
   };
 
   const openShareDayPreview = useCallback(() => {
-    const meals = dayMealPlans
+    const meals = planMealsForSelectedDay
       .filter((p) => p.recipe_id)
       .map((p) => ({
         meal_type: p.meal_type,
@@ -1398,7 +1449,7 @@ export default function MealPlanPage() {
       meals,
       shareIntro: getShareIntroText(new Date()),
     });
-  }, [dayMealPlans, mealTypes, previews, toast]);
+  }, [planMealsForSelectedDay, mealTypes, previews, toast]);
 
   const openShareWeekPreview = useCallback(() => {
     if (!user?.id) return;
@@ -1507,10 +1558,10 @@ export default function MealPlanPage() {
 
   // Группируем планы по типу приема пищи
   const mealsByType = mealTypes.reduce((acc, mealType) => {
-    const plan = dayMealPlans.find((mp) => mp.meal_type === mealType.id);
+    const plan = planMealsForSelectedDay.find((mp) => mp.meal_type === mealType.id);
     acc[mealType.id] = plan || null;
     return acc;
-  }, {} as Record<string, typeof dayMealPlans[0] | null>);
+  }, {} as Record<string, (typeof planMealsForSelectedDay)[0] | null>);
 
   /**
    * Прикорм &lt;12: роли newRecipe / familiarRecipe; в БД — carrier `breakfast` / `lunch` (см. infantComplementaryPlan).
@@ -1549,15 +1600,14 @@ export default function MealPlanPage() {
     return null;
   }, [mealsByType, planSlotsForRender]);
 
-  /** Сводка слотов выбранного дня — в deps автодобора вместо всего dayMealPlans (меньше лишних перезапусков и моргания). */
+  /** Сводка слотов выбранного дня — в deps автодобора вместо всего массива (меньше лишних перезапусков и моргания). */
   const infantDaySlotsSignature = useMemo(
     () =>
-      dayMealPlans
-        .filter((p) => p.planned_date === selectedDayKey)
+      planMealsForSelectedDay
         .map((p) => `${p.meal_type}:${p.recipe_id ?? ""}`)
         .sort()
         .join("|"),
-    [dayMealPlans, selectedDayKey]
+    [planMealsForSelectedDay]
   );
 
   /**
@@ -1568,13 +1618,13 @@ export default function MealPlanPage() {
     if (!isInfantPlanUi || !user?.id || !infantPoolMemberData || !mealPlanMemberId) return;
     if (showInfantPoolExhaustedFallback) return;
     if (infantPoolListsLoading) return;
-    if (isLoading || isFetching) return;
+    if (showPlanMealsSkeleton) return;
 
     const slots = infantSlotsForRender;
     if (!slots?.length) return;
 
     const emptySlots = slots.filter((slot) => {
-      const plannedMeal = dayMealPlans.find(
+      const plannedMeal = planMealsForSelectedDay.find(
         (p) => p.planned_date === selectedDayKey && p.meal_type === slot.id
       );
       if (!plannedMeal) return true;
@@ -1757,8 +1807,7 @@ export default function MealPlanPage() {
     mealPlanMemberId,
     showInfantPoolExhaustedFallback,
     infantPoolListsLoading,
-    isLoading,
-    isFetching,
+    showPlanMealsSkeleton,
     infantSlotsForRender,
     infantDaySlotsSignature,
     selectedDayKey,
@@ -1796,7 +1845,7 @@ export default function MealPlanPage() {
   const { dbCount: dayDbCount, aiCount: dayAiCount } = useMemo(() => {
     let db = 0;
     let ai = 0;
-    for (const item of dayMealPlans) {
+    for (const item of planMealsForSelectedDay) {
       if (item.plan_source === "pool") db++;
       else if (item.plan_source === "ai") ai++;
       else {
@@ -1806,7 +1855,7 @@ export default function MealPlanPage() {
       }
     }
     return { dbCount: db, aiCount: ai };
-  }, [dayMealPlans, previews]);
+  }, [planMealsForSelectedDay, previews]);
 
   if ((isPlanDebug() || isPerf()) && (typeof window !== "undefined")) {
     console.log("[PLAN state]", {
@@ -2332,7 +2381,7 @@ export default function MealPlanPage() {
                         }
                         return;
                       }
-                      setSelectedDay(index);
+                      selectPlanDayIndex(index);
                     }}
                   />
                 );
@@ -2371,7 +2420,7 @@ export default function MealPlanPage() {
             </div>
           )}
 
-          {justCreatedMemberId && (isLoading || isFetching) && (
+          {justCreatedMemberId && showPlanMealsSkeleton && (
             <div className="flex items-center gap-3 mt-1 -mx-4 px-4">
               <div
                 className="inline-flex items-center rounded-full py-2 px-3.5 text-typo-caption font-medium transition-colors"
@@ -2386,8 +2435,8 @@ export default function MealPlanPage() {
             </div>
           )}
 
-          {/* 3) Приёмы пищи: loader при загрузке/refetch, иначе empty state или слоты (единый источник: dayMealPlans) */}
-          {isLoading || isFetching || (isInfantPlanUi && !isAdultNoRecipesEmpty && infantPoolListsLoading) ? (
+          {/* 3) Приёмы пищи: скелетон только до готовности недели; refetch выбранного дня не сбрасывает весь блок. */}
+          {showPlanMealsSkeleton || (isInfantPlanUi && !isAdultNoRecipesEmpty && infantPoolListsLoading) ? (
             <div className={cn("mt-3 pb-4", isInfantPlanUi ? "space-y-3" : "space-y-4")}>
               {(isInfantPlanUi
                 ? infantAgeBandU12 === "4_6"

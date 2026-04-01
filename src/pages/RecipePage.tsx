@@ -50,6 +50,7 @@ import {
   recipeRpcIngredientsToShoppingRows,
 } from "@/utils/shopping/shoppingListMerge";
 import { useMealPlanMemberData, readMealPlanMutedWeekKeyFromStorage } from "@/hooks/useMealPlanMemberData";
+import { mealPlanPathWithOptionalDate } from "@/utils/mealPlanNavigation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -160,6 +161,7 @@ export default function RecipePage() {
   const stateMemberId = state?.memberId ?? null;
   const plannedDate = state?.plannedDate ?? null;
   const planMealType = state?.mealType ?? null;
+  const mealPlanReturnPath = mealPlanPathWithOptionalDate(plannedDate);
   const favoriteMemberId = stateMemberId ?? (selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : null);
 
   /**
@@ -453,7 +455,7 @@ export default function RecipePage() {
   const backButton = (
     <motion.button
       type="button"
-      onClick={() => (fromMealPlan ? navigate("/meal-plan") : navigate(-1))}
+      onClick={() => (fromMealPlan ? navigate(mealPlanReturnPath) : navigate(-1))}
       aria-label="Назад"
       whileTap={{ scale: 0.96 }}
       transition={{ duration: 0.15 }}
@@ -529,7 +531,7 @@ export default function RecipePage() {
       <MobileLayout title="Рецепт" headerLeft={backButton}>
         <div className="flex items-center justify-center min-h-[60vh] px-4">
           <p className="text-muted-foreground mb-4">Рецепт не найден</p>
-          <Button className="bg-primary hover:opacity-90 text-white border-0" onClick={() => (fromMealPlan ? navigate("/meal-plan") : navigate("/home"))}>
+          <Button className="bg-primary hover:opacity-90 text-white border-0" onClick={() => (fromMealPlan ? navigate(mealPlanReturnPath) : navigate("/home"))}>
             {fromMealPlan ? "К плану питания" : "На главную"}
           </Button>
         </div>

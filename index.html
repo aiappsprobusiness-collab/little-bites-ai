@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta
@@ -14,8 +14,10 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/icons/mom-recipes-app-icon-512.png" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="manifest" href="/manifest.json" />
-    <!-- На старте совпадает с фоном splash (без «серой полосы» до первого кадра UI) -->
+    <!-- PWA: согласовано с manifest + splash; дубликат без media — fallback для клиентов без поддержки media у theme-color -->
     <meta name="theme-color" content="#E8F1EC" />
+    <meta name="theme-color" content="#E8F1EC" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#E8F1EC" media="(prefers-color-scheme: dark)" />
     <!-- PWA / iOS standalone -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

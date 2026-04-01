@@ -3,6 +3,10 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, WifiOff } from "lucide-react";
 
+/** Тот же фон, что канонический splash (#E8F1EC), чтобы между fade splash и первым экраном не было скачка на gradient-hero. */
+const BOOT_SCREEN_CLASS =
+  "min-h-screen min-h-dvh flex items-center justify-center bg-[#E8F1EC]";
+
 function hasAuthParamsInUrl(search: string, hash: string): boolean {
   const inHash = /access_token|refresh_token|type=recovery/.test(hash || "");
   const params = new URLSearchParams(search);
@@ -20,26 +24,21 @@ const SLOW_LOAD_SEC = 10;
 export function RootRedirect() {
   const { user, loading } = useAuth();
   const location = useLocation();
-  const [mounted, setMounted] = useState(false);
   const [slowHint, setSlowHint] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!loading && !mounted) return;
+    if (!loading) return;
     const t = setTimeout(() => setSlowHint(true), SLOW_LOAD_SEC * 1000);
     return () => clearTimeout(t);
-  }, [loading, mounted]);
+  }, [loading]);
 
   useEffect(() => {
     if (!loading) setSlowHint(false);
   }, [loading]);
 
-  if (loading || !mounted) {
+  if (loading) {
     return (
-      <div className="min-h-screen min-h-dvh flex items-center justify-center gradient-hero">
+      <div className={BOOT_SCREEN_CLASS}>
         <div className="text-center px-4">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
           <p className="text-muted-foreground">Загрузка...</p>
