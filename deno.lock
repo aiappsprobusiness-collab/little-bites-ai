@@ -7779,6 +7779,7 @@
         "npm:tailwindcss-animate@^1.0.7",
         "npm:tailwindcss@^3.4.17",
         "npm:to-ico@^1.1.5",
+        "npm:tsx@^4.21.0",
         "npm:typescript-eslint@^8.38.0",
         "npm:typescript@^5.8.3",
         "npm:uuid@13",

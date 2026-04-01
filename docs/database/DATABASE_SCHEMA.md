@@ -55,7 +55,7 @@ RLS: доступ только по `auth.uid() = user_id`. Запись при 
 
 ### `public.subscriptions`
 
-Платежи подписки (Т-Банк эквайринг). Webhook обновляет `status` и синхронизирует с `profiles_v2`.
+Платежи подписки (Т-Банк эквайринг). Edge `payment-webhook` при `Status=CONFIRMED` и валидной подписи вызывает `confirm_subscription_webhook` только если сумма уведомления **в точности** совпадает с ценой тарифа из `subscriptions.plan` (копейки: месяц 29900, год 199900; источник цен — `_shared/subscriptionPricing.json`, как в `create-payment`). Иначе Premium не выдаётся (лог `grant_denied`). Подробнее: `docs/dev/PAYMENT_WEBHOOK_PREMIUM_VALIDATION.md`.
 
 | Колонка   | Тип     | Описание |
 |-----------|---------|----------|

@@ -1,7 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { safeLog, safeError } from "../_shared/safeLogger.ts";
-import pricing from "../_shared/subscriptionPricing.json" with { type: "json" };
+import {
+  evaluateWebhookSubscriptionGrant,
+  expectedAmountKopecks,
+} from "../_shared/subscriptionPaymentGuards.ts";
 
 /** Подпись уведомления T-Bank EACQ: все параметры кроме Token и вложенных (Data, Receipt); добавить Password; сортировка по ключу; конкатенация только значений; SHA-256 hex. */
 function buildTokenString(params: Record<string, unknown>, secret: string): string {
@@ -45,7 +48,13 @@ serve(async (req) => {
     const orderId = (body.OrderId ?? body.orderId) as string | undefined;
     const receivedToken = body.Token as string | undefined;
 
-    safeLog("[payment-webhook] received", { Status: status, PaymentId: paymentId, OrderId: orderId, hasToken: !!receivedToken });
+    safeLog("[payment-webhook] received", {
+      Status: status,
+      PaymentId: paymentId,
+      OrderId: orderId,
+      Amount: body.Amount != null ? body.Amount : null,
+      hasToken: !!receivedToken,
+    });
 
     if (!receivedToken) {
       safeLog("[payment-webhook] reject: Missing Token");
@@ -71,15 +80,28 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const byPayment = paymentId
-      ? await supabase.from("subscriptions").select("id, user_id, plan, status").eq("payment_id", paymentId).maybeSingle()
+      ? await supabase
+          .from("subscriptions")
+          .select("id, user_id, plan, status, order_id")
+          .eq("payment_id", paymentId)
+          .maybeSingle()
       : { data: null };
     const byOrder = orderId
-      ? await supabase.from("subscriptions").select("id, user_id, plan, status").eq("order_id", orderId).maybeSingle()
+      ? await supabase
+          .from("subscriptions")
+          .select("id, user_id, plan, status, order_id")
+          .eq("order_id", orderId)
+          .maybeSingle()
       : { data: null };
 
     const row = byPayment?.data ?? byOrder?.data;
     if (!row || row.status === "confirmed") {
-      safeLog("[payment-webhook] skip: subscription not found or already confirmed", { paymentId, orderId, found: !!row });
+      safeLog("[payment-webhook] skip: subscription not found or already confirmed", {
+        paymentId,
+        orderId,
+        found: !!row,
+        alreadyConfirmed: row?.status === "confirmed",
+      });
       return new Response("OK", {
         status: 200,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -87,9 +109,6 @@ serve(async (req) => {
     }
 
     const amountFromNotification = body.Amount != null ? Number(body.Amount) : null;
-    const monthKopecks = pricing.monthRub * 100;
-    const yearKopecks = pricing.yearRub * 100;
-    const amountTolerance = 1;
 
     const dataObj = body.DATA ?? body.Data ?? body.data;
     const dataShape = dataObj && typeof dataObj === "object" ? Object.keys(dataObj as Record<string, unknown>) : [];
@@ -100,55 +119,43 @@ serve(async (req) => {
         ? String((dataObj as Record<string, unknown>).plan)
         : null;
 
-    let plan: "month" | "year" | null = null;
-    let sourceOfPlan: "Data" | "OrderId" | "DB" | "Amount" | null = null;
+    const gate = evaluateWebhookSubscriptionGrant({
+      dbPlan: row.plan as string,
+      amountKopecks: amountFromNotification,
+      notificationOrderId: orderId ?? null,
+      rowOrderId: row.order_id ?? null,
+      dataPlan,
+    });
 
-    if (dataPlan === "year" || dataPlan === "month") {
-      plan = dataPlan;
-      sourceOfPlan = "Data";
-    } else if (orderId && /_year_/.test(orderId)) {
-      plan = "year";
-      sourceOfPlan = "OrderId";
-    } else if (orderId && /_month_/.test(orderId)) {
-      plan = "month";
-      sourceOfPlan = "OrderId";
-    } else if ((row.plan as string) === "year" || (row.plan as string) === "month") {
-      plan = (row.plan as string) as "month" | "year";
-      sourceOfPlan = "DB";
-    } else if (
-      amountFromNotification !== null &&
-      amountFromNotification >= yearKopecks - amountTolerance &&
-      amountFromNotification <= yearKopecks + amountTolerance
-    ) {
-      plan = "year";
-      sourceOfPlan = "Amount";
-      safeLog("[payment-webhook] source_of_plan=Amount (year)", { amountFromNotification, yearKopecks });
-    } else if (
-      amountFromNotification !== null &&
-      amountFromNotification >= monthKopecks - amountTolerance &&
-      amountFromNotification <= monthKopecks + amountTolerance
-    ) {
-      plan = "month";
-      sourceOfPlan = "Amount";
-      safeLog("[payment-webhook] source_of_plan=Amount (month)", { amountFromNotification, monthKopecks });
-    }
-
-    if (plan !== "month" && plan !== "year") {
-      safeLog("[payment-webhook] reject_unknown_plan", { order_id: orderId, payment_id: paymentId, amount: amountFromNotification });
-      return new Response(JSON.stringify({ error: "Unknown plan" }), {
-        status: 422,
-        headers: { "Content-Type": "application/json" },
+    if (!gate.grant) {
+      safeLog("[payment-webhook] grant_denied", {
+        reason: gate.reason,
+        details: gate.details,
+        subscriptionId: row.id,
+        userId: row.user_id,
+        dbPlan: row.plan,
+        paymentId,
+        orderId,
+      });
+      return new Response("OK", {
+        status: 200,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
 
-    safeLog("[payment-webhook] updating subscription and profile", {
+    const plan = gate.plan;
+    const sourceOfPlan = "db_plan_amount_validated" as const;
+
+    safeLog("[payment-webhook] validation_ok_grant", {
       subscriptionId: row.id,
       userId: row.user_id,
+      plan,
+      expectedAmountKopecks: expectedAmountKopecks(plan),
+      actualAmountKopecks: amountFromNotification,
+      source_of_plan: sourceOfPlan,
       order_id: orderId,
       payment_id: paymentId,
-      status: status,
-      plan_detected: plan,
-      source_of_plan: sourceOfPlan,
+      Status: status,
     });
 
     const rpcResult = await supabase.rpc("confirm_subscription_webhook", {
@@ -171,7 +178,6 @@ serve(async (req) => {
     }
 
     if (!res.was_updated) {
-      // Не пишем audit при replay: одна запись на факт подтверждения, без дублей.
       safeLog("[payment-webhook] idempotent: already confirmed", { subscriptionId: row.id });
       return new Response("OK", {
         status: 200,
@@ -179,14 +185,13 @@ serve(async (req) => {
       });
     }
 
-    safeLog("[payment-webhook] subscription updated", {
+    safeLog("[payment-webhook] premium_granted", {
+      subscriptionId: row.id,
       started_at: res.started_at,
       expires_at: res.expires_at,
       plan,
-      calc_method: "DB_interval",
     });
 
-    const auditNote = sourceOfPlan === "Amount" ? "fallback amount ±1" : null;
     await supabase.from("subscription_plan_audit").insert({
       user_id: row.user_id,
       subscription_id: row.id,
@@ -198,7 +203,7 @@ serve(async (req) => {
       source_of_plan: sourceOfPlan,
       data_keys: dataShape.length > 0 ? dataShape : null,
       raw_order_id_hint: null,
-      note: auditNote,
+      note: null,
     });
 
     return new Response("OK", {
