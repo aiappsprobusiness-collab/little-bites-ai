@@ -6,6 +6,47 @@
 /** Chickpea (нут) — не орех. */
 const CHICKPEA_CYRILLIC = "\u043d\u0443\u0442"; // нут
 
+/** Токены птицы (прилагательные), которые встречаются в названии яиц, но не означают мясо птицы. */
+const POULTRY_ADJ_TOKENS_NEEDING_EGG_STRIP = new Set([
+  "курин",
+  "утин",
+  "гусин",
+  "chicken",
+  "duck",
+  "goose",
+  "turkey",
+]);
+
+export function poultryAdjTokenNeedsEggColocationStrip(token: string): boolean {
+  return POULTRY_ADJ_TOKENS_NEEDING_EGG_STRIP.has(token);
+}
+
+/**
+ * Убирает коллокации «птиц* + яйц*» / «яйц* + птиц*» (RU/EN).
+ * Иначе «курин» матчится внутри «куриные яйца» — ложное срабатывание umbrella «мясо» на завтраках;
+ * то же для утиных/гусиных яиц и chicken/duck/turkey/goose + egg.
+ */
+export function stripPoultryEggCollocationsForMeatCheck(norm: string): string {
+  let s = String(norm);
+  /** Не использовать \\w для кириллицы после «яйц» — в JS \\w только ASCII. */
+  const ruPair = (stem: string) => {
+    s = s.replace(new RegExp(`(^|\\s)${stem}[^\\s]*\\s+яйц[^\\s]*`, "gu"), "$1 ");
+    s = s.replace(new RegExp(`(^|\\s)яйц[^\\s]*\\s+${stem}[^\\s]*`, "gu"), "$1 ");
+  };
+  ruPair("курин");
+  ruPair("утин");
+  ruPair("гусин");
+  const enPair = (w: string) => {
+    s = s.replace(new RegExp(`(^|\\s)${w}\\s+egg\\w*`, "giu"), "$1 ");
+    s = s.replace(new RegExp(`(^|\\s)egg\\w*\\s+${w}\\w*`, "giu"), "$1 ");
+  };
+  enPair("chicken");
+  enPair("duck");
+  enPair("goose");
+  enPair("turkey");
+  return s.replace(/\s+/g, " ").trim();
+}
+
 /** Как preferenceRules / pool: lower, пунктуация → пробел, схлопнуть пробелы. */
 export function normalizeRecipeTextForPreferenceMatch(text: string): string {
   return String(text)
@@ -21,8 +62,11 @@ export function normalizeRecipeTextForPreferenceMatch(text: string): string {
  */
 export function allergyTokenMatchesInPreferenceText(normalizedText: string, token: string): boolean {
   if (!token || token.length < 2) return false;
-  if (!normalizedText.includes(token)) return false;
-  if (token === "nut" && normalizedText.includes(CHICKPEA_CYRILLIC)) return false;
+  const haystack = poultryAdjTokenNeedsEggColocationStrip(token)
+    ? stripPoultryEggCollocationsForMeatCheck(normalizedText)
+    : normalizedText;
+  if (!haystack.includes(token)) return false;
+  if (token === "nut" && haystack.includes(CHICKPEA_CYRILLIC)) return false;
   return true;
 }
 

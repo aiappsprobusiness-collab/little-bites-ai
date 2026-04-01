@@ -24,6 +24,24 @@ Deno.test("post-check: мясо + рецепт с курицей в ингред
   if (c.profileAllergy !== "мясо") throw new Error("expected profile allergy мясо");
 });
 
+Deno.test("post-check: мясо + куриные яйца в ингредиентах — без конфликта (не мясо)", () => {
+  const recipe = {
+    title: "Омлет",
+    description: "Быстрый завтрак",
+    ingredients: [
+      { name: "яйца куриные", display_text: "2 шт." },
+      { name: "молоко", display_text: "40 мл" },
+    ],
+  };
+  const fields = chatRecipeRecordToAllergyFields(recipe as Record<string, unknown>);
+  const groups = expandAllergiesToCanonicalBlockedGroups(["мясо"]).map((g) => ({
+    profileAllergy: g.allergy,
+    tokens: g.tokens,
+  }));
+  const c = findFirstAllergyConflictInRecipeFields(fields, groups);
+  if (c !== null) throw new Error(`expected no conflict, got ${JSON.stringify(c)}`);
+});
+
 Deno.test("post-check: мясо + только овощи — без конфликта", () => {
   const recipe = {
     title: "Овощной суп",

@@ -48,6 +48,36 @@ describe("chatRecipeAllergySafety", () => {
     expect(findFirstAllergyConflictInRecipeFields(fields, groups)).not.toBeNull();
   });
 
+  it("мясо: куриные яйца в ингредиентах — не конфликт (ложное срабатывание курин в яйцах)", () => {
+    const recipe = {
+      title: "Быстрый завтрак",
+      description: "Омлет",
+      ingredients: [
+        { name: "яйца куриные", display_text: "2 шт." },
+        { name: "молоко", display_text: "50 мл" },
+      ],
+    };
+    const fields = chatRecipeRecordToAllergyFields(recipe as Record<string, unknown>);
+    const groups = expandAllergiesToCanonicalBlockedGroups(["мясо"]).map((g) => ({
+      profileAllergy: g.allergy,
+      tokens: g.tokens,
+    }));
+    expect(findFirstAllergyConflictInRecipeFields(fields, groups)).toBeNull();
+  });
+
+  it("мясо: куриная грудка — конфликт", () => {
+    const recipe = {
+      title: "Завтрак",
+      ingredients: [{ name: "куриная грудка", display_text: "100 г" }],
+    };
+    const fields = chatRecipeRecordToAllergyFields(recipe as Record<string, unknown>);
+    const groups = expandAllergiesToCanonicalBlockedGroups(["мясо"]).map((g) => ({
+      profileAllergy: g.allergy,
+      tokens: g.tokens,
+    }));
+    expect(findFirstAllergyConflictInRecipeFields(fields, groups)).not.toBeNull();
+  });
+
   it("арахис отдельно от орехов", () => {
     const recipe = {
       title: "Бутерброд с арахисовой пастой",

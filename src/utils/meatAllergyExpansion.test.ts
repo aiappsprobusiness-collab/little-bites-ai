@@ -34,6 +34,15 @@ describe("мясо / meat umbrella", () => {
     const tok = buildBlockedTokensFromAllergies(["мясо"]);
     expect(containsAnyTokenForAllergy("салат с мясистыми помидорами", tok).hit).toBe(false);
   });
+
+  it("не матчит «куриные яйца» / «яйцо куриное» (токен курин в составе названия яиц)", () => {
+    const tok = buildBlockedTokensFromAllergies(["мясо"]);
+    expect(containsAnyTokenForAllergy("куриные яйца 2 шт", tok).hit).toBe(false);
+    expect(containsAnyTokenForAllergy("яйцо куриное", tok).hit).toBe(false);
+    expect(containsAnyTokenForAllergy("яйца куриные", tok).hit).toBe(false);
+    expect(containsAnyTokenForAllergy("куриная грудка", tok).hit).toBe(true);
+    expect(containsAnyTokenForAllergy("куриное филе", tok).hit).toBe(true);
+  });
 });
 
 describe("узкие мясные аллергии", () => {

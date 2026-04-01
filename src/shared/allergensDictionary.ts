@@ -4,6 +4,11 @@
  * Не опираемся на recipe_ingredients.category — только на name/display_text/title.
  */
 
+import {
+  poultryAdjTokenNeedsEggColocationStrip,
+  stripPoultryEggCollocationsForMeatCheck,
+} from "./recipeAllergyMatch.ts";
+
 export type AllergenKey =
   | "milk"
   | "chicken"
@@ -253,8 +258,11 @@ export function containsAnyTokenForAllergy(
   const found: string[] = [];
   for (const t of tokens) {
     if (t.length < 2) continue;
-    if (!h.includes(t)) continue;
-    if (t === "nut" && h.includes(CHICKPEA_CYRILLIC)) continue;
+    const haystack = poultryAdjTokenNeedsEggColocationStrip(t)
+      ? stripPoultryEggCollocationsForMeatCheck(h)
+      : h;
+    if (!haystack.includes(t)) continue;
+    if (t === "nut" && haystack.includes(CHICKPEA_CYRILLIC)) continue;
     found.push(t);
   }
   return { hit: found.length > 0, found };
