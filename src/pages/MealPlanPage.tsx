@@ -365,7 +365,12 @@ export default function MealPlanPage() {
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const isFree = !hasAccess;
-  const statusBadgeLabel = subscriptionStatus === "premium" ? "Premium" : subscriptionStatus === "trial" ? "Триал" : "Free";
+
+  const openSubscriptionFromBadge = useCallback(() => {
+    setPaywallReason(null);
+    setPaywallCustomMessage(null);
+    setShowPaywall(true);
+  }, [setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
 
   // Не открываем paywall автоматически при заходе на План — Free может использовать дневной план (шаблон).
   const isFamilyMode = !isFree && selectedMemberId === "family";
@@ -1925,7 +1930,7 @@ export default function MealPlanPage() {
             }
             trailing={
               <>
-                <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} label={statusBadgeLabel} />
+                <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} onClick={openSubscriptionFromBadge} />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <TabOverflowIconButton disabled={isAnyGenerating} aria-label="Ещё действия" />

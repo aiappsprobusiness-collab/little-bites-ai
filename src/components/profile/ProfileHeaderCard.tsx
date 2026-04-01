@@ -1,13 +1,11 @@
 import { Pencil, Crown } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-
-const STATUS_LABEL: Record<string, string> = {
-  free: "Free",
-  trial: "Trial",
-  premium: "Premium",
-};
+import {
+  normalizeSubscriptionTier,
+  SUBSCRIPTION_TIER_LABELS,
+  subscriptionTierChipClassNames,
+} from "@/utils/subscriptionTierDisplay";
 
 export interface ProfileHeaderCardProps {
   displayName: string;
@@ -36,9 +34,10 @@ export function ProfileHeaderCard({
   isCancellingSubscription,
   canCancel,
 }: ProfileHeaderCardProps) {
-  const isPremium = status === "premium";
-  const isTrial = status === "trial";
-  const isFree = status === "free";
+  const tier = normalizeSubscriptionTier(status);
+  const isPremium = tier === "premium";
+  const isTrial = tier === "trial";
+  const isFree = tier === "free";
 
   const statusSubtext = isFree
     ? null
@@ -94,14 +93,8 @@ export function ProfileHeaderCard({
 
       {/* Row 2: бейдж + строка справа (как Premium: дата; для Free — «с ограничениями») */}
       <div className="flex flex-wrap items-center gap-2">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full w-fit text-[10px] font-medium px-2 py-0.5 shrink-0 border",
-            isFree && "bg-muted/50 text-muted-foreground border-border/80",
-            (isPremium || isTrial) && "bg-primary/10 text-primary border-primary/20",
-          )}
-        >
-          {STATUS_LABEL[status] ?? "Free"}
+        <span className={subscriptionTierChipClassNames(tier)}>
+          {SUBSCRIPTION_TIER_LABELS[tier]}
           {isPremium && <Crown className="h-3 w-3" strokeWidth={2} aria-hidden />}
         </span>
         {row2Secondary && (

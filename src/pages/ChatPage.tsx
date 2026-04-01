@@ -227,8 +227,6 @@ export default function ChatPage() {
     setHelpUsedToday,
   } = useSubscription();
   const isFree = subscriptionStatus === "free";
-  const statusBadgeLabel =
-    subscriptionStatus === "premium" ? "Premium" : subscriptionStatus === "trial" ? "Триал" : "Free";
   const { chat, saveChat, isChatting } = useDeepSeekAPI();
   const { messages: historyMessages, isLoading: isLoadingHistory, deleteMessage, archiveChat } = useChatHistory(selectedMemberId ?? null);
   const { saveRecipesFromChat } = useChatRecipes();
@@ -1563,9 +1561,15 @@ export default function ChatPage() {
     return undefined;
   }, [mode, selectedMemberId, selectedMember?.age_months]);
 
+  const openSubscriptionFromBadge = useCallback(() => {
+    useAppStore.getState().setPaywallReason(null);
+    useAppStore.getState().setPaywallCustomMessage(null);
+    useAppStore.getState().setShowPaywall(true);
+  }, []);
+
   const chatHeaderTrailing = (
     <>
-      <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} label={statusBadgeLabel} />
+      <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} onClick={openSubscriptionFromBadge} />
       <ChatHeaderMenuButton
         open={showActionsMenu}
         onOpenChange={setShowActionsMenu}
