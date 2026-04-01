@@ -20,4 +20,6 @@ export type RecipePreview = {
   fats?: number | null;
   carbs?: number | null;
   nutrition_goals?: string[] | null;
+  /** `recipes.meal_type` (слот плана), если загружен со списком. */
+  mealType?: string | null;
 };

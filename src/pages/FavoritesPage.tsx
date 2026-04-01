@@ -92,6 +92,8 @@ export default function FavoritesPage() {
     member_id: string | null;
     targetDayKey?: string;
     targetMealType?: string;
+    /** `recipes.meal_type` для дефолта слота, если нет явного target из плана. */
+    recipeMealType?: string | null;
   } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formRecipeId, setFormRecipeId] = useState<string | null>(null);
@@ -307,6 +309,7 @@ export default function FavoritesPage() {
                                 id: recipe.id,
                                 title: recipe.title ?? "",
                                 member_id: planSlotFromNav?.memberId ?? null,
+                                recipeMealType: recipe.mealType ?? null,
                                 ...(planSlotFromNav
                                   ? { targetDayKey: planSlotFromNav.plannedDate, targetMealType: planSlotFromNav.mealType }
                                   : {}),
@@ -363,6 +366,7 @@ export default function FavoritesPage() {
                                 id,
                                 title,
                                 member_id: planSlotFromNav?.memberId ?? favorite.member_id ?? null,
+                                recipeMealType: favorite.recipe?.mealType ?? null,
                                 ...(planSlotFromNav
                                   ? { targetDayKey: planSlotFromNav.plannedDate, targetMealType: planSlotFromNav.mealType }
                                   : {}),
@@ -388,7 +392,7 @@ export default function FavoritesPage() {
           recipeTitle={addToPlanRecipe.title}
           defaultMemberId={addToPlanRecipe.member_id ?? null}
           defaultDayKey={addToPlanRecipe.targetDayKey}
-          mealType={addToPlanRecipe.targetMealType ?? null}
+          mealType={addToPlanRecipe.targetMealType ?? addToPlanRecipe.recipeMealType ?? null}
           targetSlot={
             addToPlanRecipe.targetDayKey && addToPlanRecipe.targetMealType
               ? { dayKey: addToPlanRecipe.targetDayKey, mealType: addToPlanRecipe.targetMealType }

@@ -58,12 +58,16 @@ export function useMyRecipes(locale?: string | null) {
       if (ids.length === 0) return [];
       const [previewsRes, metaRes] = await Promise.all([
         supabase.rpc("get_recipe_previews", { recipe_ids: ids, p_locale: effectiveLocale }),
-        supabase.from("recipes").select("id, chef_advice, advice, source, calories, proteins, fats, carbs, nutrition_goals").in("id", ids),
+        supabase
+          .from("recipes")
+          .select("id, meal_type, chef_advice, advice, source, calories, proteins, fats, carbs, nutrition_goals")
+          .in("id", ids),
       ]);
       if (previewsRes.error) throw previewsRes.error;
       const metaMap = new Map(
         ((metaRes.data ?? []) as {
           id: string;
+          meal_type?: string | null;
           chef_advice?: string | null;
           advice?: string | null;
           source?: string | null;
@@ -75,6 +79,7 @@ export function useMyRecipes(locale?: string | null) {
         }[]).map((r) => [
           r.id,
           {
+            meal_type: r.meal_type ?? null,
             chefAdvice: r.chef_advice ?? null,
             advice: r.advice ?? null,
             source: r.source ?? null,
@@ -103,6 +108,8 @@ export function useMyRecipes(locale?: string | null) {
         const preview = toPreview(r);
         const meta = metaMap.get(r.id);
         if (meta) {
+          const mt = normalizeRecipePlanMealType(meta.meal_type ?? undefined);
+          if (mt) preview.mealType = mt;
           preview.chefAdvice = meta.chefAdvice;
           preview.advice = meta.advice;
           preview.source = meta.source;

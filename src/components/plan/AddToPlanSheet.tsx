@@ -11,19 +11,22 @@ import { Button } from "@/components/ui/button";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useAssignRecipeToPlanSlot, getRollingDayKeys } from "@/hooks/useAssignRecipeToPlanSlot";
 import { useMealPlans } from "@/hooks/useMealPlans";
+import type { MealPlanItemV2 } from "@/hooks/useMealPlans";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRollingStartKey, getRollingEndKey } from "@/utils/dateRange";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { cn } from "@/lib/utils";
+import {
+  normalizeRecipePlanMealType,
+  RECIPE_PLAN_MEAL_LABELS_RU,
+  RECIPE_PLAN_MEAL_TYPES,
+  type RecipePlanMealType,
+} from "@/utils/recipeMealSlots";
 
-const MEAL_TYPES = [
-  { id: "breakfast", label: "Завтрак" },
-  { id: "lunch", label: "Обед" },
-  { id: "snack", label: "Полдник" },
-  { id: "dinner", label: "Ужин" },
-] as const;
-
-const MEAL_SLOTS = ["breakfast", "lunch", "snack", "dinner"] as const;
+const MEAL_OPTIONS = RECIPE_PLAN_MEAL_TYPES.map((id) => ({
+  id,
+  label: RECIPE_PLAN_MEAL_LABELS_RU[id],
+}));
 
 function getDayLabel(dayKey: string): string {
   const d = new Date(dayKey + "T12:00:00");
@@ -37,26 +40,8 @@ function getDayLabel(dayKey: string): string {
   return d.toLocaleDateString("ru-RU", opts);
 }
 
-export interface AddToPlanSheetProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  recipeId: string;
-  recipeTitle: string;
-  /** Дефолтный приём из рецепта или контекста (например, слот плана). */
-  mealType?: string | null;
-  /** Дефолтный профиль: из контекста (чат/избранное/план). */
-  defaultMemberId: string | null;
-  /** Дефолтный день (YYYY-MM-DD), например при переходе из пустого слота плана. */
-  defaultDayKey?: string | null;
-  /** Явная цель из плана: всегда этот день+приём; если слот занят — замена по подтверждению. Иначе день со занятым слотом отбрасывается и открывается не тот день. */
-  targetSlot?: { dayKey: string; mealType: string } | null;
-  onSuccess?: () => void;
-}
-
-function normMealType(v: string | null | undefined): string {
-  const norm = v?.toLowerCase().trim();
-  if (norm && MEAL_TYPES.some((m) => m.id === norm)) return norm;
-  return "breakfast";
+function defaultMealTypeFromProp(v: string | null | undefined): RecipePlanMealType {
+  return normalizeRecipePlanMealType(v) ?? "breakfast";
 }
 
 /** Заливка по заполненности дня (0..4). Оливковая палитра. */
@@ -77,6 +62,24 @@ function dayFillClass(filledCount: number): string {
   }
 }
 
+const MEAL_SLOT_FILLED_BG = "bg-[hsl(75,37%,36%,0.12)] border-[hsl(75,37%,36%,0.35)] text-foreground";
+
+export interface AddToPlanSheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  recipeId: string;
+  recipeTitle: string;
+  /** Дефолтный приём из `recipes.meal_type` или контекста (например, слот плана). */
+  mealType?: string | null;
+  /** Дефолтный профиль: из контекста (чат/избранное/план). */
+  defaultMemberId: string | null;
+  /** Дефолтный день (YYYY-MM-DD), например при переходе из пустого слота плана. */
+  defaultDayKey?: string | null;
+  /** Явная цель из плана: всегда этот день+приём; слот можно заменить по подтверждению. */
+  targetSlot?: { dayKey: string; mealType: string } | null;
+  onSuccess?: () => void;
+}
+
 export function AddToPlanSheet({
   open,
   onOpenChange,
@@ -91,7 +94,9 @@ export function AddToPlanSheet({
   const { members } = useFamily();
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(defaultMemberId ?? null);
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
-  const [selectedMealType, setSelectedMealType] = useState<string>(() => normMealType(initialMealType));
+  const [selectedMealType, setSelectedMealType] = useState<RecipePlanMealType>(() =>
+    defaultMealTypeFromProp(initialMealType)
+  );
 
   const dayKeys = useMemo(() => getRollingDayKeys(), [open]);
 
@@ -105,83 +110,56 @@ export function AddToPlanSheet({
   const endDate = useMemo(() => new Date(rollingEnd + "T12:00:00"), [rollingEnd]);
   const { data: weekPlans } = useMealPlans(memberIdForRpc).getMealPlans(startDate, endDate);
 
-  /** По каждому дню: сколько слотов заполнено (0..4). 4-slot model: завтрак, обед, полдник, ужин. */
+  /** По каждому дню: сколько слотов заполнено (0..4). */
   const filledCountByDay = useMemo(() => {
     const count: Record<string, number> = {};
     for (const key of dayKeys) count[key] = 0;
     for (const p of weekPlans ?? []) {
-      if (p.planned_date && MEAL_SLOTS.includes(p.meal_type as (typeof MEAL_SLOTS)[number])) {
+      if (p.planned_date && normalizeRecipePlanMealType(p.meal_type) != null) {
         count[p.planned_date] = (count[p.planned_date] ?? 0) + 1;
       }
     }
     return count;
   }, [weekPlans, dayKeys]);
 
-  /** Дни, где слот выбранного приёма пищи уже занят. */
-  const daysWithSlotFilled = useMemo(() => {
-    const filled = new Set<string>();
-    for (const p of weekPlans ?? []) {
-      if (p.planned_date && p.meal_type === selectedMealType) filled.add(p.planned_date);
-    }
-    return filled;
-  }, [weekPlans, selectedMealType]);
-
-  /** Дни, доступные для выбранного приёма пищи (слот свободен). */
-  const availableDayKeys = useMemo(() => {
-    return dayKeys.filter((key) => !daysWithSlotFilled.has(key));
-  }, [dayKeys, daysWithSlotFilled]);
-
-  /** Первый доступный день: сегодня если свободен, иначе ближайший по порядку в rolling 7. */
-  const firstAvailableDayKey = useMemo(() => availableDayKeys[0] ?? null, [availableDayKeys]);
-
-  const isSelectedSlotFilled = useMemo(() => {
-    if (!selectedDayKey) return false;
-    return (weekPlans ?? []).some(
+  const planEntryForSelectedSlot = useMemo((): MealPlanItemV2 | null => {
+    if (!selectedDayKey) return null;
+    const found = (weekPlans ?? []).find(
       (p) => p.planned_date === selectedDayKey && p.meal_type === selectedMealType
     );
+    return found ?? null;
   }, [weekPlans, selectedDayKey, selectedMealType]);
 
-  const isSelectedDayAvailable = selectedDayKey != null && availableDayKeys.includes(selectedDayKey);
-  const canSubmit = selectedDayKey != null && (isSelectedDayAvailable || isSelectedSlotFilled) && !isAssigning;
+  const isSelectedSlotFilled = planEntryForSelectedSlot != null;
+
+  const slotTitleHint = useMemo(() => {
+    if (!selectedDayKey) return "";
+    if (!planEntryForSelectedSlot) return "Слот свободен";
+    const t = planEntryForSelectedSlot.recipe?.title?.trim();
+    if (t) return t;
+    return planEntryForSelectedSlot.recipe_id ? "Блюдо" : "Слот свободен";
+  }, [selectedDayKey, planEntryForSelectedSlot]);
+
+  const isSlotFilledForDay = (dayKey: string, mealType: RecipePlanMealType): boolean => {
+    return (weekPlans ?? []).some((p) => p.planned_date === dayKey && p.meal_type === mealType);
+  };
+
+  const canSubmit = selectedDayKey != null && !isAssigning;
 
   useEffect(() => {
     if (!open) return;
     setSelectedMemberId(defaultMemberId ?? null);
     if (targetSlot && dayKeys.includes(targetSlot.dayKey)) {
-      setSelectedMealType(normMealType(targetSlot.mealType));
+      setSelectedMealType(defaultMealTypeFromProp(targetSlot.mealType));
       setSelectedDayKey(targetSlot.dayKey);
       return;
     }
-    const meal = normMealType(initialMealType);
+    const meal = defaultMealTypeFromProp(initialMealType);
     setSelectedMealType(meal);
-    const filledForMeal = new Set<string>();
-    for (const p of weekPlans ?? []) {
-      if (p.planned_date && p.meal_type === meal) filledForMeal.add(p.planned_date);
-    }
-    const available = dayKeys.filter((d) => !filledForMeal.has(d));
-    const firstAvailable = available[0] ?? null;
     const preferredDay =
-      defaultDayKey && dayKeys.includes(defaultDayKey) && !filledForMeal.has(defaultDayKey)
-        ? defaultDayKey
-        : null;
-    setSelectedDayKey(preferredDay ?? firstAvailable);
-  }, [open, defaultMemberId, defaultDayKey, initialMealType, dayKeys, weekPlans, targetSlot]);
-
-  useEffect(() => {
-    if (!open) return;
-    if (targetSlot) return;
-    if (selectedDayKey != null && !availableDayKeys.includes(selectedDayKey)) {
-      setSelectedDayKey(firstAvailableDayKey ?? null);
-    }
-  }, [
-    open,
-    targetSlot,
-    selectedMealType,
-    selectedMemberId,
-    availableDayKeys,
-    firstAvailableDayKey,
-    selectedDayKey,
-  ]);
+      defaultDayKey && dayKeys.includes(defaultDayKey) ? defaultDayKey : null;
+    setSelectedDayKey(preferredDay ?? dayKeys[0] ?? null);
+  }, [open, defaultMemberId, defaultDayKey, initialMealType, dayKeys, targetSlot]);
 
   const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
 
@@ -216,11 +194,10 @@ export function AddToPlanSheet({
 
   const handleDayClick = (key: string) => {
     if (targetSlot && key !== targetSlot.dayKey) return;
-    const allowFilledTarget = targetSlot && key === targetSlot.dayKey;
-    if (daysWithSlotFilled.has(key) && !allowFilledTarget) return;
-    if (filledCountByDay[key] === 4) return;
     setSelectedDayKey(key);
   };
+
+  const replaceConfirmTitle = `На этот день уже назначен ${RECIPE_PLAN_MEAL_LABELS_RU[selectedMealType].toLowerCase()}. Заменить его новым блюдом?`;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -263,60 +240,15 @@ export function AddToPlanSheet({
             </div>
           </div>
 
-          {/* 2) Приём пищи */}
-          <div>
-            <p className="text-sm font-medium text-foreground mb-2">Приём пищи</p>
-            <div className="flex flex-wrap gap-2">
-              {MEAL_TYPES.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  disabled={!!targetSlot}
-                  onClick={() => setSelectedMealType(m.id)}
-                  className={cn(
-                    "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
-                    selectedMealType === m.id
-                      ? "bg-primary/10 border-primary/30 text-foreground"
-                      : "bg-transparent border-border text-muted-foreground hover:text-foreground",
-                    targetSlot && "opacity-80 cursor-default"
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 3) Когда */}
+          {/* 2) Когда */}
           <div>
             <p className="text-sm font-medium text-foreground mb-2">Когда</p>
-            <p className="text-xs text-muted-foreground mb-2">
-              Выберите день для блюда. Чем темнее день, тем больше меню уже заполнено.
-            </p>
-            {availableDayKeys.length === 0 && (
-              <p className="text-xs text-muted-foreground mb-2">
-                Для выбранного приёма пищи свободных дней нет. Освободите слот в плане, чтобы добавить блюдо.
-              </p>
-            )}
             <div className="flex flex-wrap gap-2">
               {dayKeys.map((key) => {
                 const filledCount = filledCountByDay[key] ?? 0;
-                const slotFilled = daysWithSlotFilled.has(key);
-                const isFull = filledCount === 4;
                 const isPinnedTargetDay = targetSlot?.dayKey === key;
-                const isAvailable = (!slotFilled || isPinnedTargetDay) && !isFull;
                 const isSelected = selectedDayKey === key;
-
-                let state: "A" | "B" | "C" | "D";
-                if (isFull) state = "C";
-                else if (slotFilled && !isPinnedTargetDay) state = "D";
-                else if (filledCount === 0) state = "A";
-                else state = "B";
-
-                const isDisabled =
-                  state === "C" ||
-                  (state === "D" && !isPinnedTargetDay) ||
-                  (!!targetSlot && !isPinnedTargetDay);
+                const isDisabled = !!targetSlot && !isPinnedTargetDay;
 
                 return (
                   <button
@@ -326,11 +258,9 @@ export function AddToPlanSheet({
                     onClick={() => handleDayClick(key)}
                     className={cn(
                       "px-3 py-2 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 min-w-0",
-                      state !== "D" && dayFillClass(filledCount),
-                      state === "D" &&
-                        "bg-muted/70 text-muted-foreground border-border cursor-not-allowed opacity-80",
-                      state === "C" && "cursor-not-allowed",
-                      isSelected && isAvailable && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                      dayFillClass(filledCount),
+                      isDisabled && "opacity-50 cursor-not-allowed",
+                      isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background"
                     )}
                   >
                     <Calendar className="w-3.5 h-3.5 shrink-0" />
@@ -341,11 +271,37 @@ export function AddToPlanSheet({
             </div>
           </div>
 
-          <Button
-            className="w-full rounded-xl"
-            onClick={handleAssign}
-            disabled={!canSubmit}
-          >
+          {/* 3) Приём пищи */}
+          <div>
+            <p className="text-sm font-medium text-foreground mb-2">Приём пищи</p>
+            <div className="flex flex-wrap gap-2">
+              {MEAL_OPTIONS.map((m) => {
+                const slotFilled = selectedDayKey != null && isSlotFilledForDay(selectedDayKey, m.id);
+                const isSelected = selectedMealType === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={!!targetSlot}
+                    onClick={() => setSelectedMealType(m.id)}
+                    className={cn(
+                      "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
+                      slotFilled ? MEAL_SLOT_FILLED_BG : "bg-transparent border-border text-muted-foreground",
+                      isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background text-foreground",
+                      targetSlot && "opacity-80 cursor-default"
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+            {selectedDayKey ? (
+              <p className="text-xs text-muted-foreground mt-2 min-h-[1rem]">{slotTitleHint}</p>
+            ) : null}
+          </div>
+
+          <Button className="w-full rounded-xl" onClick={handleAssign} disabled={!canSubmit}>
             {isAssigning ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -361,10 +317,10 @@ export function AddToPlanSheet({
       <ConfirmActionModal
         open={replaceConfirmOpen}
         onOpenChange={setReplaceConfirmOpen}
-        title="В этот день блюдо уже заполнено. Заменить?"
-        description="Текущее блюдо в выбранном слоте будет заменено на новое."
-        confirmText="Да"
-        cancelText="Нет"
+        title={replaceConfirmTitle}
+        description="Текущее блюдо в этом слоте будет заменено выбранным рецептом."
+        confirmText="Заменить"
+        cancelText="Отмена"
         onConfirm={performAssign}
       />
     </Sheet>
