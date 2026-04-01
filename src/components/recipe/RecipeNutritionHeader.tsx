@@ -62,7 +62,6 @@ export function RecipeNutritionHeader({
   const isCard = variant === "card";
   const isQuiet = tone === "quiet";
   const macrosSize = isQuiet ? "text-[10px]" : isCard ? "text-[11px]" : "text-xs";
-  const metaItemClass = "inline-flex items-baseline gap-1.5";
   const mealQuietClass =
     "inline-flex items-center rounded-md border border-border/55 bg-muted/35 text-[10px] font-medium text-muted-foreground px-2 py-0.5";
 
@@ -71,7 +70,7 @@ export function RecipeNutritionHeader({
       {hasMeta && (
         <div
           className={cn(
-            "flex flex-wrap items-baseline min-w-0",
+            "flex flex-wrap items-center min-w-0",
             isQuiet ? "gap-x-2.5 gap-y-1" : "gap-x-3 gap-y-1.5",
           )}
           role="group"
@@ -83,14 +82,13 @@ export function RecipeNutritionHeader({
           {hasTime && (
             <span
               className={cn(
-                metaItemClass,
                 isQuiet
                   ? "inline-flex items-center gap-1 text-[11px] text-muted-foreground/75"
                   : recipeTimeClass,
               )}
             >
               <Clock
-                className={cn("mt-[1px] shrink-0", isQuiet ? "h-3 w-3" : "h-3.5 w-3.5")}
+                className={cn("shrink-0", isQuiet ? "h-3 w-3" : "h-3.5 w-3.5")}
                 aria-hidden
               />
               <span>{formatMinutes(cookingTimeMinutes)}</span>
@@ -100,7 +98,7 @@ export function RecipeNutritionHeader({
             <span
               className={
                 isQuiet
-                  ? "inline-flex items-baseline text-[11px] text-muted-foreground/80 tabular-nums"
+                  ? "inline-flex items-center text-[11px] text-muted-foreground/80 tabular-nums gap-0.5"
                   : recipeKcalChip
               }
             >
