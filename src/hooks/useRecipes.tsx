@@ -28,6 +28,15 @@ type RecipeStep = Tables<'recipe_steps'>;
 
 const IS_DEV = import.meta.env.DEV;
 
+/** Опции загрузки списков: мутации (`createRecipe` и т.д.) работают независимо. */
+export type UseRecipesOptions = {
+  /**
+   * Когда false — не поднимаем useQuery для списка / избранного / недавних (только мутации + getRecipeById).
+   * Этап 1 оптимизации: replace flow на плане без лишнего трафика до действия пользователя.
+   */
+  listQueriesEnabled?: boolean;
+};
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isValidUUID(value: unknown): value is string {
@@ -100,9 +109,10 @@ function normalizeRecipePayload<T extends Record<string, unknown>>(payload: T): 
   return out;
 }
 
-export function useRecipes(childId?: string) {
+export function useRecipes(childId?: string, options?: UseRecipesOptions) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const listQueriesEnabled = options?.listQueriesEnabled !== false;
 
   const listQuery = (page: number) => {
     if (IS_DEV) {
@@ -126,7 +136,7 @@ export function useRecipes(childId?: string) {
   const { data: recipes = [], isLoading, error } = useQuery({
     queryKey: ['recipes', user?.id, childId, 0],
     queryFn: () => listQuery(0),
-    enabled: !!user,
+    enabled: !!user && listQueriesEnabled,
   });
 
   const { data: favoriteRecipes = [] } = useQuery({
@@ -152,7 +162,7 @@ export function useRecipes(childId?: string) {
       if (error) throw error;
       return (data ?? []) as Recipe[];
     },
-    enabled: !!user,
+    enabled: !!user && listQueriesEnabled,
   });
 
   const { data: recentRecipes = [] } = useQuery({
@@ -169,7 +179,7 @@ export function useRecipes(childId?: string) {
       if (error) throw error;
       return (data ?? []) as Recipe[];
     },
-    enabled: !!user,
+    enabled: !!user && listQueriesEnabled,
   });
 
   const getRecipeById = (id: string) => {

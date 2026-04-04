@@ -36,7 +36,7 @@ export function BuildShoppingListFromPlanSheet({
   const [range, setRange] = useState<"today" | "week">("today");
   const [pending, setPending] = useState(false);
   const { user } = useAuth();
-  const { replaceItems, listId } = useShoppingList();
+  const { replaceItems, listId } = useShoppingList({ enabled: open });
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const navigate = useNavigate();

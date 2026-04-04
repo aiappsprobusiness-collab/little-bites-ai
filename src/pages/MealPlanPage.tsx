@@ -26,13 +26,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMealPlans, mealPlansKey } from "@/hooks/useMealPlans";
 import { useMealPlanMemberData, MEAL_PLAN_MUTED_WEEK_STORAGE_KEY } from "@/hooks/useMealPlanMemberData";
 import { useRecipePreviewsByIds } from "@/hooks/useRecipePreviewsByIds";
-import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useAuth } from "@/hooks/useAuth";
 import { useMembers } from "@/hooks/useMembers";
 import { useFamily } from "@/contexts/FamilyContext";
 import { logEmptyOnboardingReason } from "@/utils/authSessionDebug";
-import { usePlanGenerationJob, getStoredJobId, setStoredJobId } from "@/hooks/usePlanGenerationJob";
+import { usePlanGenerationJob, setStoredJobId } from "@/hooks/usePlanGenerationJob";
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -538,7 +537,6 @@ export default function MealPlanPage() {
     startGeneration: startPlanGeneration,
     runPoolUpgrade,
     cancelJob: cancelPlanJob,
-    refetchJob,
   } = usePlanGenerationJob(memberIdForPlan, planGenType);
 
   const [poolUpgradeLoading, setPoolUpgradeLoading] = useState(false);
@@ -715,13 +713,6 @@ export default function MealPlanPage() {
     }
   }, [planJob?.id, planJob?.status, planJob?.progress_done, planJob?.created_at, planGenType, planErrorText, queryClient, user?.id, memberIdForPlan, startKey, toast, navigate]);
 
-  // При заходе на страницу — resume polling если есть сохранённый job
-  useEffect(() => {
-    if (!user?.id) return;
-    const stored = getStoredJobId(user.id, memberIdForPlan, startKey);
-    if (stored) refetchJob();
-  }, [user?.id, memberIdForPlan, startKey, refetchJob]);
-
   // При смене дня (startKey) сбрасываем мьют, чтобы не тянуть его с прошлой недели
   useEffect(() => {
     if (!mutedWeekKey) return;
@@ -740,9 +731,13 @@ export default function MealPlanPage() {
     }
   }, [location.pathname, searchParams, members, setSelectedMemberId]);
 
+  /** Списки recipes для replace грузим только во время замены / PoolExhausted (Этап 1 сети). */
+  const replaceRecipeListQueriesEnabled =
+    replacingSlotKey != null || poolExhaustedContext != null;
+
   const { replaceMealSlotAuto, getFreeSwapUsedForDay, replaceSlotWithRecipe } = useReplaceMealSlot(
     memberIdForPlan,
-    { startKey, endKey, hasAccess }
+    { startKey, endKey, hasAccess, recipeListQueriesEnabled: replaceRecipeListQueriesEnabled }
   );
 
   useEffect(() => {

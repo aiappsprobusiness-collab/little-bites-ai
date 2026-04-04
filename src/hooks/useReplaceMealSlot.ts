@@ -54,12 +54,20 @@ function setStoredFreeSwap(dayKey: string, count: number) {
 
 export function useReplaceMealSlot(
   memberId: string | null,
-  options?: { startKey?: string; endKey?: string; hasAccess?: boolean }
+  options?: {
+    startKey?: string;
+    endKey?: string;
+    hasAccess?: boolean;
+    /** false — не грузим списки recipes до replace (Этап 1); мутация createRecipe доступна всегда. */
+    recipeListQueriesEnabled?: boolean;
+  }
 ) {
   const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const { createMealPlan } = useMealPlans(memberId ?? undefined);
-  const { createRecipe } = useRecipes(memberId ?? undefined);
+  const { createRecipe } = useRecipes(memberId ?? undefined, {
+    listQueriesEnabled: options?.recipeListQueriesEnabled ?? true,
+  });
   const hasAccess = options?.hasAccess ?? true;
 
   /** Free: true если по dayKey уже использовано >= FREE_SWAP_LIMIT_PER_DAY замен. */

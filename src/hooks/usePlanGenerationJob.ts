@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type Query } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { supabase, SUPABASE_URL } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
@@ -125,6 +125,11 @@ export function usePlanGenerationJob(
   const lastStartParamsRef = useRef<StartPlanGenerationParams | null>(null);
   const lastPartialKeyRef = useRef<string>("");
 
+  const jobFocusRefetch = (query: Query<PlanGenerationJobRow | null, Error>) => {
+    const j = query.state.data;
+    return j?.status === "running";
+  };
+
   const {
     data: job,
     isLoading: isLoadingJob,
@@ -133,6 +138,7 @@ export function usePlanGenerationJob(
     queryKey: ["plan_generation_job", user?.id ?? "", memberId ?? "null", type],
     queryFn: () => (user?.id ? fetchJob(user.id, memberId, type) : Promise.resolve(null)),
     enabled,
+    staleTime: 20_000,
     refetchInterval: (query) => {
       const j = query.state.data as PlanGenerationJobRow | null | undefined;
       if (j?.status !== "running") return false;
@@ -140,7 +146,8 @@ export function usePlanGenerationJob(
       const elapsedMs = createdAt ? Date.now() - createdAt : 0;
       return getPollInterval(elapsedMs, type);
     },
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: jobFocusRefetch,
+    refetchOnReconnect: jobFocusRefetch,
   });
 
   const POOL_UPGRADE_TIMEOUT_MS = 150_000; // 2.5 мин — Edge Function может долго обрабатывать неделю + AI fallback

@@ -40,7 +40,11 @@ export function getSourceRecipesFromItem(row: ShoppingListItemRow): SourceRecipe
   return [];
 }
 
-const LIST_QUERY_KEY = ["shopping_list_active"] as const;
+/** Включает userId — избегаем кэша от предыдущего аккаунта в той же вкладке. */
+export function activeShoppingListQueryKey(userId: string | undefined) {
+  return ["shopping_list_active", userId] as const;
+}
+
 const ITEMS_QUERY_KEY = (listId: string | null) => ["shopping_list_items", listId] as const;
 
 export interface ShoppingListSyncMeta {
@@ -75,17 +79,26 @@ async function getOrCreateActiveList(userId: string): Promise<ShoppingListRow> {
   return inserted as ShoppingListRow;
 }
 
-export function useShoppingList() {
+export type UseShoppingListOptions = {
+  /**
+   * false — не запрашивать список и позиции (Этап 1: до открытия сценария на плане).
+   * Мутации из других экранов вызывают с enabled по умолчанию.
+   */
+  enabled?: boolean;
+};
+
+export function useShoppingList(options?: UseShoppingListOptions) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const listsEnabled = options?.enabled !== false;
 
   const listQuery = useQuery({
-    queryKey: LIST_QUERY_KEY,
+    queryKey: activeShoppingListQueryKey(user?.id),
     queryFn: async () => {
       if (!user) return null;
       return getOrCreateActiveList(user.id);
     },
-    enabled: !!user,
+    enabled: !!user && listsEnabled,
     staleTime: 60_000,
   });
 
@@ -112,7 +125,7 @@ export function useShoppingList() {
         ),
       }));
     },
-    enabled: !!listId,
+    enabled: !!listId && listsEnabled,
     staleTime: 30_000,
   });
 
@@ -192,7 +205,7 @@ export function useShoppingList() {
     onSuccess: () => {
       if (listId) {
         queryClient.invalidateQueries({ queryKey: ITEMS_QUERY_KEY(listId) });
-        queryClient.invalidateQueries({ queryKey: LIST_QUERY_KEY });
+        if (user?.id) queryClient.invalidateQueries({ queryKey: activeShoppingListQueryKey(user.id) });
       }
     },
   });
@@ -274,7 +287,7 @@ export function useShoppingList() {
       return { wasEmpty };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: LIST_QUERY_KEY });
+      if (user?.id) queryClient.invalidateQueries({ queryKey: activeShoppingListQueryKey(user.id) });
       queryClient.invalidateQueries({ queryKey: ["shopping_list_items"] });
       if (listId) queryClient.invalidateQueries({ queryKey: ITEMS_QUERY_KEY(listId) });
     },
@@ -339,7 +352,7 @@ export function useShoppingList() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: LIST_QUERY_KEY });
+      if (user?.id) queryClient.invalidateQueries({ queryKey: activeShoppingListQueryKey(user.id) });
     },
   });
 

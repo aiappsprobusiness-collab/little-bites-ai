@@ -59,6 +59,8 @@
 
 ## C. Data — вкладка «План», смена дня
 
+**Сетевой шум старта (Этап 1):** см. **`docs/dev/MEAL_PLAN_NETWORK_STAGE1.md`** — отложенные запросы для replace-`useRecipes`, shopping list в sheet, политика refetch для `plan_generation_jobs`.
+
 **Недопустимо** при уже загруженных данных недели:
 
 - full-screen skeleton на весь блок приёмов только из-за `isFetching` посуточного запроса;
