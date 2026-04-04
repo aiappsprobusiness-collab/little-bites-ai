@@ -8,6 +8,7 @@ import { clampMemberPayloadForTier } from "@/utils/memberPayloadLimits";
 import { logMembersProfileLoadStart, logMembersLoadDone } from "@/utils/authSessionDebug";
 import type { MembersRow, MembersInsert, MembersUpdate, AllergyItemRow } from "@/integrations/supabase/types-v2";
 import { ensureStringArray } from "@/utils/typeUtils";
+import { TAB_NAV_STALE_MS } from "@/utils/reactQueryTabNav";
 
 function parseAllergyItems(raw: unknown): AllergyItemRow[] {
   if (!Array.isArray(raw)) return [];
@@ -146,6 +147,9 @@ export function useMembers() {
       });
     },
     enabled: authReady && !!user,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const createMember = useMutation({

@@ -54,8 +54,10 @@
 
 ## Сознательно не вошло (Этап 3+)
 
+Часть сетевого шума при переходах между вкладками закрыта в **Этапе 3:** `docs/dev/SPA_TAB_NAVIGATION_STAGE3.md`.
+
 - Схлопывание дневного и недельного query в один источник.
-- `useFavorites` / `recipe_previews` / `useSubscription` на плане.
+- `useFavorites` / `recipe_previews` / `useSubscription` на плане (глобальный рефактор).
 - Широкие инвалидации в `useGenerateWeeklyPlan` и эффектах job — пока оставлены как «много дней / фоновая генерация».
 - Опциональный фоновый «safety refetch» одного ключа после Edge replace — при расхождении с сервером можно добавить отдельно.
 

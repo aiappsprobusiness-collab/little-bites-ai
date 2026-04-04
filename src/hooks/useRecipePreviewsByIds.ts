@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { getAppLocale } from "@/utils/appLocale";
 import type { RecipePreview } from "@/types/recipePreview";
+import { TAB_NAV_STALE_MS } from "@/utils/reactQueryTabNav";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DEBOUNCE_MS = 80;
@@ -145,7 +146,9 @@ export function useRecipePreviewsByIds(recipeIds: string[], locale?: string | nu
       return map;
     },
     enabled: !!user && ids.length > 0,
-    staleTime: 60_000,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const invalidatePreviews = () => {

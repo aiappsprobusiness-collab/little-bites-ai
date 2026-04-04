@@ -19,6 +19,7 @@ import {
 } from '@/utils/recipeBenefitDescription';
 import { inferNutritionGoals } from '@/utils/inferNutritionGoals';
 import mockRecipes from '@/mocks/mockRecipes.json';
+import { TAB_NAV_STALE_MS } from '@/utils/reactQueryTabNav';
 
 type Recipe = Tables<'recipes'>;
 type RecipeInsert = TablesInsert<'recipes'>;
@@ -137,6 +138,9 @@ export function useRecipes(childId?: string, options?: UseRecipesOptions) {
     queryKey: ['recipes', user?.id, childId, 0],
     queryFn: () => listQuery(0),
     enabled: !!user && listQueriesEnabled,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: favoriteRecipes = [] } = useQuery({
@@ -163,6 +167,9 @@ export function useRecipes(childId?: string, options?: UseRecipesOptions) {
       return (data ?? []) as Recipe[];
     },
     enabled: !!user && listQueriesEnabled,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: recentRecipes = [] } = useQuery({
@@ -180,6 +187,9 @@ export function useRecipes(childId?: string, options?: UseRecipesOptions) {
       return (data ?? []) as Recipe[];
     },
     enabled: !!user && listQueriesEnabled,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const getRecipeById = (id: string) => {
@@ -248,6 +258,9 @@ export function useRecipes(childId?: string, options?: UseRecipesOptions) {
         return out;
       },
       enabled: !!id,
+      staleTime: TAB_NAV_STALE_MS,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
     });
   };
 

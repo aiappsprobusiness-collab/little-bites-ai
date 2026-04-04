@@ -7,6 +7,7 @@ import { getSubscriptionLimits, isAiDailyLimitExceeded } from "@/utils/subscript
 import { useAppStore } from "@/store/useAppStore";
 import { hasSeenTrialActivatedModal } from "@/utils/trialActivatedModalStorage";
 import { getMsUntilTrialEnd } from "@/utils/trialLifecycle";
+import { TAB_NAV_STALE_MS, TAB_NAV_USAGE_STALE_MS } from "@/utils/reactQueryTabNav";
 
 /** Единая логика доступа: true если подписка активна (premium/trial) и не истекла. */
 export function hasPremiumAccessFromSubscription(subscription: {
@@ -45,6 +46,9 @@ export function useSubscription() {
       } | null;
     },
     enabled: authReady && !!user,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: latestSubscription } = useQuery({
@@ -57,6 +61,9 @@ export function useSubscription() {
       return (row ?? null) as { plan: string | null; expires_at: string | null } | null;
     },
     enabled: authReady && !!user,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   /** Успешные генерации рецепта в чате за сутки (UTC): usage_events.feature = chat_recipe (Free и Premium/Trial). */
@@ -72,6 +79,9 @@ export function useSubscription() {
       return typeof data === "number" ? data : 0;
     },
     enabled: authReady && !!user,
+    staleTime: TAB_NAV_USAGE_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   /** Использовано вопросов к Помощнику (help) сегодня. Нужно для отображения лимита на вкладке Help. */
@@ -87,6 +97,9 @@ export function useSubscription() {
       return typeof data === "number" ? data : 0;
     },
     enabled: authReady && !!user,
+    staleTime: TAB_NAV_USAGE_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const UNLIMITED_ACCESS_EMAILS = ["alesah007@gmail.com"];

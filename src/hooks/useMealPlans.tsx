@@ -6,6 +6,7 @@ import { isDateInRollingRange } from '@/utils/dateRange';
 import type { MealPlansV2Row, MealPlansV2Insert, MealPlansV2Update } from '@/integrations/supabase/types-v2';
 import type { IngredientOverrideEntry } from '@/types/ingredientOverrides';
 import { invalidateMealPlanQueriesForPlannedDate, mealPlanQueryTouchesPlannedDate } from '@/utils/mealPlanQueryInvalidation';
+import { TAB_NAV_STALE_MS } from '@/utils/reactQueryTabNav';
 
 const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'] as const;
 type MealType = (typeof MEAL_SLOTS)[number];
@@ -129,7 +130,8 @@ export function useMealPlans(
         return [];
       },
       enabled: !!user,
-      staleTime: 60_000,
+      staleTime: TAB_NAV_STALE_MS,
+      refetchOnMount: false,
       refetchOnWindowFocus: false,
     });
   };
@@ -159,7 +161,8 @@ export function useMealPlans(
         return [];
       },
       enabled: !!user,
-      staleTime: 60_000,
+      staleTime: TAB_NAV_STALE_MS,
+      refetchOnMount: false,
       refetchOnWindowFocus: false,
     });
   };

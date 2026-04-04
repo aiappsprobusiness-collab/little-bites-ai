@@ -148,6 +148,11 @@ export function usePlanGenerationJob(
     },
     refetchOnWindowFocus: jobFocusRefetch,
     refetchOnReconnect: jobFocusRefetch,
+    /** При SPA-переходах не дёргать job, если генерация не идёт (кэш staleTime достаточен). */
+    refetchOnMount: (query) => {
+      const j = query.state.data as PlanGenerationJobRow | null | undefined;
+      return j?.status === "running";
+    },
   });
 
   const POOL_UPGRADE_TIMEOUT_MS = 150_000; // 2.5 мин — Edge Function может долго обрабатывать неделю + AI fallback

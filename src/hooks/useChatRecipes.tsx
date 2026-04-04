@@ -8,6 +8,7 @@ import { parseRecipesFromChat } from '@/utils/parseChatRecipes';
 import type { ParseRecipesFromChatResult } from '@/utils/parseChatRecipes';
 import type { Tables } from '@/integrations/supabase/types';
 import { RECIPES_LIST_SELECT, RECIPES_PAGE_SIZE } from '@/lib/supabase-constants';
+import { TAB_NAV_STALE_MS } from '@/utils/reactQueryTabNav';
 import mockRecipes from '@/mocks/mockRecipes.json';
 
 type Recipe = Tables<'recipes'>;
@@ -20,7 +21,8 @@ const INVALIDATE_DELAY_MS = 300;
  */
 export function useChatRecipes() {
   const { user } = useAuth();
-  const { createRecipe } = useRecipes();
+  /** ChatPage только сохраняет рецепты — не поднимаем три list-query useRecipes (экономия при каждом заходе на /chat). */
+  const { createRecipe } = useRecipes(undefined, { listQueriesEnabled: false });
   const queryClient = useQueryClient();
   const lastProcessedRef = useRef<{ aiResponse: string; result: Promise<{ savedRecipes: Recipe[]; displayText: string }> } | null>(null);
 
@@ -77,6 +79,9 @@ export function useChatRecipes() {
         return filtered.slice(0, RECIPES_PAGE_SIZE) as Recipe[];
       },
       enabled: !!user,
+      staleTime: TAB_NAV_STALE_MS,
+      refetchOnMount: false,
+      refetchOnWindowFocus: false,
     });
   };
 

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { CHAT_HISTORY_SELECT, CHAT_LAST_MESSAGES } from '@/lib/supabase-constants';
 import { getChatThreadKey } from '@/utils/chatThreadKey';
+import { TAB_NAV_STALE_MS } from '@/utils/reactQueryTabNav';
 
 /**
  * selectedMemberId: "family" | member_id — контекст чата.
@@ -16,7 +17,8 @@ export function useChatHistory(selectedMemberId: string | null) {
 
   const { data: messages = [], isLoading, refetch } = useQuery({
     queryKey: ['chat_history', user?.id, threadKey],
-    staleTime: 30_000,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       if (!user) return [];

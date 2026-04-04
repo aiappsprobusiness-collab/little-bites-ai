@@ -7,6 +7,7 @@ import { useAuth } from './useAuth';
 import { useAppStore } from '@/store/useAppStore';
 import { FF_UNIFIED_PAYWALL } from "@/config/featureFlags";
 import { trackUsageEvent } from '@/utils/usageEvents';
+import { TAB_NAV_STALE_MS } from '@/utils/reactQueryTabNav';
 import type { RecipeSuggestion } from '@/services/deepseek';
 
 /** Рецепт в БД: в recipe_data JSONB сохраняются child_id/child_name. member_id в SavedFavorite — из favorites_v2 (для кого избранное). */
@@ -62,6 +63,9 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
   const { data: favorites = [], isLoading } = useQuery({
     queryKey: [...favoritesKey({ userId: user?.id, filter }), effectiveLocale],
     enabled: !!user && queryEnabled,
+    staleTime: TAB_NAV_STALE_MS,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       if (!user) return [];
 
