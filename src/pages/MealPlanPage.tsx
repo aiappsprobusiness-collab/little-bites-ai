@@ -1748,15 +1748,12 @@ export default function MealPlanPage() {
 
         infantAutoFillSlotLocksRef.current.add(lockKey);
         try {
-          await replaceSlotWithRecipe(
-            {
-              dayKey: selectedDayKey,
-              mealType: slot.id,
-              recipeId: picked.id,
-              recipeTitle: picked.title,
-            },
-            { skipInvalidate: true }
-          );
+          await replaceSlotWithRecipe({
+            dayKey: selectedDayKey,
+            mealType: slot.id,
+            recipeId: picked.id,
+            recipeTitle: picked.title,
+          });
         } catch (e: unknown) {
           if (!cancelled && runId === infantClientFillRunRef.current) {
             toast({
@@ -2768,15 +2765,12 @@ export default function MealPlanPage() {
                                     });
                                     return;
                                   }
-                                  await replaceSlotWithRecipe(
-                                    {
-                                      dayKey: selectedDayKey,
-                                      mealType: slot.id,
-                                      recipeId: picked.id,
-                                      recipeTitle: picked.title,
-                                    },
-                                    { skipInvalidate: true }
-                                  );
+                                  await replaceSlotWithRecipe({
+                                    dayKey: selectedDayKey,
+                                    mealType: slot.id,
+                                    recipeId: picked.id,
+                                    recipeTitle: picked.title,
+                                  });
                                   setSessionExcludeRecipeIds((prev) => ({
                                     ...prev,
                                     [selectedDayKey]: [...(prev[selectedDayKey] ?? []), picked.id],
@@ -3273,15 +3267,12 @@ export default function MealPlanPage() {
         onSelectInfantOption={async (option) => {
           if (!poolExhaustedContext) return;
           try {
-            await replaceSlotWithRecipe(
-              {
-                dayKey: poolExhaustedContext.dayKey,
-                mealType: poolExhaustedContext.mealType,
-                recipeId: option.recipeId,
-                recipeTitle: option.title,
-              },
-              { skipInvalidate: true }
-            );
+            await replaceSlotWithRecipe({
+              dayKey: poolExhaustedContext.dayKey,
+              mealType: poolExhaustedContext.mealType,
+              recipeId: option.recipeId,
+              recipeTitle: option.title,
+            });
             applyReplaceSlotToPlanCache(
               queryClient,
               { mealPlansKeyWeek, mealPlansKeyDay },
@@ -3456,15 +3447,12 @@ export default function MealPlanPage() {
               introducing_started_at: null,
             });
             await queryClient.invalidateQueries({ queryKey: ["members", user?.id] });
-            await replaceSlotWithRecipe(
-              {
-                dayKey: selectedDayKey,
-                mealType: p.slotId,
-                recipeId: p.picked.id,
-                recipeTitle: p.picked.title,
-              },
-              { skipInvalidate: true }
-            );
+            await replaceSlotWithRecipe({
+              dayKey: selectedDayKey,
+              mealType: p.slotId,
+              recipeId: p.picked.id,
+              recipeTitle: p.picked.title,
+            });
             setSessionExcludeRecipeIds((prev) => ({
               ...prev,
               [selectedDayKey]: [...(prev[selectedDayKey] ?? []), p.picked.id],

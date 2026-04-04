@@ -5,6 +5,7 @@ import { formatLocalDate } from '@/utils/dateUtils';
 import { isDateInRollingRange } from '@/utils/dateRange';
 import type { MealPlansV2Row, MealPlansV2Insert, MealPlansV2Update } from '@/integrations/supabase/types-v2';
 import type { IngredientOverrideEntry } from '@/types/ingredientOverrides';
+import { invalidateMealPlanQueriesForPlannedDate, mealPlanQueryTouchesPlannedDate } from '@/utils/mealPlanQueryInvalidation';
 
 const MEAL_SLOTS = ['breakfast', 'lunch', 'snack', 'dinner'] as const;
 type MealType = (typeof MEAL_SLOTS)[number];
@@ -163,33 +164,6 @@ export function useMealPlans(
     });
   };
 
-  /** Есть ли строка плана на дату и пустой ли день (meals = {}). Для различения EMPTY_DAY vs STARTER. */
-  const getMealPlanRowExists = (date: Date) => {
-    const dateStr = formatLocalDate(date);
-    return useQuery({
-      queryKey: [...mealPlansKey({ userId: user?.id, memberId, start: dateStr, profileKey, mutedWeekKey }), 'row_exists'] as const,
-      queryFn: async ({ signal }): Promise<{ exists: boolean; isEmpty: boolean }> => {
-        if (!user) return { exists: false, isEmpty: false };
-        let query = supabase
-          .from('meal_plans_v2')
-          .select('id, meals')
-          .eq('user_id', user.id)
-          .eq('planned_date', dateStr);
-        if (memberId === null) query = query.is('member_id', null);
-        else if (memberId) query = query.eq('member_id', memberId);
-        const { data: row, error } = await query.abortSignal(signal).maybeSingle();
-        if (error) throw error;
-        const exists = !!row;
-        const meals = (row as { meals?: MealsJson } | null)?.meals ?? {};
-        const isEmpty = exists && Object.keys(meals).length === 0;
-        return { exists, isEmpty };
-      },
-      enabled: !!user,
-      staleTime: 60_000,
-      refetchOnWindowFocus: false,
-    });
-  };
-
   const createMealPlan = useMutation({
     mutationFn: async (
       payload: {
@@ -263,8 +237,11 @@ export function useMealPlans(
       }
       return inserted as unknown as MealPlansV2Row;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+    onSuccess: (_data, variables) => {
+      void invalidateMealPlanQueriesForPlannedDate(queryClient, {
+        userId: user?.id,
+        plannedDate: variables.planned_date,
+      });
     },
   });
 
@@ -279,25 +256,33 @@ export function useMealPlans(
       if (error) throw error;
       return data as unknown as MealPlansV2Row;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+    onSuccess: (data) => {
+      const pd =
+        data && typeof data === 'object' && 'planned_date' in data && typeof (data as { planned_date?: unknown }).planned_date === 'string'
+          ? (data as { planned_date: string }).planned_date
+          : undefined;
+      if (pd && /^\d{4}-\d{2}-\d{2}$/.test(pd)) {
+        void invalidateMealPlanQueriesForPlannedDate(queryClient, { userId: user?.id, plannedDate: pd });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+      }
     },
   });
 
   const deleteMealPlan = useMutation({
     mutationFn: async (id: string) => {
-      if (!id) return;
+      if (!id) return null;
       const match = id.match(/^(.+)_(breakfast|lunch|snack|dinner)$/);
       if (!match) throw new Error('Invalid meal plan id');
       const [, rowId, mealType] = match;
 
       const { data: row, error: fetchError } = await supabase
         .from('meal_plans_v2')
-        .select('meals')
+        .select('meals, planned_date')
         .eq('id', rowId)
         .single();
-      if (fetchError || !row) return;
-      const rowData = row as unknown as { meals?: MealsJson };
+      if (fetchError || !row) return null;
+      const rowData = row as unknown as { meals?: MealsJson; planned_date?: string };
       const meals = { ...(rowData.meals ?? {}) } as MealsJson;
       const slot = meals[mealType];
       const recipeId = slot?.recipe_id;
@@ -311,9 +296,16 @@ export function useMealPlans(
         .update({ meals })
         .eq('id', rowId);
       if (updateError) throw updateError;
+      const pd = rowData.planned_date;
+      return pd && /^\d{4}-\d{2}-\d{2}$/.test(pd) ? { planned_date: pd } : null;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+    onSuccess: (result) => {
+      if (result?.planned_date) {
+        void invalidateMealPlanQueriesForPlannedDate(queryClient, {
+          userId: user?.id,
+          plannedDate: result.planned_date,
+        });
+      }
     },
   });
 
@@ -356,24 +348,17 @@ export function useMealPlans(
       if (updateErr) throw updateErr;
       return row as unknown as MealPlansV2Row;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+    onSuccess: (_row, params) => {
+      void invalidateMealPlanQueriesForPlannedDate(queryClient, {
+        userId: user?.id,
+        plannedDate: params.planned_date,
+      });
     },
   });
 
   /** Ключ: ['meal_plans_v2', userId, memberId, start, end?, profileKey, mutedWeekKey] — без end одна дата; с end — диапазон. */
-  const mealPlanQueryTouchesDate = (queryKey: unknown, plannedDate: string): boolean => {
-    if (!Array.isArray(queryKey) || queryKey[0] !== 'meal_plans_v2' || queryKey[1] !== user?.id) return false;
-    const start = queryKey[3];
-    if (typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return false;
-    const fourth = queryKey[4];
-    const fifthIsDate = typeof fourth === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fourth);
-    if (fifthIsDate) {
-      const end = fourth;
-      return plannedDate >= start && plannedDate <= end;
-    }
-    return start === plannedDate;
-  };
+  const mealPlanQueryTouchesDate = (queryKey: unknown, plannedDate: string): boolean =>
+    mealPlanQueryTouchesPlannedDate(queryKey, user?.id, plannedDate);
 
   /** Обновить кэш только затронутых запросов (без cancelQueries и без invalidate всего плана — иначе лавина refetch и лаг UI). */
   const patchCachedMealPlansServings = (params: {
@@ -450,18 +435,18 @@ export function useMealPlans(
 
   const markAsCompleted = useMutation({
     mutationFn: async (id: string) => {
-      if (!id) return;
+      if (!id) return null;
       const match = id.match(/^(.+)_(breakfast|lunch|snack|dinner)$/);
       if (!match) throw new Error('Invalid meal plan id');
       const [, rowId, mealType] = match;
 
       const { data: row, error: fetchError } = await supabase
         .from('meal_plans_v2')
-        .select('meals')
+        .select('meals, planned_date')
         .eq('id', rowId)
         .single();
-      if (fetchError || !row) return;
-      const rowData = row as unknown as { meals?: MealsJson };
+      if (fetchError || !row) return null;
+      const rowData = row as unknown as { meals?: MealsJson; planned_date?: string };
       const meals = { ...(rowData.meals ?? {}) } as MealsJson;
       const slot = meals[mealType];
       if (slot && typeof slot === 'object') {
@@ -473,9 +458,16 @@ export function useMealPlans(
         .update({ meals })
         .eq('id', rowId);
       if (updateError) throw updateError;
+      const pd = rowData.planned_date;
+      return pd && /^\d{4}-\d{2}-\d{2}$/.test(pd) ? { planned_date: pd } : null;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meal_plans_v2', user?.id] });
+    onSuccess: (result) => {
+      if (result?.planned_date) {
+        void invalidateMealPlanQueriesForPlannedDate(queryClient, {
+          userId: user?.id,
+          plannedDate: result.planned_date,
+        });
+      }
     },
   });
 
@@ -584,7 +576,6 @@ export function useMealPlans(
   return {
     getMealPlans,
     getMealPlansByDate,
-    getMealPlanRowExists,
     createMealPlan: createMealPlan.mutateAsync,
     updateMealPlan: updateMealPlan.mutateAsync,
     updateSlotIngredientOverrides: updateSlotIngredientOverrides.mutateAsync,

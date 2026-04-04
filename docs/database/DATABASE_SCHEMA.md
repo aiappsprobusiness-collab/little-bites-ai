@@ -152,7 +152,7 @@ RLS: по `auth.uid() = user_id`.
 
 RLS: SELECT — публичные или свои (или private + owner). INSERT/UPDATE/DELETE — владелец по user_id или owner_user_id для user_custom.
 
-**Индекс для seed-каталога (идемпотентный импорт):** частичный уникальный индекс `recipes_seed_catalog_identity_v2` на `(user_id, locale, norm_title, min_age_months, max_age_months, meal_type)` при `source = 'seed'`, `norm_title IS NOT NULL`, `meal_type IS NOT NULL` — см. миграции `20260325130000_recipes_seed_catalog_unique.sql` (v1, заменён) и `20260328120000_recipes_seed_catalog_identity_meal_type.sql` (v2), скрипт `scripts/import-infant-seed.mjs` (infant + toddler каталоги, опционально `--file=...`).
+**Индекс для seed-каталога (идемпотентный импорт):** частичный уникальный индекс `recipes_seed_catalog_identity_v2` на `(user_id, locale, norm_title, min_age_months, max_age_months, meal_type)` при `source = 'seed'`, `norm_title IS NOT NULL`, `meal_type IS NOT NULL` — см. миграции `20260325130000_recipes_seed_catalog_unique.sql` (v1, заменён) и `20260328120000_recipes_seed_catalog_identity_meal_type.sql` (v2), скрипт `scripts/import-infant-seed.ts` (tsx, infant + toddler каталоги, опционально `--file=...`; см. `package.json` `seed:*:import`).
 
 ---
 
@@ -162,8 +162,8 @@ RLS: SELECT — публичные или свои (или private + owner). INS
 
 **Слои данных (dual measurement, миграция `20260404120000_recipe_ingredients_dual_measurement.sql`):**
 
-- **Канонический слой (source of truth для математики):** `canonical_amount`, `canonical_unit` (g/ml). Пересчёт порций, агрегирование, список покупок опираются только на них, а не на `display_text`.
-- **UX / display-слой:** `display_amount`, `display_unit`, `display_quantity_text`, `measurement_mode` (`canonical_only` \| `dual` \| `display_only`), плюс `display_text` как fallback и для совместимости с переводами (ML-7). В режиме `dual` строка вида «Лук — 1 шт. = 80 г» собирается через `shared/ingredientMeasurementDisplay.ts` (`formatIngredientMeasurement`); выбор `dual` vs `canonical_only` при сохранении — `enrichIngredientMeasurementForSave` + `shared/ingredientMeasurementEngine.ts` + quality gate (`shared/ingredientMeasurementQuality.ts`). Подробнее: `docs/dev/RECIPE_INGREDIENT_DUAL_MEASUREMENT.md`.
+- **Канонический слой (source of truth для математики):** `canonical_amount`, `canonical_unit`. Пересчёт порций, агрегирование, список покупок опираются на них, а не на `display_text`. В RPC `create_recipe_with_steps` / `ingredient_canonical` допустимы нормализованные единицы **`g`, `ml`, `pcs`, `tsp`, `tbsp`** (вход **`kg`/`l`** приводятся к `g`/`ml`). Исторические seed-строки могли быть без канона — отдельный этап: `scripts/backfill-recipe-ingredient-canonical.ts` + `shared/ingredientCanonicalBackfill.ts` (см. `docs/dev/RECIPE_INGREDIENT_DUAL_MEASUREMENT.md`).
+- **UX / display-слой:** `display_amount`, `display_unit`, `display_quantity_text`, `measurement_mode` (`canonical_only` \| `dual` \| `display_only`), плюс `display_text` как fallback и для совместимости с переводами (ML-7). В режиме `dual` строка вида «Лук — 1 шт. = 80 г» собирается через `shared/ingredientMeasurementDisplay.ts` (`formatIngredientMeasurement`); выбор `dual` vs `canonical_only` при сохранении — `enrichIngredientMeasurementForSave` + `shared/ingredientMeasurementEngine.ts` + quality gate (`shared/ingredientMeasurementQuality.ts`). Осторожный backfill dual-слоя — `scripts/backfill-recipe-ingredient-dual-display.ts` + `shared/ingredientDualBackfill.ts` (те же правила, что save-time; требует валидного канона там, где dual опирается на граммы/мл). Подробнее: `docs/dev/RECIPE_INGREDIENT_DUAL_MEASUREMENT.md`.
 
 | Колонка          | Тип                 | Описание |
 |------------------|---------------------|----------|
@@ -174,7 +174,7 @@ RLS: SELECT — публичные или свои (или private + owner). INS
 | unit             | text                | |
 | display_text     | text                | Fallback: «морковь — 100 г» или полная dual-строка при сохранении из пайплайна |
 | canonical_amount | numeric             | В граммах/мл (g/ml) |
-| canonical_unit   | text                | g \| ml (CHECK) |
+| canonical_unit   | text                | после нормализации в RPC: **`g` \| `ml` \| `pcs` \| `tsp` \| `tbsp`** (см. `normalize_ingredient_unit`, `ingredient_canonical` в миграции `20260220120000_...` и логику `create_recipe_with_steps`) |
 | category         | product_category    | vegetables, fruits, dairy, meat, grains, other, **fish**, **fats**, **spices** (enum); в UI списка покупок fish → секция meat, fats/spices → other. При сохранении через `create_recipe_with_steps`, если категория в payload пустая или `other`, записывается результат `infer_ingredient_category` по объединённым полям name и display_text (русские эвристики). |
 | order_index      | integer DEFAULT 0   | |
 | substitute       | text                | Замена (Premium Smart Swap) |

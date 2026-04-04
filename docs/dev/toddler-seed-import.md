@@ -20,14 +20,14 @@ npm run seed:toddler:json
 
 1. Применить миграции (в т.ч. индекс `recipes_seed_catalog_identity_v2` с полем `meal_type`).
 2. `npm run seed:toddler:json`
-3. Пробный прогон: `node scripts/import-infant-seed.mjs --file=data/toddler-seed/toddler-catalog-recipes.json --dry-run`
+3. Пробный прогон: `npm run seed:toddler:import -- --dry-run`
 4. Импорт: `npm run seed:toddler:import`
 
 Очистка только этого батча по тегу (осторожно в проде):
 
 ```bash
 set SEED_CATALOG_BATCH_TAG=toddler_curated_v1
-node scripts/import-infant-seed.mjs --purge-only
+npm run seed:toddler:import -- --purge-only
 ```
 
 ## Идемпотентность
@@ -45,7 +45,7 @@ node scripts/import-infant-seed.mjs --purge-only
 
 ## Child curated seed (37–96 мес)
 
-Тот же формат файла и тот же импортёр `import-infant-seed.mjs`, отдельный батч-тег **`child_37_96_curated_v1`**.
+Тот же формат файла и тот же импортёр `import-infant-seed.ts`, отдельный батч-тег **`child_37_96_curated_v1`**.
 
 ### Источник
 
@@ -63,14 +63,14 @@ npm run seed:child:json
 ### Импорт
 
 1. `npm run seed:child:json`
-2. Пробный прогон: `node scripts/import-infant-seed.mjs --file=data/toddler-seed/child-37-96-catalog-recipes.json --dry-run`
+2. Пробный прогон: `npm run seed:child:import -- --dry-run`
 3. Импорт: `npm run seed:child:import`
 
 Purge только этого батча:
 
 ```bash
 set SEED_CATALOG_BATCH_TAG=child_37_96_curated_v1
-node scripts/import-infant-seed.mjs --purge-only
+npm run seed:child:import -- --purge-only
 ```
 
 Поля в БД: `min_age_months` / `max_age_months` в диапазоне **37–96** (как в JSON).
@@ -81,7 +81,7 @@ node scripts/import-infant-seed.mjs --purge-only
 
 ## Child curated seed (97–216 мес, ~8–18 лет)
 
-Тот же формат файла и импортёр `import-infant-seed.mjs`, батч-тег **`child_97_216_curated_v1`**.
+Тот же формат файла и импортёр `import-infant-seed.ts`, батч-тег **`child_97_216_curated_v1`**.
 
 ### Источник
 
@@ -99,14 +99,14 @@ npm run seed:child:teen:json
 ### Импорт
 
 1. `npm run seed:child:teen:json`
-2. Пробный прогон: `node scripts/import-infant-seed.mjs --file=data/toddler-seed/child-97-216-catalog-recipes.json --dry-run`
+2. Пробный прогон: `npm run seed:child:teen:import -- --dry-run`
 3. Импорт: `npm run seed:child:teen:import`
 
 Purge только этого батча:
 
 ```bash
 set SEED_CATALOG_BATCH_TAG=child_97_216_curated_v1
-node scripts/import-infant-seed.mjs --purge-only
+npm run seed:child:teen:import -- --purge-only
 ```
 
 Поля в БД: `min_age_months` / `max_age_months` в диапазоне **97–216** (как в JSON).
@@ -115,7 +115,7 @@ node scripts/import-infant-seed.mjs --purge-only
 
 ## Adult curated seed (216–1200 мес)
 
-Тот же импортёр `import-infant-seed.mjs`, батч-тег **`adult_216_1200_curated_v1`**. Формат исходника **отличается** от toddler/child: несколько подряд **JSON-массивов** `[ {...}, ... ]` (без обёртки `{ seedSet, recipes }`).
+Тот же импортёр `import-infant-seed.ts`, батч-тег **`adult_216_1200_curated_v1`**. Формат исходника **отличается** от toddler/child: несколько подряд **JSON-массивов** `[ {...}, ... ]` (без обёртки `{ seedSet, recipes }`).
 
 ### Источник
 
@@ -133,14 +133,14 @@ npm run seed:adult:json
 ### Импорт
 
 1. `npm run seed:adult:json`
-2. Пробный прогон: `node scripts/import-infant-seed.mjs --file=data/toddler-seed/adult-216-1200-catalog-recipes.json --dry-run`
+2. Пробный прогон: `npm run seed:adult:import -- --dry-run`
 3. Импорт: `npm run seed:adult:import`
 
 Purge только этого батча:
 
 ```bash
 set SEED_CATALOG_BATCH_TAG=adult_216_1200_curated_v1
-node scripts/import-infant-seed.mjs --purge-only
+npm run seed:adult:import -- --purge-only
 ```
 
 Поля в БД: `min_age_months` / `max_age_months` в диапазоне **216–1200** (как в JSON).

@@ -117,7 +117,7 @@ Generate-plan: после фильтров слот выбирается по **
 Рекомендуется:
 - вручную создать **20–40 рецептов** (или импортировать сиды);
 - распределить по приёмам: **breakfast**, **lunch**, **dinner**, **snack**;
-- для **каталожных seed**: **trust_level = core** (см. импорт `scripts/import-infant-seed.mjs` и RPC default `create_recipe_with_steps`); **trusted** — для поведенчески подтверждённых или manual, не как синоним «наш сид».
+- для **каталожных seed**: **trust_level = core** (см. импорт `scripts/import-infant-seed.ts` / `npm run seed:*:import` и RPC default `create_recipe_with_steps`); **trusted** — для поведенчески подтверждённых или manual, не как синоним «наш сид».
 
 Это базовый пул, от которого строится generate-plan. Дальше feedback и авто-правила дополняют пул.
 

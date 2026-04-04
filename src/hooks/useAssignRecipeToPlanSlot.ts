@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
-import { mealPlansKey } from "./useMealPlans";
 import { formatLocalDate } from "@/utils/dateUtils";
-import { getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
+import { getRollingDayKeys } from "@/utils/dateRange";
+import { invalidateMealPlanQueriesForPlannedDate } from "@/utils/mealPlanQueryInvalidation";
 
 export interface AssignRecipeToPlanSlotParams {
   member_id: string | null;
@@ -34,24 +34,9 @@ export function useAssignRecipeToPlanSlot(memberId: string | null | undefined) {
       return data as { id: string; planned_date: string; meal_type: string; recipe_id: string; title: string };
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-      const startKey = getRollingStartKey();
-      const endKey = getRollingEndKey();
-      queryClient.invalidateQueries({
-        queryKey: mealPlansKey({
-          userId: user?.id,
-          memberId: variables.member_id ?? undefined,
-          start: startKey,
-          end: endKey,
-        }),
-      });
-      const dayKey = variables.day_key;
-      queryClient.invalidateQueries({
-        queryKey: mealPlansKey({
-          userId: user?.id,
-          memberId: variables.member_id ?? undefined,
-          start: dayKey,
-        }),
+      void invalidateMealPlanQueriesForPlannedDate(queryClient, {
+        userId: user?.id,
+        plannedDate: variables.day_key,
       });
     },
   });

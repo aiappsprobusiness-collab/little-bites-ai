@@ -49,6 +49,7 @@ import { useSubscription } from "./hooks/useSubscription";
 import { useAuth } from "./hooks/useAuth";
 import { captureAttributionFromLocationOnce } from "./utils/usageEvents";
 import { isEffectiveTrialTier, TRIAL_ENDING_SOON_MS } from "./utils/trialLifecycle";
+import { ReactQueryDiag } from "./dev/ReactQueryDiag";
 
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
@@ -166,6 +167,7 @@ function TrialSoftBanner() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    {import.meta.env.DEV ? <ReactQueryDiag /> : null}
     <TooltipProvider>
       <BrowserRouter
         future={{

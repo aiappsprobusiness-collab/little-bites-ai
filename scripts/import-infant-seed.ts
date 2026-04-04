@@ -1,30 +1,24 @@
 /**
- * Импорт infant seed из data/infant-seed-recipes.json в Supabase (service role).
+ * Импорт infant seed из JSON в Supabase (service role).
  * Идемпотентность: поиск существующей строки по
  * (user_id, source=seed, locale, norm_title, min_age_months, max_age_months, meal_type),
  * затем UPDATE + замена ингредиентов/шагов или INSERT.
  *
- * Переменные окружения:
- *   SUPABASE_URL
- *   SUPABASE_SERVICE_ROLE_KEY
- *   INFANT_SEED_CATALOG_USER_ID — uuid существующего пользователя auth.users (владелец строк пула)
+ * Канон: если в JSON нет валидного canonical_*, вычисляется из amount/unit или display_text
+ * (`shared/ingredientCanonicalResolve.ts`), по тем же правилам, что ingredient_canonical в БД.
  *
- * Флаги:
- *   --dry-run      только сводка, без записи
- *   --purge        перед вставкой удалить рецепты этого владельца с тегом batch из файла
- *   --purge-only   только удалить батч (по тегу), без чтения JSON и без вставки
+ * Переменные: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, INFANT_SEED_CATALOG_USER_ID
+ * Флаги: --dry-run, --purge, --purge-only, --file=...
  *
- * Опционально: SEED_CATALOG_BATCH_TAG или INFANT_SEED_BATCH_TAG — для --purge-only, если JSON не нужен.
- * Опционально: --file=относительный/абсолютный путь к bundle JSON; либо SEED_CATALOG_JSON (от корня репо или абсолютный).
- *
- * Запуск: node scripts/import-infant-seed.mjs
+ * Запуск: npm run seed:infant:import (tsx)
  */
 
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, existsSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join, isAbsolute } from "path";
-import { randomUUID } from "crypto";
+import { readFileSync, existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join, isAbsolute } from "node:path";
+import { randomUUID } from "node:crypto";
+import { fillCanonicalForSeedIngredient } from "../shared/ingredientCanonicalResolve.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -38,9 +32,10 @@ function loadEnv() {
     if (m) {
       const key = m[1];
       const raw = m[2].trim();
-      const value = raw.startsWith('"') && raw.endsWith('"')
-        ? raw.slice(1, -1).replace(/\\"/g, '"')
-        : raw.replace(/^['']|['']$/g, "");
+      const value =
+        raw.startsWith('"') && raw.endsWith('"')
+          ? raw.slice(1, -1).replace(/\\"/g, '"')
+          : raw.replace(/^['']|['']$/g, "");
       if (!process.env[key]) process.env[key] = value;
     }
   }
@@ -56,38 +51,37 @@ const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const CATALOG_USER_ID = process.env.INFANT_SEED_CATALOG_USER_ID;
 
-/** Расшифровка payload JWT без проверки подписи — только чтобы отловить anon/authenticated. */
-function decodeJwtPayload(token) {
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   if (!token || typeof token !== "string") return null;
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   let b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
   while (b64.length % 4) b64 += "=";
   try {
-    return JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
+    return JSON.parse(Buffer.from(b64, "base64").toString("utf8")) as Record<string, unknown>;
   } catch {
     return null;
   }
 }
 
-function assertSupabaseServiceRoleKey(key) {
+function assertSupabaseServiceRoleKey(key: string) {
   const payload = decodeJwtPayload(key);
   if (!payload) {
     console.error(
-      "SUPABASE_SERVICE_ROLE_KEY не похож на JWT. Нужен ключ service_role из Supabase Dashboard → Settings → API (секретный), не anon и не VITE_SUPABASE_ANON_KEY."
+      "SUPABASE_SERVICE_ROLE_KEY не похож на JWT. Нужен ключ service_role из Supabase Dashboard → Settings → API (секретный), не anon и не VITE_SUPABASE_ANON_KEY.",
     );
     process.exit(1);
   }
   const role = payload.role;
   if (role !== "service_role") {
     console.error(
-      `В JWT указано role="${role ?? "нет"}". Для импорта нужен именно service_role (обходит RLS). Сейчас вставка проверяется как обычный клиент и падает на recipes_insert_own (user_id = auth.uid()).`
+      `В JWT указано role="${role ?? "нет"}". Для импорта нужен именно service_role (обходит RLS).`,
     );
     process.exit(1);
   }
 }
 
-function resolveJsonPath() {
+function resolveJsonPath(): string {
   const arg = process.argv.find((a) => a.startsWith("--file="));
   if (arg) {
     const p = arg.slice("--file=".length);
@@ -100,8 +94,7 @@ function resolveJsonPath() {
 
 const jsonPath = resolveJsonPath();
 
-/** Грубое соответствие enum product_category для списка покупок */
-function inferIngredientCategory(name) {
+function inferIngredientCategory(name: string | undefined | null): string {
   const n = (name ?? "").toLowerCase();
   if (/вода|фильтр/.test(n)) return "other";
   if (/масло|оливк/.test(n)) return "fats";
@@ -113,7 +106,7 @@ function inferIngredientCategory(name) {
   return "vegetables";
 }
 
-function normTitle(title) {
+function normTitle(title: unknown): string {
   return String(title ?? "")
     .trim()
     .toLowerCase();
@@ -130,24 +123,19 @@ if (!CATALOG_USER_ID) {
 }
 
 const defaultBatchTag =
-  process.env.SEED_CATALOG_BATCH_TAG ||
-  process.env.INFANT_SEED_BATCH_TAG ||
-  "infant_curated_v2";
+  process.env.SEED_CATALOG_BATCH_TAG || process.env.INFANT_SEED_BATCH_TAG || "infant_curated_v2";
 
-let bundle = null;
-let recipes = [];
+let bundle: { recipes?: unknown[]; batchTag?: string } | null = null;
+let recipes: unknown[] = [];
 let batchTag = defaultBatchTag;
 
 if (!purgeOnly) {
   if (!existsSync(jsonPath)) {
     console.error("Нет файла", jsonPath);
-    console.error(
-      "Для infant: npm run seed:infant:json. Для toddler: npm run seed:toddler:json или --file=data/toddler-seed/toddler-catalog-recipes.json"
-    );
     process.exit(1);
   }
-  bundle = JSON.parse(readFileSync(jsonPath, "utf8"));
-  recipes = bundle.recipes;
+  bundle = JSON.parse(readFileSync(jsonPath, "utf8")) as { recipes?: unknown[]; batchTag?: string };
+  recipes = bundle.recipes ?? [];
   batchTag = bundle.batchTag ?? defaultBatchTag;
 
   if (!Array.isArray(recipes) || recipes.length === 0) {
@@ -161,6 +149,27 @@ if (!purgeOnly) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+type RecipeJson = {
+  title: string;
+  min_age_months?: number;
+  max_age_months?: number;
+  meal_type?: string | null;
+  description?: string;
+  chef_advice?: string;
+  cooking_time_minutes?: number;
+  tags?: string[];
+  nutrition_goals?: string[];
+  is_soup?: boolean;
+  servings_base?: number;
+  servings_recommended?: number;
+  calories?: number | null;
+  proteins?: number | null;
+  fats?: number | null;
+  carbs?: number | null;
+  ingredients?: Array<Record<string, unknown>>;
+  steps?: Array<{ step_number?: number; instruction: string }>;
+};
 
 async function purgeBatch() {
   const { data: rows, error: selErr } = await supabase
@@ -185,7 +194,7 @@ async function purgeBatch() {
   console.log(`purge: удалено рецептов: ${ids.length}`);
 }
 
-async function findExistingRecipeId(r) {
+async function findExistingRecipeId(r: RecipeJson): Promise<string | null> {
   const nt = normTitle(r.title);
   let q = supabase
     .from("recipes")
@@ -194,8 +203,8 @@ async function findExistingRecipeId(r) {
     .eq("source", "seed")
     .eq("locale", "ru")
     .eq("norm_title", nt)
-    .eq("min_age_months", r.min_age_months)
-    .eq("max_age_months", r.max_age_months);
+    .eq("min_age_months", r.min_age_months ?? 6)
+    .eq("max_age_months", r.max_age_months ?? 11);
   if (r.meal_type != null && r.meal_type !== "") {
     q = q.eq("meal_type", r.meal_type);
   }
@@ -207,7 +216,7 @@ async function findExistingRecipeId(r) {
   return data?.id ?? null;
 }
 
-function buildRecipeRow(r, id) {
+function buildRecipeRow(r: RecipeJson, id: string) {
   const nutrition_goals = Array.isArray(r.nutrition_goals) ? r.nutrition_goals : [];
   const tags = Array.isArray(r.tags) ? r.tags : [];
   const ctm = Number(r.cooking_time_minutes) || 15;
@@ -240,30 +249,39 @@ function buildRecipeRow(r, id) {
   };
 }
 
-async function replaceIngredientsAndSteps(recipeId, r) {
-  const { error: di } = await supabase
-    .from("recipe_ingredients")
-    .delete()
-    .eq("recipe_id", recipeId);
-  if (di) return { ok: false, error: di, phase: "delete_ingredients" };
+async function replaceIngredientsAndSteps(recipeId: string, r: RecipeJson) {
+  const { error: di } = await supabase.from("recipe_ingredients").delete().eq("recipe_id", recipeId);
+  if (di) return { ok: false as const, error: di, phase: "delete_ingredients" };
 
   const { error: ds } = await supabase.from("recipe_steps").delete().eq("recipe_id", recipeId);
-  if (ds) return { ok: false, error: ds, phase: "delete_steps" };
+  if (ds) return { ok: false as const, error: ds, phase: "delete_steps" };
 
-  const ingredients = (r.ingredients ?? []).map((ing, i) => ({
-    recipe_id: recipeId,
-    name: ing.name,
-    amount: ing.amount ?? null,
-    unit: ing.unit ?? null,
-    display_text: ing.display_text ?? ing.name,
-    canonical_amount: ing.canonical_amount ?? null,
-    canonical_unit: ing.canonical_unit ?? null,
-    order_index: ing.order_index ?? i,
-    category: ing.category ?? inferIngredientCategory(ing.name),
-  }));
+  const ingredients = (r.ingredients ?? []).map((ing, i) => {
+    const name = typeof ing.name === "string" ? ing.name : "";
+    const displayText = typeof ing.display_text === "string" && ing.display_text.trim() ? ing.display_text : name;
+    const canon = fillCanonicalForSeedIngredient({
+      name,
+      amount: ing.amount ?? null,
+      unit: typeof ing.unit === "string" ? ing.unit : null,
+      display_text: displayText,
+      canonical_amount: typeof ing.canonical_amount === "number" ? ing.canonical_amount : null,
+      canonical_unit: typeof ing.canonical_unit === "string" ? ing.canonical_unit : null,
+    });
+    return {
+      recipe_id: recipeId,
+      name,
+      amount: ing.amount ?? null,
+      unit: ing.unit ?? null,
+      display_text: displayText,
+      canonical_amount: canon.canonical_amount,
+      canonical_unit: canon.canonical_unit,
+      order_index: (ing.order_index as number) ?? i,
+      category: (ing.category as string) ?? inferIngredientCategory(name),
+    };
+  });
 
   const { error: ie } = await supabase.from("recipe_ingredients").insert(ingredients);
-  if (ie) return { ok: false, error: ie, phase: "insert_ingredients" };
+  if (ie) return { ok: false as const, error: ie, phase: "insert_ingredients" };
 
   const steps = (r.steps ?? []).map((s, i) => ({
     recipe_id: recipeId,
@@ -272,12 +290,12 @@ async function replaceIngredientsAndSteps(recipeId, r) {
   }));
 
   const { error: se } = await supabase.from("recipe_steps").insert(steps);
-  if (se) return { ok: false, error: se, phase: "insert_steps" };
+  if (se) return { ok: false as const, error: se, phase: "insert_steps" };
 
-  return { ok: true };
+  return { ok: true as const };
 }
 
-async function upsertOne(r) {
+async function upsertOne(r: RecipeJson) {
   const existingId = await findExistingRecipeId(r);
   const id = existingId ?? randomUUID();
   const row = buildRecipeRow(r, id);
@@ -308,25 +326,23 @@ async function upsertOne(r) {
         steps: row.steps,
       })
       .eq("id", id);
-    if (ue) return { ok: false, error: ue, title: r.title, mode: "update" };
+    if (ue) return { ok: false as const, error: ue, title: r.title, mode: "update" as const };
   } else {
     const { error: ie } = await supabase.from("recipes").insert(row);
-    if (ie) return { ok: false, error: ie, title: r.title, mode: "insert" };
+    if (ie) return { ok: false as const, error: ie, title: r.title, mode: "insert" as const };
   }
 
   const child = await replaceIngredientsAndSteps(id, r);
   if (!child.ok) {
-    return { ok: false, error: child.error, title: r.title, recipeId: id, phase: child.phase };
+    return { ok: false as const, error: child.error, title: r.title, recipeId: id, phase: child.phase };
   }
 
-  return { ok: true, id, mode: existingId ? "updated" : "inserted" };
+  return { ok: true as const, id, mode: existingId ? ("updated" as const) : ("inserted" as const) };
 }
 
 async function main() {
   if (purgeOnly) {
-    console.log(
-      `purge-only: user_id=${CATALOG_USER_ID}, batchTag=${batchTag}`
-    );
+    console.log(`purge-only: user_id=${CATALOG_USER_ID}, batchTag=${batchTag}`);
     if (dryRun) {
       const { data: rows, error } = await supabase
         .from("recipes")
@@ -353,8 +369,8 @@ async function main() {
 
   let inserted = 0;
   let updated = 0;
-  const failures = [];
-  for (const r of recipes) {
+  const failures: unknown[] = [];
+  for (const r of recipes as RecipeJson[]) {
     const res = await upsertOne(r);
     if (res.ok) {
       if (res.mode === "updated") updated += 1;

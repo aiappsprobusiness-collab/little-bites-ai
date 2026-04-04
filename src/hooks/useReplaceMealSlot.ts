@@ -272,7 +272,7 @@ export function useReplaceMealSlot(
         /** Источник для usage_events plan_slot_replace_success */
         replaceAnalyticsSource?: "pool_pick" | "ai_chat" | "assign";
       },
-      opts?: { skipInvalidate?: boolean; skipAttempt?: boolean }
+      opts?: { skipAttempt?: boolean }
     ) => {
       const baseProps = {
         day_key: params.dayKey,
@@ -309,9 +309,7 @@ export function useReplaceMealSlot(
         memberId: memberId ?? null,
         properties: baseProps,
       });
-      if (!opts?.skipInvalidate) {
-        queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
-      }
+      /** Синхронизация кэша: только `createMealPlan.onSuccess` → узкая invalidate по `planned_date` (без второго широкого каскада). */
     },
     [createMealPlan, memberId, options?.startKey, options?.endKey, queryClient, user?.id]
   );

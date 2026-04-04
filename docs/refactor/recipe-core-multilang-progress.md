@@ -334,7 +334,7 @@ Checklist:
 - **Backfill:** существующие `source = seed` с `trust_level IN ('trusted','seed')` → `core`.
 - **`recompute_recipe_score_and_trust`:** для `core` как для `trusted` — только обновление `score`, без candidate-переходов.
 - **generate-plan:** `trustOrder` в `trustLevelTier.ts` — для предсортировки пула; **финальный выбор слота** — `planRankComposite.ts` (бонусы `trustRankingBonus`, `dbScoreContribution`, exploration от salt, jitter). Лог: `CHAT_PLAN_RANK_DEBUG` / `DEBUG_POOL`.
-- **Файлы:** миграция `20260329100000_recipe_trust_level_core.sql`, `generate-plan/trustLevelTier.ts`, `scripts/import-infant-seed.mjs` (`trust_level: "core"`).
+- **Файлы:** миграция `20260329100000_recipe_trust_level_core.sql`, `generate-plan/trustLevelTier.ts`, `scripts/import-infant-seed.ts` (`trust_level: "core"`).
 
 ## Stage 1 scope
 - [x] migration added

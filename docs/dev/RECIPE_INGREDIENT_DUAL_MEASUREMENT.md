@@ -6,7 +6,7 @@
 
 ## Source of truth
 
-- **Порции, агрегация, список покупок, масштаб:** только `canonical_amount` + `canonical_unit` (g/ml). Порции **не** считаются по `display_text`.
+- **Порции, агрегация, список покупок, масштаб:** опираются на `canonical_amount` + `canonical_unit`. Порции **не** считаются по `display_text`. В БД (CHECK после миграций) для канона допустимы **`g`, `ml`, `pcs`, `tsp`, `tbsp`** и промежуточные **`kg`/`l`** при записи через RPC с нормализацией в `g`/`ml`; dual measurement engine для граммовых путей ожидает прежде всего **`g`/`ml`**.
 - **UX:** `measurement_mode`, `display_amount`, `display_unit`, `display_quantity_text`, плюс `display_text` как fallback и для переводов.
 
 ## Канонический decision flow
@@ -32,6 +32,9 @@
 | `shared/ingredientMeasurementQuality.ts` | `isHumanReadableHouseholdQuantity`, `passesDualMeasurementQualityGate`, `scaledHouseholdStaysReadableForDual` |
 | `shared/ingredientMeasurementEngine.ts` | Парсинг explicit household, инференс, `resolveHouseholdCandidateForSave`, `validatePersistedDualMeasurement`, `shouldUseDualMeasurement` (по `IngredientProbeInput`) |
 | `shared/ingredientMeasurementDisplay.ts` | `enrichIngredientMeasurementForSave`, `formatIngredientMeasurement`, `shouldUseDualMeasurement` (обёртка под `IngredientMeasurementInput`), склонение «зубчик», локализация чисел |
+| `shared/ingredientDualBackfill.ts` | `evaluateDualMeasurementBackfill`, `maybeUpgradeIngredientMeasurement` — **тот же** enrich/engine/gate, без дублирования правил; для backfill и точечного lazy-upgrade |
+| `shared/ingredientCanonicalResolve.ts` | Нормализация единиц и расчёт канона как SQL `normalize_ingredient_unit` + `ingredient_canonical` (без whitelist продуктов) |
+| `shared/ingredientCanonicalBackfill.ts` | `evaluateCanonicalIngredientRow` — решение safe canonical backfill (только канон, не dual) |
 
 - **Категория по тексту (как в БД):** `shared/dbProductCategoryFromText.ts`.
 - **Сохранение в RPC:** `src/utils/recipeCanonical.ts` и `supabase/functions/_shared/recipeCanonical.ts` — enrich перед `create_recipe_with_steps`.
@@ -41,16 +44,85 @@
 
 Допустимы: словари **типов** бытовых единиц (зубчик, ложка), узкие **стемы** для объектной семантики (чеснок → зубчик, яйцо → шт.), **regex-блок** инференса «шт» из граммов для мяса/рыбы/молочки/круп по **категории + типичным подстрокам** (фарш, филе, крупы…), чтобы не выводить dual для весовых форм. Это не каталог «тыква/кабачок».
 
-## Backfill (этап 3)
+## Canonical backfill (перед dual)
 
-Идемпотентный скрипт (service role):
+**Зачем:** dual backfill и enrich требуют **заполненного канона**, если из него считается математика. Исторические **seed**-строки часто имели только `amount`/`unit`/`display_text` без `canonical_*`.
+
+**Принцип:** отдельный этап — `scripts/backfill-recipe-ingredient-canonical.ts` + `evaluateCanonicalIngredientRow`. Правила совпадают с PostgreSQL **`ingredient_canonical`** (миграция `20260220120000_...`). Парсинг: сначала **`amount` + `unit`**, иначе хвост **`display_text`** после «—» (как `parse_ingredient_display_text`). Без угадывания веса «1 моркови»; неоднозначные единицы → skip.
+
+**Команды:**
 
 ```bash
-npm run backfill:ingredient-dual -- --dry-run
-npm run backfill:ingredient-dual
+npm run backfill:ingredient-canonical -- --diagnose-only --recipe-source=seed
+npm run backfill:ingredient-canonical -- --dry-run --recipe-source=seed --limit=500
+npm run backfill:ingredient-canonical -- --recipe-source=seed --limit=500
+# только строки, где оба канона NULL:
+npm run backfill:ingredient-canonical -- --dry-run --only-missing-canonical --recipe-source=seed
+# фильтр по trust_level (опционально):
+npm run backfill:ingredient-canonical -- --diagnose-only --recipe-source=seed --trust-level=core
 ```
 
-Обновляет только строки с `measurement_mode = canonical_only`, если enrich возвращает `dual`. После смены правил enrich имеет смысл прогнать backfill снова (без обязательного повторного деплоя Edge, если менялся только фронт/общий shared — скрипт локальный).
+**Рекомендуемый порядок rollout:** `canonical --diagnose-only` → `canonical --dry-run` → ограниченная запись → `canonical` полный при необходимости → затем **`backfill:ingredient-dual`** (dry-run → write).
+
+**Импорт сида:** `scripts/import-infant-seed.ts` (tsx) вызывает **`fillCanonicalForSeedIngredient`**: новые вставки получают канон из JSON или из `amount`/`unit`/`display_text`, если в JSON канон не задан.
+
+---
+
+## Backfill dual (безопасный, консервативный)
+
+**Принцип:** backfill **не** вводит отдельных product-whitelist правил. Решение = `evaluateDualMeasurementBackfill` → внутри **`enrichIngredientMeasurementForSave`** (engine + quality gate), как при сохранении рецепта. Математика по-прежнему только из `canonical_*`; для пересчёта порций `display_text` не парсится.
+
+### Что обрабатывается
+
+- Строки с **заполненным валидным** каноном (`canonical_amount` / `canonical_unit` по правилам скрипта dual backfill: не NULL, режим `measurement_mode` и т.д.), выборка по `recipe_id` из `recipes` при фильтре по `source`.
+- По умолчанию: `measurement_mode` ∈ {`canonical_only`, `dual`}. Для **`dual`**: если **`validatePersistedDualMeasurement`** проходит и household читаемый — строка **не меняется** (`already_valid_dual`). Если dual **битый** — скрипт может **перезаписать** display-слой, если enrich снова даёт качественный dual (repair).
+- **`display_only`** не трогаем.
+- **`canonical_only`** + `display_text`, похожий на **свободную инструкцию** (длинный текст без «— N г/мл» и т.п.) — **пропуск** (`skipped_likely_custom_display_text`), чтобы не затирать осознанные подписи.
+- «По вкусу» / «для подачи» — пропуск (`skipped_special_display`).
+
+### Что остаётся `canonical_only` (норма)
+
+- Нет кандидата или enrich не выдаёт dual (`no_dual_from_engine` — сюда же относится отсев quality gate в engine).
+- Кастомный `display_text` (см. выше).
+- Нет имени, битый канон, не g/ml.
+
+### Идемпотентность
+
+Повторный прогон: уже валидный dual не обновляется; строки без кандидата снова пропускаются.
+
+### Команды (service role: `SUPABASE_SERVICE_ROLE_KEY`; URL: `SUPABASE_URL` или `VITE_SUPABASE_URL`)
+
+Скрипт сам подгружает корневые **`.env`** и **`.env.local`** (если переменные ещё не заданы в shell).
+
+**`--recipe-source`:** сначала читаются `recipes.id` с нужным `source`, затем ингредиенты по `recipe_id` (два шага, без ненадёжного фильтра по вложенной таблице в одном запросе). Если **`scanned_rows=0`**, смотрите предупреждения и блок **`[diag]`** в консоли. Типичный случай для **seed**: рецепты есть, но у ингредиентов **не заполнены `canonical_amount` / `canonical_unit`** (в JSON сида или при импорте) — тогда dual backfill нечего обрабатывать, пока канон не появится (обновление сид-файлов + импорт или отдельная нормализация).
+
+```bash
+# 1) Всегда начинать с dry-run и смотреть by_reason в summary
+npm run backfill:ingredient-dual -- --dry-run
+npm run backfill:ingredient-dual -- --dry-run --verbose --limit=100
+
+# 2) Порциями
+npm run backfill:ingredient-dual -- --dry-run --offset=0 --limit=500
+npm run backfill:ingredient-dual -- --offset=0 --limit=500
+
+# 3) Только seed / core-каталог (recipes.source из БД: seed, manual, chat_ai, week_ai, user_custom, starter, …)
+npm run backfill:ingredient-dual -- --dry-run --recipe-source=seed
+npm run backfill:ingredient-dual -- --dry-run --recipe-source=seed,manual
+
+# 4) Один рецепт
+npm run backfill:ingredient-dual -- --dry-run --recipe-id=<uuid>
+
+# 5) Не чинить битый dual — только canonical_only
+npm run backfill:ingredient-dual -- --dry-run --only-canonical
+```
+
+**Рекомендованный rollout:** dry-run → небольшие `--limit` → разбор summary → полный прогон без лимита только после проверки.
+
+**Переводы ML-7:** скрипт меняет базовые поля `recipe_ingredients` (в т.ч. `display_text` на ru). Оверлей `recipe_ingredient_translations.display_text` для других локалей может разойтись до следующего прогона translate-recipe / ручного обновления — учитывать при QA.
+
+### Lazy-upgrade (опционально)
+
+`maybeUpgradeIngredientMeasurement(row)` / `evaluateDualMeasurementBackfill` можно вызывать при **сохранении** пользовательского рецепта, **импорте** или **нормализации** payload: если сейчас `canonical_only`, а engine даёт безопасный dual — применить тот же patch, что и backfill. Не подключать автоматически на каждый GET; достаточно точек «запись / нормализация». Скрипт: `scripts/backfill-recipe-ingredient-dual-display.ts`.
 
 ## Деплой
 
