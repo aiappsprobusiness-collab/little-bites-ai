@@ -37,6 +37,8 @@ export interface ProfilesV2Row {
   accepted_terms_version: string | null;
   /** Последний выбранный член семьи в UI; NULL = семейный режим или не задано. */
   last_active_member_id: string | null;
+  /** Ротирующиеся подсказки в поле ввода чата рецептов. */
+  show_input_hints: boolean;
 }
 export interface ProfilesV2Insert {
   id?: string;
@@ -54,6 +56,7 @@ export interface ProfilesV2Insert {
   accepted_terms_at?: string | null;
   accepted_terms_version?: string | null;
   last_active_member_id?: string | null;
+  show_input_hints?: boolean;
 }
 export interface ProfilesV2Update {
   id?: string;
@@ -71,6 +74,7 @@ export interface ProfilesV2Update {
   accepted_terms_at?: string | null;
   accepted_terms_version?: string | null;
   last_active_member_id?: string | null;
+  show_input_hints?: boolean;
 }
 
 /** Один элемент аллергии (allergy_items в members). */

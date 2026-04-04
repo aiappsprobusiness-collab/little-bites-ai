@@ -84,6 +84,10 @@ import {
   buildUnder12CuratedRecipeBlockPayload,
   type RecipeGenerationRouteKind,
 } from "./domain/recipe_generation/recipeGenerationRouting.ts";
+import {
+  parseSimpleNumericQuantity,
+  resolveCanonicalForEnrichInput,
+} from "../../../shared/ingredientCanonicalForEnrich.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
@@ -121,33 +125,6 @@ function normalizeTitleKey(title: string): string {
     .replace(/[^\p{L}\p{N}\s]/gu, "")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-/** Парсит строку количества в canonical amount + unit (g/ml) для БД. Без LLM. */
-function parseAmountToCanonical(amountText: string): { amount: number; unit: "g" | "ml" } | null {
-  const t = (amountText ?? "").trim();
-  if (!t.length) return null;
-  const numMatch = t.match(/[\d½¼¾⅓⅔⅛⅜⅝⅞]+|(\d+)\s*\/\s*(\d+)/);
-  const numStr = numMatch?.[0];
-  if (!numStr) return null;
-  let amount = 0;
-  if (numStr.includes("/")) {
-    const [a, b] = numStr.split("/").map((s) => parseInt(s.trim(), 10));
-    amount = Number.isFinite(a) && Number.isFinite(b) && b !== 0 ? a / b : parseFloat(numStr) || 0;
-  } else {
-    amount = parseFloat(numStr.replace(",", ".")) || 0;
-  }
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  const rest = t.replace(numStr, "").replace(/,/g, ".").trim().toLowerCase();
-  if (/\b(г|грамм|граммов)\b/.test(rest)) return { amount: Math.round(amount * 100) / 100, unit: "g" };
-  if (/\b(кг|килограмм)\b/.test(rest)) return { amount: Math.round(amount * 1000 * 100) / 100, unit: "g" };
-  if (/\b(мл|миллилитр|миллилитров)\b/.test(rest)) return { amount: Math.round(amount * 100) / 100, unit: "ml" };
-  if (/\b(л|литр|литров)\b/.test(rest)) return { amount: Math.round(amount * 1000 * 100) / 100, unit: "ml" };
-  if (/\b(ст\.?\s*л\.?|столовых?\s*ложек?)\b/.test(rest)) return { amount: Math.round(amount * 15 * 100) / 100, unit: "ml" };
-  if (/\b(ч\.?\s*л\.?|чайных?\s*ложек?)\b/.test(rest)) return { amount: Math.round(amount * 5 * 100) / 100, unit: "ml" };
-  if (/\bг\b/.test(rest) && !/мл|л\b/.test(rest)) return { amount: Math.round(amount * 100) / 100, unit: "g" };
-  if (/\bмл\b/.test(rest)) return { amount: Math.round(amount * 100) / 100, unit: "ml" };
-  return null;
 }
 
 /** Извлекает строку amount из displayText вида «Название — 30 г» или «30 г». */
@@ -1466,15 +1443,23 @@ serve(async (req) => {
             const displayText = typeof ing === "string" ? ing : (ing?.displayText ?? (ing?.amount ? `${ing.name ?? ""} — ${ing.amount}` : ing.name ?? ""));
             const rawAmount = typeof ing === "object" && ing?.amount != null ? String(ing.amount) : "";
             const amountStr = rawAmount.trim() || amountFromDisplayText(displayText, nameStr);
-            const canonical = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
-            const parsed = canonical ?? (amountStr ? parseAmountToCanonical(amountStr) : null);
-            const numericAmountOnly = parsed?.amount != null ? String(parsed.amount) : (amountStr && /^\d+\.?\d*$/.test(amountStr.trim()) ? amountStr.trim() : null);
+            const canonicalFromLlm = typeof ing === "object" && ing?.canonical ? ing.canonical : null;
+            const enrichCanon = amountStr
+              ? resolveCanonicalForEnrichInput({ name: nameStr, amountLine: amountStr, llmCanonical: canonicalFromLlm })
+              : null;
+            const simpleQty = amountStr.trim() ? parseSimpleNumericQuantity(amountStr.trim()) : null;
+            const numericAmountOnly =
+              amountStr && /^\d+\.?\d*$/.test(amountStr.trim())
+                ? amountStr.trim()
+                : simpleQty != null
+                  ? String(simpleQty.amount)
+                  : null;
             return {
               name: nameStr,
               amount: numericAmountOnly,
               display_text: displayText || (amountStr ? `${nameStr} — ${amountStr}` : nameStr),
-              canonical_amount: parsed?.amount ?? null,
-              canonical_unit: parsed?.unit ?? null,
+              canonical_amount: enrichCanon?.amount ?? null,
+              canonical_unit: enrichCanon?.unit ?? null,
             };
           };
           const ingredientsPayload = rawIngredients.length >= 3

@@ -5,6 +5,7 @@
 
 import { inferCulturalFamiliarity } from "./inferCulturalFamiliarity.ts";
 import { enrichIngredientMeasurementForSave } from "../../../shared/ingredientMeasurementDisplay.ts";
+import { resolveCanonicalForEnrichFromIngredient } from "../../../shared/ingredientCanonicalForEnrich.ts";
 
 export const POOL_SOURCES = ["seed", "starter", "manual", "week_ai", "chat_ai"] as const;
 type PoolSource = (typeof POOL_SOURCES)[number];
@@ -197,9 +198,29 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
       rawCanon != null && String(rawCanon).trim() !== ""
         ? Number(String(rawCanon).replace(",", "."))
         : NaN;
-    const canonical_amount = Number.isFinite(canonNum) ? canonNum : null;
-    const canonical_unit = typeof ing.canonical_unit === "string" ? ing.canonical_unit : null;
+    const canonical_amount_in = Number.isFinite(canonNum) ? canonNum : null;
+    const canonical_unit_in = typeof ing.canonical_unit === "string" ? ing.canonical_unit : null;
     const amtNum = amount != null && amount !== "" ? Number(String(amount).replace(",", ".")) : null;
+
+    const resolvedCanon = resolveCanonicalForEnrichFromIngredient({
+      name,
+      amount: amountRaw,
+      unit: unitVal,
+      display_text: display_text || name,
+      canonical_amount: canonical_amount_in,
+      canonical_unit: canonical_unit_in,
+    });
+    const canonical_amount = resolvedCanon?.amount ?? null;
+    const canonical_unit = resolvedCanon?.unit ?? null;
+
+    console.log("CANONICAL_BEFORE_ENRICH", {
+      name,
+      display_text: display_text || name,
+      amount: amountRaw,
+      unit: unitVal,
+      canonical_amount,
+      canonical_unit,
+    });
 
     const enrichment = enrichIngredientMeasurementForSave({
       name,
@@ -223,8 +244,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
       amount,
       unit: ing.unit ?? null,
       substitute: ing.substitute ?? null,
-      canonical_amount: ing.canonical_amount ?? null,
-      canonical_unit: ing.canonical_unit ?? null,
+      canonical_amount,
+      canonical_unit,
       order_index: typeof ing.order_index === "number" ? ing.order_index : idx,
       category: typeof ing.category === "string" ? ing.category : "other",
       display_amount: enrichment.display_amount,

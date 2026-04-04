@@ -33,6 +33,7 @@ import { PrivacyContent } from "@/components/legal/PrivacyContent";
 import { SubscriptionContent } from "@/components/legal/SubscriptionContent";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
@@ -71,6 +72,9 @@ export default function ProfilePage() {
     hasAccess,
     trialUntil,
     expiresAt,
+    showInputHints,
+    setShowInputHints,
+    isUpdatingShowInputHints,
   } = useSubscription();
   const subscriptionLimits = getSubscriptionLimits(subscriptionStatus);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
@@ -383,6 +387,40 @@ export default function ProfilePage() {
                   <span className="text-foreground">Установить приложение</span>
                   <ChevronRight className="h-4 w-4 text-muted-foreground/50 ml-auto shrink-0" strokeWidth={2} />
                 </button>
+              </div>
+            </section>
+          )}
+
+          {user && (
+            <section className="flex flex-col gap-2">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Настройки
+              </p>
+              <div className="rounded-2xl border border-border/70 bg-card overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+                <div className="flex items-center justify-between gap-3 px-4 min-h-[50px] py-2">
+                  <div className="min-w-0 flex-1 pr-2">
+                    <p className="text-sm text-foreground leading-snug">
+                      Показывать подсказки в поле ввода
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Ротация идей в чате рецептов; выкл. — короткий текст-подсказка
+                    </p>
+                  </div>
+                  <Switch
+                    checked={showInputHints}
+                    disabled={isUpdatingShowInputHints}
+                    onCheckedChange={(checked) => {
+                      void setShowInputHints(checked).catch((e) => {
+                        toast({
+                          variant: "destructive",
+                          title: "Не удалось сохранить",
+                          description: (e as Error).message,
+                        });
+                      });
+                    }}
+                    aria-label="Показывать подсказки в поле ввода чата рецептов"
+                  />
+                </div>
               </div>
             </section>
           )}

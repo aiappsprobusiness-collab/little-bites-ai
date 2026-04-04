@@ -49,6 +49,7 @@ If a table is not present in `information_schema`, it must **not** be described 
 | accepted_terms_at | timestamptz            | Когда при регистрации зафиксировано согласие с соглашением и политикой (серверное время); nullable |
 | accepted_terms_version | text            | Версия юртекстов на момент согласия (`LEGAL_TERMS_VERSION` из приложения); nullable |
 | last_active_member_id | uuid NULL → members | Последний выбранный член семьи в UI (Premium/Trial); `NULL` = семейный режим или «не задано». При удалении member — `ON DELETE SET NULL`. Триггер гарантирует, что `members.user_id` совпадает с `profiles_v2.user_id`. Клиент: `FamilyContext`, `lastActiveMemberProfile.ts`. |
+| show_input_hints | boolean NOT NULL DEFAULT true | Ротирующиеся подсказки в поле ввода чата рецептов; при `false` — статичный плейсхолдер. Клиент: `useSubscription`, `ChatPage`, `ProfilePage`. |
 
 RLS: доступ только по `auth.uid() = user_id`. Запись при регистрации — триггер `handle_new_user_v2` на `auth.users`. Поля `accepted_terms_*` заполняются из `raw_user_meta_data.accepted_terms_version` при `signUp`, если клиент передал версию (см. миграцию `20260329190000_profiles_v2_accepted_terms.sql`, `docs/dev/legal-copy-and-auth-consent.md`).
 

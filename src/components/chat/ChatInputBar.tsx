@@ -72,6 +72,8 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
 
     const showPlaceholderOverlay = mode === "recipes" && !value.trim() && placeholderSuggestions.length > 0;
     const currentPlaceholder = placeholderSuggestions[placeholderIndex];
+    const nativePlaceholder =
+      mode === "help" ? placeholder : showPlaceholderOverlay ? "" : placeholder;
 
     return (
       <div
@@ -108,7 +110,7 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
               onChange={(e) => onChange(e.target.value)}
               onInput={syncTextareaHeight}
               onKeyDown={onKeyDown}
-              placeholder={mode === "help" ? placeholder : ""}
+              placeholder={nativePlaceholder}
               disabled={disabled}
               rows={1}
               className={cn(

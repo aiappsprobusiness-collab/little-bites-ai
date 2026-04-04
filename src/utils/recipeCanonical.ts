@@ -5,6 +5,7 @@
 
 import { inferCulturalFamiliarity } from "./inferCulturalFamiliarity";
 import { enrichIngredientMeasurementForSave } from "@shared/ingredientMeasurementDisplay";
+import { resolveCanonicalForEnrichFromIngredient } from "@shared/ingredientCanonicalForEnrich";
 
 export const POOL_SOURCES = ["seed", "starter", "manual", "week_ai", "chat_ai"] as const;
 export type PoolSource = (typeof POOL_SOURCES)[number];
@@ -192,8 +193,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
       rawCanon != null && String(rawCanon).trim() !== ""
         ? Number(String(rawCanon).replace(",", "."))
         : NaN;
-    const canonical_amount = Number.isFinite(canonNum) ? canonNum : null;
-    const canonical_unit =
+    const canonical_amount_in = Number.isFinite(canonNum) ? canonNum : null;
+    const canonical_unit_in =
       typeof (ing as { canonical_unit?: string }).canonical_unit === "string"
         ? (ing as { canonical_unit: string }).canonical_unit
         : null;
@@ -201,6 +202,26 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
       amount != null && amount !== "" && String(amount).trim() !== "" && /^\d+\.?\d*$/.test(String(amount).trim())
         ? Number(String(amount).replace(",", "."))
         : null;
+
+    const resolvedCanon = resolveCanonicalForEnrichFromIngredient({
+      name,
+      amount,
+      unit: unitVal,
+      display_text: display_text || name,
+      canonical_amount: canonical_amount_in,
+      canonical_unit: canonical_unit_in,
+    });
+    const canonical_amount = resolvedCanon?.amount ?? null;
+    const canonical_unit = resolvedCanon?.unit ?? null;
+
+    console.log("CANONICAL_BEFORE_ENRICH", {
+      name,
+      display_text: display_text || name,
+      amount,
+      unit: unitVal,
+      canonical_amount,
+      canonical_unit,
+    });
 
     const enrichment = enrichIngredientMeasurementForSave({
       name,
@@ -222,8 +243,8 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
       amount: amount != null && amount !== "" ? amount : null,
       unit: unitVal,
       substitute: (ing as { substitute?: string }).substitute ?? null,
-      canonical_amount: (ing as { canonical_amount?: number }).canonical_amount ?? null,
-      canonical_unit: (ing as { canonical_unit?: string }).canonical_unit ?? null,
+      canonical_amount,
+      canonical_unit,
       order_index: (ing as { order_index?: number }).order_index ?? idx,
       category: (ing as { category?: string }).category ?? "other",
       display_amount: enrichment.display_amount,

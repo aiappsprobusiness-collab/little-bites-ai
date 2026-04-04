@@ -10,6 +10,7 @@
 |-----|------|
 | Визуал и логика поля + кнопка «Отправить» | `src/components/chat/ChatInputBar.tsx` |
 | Состояние текста, ref на textarea, отправка по Enter | `src/pages/ChatPage.tsx` |
+| Настройка «подсказки в поле ввода» (чат рецептов) | `profiles_v2.show_input_hints` → `useSubscription` → переключатель на `ProfilePage` |
 
 Отдельный сценарий — нижний sheet «Написать сообщение» (`src/components/chat/ChatInputPanel.tsx`): это **не** та же панель, что у основного чата; при изменении UX там правки документируются отдельно при необходимости.
 
@@ -20,6 +21,14 @@
 - Поле ввода — **`<textarea>`** (обёртка shadcn `Textarea`), не однострочный `<input>`.
 - **Визуальный эталон** — нижний composer в **`TopicConsultationSheet`** (вкладка «Помощь маме»): контейнер `border-t`, `bg-background`, отступы `p-4 pt-2`; ряд `flex gap-2 items-end`; поле `rounded-xl`, `border-primary/20`, `focus-visible:border-primary/40`, `py-2.5 px-3`, `min-h-[44px]` / `max-h-[120px]`; кнопка отправки — `Button` `size="icon"` с классами `h-11 w-11 rounded-xl` (как в sheet).
 - Дисклеймер про генерацию рецептов ИИ **не** под полем ввода: текст в конце sheet **«Что умеет помощник»** (`AssistantAboutSheet.tsx`, константа + TODO `chat.disclaimer.ai_generated`).
+
+---
+
+## Плейсхолдер (режим рецептов)
+
+- При **`show_input_hints = true`** (по умолчанию в БД): поверх пустого поля — **оверлей** с ротацией строк из `CHAT_PLACEHOLDER_SUGGESTIONS` в `ChatPage` (интервал 2.5 с; останавливается при вводе и во время отправки).
+- При **`false`**: оверлей выключен, нативный `placeholder` у `textarea` — короткий статичный текст (`RECIPES_CHAT_PLACEHOLDER_STATIC` в `ChatPage`, сейчас «Что приготовить?»).
+- Режим **help** не затрагивается: по-прежнему один статичный плейсхолдер про консультацию.
 
 ---
 

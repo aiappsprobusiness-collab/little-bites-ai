@@ -32,7 +32,7 @@ export function useSubscription() {
       const { data, error } = await supabase
         .from("profiles_v2")
         .select(
-          "status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized, last_active_member_id"
+          "status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized, last_active_member_id, show_input_hints"
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -46,6 +46,7 @@ export function useSubscription() {
         trial_used: boolean | null;
         plan_initialized: boolean;
         last_active_member_id: string | null;
+        show_input_hints: boolean | null;
       } | null;
     },
     enabled: authReady && !!user,
@@ -118,6 +119,8 @@ export function useSubscription() {
   const trialUsed = profileV2?.trial_used ?? false;
   const planInitialized = profileV2?.plan_initialized ?? false;
   const lastActiveMemberId = profileV2?.last_active_member_id ?? null;
+  /** Ротирующиеся подсказки в поле ввода чата рецептов; `null`/отсутствие колонки → true (как DEFAULT в БД). */
+  const showInputHints = profileV2?.show_input_hints !== false;
 
   /** Trial: источник истины — trial_until (см. `getMsUntilTrialEnd` в trialLifecycle). */
   const trialMsRemaining = getMsUntilTrialEnd(trialUntil);
@@ -181,6 +184,20 @@ export function useSubscription() {
       queryClient.setQueryData(["usage-help-today", user.id], used);
     }
   };
+
+  const setShowInputHints = useMutation({
+    mutationFn: async (value: boolean) => {
+      if (!user) throw new Error("User not authenticated");
+      const { error } = await supabase
+        .from("profiles_v2")
+        .update({ show_input_hints: value })
+        .eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+    },
+  });
 
   const setPlanInitialized = useMutation({
     mutationFn: async () => {
@@ -310,6 +327,9 @@ export function useSubscription() {
     planInitialized,
     /** Premium/Trial: последний выбранный member из profiles_v2 (NULL = семья или не задано). */
     lastActiveMemberId,
+    showInputHints,
+    setShowInputHints: setShowInputHints.mutateAsync,
+    isUpdatingShowInputHints: setShowInputHints.isPending,
     setPlanInitialized: setPlanInitialized.mutateAsync,
     expiresAt,
     trialUntil,

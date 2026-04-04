@@ -34,6 +34,7 @@
 | `shared/ingredientMeasurementDisplay.ts` | `enrichIngredientMeasurementForSave`, `formatIngredientMeasurement`, `shouldUseDualMeasurement` (обёртка под `IngredientMeasurementInput`), склонение «зубчик», локализация чисел |
 | `shared/ingredientDualBackfill.ts` | `evaluateDualMeasurementBackfill`, `maybeUpgradeIngredientMeasurement` — **тот же** enrich/engine/gate, без дублирования правил; для backfill и точечного lazy-upgrade |
 | `shared/ingredientCanonicalResolve.ts` | Нормализация единиц и расчёт канона как SQL `normalize_ingredient_unit` + `ingredient_canonical` (без whitelist продуктов) |
+| `shared/ingredientCanonicalForEnrich.ts` | **До enrich:** приведение строки количества / `amount`+`unit` к **`g`/`ml`**, чтобы `enrichIngredientMeasurementForSave` и движок dual не получали пустой канон, пока SQL ещё не отработал (`buildOneIngredient`, `canonicalizeRecipePayload` на клиенте и Edge) |
 | `shared/ingredientCanonicalBackfill.ts` | `evaluateCanonicalIngredientRow` — решение safe canonical backfill (только канон, не dual) |
 
 - **Категория по тексту (как в БД):** `shared/dbProductCategoryFromText.ts`.
