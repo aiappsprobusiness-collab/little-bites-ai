@@ -1,9 +1,16 @@
 /**
  * Двойной формат ингредиентов: UX-слой поверх canonical (g/ml).
  * Математика порций — только по canonical_amount / canonical_unit.
+ * Решение dual vs canonical_only — в `ingredientMeasurementEngine` + quality gate.
  */
 
-import { inferDbProductCategoryFromText, normalizeIngredientTextForCategoryMatch } from "./dbProductCategoryFromText.ts";
+import {
+  parseExplicitHouseholdFromText,
+  resolveHouseholdCandidateForSave,
+  validatePersistedDualMeasurement,
+} from "./ingredientMeasurementEngine.ts";
+import type { ResolvedHouseholdCandidate } from "./ingredientMeasurementEngine.ts";
+import { scaledHouseholdStaysReadableForDual } from "./ingredientMeasurementQuality.ts";
 
 export type MeasurementMode = "canonical_only" | "dual" | "display_only";
 
@@ -22,39 +29,26 @@ export type IngredientMeasurementInput = {
   note?: string | null;
 };
 
-const MEAT_FISH_DAIRY_GRAINS_NAME_RE =
-  /фарш|филе|котлет|стейк|говядин|свинин|индейк|куриц|баранин|телятин|лосос|треск|тунец|форел|семг|судак|минтай|творог|йогурт|сыр\b|моцарел|рикотт|круп|овсян|греч|рис\b|булгур|киноа|перлов|макарон|паста\b|лапш|мука\b|хлеб/i;
-
-/** Явные исключения: не форсировать dual для «весовых» продуктов. */
+/**
+ * Есть ли кандидат на dual, проходящий универсальный pipeline + quality gate
+ * (не whitelist продуктов).
+ */
 export function shouldUseDualMeasurement(input: IngredientMeasurementInput): boolean {
   const name = (input.name ?? "").trim();
   const displayText = (input.display_text ?? "").trim();
-  const combined = normalizeIngredientTextForCategoryMatch(name, displayText);
-  if (!combined) return false;
-
-  if (/по вкусу|для подачи/i.test(displayText)) return false;
-
-  const cat =
-    input.category && String(input.category).trim()
-      ? String(input.category).trim().toLowerCase()
-      : inferDbProductCategoryFromText(combined);
-
-  if (cat === "meat" || cat === "fish" || cat === "dairy" || cat === "grains") {
-    if (MEAT_FISH_DAIRY_GRAINS_NAME_RE.test(combined)) return false;
-  }
-
-  const cu = (input.canonical_unit ?? "").trim().toLowerCase();
+  const ca = input.canonical_amount != null ? Number(input.canonical_amount) : NaN;
+  const cu = (input.canonical_unit ?? "").trim();
+  if (!name || !Number.isFinite(ca) || ca <= 0) return false;
   if (cu !== "g" && cu !== "ml") return false;
-  const ca = input.canonical_amount;
-  if (ca == null || !Number.isFinite(Number(ca)) || Number(ca) <= 0) return false;
-
-  if (cat === "vegetables" || cat === "fruits") return true;
-  if (cat === "spices" || cat === "fats") return true;
-
-  if (/(чеснок|чесноч)/i.test(combined)) return true;
-  if (/(^|\s)лук(\s|$)|репчат/i.test(combined)) return true;
-
-  return false;
+  return (
+    resolveHouseholdCandidateForSave({
+      name,
+      display_text: displayText,
+      canonical_amount: ca,
+      canonical_unit: cu,
+      category: input.category,
+    }) != null
+  );
 }
 
 const UNIT_TO_RU: Record<string, string> = {
@@ -106,42 +100,29 @@ export function pluralRuZubchik(n: number): string {
   return "зубчиков";
 }
 
-const HOUSEHOLD_AFTER_DASH =
-  /(\d+[.,]?\d*)\s*(зубчик|зубчика|зубчиков|ст\.\s*л\.?|ст\.л\.?|ч\.\s*л\.?|ч\.л\.?|шт\.?|штук|штуки)(?=\s*$|[\s,;.)])/i;
-
-export function tryParseHouseholdFromText(displayText: string, name: string): { amount: number; unitRaw: string } | null {
-  const d = (displayText ?? "").trim();
-  if (!d) return null;
-  const dash = d.indexOf("—");
-  const tail = dash >= 0 ? d.slice(dash + 1).trim() : d;
-  const m = tail.match(HOUSEHOLD_AFTER_DASH);
-  if (!m) return null;
-  const amount = parseFloat(m[1].replace(",", "."));
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  let unitRaw = m[2].trim().toLowerCase();
-  if (/^ст/.test(unitRaw)) unitRaw = "ст. л.";
-  else if (/^ч/.test(unitRaw)) unitRaw = "ч. л.";
-  else if (/^шт|^штук/.test(unitRaw)) unitRaw = "шт.";
-  else if (/зубчик/.test(unitRaw)) unitRaw = "зубчик";
-  return { amount, unitRaw };
+export function tryParseHouseholdFromText(
+  displayText: string,
+  _name?: string,
+): { amount: number; unitRaw: string } | null {
+  const p = parseExplicitHouseholdFromText(displayText);
+  if (!p) return null;
+  return { amount: p.amount, unitRaw: p.unitRaw };
 }
 
-/** Насколько вычисленное количество по эталону близко к канону (доля). */
-function withinTolerance(computed: number, canonical: number, maxRelDiff: number): boolean {
-  if (!Number.isFinite(computed) || computed <= 0 || !Number.isFinite(canonical) || canonical <= 0) return false;
-  return Math.abs(computed - canonical) / canonical <= maxRelDiff;
+function buildDualQuantityLeft(c: ResolvedHouseholdCandidate): string {
+  const q = c.displayQuantityText?.trim();
+  if (q) return q;
+  const da = c.displayAmount;
+  const du = c.displayUnit;
+  if (du.toLowerCase().includes("зубчик")) {
+    return `${formatAmountRu(da, true)} ${pluralRuZubchik(da)}`.trim();
+  }
+  return `${formatAmountRu(da, isPieceUnit(du))} ${localizeUnit(du)}`.trim();
 }
-
-const G_PER_CLOVE = 5;
-const G_PER_ONION = 90;
-const G_PER_TBSP_OIL = 17;
-const G_PER_TSP = 5;
-const ML_PER_TBSP = 15;
-const ML_PER_TSP = 5;
 
 /**
  * Для сохранения в БД: заполняет display-слой и measurement_mode.
- * Не выдумывает dual без уверенности — иначе canonical_only.
+ * Dual только если кандидат проходит engine + quality gate; иначе canonical_only.
  */
 export function enrichIngredientMeasurementForSave(ing: IngredientMeasurementInput): {
   display_amount: number | null;
@@ -159,15 +140,32 @@ export function enrichIngredientMeasurementForSave(ing: IngredientMeasurementInp
     ing.measurement_mode === "dual" &&
     ing.display_amount != null &&
     Number.isFinite(Number(ing.display_amount)) &&
-    (ing.display_unit ?? "").trim() !== ""
+    (ing.display_unit ?? "").trim() !== "" &&
+    Number.isFinite(ca) &&
+    (cu === "g" || cu === "ml") &&
+    name
   ) {
     const da = Number(ing.display_amount);
     const du = (ing.display_unit ?? "").trim();
-    const qtyText = (ing.display_quantity_text ?? "").trim();
-    if (Number.isFinite(ca) && (cu === "g" || cu === "ml")) {
+    if (
+      validatePersistedDualMeasurement({
+        name,
+        display_text: displayTextIn,
+        display_amount: da,
+        display_unit: du,
+        canonical_amount: ca,
+        canonical_unit: cu,
+        category: ing.category,
+      })
+    ) {
+      const qtyText = (ing.display_quantity_text ?? "").trim();
       const canonPart = formatCanonicalSuffix(ca, cu);
-      const left = qtyText ? qtyText : `${formatAmountRu(da, du.toLowerCase().includes("зубчик"))} ${localizeUnit(du)}`.trim();
-      const line = name ? `${name} — ${left} = ${canonPart}` : `${left} = ${canonPart}`;
+      const left = qtyText
+        ? qtyText
+        : du.toLowerCase().includes("зубчик")
+          ? `${formatAmountRu(da, true)} ${pluralRuZubchik(da)}`
+          : `${formatAmountRu(da, isPieceUnit(du))} ${localizeUnit(du)}`.trim();
+      const line = `${name} — ${left} = ${canonPart}`;
       return {
         display_amount: da,
         display_unit: du,
@@ -178,110 +176,35 @@ export function enrichIngredientMeasurementForSave(ing: IngredientMeasurementInp
     }
   }
 
-  const category =
-    ing.category && String(ing.category).trim()
-      ? String(ing.category).trim().toLowerCase()
-      : inferDbProductCategoryFromText(normalizeIngredientTextForCategoryMatch(name, displayTextIn));
-
-  const parsedHousehold = tryParseHouseholdFromText(displayTextIn, name);
-
-  const verifyDual = (
-    displayAmount: number,
-    displayUnit: string,
-    displayQuantityText: string | null,
-  ): { display_amount: number; display_unit: string; display_quantity_text: string | null; measurement_mode: MeasurementMode; display_text: string } | null => {
-    if (!name) return null;
-    let expected = 0;
-    const u = displayUnit.toLowerCase();
-    if (u.includes("зубчик")) {
-      if (cu !== "g") return null;
-      expected = displayAmount * G_PER_CLOVE;
-      if (!withinTolerance(expected, ca, 0.45)) return null;
-    } else if (u.includes("ст. л.") || u === "ст. л.") {
-      if (cu === "g" && /масло|оливк|подсолнечн|растительн|сливочн/i.test(name + " " + displayTextIn)) {
-        expected = displayAmount * G_PER_TBSP_OIL;
-        if (!withinTolerance(expected, ca, 0.4)) return null;
-      } else if (cu === "ml") {
-        expected = displayAmount * ML_PER_TBSP;
-        if (!withinTolerance(expected, ca, 0.4)) return null;
-      } else return null;
-    } else if (u.includes("ч. л.")) {
-      if (cu === "g") {
-        expected = displayAmount * G_PER_TSP;
-        if (!withinTolerance(expected, ca, 0.5)) return null;
-      } else if (cu === "ml") {
-        expected = displayAmount * ML_PER_TSP;
-        if (!withinTolerance(expected, ca, 0.5)) return null;
-      } else return null;
-    } else if (u.includes("шт") || u.startsWith("шт")) {
-      if (cu !== "g") return null;
-      if (!shouldUseDualMeasurement({ ...ing, category })) return null;
-      expected = displayAmount * G_PER_ONION;
-      if (/лук/i.test(name + displayTextIn)) {
-        if (!withinTolerance(expected, ca, 0.55)) return null;
-      } else {
-        const avg =
-          /картоф/i.test(name) ? 95
-          : /морков/i.test(name) ? 75
-          : /яблок/i.test(name) ? 140
-          : /банан/i.test(name) ? 105
-          : /лимон/i.test(name) ? 95
-          : /помидор|томат/i.test(name) ? 100
-          : /огурц/i.test(name) ? 100
-          : /тыкв/i.test(name) ? 200
-          : null;
-        if (avg == null || !withinTolerance(displayAmount * avg, ca, 0.55)) return null;
-      }
-    } else return null;
-
-    const canonStr = formatCanonicalSuffix(ca, cu);
-    const du = displayQuantityText
-      ? displayQuantityText.trim()
-      : u.includes("зубчик")
-        ? `${formatAmountRu(displayAmount, true)} ${pluralRuZubchik(displayAmount)}`
-        : `${formatAmountRu(displayAmount, isPieceUnit(displayUnit))} ${displayUnit}`.trim();
-    const line = `${name} — ${du} = ${canonStr}`;
+  if (!name || !Number.isFinite(ca) || ca <= 0 || (cu !== "g" && cu !== "ml")) {
     return {
-      display_amount: displayAmount,
-      display_unit: displayUnit,
-      display_quantity_text: displayQuantityText,
+      display_amount: null,
+      display_unit: null,
+      display_quantity_text: null,
+      measurement_mode: "canonical_only",
+      display_text: displayTextIn || null,
+    };
+  }
+
+  const candidate = resolveHouseholdCandidateForSave({
+    name,
+    display_text: displayTextIn,
+    canonical_amount: ca,
+    canonical_unit: cu,
+    category: ing.category,
+  });
+
+  if (candidate) {
+    const canonPart = formatCanonicalSuffix(ca, cu);
+    const left = buildDualQuantityLeft(candidate);
+    const line = `${name} — ${left} = ${canonPart}`;
+    return {
+      display_amount: candidate.displayAmount,
+      display_unit: candidate.displayUnit,
+      display_quantity_text: candidate.displayQuantityText,
       measurement_mode: "dual",
       display_text: line,
     };
-  };
-
-  if (parsedHousehold && shouldUseDualMeasurement({ ...ing, category })) {
-    const unitNorm = parsedHousehold.unitRaw.includes("зубчик")
-      ? "зубчик"
-      : parsedHousehold.unitRaw;
-    const v = verifyDual(parsedHousehold.amount, unitNorm, null);
-    if (v) {
-      return {
-        display_amount: v.display_amount,
-        display_unit: v.display_unit,
-        display_quantity_text: v.display_quantity_text,
-        measurement_mode: v.measurement_mode,
-        display_text: v.display_text,
-      };
-    }
-  }
-
-  if (shouldUseDualMeasurement({ ...ing, category }) && cu === "g" && Number.isFinite(ca)) {
-    if (/(чеснок|чесноч)/i.test(name + " " + displayTextIn)) {
-      const cloves = Math.max(1, Math.round(ca / G_PER_CLOVE));
-      const v = verifyDual(cloves, "зубчик", null);
-      if (v) return v;
-    }
-    if (/(^|\s)лук(\s|$)|репчат/i.test(name + displayTextIn)) {
-      const bulbs = Math.max(0.25, Math.round((ca / G_PER_ONION) * 4) / 4);
-      const v = verifyDual(bulbs, "шт.", null);
-      if (v) return v;
-    }
-    if (category === "fats" && /масло|оливк|подсолнечн|растительн|сливочн/i.test(name + displayTextIn)) {
-      const tbsp = Math.max(0.25, Math.round((ca / G_PER_TBSP_OIL) * 4) / 4);
-      const v = verifyDual(tbsp, "ст. л.", null);
-      if (v) return v;
-    }
   }
 
   return {
@@ -322,12 +245,20 @@ export function formatIngredientMeasurement(
     const canonPart = formatCanonicalSuffix(scaledCanon, cu);
 
     const qtyText = (ing.display_quantity_text ?? "").trim();
-    if (qtyText) {
+    const da0 = ing.display_amount != null ? Number(ing.display_amount) : null;
+    const du = (ing.display_unit ?? "").trim();
+
+    const householdReadableScaled =
+      da0 != null && Number.isFinite(da0) && du ? scaledHouseholdStaysReadableForDual(da0, mult) : false;
+
+    if (mult !== 1 && !householdReadableScaled) {
+      return name ? `${name} — ${canonPart}` : canonPart;
+    }
+
+    if (mult === 1 && qtyText) {
       return `${name} — ${qtyText} = ${canonPart}`;
     }
 
-    const da0 = ing.display_amount != null ? Number(ing.display_amount) : null;
-    const du = (ing.display_unit ?? "").trim();
     if (da0 != null && Number.isFinite(da0) && du) {
       const scaledDa = da0 * mult;
       let left: string;
@@ -370,7 +301,9 @@ export function formatIngredientMeasurement(
     }
     if (ca0 == null && amount != null && unit) {
       const scaled = amount * mult;
-      return name ? `${name} — ${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeUnit(unit)}` : `${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeUnit(unit)}`;
+      return name
+        ? `${name} — ${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeUnit(unit)}`
+        : `${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeUnit(unit)}`;
     }
     return dt;
   }

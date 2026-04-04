@@ -163,7 +163,7 @@ RLS: SELECT — публичные или свои (или private + owner). INS
 **Слои данных (dual measurement, миграция `20260404120000_recipe_ingredients_dual_measurement.sql`):**
 
 - **Канонический слой (source of truth для математики):** `canonical_amount`, `canonical_unit` (g/ml). Пересчёт порций, агрегирование, список покупок опираются только на них, а не на `display_text`.
-- **UX / display-слой:** `display_amount`, `display_unit`, `display_quantity_text`, `measurement_mode` (`canonical_only` \| `dual` \| `display_only`), плюс `display_text` как fallback и для совместимости с переводами (ML-7). В режиме `dual` строка вида «Лук — 1 шт. = 80 г» собирается на клиенте через `shared/ingredientMeasurementDisplay.ts`, если в БД заданы структурированные поля; иначе может использоваться переведённый `display_text` из `recipe_ingredient_translations`.
+- **UX / display-слой:** `display_amount`, `display_unit`, `display_quantity_text`, `measurement_mode` (`canonical_only` \| `dual` \| `display_only`), плюс `display_text` как fallback и для совместимости с переводами (ML-7). В режиме `dual` строка вида «Лук — 1 шт. = 80 г» собирается через `shared/ingredientMeasurementDisplay.ts` (`formatIngredientMeasurement`); выбор `dual` vs `canonical_only` при сохранении — `enrichIngredientMeasurementForSave` + `shared/ingredientMeasurementEngine.ts` + quality gate (`shared/ingredientMeasurementQuality.ts`). Подробнее: `docs/dev/RECIPE_INGREDIENT_DUAL_MEASUREMENT.md`.
 
 | Колонка          | Тип                 | Описание |
 |------------------|---------------------|----------|
