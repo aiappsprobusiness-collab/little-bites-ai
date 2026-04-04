@@ -376,6 +376,8 @@ export function useRecipes(childId?: string, options?: UseRecipesOptions) {
           : [],
       });
 
+      console.log('FINAL_INGREDIENTS_PAYLOAD', rpcPayload.ingredients);
+
       const { data: recipeId, error: rpcError } = await supabase.rpc('create_recipe_with_steps', { payload: rpcPayload });
       if (rpcError) throw rpcError;
       if (!recipeId) throw new Error('create_recipe_with_steps returned no id');

@@ -1535,6 +1535,7 @@ serve(async (req) => {
             trust_level: "candidate",
             nutrition_goals: nutritionGoalsForSave,
           });
+          console.log("FINAL_INGREDIENTS_PAYLOAD", (payload as Record<string, unknown>).ingredients);
           console.log(JSON.stringify({
             tag: "RECIPE_SAVE_PAYLOAD_DEBUG",
             requestId,
