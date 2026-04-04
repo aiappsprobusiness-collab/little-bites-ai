@@ -37,7 +37,9 @@
 
 ## Сознательно не трогали (Этап 2+)
 
-- Схлопывание `favorites` / `get_recipe_previews` / `meal_plans_v2` (несколько запросов к одной сущности).
+Часть перечисленного закрыта в **Этапе 2** — см. `docs/dev/MEAL_PLAN_NETWORK_STAGE2.md` (узкая invalidation плана, убран лишний query `row_exists` на плане).
+
+- Схлопывание `favorites` / `get_recipe_previews` / нескольких `meal_plans_v2` в один запрос.
 - Глобальные политики `useSubscription`, `useMembers`, `useFavorites` на плане.
 - `throttledFetch` / transport layer.
 

@@ -94,6 +94,7 @@ function isPerf(): boolean {
  */
 
 import { applyReplaceSlotToPlanCache, applyClearSlotToPlanCache } from "@/utils/planCache";
+import { invalidateMealPlanQueriesForPlannedDate } from "@/utils/mealPlanQueryInvalidation";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { consumeJustCreatedMemberId } from "@/services/planFill";
@@ -522,7 +523,7 @@ export default function MealPlanPage() {
     if (key) localStorage.setItem(MEAL_PLAN_MUTED_WEEK_STORAGE_KEY, key);
     else localStorage.removeItem(MEAL_PLAN_MUTED_WEEK_STORAGE_KEY);
   }, []);
-  const { getMealPlans, getMealPlansByDate, getMealPlanRowExists, clearWeekPlan, deleteMealPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
+  const { getMealPlans, getMealPlansByDate, clearWeekPlan, deleteMealPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
 
   const memberIdForPlan = mealPlanMemberId ?? null;
   const { isFavorite: isFavoriteForPlan, toggleFavorite: toggleFavoritePlan } = useFavorites("all");
@@ -848,8 +849,6 @@ export default function MealPlanPage() {
   /** Актуальные планы выбранного дня для async автодобора прикорма (совпадают с тем, что видит пользователь). */
   const dayMealPlansRef = useRef(planMealsForSelectedDay);
   dayMealPlansRef.current = planMealsForSelectedDay;
-  const { data: rowExistsData } = getMealPlanRowExists(selectedDate);
-
   const clearSlotAndOpenPoolFallback = useCallback(
     async (ctx: {
       dayKey: string;
@@ -870,7 +869,6 @@ export default function MealPlanPage() {
         try {
           await deleteMealPlan(ctx.planSlotId);
           applyClearSlotToPlanCache(queryClient, { mealPlansKeyWeek, mealPlansKeyDay }, { dayKey: ctx.dayKey, mealType: ctx.mealType });
-          await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
         } catch (e: unknown) {
           toast({
             variant: "destructive",
@@ -2134,7 +2132,10 @@ export default function MealPlanPage() {
                         day_keys: dayKeys,
                       });
                       trackUsageEvent("plan_fill_day_success");
-                      await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                      await invalidateMealPlanQueriesForPlannedDate(queryClient, {
+                        userId: user?.id,
+                        plannedDate: selectedDayKey,
+                      });
                       const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                       const total = result.totalSlots ?? 4;
                       if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
@@ -2514,7 +2515,10 @@ export default function MealPlanPage() {
                           day_keys: dayKeys,
                         });
                         trackUsageEvent("plan_fill_day_success");
-                        await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                        await invalidateMealPlanQueriesForPlannedDate(queryClient, {
+                          userId: user?.id,
+                          plannedDate: selectedDayKey,
+                        });
                         const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                         const total = result.totalSlots ?? 4;
                         if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
@@ -2850,7 +2854,6 @@ export default function MealPlanPage() {
                                     title: result.title,
                                     plan_source: result.plan_source,
                                   }, mealPlanMemberId ?? null);
-                                  await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                                   if (result.pickedSource === "pool" || result.plan_source === "pool") {
                                     setPoolAutoReplaceCountBySlot((prev) => ({
                                       ...prev,
@@ -2944,7 +2947,6 @@ export default function MealPlanPage() {
                                   delete next[sk];
                                   return next;
                                 });
-                                queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                                 toast({ title: "Блюдо удалено", description: "Убрано из плана на день" });
                               } catch (e: unknown) {
                                 toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось удалить" });
@@ -3062,7 +3064,6 @@ export default function MealPlanPage() {
                                       title: result.title,
                                       plan_source: result.plan_source,
                                     }, mealPlanMemberId ?? null);
-                                    await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
                                     toast({
                                       description: "Блюдо добавлено в план",
                                       duration: 2500,
@@ -3206,7 +3207,10 @@ export default function MealPlanPage() {
                         day_key: formatLocalDate(rollingDates[6]),
                         day_keys: dayKeys,
                       });
-                      queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
+                      await invalidateMealPlanQueriesForPlannedDate(queryClient, {
+                        userId: user?.id,
+                        plannedDate: formatLocalDate(rollingDates[6]),
+                      });
                       const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
                       const total = result.totalSlots ?? 4;
                       if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
@@ -3523,7 +3527,6 @@ export default function MealPlanPage() {
             await queryClient.cancelQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
             queryClient.setQueryData(mealPlansKeyDay, []);
             await clearWeekPlan({ startDate, endDate });
-            await queryClient.invalidateQueries({ queryKey: ["meal_plans_v2", user?.id] });
             toast({ title: isDay ? "День очищен" : "Неделя очищена", description: "Блюда удалены" });
           } catch (e: unknown) {
             toast({ variant: "destructive", title: "Ошибка", description: e instanceof Error ? e.message : "Не удалось очистить" });

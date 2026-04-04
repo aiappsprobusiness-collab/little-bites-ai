@@ -311,7 +311,7 @@ export function useReplaceMealSlot(
       });
       /** Синхронизация кэша: только `createMealPlan.onSuccess` → узкая invalidate по `planned_date` (без второго широкого каскада). */
     },
-    [createMealPlan, memberId, options?.startKey, options?.endKey, queryClient, user?.id]
+    [createMealPlan, memberId, user?.id]
   );
 
   /** Замена из пула: loose member + chat_ai, нормализация meal_type, профиль, без супов на завтрак. Не подставляем тот же recipe_id. */
