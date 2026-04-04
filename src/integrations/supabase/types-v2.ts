@@ -35,6 +35,8 @@ export interface ProfilesV2Row {
   /** Согласие с соглашением и политикой при регистрации */
   accepted_terms_at: string | null;
   accepted_terms_version: string | null;
+  /** Последний выбранный член семьи в UI; NULL = семейный режим или не задано. */
+  last_active_member_id: string | null;
 }
 export interface ProfilesV2Insert {
   id?: string;
@@ -51,6 +53,7 @@ export interface ProfilesV2Insert {
   plan_initialized?: boolean;
   accepted_terms_at?: string | null;
   accepted_terms_version?: string | null;
+  last_active_member_id?: string | null;
 }
 export interface ProfilesV2Update {
   id?: string;
@@ -67,6 +70,7 @@ export interface ProfilesV2Update {
   plan_initialized?: boolean;
   accepted_terms_at?: string | null;
   accepted_terms_version?: string | null;
+  last_active_member_id?: string | null;
 }
 
 /** Один элемент аллергии (allergy_items в members). */

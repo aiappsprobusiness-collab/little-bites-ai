@@ -1,7 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import { useMembers } from "@/hooks/useMembers";
 import { useSubscription } from "@/hooks/useSubscription";
+import { supabase } from "@/integrations/supabase/client";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
+import { setLastActiveMemberProfile } from "@/utils/lastActiveMemberProfile";
 
 const SELECTED_MEMBER_ID_KEY = "selectedMemberId";
 const PRIMARY_MEMBER_ID_KEY = "primaryMemberId";
@@ -53,7 +57,19 @@ function writeStoredPrimaryMemberId(id: string | null): void {
   }
 }
 
-/** Детерминированный primary member для Free: 1) сохранённый и валидный, 2) первый по created_at ASC, 3) первый в списке. */
+/** Fallback: самый «ранний» member по created_at (если есть), иначе по id — не порядок сортировки по имени из запроса. */
+function pickFirstMemberIdByCreatedAt(members: MembersRow[]): string | null {
+  if (members.length === 0) return null;
+  const sorted = [...members].sort((a, b) => {
+    const ca = (a as { created_at?: string }).created_at ?? "";
+    const cb = (b as { created_at?: string }).created_at ?? "";
+    if (ca !== cb) return ca.localeCompare(cb);
+    return a.id.localeCompare(b.id);
+  });
+  return sorted[0]?.id ?? members[0]?.id ?? null;
+}
+
+/** Детерминированный primary member для Free: 1) сохранённый и валидный, 2) первый по created_at / id, 3) первый в списке. */
 function computePrimaryMemberId(
   members: MembersRow[],
   ids: Set<string>
@@ -61,12 +77,7 @@ function computePrimaryMemberId(
   if (members.length === 0) return null;
   const stored = readStoredPrimaryMemberId();
   if (stored && ids.has(stored)) return stored;
-  const sorted = [...members].sort((a, b) => {
-    const ca = (a as { created_at?: string }).created_at ?? "";
-    const cb = (b as { created_at?: string }).created_at ?? "";
-    return ca.localeCompare(cb);
-  });
-  const primary = sorted[0]?.id ?? members[0]?.id ?? null;
+  const primary = pickFirstMemberIdByCreatedAt(members);
   if (primary) writeStoredPrimaryMemberId(primary);
   return primary;
 }
@@ -87,13 +98,15 @@ export interface FamilyContextType {
 const FamilyContext = createContext<FamilyContextType | undefined>(undefined);
 
 export function FamilyProvider({ children }: { children: ReactNode }) {
-  const { hasAccess } = useSubscription();
-  const { members, isLoading, formatAge, normalizeAllergiesForFree } = useMembers();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { hasAccess, lastActiveMemberId, isLoading: isProfileLoading } = useSubscription();
+  const { members, isLoading: isMembersLoading, formatAge, normalizeAllergiesForFree } = useMembers();
   const isFreeLocked = !hasAccess;
   const normalizedAllergiesForFreeRef = useRef(false);
 
   const [selectedMemberId, setSelectedMemberIdState] = useState<string | null>(() => readStoredMemberId());
-  const restoredRef = useRef(false);
+  const paidInitDoneRef = useRef(false);
 
   const existingIds = useMemo(() => new Set(members.map((m) => m.id)), [members]);
   useEffect(() => {
@@ -114,51 +127,112 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
 
   const effectiveSelectedId = isFreeLocked ? primaryMemberId : selectedMemberId;
 
+  const persistLastActiveToProfile = useCallback(
+    async (userId: string, memberId: string | null) => {
+      await setLastActiveMemberProfile(supabase, userId, memberId);
+      await queryClient.invalidateQueries({ queryKey: ["profile-subscription", userId] });
+    },
+    [queryClient]
+  );
+
   const setSelectedMemberId = useCallback(
     (id: string | null) => {
       if (isFreeLocked) return;
       setSelectedMemberIdState(id);
       writeStoredMemberId(id);
+      const dbId = id && id !== "family" ? id : null;
+      if (user?.id) {
+        void persistLastActiveToProfile(user.id, dbId).catch(() => {});
+      }
     },
-    [isFreeLocked]
+    [isFreeLocked, user?.id, persistLastActiveToProfile]
   );
 
+  useEffect(() => {
+    paidInitDoneRef.current = false;
+  }, [user?.id, isFreeLocked]);
+
+  /**
+   * Premium/Trial: после загрузки members + profiles_v2 выставить выбор по last_active_member_id,
+   * иначе fallback (правила — docs/architecture/domain-map.md).
+   */
+  useEffect(() => {
+    if (isFreeLocked || !user) return;
+    if (isMembersLoading) return;
+
+    if (members.length === 0) {
+      paidInitDoneRef.current = false;
+      if (selectedMemberId !== null) {
+        setSelectedMemberIdState(null);
+        writeStoredMemberId(null);
+      }
+      return;
+    }
+
+    if (isProfileLoading) return;
+
+    if (!paidInitDoneRef.current) {
+      paidInitDoneRef.current = true;
+      const ids = new Set(members.map((m) => m.id));
+
+      let target: string;
+      if (lastActiveMemberId && ids.has(lastActiveMemberId)) {
+        target = lastActiveMemberId;
+      } else {
+        const cached = readStoredMemberId();
+        if (lastActiveMemberId == null && cached === "family") {
+          target = "family";
+        } else {
+          const fb = pickFirstMemberIdByCreatedAt(members);
+          if (!fb) return;
+          target = fb;
+          const needSync =
+            lastActiveMemberId == null ||
+            (lastActiveMemberId != null && !ids.has(lastActiveMemberId));
+          if (needSync) {
+            void persistLastActiveToProfile(user.id, fb).catch(() => {});
+          }
+        }
+      }
+
+      setSelectedMemberIdState(target);
+      writeStoredMemberId(target);
+    }
+  }, [
+    isFreeLocked,
+    user?.id,
+    isMembersLoading,
+    isProfileLoading,
+    members,
+    lastActiveMemberId,
+    selectedMemberId,
+    persistLastActiveToProfile,
+  ]);
 
   useEffect(() => {
-    if (isFreeLocked) return;
-    if (isLoading || members.length === 0) return;
+    if (isFreeLocked || !user) return;
+    if (isMembersLoading || isProfileLoading) return;
+    if (!paidInitDoneRef.current) return;
+    if (members.length === 0) return;
+
     const ids = new Set(members.map((m) => m.id));
-    const stored = readStoredMemberId();
-    if (stored === null) {
-      if (!selectedMemberId) setSelectedMemberIdState(members[0].id);
-      restoredRef.current = true;
-      return;
-    }
-    if (restoredRef.current) return;
-    restoredRef.current = true;
-    if (stored === "family") {
-      setSelectedMemberIdState("family");
-      return;
-    }
-    if (ids.has(stored)) {
-      setSelectedMemberIdState(stored);
-      return;
-    }
-    setSelectedMemberIdState(members[0].id);
-  }, [isFreeLocked, isLoading, members, selectedMemberId]);
+    const fallback = pickFirstMemberIdByCreatedAt(members);
+    if (!fallback) return;
 
-  useEffect(() => {
-    if (isFreeLocked) return;
-    if (members.length > 0 && !selectedMemberId) {
-      setSelectedMemberIdState(members[0].id);
+    if (selectedMemberId && selectedMemberId !== "family" && !ids.has(selectedMemberId)) {
+      setSelectedMemberIdState(fallback);
+      writeStoredMemberId(fallback);
+      void persistLastActiveToProfile(user.id, fallback).catch(() => {});
     }
-    if (selectedMemberId && selectedMemberId !== "family" && !existingIds.has(selectedMemberId)) {
-      setSelectedMemberIdState(members.length > 0 ? members[0].id : null);
-    }
-    if (members.length === 0 && selectedMemberId && selectedMemberId !== "family") {
-      setSelectedMemberIdState(null);
-    }
-  }, [isFreeLocked, members, selectedMemberId, existingIds]);
+  }, [
+    isFreeLocked,
+    user?.id,
+    isMembersLoading,
+    isProfileLoading,
+    members,
+    selectedMemberId,
+    persistLastActiveToProfile,
+  ]);
 
   const selectedMember =
     effectiveSelectedId && effectiveSelectedId !== "family" && existingIds.has(effectiveSelectedId)
@@ -172,7 +246,7 @@ export function FamilyProvider({ children }: { children: ReactNode }) {
         selectedMember,
         setSelectedMemberId,
         members,
-        isLoading,
+        isLoading: isMembersLoading,
         formatAge: (ageMonths) => formatAge(ageMonths),
         primaryMemberId,
         isFreeLocked,

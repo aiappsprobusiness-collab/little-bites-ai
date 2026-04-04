@@ -31,7 +31,9 @@ export function useSubscription() {
       logMembersProfileLoadStart("profile", user.id);
       const { data, error } = await supabase
         .from("profiles_v2")
-        .select("status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized")
+        .select(
+          "status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized, last_active_member_id"
+        )
         .eq("user_id", user.id)
         .maybeSingle();
       if (error) throw error;
@@ -43,6 +45,7 @@ export function useSubscription() {
         trial_until: string | null;
         trial_used: boolean | null;
         plan_initialized: boolean;
+        last_active_member_id: string | null;
       } | null;
     },
     enabled: authReady && !!user,
@@ -114,6 +117,7 @@ export function useSubscription() {
   const trialUntil = profileV2?.trial_until ?? null;
   const trialUsed = profileV2?.trial_used ?? false;
   const planInitialized = profileV2?.plan_initialized ?? false;
+  const lastActiveMemberId = profileV2?.last_active_member_id ?? null;
 
   /** Trial: источник истины — trial_until (см. `getMsUntilTrialEnd` в trialLifecycle). */
   const trialMsRemaining = getMsUntilTrialEnd(trialUntil);
@@ -304,6 +308,8 @@ export function useSubscription() {
     subscriptionPlan,
     subscriptionExpiresAt,
     planInitialized,
+    /** Premium/Trial: последний выбранный member из profiles_v2 (NULL = семья или не задано). */
+    lastActiveMemberId,
     setPlanInitialized: setPlanInitialized.mutateAsync,
     expiresAt,
     trialUntil,

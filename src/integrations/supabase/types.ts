@@ -514,9 +514,9 @@ export type Database = {
         Relationships: []
       }
       profiles_v2: {
-        Row: { id: string; user_id: string; status: string; daily_limit: number; last_reset: string; premium_until: string | null; requests_today: number; trial_until: string | null; trial_used: boolean; trial_started_at: string | null; email: string | null; active_session_key: string | null; accepted_terms_at: string | null; accepted_terms_version: string | null }
-        Insert: { id?: string; user_id: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null; active_session_key?: string | null; accepted_terms_at?: string | null; accepted_terms_version?: string | null }
-        Update: { id?: string; user_id?: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null; active_session_key?: string | null; accepted_terms_at?: string | null; accepted_terms_version?: string | null }
+        Row: { id: string; user_id: string; status: string; daily_limit: number; last_reset: string; premium_until: string | null; requests_today: number; trial_until: string | null; trial_used: boolean; trial_started_at: string | null; email: string | null; active_session_key: string | null; accepted_terms_at: string | null; accepted_terms_version: string | null; last_active_member_id: string | null }
+        Insert: { id?: string; user_id: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null; active_session_key?: string | null; accepted_terms_at?: string | null; accepted_terms_version?: string | null; last_active_member_id?: string | null }
+        Update: { id?: string; user_id?: string; status?: string; daily_limit?: number; last_reset?: string; premium_until?: string | null; requests_today?: number; trial_until?: string | null; trial_used?: boolean; trial_started_at?: string | null; email?: string | null; active_session_key?: string | null; accepted_terms_at?: string | null; accepted_terms_version?: string | null; last_active_member_id?: string | null }
         Relationships: []
       }
       favorites_v2: {

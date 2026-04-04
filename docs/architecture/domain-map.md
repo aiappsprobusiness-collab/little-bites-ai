@@ -19,7 +19,7 @@
 ### Auth & User Profile
 
 - **Назначение:** идентификация пользователя, профиль с тарифом и лимитами.
-- **Таблицы:** `auth.users` (Supabase Auth), `public.profiles_v2` (status, daily_limit, premium_until, trial_*, plan_initialized, email). Триггер при регистрации создаёт строку в `profiles_v2`.
+- **Таблицы:** `auth.users` (Supabase Auth), `public.profiles_v2` (status, daily_limit, premium_until, trial_*, plan_initialized, email, **last_active_member_id**). Триггер при регистрации создаёт строку в `profiles_v2`.
 - **UI:** AuthPage (регистрация: обязательное согласие с `/terms` и `/privacy`), AuthCallbackPage, RootRedirect (/, /welcome, /prelogin), ProfilePage, SubscriptionCard.
 - **Правовые тексты (единый контент):** `src/components/legal/TermsContent.tsx`, `PrivacyContent.tsx`, `SubscriptionContent.tsx` — см. `docs/dev/legal-copy-and-auth-consent.md`.
 - **Edge/Services:** нет отдельной Edge для профиля; чтение/обновление через Supabase client. Trial: RPC start_trial, trial_on_signup_and_cancel.
@@ -37,6 +37,7 @@
 
 - **Назначение:** члены семьи (ребёнок/взрослый/семья): имя, возраст, аллергии, likes, dislikes, preferences, difficulty.
 - **Таблицы:** `public.members` (user_id, name, type, age_months, allergy_items, allergies (legacy), likes, dislikes, preferences, difficulty). Лимиты в приложении: Free — 1 член, 1 активная аллергия (normalize_allergies_for_free).
+- **Активный член в UI (Premium/Trial):** единственный источник правды по «последнему выбранному» профилю — **`profiles_v2.last_active_member_id`** (uuid члена или `NULL`). При выборе конкретного члена клиент обновляет это поле; при выборе режима «Семья» — пишет `NULL`. При старте приложения: загружаются `members` и профиль; если `last_active_member_id` указывает на существующего члена пользователя — он становится активным; если `NULL` или uuid не найден среди членов (удалён) — **fallback:** детерминированно первый член по `created_at` (если колонки нет в строке — по стабильному порядку `id`), а не «магический» порядок списка по имени; при первом fallback после пустого/битого значения клиент может записать uuid в `profiles_v2`, чтобы состояние совпало с правилами. Режим «Семья» в БД не хранится отдельным флагом: это `last_active_member_id IS NULL`; чтобы после перезагрузки сохранить «Семью», используется **кэш** `localStorage` (`selectedMemberId` = `family`) только когда в БД уже `NULL` — это подсказка для UX, не второй SoT для uuid члена. **Free:** переключение членов заблокировано; активен один «primary» member (localStorage `primaryMemberId` + тот же детерминированный fallback по `created_at` / id), поле `last_active_member_id` при выборе с клиента не обновляется (нет действия `setSelectedMemberId`). **Нет членов:** `selectedMemberId` сбрасывается — онбординг/создание профиля (`FamilyOnboarding` и т.д.).
 - **UI:** ProfilePage, ChildProfileEditPage, FamilyDashboard, MemberSelectorButton, AddChildForm, FamilyContext.
 - **Edge/Services:** нет отдельной Edge; данные передаются в deepseek-chat и generate-plan в body (member_id, member_data). Контекст семьи на Edge пересобирается в deepseek-chat (buildFamilyGenerationContextBlock).
 - **Зависимости:** чат и план используют members для промптов, фильтров пула, блокировки по аллергиям/dislikes.
