@@ -47,6 +47,7 @@
     "seed:adult:copy": "node scripts/copy-adult-216-1200-source.mjs",
     "seed:adult:json": "node scripts/generate-toddler-catalog-json.mjs adult-216-1200",
     "seed:adult:import": "node scripts/import-infant-seed.mjs --file=data/toddler-seed/adult-216-1200-catalog-recipes.json",
+    "backfill:ingredient-dual": "tsx --tsconfig tsconfig.scripts.json scripts/backfill-recipe-ingredient-dual-display.ts",
     "check:db-docs": "node scripts/check-db-docs-consistency.mjs",
     "resize:og-onion": "node scripts/resize-og-onion.mjs"
   },

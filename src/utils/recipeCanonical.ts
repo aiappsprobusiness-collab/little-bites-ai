@@ -4,6 +4,7 @@
  */
 
 import { inferCulturalFamiliarity } from "./inferCulturalFamiliarity";
+import { enrichIngredientMeasurementForSave } from "@shared/ingredientMeasurementDisplay";
 
 export const POOL_SOURCES = ["seed", "starter", "manual", "week_ai", "chat_ai"] as const;
 export type PoolSource = (typeof POOL_SOURCES)[number];
@@ -87,6 +88,10 @@ export interface CanonicalIngredient {
   substitute?: string | null;
   canonical_amount?: number | null;
   canonical_unit?: string | null;
+  display_amount?: number | null;
+  display_unit?: string | null;
+  display_quantity_text?: string | null;
+  measurement_mode?: string | null;
 }
 
 export interface CanonicalizeRecipePayloadInput {
@@ -181,16 +186,50 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
         : amount != null && amount !== ""
           ? `${name} — ${amount}`
           : name;
-    return {
+    const unitVal = (ing as { unit?: string }).unit ?? null;
+    const rawCanon = (ing as { canonical_amount?: number | string }).canonical_amount;
+    const canonNum =
+      rawCanon != null && String(rawCanon).trim() !== ""
+        ? Number(String(rawCanon).replace(",", "."))
+        : NaN;
+    const canonical_amount = Number.isFinite(canonNum) ? canonNum : null;
+    const canonical_unit =
+      typeof (ing as { canonical_unit?: string }).canonical_unit === "string"
+        ? (ing as { canonical_unit: string }).canonical_unit
+        : null;
+    const amtNum =
+      amount != null && amount !== "" && String(amount).trim() !== "" && /^\d+\.?\d*$/.test(String(amount).trim())
+        ? Number(String(amount).replace(",", "."))
+        : null;
+
+    const enrichment = enrichIngredientMeasurementForSave({
       name,
       display_text: display_text || name,
+      amount: amtNum,
+      unit: unitVal,
+      canonical_amount,
+      canonical_unit,
+      category: typeof (ing as { category?: string }).category === "string" ? (ing as { category: string }).category : null,
+      display_amount: (ing as { display_amount?: number }).display_amount ?? null,
+      display_unit: (ing as { display_unit?: string }).display_unit ?? null,
+      display_quantity_text: (ing as { display_quantity_text?: string }).display_quantity_text ?? null,
+      measurement_mode: (ing as { measurement_mode?: string }).measurement_mode as "canonical_only" | "dual" | "display_only" | null,
+    });
+
+    return {
+      name,
+      display_text: (enrichment.display_text ?? display_text) || name,
       amount: amount != null && amount !== "" ? amount : null,
-      unit: (ing as { unit?: string }).unit ?? null,
+      unit: unitVal,
       substitute: (ing as { substitute?: string }).substitute ?? null,
       canonical_amount: (ing as { canonical_amount?: number }).canonical_amount ?? null,
       canonical_unit: (ing as { canonical_unit?: string }).canonical_unit ?? null,
       order_index: (ing as { order_index?: number }).order_index ?? idx,
       category: (ing as { category?: string }).category ?? "other",
+      display_amount: enrichment.display_amount,
+      display_unit: enrichment.display_unit,
+      display_quantity_text: enrichment.display_quantity_text,
+      measurement_mode: enrichment.measurement_mode,
     };
   });
 

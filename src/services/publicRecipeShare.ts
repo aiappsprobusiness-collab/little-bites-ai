@@ -27,6 +27,11 @@ export interface PublicRecipePayload {
     canonical_unit?: string | null;
     substitute?: string | null;
     order_index?: number | null;
+    category?: string | null;
+    display_amount?: number | null;
+    display_unit?: string | null;
+    display_quantity_text?: string | null;
+    measurement_mode?: string | null;
   }>;
   steps: Array<{ instruction?: string | null; step_number?: number | null }>;
   chef_advice?: string | null;

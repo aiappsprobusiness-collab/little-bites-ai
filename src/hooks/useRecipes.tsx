@@ -195,7 +195,20 @@ export function useRecipes(childId?: string) {
         const stepsJson = r.steps_json as { instruction?: string; step_number?: number }[] | null | undefined;
         const rawSteps = Array.isArray(stepsJson) ? stepsJson : [];
         const steps = [...rawSteps].sort((a, b) => (a.step_number ?? 0) - (b.step_number ?? 0));
-        const ingJson = r.ingredients_json as { name?: string; amount?: number | null; unit?: string | null; substitute?: string | null; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null }[] | null | undefined;
+        const ingJson = r.ingredients_json as {
+          name?: string;
+          amount?: number | null;
+          unit?: string | null;
+          substitute?: string | null;
+          display_text?: string | null;
+          canonical_amount?: number | null;
+          canonical_unit?: string | null;
+          category?: string | null;
+          display_amount?: number | null;
+          display_unit?: string | null;
+          display_quantity_text?: string | null;
+          measurement_mode?: string | null;
+        }[] | null | undefined;
         const ingRows = Array.isArray(ingJson) ? ingJson : [];
         const ingredients = ingRows.map((ing) => ({
           name: ing.name ?? '',
@@ -205,6 +218,11 @@ export function useRecipes(childId?: string) {
           display_text: ing.display_text ?? null,
           canonical_amount: ing.canonical_amount ?? null,
           canonical_unit: ing.canonical_unit ?? null,
+          category: ing.category ?? null,
+          display_amount: ing.display_amount ?? null,
+          display_unit: ing.display_unit ?? null,
+          display_quantity_text: ing.display_quantity_text ?? null,
+          measurement_mode: ing.measurement_mode ?? 'canonical_only',
         })) as RecipeIngredient[];
 
         const servingsRow = servingsRes.data as { servings_base?: number | null; servings_recommended?: number | null } | null;

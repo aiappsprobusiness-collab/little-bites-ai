@@ -158,11 +158,16 @@ export type Database = {
           canonical_amount: number | null
           canonical_unit: string | null
           category: Database["public"]["Enums"]["product_category"] | null
+          display_amount: number | null
+          display_quantity_text: string | null
           display_text: string | null
+          display_unit: string | null
           id: string
+          measurement_mode: string
           name: string
           order_index: number | null
           recipe_id: string
+          substitute: string | null
           unit: string | null
         }
         Insert: {
@@ -170,11 +175,16 @@ export type Database = {
           canonical_amount?: number | null
           canonical_unit?: string | null
           category?: Database["public"]["Enums"]["product_category"] | null
+          display_amount?: number | null
+          display_quantity_text?: string | null
           display_text?: string | null
+          display_unit?: string | null
           id?: string
+          measurement_mode?: string
           name: string
           order_index?: number | null
           recipe_id: string
+          substitute?: string | null
           unit?: string | null
         }
         Update: {
@@ -182,11 +192,16 @@ export type Database = {
           canonical_amount?: number | null
           canonical_unit?: string | null
           category?: Database["public"]["Enums"]["product_category"] | null
+          display_amount?: number | null
+          display_quantity_text?: string | null
           display_text?: string | null
+          display_unit?: string | null
           id?: string
+          measurement_mode?: string
           name?: string
           order_index?: number | null
           recipe_id?: string
+          substitute?: string | null
           unit?: string | null
         }
         Relationships: [

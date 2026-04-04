@@ -94,7 +94,7 @@
 - **Сбор в БД** только по явному действию пользователя; `shopping_lists.meta` хранит подпись последней сборки для сравнения с планом (без автоперезаписи). См. **shopping_list_product_model.md**.
 - **replaceItems:** при сборке из меню в каждую строку пишется `meta.merge_key` (ключ агрегации), `meta.source_recipes`, при агрегации из плана — также `meta.source_contributions` и `meta.aggregation_unit` (для `computeEffectiveShoppingItemView` при фильтре по рецептам).
 - **addRecipeIngredients** (`useShoppingList`): добавление ингредиентов **из карточки рецепта** (`RecipePage`, кнопка «Добавить в покупки») строит те же ключи и display-поля, что и план, через `buildShoppingIngredientPayloadsFromRecipe` в `src/utils/shopping/shoppingListMerge.ts` (внутри — `buildShoppingAggregationKey` + `toShoppingDisplayUnitAndAmount`). Слияние с существующими строками: совпадение по `meta.merge_key`, иначе легаси `trim().toLowerCase(name)|unit` как в первой версии. Ручное добавление продукта без `merge_key` по-прежнему только легаси-ключом. Несовпадение единиц на одном ключе не конвертируется: разные ключи агрегации → разные строки.
-- **recipe_ingredients** и RPC **create_recipe_with_steps** не меняются этим слоем; возможная будущая нормализация при записи в БД — отдельный уровень (см. вариант «два уровня» в обсуждении нормализации).
+- **recipe_ingredients:** добавлены поля dual display (`measurement_mode`, `display_*`); **агрегация списка покупок по-прежнему опирается на canonical g/ml**, не на `display_text`. Подробнее: `docs/dev/RECIPE_INGREDIENT_DUAL_MEASUREMENT.md`.
 
 ---
 

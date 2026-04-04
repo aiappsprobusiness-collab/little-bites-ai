@@ -7,6 +7,7 @@
 import type { IngredientItem } from "./recipe";
 import { ingredientDisplayLabel, scaleIngredientDisplay } from "./recipe";
 import { formatIngredientAmountForDisplay } from "@/utils/formatIngredientAmount";
+import { formatIngredientMeasurement } from "@shared/ingredientMeasurementDisplay";
 
 export type IngredientOverrideAction = "swap" | "skip" | "reduce";
 
@@ -83,16 +84,51 @@ export function applyIngredientOverrides(
       const unit = (ing as { unit?: string }).unit;
       const canonical_amount = (ing as { canonical_amount?: number }).canonical_amount;
       const canonical_unit = (ing as { canonical_unit?: string }).canonical_unit;
+      const measurement_mode = (ing as { measurement_mode?: string }).measurement_mode;
+      const display_amount = (ing as { display_amount?: number }).display_amount;
+      const display_quantity_text = (ing as { display_quantity_text?: string }).display_quantity_text;
       if (canonical_amount != null && canonical_unit) {
-        const scaledAmount = Math.round(canonical_amount * scale * 10) / 10;
-        const suffix = formatIngredientAmountForDisplay(scaledAmount, canonical_unit);
-        scaledIng = {
-          ...ing,
-          canonical_amount: scaledAmount,
-          amount: scaledAmount,
-          unit: canonical_unit,
-          display_text: name ? `${name} — ${suffix}` : suffix,
-        };
+        const scaledCanon = Math.round(canonical_amount * scale * 10) / 10;
+        if (
+          measurement_mode === "dual" &&
+          display_amount != null &&
+          Number.isFinite(display_amount) &&
+          !display_quantity_text?.trim()
+        ) {
+          const scaledDa = Math.round(display_amount * scale * 10) / 10;
+          scaledIng = {
+            ...ing,
+            canonical_amount: scaledCanon,
+            amount: scaledCanon,
+            unit: canonical_unit,
+            display_amount: scaledDa,
+            measurement_mode: "dual",
+            display_text: formatIngredientMeasurement(
+              { ...ing, canonical_amount: scaledCanon, display_amount: scaledDa },
+              { servingMultiplier: 1 },
+            ),
+          };
+        } else if (measurement_mode === "dual" && display_quantity_text?.trim()) {
+          scaledIng = {
+            ...ing,
+            canonical_amount: scaledCanon,
+            amount: scaledCanon,
+            unit: canonical_unit,
+            display_text: formatIngredientMeasurement(
+              { ...ing, canonical_amount: scaledCanon },
+              { servingMultiplier: 1 },
+            ),
+          };
+        } else {
+          const suffix = formatIngredientAmountForDisplay(scaledCanon, canonical_unit);
+          scaledIng = {
+            ...ing,
+            canonical_amount: scaledCanon,
+            amount: scaledCanon,
+            unit: canonical_unit,
+            display_text: name ? `${name} — ${suffix}` : suffix,
+          };
+        }
       } else if (amount != null) {
         const scaledAmount = Math.round(amount * scale * 10) / 10;
         const u = unit ?? "";

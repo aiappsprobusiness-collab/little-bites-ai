@@ -4,6 +4,7 @@
  */
 
 import { inferCulturalFamiliarity } from "./inferCulturalFamiliarity.ts";
+import { enrichIngredientMeasurementForSave } from "../../../shared/ingredientMeasurementDisplay.ts";
 
 export const POOL_SOURCES = ["seed", "starter", "manual", "week_ai", "chat_ai"] as const;
 type PoolSource = (typeof POOL_SOURCES)[number];
@@ -83,7 +84,17 @@ export interface CanonicalizeRecipePayloadInput {
   chef_advice?: string | null;
   advice?: string | null;
   steps: Array<{ instruction?: string; step_number?: number }>;
-  ingredients: Array<Record<string, unknown> & { name?: string; amount?: string; display_text?: string }>;
+  ingredients: Array<
+    Record<string, unknown> & {
+      name?: string;
+      amount?: string;
+      display_text?: string;
+      display_amount?: number | null;
+      display_unit?: string | null;
+      display_quantity_text?: string | null;
+      measurement_mode?: string | null;
+    }
+  >;
   sourceTag?: SourceTag;
   /** Base serving count (default 1). */
   servings?: number | null;
@@ -180,9 +191,35 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
         : amountRaw != null && String(amountRaw).trim() !== ""
           ? `${name} — ${amountRaw}`
           : name;
-    return {
+    const unitVal = typeof ing.unit === "string" ? ing.unit : null;
+    const rawCanon = ing.canonical_amount;
+    const canonNum =
+      rawCanon != null && String(rawCanon).trim() !== ""
+        ? Number(String(rawCanon).replace(",", "."))
+        : NaN;
+    const canonical_amount = Number.isFinite(canonNum) ? canonNum : null;
+    const canonical_unit = typeof ing.canonical_unit === "string" ? ing.canonical_unit : null;
+    const amtNum = amount != null && amount !== "" ? Number(String(amount).replace(",", ".")) : null;
+
+    const enrichment = enrichIngredientMeasurementForSave({
       name,
       display_text: display_text || name,
+      amount: amtNum != null && Number.isFinite(amtNum) ? amtNum : null,
+      unit: unitVal,
+      canonical_amount,
+      canonical_unit,
+      category: typeof ing.category === "string" ? ing.category : null,
+      display_amount: typeof ing.display_amount === "number" ? ing.display_amount : null,
+      display_unit: typeof ing.display_unit === "string" ? ing.display_unit : null,
+      display_quantity_text: typeof ing.display_quantity_text === "string" ? ing.display_quantity_text : null,
+      measurement_mode: typeof ing.measurement_mode === "string"
+        ? (ing.measurement_mode as "canonical_only" | "dual" | "display_only")
+        : null,
+    });
+
+    return {
+      name,
+      display_text: (enrichment.display_text ?? display_text) || name,
       amount,
       unit: ing.unit ?? null,
       substitute: ing.substitute ?? null,
@@ -190,6 +227,10 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
       canonical_unit: ing.canonical_unit ?? null,
       order_index: typeof ing.order_index === "number" ? ing.order_index : idx,
       category: typeof ing.category === "string" ? ing.category : "other",
+      display_amount: enrichment.display_amount,
+      display_unit: enrichment.display_unit,
+      display_quantity_text: enrichment.display_quantity_text,
+      measurement_mode: enrichment.measurement_mode,
     };
   });
 
