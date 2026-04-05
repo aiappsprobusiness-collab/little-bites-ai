@@ -11,7 +11,11 @@ import {
   type NormalizedUnit,
 } from "@/utils/shopping/normalizeIngredientForShopping";
 import { resolveProductCategoryForShoppingIngredient } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
-import type { ShoppingSourceContribution } from "@/utils/shopping/shoppingListMerge";
+import {
+  dualDisplayContributionFromRow,
+  mergeDualDisplayIntoCarrier,
+  type ShoppingSourceContribution,
+} from "@/utils/shopping/shoppingListMerge";
 
 export interface SourceRecipe {
   id: string;
@@ -34,6 +38,9 @@ export interface AggregatedIngredient {
   aggregation_unit: string | null;
   /** Ключ группировки (как в buildShoppingAggregationKey) — для merge без дублей при добавлении из рецепта. */
   merge_key: string;
+  /** Сумма display_amount × множитель для dual (левая часть «… ≈ N г»). */
+  dual_display_amount_sum: number | null;
+  dual_display_unit: string | null;
 }
 
 type MealsSlot = { recipe_id?: string; title?: string; servings?: number };
@@ -92,7 +99,9 @@ export async function loadPlanShoppingIngredients(
     supabase.from("recipes").select("id, servings_base, title").in("id", recipeIds),
     supabase
       .from("recipe_ingredients")
-      .select("recipe_id, name, amount, unit, canonical_amount, canonical_unit, category, display_text")
+      .select(
+        "recipe_id, name, amount, unit, canonical_amount, canonical_unit, category, display_text, display_amount, display_unit, display_quantity_text, measurement_mode"
+      )
       .in("recipe_id", recipeIds),
   ]);
   if (recipesRes.error) throw recipesRes.error;
@@ -115,6 +124,10 @@ export async function loadPlanShoppingIngredients(
       canonical_unit: string | null;
       category: string | null;
       display_text: string | null;
+      display_amount: number | null;
+      display_unit: string | null;
+      display_quantity_text: string | null;
+      measurement_mode: string | null;
     }[]
   >();
   for (const ing of ingredientsRes.data ?? []) {
@@ -127,6 +140,10 @@ export async function loadPlanShoppingIngredients(
       canonical_unit: string | null;
       category: string | null;
       display_text: string | null;
+      display_amount: number | null;
+      display_unit: string | null;
+      display_quantity_text: string | null;
+      measurement_mode: string | null;
     };
     if (!ingredientsByRecipe.has(r.recipe_id)) ingredientsByRecipe.set(r.recipe_id, []);
     ingredientsByRecipe.get(r.recipe_id)!.push(r);
@@ -139,6 +156,8 @@ export async function loadPlanShoppingIngredients(
     category: ProductCategory | null;
     sourceRecipeIds: Set<string>;
     contributionsByRecipe: Map<string, number>;
+    dual_display_amount_sum: number | null;
+    dual_display_unit: string | null;
   };
   const aggMap = new Map<string, AggVal>();
 
@@ -170,6 +189,21 @@ export async function loadPlanShoppingIngredients(
         multiplier
       );
       if (res == null) continue;
+      const dualPart = dualDisplayContributionFromRow(
+        {
+          name: ing.name,
+          amount: ing.amount,
+          unit: ing.unit,
+          canonical_amount: ing.canonical_amount,
+          canonical_unit: ing.canonical_unit,
+          display_text: ing.display_text,
+          display_amount: ing.display_amount,
+          display_unit: ing.display_unit,
+          display_quantity_text: ing.display_quantity_text,
+          measurement_mode: ing.measurement_mode,
+        },
+        multiplier,
+      );
       const cur = aggMap.get(res.key);
       if (cur) {
         cur.amountSum += res.amountToSum;
@@ -178,17 +212,22 @@ export async function loadPlanShoppingIngredients(
         if (!cur.names.includes(res.originalName)) cur.names.push(res.originalName);
         if (category !== "other" && cur.category === "other") cur.category = category;
         addSource(cur, recipe_id);
+        mergeDualDisplayIntoCarrier(cur, dualPart);
       } else {
         const contributionsByRecipe = new Map<string, number>();
         contributionsByRecipe.set(recipe_id, res.amountToSum);
-        aggMap.set(res.key, {
+        const next: AggVal = {
           amountSum: res.amountToSum,
           names: [res.originalName],
           aggregationUnit: res.aggregationUnit,
           category,
           sourceRecipeIds: new Set([recipe_id]),
           contributionsByRecipe,
-        });
+          dual_display_amount_sum: null,
+          dual_display_unit: null,
+        };
+        mergeDualDisplayIntoCarrier(next, dualPart);
+        aggMap.set(res.key, next);
       }
     }
   }
@@ -218,6 +257,8 @@ export async function loadPlanShoppingIngredients(
       source_contributions,
       aggregation_unit,
       merge_key: mergeKey,
+      dual_display_amount_sum: v.dual_display_amount_sum,
+      dual_display_unit: v.dual_display_unit,
     });
   }
   return result;

@@ -11,6 +11,7 @@
 | Визуал и логика поля + кнопка «Отправить» | `src/components/chat/ChatInputBar.tsx` |
 | Состояние текста, ref на textarea, отправка по Enter | `src/pages/ChatPage.tsx` |
 | Настройка «подсказки в поле ввода» (чат рецептов) | `profiles_v2.show_input_hints` → `useSubscription` → переключатель на `ProfilePage` |
+| Тема интерфейса (светлая / тёмная) | `profiles_v2.theme` → `next-themes` (`lb-theme`) + `ThemeProfileSync` + переключатель на `ProfilePage` |
 
 Отдельный сценарий — нижний sheet «Написать сообщение» (`src/components/chat/ChatInputPanel.tsx`): это **не** та же панель, что у основного чата; при изменении UX там правки документируются отдельно при необходимости.
 

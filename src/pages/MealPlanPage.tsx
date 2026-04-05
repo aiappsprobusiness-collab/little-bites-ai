@@ -2035,7 +2035,7 @@ export default function MealPlanPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
             className={cn(
-              "rounded-2xl bg-card/70 border-0 shadow-none ring-1 ring-border/20",
+              "rounded-2xl bg-card/70 border border-border/25 shadow-none",
               isInfantPlanUi ? "p-2.5 sm:p-3.5 mb-1.5" : "p-3 sm:p-4 mb-2",
             )}
           >
@@ -2074,7 +2074,7 @@ export default function MealPlanPage() {
                       className="group flex min-h-[44px] w-full max-w-[min(21rem,100%)] sm:max-w-[50%] min-w-[min(100%,11rem)] items-center justify-between gap-2.5 rounded-xl border border-border/55 bg-transparent px-3 py-2 text-left transition-colors hover:bg-muted/30 hover:border-border/70 active:scale-[0.99]"
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted/40 text-muted-foreground ring-1 ring-border/50 group-hover:text-foreground group-hover:ring-border/60">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/55 bg-muted/40 text-muted-foreground group-hover:border-border/70 group-hover:text-foreground">
                           <HeartHandshake className="h-3.5 w-3.5" aria-hidden />
                         </span>
                         <span className="font-medium text-muted-foreground text-sm leading-tight group-hover:text-foreground">
@@ -2172,8 +2172,9 @@ export default function MealPlanPage() {
                   type="button"
                   disabled={!isFree && isAnyGenerating}
                   className={cn(
-                    "w-full flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0 py-2 text-xs font-normal transition-colors",
+                    "w-full flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0 py-2 text-xs font-normal transition-colors rounded-lg",
                     "text-muted-foreground hover:text-foreground underline-offset-4 hover:underline",
+                    "outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-0",
                     "disabled:opacity-50 disabled:pointer-events-none disabled:no-underline",
                   )}
                   onClick={async () => {
@@ -2390,11 +2391,7 @@ export default function MealPlanPage() {
           {isAnyGenerating && (
             <div className="flex items-center justify-between gap-3 mt-1 -mx-4 px-4">
               <div
-                className="inline-flex items-center rounded-full py-2 px-3.5 text-typo-caption font-medium transition-colors"
-                style={{
-                  backgroundColor: "hsl(var(--primary) / 0.08)",
-                  color: "hsl(var(--primary))",
-                }}
+                className="inline-flex items-center rounded-full py-2 px-3.5 text-typo-caption font-medium transition-colors bg-primary/[0.08] text-primary"
                 aria-live="polite"
               >
                 <motion.span
@@ -2421,11 +2418,7 @@ export default function MealPlanPage() {
           {justCreatedMemberId && showPlanMealsSkeleton && (
             <div className="flex items-center gap-3 mt-1 -mx-4 px-4">
               <div
-                className="inline-flex items-center rounded-full py-2 px-3.5 text-typo-caption font-medium transition-colors"
-                style={{
-                  backgroundColor: "hsl(var(--primary) / 0.08)",
-                  color: "hsl(var(--primary))",
-                }}
+                className="inline-flex items-center rounded-full py-2 px-3.5 text-typo-caption font-medium transition-colors bg-primary/[0.08] text-primary"
                 aria-live="polite"
               >
                 Подбираем блюда для вашей семьи…

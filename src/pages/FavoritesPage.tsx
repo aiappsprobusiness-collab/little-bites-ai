@@ -274,7 +274,7 @@ export default function FavoritesPage() {
                 <div className="flex justify-end mb-3">
                   <Button
                     onClick={openCreateForm}
-                    className="rounded-full gap-2 bg-[#6b7c3d] hover:bg-[#6b7c3d]/90"
+                    className="rounded-full gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     <Plus className="w-4 h-4" />
                     Создать свой рецепт

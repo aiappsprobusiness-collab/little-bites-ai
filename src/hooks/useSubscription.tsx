@@ -8,6 +8,20 @@ import { useAppStore } from "@/store/useAppStore";
 import { hasSeenTrialActivatedModal } from "@/utils/trialActivatedModalStorage";
 import { getMsUntilTrialEnd } from "@/utils/trialLifecycle";
 import { TAB_NAV_STALE_MS, TAB_NAV_USAGE_STALE_MS } from "@/utils/reactQueryTabNav";
+import { isThemePreference, type ThemePreference } from "@/constants/themeStorage";
+
+type ProfileV2SubscriptionRow = {
+  status: string;
+  requests_today: number;
+  daily_limit: number;
+  premium_until: string | null;
+  trial_until: string | null;
+  trial_used: boolean | null;
+  plan_initialized: boolean;
+  last_active_member_id: string | null;
+  show_input_hints: boolean | null;
+  theme: string | null;
+};
 
 /** Единая логика доступа: true если подписка активна (premium/trial) и не истекла. */
 export function hasPremiumAccessFromSubscription(subscription: {
@@ -32,22 +46,12 @@ export function useSubscription() {
       const { data, error } = await supabase
         .from("profiles_v2")
         .select(
-          "status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized, last_active_member_id, show_input_hints"
+          "status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized, last_active_member_id, show_input_hints, theme"
         )
         .eq("user_id", user.id)
         .maybeSingle();
       if (error) throw error;
-      return data as {
-        status: string;
-        requests_today: number;
-        daily_limit: number;
-        premium_until: string | null;
-        trial_until: string | null;
-        trial_used: boolean | null;
-        plan_initialized: boolean;
-        last_active_member_id: string | null;
-        show_input_hints: boolean | null;
-      } | null;
+      return data as ProfileV2SubscriptionRow | null;
     },
     enabled: authReady && !!user,
     staleTime: TAB_NAV_STALE_MS,
@@ -121,6 +125,16 @@ export function useSubscription() {
   const lastActiveMemberId = profileV2?.last_active_member_id ?? null;
   /** Ротирующиеся подсказки в поле ввода чата рецептов; `null`/отсутствие колонки → true (как DEFAULT в БД). */
   const showInputHints = profileV2?.show_input_hints !== false;
+
+  /** Тема UI: до загрузки профиля `null` (не применять из БД). */
+  const themePreference: ThemePreference | null =
+    !user || isLoadingProfile
+      ? null
+      : profileV2 == null
+        ? "light"
+        : profileV2.theme && isThemePreference(profileV2.theme)
+          ? profileV2.theme
+          : "light";
 
   /** Trial: источник истины — trial_until (см. `getMsUntilTrialEnd` в trialLifecycle). */
   const trialMsRemaining = getMsUntilTrialEnd(trialUntil);
@@ -196,6 +210,33 @@ export function useSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
+    },
+  });
+
+  const setThemePreference = useMutation({
+    mutationFn: async (value: ThemePreference) => {
+      if (!user) throw new Error("User not authenticated");
+      const { error } = await supabase.from("profiles_v2").update({ theme: value }).eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onMutate: async (value: ThemePreference) => {
+      if (!user?.id) return;
+      await queryClient.cancelQueries({ queryKey: ["profile-subscription", user.id] });
+      const prev = queryClient.getQueryData<ProfileV2SubscriptionRow | null>(["profile-subscription", user.id]);
+      queryClient.setQueryData(["profile-subscription", user.id], (old: ProfileV2SubscriptionRow | null | undefined) =>
+        old ? { ...old, theme: value } : old
+      );
+      return { prev };
+    },
+    onError: (_err, _value, ctx) => {
+      if (user?.id && ctx?.prev !== undefined) {
+        queryClient.setQueryData(["profile-subscription", user.id], ctx.prev);
+      }
+    },
+    onSettled: () => {
+      if (user?.id) {
+        queryClient.invalidateQueries({ queryKey: ["profile-subscription", user.id] });
+      }
     },
   });
 
@@ -330,6 +371,9 @@ export function useSubscription() {
     showInputHints,
     setShowInputHints: setShowInputHints.mutateAsync,
     isUpdatingShowInputHints: setShowInputHints.isPending,
+    themePreference,
+    setThemePreference: setThemePreference.mutateAsync,
+    isUpdatingThemePreference: setThemePreference.isPending,
     setPlanInitialized: setPlanInitialized.mutateAsync,
     expiresAt,
     trialUntil,

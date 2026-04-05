@@ -43,6 +43,8 @@ import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/ser
 import { Loader2 } from "lucide-react";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { isStandalone } from "@/utils/standalone";
+import { useTheme } from "@/hooks/useTheme";
+import { cn } from "@/lib/utils";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
 
@@ -75,7 +77,11 @@ export default function ProfilePage() {
     showInputHints,
     setShowInputHints,
     isUpdatingShowInputHints,
+    themePreference,
+    setThemePreference,
+    isUpdatingThemePreference,
   } = useSubscription();
+  const { theme: uiTheme, setTheme: setUiTheme, resolvedTheme } = useTheme();
   const subscriptionLimits = getSubscriptionLimits(subscriptionStatus);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
@@ -277,7 +283,7 @@ export default function ProfilePage() {
 
   return (
     <MobileLayout>
-      <div className="min-h-full bg-[var(--color-bg-main)] overflow-x-hidden">
+      <div className="min-h-full bg-app-bg overflow-x-hidden">
         <div className="px-4 pt-4 pb-24 max-w-md mx-auto flex flex-col gap-5">
           {/* Hero: аккаунт + подписка в одной карточке */}
           <ProfileHeaderCard
@@ -397,6 +403,47 @@ export default function ProfilePage() {
                 Настройки
               </p>
               <div className="rounded-2xl border border-border/70 bg-card overflow-hidden shadow-[0_1px_3px_0_rgba(0,0,0,0.04)]">
+                <div className="px-4 py-3 border-b border-border/20">
+                  <p className="text-sm text-foreground leading-snug">Тема</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Активная тема: {resolvedTheme === "dark" ? "тёмная" : "светлая"}
+                  </p>
+                  <div className="flex gap-2 mt-3">
+                    {(
+                      [
+                        { id: "light" as const, label: "Светлая" },
+                        { id: "dark" as const, label: "Тёмная" },
+                      ] as const
+                    ).map(({ id, label }) => {
+                      const active = (uiTheme ?? themePreference ?? "light") === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          disabled={isUpdatingThemePreference}
+                          onClick={() => {
+                            setUiTheme(id);
+                            void setThemePreference(id).catch((e) => {
+                              toast({
+                                variant: "destructive",
+                                title: "Не удалось сохранить тему",
+                                description: (e as Error).message,
+                              });
+                            });
+                          }}
+                          className={cn(
+                            "flex-1 min-h-10 rounded-xl text-xs font-semibold transition-colors border",
+                            active
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-muted/30 text-foreground border-border/60 hover:bg-muted/50",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div className="flex items-center justify-between gap-3 px-4 min-h-[50px] py-2">
                   <div className="min-w-0 flex-1 pr-2">
                     <p className="text-sm text-foreground leading-snug">

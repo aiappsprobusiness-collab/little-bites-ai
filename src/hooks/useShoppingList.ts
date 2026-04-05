@@ -164,6 +164,8 @@ export function useShoppingList(options?: UseShoppingListOptions) {
         merge_key?: string;
         source_contributions?: ShoppingSourceContribution[];
         aggregation_unit?: string | null;
+        dual_display_amount_sum?: number | null;
+        dual_display_unit?: string | null;
       }[];
       syncMeta?: ShoppingListSyncMeta;
     }) => {
@@ -180,6 +182,15 @@ export function useShoppingList(options?: UseShoppingListOptions) {
             if (item.source_contributions?.length) m.source_contributions = item.source_contributions;
             if (item.aggregation_unit != null && String(item.aggregation_unit).trim() !== "") {
               m.aggregation_unit = item.aggregation_unit;
+            }
+            if (
+              item.dual_display_amount_sum != null &&
+              Number.isFinite(item.dual_display_amount_sum) &&
+              item.dual_display_unit != null &&
+              String(item.dual_display_unit).trim() !== ""
+            ) {
+              m.dual_display_amount_sum = item.dual_display_amount_sum;
+              m.dual_display_unit = item.dual_display_unit.trim();
             }
             return Object.keys(m).length > 0 ? m : null;
           })();
@@ -243,6 +254,8 @@ export function useShoppingList(options?: UseShoppingListOptions) {
           const merged = mergeShoppingItemMeta(ex, newRecipe, payload.merge_key, {
             delta: payload.source_contributions,
             aggregation_unit: payload.aggregation_unit ?? null,
+            delta_dual_display_amount: payload.dual_display_amount_sum ?? null,
+            dual_display_unit: payload.dual_display_unit ?? null,
           });
           let newAmount = (ex.amount ?? 0) + (payload.amount ?? 0);
           let newUnit = ex.unit;
@@ -263,6 +276,8 @@ export function useShoppingList(options?: UseShoppingListOptions) {
           const meta = mergeShoppingItemMeta({ meta: null, recipe_id: null, recipe_title: null }, newRecipe, payload.merge_key, {
             delta: payload.source_contributions,
             aggregation_unit: payload.aggregation_unit ?? null,
+            delta_dual_display_amount: payload.dual_display_amount_sum ?? null,
+            dual_display_unit: payload.dual_display_unit ?? null,
           });
           let amount = payload.amount;
           let unit = payload.unit;

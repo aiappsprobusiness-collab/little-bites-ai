@@ -95,12 +95,7 @@ export default function AuthCallbackPage() {
 
   if (fallback) {
     return (
-      <div
-        className="min-h-screen min-h-dvh flex flex-col items-center justify-center gradient-hero px-4"
-        style={{
-          background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F3F6EC 100%)",
-        }}
-      >
+      <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center auth-page-bg px-4">
         <p className="text-muted-foreground text-center mb-2">
           Не удалось подтвердить вход. Попробуйте ещё раз.
         </p>
@@ -110,12 +105,7 @@ export default function AuthCallbackPage() {
   }
 
   return (
-    <div
-      className="min-h-screen min-h-dvh flex flex-col items-center justify-center gradient-hero px-4"
-      style={{
-        background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F3F6EC 100%)",
-      }}
-    >
+    <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center auth-page-bg px-4">
       <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
       <p className="text-muted-foreground">Подтверждаем вход...</p>
     </div>

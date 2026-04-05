@@ -1586,7 +1586,7 @@ export default function ChatPage() {
             </span>
             <Progress
               value={(usedToday / aiDailyLimit) * 100}
-              className="h-[2px] mt-px w-full rounded-full bg-[#E9E9E9]"
+              className="h-[2px] mt-px w-full rounded-full bg-border"
             />
           </span>
         )

@@ -9,6 +9,7 @@ import {
   normalizeIngredientTextForCategoryMatch,
   resolveProductCategoryForShoppingIngredient,
 } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
+import { applyYoToE } from "@/utils/shopping/canonicalShoppingIngredient";
 
 /** Вклад рецепта в строку (в единицах aggregation_unit, как amountToSum в агрегации). */
 export type ShoppingSourceContribution = {
@@ -24,6 +25,9 @@ export type ShoppingListItemMeta = {
   source_contributions?: ShoppingSourceContribution[];
   /** Единица для toShoppingDisplayUnitAndAmount при суммировании вкладов. */
   aggregation_unit?: string | null;
+  /** Сумма (display_amount × множитель порций) для dual — левая часть «… ≈ N г/мл». */
+  dual_display_amount_sum?: number | null;
+  dual_display_unit?: string | null;
 };
 
 /** Одна позиция для merge в список (из плана или из карточки рецепта). */
@@ -36,11 +40,72 @@ export type ShoppingIngredientPayload = {
   source_recipes?: SourceRecipe[];
   source_contributions?: ShoppingSourceContribution[];
   aggregation_unit?: string | null;
+  dual_display_amount_sum?: number | null;
+  dual_display_unit?: string | null;
 };
 
 /** Легаси-ключ как в первой версии addRecipeIngredients: trim lower name + точная строка unit. */
 export function legacyShoppingLineKey(name: string, unit: string | null | undefined): string {
   return `${(name ?? "").trim().toLowerCase()}|${unit ?? ""}`;
+}
+
+export function dualDisplayContributionFromRow(
+  ing: RecipeIngredientRowForShopping,
+  multiplier: number,
+): { sum: number; unit: string } | null {
+  const mode = (ing.measurement_mode ?? "canonical_only").trim().toLowerCase();
+  if (mode !== "dual") return null;
+  const da = ing.display_amount;
+  const du = (ing.display_unit ?? "").trim();
+  if (da == null || !Number.isFinite(Number(da)) || !du) return null;
+  return { sum: Number(da) * multiplier, unit: du };
+}
+
+export type ShoppingDualDisplayCarrier = {
+  dual_display_amount_sum?: number | null;
+  dual_display_unit?: string | null;
+};
+
+/** Суммировать household-часть dual (шт., ч. л., …) при агрегации или merge строк списка. */
+export function mergeDualDisplayIntoCarrier(
+  target: ShoppingDualDisplayCarrier,
+  delta: { sum: number; unit: string } | null | undefined,
+): void {
+  if (!delta) return;
+  const u0 = target.dual_display_unit?.trim();
+  if (target.dual_display_amount_sum != null && u0) {
+    if (applyYoToE(u0.toLowerCase()) !== applyYoToE(delta.unit.toLowerCase())) return;
+    target.dual_display_amount_sum = (target.dual_display_amount_sum ?? 0) + delta.sum;
+    return;
+  }
+  target.dual_display_amount_sum = delta.sum;
+  target.dual_display_unit = delta.unit;
+}
+
+/** Слить dual-слой для meta при добавлении рецепта к существующей строке. */
+export function mergeDualDisplayMeta(
+  existing: ShoppingListItemMeta | null | undefined,
+  deltaAmount: number | null | undefined,
+  deltaUnit: string | null | undefined,
+): Pick<ShoppingListItemMeta, "dual_display_amount_sum" | "dual_display_unit"> {
+  const exSum = existing?.dual_display_amount_sum;
+  const exUnit = existing?.dual_display_unit?.trim() ?? "";
+  const dAmt = deltaAmount != null && Number.isFinite(deltaAmount) ? deltaAmount : null;
+  const dUnit = deltaUnit?.trim() ?? "";
+
+  if (dAmt != null && dUnit) {
+    if (exSum != null && exUnit) {
+      if (applyYoToE(exUnit.toLowerCase()) !== applyYoToE(dUnit.toLowerCase())) {
+        return { dual_display_amount_sum: exSum, dual_display_unit: exUnit };
+      }
+      return { dual_display_amount_sum: exSum + dAmt, dual_display_unit: dUnit };
+    }
+    return { dual_display_amount_sum: dAmt, dual_display_unit: dUnit };
+  }
+  if (exSum != null && exUnit) {
+    return { dual_display_amount_sum: exSum, dual_display_unit: exUnit };
+  }
+  return {};
 }
 
 export type RecipeIngredientRowForShopping = {
@@ -50,6 +115,10 @@ export type RecipeIngredientRowForShopping = {
   canonical_amount: number | null;
   canonical_unit: string | null;
   display_text: string | null;
+  display_amount?: number | null;
+  display_unit?: string | null;
+  display_quantity_text?: string | null;
+  measurement_mode?: string | null;
 };
 
 /** Ингредиенты из get_recipe_full / recipe.ingredients (RPC) → строки для агрегации списка покупок. */
@@ -73,6 +142,13 @@ export function recipeRpcIngredientsToShoppingRows(ingredients: unknown[] | unde
             ? Number(can)
             : null;
       const cu = o.canonical_unit;
+      const daRaw = o.display_amount;
+      const displayAmountNum =
+        typeof daRaw === "number"
+          ? daRaw
+          : daRaw != null && String(daRaw).trim() !== ""
+            ? Number(daRaw)
+            : null;
       return {
         name: String(o.name ?? ""),
         amount: num != null && Number.isFinite(num) ? num : null,
@@ -80,6 +156,10 @@ export function recipeRpcIngredientsToShoppingRows(ingredients: unknown[] | unde
         canonical_amount: canNum != null && Number.isFinite(canNum) ? canNum : null,
         canonical_unit: cu === "g" || cu === "ml" ? cu : null,
         display_text: o.display_text != null ? String(o.display_text) : null,
+        display_amount: displayAmountNum != null && Number.isFinite(displayAmountNum) ? displayAmountNum : null,
+        display_unit: o.display_unit != null ? String(o.display_unit) : null,
+        display_quantity_text: o.display_quantity_text != null ? String(o.display_quantity_text) : null,
+        measurement_mode: o.measurement_mode != null ? String(o.measurement_mode) : null,
       };
     })
     .filter((r) => r.name.trim().length > 0);
@@ -124,6 +204,7 @@ export function buildShoppingIngredientPayloadsFromRecipe(
     const contrib: ShoppingSourceContribution = { recipe_id: recipeId, amount_sum: res.amountToSum };
     const aggUnitStr =
       typeof res.aggregationUnit === "string" ? res.aggregationUnit : res.aggregationUnit != null ? String(res.aggregationUnit) : null;
+    const dualPart = dualDisplayContributionFromRow(ing, multiplier);
     if (prev) {
       prev.amount = (prev.amount ?? 0) + (displayAmount ?? 0);
       const list = prev.source_contributions ?? [];
@@ -135,8 +216,9 @@ export function buildShoppingIngredientPayloadsFromRecipe(
         prev.source_contributions = [...list, contrib];
       }
       if (aggUnitStr != null) prev.aggregation_unit = aggUnitStr;
+      if (dualPart) mergeDualDisplayIntoCarrier(prev, dualPart);
     } else {
-      byKey.set(res.key, {
+      const next: ShoppingIngredientPayload = {
         name: nameForUi,
         amount: displayAmount,
         unit: displayUnit,
@@ -145,7 +227,12 @@ export function buildShoppingIngredientPayloadsFromRecipe(
         source_recipes: [source],
         source_contributions: [contrib],
         aggregation_unit: aggUnitStr,
-      });
+      };
+      if (dualPart) {
+        next.dual_display_amount_sum = dualPart.sum;
+        next.dual_display_unit = dualPart.unit;
+      }
+      byKey.set(res.key, next);
     }
   }
 
@@ -190,6 +277,8 @@ export function mergeShoppingItemMeta(
   contributionMerge?: {
     delta?: ShoppingSourceContribution[];
     aggregation_unit?: string | null;
+    delta_dual_display_amount?: number | null;
+    dual_display_unit?: string | null;
   }
 ): ShoppingListItemMeta {
   const existing = row.meta?.source_recipes ?? (row.recipe_id ? [{ id: row.recipe_id, title: row.recipe_title ?? "" }] : []);
@@ -203,5 +292,11 @@ export function mergeShoppingItemMeta(
   if (merged?.length) out.source_contributions = merged;
   const agg = contributionMerge?.aggregation_unit ?? row.meta?.aggregation_unit;
   if (agg != null && String(agg).trim() !== "") out.aggregation_unit = agg;
+
+  const dualMerged = mergeDualDisplayMeta(row.meta, contributionMerge?.delta_dual_display_amount, contributionMerge?.dual_display_unit);
+  if (dualMerged.dual_display_amount_sum != null && dualMerged.dual_display_unit) {
+    out.dual_display_amount_sum = dualMerged.dual_display_amount_sum;
+    out.dual_display_unit = dualMerged.dual_display_unit;
+  }
   return out;
 }

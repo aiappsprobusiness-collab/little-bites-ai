@@ -29,9 +29,9 @@ export const recipeIngredientChip =
 export const recipeIngredientChipText =
   "text-foreground font-medium text-xs min-w-0 max-w-full truncate whitespace-nowrap overflow-hidden text-ellipsis";
 
-/** Блок «Совет от шефа»: тёплый фон #F6F4EC; отступы задаёт ChefAdviceCard */
+/** Блок «Совет от шефа»: фон из токена `--chef-advice-bg`; отступы задаёт ChefAdviceCard */
 export const recipeChefAdviceCard =
-  "rounded-2xl border border-primary-border/50 bg-[#F6F4EC] border-l-[3px] border-l-primary/25 shadow-none";
+  "rounded-2xl border border-primary-border/50 bg-chef-advice border-l-[3px] border-l-primary/25 shadow-none";
 
 /** Мини-совет (free): нейтральный фон; отступы задаёт ChefAdviceCard */
 export const recipeMiniAdviceCard =

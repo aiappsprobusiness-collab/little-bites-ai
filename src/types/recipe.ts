@@ -1,11 +1,12 @@
-import { formatIngredientMeasurement } from "@shared/ingredientMeasurementDisplay";
+import type { IngredientMeasurementInput } from "@shared/ingredientMeasurementDisplay";
+import { formatIngredientForUI } from "@shared/formatIngredientForUI";
 
 /** canonical_unit: только g/ml для будущего списка покупок. */
 export type IngredientCanonicalUnit = "g" | "ml";
 
 /**
  * Элемент списка ингредиентов.
- * display_text — fallback; при dual измерении строка строится через formatIngredientMeasurement.
+ * display_text — fallback; для карточки dual показывается только канон (г/мл), для списка покупок — см. formatIngredientForUI(..., 'shopping').
  * canonical_amount/unit — source of truth для порций и списка покупок.
  */
 export interface IngredientItem {
@@ -49,23 +50,34 @@ export interface RecipeDisplayIngredients {
   ingredients_items?: IngredientItem[];
 }
 
-/**
- * Текст ингредиента для UI (чип): structured dual / canonical / display_text fallback.
- */
-export function ingredientDisplayLabel(ing: IngredientItem | Record<string, unknown>): string {
-  return formatIngredientMeasurement(ing as Parameters<typeof formatIngredientMeasurement>[0], {
-    servingMultiplier: 1,
-  });
+function formatRecipeIngredientDisplayLine(
+  ing: IngredientMeasurementInput,
+  options?: { servingMultiplier?: number },
+): string {
+  const name = (ing.name ?? "").trim();
+  const note = typeof ing.note === "string" ? ing.note.trim() : "";
+  if (note) return name ? `${name} — ${note}` : note;
+
+  const dt = (ing.display_text ?? "").trim();
+  if (/по вкусу|для подачи/i.test(dt)) {
+    return name ? (dt.includes("—") ? dt : `${name} — ${dt}`) : dt;
+  }
+
+  const q = formatIngredientForUI(ing, "recipe", options);
+  if (q.includes(" — ")) return q;
+  return name ? `${name} — ${q}` : q;
 }
 
 /**
- * Масштабирует отображение ингредиента по множителю порций (только canonical + dual display_amount).
+ * Полная строка ингредиента для чипа / шаринга / чата: «Название — количество».
  */
-export function scaleIngredientDisplay(
-  ing: IngredientItem | Record<string, unknown>,
-  multiplier: number,
-): string {
-  return formatIngredientMeasurement(ing as Parameters<typeof formatIngredientMeasurement>[0], {
-    servingMultiplier: multiplier,
-  });
+export function ingredientDisplayLabel(ing: IngredientItem | Record<string, unknown>): string {
+  return formatRecipeIngredientDisplayLine(ing as IngredientMeasurementInput, { servingMultiplier: 1 });
+}
+
+/**
+ * То же с масштабом порций (только canonical + dual display_amount внутри formatIngredientForUI для recipe).
+ */
+export function scaleIngredientDisplay(ing: IngredientItem | Record<string, unknown>, multiplier: number): string {
+  return formatRecipeIngredientDisplayLine(ing as IngredientMeasurementInput, { servingMultiplier: multiplier });
 }

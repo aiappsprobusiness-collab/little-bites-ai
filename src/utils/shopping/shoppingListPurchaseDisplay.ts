@@ -79,6 +79,9 @@ export interface ShoppingListPurchaseLineInput {
   unit: string | null;
   mergeKey: string | null | undefined;
   aggregationUnit: string | null | undefined;
+  /** Левая часть dual после масштаба (фильтр рецептов); вместе с dualDisplayUnit даёт «N ч. л. ≈ 5 мл». */
+  scaledDualDisplayAmount?: number | null;
+  dualDisplayUnit?: string | null;
 }
 
 export type ShoppingListPurchaseLineOptions = {
@@ -108,10 +111,27 @@ export function formatShoppingListPurchaseLine(
   options?: ShoppingListPurchaseLineOptions
 ): string {
   const delimiter = options?.delimiter ?? ", ";
-  const { displayName, amount, unit, mergeKey, aggregationUnit } = input;
+  const { displayName, amount, unit, mergeKey, aggregationUnit, scaledDualDisplayAmount, dualDisplayUnit } = input;
   const name = displayName.trim() || displayName;
   const segment = canonicalSegmentFromMergeKey(mergeKey);
   const agg = (aggregationUnit ?? "").trim().toLowerCase();
+
+  const dualLeft = scaledDualDisplayAmount;
+  const dualU = (dualDisplayUnit ?? "").trim();
+  if (
+    dualLeft != null &&
+    Number.isFinite(dualLeft) &&
+    dualLeft > 0 &&
+    dualU &&
+    amount != null &&
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    (unit ?? "").trim()
+  ) {
+    const leftStr = `${formatAmountForDisplay(dualLeft, dualU)} ${normalizeUnitForDisplay(dualU)}`.trim();
+    const rightStr = `${formatAmountForDisplay(amount, unit)} ${normalizeUnitForDisplay(unit)}`.trim();
+    return `${name}${delimiter}${leftStr} ≈ ${rightStr}`;
+  }
 
   /** Яйца: только шт., без ≈ */
   if (segment === "яйца" && (agg === "pcs" || mergeKey?.endsWith("|pcs"))) {

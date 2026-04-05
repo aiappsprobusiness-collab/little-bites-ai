@@ -187,7 +187,7 @@ export default function SubscriptionManagePage() {
       }
       showNav={true}
     >
-      <div className="min-h-full bg-[var(--color-bg-main)] overflow-y-auto">
+      <div className="min-h-full bg-app-bg overflow-y-auto">
         <div className="px-4 py-6 pb-24 space-y-6 max-w-md mx-auto">
           <StatusBlock
             subscriptionStatus={subscriptionStatus}

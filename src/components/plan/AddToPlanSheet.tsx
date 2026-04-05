@@ -50,11 +50,11 @@ function dayFillClass(filledCount: number): string {
     case 0:
       return "bg-background border-border";
     case 1:
-      return "bg-[hsl(75,37%,36%,0.06)] border-[hsl(75,37%,36%,0.2)]";
+      return "bg-primary/[0.06] border-primary/20";
     case 2:
-      return "bg-[hsl(75,37%,36%,0.12)] border-[hsl(75,37%,36%,0.3)]";
+      return "bg-primary/[0.12] border-primary/30";
     case 3:
-      return "bg-[hsl(75,37%,36%,0.2)] border-[hsl(75,37%,36%,0.4)]";
+      return "bg-primary/20 border-primary/40";
     case 4:
       return "bg-primary border-primary text-primary-foreground";
     default:
@@ -62,7 +62,7 @@ function dayFillClass(filledCount: number): string {
   }
 }
 
-const MEAL_SLOT_FILLED_BG = "bg-[hsl(75,37%,36%,0.12)] border-[hsl(75,37%,36%,0.35)] text-foreground";
+const MEAL_SLOT_FILLED_BG = "bg-primary/[0.12] border-primary/[0.35] text-foreground";
 
 export interface AddToPlanSheetProps {
   open: boolean;

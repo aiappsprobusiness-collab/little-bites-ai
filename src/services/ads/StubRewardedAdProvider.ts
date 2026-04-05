@@ -21,7 +21,7 @@ export class StubRewardedAdProvider implements IRewardedAdProvider {
       modal.innerHTML = `
         <p class="mb-2 font-semibold" style="font-size:1.1rem;margin-bottom:8px;">Посмотрите короткое видео</p>
         <p class="text-muted-foreground mb-4" style="font-size:0.9rem;color:#666;margin-bottom:16px;">чтобы открыть генерацию</p>
-        <button id="stub-rewarded-ad-continue" style="width:100%;padding:12px 20px;border-radius:12px;background:var(--primary,#6e7f3b);color:#fff;border:none;font-weight:600;cursor:pointer;">Продолжить</button>
+        <button id="stub-rewarded-ad-continue" style="width:100%;padding:12px 20px;border-radius:12px;background:var(--primary);color:var(--primary-foreground);border:none;font-weight:600;cursor:pointer;">Продолжить</button>
       `;
       overlay.appendChild(modal);
       const cleanup = () => {

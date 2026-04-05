@@ -7,6 +7,9 @@ export type EffectiveShoppingItemView = {
   unit: string | null;
   sources: SourceRecipe[];
   recipeCount: number;
+  /** Масштабированная левая часть dual (фильтр по рецептам). */
+  scaledDualDisplayAmount: number | null;
+  dualDisplayUnit: string | null;
 };
 
 /**
@@ -16,10 +19,19 @@ export type EffectiveShoppingItemView = {
  */
 export function computeEffectiveShoppingItemView(
   row: ShoppingListItemRow,
-  recipeFilterSelectedIds: Set<string> | null
+  recipeFilterSelectedIds: Set<string> | null,
 ): EffectiveShoppingItemView {
   const allSources = getSourceRecipesFromItem(row);
   const filterActive = recipeFilterSelectedIds != null && recipeFilterSelectedIds.size > 0;
+  const meta = row.meta;
+  const dualSum = meta?.dual_display_amount_sum;
+  const dualUnitRaw = meta?.dual_display_unit?.trim() ?? null;
+
+  const scaleDualLeft = (partialCanon: number | null, totalCanon: number): number | null => {
+    if (dualSum == null || !Number.isFinite(dualSum) || !dualUnitRaw) return null;
+    if (totalCanon <= 0 || partialCanon == null || partialCanon <= 0) return null;
+    return dualSum * (partialCanon / totalCanon);
+  };
 
   if (!filterActive || allSources.length === 0) {
     return {
@@ -27,11 +39,12 @@ export function computeEffectiveShoppingItemView(
       unit: row.unit,
       sources: allSources,
       recipeCount: allSources.length,
+      scaledDualDisplayAmount: dualSum != null && Number.isFinite(dualSum) ? dualSum : null,
+      dualDisplayUnit: dualUnitRaw,
     };
   }
 
   const effectiveSources = allSources.filter((s) => recipeFilterSelectedIds.has(s.id));
-  const meta = row.meta;
   const contribs = meta?.source_contributions;
   const aggUnit = meta?.aggregation_unit;
 
@@ -41,10 +54,14 @@ export function computeEffectiveShoppingItemView(
       unit: row.unit,
       sources: [],
       recipeCount: 0,
+      scaledDualDisplayAmount: null,
+      dualDisplayUnit: dualUnitRaw,
     };
   }
 
   if (contribs?.length && aggUnit != null && String(aggUnit).trim() !== "") {
+    let total = 0;
+    for (const c of contribs) total += c.amount_sum;
     let partial = 0;
     for (const c of contribs) {
       if (recipeFilterSelectedIds.has(c.recipe_id)) partial += c.amount_sum;
@@ -56,6 +73,8 @@ export function computeEffectiveShoppingItemView(
         unit: displayUnit,
         sources: effectiveSources,
         recipeCount: effectiveSources.length,
+        scaledDualDisplayAmount: scaleDualLeft(partial, total),
+        dualDisplayUnit: dualUnitRaw,
       };
     }
   }
@@ -71,5 +90,8 @@ export function computeEffectiveShoppingItemView(
     unit: row.unit,
     sources: effectiveSources,
     recipeCount: effectiveSources.length,
+    scaledDualDisplayAmount:
+      dualSum != null && Number.isFinite(dualSum) && totalN > 0 ? (dualSum * effN) / totalN : dualSum,
+    dualDisplayUnit: dualUnitRaw,
   };
 }

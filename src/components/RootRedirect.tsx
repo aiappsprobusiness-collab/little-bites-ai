@@ -3,9 +3,9 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2, WifiOff } from "lucide-react";
 
-/** Тот же фон, что канонический splash (#E8F1EC), чтобы между fade splash и первым экраном не было скачка на gradient-hero. */
+/** Тот же фон, что splash (`--splash-bg`), чтобы между fade splash и первым экраном не было скачка. */
 const BOOT_SCREEN_CLASS =
-  "min-h-screen min-h-dvh flex items-center justify-center bg-[#E8F1EC]";
+  "min-h-screen min-h-dvh flex items-center justify-center bg-splash";
 
 function hasAuthParamsInUrl(search: string, hash: string): boolean {
   const inHash = /access_token|refresh_token|type=recovery/.test(hash || "");

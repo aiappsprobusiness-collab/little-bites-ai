@@ -5,8 +5,7 @@ import { cn } from "@/lib/utils";
  * Фон карточек пустого чата: не белый.
  * bg-card в теме = 0 0% 100% (белый), поэтому для пустого состояния используем
  * существующий tinted surface: bg-primary-light + border-primary-border
- * (tailwind.config: primary.light = var(--color-primary-light), index.css: #F3F6EC;
- *  primary.border = var(--color-primary-border), index.css: #DCE3C7).
+ * Чипсы опираются на токены primary-light / primary-border (см. tailwind.config + index.css).
  * Тот же токен используется в QuickPromptsSheet, MealCard chips, .ingredient-chip.
  */
 const CHAT_EMPTY_CARD_SURFACE =
@@ -79,8 +78,8 @@ export function ChatEmptyState({
               "relative rounded-2xl shadow-soft max-w-[85%] self-end text-left",
               "px-4 py-4 min-h-[48px]",
               "text-[15px] leading-snug break-words font-normal",
-              "bg-[#607D3B] text-white",
-              "cursor-pointer hover:bg-[#556b33] active:scale-[0.98] active:shadow-none",
+              "bg-primary text-primary-foreground",
+              "cursor-pointer hover:bg-primary/90 active:scale-[0.98] active:shadow-none",
               "transition-[background-color,transform] duration-100"
             )}
           >

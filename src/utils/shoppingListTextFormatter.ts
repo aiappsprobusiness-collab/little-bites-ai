@@ -25,6 +25,8 @@ export interface ShoppingListItemForFormat {
   category?: ProductCategory | null;
   merge_key?: string | null;
   aggregation_unit?: string | null;
+  scaledDualDisplayAmount?: number | null;
+  dualDisplayUnit?: string | null;
 }
 
 function formatItemLine(item: ShoppingListItemForFormat): string {
@@ -36,6 +38,8 @@ function formatItemLine(item: ShoppingListItemForFormat): string {
       unit: item.unit,
       mergeKey: item.merge_key,
       aggregationUnit: item.aggregation_unit,
+      scaledDualDisplayAmount: item.scaledDualDisplayAmount,
+      dualDisplayUnit: item.dualDisplayUnit,
     },
     { delimiter: " — " }
   );

@@ -40,7 +40,7 @@ export function BottomNavigation() {
               aria-current={isActive ? "page" : undefined}
               className={cn(
                 "relative flex items-center justify-center py-2 px-2 min-w-0 flex-1 rounded-xl transition-colors active:scale-95",
-                isActive ? "text-primary" : "text-[#8A8A8A]"
+                isActive ? "text-primary" : "text-nav-muted"
               )}
             >
               <Icon className={cn("w-5.5 h-5.5 shrink-0", isActive && "opacity-90")} />

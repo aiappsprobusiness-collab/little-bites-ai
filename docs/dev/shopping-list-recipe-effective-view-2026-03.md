@@ -14,6 +14,7 @@
 
 - **`source_contributions`:** `{ recipe_id, amount_sum }[]` — вклад рецепта в сумму в единицах **`aggregation_unit`** (те же, что у `buildShoppingAggregationKey` / `amountToSum`).
 - **`aggregation_unit`:** строка для `toShoppingDisplayUnitAndAmount` при суммировании вкладов (и полного, и частичного набора).
+- **`dual_display_amount_sum` / `dual_display_unit`:** для ингредиентов с `measurement_mode = dual` — сумма «домашних» единиц (например шт., ч. л.) по всем вкладам; правая часть строки покупки по-прежнему из канона (`amount`/`unit` строки). При фильтре по рецептам левая часть масштабируется пропорционально вкладу канона (`computeEffectiveShoppingItemView`).
 
 Заполняется при:
 
@@ -24,9 +25,9 @@
 ## Как считается effective amount
 
 - `computeEffectiveShoppingItemView(row, selectedRecipeIds)` в `src/utils/shopping/shoppingListEffectiveView.ts`.
-- Если фильтр не активен (`selectedRecipeIds` пуст или не передан) — показываются `amount` / `unit` строки и полные источники.
-- Если активен: `partialSum = sum(amount_sum)` по вкладам с `recipe_id ∈ selectedRecipeIds`; затем `toShoppingDisplayUnitAndAmount(aggregation_unit, partialSum)`.
-- **Легаси** без вкладов: `amount * (число отфильтрованных источников / число всех источников)`.
+- Если фильтр не активен (`selectedRecipeIds` пуст или не передан) — показываются `amount` / `unit` строки и полные источники; при наличии dual в meta — также полная `dual_display_amount_sum` для подписи «N шт. ≈ M г».
+- Если активен: `partialSum = sum(amount_sum)` по вкладам с `recipe_id ∈ selectedRecipeIds`; затем `toShoppingDisplayUnitAndAmount(aggregation_unit, partialSum)`; левая часть dual: `dual_display_amount_sum * (partialSum / totalSum)` при ненулевом `totalSum`.
+- **Легаси** без вкладов: `amount * (число отфильтрованных источников / число всех источников)`; для dual — то же пропорционально для `dual_display_amount_sum`.
 
 ## Подпись «в N рецептах» и раскрытие
 
@@ -50,5 +51,8 @@
 
 ## Сознательно не трогалось
 
-- Копирование списка в буфер (по-прежнему полные строки из данных списка, не effective view).
 - Схема Postgres (только jsonb meta, без миграции колонок).
+
+## Обновление 2026-04
+
+- Копирование списка учитывает effective view (в т.ч. dual с фильтром по рецептам), как и строки на экране.

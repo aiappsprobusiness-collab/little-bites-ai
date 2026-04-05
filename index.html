@@ -15,9 +15,10 @@
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="manifest" href="/manifest.json" />
     <!-- PWA: согласовано с manifest + splash; дубликат без media — fallback для клиентов без поддержки media у theme-color -->
+    <!-- Значения подменяет ThemeColorMeta.tsx; до гидрации — скрипт ниже + --splash-bg -->
     <meta name="theme-color" content="#E8F1EC" />
     <meta name="theme-color" content="#E8F1EC" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#E8F1EC" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#1C1C22" media="(prefers-color-scheme: dark)" />
     <!-- PWA / iOS standalone -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -40,6 +41,25 @@
     <meta name="twitter:description" content="Умное планирование рациона для всей семьи." />
     <meta name="twitter:image" content="https://momrecipes.online/og/og-onion.jpg?v=2" />
 
+    <!-- Должен совпадать с LB_THEME_STORAGE_KEY в src/constants/themeStorage.ts (lb-theme) -->
+    <script>
+      (function () {
+        try {
+          var KEY = "lb-theme";
+          var raw = localStorage.getItem(KEY);
+          var t;
+          if (raw === "light" || raw === "dark") {
+            t = raw;
+          } else {
+            t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            localStorage.setItem(KEY, t);
+          }
+          var dark = t === "dark";
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.setProperty("--splash-bg", dark ? "#1c1c22" : "#e8f1ec");
+        } catch (e) {}
+      })();
+    </script>
     <!-- Критичный splash: до загрузки main.tsx (иначе пустой WebView и «мигание») -->
     <link rel="preload" href="/splash/splash-screen.png" as="image" />
     <style>
@@ -47,13 +67,13 @@
       body {
         margin: 0;
         min-height: 100%;
-        background-color: #e8f1ec;
+        background-color: var(--splash-bg, #e8f1ec);
       }
       #splash-screen {
         position: fixed;
         inset: 0;
         z-index: 9999;
-        background-color: #e8f1ec;
+        background-color: var(--splash-bg, #e8f1ec);
         background-image: url(/splash/splash-screen.png);
         background-size: cover;
         background-position: center;

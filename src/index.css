@@ -7,131 +7,219 @@
   :root {
     /* Динамическая высота viewport для мобилки/PWA (обновляется в JS при resize/orientationchange). */
     --app-height: 100vh;
-    /* Единая оливковая палитра */
-    --color-primary: #6E7F3B;
-    --color-primary-light: #F3F6EC;
-    --color-primary-border: #DCE3C7;
-    --color-bg-main: #FAFAF7;
-    --color-text-main: #2F2F2F;
 
-    /* Фон приложения #FAFAF7 */
-    --background: 60 20% 97.5%;
-    --foreground: 0 0% 18%;
+    /* Семантические токены (HEX) — светлая тема */
+    --background: #fafaf7;
+    --foreground: #2e2e2e;
+    --card: #ffffff;
+    --card-foreground: #2e2e2e;
+    --popover: #ffffff;
+    --popover-foreground: #2e2e2e;
+    --muted: #f3f1ed;
+    --muted-foreground: #666666;
+    --border: #e7e2da;
+    --input: #e7e2da;
+    --ring: #6e7f3b;
+    --primary: #6e7f3b;
+    --primary-foreground: #ffffff;
+    --secondary: #f7d4ba;
+    --secondary-foreground: #7a451f;
+    --accent: #e0d1f0;
+    --accent-foreground: #4d2e6b;
+    --destructive: #e46767;
+    --destructive-foreground: #ffffff;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 18%;
+    /* Алиасы бренда (совпадают с primary в светлой теме) */
+    --color-primary: var(--primary);
+    --color-primary-light: #f3f6ec;
+    --color-primary-border: #dce3c7;
+    --color-bg-main: #fafaf7;
+    --color-text-main: #2f2f2f;
+    --primary-gradient-end: #8a9b4b;
+    --primary-pill-surface: #e6edd5;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 18%;
+    --splash-bg: #e8f1ec;
+    --chat-surface-bg: #fcfcfa;
+    --chef-advice-bg: #f6f4ec;
+    --auth-gradient-top: #f8f9fa;
 
-    /* Primary = оливковый #6E7F3B */
-    --primary: 75 37% 36%;
-    --primary-foreground: 0 0% 100%;
+    --nutrition-block-bg: #e6f3f0;
+    --nutrition-block-fg: #2c5f4a;
+    --tip-block-bg: #ffdad6;
+    --tip-block-fg: #5d3a2e;
 
-    /* Warm peach - secondary */
-    --secondary: 25 80% 85%;
-    --secondary-foreground: 25 60% 30%;
+    --consultation-warning-bg: color-mix(in srgb, var(--primary) 8%, transparent);
 
-    /* Lavender - accent */
-    --accent: 270 50% 88%;
-    --accent-foreground: 270 40% 30%;
+    --nav-inactive-fg: #8a8a8a;
 
-    --muted: 40 20% 94%;
-    --muted-foreground: 0 0% 40%;
+    --destructive-hover-fg: #9b6b6b;
 
-    --destructive: 0 70% 65%;
-    --destructive-foreground: 0 0% 100%;
+    --pref-allergy-bg: #fce8e4;
+    --pref-allergy-fg: #b87a6e;
+    --pref-allergy-border: #f5d5cf;
+    --pref-like-bg: #e8f3e2;
+    --pref-like-fg: #4a6b2d;
+    --pref-like-border: #d4e7c8;
+    --pref-dislike-bg: #f0ede8;
+    --pref-dislike-fg: #7a6f65;
+    --pref-dislike-border: #e5e0d8;
 
-    --border: 40 20% 88%;
-    --input: 40 20% 88%;
-    --ring: 75 37% 36%;
+    --icon-sage-bg: #edf2e7;
+    --icon-sage-fg: #5e7b3c;
+    --icon-sand-bg: #ede8df;
+    --icon-sand-fg: #5c4d3d;
+    --icon-apricot-bg: #f8ebe4;
+    --icon-apricot-fg: #8a5238;
+    --icon-mint-bg: #e2ebe0;
+    --icon-mint-fg: #3a5c42;
+    --icon-blue-bg: #e2eaf2;
+    --icon-blue-fg: #3a5c72;
+    --icon-amber-bg: #f2ecd8;
+    --icon-amber-fg: #6a5a2a;
+
+    --overlay-scrim: rgb(0 0 0 / 0.4);
+
+    --mint: #eef2e3;
+    --mint-light: #f6f8f1;
+    --peach: #f7d4ba;
+    --peach-dark: #e0ab85;
+    --lavender: #e0d1f0;
+    --lavender-dark: #bfa6d9;
+    --cream: #f9f6f1;
+    --soft-pink: #f5d6db;
+    --soft-blue: #cee7f3;
+
+    --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-gradient-end) 100%);
+    --gradient-peach: linear-gradient(135deg, var(--peach) 0%, var(--soft-pink) 100%);
+    --gradient-lavender: linear-gradient(135deg, var(--lavender) 0%, var(--soft-blue) 100%);
+    --gradient-hero: linear-gradient(180deg, var(--background) 0%, var(--color-primary-light) 100%);
+    --gradient-auth: radial-gradient(ellipse 80% 70% at 50% 0%, var(--auth-gradient-top) 0%, var(--color-primary-light) 100%);
+
+    --shadow-soft: 0 4px 20px -4px color-mix(in srgb, var(--primary) 12%, transparent);
+    --shadow-card: 0 8px 30px -8px color-mix(in srgb, var(--foreground) 8%, transparent);
+    --shadow-button: 0 4px 14px -4px color-mix(in srgb, var(--primary) 25%, transparent);
+
+    --sidebar-background: #fafafa;
+    --sidebar-foreground: #3f3f46;
+    --sidebar-primary: #18181b;
+    --sidebar-primary-foreground: #fafafa;
+    --sidebar-accent: #f4f4f5;
+    --sidebar-accent-foreground: #18181b;
+    --sidebar-border: #e5e7eb;
+    --sidebar-ring: #3b82f6;
+
+    --premium-star: #db7706;
 
     --radius: 1rem;
 
-    /* Layout: единый источник истины для safe-area и отступов (см. контракт в MobileLayout.tsx)
-     * TopBar: контентная высота 32px; header-offset = safe-area + 32px. */
+    /* Layout: единый источник истины для safe-area и отступов (см. контракт в MobileLayout.tsx) */
     --header-content-height: 2rem;
-    /* 32px */
     --header-row-py: 0px;
     --layout-header-gap: 0px;
     --layout-header-offset: calc(env(safe-area-inset-top, 0px) + var(--header-content-height) + var(--header-row-py) * 2 + var(--layout-header-gap));
     --layout-nav-height: 3.625rem;
     --layout-main-bottom: calc(var(--layout-nav-height) + env(safe-area-inset-bottom, 0px) + 0.5rem);
 
-    /* Совместимость: mint → primary-light (оливковая система) */
-    --mint: 75 37% 92%;
-    --mint-light: 75 33% 96%;
-
-    --peach: 25 80% 85%;
-    --peach-dark: 25 60% 70%;
-    --lavender: 270 50% 88%;
-    --lavender-dark: 270 40% 75%;
-    --cream: 40 40% 96%;
-    --soft-pink: 350 60% 90%;
-    --soft-blue: 200 60% 88%;
-
-    /* Gradients — оливковые оттенки */
-    --gradient-primary: linear-gradient(135deg, #6E7F3B 0%, #8A9B4B 100%);
-    --gradient-peach: linear-gradient(135deg, hsl(25, 80%, 85%) 0%, hsl(350, 60%, 90%) 100%);
-    --gradient-lavender: linear-gradient(135deg, hsl(270, 50%, 88%) 0%, hsl(200, 60%, 88%) 100%);
-    --gradient-hero: linear-gradient(180deg, #FAFAF7 0%, #F3F6EC 100%);
-
-    /* Shadows — мягкие, без мятных оттенков */
-    --shadow-soft: 0 4px 20px -4px rgba(110, 127, 59, 0.12);
-    --shadow-card: 0 8px 30px -8px rgba(47, 47, 47, 0.08);
-    --shadow-button: 0 4px 14px -4px rgba(110, 127, 59, 0.25);
-
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-
-    /* Premium-индикация: цвет звезды (чипсы, карточки, кнопки Плана) */
-    --premium-star: 32 95% 44%;
+    --theme-color-light: #e8f1ec;
+    --theme-color-dark: #1c1c22;
   }
 
   .dark {
-    --background: 240 10% 12%;
-    --foreground: 30 20% 95%;
+    --background: #1c1c22;
+    --foreground: #f5f2f0;
+    --card: #22222a;
+    --card-foreground: #f5f2f0;
+    --popover: #22222a;
+    --popover-foreground: #f5f2f0;
+    --muted: #2e2e38;
+    --muted-foreground: #94949e;
+    --border: #2e2e38;
+    --input: #2e2e38;
+    --ring: #889d48;
+    --primary: #889d48;
+    --primary-foreground: #ffffff;
+    --secondary: #603a20;
+    --secondary-foreground: #fae2d1;
+    --accent: #4d3663;
+    --accent-foreground: #e6d9f2;
+    --destructive: #b82e2e;
+    --destructive-foreground: #ffffff;
 
-    --card: 240 10% 15%;
-    --card-foreground: 30 20% 95%;
+    --color-primary: var(--primary);
+    --color-primary-light: #2a2f22;
+    --color-primary-border: #3d4530;
+    --color-bg-main: #1c1c22;
+    --color-text-main: #f5f2f0;
+    --primary-gradient-end: #a4b85c;
+    --primary-pill-surface: #343a28;
 
-    --popover: 240 10% 15%;
-    --popover-foreground: 30 20% 95%;
+    --splash-bg: #1c1c22;
+    --chat-surface-bg: #222228;
+    --chef-advice-bg: #2a2820;
+    --auth-gradient-top: #2a2a32;
 
-    --primary: 75 37% 45%;
-    --primary-foreground: 0 0% 100%;
+    --nutrition-block-bg: #1e2c28;
+    --nutrition-block-fg: #9dccc0;
+    --tip-block-bg: #3d2826;
+    --tip-block-fg: #f0c9c0;
 
-    --secondary: 25 50% 25%;
-    --secondary-foreground: 25 80% 90%;
+    --nav-inactive-fg: #94949e;
 
-    --accent: 270 30% 30%;
-    --accent-foreground: 270 50% 90%;
+    --destructive-hover-fg: #e8a0a0;
 
-    --muted: 240 10% 20%;
-    --muted-foreground: 240 5% 60%;
+    --pref-allergy-bg: #3d2a28;
+    --pref-allergy-fg: #f0c4bc;
+    --pref-allergy-border: #5c3d38;
+    --pref-like-bg: #2a3324;
+    --pref-like-fg: #b8d4a0;
+    --pref-like-border: #3d4a32;
+    --pref-dislike-bg: #2e2c28;
+    --pref-dislike-fg: #cfc8be;
+    --pref-dislike-border: #454038;
 
-    --destructive: 0 60% 45%;
-    --destructive-foreground: 0 0% 100%;
+    --icon-sage-bg: #2a3328;
+    --icon-sage-fg: #a8c491;
+    --icon-sand-bg: #2f2b26;
+    --icon-sand-fg: #d4c4b0;
+    --icon-apricot-bg: #342a24;
+    --icon-apricot-fg: #e8b896;
+    --icon-mint-bg: #243028;
+    --icon-mint-fg: #8fbf9f;
+    --icon-blue-bg: #242e38;
+    --icon-blue-fg: #8eb8d4;
+    --icon-amber-bg: #302a1e;
+    --icon-amber-fg: #d4c48a;
 
-    --border: 240 10% 20%;
-    --input: 240 10% 20%;
-    --ring: 160 45% 55%;
+    --mint: #2e332a;
+    --mint-light: #363a34;
+    --peach: #4a3020;
+    --peach-dark: #6b4830;
+    --lavender: #3a2d45;
+    --lavender-dark: #524060;
+    --cream: #2a2824;
+    --soft-pink: #4a3438;
+    --soft-blue: #2a3640;
 
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-    --premium-star: 32 95% 50%;
+    --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-gradient-end) 100%);
+    --gradient-peach: linear-gradient(135deg, var(--peach) 0%, var(--soft-pink) 100%);
+    --gradient-lavender: linear-gradient(135deg, var(--lavender) 0%, var(--soft-blue) 100%);
+    --gradient-hero: linear-gradient(180deg, var(--background) 0%, var(--color-primary-light) 100%);
+    --gradient-auth: radial-gradient(ellipse 80% 70% at 50% 0%, var(--auth-gradient-top) 0%, var(--color-primary-light) 100%);
+
+    --shadow-soft: 0 4px 20px -4px color-mix(in srgb, var(--primary) 18%, transparent);
+    --shadow-card: 0 8px 30px -8px rgb(0 0 0 / 0.35);
+    --shadow-button: 0 4px 14px -4px color-mix(in srgb, var(--primary) 35%, transparent);
+
+    --sidebar-background: #18181c;
+    --sidebar-foreground: #f4f4f5;
+    --sidebar-primary: #3b82f6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #27272f;
+    --sidebar-accent-foreground: #f4f4f5;
+    --sidebar-border: #2e2e38;
+    --sidebar-ring: #3b82f6;
+
+    --premium-star: #f98806;
   }
 }
 
@@ -167,17 +255,22 @@
   }
 
   .nutrition-block {
-    background-color: #E6F3F0;
-    color: #2C5F4A;
+    background-color: var(--nutrition-block-bg);
+    color: var(--nutrition-block-fg);
   }
 
   .tip-block {
-    background-color: #FFDAD6;
-    color: #5D3A2E;
+    background-color: var(--tip-block-bg);
+    color: var(--tip-block-fg);
   }
 }
 
 @layer utilities {
+  /** Экран входа / radial из токенов */
+  .auth-page-bg {
+    background: var(--gradient-auth);
+  }
+
   .gradient-primary {
     background: var(--gradient-primary);
   }
@@ -247,7 +340,11 @@
   .layout-header.layout-header-recipe {
     height: auto;
     min-height: calc(env(safe-area-inset-top, 0px) + 62px);
-    background: linear-gradient(180deg, hsl(var(--primary) / 0.015) 0%, hsl(var(--background)) 100%);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--primary) 1.5%, transparent) 0%,
+      var(--background) 100%
+    );
   }
 
   .layout-header.layout-header-recipe .layout-header-inner {
@@ -293,13 +390,17 @@
   /** Вкладка План: деликатный точечный паттерн (оливковый, opacity 0.03–0.05). */
   .plan-page-bg {
     background-color: var(--color-bg-main);
-    background-image: radial-gradient(circle at center, rgba(110, 127, 59, 0.04) 1px, transparent 1px);
+    background-image: radial-gradient(
+      circle at center,
+      color-mix(in srgb, var(--primary) 4%, transparent) 1px,
+      transparent 1px
+    );
     background-size: 24px 24px;
   }
 
   /** Вкладка Чат: светлее Плана, ощущение AI-ассистента. */
   .chat-page-bg {
-    background-color: #FCFCFA;
+    background-color: var(--chat-surface-bg);
   }
 
   /** Типографика: H1 24px/700, Section/Header 18px/600, Body 15px/400–500, Subtext 13–14px/muted. Токены: text-typo-h1, text-typo-header, text-typo-body, text-typo-subtext. */
@@ -309,7 +410,7 @@
     width: 5px;
     height: 5px;
     border-radius: 50%;
-    background: hsl(var(--primary) / 0.6);
+    background: color-mix(in srgb, var(--primary) 60%, transparent);
     animation: chat-thinking-bounce 1.2s ease-in-out infinite;
   }
 
@@ -395,7 +496,7 @@
 }
 
 .sheet-hints-overlay {
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: var(--overlay-scrim);
 }
 
 .sheet-hints-overlay[data-state=open] {
@@ -428,11 +529,11 @@
 
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(110, 127, 59, 0.25);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 25%, transparent);
   }
 
   50% {
-    box-shadow: 0 0 0 6px rgba(110, 127, 59, 0.12);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--primary) 12%, transparent);
   }
 }
 
@@ -453,13 +554,13 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(var(--primary) / 0.4);
+  background: color-mix(in srgb, var(--primary) 40%, transparent);
   border-radius: 2px;
   margin-right: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary) / 0.7);
+  background: color-mix(in srgb, var(--primary) 70%, transparent);
 }
 
 /* Hide scrollbar but keep scroll (horizontal chips, carousels) */
@@ -526,7 +627,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 
 /* Help-чат / Consultation Mode: спокойный медицинский формат */
 .consultationCard {
-  background: #fff;
+  background: var(--card);
   padding: 16px;
   border-radius: 16px;
   line-height: 1.65;
@@ -542,7 +643,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   gap: 8px;
   padding: 12px;
   border-radius: 12px;
-  background: rgba(111, 126, 55, 0.08);
+  background: var(--consultation-warning-bg);
   margin-top: 12px;
 }
 
@@ -555,48 +656,49 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 
 /* Страница редактирования профиля (members) — оливковая дизайн-система */
 .profile-edit-page {
-  background: #F6F5F2;
+  background: var(--background);
   min-height: 100%;
 }
 
 .profile-card {
-  background: #FFFFFF;
+  background: var(--card);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-card);
 }
 
 .profile-card-title {
   font-size: 16px;
   font-weight: 600;
-  color: #2F3A2E;
+  color: var(--foreground);
 }
 
 .profile-label {
   font-size: 13px;
-  color: #6B7280;
+  color: var(--muted-foreground);
 }
 
 .profile-input {
-  border: 1px solid #E5E7EB;
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: #FFFFFF;
+  background: var(--background);
   padding: 12px 14px;
 }
 
 .profile-input:focus {
   outline: none;
-  border-color: #7A8F4D;
-  box-shadow: 0 0 0 3px rgba(122, 143, 77, 0.15);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .profile-input::placeholder {
-  color: #9CA3AF;
+  color: var(--muted-foreground);
+  opacity: 0.85;
 }
 
 .profile-pill {
-  background: #EEF3E5;
-  color: #556B2F;
+  background: var(--primary-pill-surface);
+  color: var(--primary);
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 13px;
@@ -606,8 +708,8 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 .profile-pill-add-btn {
-  background: rgba(122, 143, 77, 0.12);
-  color: #556B2F;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
   border-radius: 12px;
   height: 44px;
   display: flex;
@@ -617,7 +719,7 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 
 .profile-divider {
   height: 1px;
-  background: #F0F0F0;
+  background: var(--border);
   margin: 16px 0;
 }
 

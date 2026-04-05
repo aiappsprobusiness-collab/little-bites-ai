@@ -7,7 +7,6 @@
 import type { IngredientItem } from "./recipe";
 import { ingredientDisplayLabel, scaleIngredientDisplay } from "./recipe";
 import { formatIngredientAmountForDisplay } from "@/utils/formatIngredientAmount";
-import { formatIngredientMeasurement } from "@shared/ingredientMeasurementDisplay";
 
 export type IngredientOverrideAction = "swap" | "skip" | "reduce";
 
@@ -103,10 +102,6 @@ export function applyIngredientOverrides(
             unit: canonical_unit,
             display_amount: scaledDa,
             measurement_mode: "dual",
-            display_text: formatIngredientMeasurement(
-              { ...ing, canonical_amount: scaledCanon, display_amount: scaledDa },
-              { servingMultiplier: 1 },
-            ),
           };
         } else if (measurement_mode === "dual" && display_quantity_text?.trim()) {
           scaledIng = {
@@ -114,10 +109,7 @@ export function applyIngredientOverrides(
             canonical_amount: scaledCanon,
             amount: scaledCanon,
             unit: canonical_unit,
-            display_text: formatIngredientMeasurement(
-              { ...ing, canonical_amount: scaledCanon },
-              { servingMultiplier: 1 },
-            ),
+            measurement_mode: "dual",
           };
         } else {
           const suffix = formatIngredientAmountForDisplay(scaledCanon, canonical_unit);

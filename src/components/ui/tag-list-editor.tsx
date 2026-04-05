@@ -34,7 +34,8 @@ const chipBase =
 
 const profileLabelClass = "text-sm font-medium";
 const profileAddRowClass = "flex h-11 items-center gap-3 px-4 rounded-xl border border-input bg-background hover:border-primary/30 transition-colors cursor-text w-full";
-const profileAddBtnClass = "w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50";
+const profileAddBtnClass =
+  "w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50";
 const profileHelperClass = "text-xs text-muted-foreground mt-1.5";
 const profileInputClass = "flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 placeholder:text-muted-foreground";
 
@@ -69,7 +70,7 @@ export function TagListEditor({
     return (
       <div className={useProfileChips ? "space-y-1.5" : "space-y-2"}>
         {label ? (
-          <Label htmlFor={inputId} className={useProfileChips ? profileLabelClass : isPill ? "profile-label font-medium text-[#2F3A2E]" : "text-sm font-semibold text-foreground"}>
+          <Label htmlFor={inputId} className={useProfileChips ? profileLabelClass : isPill ? "profile-label font-medium text-foreground" : "text-sm font-semibold text-foreground"}>
             {label}
           </Label>
         ) : null}
@@ -102,7 +103,14 @@ export function TagListEditor({
                   onClick={() => onEdit(item, i)}
                   onKeyDown={(e) => e.key === "Enter" && onEdit(item, i)}
                   className={chipClassName}
-                  style={isPill && !useProfileChips ? { background: "#EEF3E5", color: "#556B2F" } : undefined}
+                  style={
+                    isPill && !useProfileChips
+                      ? {
+                          background: "var(--primary-pill-surface)",
+                          color: "var(--primary)",
+                        }
+                      : undefined
+                  }
                 >
                   <span className="truncate max-w-[140px]">{item}</span>
                   <button
@@ -111,10 +119,14 @@ export function TagListEditor({
                       e.stopPropagation();
                       onRemove(i);
                     }}
-                    className={isPill ? "w-5 h-5 rounded-full flex items-center justify-center hover:bg-[#d4e0b8] shrink-0 -mr-0.5" : "w-7 h-7 rounded-full flex items-center justify-center hover:bg-primary-light shrink-0 -mr-0.5"}
+                    className={
+                      isPill
+                        ? "w-5 h-5 rounded-full flex items-center justify-center hover:bg-primary/15 shrink-0 -mr-0.5"
+                        : "w-7 h-7 rounded-full flex items-center justify-center hover:bg-primary-light shrink-0 -mr-0.5"
+                    }
                     aria-label="Удалить"
                   >
-                    <X className={isPill ? "w-3 h-3 text-[#556B2F]" : "w-3.5 h-3.5 text-muted-foreground"} />
+                    <X className={isPill ? "w-3 h-3 text-primary" : "w-3.5 h-3.5 text-muted-foreground"} />
                   </button>
                 </div>
               )
@@ -163,11 +175,11 @@ export function TagListEditor({
               }
             }}
             placeholder={placeholder}
-            className={useProfileChips ? profileInputClass : `flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 ${isPill ? "placeholder:text-[#9CA3AF]" : "placeholder:text-muted-foreground"}`}
+            className={useProfileChips ? profileInputClass : `flex-1 min-w-0 border-0 bg-transparent py-2 text-[15px] font-medium text-foreground focus:outline-none focus:ring-0 ${isPill ? "placeholder:text-muted-foreground" : "placeholder:text-muted-foreground"}`}
           />
         </form>
         {helperText && (
-          <p className={useProfileChips ? profileHelperClass : isPill ? "text-[13px] text-[#9CA3AF] mt-1.5" : "text-[10px] text-muted-foreground/50 mt-0.5 truncate"}>{helperText}</p>
+          <p className={useProfileChips ? profileHelperClass : isPill ? "text-[13px] text-muted-foreground mt-1.5" : "text-[10px] text-muted-foreground/50 mt-0.5 truncate"}>{helperText}</p>
         )}
       </div>
     );

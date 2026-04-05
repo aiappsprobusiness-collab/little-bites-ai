@@ -127,12 +127,7 @@ export default function AuthPage() {
   };
 
   return (
-    <div
-      className="min-h-screen min-h-dvh flex flex-col items-center justify-center sm:justify-start p-4 pt-5 sm:p-5 sm:pt-8 pb-8 sm:pb-14"
-      style={{
-        background: "radial-gradient(ellipse 80% 70% at 50% 0%, #F8F9FA 0%, #F3F6EC 100%)",
-      }}
-    >
+    <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center sm:justify-start p-4 pt-5 sm:p-5 sm:pt-8 pb-8 sm:pb-14 auth-page-bg">
       <div className="w-full max-w-md mx-auto flex flex-col items-center">
         {/* Hero — заголовок и подзаголовок */}
         <motion.div

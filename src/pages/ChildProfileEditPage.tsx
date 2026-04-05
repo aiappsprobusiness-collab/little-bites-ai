@@ -565,7 +565,7 @@ export default function ChildProfileEditPage() {
                   >
                     <button
                       type="button"
-                      className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-[#7A8F4D] text-white hover:opacity-90 disabled:opacity-50"
+                      className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50"
                       onClick={() => allergyInput.trim() && allergiesHandlers.add(allergyInput)}
                       disabled={!allergyInput.trim() || (isFree && activeAllergyCount >= limits.maxAllergiesPerProfile)}
                       aria-label="Добавить"
@@ -741,7 +741,7 @@ export default function ChildProfileEditPage() {
                   <div className="pt-4 border-t border-border/60">
                     <Button
                       variant="ghost"
-                      className="w-full h-10 text-[13px] text-muted-foreground hover:text-[#9B6B6B] hover:bg-muted/40 font-medium rounded-xl"
+                      className="w-full h-10 text-[13px] text-muted-foreground hover:text-destructive-hover hover:bg-muted/40 font-medium rounded-xl"
                       onClick={() => setShowDeleteConfirm(true)}
                       disabled={isDeleting}
                     >
@@ -760,7 +760,7 @@ export default function ChildProfileEditPage() {
           <div className="flex-shrink-0 border-t border-border/80 bg-background/98 backdrop-blur-sm shadow-[0_-2px_14px_rgba(0,0,0,0.05)] px-4 pt-4 pb-4">
             <div className="max-w-lg mx-auto">
               <Button
-                className="w-full py-4 rounded-xl font-semibold text-[15px] border-0 shadow-[0_2px_10px_rgba(122,143,77,0.22)] transition-all duration-200 bg-[#7A8F4D] text-white hover:bg-[#6a7e41] hover:opacity-95 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-[#7A8F4D] disabled:hover:opacity-50"
+                className="w-full py-4 rounded-xl font-semibold text-[15px] border-0 shadow-button transition-all duration-200 bg-primary text-primary-foreground hover:bg-primary/90 hover:opacity-95 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary disabled:hover:opacity-50"
                 onClick={handleSave}
                 disabled={isCreating || isUpdating || !hasChanges}
               >
@@ -814,7 +814,7 @@ export default function ChildProfileEditPage() {
             <AlertDialogAction
               onClick={() => handleSave()}
               disabled={isCreating || isUpdating}
-              className="bg-[#7A8F4D] hover:bg-[#6a7e41] text-white"
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {(isCreating || isUpdating) ? (
                 <>

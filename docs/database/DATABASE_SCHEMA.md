@@ -50,6 +50,7 @@ If a table is not present in `information_schema`, it must **not** be described 
 | accepted_terms_version | text            | Версия юртекстов на момент согласия (`LEGAL_TERMS_VERSION` из приложения); nullable |
 | last_active_member_id | uuid NULL → members | Последний выбранный член семьи в UI (Premium/Trial); `NULL` = семейный режим или «не задано». При удалении member — `ON DELETE SET NULL`. Триггер гарантирует, что `members.user_id` совпадает с `profiles_v2.user_id`. Клиент: `FamilyContext`, `lastActiveMemberProfile.ts`. |
 | show_input_hints | boolean NOT NULL DEFAULT true | Ротирующиеся подсказки в поле ввода чата рецептов; при `false` — статичный плейсхолдер. Клиент: `useSubscription`, `ChatPage`, `ProfilePage`. |
+| theme | text NOT NULL DEFAULT `light` | Тема UI: `light` \| `dark` (CHECK). Клиент: `next-themes` + `profiles_v2` + `ProfilePage`. |
 
 RLS: доступ только по `auth.uid() = user_id`. Запись при регистрации — триггер `handle_new_user_v2` на `auth.users`. Поля `accepted_terms_*` заполняются из `raw_user_meta_data.accepted_terms_version` при `signUp`, если клиент передал версию (см. миграцию `20260329190000_profiles_v2_accepted_terms.sql`, `docs/dev/legal-copy-and-auth-consent.md`).
 
@@ -490,7 +491,7 @@ RLS: SELECT — authenticated; запись — service_role.
 | category             | product_category | |
 | is_purchased         | boolean | |
 | recipe_title         | text | |
-| meta                 | jsonb | `source_recipes`, `merge_key`; опционально `source_contributions` (вклад по `recipe_id` в единицах `aggregation_unit`) и `aggregation_unit` — для пересчёта количества при фильтре по рецептам в UI (см. `docs/architecture/shopping_list_aggregation.md`). |
+| meta                 | jsonb | `source_recipes`, `merge_key`; опционально `source_contributions`, `aggregation_unit` (фильтр по рецептам); опционально `dual_display_amount_sum`, `dual_display_unit` (dual-ингредиенты: левая часть «шт./ч. л. ≈ г/мл»). См. `docs/architecture/shopping_list_aggregation.md`. |
 | created_at           | timestamptz | |
 
 ---

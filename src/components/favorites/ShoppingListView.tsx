@@ -77,7 +77,12 @@ const CATEGORY_BADGE_VARIANT: Record<ProductCategory, IconBadgeVariant> = {
 
 function formatItemShort(
   item: ShoppingListItemRow,
-  effective?: { amount: number | null; unit: string | null }
+  effective?: {
+    amount: number | null;
+    unit: string | null;
+    scaledDualDisplayAmount: number | null;
+    dualDisplayUnit: string | null;
+  }
 ): string {
   const name = normalizeIngredientDisplayName(item.name) || capitalizeIngredientName(item.name);
   const rawA = effective ? effective.amount : item.amount;
@@ -88,6 +93,8 @@ function formatItemShort(
     unit: unitForFormat,
     mergeKey: item.meta?.merge_key,
     aggregationUnit: item.meta?.aggregation_unit,
+    scaledDualDisplayAmount: effective?.scaledDualDisplayAmount ?? null,
+    dualDisplayUnit: effective?.dualDisplayUnit ?? null,
   });
 }
 
@@ -144,7 +151,7 @@ function ShoppingListItem({
           transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           className={cn(
             "w-5 h-5 rounded border shrink-0 flex items-center justify-center touch-manipulation overflow-hidden",
-            item.is_purchased ? "bg-[#6b7c3d] border-[#6b7c3d]" : "border-border bg-background"
+            item.is_purchased ? "bg-primary border-primary" : "border-border bg-background"
           )}
           aria-label={item.is_purchased ? "Отметить не купленным" : "Отметить купленным"}
         >
@@ -289,6 +296,8 @@ export function ShoppingListView() {
       merge_key: ing.merge_key,
       source_contributions: ing.source_contributions?.length ? ing.source_contributions : undefined,
       aggregation_unit: ing.aggregation_unit,
+      dual_display_amount_sum: ing.dual_display_amount_sum,
+      dual_display_unit: ing.dual_display_unit,
     }));
     const newSyncMeta: ShoppingListSyncMeta = {
       last_synced_range: range,
@@ -320,6 +329,8 @@ export function ShoppingListView() {
         category: i.category,
         merge_key: i.meta?.merge_key ?? null,
         aggregation_unit: i.meta?.aggregation_unit ?? null,
+        scaledDualDisplayAmount: v.scaledDualDisplayAmount,
+        dualDisplayUnit: v.dualDisplayUnit,
       };
     });
     const text = formatShoppingListForCopy(itemsForFormat, range);
@@ -593,7 +604,7 @@ export function ShoppingListView() {
             onClick={() => setRange("today")}
             className={cn(
               "px-3 py-2 text-[13px] font-medium transition-colors",
-              range === "today" ? "bg-[#6b7c3d] text-white" : "text-muted-foreground hover:text-foreground"
+              range === "today" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
             Сегодня
@@ -603,7 +614,7 @@ export function ShoppingListView() {
             onClick={() => setRange("week")}
             className={cn(
               "px-3 py-2 text-[13px] font-medium transition-colors",
-              range === "week" ? "bg-[#6b7c3d] text-white" : "text-muted-foreground hover:text-foreground"
+              range === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
             )}
           >
             Неделя
@@ -644,7 +655,7 @@ export function ShoppingListView() {
                 size="sm"
                 className={cn(
                   "h-9 shrink-0 gap-1.5 px-2.5 text-muted-foreground font-normal hover:text-foreground",
-                  filterActiveCount > 0 && "text-[#6b7c3d] hover:text-[#5a6b32]"
+                  filterActiveCount > 0 && "text-primary hover:text-primary/80"
                 )}
                 onClick={() => setFilterSheetOpen(true)}
               >
@@ -697,7 +708,7 @@ export function ShoppingListView() {
                   onClick={() => setSelectedCategory("all")}
                   className={cn(
                     "px-2.5 py-1.5 text-xs font-medium rounded-full border",
-                    selectedCategory === "all" ? "bg-[#6b7c3d] text-white border-[#6b7c3d]" : "border-border bg-muted/30"
+                    selectedCategory === "all" ? "bg-primary text-primary-foreground border-primary" : "border-border bg-muted/30"
                   )}
                 >
                   Все
@@ -709,7 +720,7 @@ export function ShoppingListView() {
                     onClick={() => setSelectedCategory(cat)}
                     className={cn(
                       "px-2.5 py-1.5 text-xs font-medium rounded-full border",
-                      selectedCategory === cat ? "bg-[#6b7c3d] text-white border-[#6b7c3d]" : "border-border bg-muted/30"
+                      selectedCategory === cat ? "bg-primary text-primary-foreground border-primary" : "border-border bg-muted/30"
                     )}
                   >
                     {CATEGORY_LABEL[cat]}
@@ -775,7 +786,7 @@ export function ShoppingListView() {
               Сбросить фильтры
             </button>
             <Button
-              className="w-full sm:w-auto bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
+              className="w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={handleApplyFilter}
               disabled={recipeFilterApplyDisabled}
               title={
@@ -820,7 +831,7 @@ export function ShoppingListView() {
           <div className="flex flex-col sm:flex-row gap-2 justify-center items-stretch">
             <Button
               size="sm"
-              className="gap-1.5 bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
+              className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
               onClick={() => setBuildSheetOpen(true)}
             >
               <ListPlus className="w-3.5 h-3.5" />
@@ -990,7 +1001,7 @@ function AddProductSheet({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Отмена
             </Button>
-            <Button type="submit" className="bg-[#6b7c3d] hover:bg-[#5a6b32] text-white" disabled={!name.trim()}>
+            <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!name.trim()}>
               Добавить
             </Button>
           </SheetFooter>

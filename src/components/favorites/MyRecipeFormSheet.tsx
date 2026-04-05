@@ -243,7 +243,7 @@ export function MyRecipeFormSheet({
                   className={cn(
                     "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                     mealType === m.id
-                      ? "bg-[#6b7c3d]/15 border-[#6b7c3d]/40 text-foreground"
+                      ? "bg-primary/15 border-primary/40 text-foreground"
                       : "bg-transparent border-border text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -267,7 +267,7 @@ export function MyRecipeFormSheet({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <Label>Ингредиенты *</Label>
-              <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 text-[#6b7c3d]" onClick={addIngredient}>
+              <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 text-primary" onClick={addIngredient}>
                 <Plus className="w-3.5 h-3.5" />
                 Добавить
               </Button>
@@ -313,7 +313,7 @@ export function MyRecipeFormSheet({
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <Label>Шаги приготовления *</Label>
-              <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 text-[#6b7c3d]" onClick={addStep}>
+              <Button type="button" variant="ghost" size="sm" className="h-8 gap-1 text-primary" onClick={addStep}>
                 <Plus className="w-3.5 h-3.5" />
                 Добавить
               </Button>
@@ -344,7 +344,7 @@ export function MyRecipeFormSheet({
           </div>
 
           <Button
-            className="w-full rounded-xl bg-[#6b7c3d] hover:bg-[#6b7c3d]/90"
+            className="w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={handleSubmit}
             disabled={isSaving}
           >

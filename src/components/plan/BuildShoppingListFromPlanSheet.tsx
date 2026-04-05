@@ -67,6 +67,8 @@ export function BuildShoppingListFromPlanSheet({
         merge_key: ing.merge_key,
         source_contributions: ing.source_contributions?.length ? ing.source_contributions : undefined,
         aggregation_unit: ing.aggregation_unit,
+        dual_display_amount_sum: ing.dual_display_amount_sum,
+        dual_display_unit: ing.dual_display_unit,
       }));
       const newSyncMeta: ShoppingListSyncMeta = {
         last_synced_range: range,
@@ -110,7 +112,7 @@ export function BuildShoppingListFromPlanSheet({
               onClick={() => setRange("today")}
               className={cn(
                 "flex-1 min-h-[48px] px-3 py-3 text-typo-body font-semibold transition-colors touch-manipulation",
-                range === "today" ? "bg-[#6b7c3d] text-white" : "text-muted-foreground hover:text-foreground"
+                range === "today" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
               Сегодня
@@ -122,7 +124,7 @@ export function BuildShoppingListFromPlanSheet({
               title={!hasAccess ? "Доступно в Premium" : undefined}
               className={cn(
                 "flex-1 min-h-[48px] px-3 py-3 text-typo-body font-semibold transition-colors touch-manipulation",
-                range === "week" ? "bg-[#6b7c3d] text-white" : "text-muted-foreground hover:text-foreground",
+                range === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 !hasAccess && "opacity-50 cursor-not-allowed"
               )}
             >
@@ -146,7 +148,7 @@ export function BuildShoppingListFromPlanSheet({
           >
             <Button
               type="button"
-              className="w-full min-h-12 text-typo-body font-semibold bg-[#6b7c3d] hover:bg-[#5a6b32] text-white"
+              className="w-full min-h-12 text-typo-body font-semibold bg-primary text-primary-foreground hover:bg-primary/90"
               disabled={pending || !listId}
               onClick={() => void handleBuild()}
             >

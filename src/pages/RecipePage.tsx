@@ -807,6 +807,7 @@ export default function RecipePage() {
           ingredients={ingredientsForChips}
           overrides={fromMealPlan ? {} : overrides}
           scaledOverrides={fromMealPlan ? undefined : scaledOverrides}
+          ingredientServingMultiplier={fromMealPlan ? 1 : servingMultiplier}
           servingsCount={servingsSelected}
           hideServingsSubtitle={fromFavorites}
           headerRight={

@@ -61,7 +61,8 @@ const UNIT_TO_RU: Record<string, string> = {
   tbsp: "ст. л.",
 };
 
-function localizeUnit(u: string): string {
+/** Локализация единицы для UI (г/мл/шт./ч. л./…). */
+export function localizeIngredientUnitRu(u: string): string {
   const t = u.trim();
   if (!t) return "";
   const key = t.toLowerCase();
@@ -79,13 +80,13 @@ export function formatAmountRu(amount: number, isPieceLike: boolean): string {
 }
 
 function isPieceUnit(u: string): boolean {
-  const ru = localizeUnit(u);
+  const ru = localizeIngredientUnitRu(u);
   return ru === "шт." || /^шт/i.test(u.trim());
 }
 
 export function formatCanonicalSuffix(canonicalAmount: number, canonicalUnit: string | null | undefined): string {
   const u = (canonicalUnit ?? "").trim().toLowerCase();
-  if (u !== "g" && u !== "ml") return formatAmountRu(canonicalAmount, false) + (u ? ` ${localizeUnit(u)}` : "");
+  if (u !== "g" && u !== "ml") return formatAmountRu(canonicalAmount, false) + (u ? ` ${localizeIngredientUnitRu(u)}` : "");
   return `${formatAmountRu(canonicalAmount, false)} ${u === "ml" ? "мл" : "г"}`;
 }
 
@@ -117,7 +118,7 @@ function buildDualQuantityLeft(c: ResolvedHouseholdCandidate): string {
   if (du.toLowerCase().includes("зубчик")) {
     return `${formatAmountRu(da, true)} ${pluralRuZubchik(da)}`.trim();
   }
-  return `${formatAmountRu(da, isPieceUnit(du))} ${localizeUnit(du)}`.trim();
+  return `${formatAmountRu(da, isPieceUnit(du))} ${localizeIngredientUnitRu(du)}`.trim();
 }
 
 /**
@@ -164,7 +165,7 @@ export function enrichIngredientMeasurementForSave(ing: IngredientMeasurementInp
         ? qtyText
         : du.toLowerCase().includes("зубчик")
           ? `${formatAmountRu(da, true)} ${pluralRuZubchik(da)}`
-          : `${formatAmountRu(da, isPieceUnit(du))} ${localizeUnit(du)}`.trim();
+          : `${formatAmountRu(da, isPieceUnit(du))} ${localizeIngredientUnitRu(du)}`.trim();
       const line = `${name} — ${left} = ${canonPart}`;
       return {
         display_amount: da,
@@ -266,7 +267,7 @@ export function formatIngredientMeasurement(
         const rounded = Math.max(1, Math.round(scaledDa * 10) / 10);
         left = `${formatAmountRu(rounded, true)} ${pluralRuZubchik(rounded)}`;
       } else {
-        left = `${formatAmountRu(scaledDa, isPieceUnit(du))} ${localizeUnit(du)}`.trim();
+        left = `${formatAmountRu(scaledDa, isPieceUnit(du))} ${localizeIngredientUnitRu(du)}`.trim();
       }
       return `${name} — ${left} = ${canonPart}`;
     }
@@ -290,7 +291,7 @@ export function formatIngredientMeasurement(
   const unit = (ing.unit ?? "").trim();
   if (amount != null && Number.isFinite(amount) && unit) {
     const scaled = amount * mult;
-    const suffix = `${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeUnit(unit)}`.trim();
+    const suffix = `${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeIngredientUnitRu(unit)}`.trim();
     return name ? `${name} — ${suffix}` : suffix;
   }
 
@@ -302,8 +303,8 @@ export function formatIngredientMeasurement(
     if (ca0 == null && amount != null && unit) {
       const scaled = amount * mult;
       return name
-        ? `${name} — ${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeUnit(unit)}`
-        : `${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeUnit(unit)}`;
+        ? `${name} — ${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeIngredientUnitRu(unit)}`
+        : `${formatAmountRu(scaled, isPieceUnit(unit))} ${localizeIngredientUnitRu(unit)}`;
     }
     return dt;
   }

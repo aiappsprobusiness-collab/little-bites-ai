@@ -66,7 +66,7 @@
 
 Подробности и список алиасов / осознанных non-merge кейсов: **`docs/dev/shopping-list-canonical-pipeline-2026-03.md`**.
 
-**Purchase-friendly отображение** (штуки ≈ граммы для части овощей, зубчики чеснока, яйца без «≈»): только текст в UI и при копировании — **`formatShoppingListPurchaseLine`** в `src/utils/shopping/shoppingListPurchaseDisplay.ts`; агрегация и `merge_key` не меняются.
+**Purchase-friendly отображение** (штуки ≈ граммы для части овощей, зубчики чеснока, яйца без «≈»): текст в UI и при копировании — **`formatShoppingListPurchaseLine`** в `src/utils/shopping/shoppingListPurchaseDisplay.ts`. Для ингредиентов рецепта с **`measurement_mode = dual`** в `meta` сохраняются **`dual_display_amount_sum`** и **`dual_display_unit`** (сумма «домашних» единиц по вкладам); тогда строка строится как «N шт. ≈ M г» / «N ч. л. ≈ M мл» с приоритетом над эвристикой по сегменту `merge_key`. Агрегация по `merge_key` не меняется.
 
 ---
 
@@ -76,7 +76,7 @@
 
 - **Хук — вход:** range (`today` | `week`), memberId (согласовать с планом через `mealPlanMemberIdForShoppingSync`, см. **shopping_list_product_model.md**).
 - **Экспорт `loadPlanShoppingIngredients(userId, range, memberId)`:** та же агрегация без React Query (sheet на Плане, единая логика с хуком).
-- **Выход:** массив `AggregatedIngredient[]` (name, amount, unit, displayAmount, displayUnit, category, source_recipes, **source_contributions** — вклад каждого `recipe_id` в сумму в единицах `aggregation_unit`, **aggregation_unit** — та же единица, что у `buildShoppingAggregationKey`, **merge_key** — сохраняется в `shopping_list_items.meta` при сборке из меню и при добавлении из карточки рецепта для корректного слияния без дублей и для пересчёта количества при фильтре по рецептам в UI).
+- **Выход:** массив `AggregatedIngredient[]` (name, amount, unit, displayAmount, displayUnit, category, source_recipes, **source_contributions**, **aggregation_unit**, **merge_key**, при dual — **dual_display_amount_sum** / **dual_display_unit**). Поля meta при сборке в `shopping_list_items` — для слияния без дублей и пересчёта при фильтре по рецептам.
 
 Внутри:
 

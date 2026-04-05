@@ -7,7 +7,7 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background-color: #e8f1ec;
+  background-color: var(--splash-bg, #e8f1ec);
   background-image: url(/splash/splash-screen.png);
   background-size: cover;
   background-position: center;
