@@ -12,7 +12,7 @@
 
 - **`src/utils/mealPlanQueryInvalidation.ts`**
   - `mealPlanQueryTouchesPlannedDate(queryKey, userId, plannedDate)` — ключ недели (диапазон), ключ одного дня и бывший `row_exists` попадают под правило, если дата в диапазоне / совпадает.
-  - `invalidateMealPlanQueriesForPlannedDate(queryClient, { userId, plannedDate })` — `invalidateQueries` только по этому predicate.
+  - `invalidateMealPlanQueriesForPlannedDate(queryClient, { userId, plannedDate })` — `invalidateQueries` только по этому predicate, с **`refetchType: 'all'`**: иначе после «Добавить в план» с экрана рецепта кэш плана (неактивный observer) не refetch’ится, а `useMealPlans` держит `refetchOnMount: false` — на плане остаётся старый рецепт до F5.
 
 ### 2. Двойной invalidate после `replaceSlotWithRecipe`
 

@@ -1,9 +1,11 @@
-import { useState, useRef, forwardRef, useMemo, type ReactNode } from "react";
+import { useState, useRef, forwardRef, useMemo, useEffect, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ChefHat, Heart, BookOpen, CalendarPlus } from "lucide-react";
+import { Trash2, ChefHat, Heart, BookOpen, CalendarPlus, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useToast } from "@/hooks/use-toast";
@@ -175,6 +177,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const [addToPlanOpen, setAddToPlanOpen] = useState(false);
+    const [userVote, setUserVote] = useState<"like" | "dislike" | null>(null);
     const { user } = useAuth();
     const { isPremium, isTrial, favoritesLimit, hasAccess } = useSubscription();
     const showChefTip = isPremium || isTrial;
@@ -214,6 +217,49 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
 
     const recipeId = recipeIdProp ?? localRecipeId;
     const isFavorite = !!(recipeId && isValidRecipeId(recipeId) && isFavoriteFn(recipeId, chatMemberId));
+    const canRecipeFeedback = !!(recipeId && isValidRecipeId(recipeId) && user);
+
+    useEffect(() => {
+      const rid = recipeId;
+      if (!rid || !isValidRecipeId(rid) || !user) {
+        setUserVote(null);
+        return;
+      }
+      let cancelled = false;
+      void (async () => {
+        try {
+          const { data } = await (supabase.rpc as (n: string, a: Record<string, string>) => Promise<{ data: unknown }>)(
+            "get_recipe_my_vote",
+            { p_recipe_id: rid }
+          );
+          if (cancelled) return;
+          if (data === "like") setUserVote("like");
+          else if (data === "dislike") setUserVote("dislike");
+          else setUserVote(null);
+        } catch {
+          if (!cancelled) setUserVote(null);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [recipeId, user]);
+
+    const handleRecipeFeedback = async (action: "like" | "dislike") => {
+      const rid = recipeId;
+      if (!rid || !isValidRecipeId(rid) || !user) return;
+      if (userVote === action) return;
+      try {
+        await (supabase.rpc as (n: string, a: Record<string, string>) => Promise<unknown>)("record_recipe_feedback", {
+          p_recipe_id: rid,
+          p_action: action,
+        });
+        setUserVote(action);
+        toast({ title: action === "like" ? "Спасибо за отзыв" : "Учли" });
+      } catch {
+        toast({ variant: "destructive", title: "Не удалось отправить" });
+      }
+    };
 
     const handleToggleFavorite = async () => {
       if (!effectiveRecipe) return;
@@ -616,6 +662,46 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                     >
                       <ShareIosIcon className="h-4 w-4" />
                     </button>
+                    {canRecipeFeedback ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void handleRecipeFeedback("like");
+                          }}
+                          className={cn(
+                            "h-9 w-9 rounded-full shrink-0 flex items-center justify-center transition-all border active:scale-95",
+                            userVote === "like"
+                              ? "text-primary bg-primary/10 border-primary/20 fill-primary"
+                              : "text-muted-foreground bg-muted/50 border-border hover:bg-muted hover:text-foreground"
+                          )}
+                          aria-label={userVote === "like" ? "Нравится (выбрано)" : "Нравится"}
+                          title="Нравится"
+                        >
+                          <ThumbsUp className={cn("h-4 w-4", userVote === "like" && "fill-current")} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void handleRecipeFeedback("dislike");
+                          }}
+                          className={cn(
+                            "h-9 w-9 rounded-full shrink-0 flex items-center justify-center transition-all border active:scale-95",
+                            userVote === "dislike"
+                              ? "text-destructive bg-destructive/10 border-destructive/20 fill-destructive"
+                              : "text-muted-foreground bg-muted/50 border-border hover:bg-muted hover:text-foreground"
+                          )}
+                          aria-label={userVote === "dislike" ? "Не нравится (выбрано)" : "Не нравится"}
+                          title="Не нравится"
+                        >
+                          <ThumbsDown className={cn("h-4 w-4", userVote === "dislike" && "fill-current")} />
+                        </button>
+                      </>
+                    ) : null}
                     {hasAccess ? (
                       <button
                         type="button"

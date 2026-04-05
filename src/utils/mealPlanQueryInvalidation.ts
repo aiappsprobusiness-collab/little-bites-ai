@@ -30,5 +30,8 @@ export function invalidateMealPlanQueriesForPlannedDate(
   if (!params.userId) return Promise.resolve();
   return queryClient.invalidateQueries({
     predicate: (q) => mealPlanQueryTouchesPlannedDate(q.queryKey, params.userId, params.plannedDate),
+    // По умолчанию RQ v5 перезапрашивает только active-запросы. План с экрана рецепта/избранного
+    // размонтирован — без «all» кэш остаётся старым до F5 (useMealPlans: refetchOnMount: false).
+    refetchType: "all",
   });
 }
