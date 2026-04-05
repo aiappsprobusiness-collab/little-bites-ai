@@ -3,9 +3,6 @@ import { formatIngredientForUI } from "@shared/formatIngredientForUI";
 import type { IngredientItem } from "@/types/recipe";
 import type { ParsedIngredient } from "@/utils/parseChatRecipes";
 import { capitalizeIngredientName, shortenIngredientName } from "@/utils/ingredientDisplay";
-import { servingsLabel } from "@/utils/servingsLabel";
-import { cn } from "@/lib/utils";
-
 export type IngredientDisplayItem = string | IngredientItem | ParsedIngredient;
 export type IngredientOverrides = Record<number, string>;
 
@@ -55,8 +52,7 @@ export function RecipeIngredientList({
   emptyLabel = "ИИ уточняет состав…",
   className,
 }: RecipeIngredientListProps) {
-  const label = servingsLabel(servingsCount);
-  const subtitle = `На ${servingsCount} ${label}`;
+  const subtitle = `Порции: ${servingsCount}`;
 
   const titleRow = (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
@@ -81,7 +77,7 @@ export function RecipeIngredientList({
     <div className={className}>
       {titleRow}
       {!hideServingsSubtitle && <p className="text-[11px] text-muted-foreground/80 mt-1 mb-2">{subtitle}</p>}
-      <ul className="space-y-0 divide-y divide-[rgba(0,0,0,0.05)]" aria-label={hideServingsSubtitle ? "Ингредиенты" : `Ингредиенты, ${subtitle}`}>
+        <ul className="space-y-0 divide-y divide-[rgba(0,0,0,0.05)]" aria-label={hideServingsSubtitle ? "Ингредиенты" : `Ингредиенты, порций ${servingsCount}`}>
         {ingredients.map((ing, idx) => {
           const override = overrides[idx] ?? scaledOverrides?.[idx];
           if (override != null && override.trim()) {

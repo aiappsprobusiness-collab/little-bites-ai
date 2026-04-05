@@ -44,10 +44,18 @@ function formatDualLeftShoppingFragment(ing: IngredientMeasurementInput, mult: n
   return `${formatAmountRu(scaledDa, isPieceLikeDisplayUnit(du))} ${localizeIngredientUnitRu(du)}`.trim();
 }
 
+export type FormatIngredientForUIOptions = {
+  /**
+   * Множитель порций для числовых слоёв (canonical g/ml, display_amount, legacy amount+unit).
+   * Обычно `servingsSelected / servings_base` (канон на 1 порцию при base=1).
+   */
+  servingMultiplier?: number;
+};
+
 export function formatIngredientForUI(
   ingredient: IngredientMeasurementInput,
   context: IngredientUIContext,
-  options?: { servingMultiplier?: number },
+  options?: FormatIngredientForUIOptions,
 ): string {
   let mult = options?.servingMultiplier ?? 1;
   if (mult <= 0 || !Number.isFinite(mult)) mult = 1;
@@ -63,6 +71,8 @@ export function formatIngredientForUI(
       if (ca0 != null && Number.isFinite(ca0) && (cu === "g" || cu === "ml")) {
         return formatCanonicalSuffix(ca0 * mult, cu);
       }
+      const leftScaled = formatDualLeftShoppingFragment(ingredient, mult);
+      if (leftScaled) return leftScaled;
       const dt = (ingredient.display_text ?? "").trim();
       return dt ? stripNamePrefixFromDisplayText(name, dt) : "";
     }

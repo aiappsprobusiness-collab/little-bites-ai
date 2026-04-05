@@ -83,4 +83,21 @@ describe("formatIngredientForUI", () => {
       ),
     ).toBe("90 г");
   });
+
+  it("recipe dual: без g/ml канона — масштабирует бытовую часть", () => {
+    expect(
+      formatIngredientForUI(
+        {
+          name: "Яйцо",
+          measurement_mode: "dual",
+          display_amount: 1,
+          display_unit: "шт.",
+          canonical_amount: 3,
+          canonical_unit: "pcs",
+        },
+        "recipe",
+        { servingMultiplier: 4 },
+      ),
+    ).toBe("4 шт.");
+  });
 });

@@ -71,6 +71,7 @@ export function WelcomeRecipeBlock({
   const { getRecipeById } = useRecipes();
   const sectionRef = useRef<HTMLElement>(null);
   const demoOpenTrackedRef = useRef(false);
+  const recipeViewTrackedRef = useRef(false);
   /** Не запрашивать демо из БД, если рецепт передан снаружи — иначе ошибка get_recipe_full у анона скрывала бы весь блок. */
   const welcomeFetchId = recipeProp === undefined ? WELCOME_RECIPE_ID : "";
   const { data: recipeFromHook, isLoading: isLoadingHook, error } = getRecipeById(welcomeFetchId);
@@ -177,6 +178,9 @@ export function WelcomeRecipeBlock({
       : null;
 
   const displayIngredients = getDisplayIngredients(recipe as RecipeDisplayIngredients);
+  const welcomeServingsBase = Math.max(1, (recipe as { servings_base?: number | null }).servings_base ?? 1);
+  const welcomeServingsRecommended =
+    (recipe as { servings_recommended?: number | null }).servings_recommended ?? 4;
 
   const chefAdvicePresentation = getChefAdviceCardPresentation({
     recipe: { max_age_months: recipeDisplay.max_age_months },
@@ -227,7 +231,8 @@ export function WelcomeRecipeBlock({
             <RecipeIngredientList
               className="mt-4"
               ingredients={displayIngredients}
-              servingsCount={(recipe as { servings_base?: number })?.servings_base ?? 1}
+              ingredientServingMultiplier={welcomeServingsRecommended / welcomeServingsBase}
+              servingsCount={welcomeServingsRecommended}
             />
 
             {chefAdvice?.trim() ? (

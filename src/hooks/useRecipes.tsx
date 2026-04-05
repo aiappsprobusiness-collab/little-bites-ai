@@ -251,7 +251,7 @@ export function useRecipes(childId?: string, options?: UseRecipesOptions) {
           ...rest,
           nutrition_goals: ensureStringArray(r.nutrition_goals),
           servings_base: servingsRow?.servings_base ?? 1,
-          servings_recommended: servingsRow?.servings_recommended ?? 1,
+          servings_recommended: servingsRow?.servings_recommended ?? 4,
           ingredients,
           steps,
         } as Recipe & { ingredients: RecipeIngredient[]; steps: RecipeStep[] };

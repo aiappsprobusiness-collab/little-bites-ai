@@ -279,6 +279,7 @@ export default function RecipePage() {
     });
     const recipeDisplay = recipe as RecipeDisplayIngredients & { title?: string };
     const shareText = buildRecipeShareTextShort(recipeDisplay.title ?? "Рецепт", shareUrl);
+    let shareCompleted = false;
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({
@@ -286,15 +287,27 @@ export default function RecipePage() {
           text: shareText,
         });
         toast({ title: "Рецепт отправлен" });
+        shareCompleted = true;
       } else if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareText);
         toast({ title: "Рецепт скопирован" });
+        shareCompleted = true;
       } else {
         toast({ variant: "destructive", title: "Поделиться недоступно" });
       }
     } catch (e: unknown) {
       if ((e as Error)?.name !== "AbortError") {
         toast({ variant: "destructive", title: "Ошибка", description: (e as Error)?.message ?? "Не удалось поделиться" });
+      }
+    }
+    if (shareCompleted) {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        if (sess?.session?.user?.id) {
+          await supabase.rpc("record_recipe_feedback", { p_recipe_id: id, p_action: "shared" });
+        }
+      } catch {
+        /* сигнал scoring не критичен для UX */
       }
     }
   };
@@ -333,7 +346,7 @@ export default function RecipePage() {
       lastSyncedPlanSlotKeyRef.current = null;
       userHasChangedServingsRef.current = false;
       const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
-      const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
+      const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 4;
       const defaultServings = base >= 4 ? base : recommended;
       setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
       return;
@@ -355,7 +368,7 @@ export default function RecipePage() {
       }
       lastSyncedPlanSlotKeyRef.current = planSlotSyncKey;
       const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
-      const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 1;
+      const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 4;
       const defaultServings = base >= 4 ? base : recommended;
       setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
       return;
