@@ -12,6 +12,7 @@ import { extractSingleJsonObject, extractChefAdvice, extractAdvice } from "@/uti
 import {
   pickRecipeFromPool,
   normalizeTitleKey,
+  recipeTitleDedupeKey,
   mergeKeyIngredientCountsFromPlanSlots,
   type KeyIngredientClientSlot,
 } from "@/utils/recipePool";
@@ -164,7 +165,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
       dayName: string,
       token: string,
       weekContext?: WeekContextAccumulated | string,
-      options?: { usePool: boolean }
+      options?: { usePool?: boolean; rankEntropy?: string }
     ): Promise<SingleDayResponse | null> => {
       const dateStrForLog = formatLocalDate(date);
       const ctxTitlesCount =
@@ -343,6 +344,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             excludeTitleKeys: acc.usedTitleKeys,
             limitCandidates: 60,
             plannedDayKey: dateStr,
+            rankEntropy: options?.rankEntropy,
             usedKeyIngredientCounts: acc.usedKeyIngredientCounts,
             usedKeyIngredientCountsByMealType: acc.usedKeyIngredientCountsByMealType,
           });
@@ -352,7 +354,7 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             recipeTitle = poolRecipe.title;
             selectedFromPoolCount++;
             acc.usedRecipeIds.push(poolRecipe.id);
-            acc.usedTitleKeys.push(normalizeTitleKey(poolRecipe.title));
+            acc.usedTitleKeys.push(recipeTitleDedupeKey(poolRecipe));
             acc.chosenTitles.push(poolRecipe.title);
             if (mealKey === "breakfast") {
               acc.chosenBreakfastTitles.push(poolRecipe.title);
@@ -612,6 +614,9 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
     let completedCount = 0;
 
     try {
+      const weekRankEntropy =
+        typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `week_${Date.now()}`;
+
       let weekQuery = supabase
         .from("meal_plans_v2")
         .select("planned_date, meals")
@@ -703,7 +708,10 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
           for (const dayIndex of batch) {
             const date = rollingDates[dayIndex];
             const dayName = DAY_NAMES[getWeekdayIndex(date)];
-            const result = await generateSingleDay(dayIndex, date, dayName, token, accumulated, { usePool: true });
+            const result = await generateSingleDay(dayIndex, date, dayName, token, accumulated, {
+              usePool: true,
+              rankEntropy: weekRankEntropy,
+            });
             mergeParsedIntoAccumulated(result);
           }
         } else {
@@ -711,7 +719,10 @@ export function useGenerateWeeklyPlan(memberData: MemberData | null, memberId: s
             batch.map((dayIndex) => {
               const date = rollingDates[dayIndex];
               const dayName = DAY_NAMES[getWeekdayIndex(date)];
-              return generateSingleDay(dayIndex, date, dayName, token, accumulated, { usePool: true });
+              return generateSingleDay(dayIndex, date, dayName, token, accumulated, {
+                usePool: true,
+                rankEntropy: weekRankEntropy,
+              });
             })
           );
           for (const parsed of results) mergeParsedIntoAccumulated(parsed);

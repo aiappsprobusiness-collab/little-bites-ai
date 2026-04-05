@@ -5,7 +5,13 @@
  */
 
 /** Доля слотов с exploration-boost для candidate / legacy null (детерминированно от salt). */
-export const EXPLORATION_PICK_THRESHOLD_PCT = 15;
+export const EXPLORATION_PICK_THRESHOLD_PCT = 25;
+
+/**
+ * Мягкая добавка к composite только для `trust_level = candidate` (не для null/legacy).
+ * Не перебивает приоритет core/trusted при типичных slot-fit; даёт чаще «шанс» в плотной середине.
+ */
+export const CANDIDATE_COMPOSITE_NUDGE = 0.05;
 
 /**
  * Добавка к composite для candidate/null в «exploration»-слоте.
@@ -130,13 +136,16 @@ export function computeCompositeScore(input: RankingInput): number {
     input.rankSalt,
     input.jitterOverride,
   );
-  return (
+  let sum =
     input.slotFit +
     tail.trustBonus +
     tail.dbContribution +
     tail.explorationBoost +
-    tail.jitter
-  );
+    tail.jitter;
+  if (input.trustLevel?.trim().toLowerCase() === "candidate") {
+    sum += CANDIDATE_COMPOSITE_NUDGE;
+  }
+  return sum;
 }
 
 export function stableSortPoolForRanking<T extends RankableRecipeRef>(candidates: T[]): T[] {
@@ -158,19 +167,26 @@ export function buildRankSalt(parts: { day_key?: string; request_id?: string; me
 
 /**
  * Соль, согласованная с клиентом (generate-plan передаёт rank_salt в planPickDebug).
- * pool: userId|mealType|pool[|dayKey][|variant]
- * replace: userId|mealType|replace|dayKey[|variant]
+ * pool: userId|mealType|pool[|dayKey][|variant][|rankEntropy]
+ * replace: userId|mealType|replace|dayKey[|variant][|rankEntropy]
+ *
+ * `rankEntropy` — один на запуск job (`plan_generation_jobs.id` / `request_id` на Edge) или на клиентскую сессию;
+ * без неё соль совпадает с прежним форматом (обратная совместимость тестов и старых вызовов).
  */
 export function buildAlignedRankSalt(
   ctx:
-    | { kind: "pool"; userId: string; mealType: string; dayKey?: string; variant?: string }
-    | { kind: "replace"; userId: string; mealType: string; dayKey: string; variant?: string },
+    | { kind: "pool"; userId: string; mealType: string; dayKey?: string; variant?: string; rankEntropy?: string }
+    | { kind: "replace"; userId: string; mealType: string; dayKey: string; variant?: string; rankEntropy?: string },
 ): string {
+  const ent =
+    ctx.rankEntropy != null && String(ctx.rankEntropy).trim() !== ""
+      ? `|${String(ctx.rankEntropy).trim()}`
+      : "";
   if (ctx.kind === "pool") {
     const day = ctx.dayKey != null && ctx.dayKey !== "" ? `|${ctx.dayKey}` : "";
     const v = ctx.variant ? `|${ctx.variant}` : "";
-    return `${ctx.userId}|${ctx.mealType}|pool${day}${v}`;
+    return `${ctx.userId}|${ctx.mealType}|pool${day}${v}${ent}`;
   }
   const v = ctx.variant ? `|${ctx.variant}` : "";
-  return `${ctx.userId}|${ctx.mealType}|replace|${ctx.dayKey}${v}`;
+  return `${ctx.userId}|${ctx.mealType}|replace|${ctx.dayKey}${v}${ent}`;
 }

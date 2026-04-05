@@ -4,7 +4,7 @@
  * Architecture:
  * - Single entry: POST JSON body. Actions: cancel, replace_slot, start, run.
  * - mode=upgrade is an alias: same pipeline as run but without job_id; response shape is upgrade (replacedCount, filledSlotsCount, etc.).
- * - dayKeys from type + day_key / day_keys / start_key. If dayKeys.length === 1 -> SINGLE-DAY path (no week DB, in-memory pick only). If dayKeys.length > 1 -> WEEK path (buildExcludeSets only when poolSuitableCount >= 8).
+ * - dayKeys from type + day_key / day_keys / start_key. If dayKeys.length === 1 -> SINGLE-DAY path (no week DB, in-memory pick only). If dayKeys.length > 1 -> WEEK path (buildExcludeSets: неделя + 4 дня, всегда).
  * - Single-day path DB count: 2 (profile + usage in parallel), 1 fetchPoolCandidates, 1 meal_plans_v2 select + 1 upsert => 5 DB calls for one day.
  * - No sleep/delay/time budget/per-slot job updates. Logs: [RUN MODE], [TIMING] done, [TIMING WARN] only if totalMs > 2000.
  */
@@ -77,7 +77,7 @@ function normalizeMealType(value: string | null | undefined): NormalizedMealType
 
 type MemberDataPool = { allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; age_months?: number; type?: string | null };
 type RecipeRowPool = {
-  id: string; title: string; description: string | null; meal_type?: string | null;
+  id: string; title: string; norm_title?: string | null; description: string | null; meal_type?: string | null;
   is_soup?: boolean | null;
   max_age_months?: number | null; min_age_months?: number | null;
   nutrition_goals?: unknown;
@@ -284,6 +284,11 @@ function getPrevDayKey(dayKey: string): string {
 function normalizeTitleKey(title: string): string {
   return (title ?? "").trim().toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim();
 }
+/** Ключ дедупа пула: `norm_title` из БД (если есть), иначе `title` — та же нормализация, что для слотов плана. */
+function recipeTitleDedupeKey(r: { norm_title?: string | null; title?: string | null }): string {
+  const raw = (r.norm_title?.trim() || r.title || "").trim();
+  return normalizeTitleKey(raw);
+}
 function containsAnyToken(haystack: string, tokens: string[]): boolean {
   if (!haystack || tokens.length === 0) return false;
   const h = haystack.toLowerCase();
@@ -363,7 +368,7 @@ function getCheapFilteredCount(
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
   const slot = normalizeMealType(mealKey) ?? (mealKey as NormalizedMealType);
   let filtered = pool.filter((r) => !excludeSet.has(r.id));
-  filtered = filtered.filter((r) => !excludeTitleSet.has(normalizeTitleKey(r.title ?? "")));
+  filtered = filtered.filter((r) => !excludeTitleSet.has(recipeTitleDedupeKey(r)));
   const ageContext = getMemberAgeContext(memberData);
   if (ageContext.applyFilter && ageContext.ageMonths != null) {
     filtered = filtered.filter((r) => recipeFitsAgeRange(r, ageContext.ageMonths!));
@@ -388,7 +393,7 @@ function getCheapFilteredCount(
 }
 
 const POOL_SELECT_FIELDS =
-  "id, title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text)";
+  "id, title, norm_title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text)";
 const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
 /** Все curated seed/starter должны попадать в память: при одном LIMIT по score почти все рецепты имеют score=0, и первые N строк из БД — случайные, без каталога infant/toddler. */
 const POOL_SEED_CATALOG_FETCH_LIMIT = 600;
@@ -479,7 +484,7 @@ function pickFromPoolInMemory(
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
   const slot = normalizeMealType(mealType) ?? (mealType as NormalizedMealType);
   let filtered = pool.filter((r) => !excludeSet.has(r.id));
-  filtered = filtered.filter((r) => !excludeTitleSet.has(normalizeTitleKey(r.title ?? "")));
+  filtered = filtered.filter((r) => !excludeTitleSet.has(recipeTitleDedupeKey(r)));
   const ageContext = getMemberAgeContext(memberData);
   if (ageContext.applyFilter && ageContext.ageMonths != null) {
     filtered = filtered.filter((r) => recipeFitsAgeRange(r, ageContext.ageMonths!));
@@ -717,7 +722,6 @@ async function fetchCategoriesByMealTypeFromPlans(supabase: SupabaseClient, user
   return out;
 }
 
-const MIN_QUALITY_CANDIDATES = 8;
 const FREE_PLAN_FILL_LIMIT = 2;
 const SUPABASE_TIMEOUT_MS = 8000;
 /** Single-day pool size. */
@@ -1079,7 +1083,7 @@ function filterInfantComplementaryCandidates(
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
   const ageContext = getMemberAgeContext(memberData);
   let filtered = pool.filter((r) => !excludeSet.has(r.id));
-  filtered = filtered.filter((r) => !excludeTitleSet.has(normalizeTitleKey(r.title ?? "")));
+  filtered = filtered.filter((r) => !excludeTitleSet.has(recipeTitleDedupeKey(r)));
   if (ageContext.applyFilter && ageContext.ageMonths != null) {
     const am = ageContext.ageMonths;
     filtered = filtered.filter((r) => recipeFitsAgeRange(r, am));
@@ -1259,6 +1263,8 @@ serve(async (req) => {
       if (!dayKey || !mealType || !MEAL_KEYS.includes(mealType as NormalizedMealType)) {
         return new Response(JSON.stringify({ error: "missing_day_key_or_meal_type" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+      const replaceRankEntropy =
+        typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `rep_${Date.now()}`;
       let replaceMemberData: MemberDataPool | null = memberData;
       let replaceMembersForScoring: Array<{ age_months?: number | null }> = [];
       if (memberId == null) {
@@ -1303,6 +1309,7 @@ serve(async (req) => {
         mealType,
         dayKey,
         variant: isInfantReplace ? "infant" : undefined,
+        rankEntropy: replaceRankEntropy,
       });
       const replaceUsedKeyIngredientCounts: Record<string, number> = {};
       const replaceUsedKeyIngredientCountsByMealType: Record<string, Record<string, number>> = {};
@@ -1555,7 +1562,7 @@ serve(async (req) => {
         usedTitleKeys = [...otherTitles];
       }
     }
-    if (dayKeys.length > 1 && poolSuitableCount >= MIN_QUALITY_CANDIDATES) {
+    if (dayKeys.length > 1) {
       let weekQ = supabase.from("meal_plans_v2").select("planned_date, meals").eq("user_id", userId).gte("planned_date", dayKeys[0]).lte("planned_date", dayKeys[dayKeys.length - 1]);
       if (effectiveMemberId == null) weekQ = weekQ.is("member_id", null);
       else weekQ = weekQ.eq("member_id", effectiveMemberId);
@@ -1649,6 +1656,7 @@ serve(async (req) => {
               mealType: "snack",
               dayKey,
               variant: "infant_primary",
+              rankEntropy: requestId,
             }),
           },
           culturalSummaryAccumulator: culturalSummaryAcc,
@@ -1673,8 +1681,10 @@ serve(async (req) => {
           totalAgeBonusSum += picked1.ageBonus;
           totalSoftBonusSum += picked1.softBonus;
           usedRecipeIds.push(picked1.id);
-          usedTitleKeys.push(normalizeTitleKey(picked1.title));
-          usedTitleKeysByMealType.breakfast?.add(normalizeTitleKey(picked1.title));
+          const rowP1 = poolCandidates.find((r) => r.id === picked1.id);
+          const keyP1 = recipeTitleDedupeKey(rowP1 ?? { title: picked1.title });
+          usedTitleKeys.push(keyP1);
+          usedTitleKeysByMealType.breakfast?.add(keyP1);
           usedCategoriesByMealType.breakfast?.add(inferDishCategoryKey(picked1.title, null, null));
           if (useBaseDiversity) {
             usedBaseCounts[picked1.primaryBase] = (usedBaseCounts[picked1.primaryBase] ?? 0) + 1;
@@ -1699,6 +1709,7 @@ serve(async (req) => {
                 mealType: "snack",
                 dayKey,
                 variant: "infant_secondary",
+                rankEntropy: requestId,
               }),
             },
           };
@@ -1721,8 +1732,10 @@ serve(async (req) => {
             totalAgeBonusSum += picked2.ageBonus;
             totalSoftBonusSum += picked2.softBonus;
             usedRecipeIds.push(picked2.id);
-            usedTitleKeys.push(normalizeTitleKey(picked2.title));
-            usedTitleKeysByMealType.lunch?.add(normalizeTitleKey(picked2.title));
+            const rowP2 = poolCandidates.find((r) => r.id === picked2.id);
+            const keyP2 = recipeTitleDedupeKey(rowP2 ?? { title: picked2.title });
+            usedTitleKeys.push(keyP2);
+            usedTitleKeysByMealType.lunch?.add(keyP2);
             usedCategoriesByMealType.lunch?.add(inferDishCategoryKey(picked2.title, null, null));
             if (useBaseDiversity) {
               usedBaseCounts[picked2.primaryBase] = (usedBaseCounts[picked2.primaryBase] ?? 0) + 1;
@@ -1764,7 +1777,7 @@ serve(async (req) => {
               day_key: dayKey,
               request_id: requestId,
               meal_slot: mealKey,
-              rank_salt: buildAlignedRankSalt({ kind: "pool", userId, mealType: mealKey, dayKey }),
+              rank_salt: buildAlignedRankSalt({ kind: "pool", userId, mealType: mealKey, dayKey, rankEntropy: requestId }),
             },
             culturalSummaryAccumulator: culturalSummaryAcc,
           };
@@ -1798,8 +1811,10 @@ serve(async (req) => {
             totalAgeBonusSum += picked.ageBonus;
             totalSoftBonusSum += picked.softBonus;
             usedRecipeIds.push(picked.id);
-            usedTitleKeys.push(normalizeTitleKey(picked.title));
-            usedTitleKeysByMealType[mealKey]?.add(normalizeTitleKey(picked.title));
+            const rowP = poolForSlot.find((r) => r.id === picked.id) ?? poolCandidates.find((r) => r.id === picked.id);
+            const keyP = recipeTitleDedupeKey(rowP ?? { title: picked.title });
+            usedTitleKeys.push(keyP);
+            usedTitleKeysByMealType[mealKey]?.add(keyP);
             usedCategoriesByMealType[mealKey]?.add(inferDishCategoryKey(picked.title, null, null));
             if (useBaseDiversity) {
               usedBaseCounts[picked.primaryBase] = (usedBaseCounts[picked.primaryBase] ?? 0) + 1;

@@ -5,6 +5,7 @@ import {
 } from "./culturalPlanDebug.ts";
 import {
   buildAlignedRankSalt,
+  CANDIDATE_COMPOSITE_NUDGE,
   computeCompositeScore,
   dbScoreContribution,
   explainRankingTail,
@@ -136,6 +137,16 @@ Deno.test("buildAlignedRankSalt: pool and replace shapes", () => {
     buildAlignedRankSalt({ kind: "replace", userId: "u1", mealType: "lunch", dayKey: "2026-01-02", variant: "infant" }),
     "u1|lunch|replace|2026-01-02|infant",
   );
+  assertEquals(
+    buildAlignedRankSalt({
+      kind: "pool",
+      userId: "u1",
+      mealType: "lunch",
+      dayKey: "2026-01-02",
+      rankEntropy: "job-uuid",
+    }),
+    "u1|lunch|pool|2026-01-02|job-uuid",
+  );
 });
 
 Deno.test("computeCompositeScore equals slotFit plus explainRankingTail", () => {
@@ -150,6 +161,24 @@ Deno.test("computeCompositeScore equals slotFit plus explainRankingTail", () => 
     rankSalt: salt,
   });
   assertEquals(total, 30 + tail.trustBonus + tail.dbContribution + tail.explorationBoost + tail.jitter);
+});
+
+Deno.test("computeCompositeScore: candidate gets CANDIDATE_COMPOSITE_NUDGE", () => {
+  const salt = "s-fixed";
+  const rid = "r-c";
+  const tail = explainRankingTail("candidate", 0, rid, salt, 0);
+  const total = computeCompositeScore({
+    slotFit: 10,
+    trustLevel: "candidate",
+    score: 0,
+    recipeId: rid,
+    rankSalt: salt,
+    jitterOverride: 0,
+  });
+  assertEquals(
+    total,
+    10 + tail.trustBonus + tail.dbContribution + tail.explorationBoost + tail.jitter + CANDIDATE_COMPOSITE_NUDGE,
+  );
 });
 
 Deno.test("exploration boost: candidate with boost beats peer candidate without (same trust)", () => {
@@ -168,15 +197,15 @@ Deno.test("exploration boost: candidate with boost beats peer candidate without 
     trustTier: 2,
     explorationBoost: EXPLORATION_CANDIDATE_BOOST,
     rankJitter: 0,
-    compositeWithCultural: slot + tbC + dbScoreContribution(0) + EXPLORATION_CANDIDATE_BOOST,
-    compositeWithoutCultural: slot + tbC + dbScoreContribution(0) + EXPLORATION_CANDIDATE_BOOST,
+    compositeWithCultural: slot + tbC + dbScoreContribution(0) + EXPLORATION_CANDIDATE_BOOST + CANDIDATE_COMPOSITE_NUDGE,
+    compositeWithoutCultural: slot + tbC + dbScoreContribution(0) + EXPLORATION_CANDIDATE_BOOST + CANDIDATE_COMPOSITE_NUDGE,
   };
   const plain: ScoredCandidateRow = {
     ...withExpl,
     r: { id: "c_plain", title: "c_plain", familiarity: "adapted", trust_level: trustC },
     explorationBoost: 0,
-    compositeWithCultural: slot + tbC + dbScoreContribution(0),
-    compositeWithoutCultural: slot + tbC + dbScoreContribution(0),
+    compositeWithCultural: slot + tbC + dbScoreContribution(0) + CANDIDATE_COMPOSITE_NUDGE,
+    compositeWithoutCultural: slot + tbC + dbScoreContribution(0) + CANDIDATE_COMPOSITE_NUDGE,
   };
   const sorted = [plain, withExpl].sort((a, b) => compareScoredForSlot(a, b, "with_cultural"));
   assertEquals(sorted[0]!.r.id, "c_exp");

@@ -6,6 +6,7 @@
 export {
   buildAlignedRankSalt,
   buildRankSalt,
+  CANDIDATE_COMPOSITE_NUDGE,
   computeCompositeScore,
   dbScoreContribution,
   explainRankingTail,

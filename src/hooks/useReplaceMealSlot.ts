@@ -17,7 +17,9 @@ import {
   filterPoolCandidatesForSlot,
   memberHasDislikesForPool,
   computeSlotFitForPoolRow,
+  normalizeTitleKey,
   POOL_TRUST_OR,
+  recipeTitleDedupeKey,
   buildSevenDayPlanKeysEndingAt,
   collectRecipeSlotsFromPlansExcludingSlotClient,
   mergeKeyIngredientCountsFromPlanSlots,
@@ -82,20 +84,16 @@ export function useReplaceMealSlot(
     setStoredFreeSwap(dayKey, nextCount);
   }, []);
 
-  /** Фильтрация кандидатов: исключаем по id (primary) и по title (вторично). */
+  /** Фильтрация кандидатов: исключаем по id (primary) и по ключу заголовка (как Edge / recipePool). */
   function filterCandidates(
-    rows: { id: string; title: string }[],
+    rows: { id: string; title: string; norm_title?: string | null }[],
     excludeRecipeIds: string[],
     excludeTitles: string[]
-  ): { id: string; title: string }[] {
+  ): { id: string; title: string; norm_title?: string | null }[] {
     const excludeSet = new Set(excludeRecipeIds);
-    const excludeTitlesLower = new Set(
-      excludeTitles.map((t) => t.trim().toLowerCase()).filter(Boolean)
-    );
+    const excludeTitleKeys = new Set(excludeTitles.map((t) => normalizeTitleKey(t)).filter(Boolean));
     return rows.filter(
-      (r) =>
-        !excludeSet.has(r.id) &&
-        !excludeTitlesLower.has((r.title ?? "").trim().toLowerCase())
+      (r) => !excludeSet.has(r.id) && !excludeTitleKeys.has(recipeTitleDedupeKey(r)),
     );
   }
 
@@ -109,6 +107,8 @@ export function useReplaceMealSlot(
       memberData?: MemberDataForPool | null;
     }): Promise<{ id: string; title: string; fromLegacy?: boolean } | null> => {
       if (!user) return null;
+      const replaceSessionEntropy =
+        typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `repl_${Date.now()}`;
       const slotNorm = normalizeMealType(params.mealType) ?? (params.mealType as "breakfast" | "lunch" | "snack" | "dinner");
       const ageMonths = params.memberData?.age_months;
       const infantCarrierRepl =
@@ -134,8 +134,8 @@ export function useReplaceMealSlot(
         hasIntroduced ||
         hasIntroducing ||
         needsIngredientDiversity
-          ? "id, title, tags, description, meal_type, min_age_months, max_age_months, trust_level, score, cooking_time_minutes, recipe_ingredients(name, display_text)"
-          : "id, title, tags, description, meal_type, min_age_months, max_age_months, trust_level, score, cooking_time_minutes";
+          ? "id, title, norm_title, tags, description, meal_type, min_age_months, max_age_months, trust_level, score, cooking_time_minutes, recipe_ingredients(name, display_text)"
+          : "id, title, norm_title, tags, description, meal_type, min_age_months, max_age_months, trust_level, score, cooking_time_minutes";
 
       const ageMonthsForPool =
         params.memberData?.age_months ??
@@ -155,6 +155,7 @@ export function useReplaceMealSlot(
       type Row = {
         id: string;
         title: string;
+        norm_title?: string | null;
         tags?: string[] | null;
         description?: string | null;
         meal_type?: string | null;
@@ -224,6 +225,7 @@ export function useReplaceMealSlot(
           mealType: params.mealType,
           dayKey: params.dayKey,
           variant: "infant",
+          rankEntropy: replaceSessionEntropy,
         });
         return pickRanked(poolFiltered, salt, undefined, undefined);
       }
@@ -255,6 +257,7 @@ export function useReplaceMealSlot(
         userId: user.id,
         mealType: params.mealType,
         dayKey: params.dayKey,
+        rankEntropy: replaceSessionEntropy,
       });
       return pickRanked(fullRows, salt, replaceUsedKeyIngredientCounts, replaceUsedKeyIngredientCountsByMeal);
     },

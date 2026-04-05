@@ -184,6 +184,12 @@ export function normalizeTitleKey(title: string): string {
     .trim();
 }
 
+/** Дедуп по заголовку: `norm_title` из БД при наличии, иначе `title` (как на Edge generate-plan). */
+export function recipeTitleDedupeKey(r: { norm_title?: string | null; title?: string | null }): string {
+  const raw = (r.norm_title?.trim() || r.title || "").trim();
+  return normalizeTitleKey(raw);
+}
+
 /** Токенизация текста (RU): lower, убрать пунктуацию, split по пробелам. */
 export function tokenize(text: string): string[] {
   if (!text || typeof text !== "string") return [];
@@ -295,6 +301,8 @@ export interface PickRecipeFromPoolArgs {
   infantSlotRole?: InfantSlotRole | null;
   /** Соль ранжирования: день плана (как на Edge generate-plan). */
   plannedDayKey?: string;
+  /** Один UUID на неделю / сессию — как `request_id` на Edge; иначе соль без суффикса (детерминизм). */
+  rankEntropy?: string;
   /** Суффикс соли (infant_primary / infant_secondary) — см. shared buildAlignedRankSalt. */
   rankVariant?: string;
   /**
@@ -325,6 +333,7 @@ function computeFirstNovelProductKeyForPoolRow(
 export type PoolRecipeRow = {
   id: string;
   title: string;
+  norm_title?: string | null;
   tags: string[] | null;
   description: string | null;
   cooking_time_minutes: number | null;
@@ -462,7 +471,7 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
   }
 
   filtered = filtered.filter((r) => {
-    const key = normalizeTitleKey(r.title);
+    const key = recipeTitleDedupeKey(r);
     return !excludeTitleSet.has(key);
   });
 
@@ -723,8 +732,8 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
     hasIntroducing ||
     needsIngredientsForInfantRole ||
     needsIngredientsForWeeklyDiversity
-      ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score, recipe_ingredients(name, display_text, category)"
-      : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score";
+      ? "id, title, norm_title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score, recipe_ingredients(name, display_text, category)"
+      : "id, title, norm_title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score";
 
   const ageMonthsForPool =
     memberData?.age_months ??
@@ -773,6 +782,7 @@ export async function pickRecipeFromPool(
     infantSlotRole,
     plannedDayKey,
     rankVariant,
+    rankEntropy,
     usedKeyIngredientCounts,
     usedKeyIngredientCountsByMealType,
   } = args;
@@ -804,8 +814,8 @@ export async function pickRecipeFromPool(
     hasIntroducing ||
     needsIngredientsForInfantRole ||
     needsIngredientsForWeeklyDiversity
-      ? "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score, recipe_ingredients(name, display_text, category)"
-      : "id, title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score";
+      ? "id, title, norm_title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score, recipe_ingredients(name, display_text, category)"
+      : "id, title, norm_title, tags, description, cooking_time_minutes, source, meal_type, min_age_months, max_age_months, trust_level, score";
 
   const ageMonthsForPool =
     memberData?.age_months ??
@@ -877,6 +887,7 @@ export async function pickRecipeFromPool(
     mealType,
     dayKey: plannedDayKey,
     variant: rankVariant,
+    ...(rankEntropy != null && String(rankEntropy).trim() !== "" ? { rankEntropy: String(rankEntropy).trim() } : {}),
   });
   const ranked = pickFromPoolRankingLite(filtered as PoolRankLiteRow[], {
     rankSalt,

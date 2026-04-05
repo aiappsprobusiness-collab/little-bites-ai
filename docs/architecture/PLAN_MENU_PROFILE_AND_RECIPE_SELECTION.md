@@ -216,7 +216,9 @@ Dislikes — **жёсткое исключение**: рецепт, содерж
 
 ### 6.3 Синхронизация ranking Client ↔ Edge
 
-**Цель:** одинаковые **rank_salt**, **exploration** (~15% слотов по хэшу соли), **jitter** (`rankJitterFromSeed(rankSalt, recipeId)`), и единая формула **`computeCompositeScore`** (`shared/planRankTrustShared.ts`), чтобы быстрый клиентский выбор и последующий Edge чаще давали **одного и того же победителя** при том же наборе кандидатов после фильтров.
+**Цель:** одинаковая **форма** `rank_salt` (в конец соли добавляется **`rankEntropy`**: на Edge — `plan_generation_jobs.id` / `request_id` за один run; на клиенте — один UUID на неделю замены / сессию; см. **`docs/plan-generation.md`**), **exploration** (~25% слотов по хэшу соли), **jitter** (`rankJitterFromSeed(rankSalt, recipeId)`), и единая формула **`computeCompositeScore`** (`shared/planRankTrustShared.ts`), чтобы клиент и Edge оставались согласованы, а при **новом** job/sессии порядок мог меняться.
+
+**Недельный dedup:** исключения по слотам текущей недели и 4 предыдущих дней применяются **всегда** для multi-day run (раньше при малом adult-пуле отключались).
 
 **Совпадает:** trust/db/exploration/jitter и порядок сортировки по composite (затем стабильно по `recipe.id`).
 
