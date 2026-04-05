@@ -20,8 +20,8 @@ export function BottomNavigation() {
     <nav
       className={cn(
         "fixed bottom-0 left-0 right-0 z-50 safe-bottom-nav",
-        "bg-white border-t border-primary-border/50",
-        "rounded-t-2xl max-w-lg mx-auto shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
+        "bg-card border-t border-border/60",
+        "rounded-t-2xl max-w-lg mx-auto shadow-[0_-4px_24px_-8px_rgb(0_0_0_/0.18)]",
       )}
       style={{ minHeight: "var(--layout-nav-height)", touchAction: "manipulation" }}
     >
