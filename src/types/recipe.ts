@@ -6,7 +6,7 @@ export type IngredientCanonicalUnit = "g" | "ml";
 
 /**
  * Элемент списка ингредиентов.
- * display_text — fallback; для карточки dual показывается только канон (г/мл), для списка покупок — см. formatIngredientForUI(..., 'shopping').
+ * display_text — fallback; при measurement_mode dual количество в карточке собирает formatIngredientForUI (бытовая мера = канон где уместно).
  * canonical_amount/unit — source of truth для порций и списка покупок.
  */
 export interface IngredientItem {
@@ -23,6 +23,8 @@ export interface IngredientItem {
   display_unit?: string | null;
   display_quantity_text?: string | null;
   measurement_mode?: string | null;
+  /** Категория из recipe_ingredients (для эвристик UI, не обязательна). */
+  category?: string | null;
 }
 
 /**

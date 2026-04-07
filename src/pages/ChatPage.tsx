@@ -25,6 +25,7 @@ import { useChatRecipes } from "@/hooks/useChatRecipes";
 import { buildGenerationContext, validateRecipe } from "@/domain/generation";
 import type { Profile } from "@/domain/generation";
 import { detectMealType, parseRecipesFromChat, parseRecipesFromApiResponse, type ParsedRecipe } from "@/utils/parseChatRecipes";
+import { resolveChatRecipeServings } from "@/utils/chatRecipeServings";
 import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberSelectorButton, type MemberSelectorButtonProps } from "@/components/family/MemberSelectorButton";
@@ -1269,6 +1270,16 @@ export default function ChatPage() {
 
         if (finalValidation.ok && !recipeIdForHistory && !response?.auth_required_to_save) {
           const mealType = detectMealType(userMessage.content);
+          const servingsResolved = resolveChatRecipeServings({
+            targetIsFamily: selectedMemberId === "family" || selectedMemberId == null,
+            members: members ?? [],
+            mealType,
+          });
+          const fromJson = parsed.recipes[0]?.servings;
+          const servingsBaseForDb =
+            typeof fromJson === "number" && Number.isFinite(fromJson) && fromJson >= 1 && fromJson <= 99
+              ? Math.round(fromJson)
+              : servingsResolved;
           const SAVE_RECIPE_TIMEOUT_MS = 15_000;
           try {
             const { savedRecipes } = await Promise.race([
@@ -1279,6 +1290,8 @@ export default function ChatPage() {
                 mealType,
                 parsedResult: parsed,
                 assistantMessageId: assistantMessageId,
+                servingsBase: servingsBaseForDb,
+                servingsRecommended: servingsBaseForDb,
               }),
               new Promise<{ savedRecipes?: Array<{ id: string; title?: string }> }>((_, reject) =>
                 setTimeout(() => reject(new Error("SAVE_TIMEOUT")), SAVE_RECIPE_TIMEOUT_MS)

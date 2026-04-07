@@ -126,6 +126,9 @@ export interface CanonicalizeRecipePayloadInput {
   region?: string | null;
   /** Stage 4.4: if omitted, inferred from cuisine. */
   familiarity?: string | null;
+  /** База порций: количества ингредиентов в payload за эти порции (RPC recipes.servings_base). */
+  servings_base?: number | null;
+  servings_recommended?: number | null;
 }
 
 /**
@@ -157,7 +160,17 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     cuisine: rawCuisine,
     region: rawRegion,
     familiarity: rawFamiliarity,
+    servings_base: rawServingsBase,
+    servings_recommended: rawServingsRecommended,
   } = input;
+
+  const clampServings = (v: unknown, fallback: number): number => {
+    const n = typeof v === "number" ? v : parseInt(String(v ?? ""), 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(1, Math.min(99, Math.floor(n)));
+  };
+  const servings_base = clampServings(rawServingsBase, 1);
+  const servings_recommended = clampServings(rawServingsRecommended ?? rawServingsBase, servings_base);
 
   const meal_type = resolveMealType({ mealType, tags: rawTags, contextMealType });
   const safeSource = ensurePoolSource(source);
@@ -297,5 +310,7 @@ export function canonicalizeRecipePayload(input: CanonicalizeRecipePayloadInput)
     ...(cuisineTrim != null ? { cuisine: cuisineTrim } : {}),
     ...(regionTrim != null ? { region: regionTrim } : {}),
     familiarity: familiarityResolved,
+    servings_base,
+    servings_recommended,
   };
 }

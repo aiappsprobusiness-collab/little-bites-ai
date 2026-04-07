@@ -1,7 +1,10 @@
+import { useMemo } from "react";
 import type { ParsedIngredient } from "@/utils/parseChatRecipes";
 import { getBenefitLabel } from "@/utils/ageCategory";
 import { getMealLabel } from "@/data/mealLabels";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
+import { useFamily } from "@/contexts/FamilyContext";
+import { resolveChatRecipeServings } from "@/utils/chatRecipeServings";
 import {
   buildRecipeBenefitDescription,
   resolveBenefitDescriptionSeed,
@@ -23,6 +26,7 @@ export interface ChatRecipeCardRecipe {
   fats?: number | null;
   carbs?: number | null;
   nutrition_goals?: string[] | null;
+  servings?: number | null;
 }
 
 export interface ChatRecipeCardProps {
@@ -42,12 +46,25 @@ export interface ChatRecipeCardProps {
 function ChatRecipeCard({
   recipe,
   ageMonths,
+  selectedProfileId,
   chatMessageId,
   savedRecipeId = null,
   showChefTip,
   ingredientOverrides,
   onSubstituteClick,
 }: ChatRecipeCardProps) {
+  const { members } = useFamily();
+  const servingsCount = useMemo(() => {
+    const s = recipe.servings;
+    if (typeof s === "number" && Number.isFinite(s) && s >= 1 && s <= 20) return Math.round(s);
+    const isFamily = selectedProfileId === "family" || selectedProfileId == null;
+    return resolveChatRecipeServings({
+      targetIsFamily: isFamily,
+      members: members ?? [],
+      mealType: recipe.mealType ?? null,
+    });
+  }, [recipe.servings, recipe.mealType, selectedProfileId, members]);
+
   const mealLabel = getMealLabel(recipe.mealType) ?? null;
 
   const nutrition =
@@ -99,6 +116,7 @@ function ChatRecipeCard({
       nutrition={nutrition}
       nutritionGoals={recipe.nutrition_goals ?? []}
       recipeMaxAgeMonths={recipe.max_age_months ?? null}
+      servingsCount={servingsCount}
     />
   );
 }

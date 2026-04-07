@@ -47,6 +47,34 @@ function canonicalSegmentFromMergeKey(mergeKey: string | null | undefined): stri
   return applyYoToE(part).toLowerCase();
 }
 
+/** Сухие специи в списке покупок: мл → ч. л. для читаемости (агрегация остаётся в мл). */
+function isSpiceSegmentForMlDisplay(segment: string | null): boolean {
+  if (!segment) return false;
+  return (
+    segment.includes("перец") ||
+    segment.includes("соль") ||
+    segment.includes("паприк") ||
+    segment.includes("кориц") ||
+    segment.includes("куркум") ||
+    segment.includes("имбир") ||
+    segment.includes("мускат") ||
+    segment.includes("гвоздик") ||
+    segment.includes("лавров") ||
+    segment.includes("карри") ||
+    segment.includes("кмин") ||
+    segment.includes("зира") ||
+    segment.includes("зиры")
+  );
+}
+
+function formatDecimalRu(amount: number): string {
+  if (!Number.isFinite(amount)) return "";
+  const rounded = Math.round(amount * 10) / 10;
+  const isInteger = Math.abs(rounded - Math.round(rounded)) < 1e-6;
+  if (isInteger) return String(Math.round(rounded));
+  return rounded.toFixed(1).replace(".", ",");
+}
+
 function totalGramsFromDisplay(amount: number | null, unitRaw: string | null): number | null {
   if (amount == null || !Number.isFinite(amount) || amount <= 0) return null;
   const u = (unitRaw ?? "").trim().toLowerCase();
@@ -96,6 +124,12 @@ function defaultAmountLine(
   delimiter: ", " | " — "
 ): string {
   const a = amount != null && amount > 0 ? amount : null;
+  const rawU = (unit ?? "").trim();
+  if (rawU === "clove" && a != null) {
+    const word = pluralizeGarlicCloves(a);
+    const amountStr = formatDecimalRu(a);
+    return `${displayName}${delimiter}${amountStr} ${word}`;
+  }
   const u = normalizeUnitForDisplay(unit);
   const amountStr = a != null ? formatAmountForDisplay(a, unit) : "";
   if (a != null && u) return `${displayName}${delimiter}${amountStr} ${u}`;
@@ -116,6 +150,19 @@ export function formatShoppingListPurchaseLine(
   const segment = canonicalSegmentFromMergeKey(mergeKey);
   const agg = (aggregationUnit ?? "").trim().toLowerCase();
 
+  const unitNorm = (unit ?? "").trim().toLowerCase();
+  if (
+    amount != null &&
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    amount < 30 &&
+    (unitNorm === "мл" || unitNorm === "ml") &&
+    isSpiceSegmentForMlDisplay(segment)
+  ) {
+    const tsp = Math.round((amount / 5) * 10) / 10;
+    return `${name}${delimiter}${formatDecimalRu(tsp)} ч. л.`;
+  }
+
   const dualLeft = scaledDualDisplayAmount;
   const dualU = (dualDisplayUnit ?? "").trim();
   if (
@@ -128,7 +175,9 @@ export function formatShoppingListPurchaseLine(
     amount > 0 &&
     (unit ?? "").trim()
   ) {
-    const leftStr = `${formatAmountForDisplay(dualLeft, dualU)} ${normalizeUnitForDisplay(dualU)}`.trim();
+    const leftStr = dualU.toLowerCase().includes("зубчик")
+      ? `${formatDecimalRu(dualLeft)} ${pluralizeGarlicCloves(dualLeft)}`.trim()
+      : `${formatAmountForDisplay(dualLeft, dualU)} ${normalizeUnitForDisplay(dualU) ?? ""}`.trim();
     const rightStr = `${formatAmountForDisplay(amount, unit)} ${normalizeUnitForDisplay(unit)}`.trim();
     return `${name}${delimiter}${leftStr} ≈ ${rightStr}`;
   }

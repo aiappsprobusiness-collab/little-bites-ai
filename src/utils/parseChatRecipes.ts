@@ -37,6 +37,8 @@ export interface ParsedRecipe {
   carbs?: number | null;
   /** Stage 4: цели питания (whitelist), с бэка / из JSON ответа. */
   nutrition_goals?: string[] | null;
+  /** Порции, под которые даны количества ингредиентов (из JSON или с клиента). */
+  servings?: number | null;
 }
 
 /** Проверка: элемент ингредиента — объект с полем name (Premium-формат). */
@@ -504,6 +506,12 @@ export function parseRecipesFromApiResponse(
     const goals = extractNutritionGoals(r as Record<string, unknown>);
     const minAgeMonths = asFiniteNumberField((r as Record<string, unknown>).min_age_months ?? (r as Record<string, unknown>).minAgeMonths);
     const maxAgeMonths = asFiniteNumberField((r as Record<string, unknown>).max_age_months ?? (r as Record<string, unknown>).maxAgeMonths);
+    const servingsRaw =
+      asFiniteNumberField((r as Record<string, unknown>).servings) ??
+      asFiniteNumberField((r as Record<string, unknown>).servings_base) ??
+      asFiniteNumberField((r as Record<string, unknown>).servingsCount);
+    const servings =
+      servingsRaw != null && servingsRaw >= 1 && servingsRaw <= 99 ? Math.round(servingsRaw) : null;
     return {
       title: String(title).trim(),
       description: typeof r.description === "string" ? r.description : undefined,
@@ -518,6 +526,7 @@ export function parseRecipesFromApiResponse(
         : {}),
       ...nutritionFields,
       ...(goals?.length ? { nutrition_goals: goals } : {}),
+      ...(servings != null ? { servings } : {}),
     };
   });
   const displayText = recipes.length > 0 ? formatRecipeForDisplay(recipes[0]) : fallbackDisplayText;

@@ -91,8 +91,7 @@ export function applyIngredientOverrides(
         if (
           measurement_mode === "dual" &&
           display_amount != null &&
-          Number.isFinite(display_amount) &&
-          !display_quantity_text?.trim()
+          Number.isFinite(display_amount)
         ) {
           const scaledDa = Math.round(display_amount * scale * 10) / 10;
           scaledIng = {
@@ -101,15 +100,22 @@ export function applyIngredientOverrides(
             amount: scaledCanon,
             unit: canonical_unit,
             display_amount: scaledDa,
+            display_quantity_text: undefined,
             measurement_mode: "dual",
+            display_text: undefined,
           };
-        } else if (measurement_mode === "dual" && display_quantity_text?.trim()) {
+        } else if (measurement_mode === "dual" && display_quantity_text?.trim() && display_amount == null) {
+          const suffix = formatIngredientAmountForDisplay(scaledCanon, canonical_unit);
           scaledIng = {
             ...ing,
             canonical_amount: scaledCanon,
             amount: scaledCanon,
             unit: canonical_unit,
-            measurement_mode: "dual",
+            measurement_mode: "canonical_only",
+            display_amount: undefined,
+            display_unit: undefined,
+            display_quantity_text: undefined,
+            display_text: name ? `${name} — ${suffix}` : suffix,
           };
         } else {
           const suffix = formatIngredientAmountForDisplay(scaledCanon, canonical_unit);

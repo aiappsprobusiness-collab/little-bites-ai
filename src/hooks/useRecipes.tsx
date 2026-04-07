@@ -61,7 +61,17 @@ function ensureNumber(v: unknown): number | null {
 /** Нормализовать payload рецепта под схему: integer, text[], numeric, UUID. */
 function normalizeRecipePayload<T extends Record<string, unknown>>(payload: T): T {
   const out = { ...payload };
-  const intKeys = ['calories', 'cooking_time_minutes', 'min_age_months', 'max_age_months', 'times_cooked', 'rating'] as const;
+  const intKeys = [
+    'calories',
+    'cooking_time_minutes',
+    'min_age_months',
+    'max_age_months',
+    'times_cooked',
+    'rating',
+    'servings_base',
+    'servings_recommended',
+    'servings',
+  ] as const;
   for (const key of intKeys) {
     if (key in out && out[key] !== undefined) {
       (out as Record<string, unknown>)[key] = ensureInteger(out[key]);
@@ -346,18 +356,21 @@ export function useRecipes(childId?: string, options?: UseRecipesOptions) {
         (normalized as Record<string, unknown>).description = preDesc;
       }
 
+      const nrm = normalized as Record<string, unknown>;
       const rpcPayload = canonicalizeRecipePayload({
         user_id: user.id,
-        member_id: (normalized as Record<string, unknown>).member_id ?? null,
-        child_id: (normalized as Record<string, unknown>).child_id ?? null,
+        member_id: nrm.member_id ?? null,
+        child_id: nrm.child_id ?? null,
         source,
-        mealType: (normalized as Record<string, unknown>).meal_type ?? null,
-        tags: (normalized as Record<string, unknown>).tags ?? null,
+        mealType: nrm.meal_type ?? null,
+        tags: nrm.tags ?? null,
         title: titleStr,
         description: (normalized.description as string) ?? null,
-        cooking_time_minutes: (normalized as Record<string, unknown>).cooking_time_minutes ?? null,
-        chef_advice: (normalized as Record<string, unknown>).chef_advice ?? null,
-        advice: (normalized as Record<string, unknown>).advice ?? null,
+        cooking_time_minutes: nrm.cooking_time_minutes ?? null,
+        chef_advice: nrm.chef_advice ?? null,
+        advice: nrm.advice ?? null,
+        servings_base: (nrm.servings_base ?? nrm.servings) as number | null | undefined,
+        servings_recommended: (nrm.servings_recommended ?? nrm.servings_base ?? nrm.servings) as number | null | undefined,
         steps: stepsPadded.map((s, i) => ({ instruction: s.instruction ?? '', step_number: s.step_number ?? i + 1 })),
         ingredients: ingredientsPadded.map((ing, i) => ({
           name: ing.name,

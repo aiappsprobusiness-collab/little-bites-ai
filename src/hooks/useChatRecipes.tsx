@@ -96,6 +96,8 @@ export function useChatRecipes() {
       mealType,
       parsedResult: parsedResultIn,
       assistantMessageId,
+      servingsBase,
+      servingsRecommended,
     }: {
       userMessage: string;
       aiResponse: string;
@@ -105,6 +107,9 @@ export function useChatRecipes() {
       parsedResult?: ParseRecipesFromChatResult;
       /** Как ChatRecipeCard: стабильный seed до появления recipe.id */
       assistantMessageId?: string;
+      /** Согласовано с запросом deepseek-chat / карточкой чата; иначе берётся из JSON рецепта или 1. */
+      servingsBase?: number;
+      servingsRecommended?: number;
     }): Promise<{ savedRecipes: Recipe[]; displayText: string }> => {
       if (!user) throw new Error('User not authenticated');
 
@@ -193,6 +198,22 @@ export function useChatRecipes() {
               ? memberId
               : null;
 
+          const clampS = (n: number) => Math.max(1, Math.min(99, Math.round(n)));
+          const fromParsed =
+            typeof parsedRecipe.servings === "number" &&
+            Number.isFinite(parsedRecipe.servings) &&
+            parsedRecipe.servings >= 1
+              ? clampS(parsedRecipe.servings)
+              : null;
+          const sb =
+            servingsBase != null && Number.isFinite(servingsBase) && servingsBase >= 1
+              ? clampS(servingsBase)
+              : fromParsed ?? 1;
+          const sr =
+            servingsRecommended != null && Number.isFinite(servingsRecommended) && servingsRecommended >= 1
+              ? clampS(servingsRecommended)
+              : sb;
+
           const newRecipe = await createRecipe({
             source: 'chat_ai',
             canonicalBenefitPersist: {
@@ -214,6 +235,8 @@ export function useChatRecipes() {
               ...(recipeMealType && { meal_type: recipeMealType }),
               ...(parsedRecipe.chefAdvice != null && parsedRecipe.chefAdvice !== '' && { chef_advice: parsedRecipe.chefAdvice }),
               ...(parsedRecipe.advice != null && parsedRecipe.advice !== '' && { advice: parsedRecipe.advice }),
+              servings_base: sb,
+              servings_recommended: sr,
             },
             ingredients: parsedRecipe.ingredients.map((ing, index) => {
               const o = typeof ing === 'object' && ing && 'name' in ing ? (ing as { name: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; substitute?: string }) : null;

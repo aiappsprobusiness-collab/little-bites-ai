@@ -73,7 +73,21 @@ function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem
 
   return raw.map((item): IngredientItem => {
     if (typeof item === "string") return { name: item };
-    const o = item as { name?: string; display_text?: string | null; canonical_amount?: number | null; canonical_unit?: string | null; amount?: number | null; unit?: string | null; note?: string; substitute?: string | null };
+    const o = item as {
+      name?: string;
+      display_text?: string | null;
+      canonical_amount?: number | null;
+      canonical_unit?: string | null;
+      amount?: number | null;
+      unit?: string | null;
+      note?: string;
+      substitute?: string | null;
+      display_amount?: number | null;
+      display_unit?: string | null;
+      display_quantity_text?: string | null;
+      measurement_mode?: string | null;
+      category?: string | null;
+    };
     return {
       name: o.name ?? "",
       display_text: o.display_text ?? undefined,
@@ -83,6 +97,11 @@ function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem
       unit: o.unit ?? undefined,
       note: o.note ?? undefined,
       substitute: o.substitute ?? undefined,
+      display_amount: o.display_amount ?? undefined,
+      display_unit: o.display_unit ?? undefined,
+      display_quantity_text: o.display_quantity_text ?? undefined,
+      measurement_mode: o.measurement_mode ?? undefined,
+      category: o.category ?? undefined,
     };
   });
 }

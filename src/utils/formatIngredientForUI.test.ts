@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { formatIngredientForUI } from "@shared/formatIngredientForUI";
 
 describe("formatIngredientForUI", () => {
-  it("recipe dual: только канон", () => {
+  it("recipe dual: бытовая мера = канон (граммы)", () => {
     expect(
       formatIngredientForUI(
         {
@@ -16,7 +16,7 @@ describe("formatIngredientForUI", () => {
         "recipe",
         { servingMultiplier: 1 },
       ),
-    ).toBe("90 г");
+    ).toBe("1 шт. = 90 г");
   });
 
   it("shopping dual: составная строка с ≈", () => {
@@ -33,11 +33,11 @@ describe("formatIngredientForUI", () => {
       { servingMultiplier: 1 },
     );
     expect(s).toContain("≈");
-    expect(s).toContain("5");
-    expect(s.toLowerCase()).toContain("мл");
+    expect(s).toContain("1");
+    expect(s.toLowerCase()).toContain("ч. л.");
   });
 
-  it("shopping dual: display_quantity_text приоритетнее", () => {
+  it("shopping dual: display_quantity_text приоритетнее при multiplier 1", () => {
     expect(
       formatIngredientForUI(
         {
@@ -67,7 +67,7 @@ describe("formatIngredientForUI", () => {
     ).toBe("1 зубчик");
   });
 
-  it("recipe dual масштаб порций", () => {
+  it("recipe dual: масштаб порций сохраняет двойной формат", () => {
     expect(
       formatIngredientForUI(
         {
@@ -81,7 +81,7 @@ describe("formatIngredientForUI", () => {
         "recipe",
         { servingMultiplier: 2 },
       ),
-    ).toBe("90 г");
+    ).toBe("1 шт. = 90 г");
   });
 
   it("recipe dual: без g/ml канона — масштабирует бытовую часть", () => {
@@ -99,5 +99,22 @@ describe("formatIngredientForUI", () => {
         { servingMultiplier: 4 },
       ),
     ).toBe("4 шт.");
+  });
+
+  it("recipe dual: специя в мл — только ч. л. если нет бытовой части", () => {
+    const s = formatIngredientForUI(
+      {
+        name: "Чёрный перец",
+        measurement_mode: "dual",
+        display_amount: 0.3,
+        display_unit: "ч. л.",
+        canonical_amount: 1.3,
+        canonical_unit: "ml",
+      },
+      "recipe",
+      { servingMultiplier: 1 },
+    );
+    expect(s).toContain("ч. л.");
+    expect(s).not.toContain("мл");
   });
 });

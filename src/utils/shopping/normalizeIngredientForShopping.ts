@@ -78,7 +78,7 @@ function escapeRegExp(s: string): string {
 }
 
 /** Нормализованные единицы для ключа агрегации (латиница). */
-export type NormalizedUnit = "g" | "ml" | "kg" | "l" | "pcs" | "tbsp" | "tsp" | null;
+export type NormalizedUnit = "g" | "ml" | "kg" | "l" | "pcs" | "tbsp" | "tsp" | "clove" | null;
 
 const UNIT_TO_NORMALIZED: Record<string, NormalizedUnit> = {
   г: "g",
@@ -132,6 +132,7 @@ export function normalizeIngredientUnitForShopping(
   // Частичное совпадение для "столовая ложка" / "чайная ложка"
   if (u.includes("столовая") || u.includes("ст.л") || u === "ст л") return "tbsp";
   if (u.includes("чайная") || u.includes("ч.л") || u === "ч л") return "tsp";
+  if (/\bзубчик/i.test(u) || u === "clove" || u === "cloves") return "clove";
   return null;
 }
 
@@ -195,6 +196,24 @@ export function buildShoppingAggregationKey(
 
   const normalizedUnit = normalizeIngredientUnitForShopping(unit, canonical_unit);
 
+  /** Чеснок без канона и без явной единицы: мелкое целое число трактуем как зубчики (избегаем «2 ?»). */
+  if (
+    normalizedUnit === null &&
+    applyYoToE(canonicalNameSegment.trim().toLowerCase()) === "чеснок" &&
+    Number.isFinite(rawAmount) &&
+    rawAmount > 0 &&
+    rawAmount <= 30 &&
+    Number.isInteger(rawAmount) &&
+    (!(unit ?? "").trim() || /\bзубчик/i.test(String(unit).toLowerCase()))
+  ) {
+    return {
+      key: `${canonicalNameSegment}|clove`,
+      aggregationUnit: "clove",
+      amountToSum: rawAmount,
+      originalName: name.trim(),
+    };
+  }
+
   /** Овощи из allowlist: шт. и г суммируются в г (см. SHOPPING_PCS_TO_GRAMS / парсинг display_text). */
   if (
     (normalizedUnit === "g" || normalizedUnit === "pcs") &&
@@ -223,6 +242,17 @@ export function buildShoppingAggregationKey(
         originalName: name.trim(),
       };
     }
+  }
+
+  if (normalizedUnit === "clove") {
+    const amt = Number.isFinite(rawAmount) && rawAmount > 0 ? rawAmount : 0;
+    if (amt <= 0) return null;
+    return {
+      key: `${canonicalNameSegment}|clove`,
+      aggregationUnit: "clove",
+      amountToSum: amt,
+      originalName: name.trim(),
+    };
   }
 
   if (normalizedUnit === null) {
@@ -301,6 +331,7 @@ export function toShoppingDisplayUnitAndAmount(
   if (aggregationUnit === "kg") return { displayAmount: rounded, displayUnit: "кг" };
   if (aggregationUnit === "l") return { displayAmount: rounded, displayUnit: "л" };
   if (aggregationUnit === "pcs") return { displayAmount: rounded, displayUnit: "шт." };
+  if (aggregationUnit === "clove") return { displayAmount: rounded, displayUnit: "clove" };
   if (aggregationUnit === "tbsp") return { displayAmount: rounded, displayUnit: "ст.л." };
   if (aggregationUnit === "tsp") return { displayAmount: rounded, displayUnit: "ч.л." };
   const u = String(aggregationUnit ?? "").trim();
