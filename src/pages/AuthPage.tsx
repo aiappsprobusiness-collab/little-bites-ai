@@ -36,7 +36,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 type SignupFormData = z.infer<typeof signupSchema>;
 
 const AUTH_INPUT_CLASS =
-  "rounded-[24px] border border-slate-200/80 bg-white/50 py-4 focus-visible:ring-0 focus-visible:border-primary shadow-none min-h-[52px]";
+  "rounded-[24px] border border-slate-200/80 bg-white/50 py-4 min-h-[52px] text-foreground placeholder:text-muted-foreground/90 focus-visible:ring-0 focus-visible:border-primary shadow-none dark:border-white/10 dark:bg-[#1f2028]/90 dark:placeholder:text-[#8f92a3]";
 
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -155,12 +155,22 @@ export default function AuthPage() {
           transition={{ delay: 0.15 }}
           className="w-full"
         >
-          <Card className="bg-white/90 backdrop-blur-xl border-0 rounded-[28px] sm:rounded-[32px] shadow-xl shadow-slate-200/50">
+          <Card className="backdrop-blur-xl rounded-[28px] sm:rounded-[32px] bg-card/95 text-card-foreground border border-border/40 shadow-card dark:bg-card/92 dark:border-white/10 dark:shadow-[0_24px_48px_-28px_rgba(0,0,0,0.85)]">
             <CardContent className="px-4 sm:px-6 pt-6 sm:pt-7 pb-5 sm:pb-6">
               <Tabs key={defaultAuthTab} defaultValue={defaultAuthTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11">
-                  <TabsTrigger value="login" className="rounded-[16px]">Войти</TabsTrigger>
-                  <TabsTrigger value="signup" className="rounded-[16px]">Начать</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11 dark:bg-[#353742]">
+                  <TabsTrigger
+                    value="login"
+                    className="rounded-[16px] text-[#8b8e9d] dark:text-[#a3a6b4] dark:data-[state=active]:bg-[#1d1e27] dark:data-[state=active]:text-white dark:data-[state=active]:shadow-none"
+                  >
+                    Войти
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="signup"
+                    className="rounded-[16px] text-[#8b8e9d] dark:text-[#a3a6b4] dark:data-[state=active]:bg-[#1d1e27] dark:data-[state=active]:text-white dark:data-[state=active]:shadow-none"
+                  >
+                    Начать
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="login">
@@ -171,7 +181,7 @@ export default function AuthPage() {
                         name="email"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
+                            <FormLabel className="text-muted-foreground font-normal dark:text-[#b1b4c2]">Email</FormLabel>
                             <FormControl>
                               <Input placeholder="Введите ваш email" className={AUTH_INPUT_CLASS} {...field} />
                             </FormControl>
@@ -184,7 +194,7 @@ export default function AuthPage() {
                         name="password"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-muted-foreground font-normal">Пароль</FormLabel>
+                            <FormLabel className="text-muted-foreground font-normal dark:text-[#b1b4c2]">Пароль</FormLabel>
                             <FormControl>
                               <div className="relative">
                                 <Input
@@ -197,7 +207,7 @@ export default function AuthPage() {
                                   type="button"
                                   aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
                                   onClick={() => setShowPassword(!showPassword)}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors touch-manipulation"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors touch-manipulation dark:text-[#9ca0af] dark:hover:bg-white/10 dark:hover:text-white"
                                 >
                                   {showPassword ? <EyeOff className="w-4 h-4 shrink-0" /> : <Eye className="w-4 h-4 shrink-0" />}
                                 </button>
@@ -227,7 +237,7 @@ export default function AuthPage() {
                         name="displayName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-muted-foreground font-normal">Как к вам обращаться?</FormLabel>
+                            <FormLabel className="text-muted-foreground font-normal dark:text-[#b1b4c2]">Как к вам обращаться?</FormLabel>
                             <FormControl>
                               <Input
                                 placeholder="Например, Мария"
@@ -253,7 +263,7 @@ export default function AuthPage() {
                           const { ref: fieldRef, ...rest } = field;
                           return (
                             <FormItem>
-                              <FormLabel className="text-muted-foreground font-normal">Email</FormLabel>
+                              <FormLabel className="text-muted-foreground font-normal dark:text-[#b1b4c2]">Email</FormLabel>
                               <FormControl>
                                 <Input
                                   type="email"
@@ -284,7 +294,7 @@ export default function AuthPage() {
                           const { ref: fieldRef, ...rest } = field;
                           return (
                             <FormItem>
-                              <FormLabel className="text-muted-foreground font-normal">Пароль (от 6 символов)</FormLabel>
+                              <FormLabel className="text-muted-foreground font-normal dark:text-[#b1b4c2]">Пароль (от 6 символов)</FormLabel>
                               <FormControl>
                                 <div className="relative">
                                   <Input
@@ -307,7 +317,7 @@ export default function AuthPage() {
                                   type="button"
                                   aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
                                   onClick={() => setShowPassword(!showPassword)}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors touch-manipulation"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors touch-manipulation dark:text-[#9ca0af] dark:hover:bg-white/10 dark:hover:text-white"
                                 >
                                   {showPassword ? <EyeOff className="w-4 h-4 shrink-0" /> : <Eye className="w-4 h-4 shrink-0" />}
                                 </button>
@@ -327,7 +337,7 @@ export default function AuthPage() {
                               <Checkbox
                                 checked={field.value}
                                 onCheckedChange={(c) => field.onChange(c === true)}
-                                className="mt-0.5"
+                                className="mt-0.5 dark:border-[#717488] dark:data-[state=checked]:border-primary"
                               />
                             </FormControl>
                             <div className="space-y-1.5 leading-snug">
@@ -349,7 +359,7 @@ export default function AuthPage() {
                                   Политику конфиденциальности
                                 </Link>
                               </FormLabel>
-                              <FormMessage className="!mt-0 text-[13px] font-normal !text-muted-foreground" />
+                              <FormMessage className="!mt-0 text-[13px] font-normal !text-muted-foreground dark:!text-[#c6a2a2]" />
                             </div>
                           </FormItem>
                         )}
@@ -362,7 +372,7 @@ export default function AuthPage() {
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
                         <span>Создать меню</span>
                       </Button>
-                      <p className="text-center text-sm text-muted-foreground mt-2">
+                      <p className="text-center text-sm text-muted-foreground mt-2 dark:text-[#9ca0af]">
                         Бесплатно. Без карты.
                       </p>
                     </form>
@@ -373,7 +383,7 @@ export default function AuthPage() {
                 <button
                   type="button"
                   onClick={goToWelcome}
-                  className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2 dark:text-[#a7abba] dark:hover:text-white"
                 >
                   Посмотреть пример рецепта
                 </button>
