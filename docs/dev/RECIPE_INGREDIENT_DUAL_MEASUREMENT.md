@@ -95,25 +95,34 @@ npm run backfill:ingredient-canonical -- --diagnose-only --recipe-source=seed --
 
 Скрипт сам подгружает корневые **`.env`** и **`.env.local`** (если переменные ещё не заданы в shell).
 
+**`--pool`:** то же, что `--recipe-source=seed,starter,manual,week_ai,chat_ai` — полный набор источников **общего пула** (раздаётся всем авторизованным пользователям при подборе меню). Для универсального каталога это предпочтительный режим.
+
 **`--recipe-source`:** сначала читаются `recipes.id` с нужным `source`, затем ингредиенты по `recipe_id` (два шага, без ненадёжного фильтра по вложенной таблице в одном запросе). Если **`scanned_rows=0`**, смотрите предупреждения и блок **`[diag]`** в консоли. Типичный случай для **seed**: рецепты есть, но у ингредиентов **не заполнены `canonical_amount` / `canonical_unit`** (в JSON сида или при импорте) — тогда dual backfill нечего обрабатывать, пока канон не появится (обновление сид-файлов + импорт или отдельная нормализация).
 
 ```bash
-# 1) Всегда начинать с dry-run и смотреть by_reason в summary
+# 1) Весь общий пул (универсальные рецепты для всех пользователей: seed, starter, manual, week_ai, chat_ai — как RLS и generate-plan)
+npm run backfill:ingredient-dual -- --dry-run --pool
+npm run backfill:ingredient-dual -- --pool
+
+# 2) Dry-run по всем строкам ингредиентов в БД (в т.ч. user_custom и прочие source) — шире, чем пул
 npm run backfill:ingredient-dual -- --dry-run
 npm run backfill:ingredient-dual -- --dry-run --verbose --limit=100
 
-# 2) Порциями
-npm run backfill:ingredient-dual -- --dry-run --offset=0 --limit=500
-npm run backfill:ingredient-dual -- --offset=0 --limit=500
+# 3) Порциями (с --pool — только в пределах пула)
+npm run backfill:ingredient-dual -- --dry-run --pool --offset=0 --limit=500
+npm run backfill:ingredient-dual -- --pool --offset=0 --limit=500
 
-# 3) Только seed / core-каталог (recipes.source из БД: seed, manual, chat_ai, week_ai, user_custom, starter, …)
+# 4) Узко по source (эквивалент части пула, если нужен только каталог)
 npm run backfill:ingredient-dual -- --dry-run --recipe-source=seed
 npm run backfill:ingredient-dual -- --dry-run --recipe-source=seed,manual
 
-# 4) Один рецепт
+# 5) Один рецепт
 npm run backfill:ingredient-dual -- --dry-run --recipe-id=<uuid>
 
-# 5) Не чинить битый dual — только canonical_only
+# 6) Опционально: только рецепты одного user_id в БД (каталог обычно на системном владельце — для пула удобнее --pool)
+npm run backfill:ingredient-dual -- --dry-run --user-id=<uuid>
+
+# 7) Не чинить битый dual — только canonical_only
 npm run backfill:ingredient-dual -- --dry-run --only-canonical
 ```
 

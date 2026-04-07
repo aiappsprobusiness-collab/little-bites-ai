@@ -6,11 +6,14 @@
  * Автоматически подгружаются корневые `.env` и `.env.local` (как у других scripts/), без перезаписи уже заданных в shell.
  *
  * Запуск:
- *   npm run backfill:ingredient-dual -- --dry-run
- *   npm run backfill:ingredient-dual -- --dry-run --verbose --limit=50
+ *   npm run backfill:ingredient-dual -- --dry-run --pool
+ *   npm run backfill:ingredient-dual -- --pool
+ *   npm run backfill:ingredient-dual -- --dry-run --verbose --limit=50 --pool
  *   npm run backfill:ingredient-dual -- --recipe-source=seed --offset=0 --limit=200
  *   npm run backfill:ingredient-dual -- --recipe-id=<uuid>
  *   npm run backfill:ingredient-dual -- --only-canonical
+ *
+ * --pool = все рецепты общего пула (source: seed, starter, manual, week_ai, chat_ai) — как RLS и generate-plan.
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -27,6 +30,9 @@ const repoRoot = join(__dirname, "..");
 
 const INGREDIENT_SELECT =
   "id, recipe_id, name, display_text, canonical_amount, canonical_unit, category, measurement_mode, display_amount, display_unit, display_quantity_text";
+
+/** Как `POOL_SOURCES` в `src/utils/recipeCanonical.ts` и RLS «pool recipes» в миграциях. */
+const RECIPE_POOL_SOURCES = ["seed", "starter", "manual", "week_ai", "chat_ai"] as const;
 
 function loadEnvFile(filePath: string): void {
   if (!existsSync(filePath)) return;
@@ -59,6 +65,7 @@ type CliOptions = {
   offset: number;
   recipeSources: string[] | null;
   recipeId: string | null;
+  userId: string | null;
   onlyCanonical: boolean;
 };
 
@@ -69,13 +76,16 @@ function parseArgs(argv: string[]): CliOptions {
   let offset = 0;
   let recipeSources: string[] | null = null;
   let recipeId: string | null = null;
+  let userId: string | null = null;
   let onlyCanonical = false;
+  let wantPool = false;
 
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--dry-run") dryRun = true;
     else if (a === "--verbose") verbose = true;
     else if (a === "--only-canonical") onlyCanonical = true;
+    else if (a === "--pool") wantPool = true;
     else if (a === "--help" || a === "-h") {
       console.log(`Usage: npm run backfill:ingredient-dual -- [options]
 
@@ -84,7 +94,9 @@ Options:
   --verbose              Лог по каждой строке (id, reason)
   --limit=N              Максимум строк из выборки (с учётом offset)
   --offset=N             Смещение по id (order id asc)
-  --recipe-source=X      Фильтр recipes.source (через запятую: seed,manual,chat_ai,...)
+  --pool                 Все рецепты общего пула: source ∈ seed, starter, manual, week_ai, chat_ai
+  --recipe-source=X      Узкий фильтр source (через запятую). С --pool: если задано оба — побеждает --recipe-source
+  --user-id=UUID         Сузить к рецептам одного владельца (редко нужно для каталога)
   --recipe-id=UUID       Только ингредиенты этого рецепта
   --only-canonical       Не чинить битый dual, только measurement_mode = canonical_only
 `);
@@ -98,10 +110,22 @@ Options:
       recipeSources = raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
     } else if (a.startsWith("--recipe-id=")) {
       recipeId = a.slice("--recipe-id=".length).trim() || null;
+    } else if (a.startsWith("--user-id=")) {
+      userId = a.slice("--user-id=".length).trim() || null;
     }
   }
 
-  return { dryRun, verbose, limit, offset, recipeSources, recipeId, onlyCanonical };
+  if (wantPool) {
+    if (recipeSources?.length) {
+      console.warn(
+        "[warn] Заданы и --pool, и --recipe-source: используется только список из --recipe-source (не весь пул).",
+      );
+    } else {
+      recipeSources = [...RECIPE_POOL_SOURCES];
+    }
+  }
+
+  return { dryRun, verbose, limit, offset, recipeSources, recipeId, userId, onlyCanonical };
 }
 
 type RowFromDb = {
@@ -142,17 +166,19 @@ function recipeSourceFromRow(r: RowFromDb): string {
   return rec?.source ?? "?";
 }
 
-async function fetchAllRecipeIdsBySources(supabase: SupabaseClient, sources: string[]): Promise<string[]> {
+/** Рецепты по фильтрам (AND): опционально user_id и/или source. */
+async function fetchRecipeIdsFiltered(
+  supabase: SupabaseClient,
+  filters: { sources?: string[]; userId?: string | null },
+): Promise<string[]> {
   const ids: string[] = [];
   let from = 0;
   const page = 1000;
   for (;;) {
-    const { data, error } = await supabase
-      .from("recipes")
-      .select("id")
-      .in("source", sources)
-      .order("id", { ascending: true })
-      .range(from, from + page - 1);
+    let q = supabase.from("recipes").select("id").order("id", { ascending: true });
+    if (filters.userId) q = q.eq("user_id", filters.userId);
+    if (filters.sources?.length) q = q.in("source", filters.sources);
+    const { data, error } = await q.range(from, from + page - 1);
     if (error) throw error;
     if (!data?.length) break;
     for (const r of data) ids.push(r.id);
@@ -327,15 +353,24 @@ async function main() {
     }
   };
 
-  if (opts.recipeSources?.length && !opts.recipeId) {
-    const recipeIds = await fetchAllRecipeIdsBySources(supabase, opts.recipeSources);
+  if ((opts.recipeSources?.length || opts.userId) && !opts.recipeId) {
+    const recipeIds = await fetchRecipeIdsFiltered(supabase, {
+      sources: opts.recipeSources?.length ? opts.recipeSources : undefined,
+      userId: opts.userId ?? undefined,
+    });
     if (recipeIds.length === 0) {
+      const parts: string[] = [];
+      if (opts.userId) parts.push(`user_id = ${opts.userId}`);
+      if (opts.recipeSources?.length) parts.push(`source ∈ [${opts.recipeSources.join(", ")}]`);
       console.warn(
-        `\n[hint] В этом проекте Supabase нет строк в recipes с source ∈ [${opts.recipeSources.join(", ")}].\n` +
-          `        Проверьте URL проекта в .env и фактическое значение столбца recipes.source (seed, manual, chat_ai, …).\n`,
+        `\n[hint] В этом проекте Supabase нет строк в recipes с фильтром: ${parts.join(" AND ") || "(пусто)"}.\n` +
+          `        Проверьте URL в .env и значения recipes.user_id / recipes.source.\n`,
       );
     } else {
-      console.log(`Рецептов по выбранным source: ${recipeIds.length} (загрузка ингредиентов пачками…)`);
+      const f: string[] = [];
+      if (opts.userId) f.push(`user_id`);
+      if (opts.recipeSources?.length) f.push(`source`);
+      console.log(`Рецептов по фильтру (${f.join(" + ") || "—"}): ${recipeIds.length} (загрузка ингредиентов пачками…)`);
     }
     let all = await fetchIngredientsForRecipeIdChunks(supabase, recipeIds, opts.onlyCanonical);
     if (recipeIds.length > 0 && all.length === 0) {
