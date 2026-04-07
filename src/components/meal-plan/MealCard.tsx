@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, RotateCw, Loader2, Trash2, Lock } from "lucide-react";
+import { Heart, RotateCw, Loader2, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -57,11 +57,11 @@ export interface MealCardProps {
   isFavorite?: boolean;
   onToggleFavorite?: (recipeId: string, next: boolean) => void;
   onShare?: (recipeId: string, recipeTitle: string) => void;
-  /** Заменить этот приём пищи (план). Показывает кнопку ↻ или замочек (Free). */
+  /** Заменить этот приём пищи (план). Кнопка ↻ (как у Premium); у Free onReplace открывает пейвол. */
   onReplace?: () => void;
   /** true = кнопка замены в состоянии загрузки (pool/AI). */
   isReplaceLoading?: boolean;
-  /** true = показывать замочек вместо ↻, по клику вызывается onReplace (пейвол). */
+  /** Free: та же ↻ что у Premium, подсказки про Premium; по клику — onReplace (пейвол). */
   replaceShowsLock?: boolean;
   /** Удалить блюдо из плана (Premium). Показывает кнопку 🗑. */
   onDelete?: () => void;
@@ -253,8 +253,6 @@ export function MealCard({
                   >
                     {isReplaceLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : replaceShowsLock ? (
-                      <Lock className="h-4 w-4" />
                     ) : (
                       <motion.span
                         animate={{ rotate: replaceSpin ? 360 : 0 }}
