@@ -207,6 +207,8 @@ export default function RecipePage() {
             p.planned_date === plannedDate && p.meal_type === planMealType && p.recipe_id === id
         )
       : null;
+  /** Слот реально есть в загруженном плане — иначе нельзя подставлять servings_recommended и тем более писать в БД (было 4↔1). */
+  const planSlotResolved = planSlot != null;
   const slotOverrides = planSlot?.ingredient_overrides ?? [];
   const slotServings = planSlot?.servings;
 
@@ -346,17 +348,20 @@ export default function RecipePage() {
   const planRowMemberIdPersistRef = useRef<string | null | undefined>(undefined);
   const servingsSelectedPersistRef = useRef(1);
   const slotServingsPersistRef = useRef<number | undefined>(undefined);
+  const planSlotResolvedPersistRef = useRef(false);
   fromMealPlanPersistRef.current = !!fromMealPlan;
   plannedDatePersistRef.current = plannedDate;
   planMealTypePersistRef.current = planMealType;
   planRowMemberIdPersistRef.current = planRowMemberId;
   servingsSelectedPersistRef.current = servingsSelected;
   slotServingsPersistRef.current = slotServings;
+  planSlotResolvedPersistRef.current = planSlotResolved;
 
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
 
   // Порции из плана: не ждём загрузку recipe — id из URL + dayPlans из кэша; иначе кадр с 1 и скачок после fetch рецепта.
+  // Пока слота нет в dayPlans (кэш/ключ запроса), не подставляем servings_recommended — иначе «мигание» с реальным meals.*.servings.
   // После save слота кэш плана патчится в updateSlotServings (без invalidate всего meal_plans_v2).
   useEffect(() => {
     if (fromFavorites) {
@@ -389,6 +394,9 @@ export default function RecipePage() {
       if (!recipe?.id) {
         return;
       }
+      if (!planSlotResolved) {
+        return;
+      }
       lastSyncedPlanSlotKeyRef.current = planSlotSyncKey;
       const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
       const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 4;
@@ -418,13 +426,18 @@ export default function RecipePage() {
     slotServings,
     servingsSelected,
     dayPlanLoading,
+    planSlotResolved,
   ]);
 
   // Сохранение порций в meals.*.servings (meal_plans_v2). Debounce + обязательный cleanup при unmount по refs.
   // Раньше при slotServings === servingsSelected эффект делал ранний return без cleanup — при закрытии карточки flush не вызывался, если последний run был «чистый».
+  // Без найденного слота в dayPlans не пишем: slotServings === undefined раньше давало ложный mismatch и cleanup перетирал план дефолтом рецепта.
   const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!fromMealPlan || plannedDate == null || planMealType == null) {
+      return undefined;
+    }
+    if (!planSlotResolved) {
       return undefined;
     }
 
@@ -452,6 +465,7 @@ export default function RecipePage() {
         servingsSaveRef.current = null;
       }
       if (!fromMealPlanPersistRef.current) return;
+      if (!planSlotResolvedPersistRef.current) return;
       const pd = plannedDatePersistRef.current;
       const mt = planMealTypePersistRef.current;
       if (pd == null || mt == null) return;
@@ -466,7 +480,16 @@ export default function RecipePage() {
         }).catch(() => {});
       }
     };
-  }, [fromMealPlan, plannedDate, planMealType, planRowMemberId, slotServings, servingsSelected, updateSlotServings]);
+  }, [
+    fromMealPlan,
+    plannedDate,
+    planMealType,
+    planRowMemberId,
+    planSlotResolved,
+    slotServings,
+    servingsSelected,
+    updateSlotServings,
+  ]);
 
   const displayIngredients = recipe ? getDisplayIngredients(recipe as RecipeDisplayIngredients) : [];
   const servingsBase = Math.max(1, (recipe as { servings_base?: number | null })?.servings_base ?? 1);
