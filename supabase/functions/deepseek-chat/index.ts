@@ -127,6 +127,86 @@ function normalizeTitleKey(title: string): string {
     .trim();
 }
 
+function normalizeMealTypeKey(v: string | null | undefined): string {
+  const x = String(v ?? "").trim().toLowerCase();
+  if (!x) return "";
+  if (x === "breakfast" || x === "lunch" || x === "dinner" || x === "snack") return x;
+  return "";
+}
+
+function isSimpleMealOnlyQuery(text: string): boolean {
+  const q = normalizeTitleKey(text);
+  if (!q) return false;
+  const words = q.split(" ").filter(Boolean);
+  if (words.length > 4) return false;
+  const simple = new Set([
+    "ужин",
+    "на ужин",
+    "обед",
+    "на обед",
+    "завтрак",
+    "на завтрак",
+    "перекус",
+    "на перекус",
+    "dinner",
+    "for dinner",
+    "lunch",
+    "for lunch",
+    "breakfast",
+    "for breakfast",
+    "snack",
+  ]);
+  return simple.has(q);
+}
+
+type CookingTechnique = "bake" | "stew" | "fry" | "boil" | "steam";
+
+function detectTechniqueFromText(text: string): CookingTechnique | null {
+  const t = normalizeTitleKey(text);
+  if (!t) return null;
+  if (/(запеч|запек|духовк)/.test(t)) return "bake";
+  if (/(туш|томл)/.test(t)) return "stew";
+  if (/(жар|обжар|гриль)/.test(t)) return "fry";
+  if (/(вар|отвар|кипят)/.test(t)) return "boil";
+  if (/(на пару|паровар|парен)/.test(t)) return "steam";
+  return null;
+}
+
+function extractStepTexts(rawSteps: unknown): string[] {
+  if (!Array.isArray(rawSteps)) return [];
+  const out: string[] = [];
+  for (const s of rawSteps) {
+    if (typeof s === "string" && s.trim()) out.push(s.trim());
+    else if (s && typeof s === "object") {
+      const instr = (s as { instruction?: unknown }).instruction;
+      if (typeof instr === "string" && instr.trim()) out.push(instr.trim());
+    }
+  }
+  return out;
+}
+
+function detectTechniqueFromRecipeLike(recipe: { title?: string; steps?: unknown }): CookingTechnique | null {
+  const fromTitle = detectTechniqueFromText(recipe.title ?? "");
+  if (fromTitle) return fromTitle;
+  const stepsText = extractStepTexts(recipe.steps).join(" ");
+  return detectTechniqueFromText(stepsText);
+}
+
+function buildTechniqueCooldownLine(techniques: CookingTechnique[]): string {
+  if (!techniques.length) return "";
+  const map: Record<CookingTechnique, string> = {
+    bake: "запекание",
+    stew: "тушение",
+    fry: "жарка",
+    boil: "варка",
+    steam: "приготовление на пару",
+  };
+  const labels = techniques.map((t) => map[t]).filter(Boolean);
+  if (!labels.length) return "";
+  return `[РАЗНООБРАЗИЕ — ТЕХНИКА]
+Избегай техники(к): ${labels.join(", ")}. Выбери другую технику приготовления.`;
+}
+
 /** Извлекает строку amount из displayText вида «Название — 30 г» или «30 г». */
 function amountFromDisplayText(displayText: string, name: string): string {
   const d = (displayText ?? "").trim();
@@ -144,7 +224,8 @@ async function fetchRecentTitleKeys(
   supabase: ReturnType<typeof createClient>,
   userId: string,
   memberIdOrFamilyStorage: string | null,
-  targetIsFamily: boolean
+  targetIsFamily: boolean,
+  mealTypeFilter?: string | null
 ): Promise<string[]> {
   try {
     const since = new Date();
@@ -166,8 +247,9 @@ async function fetchRecentTitleKeys(
     const { data: rows } = await q;
     const recipeIds = (rows ?? []).map((r: { recipe_id?: string }) => r?.recipe_id).filter(Boolean) as string[];
     if (recipeIds.length === 0) return [];
-    const { data: recipes } = await supabase.from("recipes").select("id, title").in("id", recipeIds);
-    const byId = new Map<string, { title?: string }>();
+    const mealTypeNorm = normalizeMealTypeKey(mealTypeFilter);
+    const { data: recipes } = await supabase.from("recipes").select("id, title, meal_type").in("id", recipeIds);
+    const byId = new Map<string, { title?: string; meal_type?: string | null }>();
     for (const r of recipes ?? []) {
       const id = (r as { id?: string }).id;
       if (id) byId.set(id, r as { title?: string });
@@ -175,7 +257,12 @@ async function fetchRecentTitleKeys(
     const seen = new Set<string>();
     const titleKeys: string[] = [];
     for (const id of recipeIds) {
-      const t = byId.get(id)?.title;
+      const recipeRow = byId.get(id);
+      if (mealTypeNorm) {
+        const rowMealType = normalizeMealTypeKey(recipeRow?.meal_type);
+        if (!rowMealType || rowMealType !== mealTypeNorm) continue;
+      }
+      const t = recipeRow?.title;
       if (t && typeof t === "string") {
         const key = normalizeTitleKey(t);
         if (key && !seen.has(key)) {
@@ -185,6 +272,65 @@ async function fetchRecentTitleKeys(
       }
     }
     return titleKeys.slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+async function fetchRecentTechniques(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  memberIdOrFamilyStorage: string | null,
+  targetIsFamily: boolean,
+  mealTypeFilter?: string | null,
+): Promise<CookingTechnique[]> {
+  try {
+    const since = new Date();
+    since.setDate(since.getDate() - 14);
+    const sinceIso = since.toISOString();
+    let q = supabase
+      .from("chat_history")
+      .select("recipe_id")
+      .eq("user_id", userId)
+      .not("recipe_id", "is", null)
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (targetIsFamily) {
+      q = memberIdOrFamilyStorage ? q.eq("child_id", memberIdOrFamilyStorage) : q.is("child_id", null);
+    } else if (memberIdOrFamilyStorage) {
+      q = q.eq("child_id", memberIdOrFamilyStorage);
+    }
+    const { data: rows } = await q;
+    const recipeIds = (rows ?? []).map((r: { recipe_id?: string }) => r?.recipe_id).filter(Boolean) as string[];
+    if (!recipeIds.length) return [];
+    const mealTypeNorm = normalizeMealTypeKey(mealTypeFilter);
+    const { data: recipes } = await supabase
+      .from("recipes")
+      .select("id, title, meal_type, steps")
+      .in("id", recipeIds);
+    const byId = new Map<string, { title?: string; meal_type?: string | null; steps?: unknown }>();
+    for (const r of recipes ?? []) {
+      const id = (r as { id?: string }).id;
+      if (id) byId.set(id, r as { title?: string; meal_type?: string | null; steps?: unknown });
+    }
+    const result: CookingTechnique[] = [];
+    const seen = new Set<CookingTechnique>();
+    for (const id of recipeIds) {
+      const rec = byId.get(id);
+      if (!rec) continue;
+      if (mealTypeNorm) {
+        const rowMealType = normalizeMealTypeKey(rec.meal_type);
+        if (!rowMealType || rowMealType !== mealTypeNorm) continue;
+      }
+      const tech = detectTechniqueFromRecipeLike({ title: rec.title, steps: rec.steps });
+      if (tech && !seen.has(tech)) {
+        seen.add(tech);
+        result.push(tech);
+      }
+      if (result.length >= 3) break;
+    }
+    return result;
   } catch {
     return [];
   }
@@ -707,23 +853,55 @@ serve(async (req) => {
       );
     }
 
-    let recentTitleKeys: string[] = [];
-    let recentTitleKeysLine = "";
-    if (isRecipeRequest && userId && supabase) {
-      const memberIdForHistory = targetIsFamily ? storageMemberId : (memberId && memberId !== "family" ? memberId : null);
-      recentTitleKeys = await fetchRecentTitleKeys(supabase, userId, memberIdForHistory, targetIsFamily);
-      if (recentTitleKeys.length > 0) {
-        const maxTitles = 5;
-        recentTitleKeysLine = "Не повторяй: " + recentTitleKeys.slice(0, maxTitles).join(", ") + ".";
-      }
-    }
-
-    const tSystemPromptStart = Date.now();
-    const promptUserMessage = (type === "sos_consultant" || type === "balance_check") ? userMessage : undefined;
     const mealTypeForPrompt =
       isRecipeRequest && userMessage && isExplicitDishRequest(userMessage) && inferMealTypeFromQuery(userMessage)
         ? inferMealTypeFromQuery(userMessage)!
         : (reqMealType ?? "");
+    const simpleMealOnlyQuery = isRecipeRequest && isSimpleMealOnlyQuery(userMessage);
+
+    let recentTitleKeys: string[] = [];
+    let recentTitleKeysLine = "";
+    let recentTechniqueCooldown: CookingTechnique[] = [];
+    let recentTechniqueLine = "";
+    if (isRecipeRequest && userId && supabase) {
+      const memberIdForHistory = targetIsFamily ? storageMemberId : (memberId && memberId !== "family" ? memberId : null);
+      const historyMealTypeFilter = simpleMealOnlyQuery ? normalizeMealTypeKey(mealTypeForPrompt) : "";
+      recentTitleKeys = await fetchRecentTitleKeys(
+        supabase,
+        userId,
+        memberIdForHistory,
+        targetIsFamily,
+        historyMealTypeFilter || null
+      );
+      if (recentTitleKeys.length > 0 && simpleMealOnlyQuery) {
+        const maxTitles = 5;
+        recentTitleKeysLine = "Не повторяй недавние варианты: " + recentTitleKeys.slice(0, maxTitles).join(", ") + ".";
+      }
+      if (simpleMealOnlyQuery && historyMealTypeFilter) {
+        recentTechniqueCooldown = await fetchRecentTechniques(
+          supabase,
+          userId,
+          memberIdForHistory,
+          targetIsFamily,
+          historyMealTypeFilter
+        );
+        if (recentTechniqueCooldown.length >= 2) {
+          recentTechniqueLine = buildTechniqueCooldownLine(recentTechniqueCooldown.slice(0, 2));
+        }
+      }
+    }
+    safeLog(JSON.stringify({
+      tag: "ANTI_DUPLICATE_TELEMETRY",
+      requestId,
+      simpleMealOnlyQuery,
+      mealTypeForPrompt: normalizeMealTypeKey(mealTypeForPrompt) || undefined,
+      recentTitleKeysUsed: simpleMealOnlyQuery ? Math.min(recentTitleKeys.length, 5) : 0,
+      techniqueCooldownSize: recentTechniqueCooldown.length,
+      techniqueCooldownApplied: !!recentTechniqueLine,
+    }));
+
+    const tSystemPromptStart = Date.now();
+    const promptUserMessage = (type === "sos_consultant" || type === "balance_check") ? userMessage : undefined;
     let systemPrompt: string;
     if (!isRecipeRequest) {
       systemPrompt = getSystemPromptForType(type, memberDataForPrompt, isPremiumUser, targetIsFamily, allMembersForPrompt, promptUserMessage, effectiveGenerationContextBlock, mealTypeForPrompt, reqMaxCookingTime, servings, recentTitleKeysLine);
@@ -817,6 +995,9 @@ serve(async (req) => {
           }
         }
       }
+    }
+    if (recentTechniqueLine) {
+      systemPrompt += "\n\n" + recentTechniqueLine;
     }
 
     const extraSuffix = typeof reqExtraSystemSuffix === "string" ? reqExtraSystemSuffix.trim() : "";
@@ -1392,13 +1573,23 @@ serve(async (req) => {
       const recipeForLog = responseRecipes[0] as RecipeJson;
       const newTitleKey = normalizeTitleKey(recipeForLog.title ?? "");
       const wasDuplicate = newTitleKey && recentTitleKeys.length > 0 && recentTitleKeys.includes(newTitleKey);
+      const generatedTechnique = detectTechniqueFromRecipeLike({
+        title: recipeForLog.title ?? "",
+        steps: recipeForLog.steps ?? [],
+      });
+      const techniqueCooldownHit = !!generatedTechnique && recentTechniqueCooldown.includes(generatedTechnique);
       safeLog(JSON.stringify({
         tag: "ANTI_DUPLICATE",
         requestId,
         scope: targetIsFamily ? "family" : "member",
+        simpleMealOnlyQuery,
+        mealTypeForPrompt: normalizeMealTypeKey(mealTypeForPrompt) || undefined,
         recentTitleKeysCount: recentTitleKeys.length,
         newTitleKey: newTitleKey || undefined,
         wasDuplicate,
+        generatedTechnique: generatedTechnique ?? undefined,
+        techniqueCooldownHit,
+        techniqueCooldownList: recentTechniqueCooldown,
         retried: false,
       }));
     }
