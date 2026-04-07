@@ -249,6 +249,7 @@ Dislikes — **жёсткое исключение**: рецепт, содерж
 Когда пользователь открывает чат из плана с готовой фразой в поле ввода (без автоматической отправки):
 
 - **Транспорт:** React Router `navigate("/chat", { state: { … } })`. Ключевые поля: `prefillMessage` (строка), `prefillOnly: true` (только вставка в input), плюс контекст слота: `fromPlanSlot`, `plannedDate`, `mealType`, `memberId`.
+- **`memberId` в state:** UUID члена семьи для строки `meal_plans_v2` с этим `member_id`; **`null` — план «Семья»** (`member_id IS NULL`). Нельзя сбрасывать `null` в `undefined` через `memberId ?? undefined` при переходе в чат/избранное/рецепт — иначе экран рецепта не находит слот и порции рассинхронизируются. В `RecipePage` явный `null` определяется через **`'memberId' in location.state`** (не через `!= null`).
 - **Маппинг текста по слоту** (единый источник на клиенте): `src/utils/planChatPrefill.ts` — `getPlanSlotChatPrefillMessage(meal_type)`:
   - `breakfast` → «Подберите завтрак»
   - `lunch` → «Подберите обед»

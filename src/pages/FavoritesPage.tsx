@@ -44,7 +44,7 @@ export default function FavoritesPage() {
     fromPlanSlot?: boolean;
     plannedDate?: string;
     mealType?: string;
-    memberId?: string;
+    memberId?: string | null;
     /** Мягкий вход на вкладку списка после сборки с плана */
     shoppingListJustBuilt?: boolean;
   } | null;
@@ -143,7 +143,7 @@ export default function FavoritesPage() {
                 fromMealPlan: true,
                 plannedDate: planSlotFromNav.plannedDate,
                 mealType: planSlotFromNav.mealType,
-                ...(planSlotFromNav.memberId != null ? { memberId: planSlotFromNav.memberId } : {}),
+                memberId: planSlotFromNav.memberId,
               }
             : {}),
         },
@@ -296,7 +296,7 @@ export default function FavoritesPage() {
                                   fromMealPlan: true,
                                   plannedDate: planSlotFromNav.plannedDate,
                                   mealType: planSlotFromNav.mealType,
-                                  ...(planSlotFromNav.memberId != null ? { memberId: planSlotFromNav.memberId } : {}),
+                                  memberId: planSlotFromNav.memberId,
                                 }
                               : {}),
                           },

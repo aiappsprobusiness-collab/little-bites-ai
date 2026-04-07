@@ -189,7 +189,13 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     const setPaywallReason = useAppStore((s) => s.setPaywallReason);
     const { toast } = useToast();
     const location = useLocation();
-    const planSlotState = (location.state as { fromPlanSlot?: boolean; plannedDate?: string; mealType?: string; memberId?: string } | null) ?? null;
+    const planSlotState =
+      (location.state as {
+        fromPlanSlot?: boolean;
+        plannedDate?: string;
+        mealType?: string;
+        memberId?: string | null;
+      } | null) ?? null;
 
     const [ingredientOverrides, setIngredientOverrides] = useState<Record<number, string>>({});
 
@@ -777,8 +783,8 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                 : (effectiveRecipe as { mealType?: string }).mealType ?? null
             }
             defaultMemberId={
-              planSlotState?.fromPlanSlot && planSlotState?.memberId != null
-                ? planSlotState.memberId
+              planSlotState?.fromPlanSlot && planSlotState != null && Object.prototype.hasOwnProperty.call(planSlotState, "memberId")
+                ? planSlotState.memberId ?? null
                 : chatMemberId
             }
             defaultDayKey={

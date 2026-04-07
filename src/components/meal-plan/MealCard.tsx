@@ -141,7 +141,8 @@ export function MealCard({
         mealTypeLabel: displayMealLabel,
         plannedDate: plannedDate ?? undefined,
         mealType,
-        memberId: planMemberId ?? undefined,
+        /** null = строка плана «Семья» (member_id IS NULL); не использовать ?? undefined — иначе теряется null и ломаются порции. */
+        memberId: planMemberId === undefined ? undefined : planMemberId,
       },
     });
   };

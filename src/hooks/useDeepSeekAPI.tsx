@@ -11,6 +11,7 @@ import { derivePayloadFromContext } from '@/domain/generation/derivePayloadFromC
 import type { Family, Profile } from '@/domain/generation/types';
 import { checkChatRequestAgainstProfile } from '@/utils/chatBlockedCheck';
 import { getAppLocale } from '@/utils/appLocale';
+import { resolveChatRecipeServings } from '@/utils/chatRecipeServings';
 
 /** Повтор запроса при сетевой/протокольной ошибке (ERR_HTTP2_PROTOCOL_ERROR, Failed to fetch). */
 async function fetchWithRetry(
@@ -164,6 +165,15 @@ export function useDeepSeekAPI() {
         dislikes: c.dislikes,
       })));
 
+      const isRecipeLike = type === 'chat' || type === 'recipe';
+      const servingsForRecipe = isRecipeLike
+        ? resolveChatRecipeServings({
+            targetIsFamily: activeProfileId === 'family' || targetIsFamily,
+            members: freshMembers.map((c) => ({ age_months: c.age_months, type: c.type })),
+            mealType: mealType ?? null,
+          })
+        : undefined;
+
       safeLog('AI Context Sent:', {
         memberData,
         ageMonths: memberData?.ageMonths,
@@ -215,6 +225,7 @@ export function useDeepSeekAPI() {
             ...(extraSystemSuffix && extraSystemSuffix.trim() && { extraSystemSuffix: extraSystemSuffix.trim() }),
             ...(mealType && { mealType }),
             ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime }),
+            ...(servingsForRecipe != null && isRecipeLike && { servings: servingsForRecipe }),
             ...((type === 'chat' || type === 'recipe') && { target_locale: getAppLocale() }),
           }),
         });

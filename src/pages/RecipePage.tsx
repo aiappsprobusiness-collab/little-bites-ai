@@ -111,7 +111,8 @@ export default function RecipePage() {
     fromChat?: boolean;
     preloadedTitle?: string;
     mealTypeLabel?: string;
-    memberId?: string;
+    /** string — член семьи; null — план «Семья» (meal_plans_v2.member_id IS NULL) */
+    memberId?: string | null;
     plannedDate?: string;
     mealType?: string;
   } | null;
@@ -165,13 +166,16 @@ export default function RecipePage() {
   const favoriteMemberId = stateMemberId ?? (selectedMemberId && selectedMemberId !== "family" ? selectedMemberId : null);
 
   /**
-   * member_id строки meal_plans_v2 для слота. С Плана в state часто нет memberId (семья Premium) —
-   * нельзя подставлять selectedMemberId === "family" в запрос (иначе слот не находится, порции скачут 6↔1).
+   * member_id строки meal_plans_v2 для слота.
+   * Явный `memberId: null` в state = семейная строка плана; `!= null` нельзя — null терялся бы и слот не находился.
    */
+  const hasExplicitPlanMemberId = Boolean(
+    state && fromMealPlan && plannedDate && planMealType && Object.prototype.hasOwnProperty.call(state, "memberId")
+  );
   const planRowMemberId =
     fromMealPlan && plannedDate && planMealType
-      ? state?.memberId != null
-        ? state.memberId
+      ? hasExplicitPlanMemberId
+        ? state!.memberId ?? null
         : mealPlanMemberIdForShoppingSync({ hasAccess, selectedMemberId, members })
       : undefined;
   const planDate = fromMealPlan && plannedDate ? new Date(plannedDate + "T12:00:00") : new Date();

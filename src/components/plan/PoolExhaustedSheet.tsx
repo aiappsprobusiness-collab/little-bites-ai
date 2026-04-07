@@ -51,7 +51,8 @@ export function PoolExhaustedSheet({
     fromPlanSlot: true as const,
     plannedDate: selectedDayKey,
     mealType,
-    memberId: memberId ?? undefined,
+    /** null — семейный план; не сбрасывать в undefined через ?? */
+    memberId: memberId === undefined ? undefined : memberId,
   };
 
   const handleAddFromFavorites = () => {

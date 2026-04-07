@@ -1487,7 +1487,7 @@ export default function ChatPage() {
       fromPlanSlot?: boolean;
       plannedDate?: string;
       mealType?: string;
-      memberId?: string;
+      memberId?: string | null;
     } | null;
     const prefillText = state?.prefillMessage;
     if (!prefillText) {
