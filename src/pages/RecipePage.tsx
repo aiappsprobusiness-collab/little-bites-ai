@@ -667,7 +667,10 @@ export default function RecipePage() {
       return;
     }
     try {
-      const { wasEmpty } = await addRecipeIngredients({ payloads });
+      const { wasEmpty } = await addRecipeIngredients({
+        payloads,
+        recipeServings: { recipe_id: id, servings_selected: servingsSelected },
+      });
       toast({
         title: wasEmpty ? "Создали список и добавили ингредиенты ✓" : "Добавили в список покупок ✓",
       });

@@ -15,6 +15,12 @@
 
 Нормализация применяется **только при агрегации** списка покупок. Данные в `recipe_ingredients`, карточки рецептов и путь генерации рецепта в чате не меняются.
 
+### Порции рецепта в списке (карточка → покупки)
+
+- При **«Добавить в покупки»** с экрана рецепта (`RecipePage`) в **`shopping_lists.meta.recipe_shopping_servings`** сохраняется снимок **`recipe_id → servings_selected`** (вместе с уже посчитанными `source_contributions` в строках).
+- В **ShoppingListView** для таких рецептов (пока они есть в строках списка) показывается блок **«Порции из рецепта»** со степпером: изменение пересчитывает **`source_contributions`** для данного `recipe_id`, заново выводит `amount`/`unit` через **`toShoppingDisplayUnitAndAmount`**, пропорционально масштабирует **`dual_display_amount_sum`** при наличии. Логика: **`computeShoppingItemUpdatesForRecipeServings`** (`src/utils/shopping/scaleShoppingListForRecipeServings.ts`), мутация **`adjustRecipeServingsInShoppingList`** в **`useShoppingList`**.
+- Сборка списка **из плана** (`replaceItems` + sync meta) задаёт **`recipe_shopping_servings: {}`**, чтобы не смешивать снимки порций с агрегатом меню. Степпер появляется только после добавления из карточки рецепта.
+
 ---
 
 ## Модуль нормализации

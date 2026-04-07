@@ -251,6 +251,8 @@ export function ShoppingListView() {
     deleteItem,
     insertItem,
     removePurchased,
+    adjustRecipeServingsInShoppingList,
+    isAdjustingRecipeServings,
   } = useShoppingList();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -304,6 +306,7 @@ export function ShoppingListView() {
       last_synced_member_id: memberId ?? null,
       last_synced_plan_signature: planSignature ?? "",
       last_synced_at: new Date().toISOString(),
+      recipe_shopping_servings: {},
     };
     try {
       if (payload.length === 0) {
@@ -365,6 +368,54 @@ export function ShoppingListView() {
     }
     return [...byId.values()];
   }, [items]);
+
+  /** Рецепты, которые реально есть в строках списка (для отсечения устаревших ключей в meta). */
+  const activeRecipeIdsFromItems = useMemo(() => {
+    const s = new Set<string>();
+    for (const item of items) {
+      for (const c of item.meta?.source_contributions ?? []) {
+        if (c.recipe_id) s.add(c.recipe_id);
+      }
+      for (const r of item.meta?.source_recipes ?? []) {
+        if (r.id) s.add(r.id);
+      }
+      if (item.recipe_id) s.add(item.recipe_id);
+    }
+    return s;
+  }, [items]);
+
+  /** Рецепты, добавленные из карточки: в list meta есть snapshot порций. */
+  const recipesWithServingsSnapshot = useMemo(() => {
+    const rs = syncMetaStored?.recipe_shopping_servings;
+    if (!rs || typeof rs !== "object") return [];
+    const list: { id: string; title: string; servings: number }[] = [];
+    for (const rid of Object.keys(rs)) {
+      if (!activeRecipeIdsFromItems.has(rid)) continue;
+      const raw = rs[rid as keyof typeof rs];
+      if (typeof raw !== "number" || raw < 1) continue;
+      let title = "";
+      for (const item of items) {
+        const fromMeta = item.meta?.source_recipes?.find((x) => x.id === rid);
+        if (fromMeta?.title) {
+          title = fromMeta.title;
+          break;
+        }
+        if (item.recipe_id === rid && item.recipe_title) {
+          title = item.recipe_title;
+          break;
+        }
+      }
+      list.push({ id: rid, title: title || "Рецепт", servings: Math.round(raw) });
+    }
+    list.sort((a, b) => a.title.localeCompare(b.title, "ru"));
+    return list;
+  }, [syncMetaStored, items, activeRecipeIdsFromItems]);
+
+  const handleRecipeServingsChange = (recipeId: string, next: number) => {
+    adjustRecipeServingsInShoppingList({ recipeId, newServings: next }).catch(() => {
+      toast({ variant: "destructive", title: "Не удалось пересчитать порции" });
+    });
+  };
 
   /** При открытии sheet: черновик = полный набор id (если фильтр не задан) или текущий subset. */
   useEffect(() => {
@@ -689,6 +740,52 @@ export function ShoppingListView() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+      )}
+
+      {!loading && recipesWithServingsSnapshot.length > 0 && (
+        <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5 space-y-2">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/90">
+            Порции из рецепта
+          </p>
+          <div className="flex flex-col gap-2.5">
+            {recipesWithServingsSnapshot.map((r) => (
+              <div key={r.id} className="flex items-center gap-3 min-w-0">
+                <span className="text-xs text-foreground flex-1 min-w-0 truncate" title={r.title}>
+                  {r.title}
+                </span>
+                <div
+                  className="inline-flex items-center rounded-full bg-primary-light/50 border border-primary-border/70 overflow-hidden shrink-0"
+                  role="group"
+                  aria-label={`Порции: ${r.title}`}
+                >
+                  <motion.button
+                    type="button"
+                    disabled={isAdjustingRecipeServings || r.servings <= 1}
+                    onClick={() => handleRecipeServingsChange(r.id, r.servings - 1)}
+                    whileTap={{ scale: 0.96 }}
+                    className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 text-base leading-none font-medium touch-manipulation"
+                    aria-label="Уменьшить порции"
+                  >
+                    −
+                  </motion.button>
+                  <span className="min-w-[1.25rem] px-0.5 text-center text-xs font-semibold text-foreground tabular-nums">
+                    {r.servings}
+                  </span>
+                  <motion.button
+                    type="button"
+                    disabled={isAdjustingRecipeServings || r.servings >= 20}
+                    onClick={() => handleRecipeServingsChange(r.id, r.servings + 1)}
+                    whileTap={{ scale: 0.96 }}
+                    className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 text-base leading-none font-medium touch-manipulation"
+                    aria-label="Увеличить порции"
+                  >
+                    +
+                  </motion.button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

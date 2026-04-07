@@ -9,6 +9,7 @@ import type {
 } from "@/utils/shopping/shoppingListMerge";
 import { mergeShoppingItemMeta, shoppingRowMatchesPayload } from "@/utils/shopping/shoppingListMerge";
 import { toShoppingDisplayUnitAndAmount } from "@/utils/shopping/normalizeIngredientForShopping";
+import { computeShoppingItemUpdatesForRecipeServings } from "@/utils/shopping/scaleShoppingListForRecipeServings";
 
 export type { ShoppingIngredientPayload } from "@/utils/shopping/shoppingListMerge";
 
@@ -52,6 +53,11 @@ export interface ShoppingListSyncMeta {
   last_synced_member_id?: string | null;
   last_synced_plan_signature?: string;
   last_synced_at?: string;
+  /**
+   * Порции, под которые добавлены вклады рецепта из карточки (RecipePage).
+   * Используется степпером «Порции» в списке покупок для пересчёта количеств.
+   */
+  recipe_shopping_servings?: Record<string, number>;
 }
 
 export interface ShoppingListRow {
@@ -222,7 +228,11 @@ export function useShoppingList(options?: UseShoppingListOptions) {
   });
 
   const addRecipeIngredients = useMutation({
-    mutationFn: async (params: { payloads: ShoppingIngredientPayload[] }): Promise<{ wasEmpty: boolean }> => {
+    mutationFn: async (params: {
+      payloads: ShoppingIngredientPayload[];
+      /** Заполняется при добавлении из карточки рецепта — для степпера порций в списке. */
+      recipeServings?: { recipe_id: string; servings_selected: number };
+    }): Promise<{ wasEmpty: boolean }> => {
       if (!user) throw new Error("Not authenticated");
       const list = await getOrCreateActiveList(user.id);
       const { count: countBefore } = await supabase
@@ -247,7 +257,8 @@ export function useShoppingList(options?: UseShoppingListOptions) {
       if (existingRes.error) throw existingRes.error;
       const rows = (existingRes.data ?? []) as ExRow[];
 
-      for (const payload of params.payloads) {
+      const { payloads, recipeServings } = params;
+      for (const payload of payloads) {
         const ex = rows.find((r) => shoppingRowMatchesPayload(r, payload));
         const newRecipe = payload.source_recipes?.[0] ?? null;
         if (ex) {
@@ -299,12 +310,78 @@ export function useShoppingList(options?: UseShoppingListOptions) {
           });
         }
       }
+
+      if (recipeServings?.recipe_id && Number.isFinite(recipeServings.servings_selected) && recipeServings.servings_selected >= 1) {
+        const { data: listMetaRow } = await supabase.from("shopping_lists").select("meta").eq("id", list.id).single();
+        const prevFull = (listMetaRow?.meta as Record<string, unknown>) ?? {};
+        const prevRsRaw = prevFull.recipe_shopping_servings;
+        const prevRs =
+          prevRsRaw != null && typeof prevRsRaw === "object" && !Array.isArray(prevRsRaw)
+            ? { ...(prevRsRaw as Record<string, number>) }
+            : {};
+        prevRs[recipeServings.recipe_id] = Math.max(1, Math.min(99, Math.round(recipeServings.servings_selected)));
+        await supabase
+          .from("shopping_lists")
+          .update({ meta: { ...prevFull, recipe_shopping_servings: prevRs } })
+          .eq("id", list.id);
+      }
+
       return { wasEmpty };
     },
     onSuccess: () => {
       if (user?.id) queryClient.invalidateQueries({ queryKey: activeShoppingListQueryKey(user.id) });
       queryClient.invalidateQueries({ queryKey: ["shopping_list_items"] });
       if (listId) queryClient.invalidateQueries({ queryKey: ITEMS_QUERY_KEY(listId) });
+    },
+  });
+
+  const adjustRecipeServingsInShoppingList = useMutation({
+    mutationFn: async ({ recipeId, newServings }: { recipeId: string; newServings: number }) => {
+      if (!user) throw new Error("Not authenticated");
+      if (!listId) throw new Error("No active list");
+      const clamped = Math.max(1, Math.min(20, Math.round(newServings)));
+      const { data: listRow, error: listErr } = await supabase.from("shopping_lists").select("meta").eq("id", listId).single();
+      if (listErr) throw listErr;
+      const prevFull = (listRow?.meta as Record<string, unknown>) ?? {};
+      const rsRaw = prevFull.recipe_shopping_servings;
+      const rs =
+        rsRaw != null && typeof rsRaw === "object" && !Array.isArray(rsRaw) ? (rsRaw as Record<string, number>) : null;
+      const oldS = rs?.[recipeId];
+      if (oldS == null || typeof oldS !== "number" || oldS < 1) {
+        throw new Error("missing_recipe_servings_snapshot");
+      }
+      if (clamped === oldS) return;
+
+      const { data: itemRows, error: itemsErr } = await supabase
+        .from("shopping_list_items")
+        .select("id, shopping_list_id, name, amount, unit, category, is_purchased, recipe_id, recipe_title, meta")
+        .eq("shopping_list_id", listId);
+      if (itemsErr) throw itemsErr;
+
+      const updates = computeShoppingItemUpdatesForRecipeServings(
+        (itemRows ?? []) as ShoppingListItemRow[],
+        recipeId,
+        oldS,
+        clamped,
+      );
+      for (const u of updates) {
+        const { error: upErr } = await supabase
+          .from("shopping_list_items")
+          .update({ amount: u.amount, unit: u.unit, meta: u.meta })
+          .eq("id", u.id);
+        if (upErr) throw upErr;
+      }
+
+      const nextRs = { ...rs, [recipeId]: clamped };
+      const { error: metaErr } = await supabase
+        .from("shopping_lists")
+        .update({ meta: { ...prevFull, recipe_shopping_servings: nextRs } })
+        .eq("id", listId);
+      if (metaErr) throw metaErr;
+    },
+    onSuccess: () => {
+      if (listId) queryClient.invalidateQueries({ queryKey: ITEMS_QUERY_KEY(listId) });
+      if (user?.id) queryClient.invalidateQueries({ queryKey: activeShoppingListQueryKey(user.id) });
     },
   });
 
@@ -382,6 +459,8 @@ export function useShoppingList(options?: UseShoppingListOptions) {
     replaceItems: replaceItems.mutateAsync,
     addRecipeIngredients: addRecipeIngredients.mutateAsync,
     isAddingToList: addRecipeIngredients.isPending,
+    adjustRecipeServingsInShoppingList: adjustRecipeServingsInShoppingList.mutateAsync,
+    isAdjustingRecipeServings: adjustRecipeServingsInShoppingList.isPending,
     deleteItem: deleteItem.mutateAsync,
     insertItem: insertItem.mutateAsync,
     removePurchased: removePurchased.mutateAsync,
