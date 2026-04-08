@@ -77,6 +77,14 @@
 | `member_create_start` | click | AddChildForm |
 | `member_create_success` | outcome | AddChildForm |
 
+### 3.3.1 Trial onboarding (после `start_trial`)
+
+| feature | Тип | Источник | properties |
+|---------|-----|----------|--------------|
+| `trial_onboarding_shown` | view | TrialActivatedModal | — |
+| `trial_onboarding_closed` | click | TrialActivatedModal: «Продолжить», крестик | — |
+| `pricing_info_opened` | view | FreeVsPremiumModal, TrialActivatedModal | опц. `source`: `replace_meal_soft_paywall` \| `trial_onboarding` |
+
 ### 3.4 Paywall
 
 | feature | Тип | Источник | properties |
@@ -84,6 +92,9 @@
 | `paywall_view` | view | UnifiedPaywall, WeekPreviewPaywallSheet | `paywall_reason` и/или `source`, `paywall_surface` |
 | `paywall_primary_click` | click | Paywalls, WeekPreview | Unified: `paywall_reason`; week_preview: `source: week_preview` |
 | `paywall_secondary_click` | click | Unified/Legacy | |
+| `paywall_replace_meal_shown` | view | ReplaceMealSoftPaywallModal (клик «Заменить блюдо» на Free) | опц. `member_id` |
+| `trial_started_from_replace_meal` | outcome | После успешного `startTrial()` из soft paywall замены | — |
+| `paywall_closed_replace_meal` | click | ReplaceMealSoftPaywallModal: «Назад» | — |
 | `trial_started` | outcome | После успешного `startTrial()` | |
 
 ### 3.5 Subscription / оплата (клиент)

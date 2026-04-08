@@ -18,6 +18,12 @@ interface AppState {
   /** После успешного start_trial (один показ, пока не закрыли — см. trialActivatedModalStorage) */
   showTrialActivatedModal: boolean;
   setShowTrialActivatedModal: (v: boolean) => void;
+  /** После закрытия онбординга trial — продолжить flow (например замена блюда). Не персистится. */
+  trialOnboardingResumeCallback: (() => void | Promise<void>) | null;
+  setTrialOnboardingResumeCallback: (fn: (() => void | Promise<void>) | null) => void;
+  /** Экран Free vs Premium (модалка). */
+  showFreeVsPremiumModal: boolean;
+  setShowFreeVsPremiumModal: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -35,6 +41,10 @@ export const useAppStore = create<AppState>()(
       setShowFavoritesLimitSheet: (v) => set((s) => ({ ...s, showFavoritesLimitSheet: v })),
       showTrialActivatedModal: false,
       setShowTrialActivatedModal: (v) => set({ showTrialActivatedModal: v }),
+      trialOnboardingResumeCallback: null,
+      setTrialOnboardingResumeCallback: (fn) => set({ trialOnboardingResumeCallback: fn }),
+      showFreeVsPremiumModal: false,
+      setShowFreeVsPremiumModal: (v) => set({ showFreeVsPremiumModal: v }),
     }),
     { name: STORAGE_KEY, partialize: (s) => ({ _version: s._version }) }
   )

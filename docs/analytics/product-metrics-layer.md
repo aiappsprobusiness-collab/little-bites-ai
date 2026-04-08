@@ -7,7 +7,7 @@ Taxonomy событий: [ANALYTICS_EVENT_TAXONOMY_STAGE2.md](../decisions/ANALY
 
 ## 1. View: `analytics.usage_events_enriched`
 
-**Миграции:** `20260331180000_analytics_usage_events_enriched_view.sql` (база), затем **`20260401120000_analytics_usage_events_enriched_stage5.sql`** (Stage 5: новые feature + platform + prop_share_type / prop_entry_point).
+**Миграции:** `20260331180000_analytics_usage_events_enriched_view.sql` (база), затем **`20260401120000_analytics_usage_events_enriched_stage5.sql`** (Stage 5), затем **`20260408120000_analytics_usage_events_enriched_replace_meal_paywall.sql`** (soft paywall замены блюда + trial onboarding + pricing_info).
 
 **Назначение:** единая точка для отчётов без ручного `CASE` по `feature` в каждом запросе.
 

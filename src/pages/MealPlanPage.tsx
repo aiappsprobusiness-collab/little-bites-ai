@@ -105,14 +105,11 @@ import {
   isInfantComplementaryPlanContext,
   isInfantNewRecipePlanSlot,
 } from "@/utils/infantComplementaryPlan";
-import {
-  getAutoReplaceLimitPerSlotPerDay,
-  getSlotDayKey,
-  isInfantAutoreplaceContext,
-  type InfantPoolExhaustedReason,
-} from "@/utils/infantAutoreplace";
+import { getSlotDayKey, type InfantPoolExhaustedReason } from "@/utils/infantAutoreplace";
 import { FF_UNIFIED_PAYWALL, FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
 import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/WeekPreviewPaywallSheet";
+import { ReplaceMealSoftPaywallModal } from "@/components/subscription/ReplaceMealSoftPaywallModal";
+import { runReplaceOccupiedMealSlot, type ReplaceOccupiedMealDeps } from "@/pages/mealPlan/runReplaceOccupiedMealSlot";
 import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingListFromPlanSheet";
 import { TagListEditor } from "@/components/ui/tag-list-editor";
 import { createSharedPlan, type SharedPlanPayloadWeek } from "@/services/sharedPlan";
@@ -360,10 +357,12 @@ export default function MealPlanPage() {
     if (id) setJustCreatedMemberIdState(id);
   }, []);
 
-  const { hasAccess, subscriptionStatus, planInitialized, setPlanInitialized } = useSubscription();
+  const { hasAccess, subscriptionStatus, planInitialized, setPlanInitialized, startTrial, isStartingTrial } =
+    useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
+  const setShowFreeVsPremiumModal = useAppStore((s) => s.setShowFreeVsPremiumModal);
   const isFree = !hasAccess;
 
   const openSubscriptionFromBadge = useCallback(() => {
@@ -618,6 +617,8 @@ export default function MealPlanPage() {
   const infantAutoFillSlotLocksRef = useRef<Set<string>>(new Set());
 
   const [replacingSlotKey, setReplacingSlotKey] = useState<string | null>(null);
+  const [replaceMealSoftPaywallOpen, setReplaceMealSoftPaywallOpen] = useState(false);
+  const pendingReplaceMealResumeRef = useRef<(() => Promise<void>) | null>(null);
   const [poolExhaustedContext, setPoolExhaustedContext] = useState<{
     dayKey: string;
     mealType: string;
@@ -1341,15 +1342,6 @@ export default function MealPlanPage() {
     [weekPlans, selectedDayKey, sessionExcludeTitleKeys]
   );
 
-  const isInfantPremiumAutoreplace = isInfantAutoreplaceContext({
-    isInfantPlanUi,
-    isFree,
-  });
-
-  const slotAutoReplaceLimit = getAutoReplaceLimitPerSlotPerDay({
-    isInfantPremiumContext: isInfantPremiumAutoreplace,
-  });
-
   const infantPoolExhaustedOptions = useMemo(() => {
     if (!poolExhaustedContext) return [];
     const key = getSlotDayKey(poolExhaustedContext.dayKey, poolExhaustedContext.mealType);
@@ -1597,6 +1589,99 @@ export default function MealPlanPage() {
     }
     return null;
   }, [mealsByType, planSlotsForRender]);
+
+  const replaceOccupiedDeps = useMemo((): ReplaceOccupiedMealDeps => {
+    return {
+      selectedDayKey,
+      isInfantPlanUi,
+      selectedMember,
+      isAnyGenerating,
+      toast,
+      appendInfantMatchedVariant,
+      replacingSlotKey,
+      setReplacingSlotKey,
+      poolAutoReplaceCountBySlot,
+      clearSlotAndOpenPoolFallback,
+      infantPoolMemberData,
+      user,
+      mealPlanMemberId,
+      infantDayReplaceExcludeRecipeIdsMerged,
+      infantDayReplaceExcludeTitleKeysMerged,
+      supabase,
+      replaceSlotWithRecipe,
+      setSessionExcludeRecipeIds,
+      setSessionExcludeTitleKeys,
+      queryClient,
+      mealPlansKeyWeek,
+      mealPlansKeyDay,
+      setPoolAutoReplaceCountBySlot,
+      replaceMealSlotAuto,
+      replaceExcludeRecipeIdsMerged,
+      replaceExcludeTitleKeysMerged,
+      memberDataForPlan,
+      setPaywallReason,
+      setPaywallCustomMessage,
+      setShowPaywall,
+      setInfantReplacePrimaryConfirm,
+      getProductDisplayLabel,
+    };
+  }, [
+    selectedDayKey,
+    isInfantPlanUi,
+    selectedMember,
+    isAnyGenerating,
+    toast,
+    appendInfantMatchedVariant,
+    replacingSlotKey,
+    setReplacingSlotKey,
+    poolAutoReplaceCountBySlot,
+    clearSlotAndOpenPoolFallback,
+    infantPoolMemberData,
+    user,
+    mealPlanMemberId,
+    infantDayReplaceExcludeRecipeIdsMerged,
+    infantDayReplaceExcludeTitleKeysMerged,
+    supabase,
+    replaceSlotWithRecipe,
+    setSessionExcludeRecipeIds,
+    setSessionExcludeTitleKeys,
+    queryClient,
+    mealPlansKeyWeek,
+    mealPlansKeyDay,
+    setPoolAutoReplaceCountBySlot,
+    replaceMealSlotAuto,
+    replaceExcludeRecipeIdsMerged,
+    replaceExcludeTitleKeysMerged,
+    memberDataForPlan,
+    setPaywallReason,
+    setPaywallCustomMessage,
+    setShowPaywall,
+    setInfantReplacePrimaryConfirm,
+    getProductDisplayLabel,
+  ]);
+
+  const handleReplaceMealSoftPaywallTryTrial = useCallback(async () => {
+    const resume = pendingReplaceMealResumeRef.current;
+    try {
+      trackUsageEvent("trial_started_from_replace_meal");
+      await startTrial({
+        resumeAfterOnboarding: resume
+          ? async () => {
+              await resume();
+            }
+          : undefined,
+      });
+      setReplaceMealSoftPaywallOpen(false);
+      pendingReplaceMealResumeRef.current = null;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "TRIAL_ALREADY_USED") {
+        toast({ title: "Триал уже использован", description: "Оформите подписку для полного доступа." });
+      } else if (msg) {
+        toast({ variant: "destructive", title: "Ошибка", description: msg });
+      }
+    }
+  }, [startTrial, toast]);
 
   /** Сводка слотов выбранного дня — в deps автодобора вместо всего массива (меньше лишних перезапусков и моргания). */
   const infantDaySlotsSignature = useMemo(
@@ -2673,249 +2758,32 @@ export default function MealPlanPage() {
                                 return;
                               }
                               if (isFree) {
-                                setPaywallReason(isInfantPlanUi ? "new_product" : "meal_replace");
-                                setPaywallCustomMessage(null);
-                                setShowPaywall(true);
-                                return;
-                              }
-                              if (import.meta.env.DEV) console.info("[REPLACE] source=AI premiumOnly", { dayKey: selectedDayKey, slot: slot.id });
-                              const slotKey = getSlotDayKey(selectedDayKey, slot.id);
-                              if (isInfantPremiumAutoreplace && recipeId && recipe?.title) {
-                                appendInfantMatchedVariant({
-                                  dayKey: selectedDayKey,
-                                  mealType: slot.id,
-                                  recipeId,
-                                  title: recipe.title,
-                                });
-                              }
-                              if (replacingSlotKey != null) return;
-                              if ((poolAutoReplaceCountBySlot[slotKey] ?? 0) >= slotAutoReplaceLimit) {
-                                await clearSlotAndOpenPoolFallback({
-                                  dayKey: selectedDayKey,
-                                  mealType: slot.id,
-                                  planSlotId: plannedMeal.id,
-                                  infantReason: isInfantPremiumAutoreplace ? "limit_reached" : undefined,
-                                  skipClear: isInfantPremiumAutoreplace,
-                                });
-                                return;
-                              }
-                              setReplacingSlotKey(slotKey);
-                              try {
-                                if (
-                                  isInfantPremiumAutoreplace &&
-                                  infantPoolMemberData &&
-                                  user?.id &&
-                                  mealPlanMemberId
-                                ) {
-                                  const picked = isInfantNewRecipePlanSlot(slot.id)
-                                    ? await pickInfantNewRecipe({
-                                      supabase,
-                                      userId: user.id,
-                                      memberId: mealPlanMemberId,
-                                      memberData: infantPoolMemberData,
-                                      excludeRecipeIds: infantDayReplaceExcludeRecipeIdsMerged,
-                                      excludeTitleKeys: infantDayReplaceExcludeTitleKeysMerged,
-                                      limitCandidates: 150,
-                                      plannedDayKey: selectedDayKey,
-                                    })
-                                    : await pickInfantFamiliarRecipe({
-                                      supabase,
-                                      userId: user.id,
-                                      memberId: mealPlanMemberId,
-                                      memberData: infantPoolMemberData,
-                                      excludeRecipeIds: infantDayReplaceExcludeRecipeIdsMerged,
-                                      excludeTitleKeys: infantDayReplaceExcludeTitleKeysMerged,
-                                      limitCandidates: 150,
-                                      plannedDayKey: selectedDayKey,
-                                    });
-                                  if (!picked) {
-                                    await clearSlotAndOpenPoolFallback({
-                                      dayKey: selectedDayKey,
-                                      mealType: slot.id,
-                                      planSlotId: plannedMeal.id,
-                                      infantReason: "candidates_exhausted",
-                                      skipClear: true,
-                                    });
-                                    return;
-                                  }
-                                  if (picked.id === recipeId) {
-                                    toast({ description: "Нет других вариантов" });
-                                    return;
-                                  }
-                                  const introKey =
-                                    (selectedMember as MembersRow | undefined)?.introducing_product_key?.trim() ?? null;
-                                  if (
-                                    isInfantNewRecipePlanSlot(slot.id) &&
-                                    introKey &&
-                                    picked.firstNovelProductKey &&
-                                    picked.firstNovelProductKey !== introKey
-                                  ) {
-                                    setInfantReplacePrimaryConfirm({
-                                      currentLabel: getProductDisplayLabel(introKey),
-                                      newLabel: getProductDisplayLabel(picked.firstNovelProductKey),
-                                      picked: {
-                                        id: picked.id,
-                                        title: picked.title,
-                                        firstNovelProductKey: picked.firstNovelProductKey,
-                                      },
-                                      slotId: slot.id,
-                                    });
-                                    return;
-                                  }
-                                  await replaceSlotWithRecipe({
-                                    dayKey: selectedDayKey,
-                                    mealType: slot.id,
-                                    recipeId: picked.id,
-                                    recipeTitle: picked.title,
-                                  });
-                                  setSessionExcludeRecipeIds((prev) => ({
-                                    ...prev,
-                                    [selectedDayKey]: [...(prev[selectedDayKey] ?? []), picked.id],
-                                  }));
-                                  setSessionExcludeTitleKeys((prev) => ({
-                                    ...prev,
-                                    [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(picked.title)],
-                                  }));
-                                  applyReplaceSlotToPlanCache(
-                                    queryClient,
-                                    { mealPlansKeyWeek, mealPlansKeyDay },
+                                pendingReplaceMealResumeRef.current = async () => {
+                                  await runReplaceOccupiedMealSlot(
                                     {
-                                      dayKey: selectedDayKey,
-                                      mealType: slot.id,
-                                      newRecipeId: picked.id,
-                                      title: picked.title,
-                                      plan_source: "pool",
+                                      slot,
+                                      plannedMeal: plannedMeal!,
+                                      recipe: recipe!,
+                                      recipeId: recipeId!,
+                                      isFreeTierForReplace: false,
                                     },
-                                    mealPlanMemberId ?? null
+                                    replaceOccupiedDeps
                                   );
-                                  setPoolAutoReplaceCountBySlot((prev) => ({
-                                    ...prev,
-                                    [slotKey]: (prev[slotKey] ?? 0) + 1,
-                                  }));
-                                  appendInfantMatchedVariant({
-                                    dayKey: selectedDayKey,
-                                    mealType: slot.id,
-                                    recipeId: picked.id,
-                                    title: picked.title,
-                                  });
-                                  toast({ description: "Блюдо заменено" });
-                                  if (isPlanDebug()) {
-                                    console.info("[replace_slot]", {
-                                      requestId: undefined,
-                                      dayKey: selectedDayKey,
-                                      memberId: mealPlanMemberId,
-                                      slot: slot.id,
-                                      ok: true,
-                                      reason: "client_pool_infant",
-                                    });
-                                  }
-                                  return;
-                                }
-
-                                const result = await replaceMealSlotAuto({
-                                  dayKey: selectedDayKey,
-                                  mealType: slot.id,
-                                  excludeRecipeIds: replaceExcludeRecipeIdsMerged,
-                                  excludeTitleKeys: replaceExcludeTitleKeysMerged,
-                                  memberData: memberDataForPlan
-                                    ? {
-                                      allergies: memberDataForPlan.allergies,
-                                      likes: memberDataForPlan.likes,
-                                      dislikes: memberDataForPlan.dislikes,
-                                      age_months: memberDataForPlan.age_months,
-                                    }
-                                    : undefined,
-                                  isFree,
-                                });
-                                if (result.ok) {
-                                  if (result.newRecipeId === recipeId) {
-                                    toast({ description: "Нет других вариантов" });
-                                    return;
-                                  }
-                                  setSessionExcludeRecipeIds((prev) => ({
-                                    ...prev,
-                                    [selectedDayKey]: [...(prev[selectedDayKey] ?? []), result.newRecipeId],
-                                  }));
-                                  setSessionExcludeTitleKeys((prev) => ({
-                                    ...prev,
-                                    [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(result.title)],
-                                  }));
-                                  applyReplaceSlotToPlanCache(queryClient, { mealPlansKeyWeek, mealPlansKeyDay }, {
-                                    dayKey: selectedDayKey,
-                                    mealType: slot.id,
-                                    newRecipeId: result.newRecipeId,
-                                    title: result.title,
-                                    plan_source: result.plan_source,
-                                  }, mealPlanMemberId ?? null);
-                                  if (result.pickedSource === "pool" || result.plan_source === "pool") {
-                                    setPoolAutoReplaceCountBySlot((prev) => ({
-                                      ...prev,
-                                      [slotKey]: (prev[slotKey] ?? 0) + 1,
-                                    }));
-                                  }
-                                  if (isInfantPremiumAutoreplace) {
-                                    appendInfantMatchedVariant({
-                                      dayKey: selectedDayKey,
-                                      mealType: slot.id,
-                                      recipeId: result.newRecipeId,
-                                      title: result.title,
-                                    });
-                                  }
-                                  toast({
-                                    description: result.pickedSource === "ai" ? "Подбираем новый вариант…" : "Блюдо заменено",
-                                  });
-                                  if (isPlanDebug()) {
-                                    console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: true, reason: result.reason });
-                                  }
-                                } else {
-                                  const code = (result as { code?: string }).code;
-                                  if (code === "LIMIT_REACHED") {
-                                    setPaywallReason("plan_refresh");
-                                    setPaywallCustomMessage(
-                                      `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_refresh")}`
-                                    );
-                                    setShowPaywall(true);
-                                  } else if (code === "pool_exhausted") {
-                                    await clearSlotAndOpenPoolFallback({
-                                      dayKey: selectedDayKey,
-                                      mealType: slot.id,
-                                      planSlotId: plannedMeal.id,
-                                      infantReason: isInfantPremiumAutoreplace ? "candidates_exhausted" : undefined,
-                                      skipClear: isInfantPremiumAutoreplace,
-                                    });
-                                  } else {
-                                    const err = "error" in result ? result.error : "";
-                                    if (err === "limit") {
-                                      toast({
-                                        variant: "destructive",
-                                        title: "Лимит",
-                                        description: "2 замены в день (Free). В Premium — без ограничений.",
-                                      });
-                                    } else if (err === "premium_required") {
-                                      setPaywallReason("meal_replace");
-                                      setPaywallCustomMessage(null);
-                                      setShowPaywall(true);
-                                    } else {
-                                      toast({
-                                        variant: "destructive",
-                                        title: "Не удалось заменить",
-                                        description: err === "unauthorized" ? "Нужна авторизация" : err,
-                                      });
-                                    }
-                                  }
-                                  if (isPlanDebug()) {
-                                    console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: false, reason: result.reason, error: "error" in result ? result.error : undefined });
-                                  }
-                                }
-                              } catch (e: unknown) {
-                                toast({
-                                  variant: "destructive",
-                                  title: "Ошибка",
-                                  description: e instanceof Error ? e.message : "Не удалось заменить",
-                                });
-                              } finally {
-                                setReplacingSlotKey(null);
+                                };
+                                trackUsageEvent("paywall_replace_meal_shown", { memberId: mealPlanMemberId ?? null });
+                                setReplaceMealSoftPaywallOpen(true);
+                                return;
                               }
+                              await runReplaceOccupiedMealSlot(
+                                {
+                                  slot,
+                                  plannedMeal: plannedMeal!,
+                                  recipe: recipe!,
+                                  recipeId: recipeId!,
+                                  isFreeTierForReplace: isFree,
+                                },
+                                replaceOccupiedDeps
+                              );
                             }}
                             debugSource={
                               planDebug
@@ -3291,6 +3159,21 @@ export default function MealPlanPage() {
             });
           }
         }}
+      />
+
+      <ReplaceMealSoftPaywallModal
+        open={replaceMealSoftPaywallOpen}
+        onClose={() => {
+          trackUsageEvent("paywall_closed_replace_meal");
+          pendingReplaceMealResumeRef.current = null;
+          setReplaceMealSoftPaywallOpen(false);
+        }}
+        onTryTrial={handleReplaceMealSoftPaywallTryTrial}
+        onOpenPricing={() => {
+          trackUsageEvent("pricing_info_opened", { properties: { source: "replace_meal_soft_paywall" } });
+          setShowFreeVsPremiumModal(true);
+        }}
+        isStartingTrial={isStartingTrial}
       />
 
       <BuildShoppingListFromPlanSheet

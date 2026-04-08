@@ -40,6 +40,7 @@ import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
 import { TrialActivatedModal } from "./components/subscription/TrialActivatedModal";
+import { FreeVsPremiumModal } from "./components/subscription/FreeVsPremiumModal";
 import { TrialLifecycleModalsHost } from "./components/subscription/TrialLifecycleModalsHost";
 import { FavoritesLimitSheet } from "./components/plan/FavoritesLimitSheet";
 import { FF_UNIFIED_PAYWALL } from "./config/featureFlags";
@@ -47,6 +48,7 @@ import { DinnerReminderBanner } from "./components/DinnerReminderBanner";
 import { useAppStore } from "./store/useAppStore";
 import { useSubscription } from "./hooks/useSubscription";
 import { useAuth } from "./hooks/useAuth";
+import { useToast } from "./hooks/use-toast";
 import { captureAttributionFromLocationOnce } from "./utils/usageEvents";
 import { isEffectiveTrialTier, TRIAL_ENDING_SOON_MS } from "./utils/trialLifecycle";
 import { ReactQueryDiag } from "./dev/ReactQueryDiag";
@@ -128,6 +130,7 @@ function TrialActivatedModalHost() {
   const { user } = useAuth();
   const show = useAppStore((s) => s.showTrialActivatedModal);
   const setShow = useAppStore((s) => s.setShowTrialActivatedModal);
+  const setFreeVsPremium = useAppStore((s) => s.setShowFreeVsPremiumModal);
 
   useEffect(() => {
     if (!user) setShow(false);
@@ -140,6 +143,36 @@ function TrialActivatedModalHost() {
       open={show}
       userId={user.id}
       onClose={() => setShow(false)}
+      onOpenPricing={() => setFreeVsPremium(true)}
+    />
+  );
+}
+
+function GlobalFreeVsPremiumModalHost() {
+  const { hasAccess, trialUsed, startTrial } = useSubscription();
+  const { toast } = useToast();
+  const open = useAppStore((s) => s.showFreeVsPremiumModal);
+  const setOpen = useAppStore((s) => s.setShowFreeVsPremiumModal);
+  const showTrialCta = !hasAccess && !trialUsed;
+
+  return (
+    <FreeVsPremiumModal
+      open={open}
+      onClose={() => setOpen(false)}
+      showTrialCta={showTrialCta}
+      onTryTrial={async () => {
+        setOpen(false);
+        try {
+          await startTrial();
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "";
+          if (msg === "TRIAL_ALREADY_USED") {
+            toast({ title: "Триал уже использован", description: "Оформите подписку для полного доступа." });
+          } else if (msg) {
+            toast({ variant: "destructive", title: "Ошибка", description: msg });
+          }
+        }
+      }}
     />
   );
 }
@@ -193,6 +226,7 @@ const App = () => (
             <PWAUpdateToast />
             <GlobalPaywall />
             <TrialActivatedModalHost />
+            <GlobalFreeVsPremiumModalHost />
             <TrialLifecycleModalsHost />
             {!FF_UNIFIED_PAYWALL ? <FavoritesLimitSheet /> : null}
             <TrialSoftBanner />

@@ -34,6 +34,11 @@ export function hasPremiumAccessFromSubscription(subscription: {
   return true;
 }
 
+export type StartTrialOptions = {
+  /** После закрытия онбординга trial — например продолжить замену блюда. */
+  resumeAfterOnboarding?: () => void | Promise<void>;
+};
+
 export function useSubscription() {
   const { user, authReady } = useAuth();
   const queryClient = useQueryClient();
@@ -284,7 +289,7 @@ export function useSubscription() {
 
   /** Активировать trial по кнопке. RPC возвращает { result, trial_until }. */
   const startTrial = useMutation({
-    mutationFn: async (): Promise<{ activated: boolean }> => {
+    mutationFn: async (_opts?: StartTrialOptions): Promise<{ activated: boolean }> => {
       if (!user) throw new Error("User not authenticated");
       const { data, error } = await supabase.rpc("start_trial");
       if (error) throw error;
@@ -301,15 +306,24 @@ export function useSubscription() {
       }
       return { activated: true };
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["profile-subscription", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["subscription-plan", user?.id] });
-      if (
-        data?.activated &&
-        user?.id &&
-        !hasSeenTrialActivatedModal(user.id)
-      ) {
-        useAppStore.getState().setShowTrialActivatedModal(true);
+      const resume = variables?.resumeAfterOnboarding;
+      if (!user?.id) return;
+
+      const clearResume = () => useAppStore.getState().setTrialOnboardingResumeCallback(null);
+
+      if (data?.activated) {
+        const seen = hasSeenTrialActivatedModal(user.id);
+        if (!seen) {
+          useAppStore.getState().setTrialOnboardingResumeCallback(resume ?? null);
+          useAppStore.getState().setShowTrialActivatedModal(true);
+        } else if (resume) {
+          void Promise.resolve(resume()).finally(clearResume);
+        }
+      } else if (resume) {
+        void Promise.resolve(resume()).finally(clearResume);
       }
     },
   });
