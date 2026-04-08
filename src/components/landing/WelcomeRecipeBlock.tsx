@@ -10,6 +10,7 @@ import { RecipeIngredientList } from "@/components/recipe/RecipeIngredientList";
 import { ChefAdviceCard } from "@/components/recipe/ChefAdviceCard";
 import { RecipeSteps } from "@/components/recipe/RecipeSteps";
 import { RecipeNutritionHeader } from "@/components/recipe/RecipeNutritionHeader";
+import { NutritionGoalsChips } from "@/components/recipe/NutritionGoalsChips";
 import { cn } from "@/lib/utils";
 import type { PublicRecipePayload } from "@/services/publicRecipeShare";
 import { getChefAdviceCardPresentation, isInfantRecipe } from "@/utils/infantRecipe";
@@ -149,16 +150,24 @@ export function WelcomeRecipeBlock({
   const nutritionGoals = recipeDisplay.nutrition_goals ?? [];
   const benefitLabel = getBenefitLabel(minAgeMonths ?? undefined);
   const benefitLabelForDisplay = isInfant ? null : benefitLabel;
+  /** Как на RecipePage: сначала каноническое description (БД / перевод из RPC), иначе benefit fallback. */
   const benefitDescription = buildRecipeBenefitDescription({
     recipeId: (recipe as { id?: string }).id ?? null,
-    stableKey: recipeDisplay.title ? `welcome:${recipeDisplay.title}` : "welcome",
     goals: nutritionGoals,
     title: recipeDisplay.title ?? "",
   });
-  const heroDescription =
-    isInfant && recipeDisplay.description?.trim()
-      ? recipeDisplay.description.trim()
-      : benefitDescription;
+  const dbDescription = (recipeDisplay.description ?? "").trim();
+  const heroDescription = dbDescription.length > 0 ? dbDescription : benefitDescription;
+
+  if (import.meta.env.DEV && recipeProp !== undefined) {
+    const descriptionSource =
+      dbDescription.length > 0 ? "db_or_translation" : "fallback_benefit";
+    console.debug("[sharedRecipeHero]", {
+      description_source: descriptionSource,
+      used_benefit_fallback: dbDescription.length === 0,
+      nutrition_goals_count: nutritionGoals.length,
+    });
+  }
   const steps = recipeDisplay.steps ?? [];
   const chefAdvice =
     recipeDisplay.chefAdvice ?? (recipeDisplay as { chef_advice?: string | null }).chef_advice;
@@ -224,6 +233,7 @@ export function WelcomeRecipeBlock({
               <p className="text-sm text-muted-foreground leading-[1.6]">
                 {heroDescription}
               </p>
+              <NutritionGoalsChips goals={nutritionGoals} className="mt-1" />
             </div>
           </div>
 

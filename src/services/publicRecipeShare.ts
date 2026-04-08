@@ -5,6 +5,8 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { getAppLocale } from "@/utils/appLocale";
+import { ensureStringArray } from "@/utils/typeUtils";
+import { normalizeNutritionGoals } from "@/utils/nutritionGoals";
 
 export interface PublicRecipePayload {
   id: string;
@@ -36,6 +38,7 @@ export interface PublicRecipePayload {
   steps: Array<{ instruction?: string | null; step_number?: number | null }>;
   chef_advice?: string | null;
   advice?: string | null;
+  nutrition_goals?: string[] | null;
   [key: string]: unknown;
 }
 
@@ -69,9 +72,22 @@ export async function getRecipeByShareRef(shareRef: string): Promise<PublicRecip
     return na - nb;
   });
 
-  return {
+  const nutrition_goals = ensureStringArray((recipe as { nutrition_goals?: unknown }).nutrition_goals);
+  const merged = {
     ...recipe,
+    nutrition_goals,
     ingredients,
     steps,
   } as PublicRecipePayload;
+
+  if (import.meta.env.DEV) {
+    const desc = typeof merged.description === "string" ? merged.description.trim() : "";
+    const goalsNorm = normalizeNutritionGoals(merged.nutrition_goals);
+    console.debug("[getRecipeByShareRef]", {
+      description_source: desc ? "payload" : "empty_will_use_ui_fallback",
+      nutrition_goals_count: goalsNorm.length,
+    });
+  }
+
+  return merged;
 }
