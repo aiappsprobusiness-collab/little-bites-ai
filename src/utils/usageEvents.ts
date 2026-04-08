@@ -34,6 +34,7 @@ const VIEW_STYLE_FEATURES = new Set<string>([
   "chat_open",
   "help_open",
   "paywall_view",
+  "paywall_text",
   "paywall_replace_meal_shown",
   "trial_onboarding_shown",
   "pricing_info_opened",

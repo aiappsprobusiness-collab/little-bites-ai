@@ -96,7 +96,7 @@ export function SosHero({
             )}
           >
             {helpLimitExceeded
-              ? "Лимит на сегодня исчерпан"
+              ? "Сегодня лимит вопросов исчерпан 🙌"
               : `Сегодня осталось: ${helpRemaining} ${helpRemaining === 1 ? "вопрос" : "вопроса"}`}
           </p>
         )}

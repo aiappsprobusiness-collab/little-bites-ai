@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Check } from "lucide-react";
 import {
   Sheet,
@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
 const FAVORITES_FREE_LIMIT = 7;
 
@@ -16,6 +17,12 @@ export function FavoritesLimitSheet() {
   const showFavoritesLimitSheet = useAppStore((s) => s.showFavoritesLimitSheet);
   const setShowFavoritesLimitSheet = useAppStore((s) => s.setShowFavoritesLimitSheet);
   const copy = useMemo(() => getPaywallReasonCopy("favorites_limit"), []);
+
+  useEffect(() => {
+    if (showFavoritesLimitSheet) {
+      trackPaywallTextShown("favorites_limit_sheet", { surface: "favorites_limit_sheet" });
+    }
+  }, [showFavoritesLimitSheet]);
 
   const handleOpenPremium = () => {
     setShowFavoritesLimitSheet(false);
@@ -36,7 +43,7 @@ export function FavoritesLimitSheet() {
           </SheetTitle>
         </SheetHeader>
         <p className="text-sm text-muted-foreground leading-relaxed text-balance">
-          В Free — до {FAVORITES_FREE_LIMIT} рецептов. {copy.body}
+          В бесплатной версии — до {FAVORITES_FREE_LIMIT} рецептов. {copy.body}
         </p>
         <ul className="space-y-2.5 min-w-0 shrink-0">
           {copy.bullets.map((text, index) => (
@@ -54,7 +61,7 @@ export function FavoritesLimitSheet() {
             className="w-full h-12 rounded-xl text-sm font-semibold"
             onClick={handleOpenPremium}
           >
-            Открыть Premium
+            Открыть полную версию
           </Button>
           <Button
             variant="outline"

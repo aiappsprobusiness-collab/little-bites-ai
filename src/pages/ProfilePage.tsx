@@ -625,6 +625,7 @@ export default function ProfilePage() {
         onOpenChange={setShowProfileCapDialog}
         title={PREMIUM_PROFILES_MAX_TITLE}
         description={PREMIUM_PROFILES_MAX_BODY}
+        paywallTextKey="friendly_limit_profiles_max"
       />
 
       {showGeneratingScreen && (

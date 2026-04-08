@@ -203,7 +203,7 @@ export function usePlanGenerationJob(
           if (res.status === 429 && err?.code === "LIMIT_REACHED") {
             useAppStore.getState().setPaywallReason("plan_fill_day");
             useAppStore.getState().setPaywallCustomMessage(
-              `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_fill_day")}`
+              `${getLimitReachedTitle("plan_fill_day")}\n\n${getLimitReachedMessage("plan_fill_day")}`
             );
             useAppStore.getState().setShowPaywall(true);
           }
@@ -334,7 +334,7 @@ export function usePlanGenerationJob(
         if (errData?.code === "LIMIT_REACHED") {
           useAppStore.getState().setPaywallReason("plan_fill_day");
           useAppStore.getState().setPaywallCustomMessage(
-            `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_fill_day")}`
+            `${getLimitReachedTitle("plan_fill_day")}\n\n${getLimitReachedMessage("plan_fill_day")}`
           );
           useAppStore.getState().setShowPaywall(true);
         }

@@ -6,6 +6,7 @@ import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
 import { markTrialActivatedModalSeen } from "@/utils/trialActivatedModalStorage";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import {
   TRIAL_ONBOARDING_BULLETS,
   TRIAL_ONBOARDING_CTA_CONTINUE,
@@ -29,6 +30,7 @@ export function TrialActivatedModal({ open, userId, onClose, onOpenPricing }: Tr
   useEffect(() => {
     if (open) {
       trackUsageEvent("trial_onboarding_shown");
+      trackPaywallTextShown("trial_activation_modal", { surface: "trial_onboarding" });
     }
   }, [open]);
 

@@ -1,8 +1,11 @@
 /**
- * Экран сравнения Free vs Premium / Trial.
+ * Экран сравнения бесплатной и полной версии.
  */
 
 export const FREE_VS_PREMIUM_TITLE = "Чем отличается бесплатная и полная версия";
+
+export const FREE_VS_PREMIUM_DESCRIPTION =
+  "В бесплатной версии есть базовые функции. В полной — всё, чтобы не думать о питании каждый день";
 
 export type FreeVsPremiumCell = "yes" | "no" | "text";
 
@@ -15,33 +18,47 @@ export type FreeVsPremiumRow = {
 };
 
 export const FREE_VS_PREMIUM_ROWS: FreeVsPremiumRow[] = [
-  { feature: "План на день", free: "yes", premium: "yes" },
-  { feature: "План на неделю", free: "no", premium: "yes" },
-  { feature: "Автозамена и ручная замена блюд", free: "no", premium: "yes" },
-  { feature: "Список продуктов из меню", free: "no", premium: "yes" },
-  { feature: "Помощь маме", free: "text", freeText: "Ограничено", premium: "text", premiumText: "Без ограничений" },
   {
-    feature: "ИИ-помощник в чате, запросы в день",
+    feature: "План питания",
     free: "text",
-    freeText: "2",
+    freeText: "Только на день",
+    premium: "text",
+    premiumText: "На всю неделю",
+  },
+  {
+    feature: "Замена блюд",
+    free: "text",
+    freeText: "Ограничено",
     premium: "text",
     premiumText: "Без ограничений",
   },
-  { feature: "Несколько профилей", free: "no", premium: "yes" },
   {
-    feature: "Учёт особенностей питания",
+    feature: "Чат",
     free: "text",
-    freeText: "1 аллергия",
+    freeText: "Несколько вопросов в день",
     premium: "text",
     premiumText: "Без ограничений",
   },
-  { feature: "Любит / не любит", free: "no", premium: "yes" },
+  {
+    feature: "Профили детей",
+    free: "text",
+    freeText: "Ограничено",
+    premium: "text",
+    premiumText: "Для всей семьи",
+  },
+  {
+    feature: "Подбор рецептов",
+    free: "text",
+    freeText: "Базовый",
+    premium: "text",
+    premiumText: "Персональный",
+  },
 ];
 
 export const FREE_VS_PREMIUM_COL_FREE = "Free";
 
 export const FREE_VS_PREMIUM_COL_PREMIUM = "Premium";
 
-export const FREE_VS_PREMIUM_CTA_TRIAL = "Попробовать бесплатно";
+export const FREE_VS_PREMIUM_CTA_TRIAL = "Попробовать бесплатно 3 дня";
 
 export const FREE_VS_PREMIUM_CTA_CLOSE = "Закрыть";

@@ -172,7 +172,7 @@ function GlobalFreeVsPremiumModalHost() {
         } catch (e) {
           const msg = e instanceof Error ? e.message : "";
           if (msg === "TRIAL_ALREADY_USED") {
-            toast({ title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
+            toast({ title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите полную версию для полного доступа." });
           } else if (msg) {
             toast({ variant: "destructive", title: "Ошибка", description: msg });
           }

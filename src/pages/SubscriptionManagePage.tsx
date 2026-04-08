@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
@@ -9,6 +10,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SUBSCRIPTION_PRICES } from "@/utils/subscriptionPricing";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
 /** Форматирование даты для отображения. */
 function formatDate(iso: string | null): string {
@@ -41,10 +43,10 @@ function StatusBlock({
 }) {
   const statusLabel =
     subscriptionStatus === "free"
-      ? "Free"
+      ? "Бесплатная версия"
       : subscriptionStatus === "trial"
         ? "Пробный период"
-        : "Premium";
+        : "Полная версия";
 
   const planLabel =
     subscriptionStatus === "premium" && subscriptionPlan
@@ -122,6 +124,10 @@ export default function SubscriptionManagePage() {
     isCancellingSubscription,
     refetchUsage,
   } = useSubscription();
+
+  useEffect(() => {
+    trackPaywallTextShown("subscription_manage_page", { surface: "subscription_manage" });
+  }, []);
 
   const handlePayment = (plan: "month" | "year") => {
     startPayment(plan).catch((e) => {
@@ -263,7 +269,7 @@ export default function SubscriptionManagePage() {
                     setShowPaywall(true);
                   }}
                 >
-                  Купить Premium
+                  Оформить полную версию
                 </Button>
               </div>
             )}

@@ -733,7 +733,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                           setShowPaywall(true);
                         }}
                         className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all active:scale-95"
-                        title="В план (Premium)"
+                        title="В план (полная версия)"
                       >
                         <CalendarPlus className="h-4 w-4" />
                       </button>

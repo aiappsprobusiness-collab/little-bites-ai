@@ -828,8 +828,8 @@ export default function RecipePage() {
               whileTap={{ scale: 0.96 }}
               transition={{ duration: 0.15 }}
               className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all"
-              aria-label="В план (Premium)"
-              title="В план (Premium)"
+              aria-label="В план (полная версия)"
+              title="В план (полная версия)"
             >
               <CalendarPlus className="h-4 w-4" />
             </motion.button>

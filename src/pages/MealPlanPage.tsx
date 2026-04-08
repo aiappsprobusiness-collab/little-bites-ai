@@ -1677,7 +1677,7 @@ export default function MealPlanPage() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "";
       if (msg === "TRIAL_ALREADY_USED") {
-        toast({ title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
+        toast({ title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите полную версию для полного доступа." });
       } else if (msg) {
         toast({ variant: "destructive", title: "Ошибка", description: msg });
       }
@@ -2324,7 +2324,7 @@ export default function MealPlanPage() {
                         🔒
                       </span>
                       <span>Собрать неделю</span>
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/75">Premium</span>
+                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/75">Полная</span>
                     </>
                   ) : (
                     <span>Собрать неделю</span>
@@ -2460,8 +2460,8 @@ export default function MealPlanPage() {
                           setShowWeekPreviewSheet(true);
                         } else {
                           toast({
-                            title: "Доступно в Premium",
-                            description: "План на 7 дней — только для подписчиков.",
+                            title: "Это в полной версии",
+                            description: "План на неделю — чтобы не думать о меню каждый день.",
                           });
                         }
                         return;
@@ -2938,7 +2938,7 @@ export default function MealPlanPage() {
                                     if (code === "LIMIT_REACHED") {
                                       setPaywallReason("plan_refresh");
                                       setPaywallCustomMessage(
-                                        `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_refresh")}`
+                                        `${getLimitReachedTitle("plan_refresh")}\n\n${getLimitReachedMessage("plan_refresh")}`
                                       );
                                       setShowPaywall(true);
                                     } else if (code === "pool_exhausted") {
@@ -2953,7 +2953,7 @@ export default function MealPlanPage() {
                                         toast({
                                           variant: "destructive",
                                           title: "Лимит",
-                                          description: "2 замены в день (Free). В Premium — без ограничений.",
+                                          description: "В бесплатной версии — 2 замены в день. В полной — без ограничений.",
                                         });
                                       } else if (err === "premium_required") {
                                         setPaywallReason("meal_replace");
@@ -3390,7 +3390,7 @@ export default function MealPlanPage() {
           const which = clearConfirm;
           if (!which || isAnyGenerating) return;
           if (which === "week" && !hasAccess) {
-            toast({ title: "Доступно в Premium", description: "Очистка недели доступна по подписке." });
+            toast({ title: "Это в полной версии", description: "Очистка всей недели доступна в полной версии." });
             setClearConfirm(null);
             return;
           }

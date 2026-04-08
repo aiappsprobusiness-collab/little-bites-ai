@@ -30,11 +30,11 @@ export function SubscriptionCard({
     isFree
       ? freePlanLine
       : isTrial && trialUntilFormatted
-        ? `Trial до ${trialUntilFormatted}`
+        ? `Пробный период до ${trialUntilFormatted}`
         : isPremium && expiresAtFormatted
-          ? `Premium до ${expiresAtFormatted}`
+          ? `Полная версия до ${expiresAtFormatted}`
           : isPremium
-            ? "Подписка активна"
+            ? "Полная версия активна"
             : "Пробный период";
 
   return (
@@ -49,7 +49,7 @@ export function SubscriptionCard({
         className="w-full rounded-xl bg-primary text-primary-foreground hover:opacity-90 border-0 h-10 text-sm font-medium"
         onClick={onCta}
       >
-        {isFree ? "Попробовать Premium" : "Управлять подпиской"}
+        {isFree ? "Попробовать бесплатно 3 дня" : "Управлять подпиской"}
       </Button>
       {canCancel && onCancel && (
         <button

@@ -22,7 +22,7 @@ const MEMBER_TYPE_LABEL: Record<string, string> = {
 };
 
 const ONBOARDING_FAMILY_LIMIT_MESSAGE =
-  "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу";
+  "Добавьте всю семью. Получите план питания для каждого ребёнка с учётом возраста и предпочтений";
 
 interface FamilyOnboardingProps {
   onComplete: () => void;

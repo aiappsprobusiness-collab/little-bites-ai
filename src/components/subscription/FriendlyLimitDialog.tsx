@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -6,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
 export interface FriendlyLimitDialogProps {
   open: boolean;
@@ -15,6 +17,8 @@ export interface FriendlyLimitDialogProps {
   primaryLabel?: string;
   secondaryLabel?: string;
   onSecondary?: () => void;
+  /** Ключ для `usage_events.feature = paywall_text` (properties.paywall_reason). */
+  paywallTextKey?: string;
 }
 
 /**
@@ -28,7 +32,14 @@ export function FriendlyLimitDialog({
   primaryLabel = "Понятно",
   secondaryLabel,
   onSecondary,
+  paywallTextKey,
 }: FriendlyLimitDialogProps) {
+  useEffect(() => {
+    if (open && paywallTextKey) {
+      trackPaywallTextShown(paywallTextKey, { surface: "friendly_limit_dialog" });
+    }
+  }, [open, paywallTextKey]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md rounded-2xl">

@@ -356,7 +356,7 @@ export async function runReplaceOccupiedMealSlot(
       const code = (result as { code?: string }).code;
       if (code === "LIMIT_REACHED") {
         setPaywallReason("plan_refresh");
-        setPaywallCustomMessage(`${getLimitReachedTitle()}\n\n${getLimitReachedMessage("plan_refresh")}`);
+        setPaywallCustomMessage(`${getLimitReachedTitle("plan_refresh")}\n\n${getLimitReachedMessage("plan_refresh")}`);
         setShowPaywall(true);
       } else if (code === "pool_exhausted") {
         await clearSlotAndOpenPoolFallback({

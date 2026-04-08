@@ -29,6 +29,7 @@ import {
   applyTextareaAutosize,
   TEXTAREA_AUTOSIZE_DEFAULT_MAX_PX,
 } from "@/utils/textareaAutosize";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
 const MAX_MESSAGES = 12;
 
@@ -92,6 +93,12 @@ export function TopicConsultationSheet({
   onInitialMessageSent,
   popularQuestionTextIfPremium = null,
 }: TopicConsultationSheetProps) {
+  useEffect(() => {
+    if (isOpen) {
+      trackPaywallTextShown(`topic_consultation_${topicKey}`, { surface: "topic_consultation" });
+    }
+  }, [isOpen, topicKey]);
+
   const { selectedMemberId, members } = useFamily();
   const { chat } = useDeepSeekAPI();
   /** "family" = общий ответ / уточнить о ком речь; иначе id ребёнка для персонального ответа. */
@@ -188,7 +195,7 @@ export function TopicConsultationSheet({
 
       if (premiumHelpLimitGate?.blocked) {
         const soft =
-          "Сегодня вы уже использовали доступное количество запросов. Лимит обновится завтра — спасибо, что пользуетесь Premium.";
+          "Сегодня вы уже использовали доступное количество запросов. Лимит обновится завтра — спасибо, что пользуетесь приложением.";
         const assistantFinal: TopicSessionMessage = {
           id: assistantId,
           role: "assistant",
@@ -261,7 +268,7 @@ export function TopicConsultationSheet({
                 ? {
                     ...m,
                     content:
-                      "Сегодня вы уже использовали доступное количество запросов. Лимит обновится завтра — спасибо, что пользуетесь Premium.",
+                      "Сегодня вы уже использовали доступное количество запросов. Лимит обновится завтра — спасибо, что пользуетесь приложением.",
                   }
                 : m
             )
@@ -275,7 +282,7 @@ export function TopicConsultationSheet({
           msg === "HELP_TIMEOUT"
             ? "Ответ занимает больше времени. Попробуйте ещё раз."
             : msg === "LIMIT_REACHED"
-              ? "Лимит на сегодня исчерпан. Попробуйте завтра или откройте Trial."
+              ? "Лимит на сегодня исчерпан. Попробуйте завтра или откройте полную версию."
               : "Ошибка отправки. Попробуйте ещё раз.";
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantId ? { ...m, content: fallbackText } : m))
@@ -373,7 +380,7 @@ export function TopicConsultationSheet({
                   className="h-[52px] rounded-[18px] font-semibold bg-primary text-primary-foreground"
                   onClick={onOpenPremium}
                 >
-                  Открыть в Premium
+                  Открыть полную версию
                 </Button>
                 <Button
                   variant="ghost"
@@ -493,7 +500,7 @@ export function TopicConsultationSheet({
                             {showPreview && onPremiumChipTap && (
                               <div className="mt-4 pt-3 border-t border-border/60 space-y-3">
                                 <p className="text-[13px] text-muted-foreground leading-snug">
-                                  Продолжение ответа доступно в расширенной консультации.
+                                  Продолжение ответа — в полной версии, без сокращений.
                                 </p>
                                 <Button
                                   type="button"
@@ -501,7 +508,7 @@ export function TopicConsultationSheet({
                                   className="rounded-xl font-medium bg-primary text-primary-foreground"
                                   onClick={onPremiumChipTap}
                                 >
-                                  Получить полный разбор (Premium)
+                                  Получить полный разбор
                                 </Button>
                               </div>
                             )}

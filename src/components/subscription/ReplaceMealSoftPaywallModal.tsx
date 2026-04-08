@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import {
   REPLACE_MEAL_PAYWALL_CTA_BACK,
   REPLACE_MEAL_PAYWALL_CTA_PRICING,
@@ -23,6 +25,12 @@ export function ReplaceMealSoftPaywallModal({
   onOpenPricing,
   isStartingTrial = false,
 }: ReplaceMealSoftPaywallModalProps) {
+  useEffect(() => {
+    if (open) {
+      trackPaywallTextShown("replace_meal_soft", { surface: "replace_meal_soft" });
+    }
+  }, [open]);
+
   return (
     <AnimatePresence>
       {open && (

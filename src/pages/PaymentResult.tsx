@@ -4,6 +4,7 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { CheckCircle, XCircle } from "lucide-react";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
 export function PaymentSuccess() {
   const [searchParams] = useSearchParams();
@@ -11,16 +12,17 @@ export function PaymentSuccess() {
 
   useEffect(() => {
     trackUsageEvent("purchase_success", { properties: orderId ? { order_id: orderId } : {} });
+    trackPaywallTextShown("payment_success_screen", { surface: "payment_result" });
   }, [orderId]);
 
   return (
     <MobileLayout>
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
         <CheckCircle className="h-16 w-16 text-primary mb-4" />
-        <h1 className="text-typo-title font-semibold mb-2">Оплата прошла успешно</h1>
+        <h1 className="text-typo-title font-semibold mb-2">🎉 Оплата прошла успешно</h1>
         <p className="text-muted-foreground mb-6">
-          Подписка активирована. Обновите страницу или вернитесь в приложение, если статус не
-          изменился.
+          Полная версия активирована. Обновите страницу или вернитесь в приложение, если статус ещё не
+          обновился.
         </p>
         {orderId && (
           <p className="text-typo-caption text-muted-foreground mb-4 font-mono">Заказ: {orderId}</p>
@@ -43,14 +45,15 @@ export function PaymentFail() {
   const orderId = searchParams.get("OrderId") ?? searchParams.get("order_id") ?? "";
   useEffect(() => {
     trackUsageEvent("purchase_error", { properties: orderId ? { order_id: orderId } : {} });
+    trackPaywallTextShown("payment_fail_screen", { surface: "payment_result" });
   }, [orderId]);
   return (
     <MobileLayout>
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
         <XCircle className="h-16 w-16 text-destructive mb-4" />
-        <h1 className="text-typo-title font-semibold mb-2">Оплата не прошла</h1>
+        <h1 className="text-typo-title font-semibold mb-2">Оплата не прошла 🙈</h1>
         <p className="text-muted-foreground mb-6">
-          Попробуйте снова или выберите другой способ оплаты.
+          Ничего страшного — попробуйте снова или выберите другой способ оплаты.
         </p>
         {orderId && (
           <p className="text-typo-caption text-muted-foreground mb-4 font-mono">Заказ: {orderId}</p>

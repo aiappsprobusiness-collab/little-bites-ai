@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
@@ -6,7 +6,6 @@ import { TrialLifecycleModal } from "@/components/subscription/TrialLifecycleMod
 import {
   isPostTrialExpiredNatural,
   isTrialEndingSoon,
-  isTrialEndDateSameCalendarDayAs,
 } from "@/utils/trialLifecycle";
 import {
   hasSeenTrialEndingSoonModal,
@@ -28,13 +27,6 @@ export function TrialLifecycleModalsHost() {
   const { isLoading: isLoadingProfile, trialUntil, trialUsed, hasPremiumAccess } = useSubscription();
 
   const [phase, setPhase] = useState<"ending_soon" | "expired" | null>(null);
-
-  const endingSoonTitle = useMemo(() => {
-    if (!trialUntil) return "Пробный доступ заканчивается завтра";
-    return isTrialEndDateSameCalendarDayAs(trialUntil)
-      ? "Пробный доступ заканчивается сегодня"
-      : "Пробный доступ заканчивается завтра";
-  }, [trialUntil]);
 
   useEffect(() => {
     if (!user?.id || isLoadingProfile) return;
@@ -86,7 +78,6 @@ export function TrialLifecycleModalsHost() {
     <TrialLifecycleModal
       open
       variant={phase}
-      endingSoonTitle={endingSoonTitle}
       onPrimary={() => openPaywall(phase === "ending_soon" ? "trial_ending_soon" : "trial_expired")}
       onSecondary={phase === "ending_soon" ? dismissEndingSoon : dismissExpired}
     />

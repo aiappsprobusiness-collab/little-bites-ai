@@ -1,22 +1,29 @@
+import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
 export type TrialLifecycleModalVariant = "ending_soon" | "expired";
 
 type TrialLifecycleModalProps = {
   open: boolean;
   variant: TrialLifecycleModalVariant;
-  /** Заголовок напоминания (например «сегодня» / «завтра»). */
-  endingSoonTitle: string;
+  /** Оставлено для обратной совместимости; текст задаётся внутри модалки. */
+  endingSoonTitle?: string;
   onPrimary: () => void;
   onSecondary: () => void;
 };
 
+const TITLES: Record<TrialLifecycleModalVariant, string> = {
+  ending_soon: "⏳ Пробный доступ заканчивается… Продолжайте пользоваться без ограничений",
+  expired: "Пробный доступ закончился",
+};
+
 const BODY: Record<TrialLifecycleModalVariant, string> = {
-  ending_soon: "Сохраните полный доступ к плану питания и AI-рецептам",
-  expired: "Чтобы продолжить пользоваться всеми функциями, оформите Premium",
+  ending_soon: "Успейте оформить полную версию — план, замены и помощь останутся без дневных лимитов.",
+  expired: "Доступна бесплатная версия с ограничениями. Оформите полную версию, чтобы сохранить все возможности",
 };
 
 /**
@@ -25,11 +32,21 @@ const BODY: Record<TrialLifecycleModalVariant, string> = {
 export function TrialLifecycleModal({
   open,
   variant,
-  endingSoonTitle,
+  endingSoonTitle: _legacyEndingSoonTitle,
   onPrimary,
   onSecondary,
 }: TrialLifecycleModalProps) {
-  const title = variant === "ending_soon" ? endingSoonTitle : "Пробный доступ завершён";
+  void _legacyEndingSoonTitle; // совместимость с TrialLifecycleModalsHost
+  const title = TITLES[variant];
+
+  useEffect(() => {
+    if (open) {
+      trackPaywallTextShown(
+        variant === "ending_soon" ? "trial_lifecycle_ending_soon" : "trial_lifecycle_expired",
+        { surface: "trial_lifecycle" }
+      );
+    }
+  }, [open, variant]);
 
   return (
     <AnimatePresence>
@@ -74,10 +91,10 @@ export function TrialLifecycleModal({
                 className="w-full h-11 text-sm font-semibold rounded-xl"
                 onClick={onPrimary}
               >
-                Оформить Premium
+                Оформить полную версию
               </Button>
               <Button variant="ghost" size="sm" className="w-full h-10 text-sm rounded-xl" onClick={onSecondary}>
-                {variant === "ending_soon" ? "Позже" : "Продолжить с Free"}
+                {variant === "ending_soon" ? "Позже" : "Остаться на бесплатной версии"}
               </Button>
             </div>
           </motion.div>

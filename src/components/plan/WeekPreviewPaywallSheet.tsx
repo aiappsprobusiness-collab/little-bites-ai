@@ -12,6 +12,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { SUBSCRIPTION_PRICES, YEARLY_PER_MONTH } from "@/utils/subscriptionPricing";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
 import { PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
@@ -69,6 +70,7 @@ export function WeekPreviewPaywallSheet({
         paywall_surface: "week_preview_sheet",
       },
     });
+    trackPaywallTextShown("week_preview_sheet", { surface: "week_preview_sheet" });
   }, [open]);
 
   const handleStartTrial = async () => {
@@ -80,7 +82,7 @@ export function WeekPreviewPaywallSheet({
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg === "TRIAL_ALREADY_USED") {
-        toast({ variant: "default", title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
+        toast({ variant: "default", title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите полную версию для полного доступа." });
       } else {
         toast({ variant: "destructive", title: "Ошибка", description: msg || "Попробуйте позже." });
       }
@@ -159,7 +161,7 @@ export function WeekPreviewPaywallSheet({
               >
                 <span className="flex items-center gap-2">
                   <Heart className="w-4 h-4 shrink-0" />
-                  {isStartingTrial ? "Активация…" : "Попробовать бесплатно"}
+                  {isStartingTrial ? "Активация…" : "Попробовать бесплатно 3 дня"}
                 </span>
               </Button>
             )}

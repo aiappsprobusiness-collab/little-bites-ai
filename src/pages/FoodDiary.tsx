@@ -26,7 +26,7 @@ export default function FoodDiary() {
   useEffect(() => {
     if (!hasAccess) {
       setPaywallReason("sos_premium_feature");
-      setPaywallCustomMessage("Готовьте для всех детей сразу с Premium — дневник и анализ тарелки.");
+      setPaywallCustomMessage("Дневник и разбор тарелки — в полной версии, когда у вас несколько детей и нужен общий контекст.");
       setShowPaywall(true);
     }
     return () => {

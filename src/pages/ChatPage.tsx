@@ -862,7 +862,7 @@ export default function ChatPage() {
       } else {
         useAppStore.getState().setPaywallReason("help_limit");
         useAppStore.getState().setPaywallCustomMessage(
-          `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("help")}`
+          `${getLimitReachedTitle("help")}\n\n${getLimitReachedMessage("help")}`
         );
         setShowPaywall(true);
       }
@@ -1428,14 +1428,14 @@ export default function ChatPage() {
         const feat = limitPayload.feature as LimitReachedFeature;
         useAppStore.getState().setPaywallReason(paywallReasonFromLimitFeature(feat));
         useAppStore.getState().setPaywallCustomMessage(
-          `${getLimitReachedTitle()}\n\n${getLimitReachedMessage(feat)}`
+          `${getLimitReachedTitle(feat)}\n\n${getLimitReachedMessage(feat)}`
         );
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
       } else if (err?.message === "usage_limit_exceeded") {
         useAppStore.getState().setPaywallReason("limit_chat");
         useAppStore.getState().setPaywallCustomMessage(
-          `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("chat_recipe")}`
+          `${getLimitReachedTitle("chat_recipe")}\n\n${getLimitReachedMessage("chat_recipe")}`
         );
         setShowPaywall(true);
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
@@ -1898,6 +1898,7 @@ export default function ChatPage() {
         title={friendlyLimitKind === "help" ? PREMIUM_HELP_LIMIT_TITLE : PREMIUM_CHAT_LIMIT_TITLE}
         description={friendlyLimitKind === "help" ? PREMIUM_HELP_LIMIT_BODY : PREMIUM_CHAT_LIMIT_BODY}
         secondaryLabel="Попробовать завтра"
+        paywallTextKey={friendlyLimitKind === "help" ? "friendly_limit_help_paid" : "friendly_limit_chat_paid"}
       />
 
       <Paywall

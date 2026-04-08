@@ -55,6 +55,8 @@
 
 **Клиент (после Stage 1):** нет глобального cooldown на все события; при ошибке запроса — короткий backoff **только для этого `feature`** (~12 s). Dedup: ~550 ms для действий, ~4 s для «view»-событий (см. `VIEW_STYLE_FEATURES` в `usageEvents.ts`); ключ dedup включает fingerprint переданных `properties`. В payload добавляется `properties.onboarding` из `onboarding_attribution`; при пустом `last_touch_utm` UTM подставляются из onboarding в колонки `utm_*`. **Stage 5:** в каждое событие добавляется `properties.platform` (`web` \| `pwa` \| `ios` \| `android` \| `unknown`) через `getAnalyticsPlatform()` в `analyticsPlatform.ts`.
 
+**Копирайт paywall / trial (отдельно от `paywall_view`):** `feature: paywall_text`, в `properties.paywall_reason` — стабильный ключ показанного текста (в `analytics.usage_events_enriched` → `prop_paywall_reason`). Вызов через `trackPaywallTextShown()` в `src/utils/paywallTextAnalytics.ts` при показе соответствующего UI (не дублирует серверные лимитные `feature`).
+
 ---
 
 ### 2. Edge Function `deepseek-chat`
@@ -219,6 +221,7 @@ Read-only слой поверх `public.usage_events`: `event_group`, `event_typ
 | member_create_success | AddChildForm | usage_events | properties: { member_id } | Успешное создание |
 | **Paywall / trial / purchase** |
 | paywall_view | Paywall (Unified / Legacy), WeekPreviewPaywallSheet | usage_events | Unified/Legacy: `paywall_reason` (в т.ч. `trial_ending_soon`, `trial_expired` при открытии из `TrialLifecycleModalsHost`); week preview sheet: `paywall_reason`, `source`, `paywall_surface` | Показ paywall или нижнего sheet превью недели |
+| paywall_text | `trackPaywallTextShown`: Unified/Legacy paywall, ReplaceMealSoft, trial onboarding, trial lifecycle, Free vs Premium, week preview sheet, FavoritesLimitSheet, FriendlyLimitDialog, TopicConsultationSheet, экраны оплаты, управление подпиской, сборка списка покупок и др. | usage_events | `properties.paywall_reason` — ключ текста; опционально `surface` | Показ конкретного пользовательского текста (A/B и отчёты по копирайту) |
 | paywall_primary_click | Paywall, WeekPreviewPaywallSheet | usage_events | properties: { source } и/или { paywall_reason } опционально | Клик по основной кнопке |
 | paywall_secondary_click | Paywall | usage_events | properties: { paywall_reason } опционально (UnifiedPaywall) | Клик по вторичной кнопке |
 | trial_started | Paywall, WeekPreviewPaywallSheet | usage_events | то же | После успешного start_trial() |

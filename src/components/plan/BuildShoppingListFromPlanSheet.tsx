@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -43,6 +44,12 @@ export function BuildShoppingListFromPlanSheet({
 
   useEffect(() => {
     if (open) setRange("today");
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      trackPaywallTextShown("build_shopping_list_sheet", { surface: "shopping_list_sheet" });
+    }
   }, [open]);
 
   const handleBuild = async () => {
@@ -121,14 +128,14 @@ export function BuildShoppingListFromPlanSheet({
               type="button"
               disabled={!hasAccess}
               onClick={() => setRange("week")}
-              title={!hasAccess ? "Доступно в Premium" : undefined}
+              title={!hasAccess ? "Неделя — в полной версии" : undefined}
               className={cn(
                 "flex-1 min-h-[48px] px-3 py-3 text-typo-body font-semibold transition-colors touch-manipulation",
                 range === "week" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
                 !hasAccess && "opacity-50 cursor-not-allowed"
               )}
             >
-              Неделя {!hasAccess ? "· Premium" : ""}
+              Неделя {!hasAccess ? "· полная версия" : ""}
             </button>
           </div>
         </div>

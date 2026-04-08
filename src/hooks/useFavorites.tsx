@@ -325,7 +325,7 @@ export function useFavorites(filter: FavoritesFilter = 'all', options?: UseFavor
       if (error) throw error;
       const result = data as { ok: boolean; code?: string; limit?: number };
       if (!result.ok && result.code === 'favorites_limit_reached') {
-        const err = new Error('В Free можно сохранить до 7 рецептов. Откройте Premium, чтобы сохранять без лимита.') as Error & { code?: string; limit?: number };
+        const err = new Error('В бесплатной версии можно сохранить до 7 рецептов. В полной — сохраняйте без лимита.') as Error & { code?: string; limit?: number };
         err.code = 'favorites_limit_reached';
         err.limit = result.limit ?? 7;
         throw err;

@@ -302,7 +302,7 @@ export default function SosTiles() {
             refetchUsage?.();
             useAppStore.getState().setPaywallReason("help_limit");
             useAppStore.getState().setPaywallCustomMessage(
-              `${getLimitReachedTitle()}\n\n${getLimitReachedMessage("help")}`
+              `${getLimitReachedTitle("help")}\n\n${getLimitReachedMessage("help")}`
             );
             openPaywallFromSheet();
           }}
@@ -334,6 +334,7 @@ export default function SosTiles() {
         title={PREMIUM_HELP_LIMIT_TITLE}
         description={PREMIUM_HELP_LIMIT_BODY}
         secondaryLabel="Попробовать завтра"
+        paywallTextKey="friendly_limit_help_paid"
       />
     </MobileLayout>
   );

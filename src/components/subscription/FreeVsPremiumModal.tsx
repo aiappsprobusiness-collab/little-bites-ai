@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,11 +7,13 @@ import {
   FREE_VS_PREMIUM_COL_PREMIUM,
   FREE_VS_PREMIUM_CTA_CLOSE,
   FREE_VS_PREMIUM_CTA_TRIAL,
+  FREE_VS_PREMIUM_DESCRIPTION,
   FREE_VS_PREMIUM_ROWS,
   FREE_VS_PREMIUM_TITLE,
   type FreeVsPremiumRow,
 } from "@/constants/freeVsPremiumCopy";
 import { cn } from "@/lib/utils";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
 function CellIcon({ row, side }: { row: FreeVsPremiumRow; side: "free" | "premium" }) {
   const cell = side === "free" ? row.free : row.premium;
@@ -34,6 +37,12 @@ export type FreeVsPremiumModalProps = {
 };
 
 export function FreeVsPremiumModal({ open, onClose, showTrialCta, onTryTrial }: FreeVsPremiumModalProps) {
+  useEffect(() => {
+    if (open) {
+      trackPaywallTextShown("free_vs_premium_modal", { surface: "free_vs_premium" });
+    }
+  }, [open]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -52,8 +61,9 @@ export function FreeVsPremiumModal({ open, onClose, showTrialCta, onTryTrial }: 
             className="w-full max-w-md max-h-[92dvh] flex flex-col overflow-hidden bg-background rounded-t-2xl sm:rounded-2xl shadow-2xl border border-border/30"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-4 pt-4 pb-2 sm:px-5 border-b border-border/40">
+            <div className="px-4 pt-4 pb-2 sm:px-5 border-b border-border/40 space-y-2">
               <h2 className="text-base font-semibold leading-snug text-foreground text-balance pr-8">{FREE_VS_PREMIUM_TITLE}</h2>
+              <p className="text-sm text-muted-foreground leading-snug pr-8">{FREE_VS_PREMIUM_DESCRIPTION}</p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 sm:px-3">
               <div className="rounded-xl border border-border/50 overflow-hidden text-[13px]">

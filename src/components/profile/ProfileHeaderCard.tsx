@@ -46,7 +46,7 @@ export function ProfileHeaderCard({
       : accountEmail?.trim() ?? "";
 
   const row2Secondary = isFree
-    ? "с ограничениями"
+    ? "базовые возможности"
     : isTrial && trialUntilFormatted
       ? `до ${trialUntilFormatted}`
       : isPremium && expiresAtFormatted
@@ -109,7 +109,7 @@ export function ProfileHeaderCard({
             className="w-full rounded-xl bg-primary text-primary-foreground hover:opacity-90 border-0 h-11 text-sm font-medium shadow-soft"
             onClick={onSubscriptionCta}
           >
-            {isFree ? "Попробовать Premium" : "Управлять подпиской"}
+            {isFree ? "Попробовать бесплатно 3 дня" : "Управлять подпиской"}
           </Button>
         </motion.div>
         {canCancel && onCancelSubscription && (

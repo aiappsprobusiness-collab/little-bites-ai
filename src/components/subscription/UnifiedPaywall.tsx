@@ -7,6 +7,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { resolvePaywallReason } from "@/utils/paywallReasonCopy";
 import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
 import {
@@ -54,11 +55,16 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
 
   useEffect(() => {
     if (isOpen) {
+      const resolved = resolvePaywallReason(paywallReason);
       trackUsageEvent("paywall_view", {
-        properties: { paywall_reason: resolvePaywallReason(paywallReason) },
+        properties: { paywall_reason: resolved },
       });
+      trackPaywallTextShown(
+        paywallCustomMessage ? `unified_custom_${resolved}` : `unified_default_${resolved}`,
+        { surface: "unified_paywall" }
+      );
     }
-  }, [isOpen, paywallReason]);
+  }, [isOpen, paywallReason, paywallCustomMessage]);
 
   const handleStartTrial = async () => {
     trackUsageEvent("paywall_primary_click", {
@@ -72,7 +78,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg === "TRIAL_ALREADY_USED") {
-        toast({ variant: "default", title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
+        toast({ variant: "default", title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите полную версию для полного доступа." });
       } else {
         toast({ variant: "destructive", title: "Ошибка", description: msg || "Попробуйте позже." });
       }
@@ -193,7 +199,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                         disabled={isStartingTrial}
                       >
                         <Heart className="w-4 h-4 mr-2 shrink-0" />
-                        {isStartingTrial ? "Активация…" : "Попробовать бесплатно"}
+                        {isStartingTrial ? "Активация…" : "Попробовать бесплатно 3 дня"}
                       </Button>
                     ) : null}
 
@@ -221,7 +227,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                       className="w-full h-10 text-sm text-muted-foreground hover:text-foreground rounded-xl"
                       onClick={handleContinueFree}
                     >
-                      {paywallCustomMessage ? "Позже" : "Остаться на Free"}
+                      {paywallCustomMessage ? "Позже" : "Остаться на бесплатной версии"}
                     </Button>
 
                     <p className="text-center text-xs text-muted-foreground leading-snug px-1">{UNIFIED_PAYWALL_FOOTER}</p>

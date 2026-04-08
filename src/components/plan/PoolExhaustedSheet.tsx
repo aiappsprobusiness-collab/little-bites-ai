@@ -151,7 +151,7 @@ export function PoolExhaustedSheet({
                 className="w-full rounded-xl"
                 onClick={handleGenerateInChat}
               >
-                {isFree ? "✨ Сгенерировать в чате (Premium)" : "Сгенерировать в чате"}
+                {isFree ? "✨ Сгенерировать в чате (полная версия)" : "Сгенерировать в чате"}
               </Button>
             </div>
           )}

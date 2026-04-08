@@ -94,7 +94,7 @@ export function FamilyMemberCard({
           className="w-full px-4 pb-3 pt-2 flex flex-col gap-0.5 items-start text-left hover:opacity-90 transition-opacity border-t border-border/30"
         >
           <span className="text-[11px] text-muted-foreground">Настройте продукты и улучшите подбор блюд</span>
-          <span className="text-xs font-medium text-primary">Открыть Premium</span>
+          <span className="text-xs font-medium text-primary">Открыть полную версию</span>
         </button>
       )}
     </motion.div>
