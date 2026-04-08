@@ -25,7 +25,11 @@ import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
-import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
+import {
+  FREE_ALLERGY_PAYWALL_MESSAGE,
+  PREMIUM_PROFILES_MAX_BODY,
+  PREMIUM_PROFILES_MAX_TITLE,
+} from "@/utils/friendlyLimitCopy";
 import { Calendar } from "lucide-react";
 
 function parseTags(s: string): string[] {
@@ -140,7 +144,7 @@ export function ProfileEditSheet({
     add: (raw: string) => {
       if (!hasAccess && allergies.length >= 1) {
         setPaywallReason("allergies_locked");
-        setPaywallCustomMessage(null);
+        setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
         setShowPaywall(true);
         return;
       }
@@ -315,17 +319,17 @@ export function ProfileEditSheet({
         <div className="space-y-5 py-4 overflow-y-auto">
           <p className="text-sm text-muted-foreground leading-relaxed">
             {isCreate
-              ? "Добавьте профиль, чтобы мы учитывали особенности питания."
+              ? "Добавьте профиль, чтобы мы учитывали особенности питания члена вашей семьи."
               : "Измените данные, чтобы рекомендации учитывали особенности питания."}
           </p>
-          <div className="space-y-2">
+          <div className="space-y-2 w-full min-w-0">
             <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
             <Input
               id="profile-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Например: Маша, Папа"
-              className="h-11 border-2"
+              className="h-11 w-full min-w-0 max-w-full box-border border-2 focus-visible:ring-offset-0"
             />
           </div>
           <div className="space-y-2">

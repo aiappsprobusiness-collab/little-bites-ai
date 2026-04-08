@@ -485,7 +485,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               : isConsultationBubble
                 ? "rounded-2xl rounded-bl-sm border border-border bg-card shadow-soft p-4"
                 : role === "user"
-                  ? "relative px-3.5 py-2.5 text-xs bg-primary text-primary-foreground rounded-full rounded-br-sm break-words leading-snug"
+                  ? "relative p-3 text-xs bg-primary text-primary-foreground rounded-2xl rounded-br-sm break-words leading-snug border border-primary/25 shadow-soft"
                   : role === "assistant" && effectiveRecipe
                     ? "relative p-0 overflow-visible"
                     : role === "assistant" && isStreaming

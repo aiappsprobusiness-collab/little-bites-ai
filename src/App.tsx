@@ -51,6 +51,11 @@ import { useAuth } from "./hooks/useAuth";
 import { useToast } from "./hooks/use-toast";
 import { captureAttributionFromLocationOnce } from "./utils/usageEvents";
 import { isEffectiveTrialTier, TRIAL_ENDING_SOON_MS } from "./utils/trialLifecycle";
+import {
+  PAYWALL_TRIAL_ALREADY_USED,
+  PAYWALL_TRIAL_ENDS_TODAY,
+  PAYWALL_TRIAL_ENDS_TOMORROW,
+} from "@/utils/unifiedPaywallCopy";
 import { ReactQueryDiag } from "./dev/ReactQueryDiag";
 import { AppThemeProvider } from "@/components/theme/AppThemeProvider";
 import { ThemeProfileSync } from "@/components/theme/ThemeProfileSync";
@@ -167,7 +172,7 @@ function GlobalFreeVsPremiumModalHost() {
         } catch (e) {
           const msg = e instanceof Error ? e.message : "";
           if (msg === "TRIAL_ALREADY_USED") {
-            toast({ title: "Триал уже использован", description: "Оформите подписку для полного доступа." });
+            toast({ title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
           } else if (msg) {
             toast({ variant: "destructive", title: "Ошибка", description: msg });
           }
@@ -191,11 +196,11 @@ function TrialSoftBanner() {
         endOfTrial.getDate() === now.getDate() &&
         endOfTrial.getMonth() === now.getMonth() &&
         endOfTrial.getFullYear() === now.getFullYear();
-      setPaywallCustomMessage(isToday ? "Триал закончится сегодня" : "Триал закончится завтра");
+      setPaywallCustomMessage(isToday ? PAYWALL_TRIAL_ENDS_TODAY : PAYWALL_TRIAL_ENDS_TOMORROW);
     } else if (trialRemainingDays != null) {
       const days =
         trialRemainingDays === 1 ? "день" : trialRemainingDays < 5 ? "дня" : "дней";
-      setPaywallCustomMessage(`Триал заканчивается через ${trialRemainingDays} ${days}`);
+      setPaywallCustomMessage(`Пробный период заканчивается через ${trialRemainingDays} ${days}`);
     }
   }, [trialUx, trialRemainingMs, trialRemainingDays, setPaywallCustomMessage]);
   return null;

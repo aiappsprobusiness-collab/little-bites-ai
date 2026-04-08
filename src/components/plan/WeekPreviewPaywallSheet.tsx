@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { SUBSCRIPTION_PRICES, YEARLY_PER_MONTH } from "@/utils/subscriptionPricing";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
+import { PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
 
 const MEAL_EMOJIS: Record<string, string> = {
   breakfast: "🍳",
@@ -79,7 +80,7 @@ export function WeekPreviewPaywallSheet({
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg === "TRIAL_ALREADY_USED") {
-        toast({ variant: "default", title: "Триал уже использован", description: "Оформите подписку для полного доступа." });
+        toast({ variant: "default", title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
       } else {
         toast({ variant: "destructive", title: "Ошибка", description: msg || "Попробуйте позже." });
       }

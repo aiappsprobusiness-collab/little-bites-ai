@@ -22,7 +22,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
-import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
+import {
+  FREE_ALLERGY_PAYWALL_MESSAGE,
+  PREMIUM_PROFILES_MAX_BODY,
+  PREMIUM_PROFILES_MAX_TITLE,
+} from "@/utils/friendlyLimitCopy";
 import { normalizeAllergyToken } from "@/utils/allergyAliases";
 import { getProductDisplayLabel, normalizeProductKeys } from "@/utils/introducedProducts";
 import { PreferenceChip } from "@/components/profile/PreferenceChip";
@@ -135,7 +139,7 @@ export default function ChildProfileEditPage() {
           return;
         }
         setPaywallReason("allergies_locked");
-        setPaywallCustomMessage(null);
+        setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
         setShowPaywall(true);
         return;
       }
@@ -158,7 +162,7 @@ export default function ChildProfileEditPage() {
     setActive: (index: number, active: boolean) => {
       if (!hasAccess && active) {
         setPaywallReason("allergies_locked");
-        setPaywallCustomMessage(null);
+        setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
         setShowPaywall(true);
         return;
       }
@@ -321,7 +325,7 @@ export default function ChildProfileEditPage() {
         return;
       }
       setPaywallReason("allergies_locked");
-      setPaywallCustomMessage(null);
+      setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
       setShowPaywall(true);
       return;
     }
@@ -546,7 +550,7 @@ export default function ChildProfileEditPage() {
                               size="compact"
                               allowWrap
                               locked={isLocked}
-                              onLockedClick={isLocked ? () => { setPaywallReason("allergies_locked"); setPaywallCustomMessage(null); setShowPaywall(true); } : undefined}
+                              onLockedClick={isLocked ? () => { setPaywallReason("allergies_locked"); setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE); setShowPaywall(true); } : undefined}
                               removable={!isLocked}
                               onRemove={!isLocked ? () => allergiesHandlers.remove(i) : undefined}
                             />

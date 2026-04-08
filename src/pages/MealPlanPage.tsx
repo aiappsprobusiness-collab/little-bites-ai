@@ -48,6 +48,7 @@ import { addDaysToLocalYmd, formatLocalDate } from "@/utils/dateUtils";
 import { MEAL_PLAN_DATE_QUERY_PARAM } from "@/utils/mealPlanNavigation";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
+import { PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
 import {
   normalizeTitleKey,
   listInfantNewRecipeCandidates,
@@ -1676,7 +1677,7 @@ export default function MealPlanPage() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "";
       if (msg === "TRIAL_ALREADY_USED") {
-        toast({ title: "Триал уже использован", description: "Оформите подписку для полного доступа." });
+        toast({ title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
       } else if (msg) {
         toast({ variant: "destructive", title: "Ошибка", description: msg });
       }

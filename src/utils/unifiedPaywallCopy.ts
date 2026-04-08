@@ -15,8 +15,11 @@ export const UNIFIED_PAYWALL_BULLETS: readonly string[] = [
   "Помощь и идеи по питанию в любой ситуации",
 ];
 
-/** Микро-текст над блоком выбора тарифа (месяц / год). */
-export const UNIFIED_PAYWALL_PRICING_CAPTION =
-  "Самый удобный способ планировать питание для семьи";
-
 export const UNIFIED_PAYWALL_FOOTER = "Можно отменить в любой момент";
+
+/** Единые формулировки про пробный период во всех paywall (вместо «Триал» / «trial» в UI). */
+export const PAYWALL_TRIAL_ALREADY_USED = "Пробный период уже использован";
+export const PAYWALL_TRIAL_ACTIVE_HINT = "У вас активен пробный период";
+/** Мягкий баннер / custom message перед открытием paywall (остаток trial). */
+export const PAYWALL_TRIAL_ENDS_TODAY = "Пробный период закончится сегодня";
+export const PAYWALL_TRIAL_ENDS_TOMORROW = "Пробный период закончится завтра";

@@ -13,8 +13,9 @@ import {
   UNIFIED_PAYWALL_TITLE,
   UNIFIED_PAYWALL_SUBTITLE,
   UNIFIED_PAYWALL_BULLETS,
-  UNIFIED_PAYWALL_PRICING_CAPTION,
   UNIFIED_PAYWALL_FOOTER,
+  PAYWALL_TRIAL_ALREADY_USED,
+  PAYWALL_TRIAL_ACTIVE_HINT,
 } from "@/utils/unifiedPaywallCopy";
 import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
 import { PaywallSubscriptionPlans } from "@/components/subscription/PaywallSubscriptionPlans";
@@ -71,7 +72,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg === "TRIAL_ALREADY_USED") {
-        toast({ variant: "default", title: "Триал уже использован", description: "Оформите подписку для полного доступа." });
+        toast({ variant: "default", title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
       } else {
         toast({ variant: "destructive", title: "Ошибка", description: msg || "Попробуйте позже." });
       }
@@ -125,14 +126,6 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
             {/* Верх: при нехватке места скроллится; цены и CTA всегда внизу */}
             <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2.5 pb-1.5 sm:px-5 sm:pt-3 sm:pb-2 pr-11 space-y-2">
-                {paywallCustomMessage ? (
-                  <div className="shrink-0 p-2 rounded-xl bg-primary/10 border border-primary/20 min-w-0">
-                    <p className="text-xs font-medium text-foreground text-center leading-snug line-clamp-4 whitespace-pre-line break-words">
-                      {paywallCustomMessage}
-                    </p>
-                  </div>
-                ) : null}
-
                 <div className="flex justify-center shrink-0">
                   <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-md shadow-amber-500/15">
                     <Crown className="w-[18px] h-[18px] text-white" />
@@ -140,12 +133,20 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                 </div>
 
                 <div className="text-center space-y-1 px-0.5">
-                  <h2 className="text-xl font-semibold leading-snug text-foreground text-balance">
-                    {UNIFIED_PAYWALL_TITLE}
-                  </h2>
-                  <p className="text-sm text-muted-foreground leading-snug text-balance">
-                    {UNIFIED_PAYWALL_SUBTITLE}
-                  </p>
+                  {paywallCustomMessage ? (
+                    <p className="text-base font-semibold leading-snug text-foreground text-balance whitespace-pre-line break-words">
+                      {paywallCustomMessage}
+                    </p>
+                  ) : (
+                    <>
+                      <h2 className="text-xl font-semibold leading-snug text-foreground text-balance">
+                        {UNIFIED_PAYWALL_TITLE}
+                      </h2>
+                      <p className="text-sm text-muted-foreground leading-snug text-balance">
+                        {UNIFIED_PAYWALL_SUBTITLE}
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <ul className="space-y-1 min-w-0 pb-0 mt-3">
@@ -163,9 +164,6 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
               <div className="shrink-0 flex flex-col gap-2 px-4 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pt-2 border-t border-border/40 bg-background/95 backdrop-blur-sm">
                 {showPayForm && (
                   <>
-                    <p className="text-center text-[11px] leading-snug text-muted-foreground font-normal px-1">
-                      {UNIFIED_PAYWALL_PRICING_CAPTION}
-                    </p>
                     <div className="rounded-xl border border-border bg-card/60 p-2">
                       <PaywallSubscriptionPlans value={pricingOption} onChange={setPricingOption} density="comfortable" />
                     </div>
@@ -177,7 +175,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                       </p>
                     ) : null}
                     {trialUnavailable ? (
-                      <p className="text-center text-xs text-muted-foreground leading-snug">Триал уже использован</p>
+                      <p className="text-center text-xs text-muted-foreground leading-snug">{PAYWALL_TRIAL_ALREADY_USED}</p>
                     ) : null}
 
                     {!hasAccess && !trialUnavailable ? (
@@ -200,7 +198,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                     ) : null}
 
                     {hasTrialAccess ? (
-                      <p className="text-center text-[11px] text-muted-foreground -mt-1 leading-snug">У вас активен trial</p>
+                      <p className="text-center text-[11px] text-muted-foreground -mt-1 leading-snug">{PAYWALL_TRIAL_ACTIVE_HINT}</p>
                     ) : null}
 
                     <Button

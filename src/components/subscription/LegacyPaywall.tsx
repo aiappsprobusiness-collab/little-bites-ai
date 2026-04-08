@@ -12,6 +12,7 @@ import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
 import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
 import { PaywallSubscriptionPlans } from "@/components/subscription/PaywallSubscriptionPlans";
 import { paywallSubscribeCtaLabel } from "@/utils/subscriptionPricing";
+import { PAYWALL_TRIAL_ACTIVE_HINT, PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
 
 export interface PaywallSharedProps {
   isOpen: boolean;
@@ -69,7 +70,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (msg === "TRIAL_ALREADY_USED") {
-        toast({ variant: "default", title: "Триал уже использован", description: "Оформите подписку для полного доступа." });
+        toast({ variant: "default", title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите подписку для полного доступа." });
       } else {
         toast({ variant: "destructive", title: "Ошибка", description: msg || "Попробуйте позже." });
       }
@@ -119,14 +120,6 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
             </button>
 
             <div className="flex flex-col min-h-0 flex-1 gap-3 pt-1 pr-8 overflow-y-auto">
-              {paywallCustomMessage && (
-                <div className="shrink-0 p-3 rounded-xl bg-primary/10 border border-primary/20 min-w-0">
-                  <p className="text-xs font-medium text-foreground text-center leading-relaxed line-clamp-4 whitespace-pre-line break-words">
-                    {paywallCustomMessage}
-                  </p>
-                </div>
-              )}
-
               <div className="flex justify-center shrink-0 py-1">
                 <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-md shadow-amber-500/15">
                   <Crown className="w-5 h-5 text-white" />
@@ -134,17 +127,25 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
               </div>
 
               <div className="text-center shrink-0 space-y-1.5 px-0.5">
-                <h2 className="text-lg font-semibold leading-snug text-foreground text-balance">
-                  {copy.title}
-                </h2>
-                <p className="text-sm text-muted-foreground leading-relaxed text-balance">
-                  {copy.body}
-                </p>
-                {copy.subtitle.trim() ? (
-                  <p className="text-sm text-muted-foreground/90 leading-relaxed pt-0.5 text-balance">
-                    {copy.subtitle}
+                {paywallCustomMessage ? (
+                  <p className="text-lg font-semibold leading-snug text-foreground text-balance whitespace-pre-line break-words">
+                    {paywallCustomMessage}
                   </p>
-                ) : null}
+                ) : (
+                  <>
+                    <h2 className="text-lg font-semibold leading-snug text-foreground text-balance">
+                      {copy.title}
+                    </h2>
+                    <p className="text-sm text-muted-foreground leading-relaxed text-balance">
+                      {copy.body}
+                    </p>
+                    {copy.subtitle.trim() ? (
+                      <p className="text-sm text-muted-foreground/90 leading-relaxed pt-0.5 text-balance">
+                        {copy.subtitle}
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </div>
 
               <ul className="shrink-0 space-y-2.5 min-w-0 py-1">
@@ -187,7 +188,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                     </p>
                   )}
                   {trialUnavailable && (
-                    <p className="text-center text-xs text-muted-foreground leading-relaxed">Триал уже использован</p>
+                    <p className="text-center text-xs text-muted-foreground leading-relaxed">{PAYWALL_TRIAL_ALREADY_USED}</p>
                   )}
 
                   {!hasAccess && !trialUnavailable && (
@@ -204,7 +205,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                   )}
 
                   {hasTrialAccess && (
-                    <p className="text-center text-xs text-muted-foreground -mt-1 leading-relaxed">У вас активен trial</p>
+                    <p className="text-center text-xs text-muted-foreground -mt-1 leading-relaxed">{PAYWALL_TRIAL_ACTIVE_HINT}</p>
                   )}
 
                   <Button

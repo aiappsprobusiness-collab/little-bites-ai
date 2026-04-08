@@ -12,13 +12,13 @@ export function getLimitReachedTitle(): string {
 export function getLimitReachedMessage(feature: LimitReachedFeature): string {
   switch (feature) {
     case "chat_recipe":
-      return "В Free доступно 2 рецепта в день. В Trial/Premium — без ограничений.";
+      return "В Free доступно 2 рецепта в день. С пробным периодом или Premium — без ограничений.";
     case "plan_refresh":
     case "plan_fill_day":
-      return "В Free доступно 2 действия в день. В Trial/Premium — без ограничений.";
+      return "В Free доступно 2 действия в день. С пробным периодом или Premium — без ограничений.";
     case "help":
-      return "В Free доступно 2 вопроса в день. В Trial/Premium — без ограничений.";
+      return "В Free доступно 2 вопроса в день. С пробным периодом или Premium — без ограничений.";
     default:
-      return "В Trial/Premium — без ограничений.";
+      return "С пробным периодом или Premium — без ограничений.";
   }
 }

@@ -10,7 +10,11 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
-import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
+import {
+  FREE_ALLERGY_PAYWALL_MESSAGE,
+  PREMIUM_PROFILES_MAX_BODY,
+  PREMIUM_PROFILES_MAX_TITLE,
+} from "@/utils/friendlyLimitCopy";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { normalizeAllergyInput } from "@/utils/allergyAliases";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
@@ -93,7 +97,7 @@ export function AddChildForm({
     add: (raw: string) => {
       if (!hasAccess && allergies.length >= 1) {
         setPaywallReason("allergies_locked");
-        setPaywallCustomMessage(null);
+        setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
         setShowPaywall(true);
         return;
       }

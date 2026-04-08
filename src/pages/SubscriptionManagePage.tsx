@@ -43,7 +43,7 @@ function StatusBlock({
     subscriptionStatus === "free"
       ? "Free"
       : subscriptionStatus === "trial"
-        ? "Trial"
+        ? "Пробный период"
         : "Premium";
 
   const planLabel =
@@ -242,7 +242,7 @@ export default function SubscriptionManagePage() {
               <div className="space-y-3">
                 {trialUntil && (
                   <p className="text-sm text-muted-foreground">
-                    Trial до {formatDate(trialUntil)}
+                    Пробный период до {formatDate(trialUntil)}
                   </p>
                 )}
                 <Button
