@@ -192,8 +192,11 @@ export default function AuthPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-4 sm:mb-6 px-2"
         >
-          <h1 className="text-5xl sm:text-6xl font-semibold tracking-tight leading-tight text-foreground mb-3">
+          <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground mb-2">
             MomRecipes 🌿
+          </p>
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground leading-snug mb-2">
+            Спокойствие за питание ребёнка — каждый день
           </h1>
           <p className="text-base sm:text-lg font-medium text-foreground/90 leading-snug mb-1.5">
             Меню на сегодня за 1 минуту
