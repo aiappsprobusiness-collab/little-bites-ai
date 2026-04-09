@@ -56,6 +56,12 @@ export default function AuthCallbackPage() {
         return () => clearTimeout(timer);
       }
 
+      /** Сброс пароля: в hash/query приходит `type=recovery` (до очистки URL). */
+      const isPasswordRecovery =
+        typeof window !== "undefined" &&
+        (/type=recovery/.test(window.location.hash || "") ||
+          new URLSearchParams(window.location.search).get("type") === "recovery");
+
       // Очищаем URL от токенов
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
@@ -68,6 +74,11 @@ export default function AuthCallbackPage() {
       await setActiveSessionKeyForUser(userId);
 
       if (cancelled) return;
+
+      if (isPasswordRecovery) {
+        navigate("/auth/update-password", { replace: true });
+        return;
+      }
 
       const { count, error } = await supabase
         .from("members")

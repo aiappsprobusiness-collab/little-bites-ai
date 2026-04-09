@@ -155,6 +155,14 @@ WHERE min_age_months IS NULL OR max_age_months IS NULL;
 
 ---
 
+## Auth: сброс пароля (Supabase)
+
+- **Клиент:** `requestPasswordReset` → `resetPasswordForEmail` с `redirectTo: <origin>/auth/callback`. После клика по ссылке `AuthCallbackPage` определяет `type=recovery` в hash/query **до** очистки URL и ведёт на **`/auth/update-password`**, где вызывается `updateUser({ password })`.
+- **Dashboard:** *Authentication → URL Configuration* — в **Redirect URLs** должен быть URL приложения с путём `/auth/callback` (и при необходимости localhost для dev). Иначе редирект после письма заблокируется.
+- **Шаблон письма «Reset password»** (Supabase Hosted): в теле письма ссылку нужно вести через **`{{ .ConfirmationURL }}`** (или эквивалент для вашей версии шаблона) — это полный URL с токеном и корректным `redirectTo`. Не подставлять вручную только `SiteURL` без токена.
+
+---
+
 ## Профиль после подтверждения email и paywall
 
 - **`AuthCallbackPage`**, **`RootRedirect` (`/`)**, **`AppPreloginScreen`**, **`LandingOnboardingScreen`**, редирект с **`/meal-plan`** при 0 профилях: если у пользователя нет записей в `members`, целевой путь — `/profile?openCreateProfile=1&welcome=1` (константа `PROFILE_FIRST_CHILD_ONBOARDING` в `src/utils/firstChildOnboarding.ts`). Параметр `welcome=1` одноразово включает приветственный блок в модалке «Новый профиль» (`ProfileEditSheet`); из URL он удаляется при открытии.

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
@@ -10,6 +10,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -21,6 +29,12 @@ const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
   password: z.string().min(6, "Пароль должен быть минимум 6 символов"),
 });
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email("Введите корректный email"),
+});
+
+type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 
 const signupSchema = z.object({
   displayName: z.string().min(2, "Имя должно быть минимум 2 символа"),
@@ -41,9 +55,13 @@ const AUTH_INPUT_CLASS =
 export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordFieldError, setForgotPasswordFieldError] = useState<string | null>(null);
   const signupEmailRef = useRef<HTMLInputElement>(null);
   const signupPasswordRef = useRef<HTMLInputElement>(null);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, requestPasswordReset } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -81,6 +99,45 @@ export default function AuthPage() {
     resolver: zodResolver(signupSchema),
     defaultValues: { displayName: "", email: "", password: "", acceptLegal: false },
   });
+
+  const forgotPasswordForm = useForm<ForgotPasswordFormData>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: "" },
+  });
+
+  const openForgotPassword = useCallback(() => {
+    setForgotPasswordSent(false);
+    setForgotPasswordFieldError(null);
+    forgotPasswordForm.reset({ email: loginForm.getValues("email")?.trim() || "" });
+    setForgotPasswordOpen(true);
+  }, [forgotPasswordForm, loginForm]);
+
+  const onForgotPasswordOpenChange = (open: boolean) => {
+    setForgotPasswordOpen(open);
+    if (!open) {
+      setForgotPasswordSent(false);
+      setForgotPasswordFieldError(null);
+      forgotPasswordForm.reset({ email: "" });
+    }
+  };
+
+  const onForgotPasswordSubmit = async (data: ForgotPasswordFormData) => {
+    setForgotPasswordLoading(true);
+    setForgotPasswordFieldError(null);
+    trackUsageEvent("auth_password_reset_request");
+    try {
+      const { error } = await requestPasswordReset(data.email);
+      if (error) {
+        setForgotPasswordFieldError(error.message);
+      } else {
+        setForgotPasswordSent(true);
+      }
+    } catch (e) {
+      setForgotPasswordFieldError(e instanceof Error ? e.message : "Не удалось отправить письмо");
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
 
   const onLogin = async (data: LoginFormData) => {
     setIsLoading(true);
@@ -214,6 +271,13 @@ export default function AuthPage() {
                               </div>
                             </FormControl>
                             <FormMessage />
+                            <button
+                              type="button"
+                              onClick={openForgotPassword}
+                              className="text-sm text-muted-foreground hover:text-foreground underline-offset-4 hover:underline text-left pt-0.5 dark:text-[#9ca0af] dark:hover:text-white"
+                            >
+                              Забыли пароль?
+                            </button>
                           </FormItem>
                         )}
                       />
@@ -392,6 +456,73 @@ export default function AuthPage() {
           </Card>
         </motion.div>
       </div>
+
+      <Dialog open={forgotPasswordOpen} onOpenChange={onForgotPasswordOpenChange}>
+        <DialogContent className="sm:max-w-md rounded-[24px] border-border shadow-xl">
+          <DialogHeader>
+            <DialogTitle>Восстановление пароля</DialogTitle>
+            <DialogDescription>
+              {forgotPasswordSent
+                ? "Мы отправили ссылку на ваш email. Откройте письмо и перейдите по ссылке, чтобы задать новый пароль."
+                : "Укажите email аккаунта — мы отправим ссылку для сброса пароля."}
+            </DialogDescription>
+          </DialogHeader>
+          {forgotPasswordSent ? (
+            <DialogFooter className="sm:justify-stretch gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full rounded-[20px] border-border bg-muted/40 text-foreground hover:bg-muted hover:text-foreground dark:border-white/15 dark:bg-white/5 dark:hover:bg-white/10"
+                onClick={() => onForgotPasswordOpenChange(false)}
+              >
+                Закрыть
+              </Button>
+            </DialogFooter>
+          ) : (
+            <Form {...forgotPasswordForm}>
+              <form onSubmit={forgotPasswordForm.handleSubmit(onForgotPasswordSubmit)} className="space-y-4">
+                <FormField
+                  control={forgotPasswordForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-foreground/90 font-medium">Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          placeholder="Ваш email"
+                          className={cn(
+                            AUTH_INPUT_CLASS,
+                            "text-foreground placeholder:text-muted-foreground dark:bg-[#1f2028] dark:border-white/12 dark:text-foreground",
+                          )}
+                          autoComplete="email"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                      {forgotPasswordFieldError ? (
+                        <p className="text-sm font-medium text-destructive" role="alert">
+                          {forgotPasswordFieldError}
+                        </p>
+                      ) : null}
+                    </FormItem>
+                  )}
+                />
+                <DialogFooter className="gap-2 sm:justify-stretch flex-col sm:flex-col">
+                  <Button
+                    type="submit"
+                    className="w-full rounded-[20px] h-12 bg-primary text-primary-foreground"
+                    disabled={forgotPasswordLoading}
+                  >
+                    {forgotPasswordLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
+                    Отправить ссылку
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

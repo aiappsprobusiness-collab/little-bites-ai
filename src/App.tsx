@@ -25,6 +25,7 @@ import FoodDiary from "./pages/FoodDiary";
 import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
+import AuthUpdatePasswordPage from "./pages/AuthUpdatePasswordPage";
 import PublicRecipeSharePage from "./pages/PublicRecipeSharePage";
 import SharedPlanPage from "./pages/SharedPlanPage";
 import LandingOnboardingScreen from "./pages/LandingOnboardingScreen";
@@ -240,6 +241,7 @@ const App = () => (
               <Route path="/auth" element={<AuthPage />} />
               {/* Публичный маршрут: обрабатывает magic link / email confirmation, сам ждёт session и редиректит; не оборачивать в ProtectedRoute */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
+              <Route path="/auth/update-password" element={<AuthUpdatePasswordPage />} />
               <Route path="/welcome" element={<LandingOnboardingScreen />} />
               <Route path="/prelogin" element={<AppPreloginScreen />} />
               <Route path="/r/:shareRef" element={<PublicRecipeSharePage />} />

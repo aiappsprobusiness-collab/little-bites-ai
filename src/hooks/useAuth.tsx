@@ -20,6 +20,10 @@ interface AuthContextType {
     options?: { acceptedTermsVersion?: string },
   ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  /** Запрос письма со ссылкой сброса пароля (redirect на `/auth/callback` с `type=recovery`). */
+  requestPasswordReset: (email: string) => Promise<{ error: Error | null }>;
+  /** После перехода по ссылке из письма (сессия recovery). */
+  updatePassword: (password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
@@ -177,6 +181,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const requestPasswordReset = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`,
+      });
+      if (error) {
+        let msg = error.message;
+        if (error.message?.includes("Failed to fetch") || error.message?.includes("NetworkError")) {
+          msg = "Не удалось подключиться к серверу. Проверьте интернет-соединение.";
+        }
+        return { error: new Error(msg) };
+      }
+      return { error: null };
+    } catch (err) {
+      const e = err as Error;
+      let msg = e.message || "Не удалось отправить письмо";
+      if (e.message?.includes("Failed to fetch") || e.message?.includes("NetworkError")) {
+        msg = "Не удалось подключиться к серверу. Проверьте интернет-соединение.";
+      }
+      return { error: new Error(msg) };
+    }
+  };
+
+  const updatePassword = async (password: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        let msg = error.message;
+        if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+          msg = "Не удалось подключиться к серверу. Проверьте интернет-соединение.";
+        }
+        return { error: new Error(msg) };
+      }
+      return { error: null };
+    } catch (err) {
+      const e = err as Error;
+      let msg = e.message || "Не удалось обновить пароль";
+      if (e.message?.includes("Failed to fetch") || e.message?.includes("NetworkError")) {
+        msg = "Не удалось подключиться к серверу. Проверьте интернет-соединение.";
+      }
+      return { error: new Error(msg) };
+    }
+  };
+
   const signOut = async () => {
     clearOnLogout();
     clearStoredSessionKey();
@@ -188,7 +236,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authReady = !loading;
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, authReady, signUp, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{
+        session,
+        user,
+        loading,
+        authReady,
+        signUp,
+        signIn,
+        requestPasswordReset,
+        updatePassword,
+        signOut,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
