@@ -20,6 +20,8 @@ export type PaywallReasonKey =
   | "add_child_limit"
   | "switch_child"
   | "allergies_locked"
+  /** Вторая аллергия при создании первого профиля (онбординг); отдельный UI в UnifiedPaywall. */
+  | "onboarding_second_allergy_free"
   | "preferences_locked"
   | "favorites_limit"
   | "new_product"
@@ -174,6 +176,16 @@ const COPY: Record<PaywallReasonKey, PaywallReasonCopy> = {
       "Исключения при подборе меню",
       "Спокойнее за столом",
       "План и чат говорят на одном языке",
+    ],
+  },
+  onboarding_second_allergy_free: {
+    title: "Похоже, вы хотите учесть больше особенностей 🙈",
+    body: "Мы помогаем учитывать питание ребёнка точнее — чтобы блюда всегда подходили и не приходилось угадывать",
+    bullets: [
+      "Подбор блюд с учётом всех особенностей",
+      "Быстрая замена, если что-то не подходит",
+      "Подсказки в сложных ситуациях",
+      "Экономия времени каждый день",
     ],
   },
   preferences_locked: {

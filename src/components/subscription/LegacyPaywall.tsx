@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { getPaywallReasonCopy, resolvePaywallReason } from "@/utils/paywallReasonCopy";
+import { cn } from "@/lib/utils";
 import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
 import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
 import { PaywallSubscriptionPlans } from "@/components/subscription/PaywallSubscriptionPlans";
@@ -48,6 +49,8 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
   } = useSubscription();
   const [pricingOption, setPricingOption] = useState<"month" | "year">("year");
   const paywallReason = useAppStore((s) => s.paywallReason);
+  const resolvedReason = resolvePaywallReason(paywallReason);
+  const isOnboardingSecondAllergy = resolvedReason === "onboarding_second_allergy_free";
   const showPayForm = !hasAccess || hasTrialAccess;
   const trialUnavailable = trialUsed && !hasTrialAccess;
 
@@ -55,16 +58,17 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
 
   useEffect(() => {
     if (isOpen) {
-      const resolved = resolvePaywallReason(paywallReason);
       trackUsageEvent("paywall_view", {
-        properties: { paywall_reason: resolved },
+        properties: { paywall_reason: resolvedReason },
       });
       trackPaywallTextShown(
-        paywallCustomMessage ? `legacy_custom_${resolved}` : `legacy_context_${resolved}`,
+        paywallCustomMessage && !isOnboardingSecondAllergy
+          ? `legacy_custom_${resolvedReason}`
+          : `legacy_context_${resolvedReason}`,
         { surface: "legacy_paywall" }
       );
     }
-  }, [isOpen, paywallReason, paywallCustomMessage]);
+  }, [isOpen, paywallReason, paywallCustomMessage, resolvedReason, isOnboardingSecondAllergy]);
 
   const handleStartTrial = async () => {
     trackUsageEvent("paywall_primary_click");
@@ -231,10 +235,17 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="w-full h-10 text-sm text-muted-foreground hover:text-foreground rounded-xl"
+                    className={cn(
+                      "w-full h-10 text-sm rounded-xl",
+                      isOnboardingSecondAllergy
+                        ? "text-gray-800 hover:text-gray-950 dark:text-muted-foreground dark:hover:text-foreground"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
                     onClick={handleContinueFree}
                   >
-                    {paywallCustomMessage ? "Позже" : "Остаться на бесплатной версии"}
+                    {paywallCustomMessage && !isOnboardingSecondAllergy
+                      ? "Позже"
+                      : "Остаться на бесплатной версии"}
                   </Button>
                 </>
               )}
@@ -250,7 +261,10 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                 </Button>
               )}
 
-              <PaywallLegalConsentNote className="text-[10px] px-1 pt-0.5 leading-relaxed" />
+              <PaywallLegalConsentNote
+                className="text-[10px] px-1 pt-0.5 leading-relaxed"
+                tone={isOnboardingSecondAllergy ? "readableLight" : "default"}
+              />
             </div>
           </motion.div>
         </motion.div>

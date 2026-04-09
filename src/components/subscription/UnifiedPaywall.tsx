@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { resolvePaywallReason } from "@/utils/paywallReasonCopy";
+import { cn } from "@/lib/utils";
 import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
 import {
   UNIFIED_PAYWALL_TITLE,
@@ -22,6 +23,11 @@ import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentN
 import { PaywallSubscriptionPlans } from "@/components/subscription/PaywallSubscriptionPlans";
 import { paywallSubscribeCtaLabel } from "@/utils/subscriptionPricing";
 import type { PaywallSharedProps } from "./LegacyPaywall";
+import {
+  ONBOARDING_SECOND_ALLERGY_PAYWALL_BULLETS,
+  ONBOARDING_SECOND_ALLERGY_PAYWALL_SUBTITLE,
+  ONBOARDING_SECOND_ALLERGY_PAYWALL_TITLE,
+} from "@/utils/onboardingSecondAllergyPaywallCopy";
 
 function unifiedTrialHeadline(days: number): string {
   if (days === 1) return "1 день полного доступа бесплатно";
@@ -50,25 +56,29 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
   } = useSubscription();
   const [pricingOption, setPricingOption] = useState<"month" | "year">("year");
   const paywallReason = useAppStore((s) => s.paywallReason);
+  const resolvedReason = resolvePaywallReason(paywallReason);
+  const isOnboardingSecondAllergy = resolvedReason === "onboarding_second_allergy_free";
   const showPayForm = !hasAccess || hasTrialAccess;
   const trialUnavailable = trialUsed && !hasTrialAccess;
+  const paywallBullets = isOnboardingSecondAllergy ? ONBOARDING_SECOND_ALLERGY_PAYWALL_BULLETS : UNIFIED_PAYWALL_BULLETS;
 
   useEffect(() => {
     if (isOpen) {
-      const resolved = resolvePaywallReason(paywallReason);
       trackUsageEvent("paywall_view", {
-        properties: { paywall_reason: resolved },
+        properties: { paywall_reason: resolvedReason },
       });
       trackPaywallTextShown(
-        paywallCustomMessage ? `unified_custom_${resolved}` : `unified_default_${resolved}`,
+        paywallCustomMessage && !isOnboardingSecondAllergy
+          ? `unified_custom_${resolvedReason}`
+          : `unified_default_${resolvedReason}`,
         { surface: "unified_paywall" }
       );
     }
-  }, [isOpen, paywallReason, paywallCustomMessage]);
+  }, [isOpen, paywallReason, paywallCustomMessage, resolvedReason, isOnboardingSecondAllergy]);
 
   const handleStartTrial = async () => {
     trackUsageEvent("paywall_primary_click", {
-      properties: { paywall_reason: resolvePaywallReason(paywallReason) },
+      properties: { paywall_reason: resolvedReason },
     });
     try {
       await startTrial();
@@ -93,7 +103,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
 
   const handleContinueFree = () => {
     trackUsageEvent("paywall_secondary_click", {
-      properties: { paywall_reason: resolvePaywallReason(paywallReason) },
+      properties: { paywall_reason: resolvedReason },
     });
     onClose();
   };
@@ -139,10 +149,19 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                 </div>
 
                 <div className="text-center space-y-1 px-0.5">
-                  {paywallCustomMessage ? (
+                  {paywallCustomMessage && !isOnboardingSecondAllergy ? (
                     <p className="text-base font-semibold leading-snug text-foreground text-balance whitespace-pre-line break-words">
                       {paywallCustomMessage}
                     </p>
+                  ) : isOnboardingSecondAllergy ? (
+                    <>
+                      <h2 className="text-xl font-semibold leading-snug text-gray-900 dark:text-foreground text-balance">
+                        {ONBOARDING_SECOND_ALLERGY_PAYWALL_TITLE}
+                      </h2>
+                      <p className="text-sm text-gray-800 dark:text-muted-foreground leading-snug text-balance">
+                        {ONBOARDING_SECOND_ALLERGY_PAYWALL_SUBTITLE}
+                      </p>
+                    </>
                   ) : (
                     <>
                       <h2 className="text-xl font-semibold leading-snug text-foreground text-balance">
@@ -156,12 +175,21 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                 </div>
 
                 <ul className="space-y-1 min-w-0 pb-0 mt-3">
-                  {UNIFIED_PAYWALL_BULLETS.map((text, index) => (
+                  {paywallBullets.map((text, index) => (
                     <li key={`${text}-${index}`} className="flex items-start gap-2 text-[13px] leading-snug min-w-0">
                       <span className="w-3.5 h-3.5 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
                         <Check className="w-2 h-2 text-primary" strokeWidth={3} />
                       </span>
-                      <span className="text-foreground/90 min-w-0 flex-1">{text}</span>
+                      <span
+                        className={cn(
+                          "min-w-0 flex-1",
+                          isOnboardingSecondAllergy
+                            ? "text-gray-900 dark:text-foreground/90"
+                            : "text-foreground/90",
+                        )}
+                      >
+                        {text}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -224,13 +252,29 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full h-10 text-sm text-muted-foreground hover:text-foreground rounded-xl"
+                      className={cn(
+                        "w-full h-10 text-sm rounded-xl",
+                        isOnboardingSecondAllergy
+                          ? "text-gray-800 hover:text-gray-950 dark:text-muted-foreground dark:hover:text-foreground"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
                       onClick={handleContinueFree}
                     >
-                      {paywallCustomMessage ? "Позже" : "Остаться на бесплатной версии"}
+                      {paywallCustomMessage && !isOnboardingSecondAllergy
+                        ? "Позже"
+                        : "Остаться на бесплатной версии"}
                     </Button>
 
-                    <p className="text-center text-xs text-muted-foreground leading-snug px-1">{UNIFIED_PAYWALL_FOOTER}</p>
+                    <p
+                      className={cn(
+                        "text-center text-xs leading-snug px-1",
+                        isOnboardingSecondAllergy
+                          ? "text-gray-800 dark:text-muted-foreground"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {UNIFIED_PAYWALL_FOOTER}
+                    </p>
                   </>
                 )}
 
@@ -245,7 +289,10 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                   </Button>
                 ) : null}
 
-                <PaywallLegalConsentNote className="text-[9px] px-0.5" />
+                <PaywallLegalConsentNote
+                  className="text-[9px] px-0.5"
+                  tone={isOnboardingSecondAllergy ? "readableLight" : "default"}
+                />
               </div>
             </div>
           </motion.div>

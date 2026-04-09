@@ -26,7 +26,6 @@ import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/ser
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import {
-  FREE_ALLERGY_PAYWALL_MESSAGE,
   FREE_ALLERGY_SINGLE_HINT_CREATE,
   PREMIUM_PROFILES_MAX_BODY,
   PREMIUM_PROFILES_MAX_TITLE,
@@ -93,6 +92,7 @@ export function ProfileEditSheet({
   const { members, updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
   const { hasAccess, subscriptionStatus } = useSubscription();
   const limits = getSubscriptionLimits(subscriptionStatus);
+  const showPaywall = useAppStore((s) => s.showPaywall);
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
@@ -117,7 +117,7 @@ export function ProfileEditSheet({
     const memberId = member?.id ?? null;
     const key = { isCreate, memberId };
     const sameKey = lastInitRef.current?.isCreate === key.isCreate && lastInitRef.current?.memberId === key.memberId;
-    if (sameKey && !isCreate) return;
+    if (sameKey) return;
     lastInitRef.current = key;
 
     if (isCreate) {
@@ -152,8 +152,8 @@ export function ProfileEditSheet({
           description:
             "На бесплатном плане в одном профиле доступна одна аллергия. Ниже можно открыть условия подписки.",
         });
-        setPaywallReason("allergies_locked");
-        setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
+        setPaywallReason("onboarding_second_allergy_free");
+        setPaywallCustomMessage(null);
         setShowPaywall(true);
         return;
       }
@@ -316,11 +316,25 @@ export function ProfileEditSheet({
     }
   };
 
-  if (!open) return null;
-
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl flex flex-col max-h-[85vh]" aria-describedby="profile-sheet-desc">
+    <Sheet
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && showPaywall) return;
+        onOpenChange(next);
+      }}
+    >
+      <SheetContent
+        side="bottom"
+        className="rounded-t-3xl flex flex-col max-h-[85vh]"
+        aria-describedby="profile-sheet-desc"
+        onPointerDownOutside={(e) => {
+          if (showPaywall) e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          if (showPaywall) e.preventDefault();
+        }}
+      >
         <p id="profile-sheet-desc" className="sr-only">Редактирование профиля</p>
         <SheetHeader>
           <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать — ${member?.name ?? ""}`}</SheetTitle>

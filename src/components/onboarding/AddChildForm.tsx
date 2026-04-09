@@ -11,7 +11,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import {
-  FREE_ALLERGY_PAYWALL_MESSAGE,
   FREE_ALLERGY_SINGLE_HINT_CREATE,
   PREMIUM_PROFILES_MAX_BODY,
   PREMIUM_PROFILES_MAX_TITLE,
@@ -102,8 +101,8 @@ export function AddChildForm({
           description:
             "На бесплатном плане в одном профиле доступна одна аллергия. Ниже можно открыть условия подписки.",
         });
-        setPaywallReason("allergies_locked");
-        setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
+        setPaywallReason("onboarding_second_allergy_free");
+        setPaywallCustomMessage(null);
         setShowPaywall(true);
         return;
       }
