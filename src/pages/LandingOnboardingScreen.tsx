@@ -10,6 +10,7 @@ import { trackLandingEvent } from "@/utils/landingAnalytics";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { WelcomeRecipeBlock } from "@/components/landing/WelcomeRecipeBlock";
 import { WELCOME_LANDING_DEMO_RECIPE } from "@/data/welcomeLandingDemoRecipe";
+import { HAS_SEEN_WELCOME_KEY } from "@/utils/navigation";
 
 const BENEFIT_CARDS = [
   {
@@ -36,6 +37,10 @@ export default function LandingOnboardingScreen() {
   const location = useLocation();
   const landingDemoSectionSeenRef = useRef(false);
   const landingPaywallTextSentRef = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem(HAS_SEEN_WELCOME_KEY, "true");
+  }, []);
 
   const onDemoSectionBecameVisible = useCallback(() => {
     landingDemoSectionSeenRef.current = true;
@@ -121,13 +126,16 @@ export default function LandingOnboardingScreen() {
       <main className="max-w-md mx-auto w-full px-4 py-8 pb-14">
         {/* A) HERO */}
         <section className="text-center mb-10">
-          <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-foreground leading-tight mb-3">
+          <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground mb-2">
+            MomRecipes 🌿
+          </p>
+          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground leading-snug mb-2">
             Спокойствие за питание ребёнка — каждый день
           </h1>
-          <p className="text-xl sm:text-2xl font-medium text-foreground/95 leading-snug mb-2">
+          <p className="text-lg sm:text-xl font-medium text-foreground/95 leading-snug mb-2">
             Не нужно думать, что приготовить — мы уже всё продумали за вас ✔
           </p>
-          <p className="text-base text-muted-foreground mb-8">
+          <p className="text-sm sm:text-base text-muted-foreground mb-8">
             Меню, рецепты и советы — за пару минут
           </p>
         </section>
@@ -162,7 +170,7 @@ export default function LandingOnboardingScreen() {
             className="rounded-xl h-12 px-6 font-semibold"
             onClick={goToFreeCta}
           >
-            Попробовать бесплатно 3 дня
+            Получить свой план
           </Button>
           <Button
             variant="outline"
@@ -217,7 +225,7 @@ export default function LandingOnboardingScreen() {
               className="w-full rounded-xl h-14 text-base font-semibold mb-3"
               onClick={goToFreeCta}
             >
-              Попробовать бесплатно 3 дня
+              Получить свой план
             </Button>
             <p className="text-center text-xs text-muted-foreground">
               Можно остаться на бесплатной версии

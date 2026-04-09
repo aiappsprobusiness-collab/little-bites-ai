@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
+import { shouldShowWelcomePage } from "@/utils/navigation";
 import { Loader2, WifiOff } from "lucide-react";
 
 /** Тот же фон, что splash (`--splash-bg`), чтобы между fade splash и первым экраном не было скачка. */
@@ -20,7 +21,8 @@ function hasAuthParamsInUrl(search: string, hash: string): boolean {
  * - авторизован, members загружены и пусто → профиль + создание первого ребёнка (как после письма)
  * - авторизован, есть члены семьи → /meal-plan
  * - в URL есть токены из письма (magic link / confirm) → /auth/callback (сохраняем hash/query)
- * - не авторизован → /auth (страница входа).
+ * - не авторизован, первый визит без UTM → /welcome
+ * - не авторизован, уже видел welcome или есть utm_* → /auth
  */
 const SLOW_LOAD_SEC = 10;
 
@@ -82,6 +84,10 @@ export function RootRedirect() {
         replace
       />
     );
+  }
+
+  if (shouldShowWelcomePage()) {
+    return <Navigate to="/welcome" replace />;
   }
 
   return <Navigate to="/auth" replace />;

@@ -150,7 +150,7 @@
 
 ### Flow: First user activation
 
-1. Посещение / или /welcome (RootRedirect, LandingOnboardingScreen); атрибуция в onboarding_attribution.
+1. RootRedirect: анонимно, первый заход на `/` без utm_* → `/welcome` и `localStorage.hasSeenWelcome`; иначе анону → `/auth`; с сессией — в app. LandingOnboardingScreen; атрибуция в onboarding_attribution (см. `welcome_prelogin_routing.md`).
 2. Регистрация/вход (AuthPage → AuthCallbackPage); триггер создаёт profiles_v2; событие auth_success.
 3. Создание первого члена семьи (AddChildForm → members); событие member_create_success.
 4. Домены: Auth & User Profile, Family Profiles, Analytics.
