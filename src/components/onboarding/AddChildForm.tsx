@@ -12,6 +12,7 @@ import { useAppStore } from "@/store/useAppStore";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import {
   FREE_ALLERGY_PAYWALL_MESSAGE,
+  FREE_ALLERGY_SINGLE_HINT_CREATE,
   PREMIUM_PROFILES_MAX_BODY,
   PREMIUM_PROFILES_MAX_TITLE,
 } from "@/utils/friendlyLimitCopy";
@@ -96,6 +97,11 @@ export function AddChildForm({
   const allergiesHandlers = {
     add: (raw: string) => {
       if (!hasAccess && allergies.length >= 1) {
+        toast({
+          title: "Несколько аллергий — в полной версии",
+          description:
+            "На бесплатном плане в одном профиле доступна одна аллергия. Ниже можно открыть условия подписки.",
+        });
         setPaywallReason("allergies_locked");
         setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
         setShowPaywall(true);
@@ -276,7 +282,11 @@ export function AddChildForm({
         onEdit={allergiesHandlers.edit}
         onRemove={allergiesHandlers.remove}
         placeholder="Добавить аллергию (запятая или Enter)"
-        helperText="Запятая или Enter."
+        helperText={
+          !hasAccess
+            ? `Запятая или Enter. ${FREE_ALLERGY_SINGLE_HINT_CREATE}`
+            : "Запятая или Enter."
+        }
       />
 
       {hasAccess && (

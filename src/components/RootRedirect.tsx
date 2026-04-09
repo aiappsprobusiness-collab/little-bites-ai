@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useFamily } from "@/contexts/FamilyContext";
+import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
 import { Loader2, WifiOff } from "lucide-react";
 
 /** Тот же фон, что splash (`--splash-bg`), чтобы между fade splash и первым экраном не было скачка. */
@@ -15,7 +17,8 @@ function hasAuthParamsInUrl(search: string, hash: string): boolean {
 
 /**
  * Root "/" — умная маршрутизация:
- * - авторизован → app (meal-plan)
+ * - авторизован, members загружены и пусто → профиль + создание первого ребёнка (как после письма)
+ * - авторизован, есть члены семьи → /meal-plan
  * - в URL есть токены из письма (magic link / confirm) → /auth/callback (сохраняем hash/query)
  * - не авторизован → /auth (страница входа).
  */
@@ -23,6 +26,7 @@ const SLOW_LOAD_SEC = 10;
 
 export function RootRedirect() {
   const { user, loading } = useAuth();
+  const { members, isLoading: isMembersLoading } = useFamily();
   const location = useLocation();
   const [slowHint, setSlowHint] = useState(false);
 
@@ -54,6 +58,19 @@ export function RootRedirect() {
   }
 
   if (user) {
+    if (isMembersLoading) {
+      return (
+        <div className={BOOT_SCREEN_CLASS}>
+          <div className="text-center px-4">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Загрузка...</p>
+          </div>
+        </div>
+      );
+    }
+    if (members.length === 0) {
+      return <Navigate to={PROFILE_FIRST_CHILD_ONBOARDING} replace />;
+    }
     return <Navigate to="/meal-plan" replace />;
   }
 

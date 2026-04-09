@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -6,10 +6,8 @@ import { SubscriptionTierBadge } from "@/components/layout/SubscriptionTierBadge
 import { TabOverflowIconButton } from "@/components/layout/TabOverflowIconButton";
 import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
 import { TabEmptyState } from "@/components/ui/TabEmptyState";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Calendar as CalendarIcon,
   CalendarDays,
   Check,
   ClipboardList,
@@ -31,6 +29,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMembers } from "@/hooks/useMembers";
 import { useFamily } from "@/contexts/FamilyContext";
 import { logEmptyOnboardingReason } from "@/utils/authSessionDebug";
+import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
 import { usePlanGenerationJob, setStoredJobId } from "@/hooks/usePlanGenerationJob";
 import { useReplaceMealSlot } from "@/hooks/useReplaceMealSlot";
 import { useToast } from "@/hooks/use-toast";
@@ -1906,6 +1905,11 @@ export default function MealPlanPage() {
   const showNoProfile = authReady && !!user && !isMembersLoading && members.length === 0;
   const showEmptyFamily = isFamilyMode && showNoProfile;
 
+  useLayoutEffect(() => {
+    if (!authReady || isMembersLoading || members.length > 0) return;
+    navigate(PROFILE_FIRST_CHILD_ONBOARDING, { replace: true });
+  }, [authReady, isMembersLoading, members.length, navigate]);
+
   useEffect(() => {
     if (import.meta.env.DEV && (showNoProfile || showEmptyFamily)) {
       logEmptyOnboardingReason(showEmptyFamily ? "meal-plan (family)" : "meal-plan", "members empty", {
@@ -1959,21 +1963,8 @@ export default function MealPlanPage() {
   if (showNoProfile || showEmptyFamily) {
     return (
       <MobileLayout>
-        <div className="flex items-center justify-center min-h-[60vh] px-4">
-          <Card variant="default" className="p-8 text-center">
-            <CardContent className="p-0">
-              <CalendarIcon className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-typo-title font-semibold mb-2">Нет профиля ребенка</h3>
-              <p className="text-typo-muted text-muted-foreground mb-4">
-                {isFree
-                  ? "Добавьте профиль ребёнка, чтобы строить план питания."
-                  : "Добавьте профиль ребёнка или выберите «Семья» для общего плана"}
-              </p>
-              <Button className="bg-primary hover:opacity-90 text-white border-0 shadow-soft rounded-2xl" onClick={() => navigate("/profile")}>
-                Добавить ребенка
-              </Button>
-            </CardContent>
-          </Card>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
       </MobileLayout>
     );

@@ -98,6 +98,7 @@ export default function ProfilePage() {
   const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
   const [showProfileCapDialog, setShowProfileCapDialog] = useState(false);
   const onboardingFirstProfileRef = useRef(false);
+  const [welcomeAfterEmail, setWelcomeAfterEmail] = useState(false);
   const { canInstall, promptInstall, isInstalled, isIOSDevice } = usePWAInstall();
   const showAppSection = !isInstalled && !isStandalone();
 
@@ -117,6 +118,7 @@ export default function ProfilePage() {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.delete("openCreateProfile");
+        next.delete("welcome");
         return next;
       }, { replace: true });
       if (hasAccess) setShowProfileCapDialog(true);
@@ -128,10 +130,14 @@ export default function ProfilePage() {
       return;
     }
     if (members.length > 0) return;
+    if (searchParams.get("welcome") === "1") {
+      setWelcomeAfterEmail(true);
+    }
     setShowMemberSheet(true);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete("openCreateProfile");
+      next.delete("welcome");
       return next;
     }, { replace: true });
   }, [searchParams, authReady, isLoading, members.length, setSearchParams, subscriptionStatus, hasAccess, setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
@@ -613,11 +619,15 @@ export default function ProfilePage() {
 
       <ProfileEditSheet
         open={showMemberSheet}
-        onOpenChange={setShowMemberSheet}
+        onOpenChange={(open) => {
+          setShowMemberSheet(open);
+          if (!open) setWelcomeAfterEmail(false);
+        }}
         member={null}
         createMode={true}
         onCreated={handleMemberCreated}
         skipFillAndRedirectWhenCreated={members.length === 0}
+        welcomeAfterEmailConfirm={welcomeAfterEmail}
       />
 
       <FriendlyLimitDialog

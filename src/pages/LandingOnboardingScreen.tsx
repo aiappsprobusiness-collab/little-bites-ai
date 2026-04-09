@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useFamily } from "@/contexts/FamilyContext";
+import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
@@ -28,6 +30,7 @@ const BENEFIT_CARDS = [
 
 export default function LandingOnboardingScreen() {
   const { user, loading } = useAuth();
+  const { members, isLoading: isMembersLoading } = useFamily();
   const navigate = useNavigate();
   const location = useLocation();
   const landingDemoSectionSeenRef = useRef(false);
@@ -81,7 +84,20 @@ export default function LandingOnboardingScreen() {
     );
   }
 
-  if (user) return <Navigate to="/meal-plan" replace />;
+  if (user) {
+    if (isMembersLoading) {
+      return (
+        <div className="min-h-screen min-h-dvh flex items-center justify-center gradient-hero">
+          <div className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Загрузка...</p>
+          </div>
+        </div>
+      );
+    }
+    const to = members.length === 0 ? PROFILE_FIRST_CHILD_ONBOARDING : "/meal-plan";
+    return <Navigate to={to} replace />;
+  }
 
   return (
     <div

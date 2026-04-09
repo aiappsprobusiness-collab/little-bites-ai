@@ -27,6 +27,7 @@ import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import {
   FREE_ALLERGY_PAYWALL_MESSAGE,
+  FREE_ALLERGY_SINGLE_HINT_CREATE,
   PREMIUM_PROFILES_MAX_BODY,
   PREMIUM_PROFILES_MAX_TITLE,
 } from "@/utils/friendlyLimitCopy";
@@ -70,6 +71,8 @@ interface ProfileEditSheetProps {
   onCreated?: (memberId: string) => void;
   /** When true, after creating a member we only call onCreated and do not run startFillDay/navigate (parent shows onboarding screen). */
   skipFillAndRedirectWhenCreated?: boolean;
+  /** После подтверждения email (`/profile?welcome=1`): короткое приветствие в шапке формы создания профиля. */
+  welcomeAfterEmailConfirm?: boolean;
 }
 
 export function ProfileEditSheet({
@@ -80,6 +83,7 @@ export function ProfileEditSheet({
   onAddNew,
   onCreated,
   skipFillAndRedirectWhenCreated = false,
+  welcomeAfterEmailConfirm = false,
 }: ProfileEditSheetProps) {
   const FAMILY_LIMIT_MESSAGE =
     "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу";
@@ -143,6 +147,11 @@ export function ProfileEditSheet({
     ...baseAllergiesHandlers,
     add: (raw: string) => {
       if (!hasAccess && allergies.length >= 1) {
+        toast({
+          title: "Несколько аллергий — в полной версии",
+          description:
+            "На бесплатном плане в одном профиле доступна одна аллергия. Ниже можно открыть условия подписки.",
+        });
         setPaywallReason("allergies_locked");
         setPaywallCustomMessage(FREE_ALLERGY_PAYWALL_MESSAGE);
         setShowPaywall(true);
@@ -317,6 +326,17 @@ export function ProfileEditSheet({
           <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать — ${member?.name ?? ""}`}</SheetTitle>
         </SheetHeader>
         <div className="space-y-5 py-4 overflow-y-auto">
+          {isCreate && welcomeAfterEmailConfirm ? (
+            <div
+              className="rounded-xl border border-primary/25 bg-primary/10 px-3.5 py-3 text-sm leading-snug text-foreground"
+              role="status"
+            >
+              <p className="font-semibold text-foreground">Добро пожаловать!</p>
+              <p className="mt-1 text-muted-foreground">
+                Email подтверждён. Заполните профиль — так меню и рекомендации будут точнее.
+              </p>
+            </div>
+          ) : null}
           <p className="text-sm text-muted-foreground leading-relaxed">
             {isCreate
               ? "Добавьте профиль, чтобы мы учитывали особенности питания члена вашей семьи."
@@ -363,7 +383,11 @@ export function ProfileEditSheet({
             onEdit={allergiesHandlers.edit}
             onRemove={allergiesHandlers.remove}
             placeholder="Например: БКМ, орехи"
-            helperText="Введите через запятую или нажмите Enter"
+            helperText={
+              !hasAccess && isCreate
+                ? `Введите через запятую или нажмите Enter. ${FREE_ALLERGY_SINGLE_HINT_CREATE}`
+                : "Введите через запятую или нажмите Enter"
+            }
           />
           {hasAccess && (
             <>

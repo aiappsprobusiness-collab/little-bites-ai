@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { setActiveSessionKeyForUser } from "@/utils/activeSessionKey";
+import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
 
 const POLL_INTERVAL_MS = 300;
 const MAX_WAIT_MS = 5000;
@@ -81,7 +82,7 @@ export default function AuthCallbackPage() {
       }
 
       if (count === 0) {
-        navigate("/profile?openCreateProfile=1", { replace: true });
+        navigate(PROFILE_FIRST_CHILD_ONBOARDING, { replace: true });
       } else {
         navigate("/meal-plan", { replace: true });
       }
