@@ -7,24 +7,25 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
+import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { WelcomeRecipeBlock } from "@/components/landing/WelcomeRecipeBlock";
 import { WELCOME_LANDING_DEMO_RECIPE } from "@/data/welcomeLandingDemoRecipe";
 
 const BENEFIT_CARDS = [
   {
-    emoji: "👶",
-    title: "Ребёнок отказывается есть?",
-    text: "Подберём блюда, которые дети принимают охотнее.",
+    emoji: "",
+    title: "Ребёнок отказывается есть? 🙈",
+    text: "Мы подберём блюда, которые дети принимают охотнее — без уговоров и стресса",
   },
   {
-    emoji: "🍽",
-    title: "Меню без лишней готовки",
-    text: "Готовые блюда на день для ребёнка и семьи.",
+    emoji: "",
+    title: "Не хочется готовить отдельно? 🍽",
+    text: "Готовый план питания на день — для ребёнка и всей семьи\nБез лишней готовки и раздумий",
   },
   {
-    emoji: "💬",
-    title: "Учитываем особенности ребёнка",
-    text: "Аллергии, возраст, любимые и нелюбимые продукты.",
+    emoji: "",
+    title: "У каждого ребёнка свои особенности 💬",
+    text: "Учтём возраст, аллергии и вкусы\nИ исключим то, что ребёнок не ест ✔",
   },
 ];
 
@@ -34,6 +35,7 @@ export default function LandingOnboardingScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const landingDemoSectionSeenRef = useRef(false);
+  const landingPaywallTextSentRef = useRef(false);
 
   const onDemoSectionBecameVisible = useCallback(() => {
     landingDemoSectionSeenRef.current = true;
@@ -44,6 +46,16 @@ export default function LandingOnboardingScreen() {
     saveOnboardingAttribution(location.pathname, location.search);
     trackLandingEvent("landing_view");
   }, [user, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (loading || user) return;
+    if (landingPaywallTextSentRef.current) return;
+    landingPaywallTextSentRef.current = true;
+    trackPaywallTextShown("landing_example_recipe", {
+      surface: "landing_example_recipe",
+      properties: { entry_point: "landing" },
+    });
+  }, [loading, user]);
 
   const buildAuthParams = (): string => {
     const params = new URLSearchParams(location.search);
@@ -110,15 +122,13 @@ export default function LandingOnboardingScreen() {
         {/* A) HERO */}
         <section className="text-center mb-10">
           <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-foreground leading-tight mb-3">
-            MomRecipes
+            Спокойствие за питание ребёнка — каждый день
           </h1>
           <p className="text-xl sm:text-2xl font-medium text-foreground/95 leading-snug mb-2">
-            Не думайте каждый день,
-            <br />
-            чем кормить ребёнка
+            Не нужно думать, что приготовить — мы уже всё продумали за вас ✔
           </p>
           <p className="text-base text-muted-foreground mb-8">
-            Меню, рецепты и советы — за 1 минуту
+            Меню, рецепты и советы — за пару минут
           </p>
         </section>
 
@@ -130,12 +140,14 @@ export default function LandingOnboardingScreen() {
               className="rounded-2xl bg-primary/5 border border-primary/10 px-4 py-4 shadow-sm"
             >
               <div className="flex gap-3 items-start">
-                <span className="text-2xl shrink-0" aria-hidden>
-                  {card.emoji}
-                </span>
-                <div>
+                {card.emoji ? (
+                  <span className="text-2xl shrink-0" aria-hidden>
+                    {card.emoji}
+                  </span>
+                ) : null}
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold text-foreground">{card.title}</p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
+                  <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-line">
                     {card.text}
                   </p>
                 </div>
@@ -150,7 +162,7 @@ export default function LandingOnboardingScreen() {
             className="rounded-xl h-12 px-6 font-semibold"
             onClick={goToFreeCta}
           >
-            Получить свой план
+            Попробовать бесплатно 3 дня
           </Button>
           <Button
             variant="outline"
@@ -174,28 +186,43 @@ export default function LandingOnboardingScreen() {
           />
         </section>
 
-        {/* E) Инфо перед CTA */}
+        {/* E) Финальный CTA */}
         <section className="mb-6">
-          <div className="rounded-2xl bg-muted/40 border border-border/60 px-4 py-3">
-            <p className="text-sm font-medium text-foreground mb-2">
-              Создадим персональное меню:
+          <div className="rounded-2xl bg-muted/40 border border-border/60 px-4 py-4">
+            <p className="text-base font-semibold text-foreground mb-2">
+              Хочется перестать каждый день думать о еде?
             </p>
-            <ul className="space-y-1 text-sm text-muted-foreground">
-              <li className="flex items-center gap-2">✓ с учётом возраста ребёнка</li>
-              <li className="flex items-center gap-2">✓ с учётом аллергий</li>
-              <li className="flex items-center gap-2">✓ без продуктов, которые ребёнок не ест</li>
+            <p className="text-sm text-muted-foreground mb-3 whitespace-pre-line">
+              Мы составим меню за вас — с учётом именно вашего ребёнка 👶
+            </p>
+            <ul className="space-y-1 text-sm text-muted-foreground mb-4">
+              <li className="flex items-start gap-2">
+                <span className="shrink-0">✔</span>
+                <span>с учётом возраста</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="shrink-0">✔</span>
+                <span>без аллергенов</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="shrink-0">✔</span>
+                <span>без нелюбимых продуктов</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="shrink-0">✔</span>
+                <span>с блюдами, которые реально едят дети</span>
+              </li>
             </ul>
+            <Button
+              className="w-full rounded-xl h-14 text-base font-semibold mb-3"
+              onClick={goToFreeCta}
+            >
+              Попробовать бесплатно 3 дня
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              Можно остаться на бесплатной версии
+            </p>
           </div>
-        </section>
-
-        {/* F) Нижний CTA */}
-        <section>
-          <Button
-            className="w-full rounded-xl h-14 text-base font-semibold"
-            onClick={goToFreeCta}
-          >
-            Создать меню для ребёнка
-          </Button>
         </section>
       </main>
     </div>

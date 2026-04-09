@@ -25,6 +25,7 @@ export type PaywallTextSurface =
   | "profile"
   | "subscription_manage"
   | "payment_result"
+  | "landing_example_recipe"
   | "other";
 
 /**
@@ -32,7 +33,12 @@ export type PaywallTextSurface =
  */
 export function trackPaywallTextShown(
   paywallReasonKey: string,
-  options?: { memberId?: string | null; surface?: PaywallTextSurface }
+  options?: {
+    memberId?: string | null;
+    surface?: PaywallTextSurface;
+    /** Доп. поля в `properties` (например `entry_point` для лендинга). */
+    properties?: Record<string, unknown>;
+  }
 ): void {
   if (!paywallReasonKey) return;
   trackUsageEvent("paywall_text", {
@@ -40,6 +46,7 @@ export function trackPaywallTextShown(
     properties: {
       paywall_reason: paywallReasonKey,
       ...(options?.surface ? { surface: options.surface } : {}),
+      ...(options?.properties ?? {}),
     },
   });
 }
