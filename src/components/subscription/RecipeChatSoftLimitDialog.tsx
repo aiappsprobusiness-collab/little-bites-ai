@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
+import { cn } from "@/lib/utils";
+import { PAYWALL_OVERLAY, PAYWALL_PRIMARY_CTA } from "@/utils/paywallBrandStyles";
 
 export interface RecipeChatSoftLimitDialogProps {
   open: boolean;
@@ -33,14 +35,18 @@ export function RecipeChatSoftLimitDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md rounded-2xl">
+      <DialogContent
+        overlayClassName={PAYWALL_OVERLAY}
+        className={cn(
+          "sm:max-w-md rounded-2xl border-primary/15 bg-gradient-to-b from-primary-pill-surface/35 to-background",
+        )}
+      >
         <DialogHeader className="space-y-2 text-left">
-          <DialogTitle className="text-lg font-semibold leading-snug">
+          <DialogTitle className="text-base font-semibold leading-snug whitespace-nowrap tracking-tight sm:text-lg">
             Сегодня лимит подборов исчерпан 🙌
           </DialogTitle>
-          <p className="text-[14px] leading-relaxed text-muted-foreground">
-            В бесплатной версии есть ограничение на количество подборов в день
-          </p>
+          <p className="text-[14px] leading-relaxed text-muted-foreground whitespace-pre-line">{`В бесплатной версии есть лимит на количество подборов в день.
+В полной — можно подбирать блюда без ограничений`}</p>
         </DialogHeader>
         {/*
           DialogFooter по умолчанию: sm:space-x-2 — в колонке даёт margin-left второй кнопке (визуально «съехала» вправо).
@@ -57,7 +63,7 @@ export function RecipeChatSoftLimitDialog({
           </Button>
           <Button
             type="button"
-            className="w-full shrink-0 rounded-xl"
+            className={cn("w-full shrink-0 rounded-xl border-0", PAYWALL_PRIMARY_CTA)}
             onClick={() => {
               onRequestFullPaywall();
               onOpenChange(false);

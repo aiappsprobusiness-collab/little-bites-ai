@@ -11,6 +11,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { getPlanSlotChatPrefillMessage } from "@/utils/planChatPrefill";
 import type { InfantPoolExhaustedReason } from "@/utils/infantAutoreplace";
+import { cn } from "@/lib/utils";
+import { PAYWALL_SHEET_OVERLAY, PAYWALL_SHEET_SURFACE } from "@/utils/paywallBrandStyles";
 
 export interface PoolExhaustedSheetProps {
   open: boolean;
@@ -96,7 +98,11 @@ export function PoolExhaustedSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="rounded-t-2xl flex flex-col gap-4">
+        <SheetContent
+          side="bottom"
+          overlayClassName={PAYWALL_SHEET_OVERLAY}
+          className={cn("rounded-t-2xl flex flex-col gap-4", PAYWALL_SHEET_SURFACE)}
+        >
           <SheetHeader>
             <SheetTitle className="text-left">
               {infantMode ? "Подходящие варианты закончились" : "Нет подходящих рецептов"}

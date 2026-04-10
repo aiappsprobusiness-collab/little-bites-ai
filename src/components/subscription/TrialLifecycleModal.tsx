@@ -4,6 +4,13 @@ import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
+import {
+  PAYWALL_MODAL_BOTTOM_PANEL,
+  PAYWALL_MODAL_CARD,
+  PAYWALL_MODAL_SCROLL_TINT,
+  PAYWALL_OVERLAY,
+  PAYWALL_PRIMARY_CTA,
+} from "@/utils/paywallBrandStyles";
 
 export type TrialLifecycleModalVariant = "ending_soon" | "expired";
 
@@ -55,7 +62,10 @@ export function TrialLifecycleModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[58] flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-sm p-0 sm:p-4"
+          className={cn(
+            "fixed inset-0 z-[58] flex items-end sm:items-center justify-center p-0 sm:p-4",
+            PAYWALL_OVERLAY,
+          )}
           onClick={onSecondary}
         >
           <motion.div
@@ -64,9 +74,8 @@ export function TrialLifecycleModal({
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 340 }}
             className={cn(
-              "w-full max-w-md shadow-xl border border-border/50",
-              "rounded-t-2xl sm:rounded-2xl bg-card text-card-foreground",
-              "flex flex-col overflow-hidden max-h-[min(92dvh,520px)]",
+              "w-full max-w-md shadow-xl text-card-foreground flex flex-col overflow-hidden max-h-[min(92dvh,520px)]",
+              PAYWALL_MODAL_CARD,
             )}
             onClick={(e) => e.stopPropagation()}
           >
@@ -79,16 +88,26 @@ export function TrialLifecycleModal({
               <X className="w-4 h-4" />
             </button>
 
-            <div className="px-5 pt-9 pb-4 sm:pt-10 space-y-2 pr-12">
+            <div
+              className={cn(
+                "px-5 pt-9 pb-4 sm:pt-10 space-y-2 pr-12",
+                PAYWALL_MODAL_SCROLL_TINT,
+              )}
+            >
               <h2 className="text-lg font-semibold leading-snug text-foreground text-balance">{title}</h2>
               <p className="text-sm text-muted-foreground leading-snug">{BODY[variant]}</p>
             </div>
 
-            <div className="flex flex-col gap-2 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 border-t border-border/40">
+            <div
+              className={cn(
+                "flex flex-col gap-2 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2",
+                PAYWALL_MODAL_BOTTOM_PANEL,
+              )}
+            >
               <Button
                 variant="default"
                 size="sm"
-                className="w-full h-11 text-sm font-semibold rounded-xl"
+                className={cn("w-full h-11 text-sm font-semibold rounded-xl border-0", PAYWALL_PRIMARY_CTA)}
                 onClick={onPrimary}
               >
                 Оформить полную версию

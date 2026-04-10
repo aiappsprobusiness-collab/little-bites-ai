@@ -10,6 +10,14 @@ import {
   REPLACE_MEAL_PAYWALL_SUBTITLE_TAGLINE,
   REPLACE_MEAL_PAYWALL_TITLE,
 } from "@/constants/replaceMealPaywallCopy";
+import { cn } from "@/lib/utils";
+import {
+  PAYWALL_MODAL_BOTTOM_PANEL,
+  PAYWALL_MODAL_CARD,
+  PAYWALL_MODAL_SCROLL_TINT,
+  PAYWALL_OVERLAY,
+  PAYWALL_PRIMARY_CTA,
+} from "@/utils/paywallBrandStyles";
 
 export type ReplaceMealSoftPaywallModalProps = {
   open: boolean;
@@ -39,7 +47,10 @@ export function ReplaceMealSoftPaywallModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
+          className={cn(
+            "fixed inset-0 z-[55] flex items-end sm:items-center justify-center p-0 sm:p-4",
+            PAYWALL_OVERLAY,
+          )}
           onClick={() => !isStartingTrial && onClose()}
         >
           <motion.div
@@ -47,11 +58,19 @@ export function ReplaceMealSoftPaywallModal({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className="w-full max-w-md max-h-[100dvh] sm:max-h-[min(100dvh,720px)] flex flex-col overflow-hidden bg-gradient-to-b from-background via-background to-secondary/20 rounded-t-2xl sm:rounded-2xl shadow-2xl"
+            className={cn(
+              "w-full max-w-md max-h-[100dvh] sm:max-h-[min(100dvh,720px)] flex flex-col overflow-hidden",
+              PAYWALL_MODAL_CARD,
+            )}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-2 sm:px-5 sm:pt-5 space-y-3">
+              <div
+                className={cn(
+                  "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-2 sm:px-5 sm:pt-5 space-y-3",
+                  PAYWALL_MODAL_SCROLL_TINT,
+                )}
+              >
                 <h2 className="text-lg font-semibold leading-snug text-foreground text-balance">
                   {REPLACE_MEAL_PAYWALL_TITLE}
                 </h2>
@@ -61,12 +80,17 @@ export function ReplaceMealSoftPaywallModal({
                 </div>
               </div>
 
-              <div className="shrink-0 flex flex-col gap-2 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 border-t border-border/40 bg-background/95 backdrop-blur-sm">
+              <div
+                className={cn(
+                  "shrink-0 flex flex-col gap-2 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5",
+                  PAYWALL_MODAL_BOTTOM_PANEL,
+                )}
+              >
                 <Button
                   type="button"
                   variant="default"
                   size="sm"
-                  className="w-full h-12 text-sm font-semibold rounded-xl"
+                  className={cn("w-full h-12 text-sm font-semibold rounded-xl border-0", PAYWALL_PRIMARY_CTA)}
                   disabled={isStartingTrial}
                   onClick={onTryTrial}
                 >

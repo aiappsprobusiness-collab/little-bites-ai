@@ -1,6 +1,6 @@
 /** Тексты вне paywall: лимиты Premium, подсказки полей. */
 
-export const PREMIUM_CHAT_LIMIT_TITLE = "Сегодня вы задали максимум вопросов 🙌";
+export const PREMIUM_CHAT_LIMIT_TITLE = "Сегодня лимит подборов исчерпан 🙌";
 
 export const PREMIUM_CHAT_LIMIT_BODY =
   "Вы уже использовали доступное количество генераций на сегодня.\nЛимит обновится завтра — спасибо, что пользуетесь приложением.";

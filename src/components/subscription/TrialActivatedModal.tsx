@@ -7,6 +7,15 @@ import { markTrialActivatedModalSeen } from "@/utils/trialActivatedModalStorage"
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
+import { cn } from "@/lib/utils";
+import {
+  PAYWALL_HERO_ICON_WRAP,
+  PAYWALL_MODAL_BOTTOM_PANEL,
+  PAYWALL_MODAL_CARD,
+  PAYWALL_MODAL_SCROLL_TINT,
+  PAYWALL_OVERLAY,
+  PAYWALL_PRIMARY_CTA,
+} from "@/utils/paywallBrandStyles";
 import {
   TRIAL_ONBOARDING_BULLETS,
   TRIAL_ONBOARDING_CTA_CONTINUE,
@@ -56,7 +65,10 @@ export function TrialActivatedModal({ open, userId, onClose, onOpenPricing }: Tr
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
+          className={cn(
+            "fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4",
+            PAYWALL_OVERLAY,
+          )}
           onClick={dismiss}
         >
           <motion.div
@@ -64,7 +76,10 @@ export function TrialActivatedModal({ open, userId, onClose, onOpenPricing }: Tr
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className="w-full max-w-md max-h-[100dvh] sm:max-h-[min(100dvh,720px)] flex flex-col overflow-hidden bg-gradient-to-b from-background via-background to-secondary/20 rounded-t-2xl sm:rounded-2xl shadow-2xl"
+            className={cn(
+              "w-full max-w-md max-h-[100dvh] sm:max-h-[min(100dvh,720px)] flex flex-col overflow-hidden",
+              PAYWALL_MODAL_CARD,
+            )}
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -77,10 +92,20 @@ export function TrialActivatedModal({ open, userId, onClose, onOpenPricing }: Tr
             </button>
 
             <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2.5 pb-1.5 sm:px-5 sm:pt-3 sm:pb-2 pr-11 space-y-2">
+              <div
+                className={cn(
+                  "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-2.5 pb-1.5 sm:px-5 sm:pt-3 sm:pb-2 pr-11 space-y-2",
+                  PAYWALL_MODAL_SCROLL_TINT,
+                )}
+              >
                 <div className="flex justify-center shrink-0">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-emerald-400/90 to-teal-600/90 flex items-center justify-center shadow-md shadow-emerald-500/15">
-                    <Sparkles className="w-[18px] h-[18px] text-white" />
+                  <div
+                    className={cn(
+                      "w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center text-primary",
+                      PAYWALL_HERO_ICON_WRAP,
+                    )}
+                  >
+                    <Sparkles className="w-[18px] h-[18px]" strokeWidth={2} />
                   </div>
                 </div>
 
@@ -102,11 +127,16 @@ export function TrialActivatedModal({ open, userId, onClose, onOpenPricing }: Tr
                 </ul>
               </div>
 
-              <div className="shrink-0 flex flex-col gap-2 px-4 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pt-2 border-t border-border/40 bg-background/95 backdrop-blur-sm">
+              <div
+                className={cn(
+                  "shrink-0 flex flex-col gap-2 px-4 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pt-2",
+                  PAYWALL_MODAL_BOTTOM_PANEL,
+                )}
+              >
                 <Button
                   variant="default"
                   size="sm"
-                  className="w-full h-12 text-sm font-semibold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm shadow-primary/20"
+                  className={cn("w-full h-12 text-sm font-semibold rounded-xl border-0", PAYWALL_PRIMARY_CTA)}
                   onClick={dismiss}
                 >
                   {TRIAL_ONBOARDING_CTA_CONTINUE}

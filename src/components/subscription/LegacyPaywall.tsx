@@ -14,6 +14,17 @@ import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
 import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
 import { PaywallSubscriptionPlans } from "@/components/subscription/PaywallSubscriptionPlans";
 import { paywallSubscribeCtaLabel } from "@/utils/subscriptionPricing";
+import {
+  PAYWALL_HERO_ICON_CLASS,
+  PAYWALL_HERO_ICON_WRAP,
+  PAYWALL_MODAL_BOTTOM_PANEL,
+  PAYWALL_MODAL_CARD,
+  PAYWALL_MODAL_SCROLL_TINT,
+  PAYWALL_OUTLINE_PAY_CTA,
+  PAYWALL_OVERLAY,
+  PAYWALL_PLANS_CONTAINER,
+  PAYWALL_PRIMARY_CTA,
+} from "@/utils/paywallBrandStyles";
 import { PAYWALL_TRIAL_ACTIVE_HINT, PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
 
 export interface PaywallSharedProps {
@@ -105,7 +116,10 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
+          className={cn(
+            "fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4",
+            PAYWALL_OVERLAY,
+          )}
           onClick={onClose}
         >
           <motion.div
@@ -113,7 +127,10 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 28, stiffness: 320 }}
-            className="w-full max-w-md max-h-[100dvh] sm:max-h-[min(100dvh,800px)] min-h-[68dvh] sm:min-h-0 flex flex-col overflow-hidden bg-gradient-to-b from-background via-background to-secondary/20 rounded-t-2xl sm:rounded-2xl px-5 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-2xl"
+            className={cn(
+              "w-full max-w-md max-h-[100dvh] sm:max-h-[min(100dvh,800px)] min-h-[68dvh] sm:min-h-0 flex flex-col overflow-hidden px-5 pt-4",
+              PAYWALL_MODAL_CARD,
+            )}
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -124,10 +141,15 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
               <X className="w-4 h-4" />
             </button>
 
-            <div className="flex flex-col min-h-0 flex-1 gap-3 pt-1 pr-8 overflow-y-auto">
+            <div
+              className={cn(
+                "flex flex-col min-h-0 flex-1 gap-3 pt-1 pr-8 overflow-y-auto",
+                PAYWALL_MODAL_SCROLL_TINT,
+              )}
+            >
               <div className="flex justify-center shrink-0 py-1">
-                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400/90 to-orange-500/90 flex items-center justify-center shadow-md shadow-amber-500/15">
-                  <Crown className="w-5 h-5 text-white" />
+                <div className={cn("w-11 h-11 flex items-center justify-center", PAYWALL_HERO_ICON_WRAP)}>
+                  <Crown className={cn("w-5 h-5", PAYWALL_HERO_ICON_CLASS)} />
                 </div>
               </div>
 
@@ -138,7 +160,14 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                   </p>
                 ) : (
                   <>
-                    <h2 className="text-lg font-semibold leading-snug text-foreground text-balance">
+                    <h2
+                      className={cn(
+                        "font-semibold leading-snug text-foreground text-center",
+                        resolvedReason === "limit_chat"
+                          ? "text-[clamp(0.9375rem,3.9vw,1.125rem)] whitespace-nowrap tracking-tight"
+                          : "text-lg text-balance",
+                      )}
+                    >
                       {copy.title}
                     </h2>
                     <p className="text-sm text-muted-foreground leading-relaxed text-balance whitespace-pre-line">
@@ -152,10 +181,15 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
               </p>
             </div>
 
-            <div className="shrink-0 flex flex-col gap-3 pt-3 mt-auto border-t border-border/40">
+            <div
+              className={cn(
+                "shrink-0 flex flex-col gap-3 pt-3 mt-auto pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+                PAYWALL_MODAL_BOTTOM_PANEL,
+              )}
+            >
               {showPayForm && (
                 <>
-                  <div className="rounded-xl border border-border bg-card/50 p-3">
+                  <div className={cn("p-3", PAYWALL_PLANS_CONTAINER)}>
                     <PaywallSubscriptionPlans value={pricingOption} onChange={setPricingOption} density="compact" />
                   </div>
 
@@ -184,7 +218,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                     <Button
                       variant="default"
                       size="sm"
-                      className="w-full h-12 text-sm font-semibold rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground"
+                      className={cn("w-full h-12 text-sm font-semibold rounded-xl border-0", PAYWALL_PRIMARY_CTA)}
                       onClick={() => handleStartTrial()}
                       disabled={isStartingTrial}
                     >
@@ -200,7 +234,10 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full h-10 py-1 rounded-xl flex flex-col gap-0 justify-center leading-none min-h-10"
+                    className={cn(
+                      "w-full h-10 py-1 rounded-xl flex flex-col gap-0 justify-center leading-none min-h-10 hover:text-foreground",
+                      PAYWALL_OUTLINE_PAY_CTA,
+                    )}
                     onClick={handlePayPremium}
                     disabled={isStartingPayment}
                   >

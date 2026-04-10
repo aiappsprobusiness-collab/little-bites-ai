@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
+import { cn } from "@/lib/utils";
+import {
+  PAYWALL_PRIMARY_CTA,
+  PAYWALL_SHEET_OVERLAY,
+  PAYWALL_SHEET_SURFACE,
+} from "@/utils/paywallBrandStyles";
 
 export function FavoritesLimitSheet() {
   const showFavoritesLimitSheet = useAppStore((s) => s.showFavoritesLimitSheet);
@@ -32,7 +38,11 @@ export function FavoritesLimitSheet() {
     <Sheet open={showFavoritesLimitSheet} onOpenChange={setShowFavoritesLimitSheet}>
       <SheetContent
         side="bottom"
-        className="rounded-t-2xl flex flex-col gap-3 p-5 max-h-[85dvh] overflow-y-auto overflow-x-hidden"
+        overlayClassName={PAYWALL_SHEET_OVERLAY}
+        className={cn(
+          "rounded-t-2xl flex flex-col gap-3 p-5 max-h-[85dvh] overflow-y-auto overflow-x-hidden",
+          PAYWALL_SHEET_SURFACE,
+        )}
       >
         <SheetHeader className="space-y-1.5 pb-0 text-left">
           <SheetTitle className="text-lg font-semibold leading-snug text-balance">
@@ -43,7 +53,7 @@ export function FavoritesLimitSheet() {
         <div className="flex flex-col gap-3 mt-2 shrink-0">
           <Button
             size="sm"
-            className="w-full h-12 rounded-xl text-sm font-semibold"
+            className={cn("w-full h-12 rounded-xl text-sm font-semibold border-0", PAYWALL_PRIMARY_CTA)}
             onClick={handleOpenPremium}
           >
             Открыть полную версию

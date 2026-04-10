@@ -16,6 +16,13 @@ import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { SUBSCRIPTION_PRICES, YEARLY_PER_MONTH } from "@/utils/subscriptionPricing";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
 import { PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
+import { cn } from "@/lib/utils";
+import {
+  PAYWALL_PRIMARY_CTA,
+  PAYWALL_OUTLINE_PAY_CTA,
+  PAYWALL_SHEET_OVERLAY,
+  PAYWALL_SHEET_SURFACE,
+} from "@/utils/paywallBrandStyles";
 
 const MEAL_EMOJIS: Record<string, string> = {
   breakfast: "🍳",
@@ -100,7 +107,11 @@ export function WeekPreviewPaywallSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="rounded-t-2xl flex flex-col max-h-[90dvh] overflow-y-auto overflow-x-hidden p-5 gap-3"
+        overlayClassName={PAYWALL_SHEET_OVERLAY}
+        className={cn(
+          "rounded-t-2xl flex flex-col max-h-[90dvh] overflow-y-auto overflow-x-hidden p-5 gap-3",
+          PAYWALL_SHEET_SURFACE,
+        )}
       >
         <SheetHeader className="text-left space-y-1.5 pb-0 shrink-0">
           <SheetTitle className="text-lg font-semibold leading-snug text-balance">
@@ -139,12 +150,15 @@ export function WeekPreviewPaywallSheet({
         </div>
 
         {showPayForm && (
-          <div className="flex flex-col gap-3 shrink-0 mt-auto pt-3 border-t border-border/50">
+          <div className="flex flex-col gap-3 shrink-0 mt-auto pt-3 border-t border-primary/10 bg-background/80 -mx-5 px-5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
             {!hasAccess && !trialUnavailable && (
               <Button
                 variant="default"
                 size="sm"
-                className="w-full h-12 text-sm font-semibold rounded-xl"
+                className={cn(
+                  "w-full h-12 text-sm font-semibold rounded-xl border-0",
+                  PAYWALL_PRIMARY_CTA,
+                )}
                 onClick={handleStartTrial}
                 disabled={isStartingTrial}
               >
@@ -160,7 +174,10 @@ export function WeekPreviewPaywallSheet({
             <Button
               variant="outline"
               size="sm"
-              className="w-full h-10 rounded-xl text-sm flex flex-col gap-0 py-1 justify-center leading-none min-h-10"
+              className={cn(
+                "w-full h-10 rounded-xl text-sm flex flex-col gap-0 py-1 justify-center leading-none min-h-10 hover:text-foreground",
+                PAYWALL_OUTLINE_PAY_CTA,
+              )}
               onClick={() => void handlePayPremium()}
               disabled={isStartingPayment}
             >

@@ -41,6 +41,12 @@
 - **Кастомные врезки** (дневник, лимиты из Edge, лимит семьи): `paywallCustomMessage` (коротко, часто две строки); семья — `paywallCustomMessages.ts`. Аллергии вне онбординга — `friendlyLimitCopy.ts` (`FREE_ALLERGY_PAYWALL_MESSAGE`).
 - **`unifiedPaywallCopy.ts`:** футер и подсказки trial.
 
+### Брендовый визуал (единый для поверхностей с подпиской)
+
+- **Модуль:** `src/utils/paywallBrandStyles.ts` — overlay (`PAYWALL_OVERLAY`), карточка без градиента `to-secondary`, верхний тинт `primary-pill-surface`, нижняя панель CTA, градиент **только** на главной кнопке (`PAYWALL_PRIMARY_CTA`), обёртка тарифов и т.д.
+- **Подключено:** `UnifiedPaywall`, `LegacyPaywall`, `WeekPreviewPaywallSheet`, `ReplaceMealSoftPaywallModal`, `FreeVsPremiumModal`, `TrialLifecycleModal`, `TrialActivatedModal`, `SosPaywallModal`, `RecipeChatSoftLimitDialog`, `FavoritesLimitSheet`, `PoolExhaustedSheet`; тарифные карточки — `PaywallSubscriptionPlans`.
+- **`DialogContent`:** опциональный `overlayClassName` (`src/components/ui/dialog.tsx`) для согласованного затемнения с paywall-оверлеем.
+
 ### Zustand (`src/store/useAppStore.ts`)
 
 | Поле | Назначение |

@@ -33,8 +33,8 @@ export function PaywallSubscriptionPlans({
           "w-full text-left rounded-xl border-2 transition-colors",
           pad,
           yearSelected
-            ? "border-primary bg-primary/10 shadow-sm shadow-primary/15"
-            : "border-border/50 bg-card/50 hover:bg-muted/25"
+            ? "border-primary bg-primary-pill-surface shadow-sm shadow-primary/20"
+            : "border-border/50 bg-muted/20 hover:bg-muted/35"
         )}
       >
         <div className="flex items-start justify-between gap-2">
@@ -53,7 +53,7 @@ export function PaywallSubscriptionPlans({
               "shrink-0 rounded-full text-[10px] font-semibold px-2 py-0.5 text-right leading-tight",
               yearSelected
                 ? "bg-primary text-primary-foreground"
-                : "bg-amber-500/15 text-amber-900 dark:text-amber-100"
+                : "bg-primary/12 text-primary"
             )}
           >
             {yearSelected ? "Лучшее предложение" : YEARLY_BADGE_WHEN_NOT_SELECTED}
@@ -68,8 +68,8 @@ export function PaywallSubscriptionPlans({
           "w-full text-left rounded-xl border transition-colors",
           pad,
           monthSelected
-            ? "border-primary/50 bg-muted/40"
-            : "border-border/40 bg-muted/15 hover:bg-muted/30"
+            ? "border-primary bg-primary-pill-surface/70 shadow-sm shadow-primary/10"
+            : "border-border/50 bg-muted/20 hover:bg-muted/35"
         )}
       >
         <p className="text-xs font-medium text-foreground">Месячная подписка</p>
