@@ -32,10 +32,33 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const STORAGE_RECOVERY_PENDING = 'lb-auth-recovery-pending';
+
+function readRecoveryPendingFlag(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return sessionStorage.getItem(STORAGE_RECOVERY_PENDING) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setRecoveryPendingFlag(on: boolean) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (on) sessionStorage.setItem(STORAGE_RECOVERY_PENDING, '1');
+    else sessionStorage.removeItem(STORAGE_RECOVERY_PENDING);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  /** Сброс пароля: событие PASSWORD_RECOVERY или флаг после reload (JWT без amr). */
+  const [recoveryFromAuthEvent, setRecoveryFromAuthEvent] = useState(readRecoveryPendingFlag);
   /** Флаг завершения первичного восстановления сессии. До true не обрабатываем onAuthStateChange, чтобы избежать мигания SIGNED_OUT/SIGNED_IN на старте (Android/stale storage). */
   const initializedRef = useRef(false);
 
@@ -49,6 +72,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logAuthBootstrap('getSession', { session, error });
       setSession(session);
       setUser(session?.user ?? null);
+      if (session && isRecoveryJwtSession(session)) {
+        setRecoveryPendingFlag(true);
+        setRecoveryFromAuthEvent(true);
+      } else if (!session && readRecoveryPendingFlag()) {
+        setRecoveryPendingFlag(false);
+        setRecoveryFromAuthEvent(false);
+      } else if (session && readRecoveryPendingFlag() && !isRecoveryJwtSession(session)) {
+        setRecoveryPendingFlag(false);
+        setRecoveryFromAuthEvent(false);
+      }
       setLoading(false);
       initializedRef.current = true;
     }).catch((err) => {
@@ -60,11 +93,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         logAuthStateChange(event, session);
+        // PASSWORD_RECOVERY часто приходит до initializedRef (после клика по ссылке из письма).
+        // Раньше мы его отбрасывали — isRecoverySession оставался false, пользователь уходил в приложение.
+        if (event === 'PASSWORD_RECOVERY') {
+          logAuthBootstrap('onAuthStateChange', { session, event });
+          setRecoveryPendingFlag(true);
+          setRecoveryFromAuthEvent(true);
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+          initializedRef.current = true;
+          return;
+        }
+        if (event === 'SIGNED_OUT') {
+          setRecoveryPendingFlag(false);
+          setRecoveryFromAuthEvent(false);
+        }
         if (!initializedRef.current) return;
         logAuthBootstrap('onAuthStateChange', { session, event });
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        if (event === 'USER_UPDATED' && session && !isRecoveryJwtSession(session)) {
+          setRecoveryPendingFlag(false);
+          setRecoveryFromAuthEvent(false);
+        }
       }
     );
 
@@ -163,6 +216,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error: keyError } = await setActiveSessionKeyForUser(data.user.id);
         if (keyError) safeError('Failed to set active session key:', keyError);
       }
+
+      setRecoveryPendingFlag(false);
+      setRecoveryFromAuthEvent(false);
       
       return { error: null };
     } catch (err) {
@@ -217,6 +273,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return { error: new Error(msg) };
       }
+      setRecoveryPendingFlag(false);
+      setRecoveryFromAuthEvent(false);
       return { error: null };
     } catch (err) {
       const e = err as Error;
@@ -237,7 +295,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const authReady = !loading;
-  const isRecoverySession = session !== null && isRecoveryJwtSession(session);
+  const isRecoverySession =
+    session !== null && (isRecoveryJwtSession(session) || recoveryFromAuthEvent);
 
   return (
     <AuthContext.Provider
