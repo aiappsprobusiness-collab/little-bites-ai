@@ -5,4 +5,4 @@
 export const ONBOARDING_SECOND_ALLERGY_PAYWALL_TITLE = "Важно учитывать всё питание ребёнка 💛";
 
 export const ONBOARDING_SECOND_ALLERGY_PAYWALL_BODY =
-  "В бесплатной версии — одна аллергия в профиле\nВ полной — несколько, меню и советы точнее";
+  "В бесплатной версии — одна аллергия\nВ полной — учитываем всё питание ребёнка без риска";
