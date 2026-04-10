@@ -39,3 +39,22 @@ export function isRecoveryJwtSession(session: Session | null): boolean {
   if (!payload) return false;
   return amrHasRecovery(payload.amr);
 }
+
+/**
+ * В адресе ещё есть токены/code от письма — сессия подключается асинхронно.
+ * Нельзя сразу редиректить на /auth с «сессия истекла».
+ */
+export function isRecoveryUrlPresent(): boolean {
+  if (typeof window === "undefined") return false;
+  const p = window.location.pathname.replace(/\/+$/, "") || "/";
+  if (!["/auth/reset-password", "/auth/callback", "/"].includes(p)) return false;
+  const h = window.location.hash || "";
+  const q = new URLSearchParams(window.location.search);
+  return (
+    /access_token|refresh_token|type=recovery/.test(h) ||
+    q.has("access_token") ||
+    q.has("refresh_token") ||
+    q.has("code") ||
+    q.get("type") === "recovery"
+  );
+}

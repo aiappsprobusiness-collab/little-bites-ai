@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { isRecoveryUrlPresent } from "@/utils/authRecoverySession";
 
 const schema = z
   .object({
@@ -36,6 +37,8 @@ export default function AuthUpdatePasswordPage() {
   const { user, loading, authReady, updatePassword, isRecoverySession } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  /** Снимок на маунт: в URL ещё есть токены — ждём getSession, не считаем «сессия истекла». */
+  const [urlHadTokens] = useState(() => isRecoveryUrlPresent());
   const [showPassword, setShowPassword] = useState(false);
   const [showPassword2, setShowPassword2] = useState(false);
 
@@ -47,13 +50,36 @@ export default function AuthUpdatePasswordPage() {
   useEffect(() => {
     if (!authReady || loading) return;
     if (!user) {
-      navigate("/auth", { replace: true, state: { message: "Ссылка недействительна или сессия истекла. Запросите новое письмо." } });
+      if (urlHadTokens) return;
+      navigate("/auth", {
+        replace: true,
+        state: {
+          message:
+            "Откройте ссылку из письма «Сброс пароля». Если открываете страницу вручную — сначала перейдите по кнопке в письме.",
+        },
+      });
       return;
     }
     if (!isRecoverySession) {
       navigate("/", { replace: true });
     }
-  }, [authReady, loading, user, isRecoverySession, navigate]);
+  }, [authReady, loading, user, isRecoverySession, navigate, urlHadTokens]);
+
+  /** Долгий обмен токенов / сеть — только после таймаута уводим на вход. */
+  useEffect(() => {
+    if (!authReady || loading || user) return;
+    if (!urlHadTokens) return;
+    const t = setTimeout(() => {
+      navigate("/auth", {
+        replace: true,
+        state: {
+          message:
+            "Не удалось подтвердить ссылку. Запросите новое письмо для сброса пароля или откройте ссылку из последнего письма.",
+        },
+      });
+    }, 20000);
+    return () => clearTimeout(t);
+  }, [authReady, loading, user, urlHadTokens, navigate]);
 
   const onSubmit = async (data: FormData) => {
     trackUsageEvent("auth_password_reset_submit");
@@ -71,7 +97,25 @@ export default function AuthUpdatePasswordPage() {
     navigate("/", { replace: true });
   };
 
-  if (!authReady || loading || (user && !isRecoverySession)) {
+  if (!authReady || loading) {
+    return (
+      <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center auth-page-bg px-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground text-sm">Загрузка…</p>
+      </div>
+    );
+  }
+
+  if (!user && urlHadTokens) {
+    return (
+      <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center auth-page-bg px-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-muted-foreground text-sm text-center px-4">Подключаем сессию…</p>
+      </div>
+    );
+  }
+
+  if (user && !isRecoverySession) {
     return (
       <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center auth-page-bg px-4">
         <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />

@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { setActiveSessionKeyForUser, clearStoredSessionKey } from '@/utils/activeSessionKey';
 import { clearOnLogout } from '@/utils/authStorageCleanup';
 import { logAuthBootstrap, logAuthSessionResult, logAuthStateChange } from '@/utils/authSessionDebug';
-import { isRecoveryJwtSession } from '@/utils/authRecoverySession';
+import { isRecoveryJwtSession, isRecoveryUrlPresent } from '@/utils/authRecoverySession';
 
 interface AuthContextType {
   session: Session | null;
@@ -57,8 +57,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  /** Сброс пароля: событие PASSWORD_RECOVERY или флаг после reload (JWT без amr). */
-  const [recoveryFromAuthEvent, setRecoveryFromAuthEvent] = useState(readRecoveryPendingFlag);
+  /** Сброс пароля: событие PASSWORD_RECOVERY, sessionStorage, или URL с токенами (до getSession). */
+  const [recoveryFromAuthEvent, setRecoveryFromAuthEvent] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return readRecoveryPendingFlag() || isRecoveryUrlPresent();
+    } catch {
+      return false;
+    }
+  });
   /** Флаг завершения первичного восстановления сессии. До true не обрабатываем onAuthStateChange, чтобы избежать мигания SIGNED_OUT/SIGNED_IN на старте (Android/stale storage). */
   const initializedRef = useRef(false);
 
@@ -78,10 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (!session && readRecoveryPendingFlag()) {
         setRecoveryPendingFlag(false);
         setRecoveryFromAuthEvent(false);
-      } else if (session && readRecoveryPendingFlag() && !isRecoveryJwtSession(session)) {
-        setRecoveryPendingFlag(false);
-        setRecoveryFromAuthEvent(false);
       }
+      // НЕ сбрасывать recovery при session && !isRecoveryJwtSession — это затирало PASSWORD_RECOVERY
+      // до того, как JWT успевал содержать amr recovery.
       setLoading(false);
       initializedRef.current = true;
     }).catch((err) => {
@@ -295,8 +301,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const authReady = !loading;
+  /** Пока сессия не подтянулась, recoveryFromAuthEvent из URL/storage держит пользователя на форме сброса. */
   const isRecoverySession =
-    session !== null && (isRecoveryJwtSession(session) || recoveryFromAuthEvent);
+    recoveryFromAuthEvent ||
+    (session !== null && isRecoveryJwtSession(session));
 
   return (
     <AuthContext.Provider
