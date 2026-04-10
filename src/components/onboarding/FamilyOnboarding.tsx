@@ -7,6 +7,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAppStore } from "@/store/useAppStore";
 import { OnboardingStepper } from "./OnboardingStepper";
 import { AddChildForm, getMaxMembersByTariff } from "./AddChildForm";
+import { PAYWALL_ADD_CHILD_CUSTOM_MESSAGE } from "@/constants/paywallCustomMessages";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 
 const MEMBER_ICONS = ["🥕", "🥦", "🍅", "🥬", "🌽", "🫐", "🍎", "🥑"];
@@ -20,9 +21,6 @@ const MEMBER_TYPE_LABEL: Record<string, string> = {
   adult: "Взрослый",
   family: "Семья",
 };
-
-const ONBOARDING_FAMILY_LIMIT_MESSAGE =
-  "Добавьте всю семью. Получите план питания для каждого ребёнка с учётом возраста и предпочтений";
 
 interface FamilyOnboardingProps {
   onComplete: () => void;
@@ -44,7 +42,7 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
   const handleAddClick = () => {
     if (!canAddMore) {
       setPaywallReason("add_child_limit");
-      setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
+      setPaywallCustomMessage(PAYWALL_ADD_CHILD_CUSTOM_MESSAGE);
       setShowPaywall(true);
       return;
     }
@@ -58,7 +56,7 @@ export function FamilyOnboarding({ onComplete }: FamilyOnboardingProps) {
   const handleAddAnother = () => {
     if (!canAddMore) {
       setPaywallReason("add_child_limit");
-      setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
+      setPaywallCustomMessage(PAYWALL_ADD_CHILD_CUSTOM_MESSAGE);
       setShowPaywall(true);
       return;
     }

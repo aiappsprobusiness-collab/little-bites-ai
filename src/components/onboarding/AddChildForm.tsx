@@ -17,6 +17,7 @@ import {
 } from "@/utils/friendlyLimitCopy";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { normalizeAllergyInput } from "@/utils/allergyAliases";
+import { PAYWALL_ADD_CHILD_CUSTOM_MESSAGE } from "@/constants/paywallCustomMessages";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
@@ -28,9 +29,6 @@ function parseTags(s: string): string[] {
     .map((x) => x.trim())
     .filter(Boolean);
 }
-
-const ONBOARDING_FAMILY_LIMIT_MESSAGE =
-  "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу";
 
 export function getMaxMembersByTariff(status: string): number {
   return getSubscriptionLimits(status as "free" | "trial" | "premium").maxProfiles;
@@ -148,7 +146,7 @@ export function AddChildForm({
   const handleSave = async () => {
     if (isFreeLimitReached && memberCount >= 1) {
       setPaywallReason("add_child_limit");
-      setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
+      setPaywallCustomMessage(PAYWALL_ADD_CHILD_CUSTOM_MESSAGE);
       setShowPaywall(true);
       return;
     }
@@ -212,7 +210,7 @@ export function AddChildForm({
         return;
       }
       setPaywallReason("add_child_limit");
-      setPaywallCustomMessage(ONBOARDING_FAMILY_LIMIT_MESSAGE);
+      setPaywallCustomMessage(PAYWALL_ADD_CHILD_CUSTOM_MESSAGE);
       setShowPaywall(true);
       return;
     }

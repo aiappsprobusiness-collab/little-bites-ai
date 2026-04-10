@@ -70,7 +70,7 @@ export function WeekPreviewPaywallSheet({
         paywall_surface: "week_preview_sheet",
       },
     });
-    trackPaywallTextShown("week_preview_sheet", { surface: "week_preview_sheet" });
+    trackPaywallTextShown("week_preview", { surface: "week_preview_sheet" });
   }, [open]);
 
   const handleStartTrial = async () => {

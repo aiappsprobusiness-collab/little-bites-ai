@@ -11,8 +11,6 @@ import { useAppStore } from "@/store/useAppStore";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
-const FAVORITES_FREE_LIMIT = 7;
-
 export function FavoritesLimitSheet() {
   const showFavoritesLimitSheet = useAppStore((s) => s.showFavoritesLimitSheet);
   const setShowFavoritesLimitSheet = useAppStore((s) => s.setShowFavoritesLimitSheet);
@@ -20,7 +18,7 @@ export function FavoritesLimitSheet() {
 
   useEffect(() => {
     if (showFavoritesLimitSheet) {
-      trackPaywallTextShown("favorites_limit_sheet", { surface: "favorites_limit_sheet" });
+      trackPaywallTextShown("favorites_limit", { surface: "favorites_limit_sheet" });
     }
   }, [showFavoritesLimitSheet]);
 
@@ -42,9 +40,7 @@ export function FavoritesLimitSheet() {
             {copy.title}
           </SheetTitle>
         </SheetHeader>
-        <p className="text-sm text-muted-foreground leading-relaxed text-balance">
-          В бесплатной версии — до {FAVORITES_FREE_LIMIT} рецептов. {copy.body}
-        </p>
+        <p className="text-sm text-muted-foreground leading-relaxed text-balance">{copy.body}</p>
         <ul className="space-y-2.5 min-w-0 shrink-0">
           {copy.bullets.map((text, index) => (
             <li key={`${text}-${index}`} className="flex items-start gap-2.5 text-xs leading-relaxed min-w-0">

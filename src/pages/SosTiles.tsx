@@ -230,6 +230,8 @@ export default function SosTiles() {
               type="button"
               onClick={() => {
                 if (!hasAccess && popularQuestion.access === "premium") {
+                  useAppStore.getState().setPaywallReason("sos_premium_feature");
+                  useAppStore.getState().setPaywallCustomMessage(null);
                   setPaywallOpen(true);
                   return;
                 }

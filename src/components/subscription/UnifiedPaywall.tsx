@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Crown, Check, Heart } from "lucide-react";
@@ -8,17 +8,10 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
-import { resolvePaywallReason } from "@/utils/paywallReasonCopy";
+import { getPaywallReasonCopy, resolvePaywallReason } from "@/utils/paywallReasonCopy";
 import { cn } from "@/lib/utils";
 import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
-import {
-  UNIFIED_PAYWALL_TITLE,
-  UNIFIED_PAYWALL_SUBTITLE,
-  UNIFIED_PAYWALL_BULLETS,
-  UNIFIED_PAYWALL_FOOTER,
-  PAYWALL_TRIAL_ALREADY_USED,
-  PAYWALL_TRIAL_ACTIVE_HINT,
-} from "@/utils/unifiedPaywallCopy";
+import { UNIFIED_PAYWALL_FOOTER, PAYWALL_TRIAL_ALREADY_USED, PAYWALL_TRIAL_ACTIVE_HINT } from "@/utils/unifiedPaywallCopy";
 import { PaywallLegalConsentNote } from "@/components/legal/PaywallLegalConsentNote";
 import { PaywallSubscriptionPlans } from "@/components/subscription/PaywallSubscriptionPlans";
 import { paywallSubscribeCtaLabel } from "@/utils/subscriptionPricing";
@@ -60,21 +53,17 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
   const isOnboardingSecondAllergy = resolvedReason === "onboarding_second_allergy_free";
   const showPayForm = !hasAccess || hasTrialAccess;
   const trialUnavailable = trialUsed && !hasTrialAccess;
-  const paywallBullets = isOnboardingSecondAllergy ? ONBOARDING_SECOND_ALLERGY_PAYWALL_BULLETS : UNIFIED_PAYWALL_BULLETS;
+  const reasonCopy = useMemo(() => getPaywallReasonCopy(paywallReason), [paywallReason]);
+  const paywallBullets = isOnboardingSecondAllergy ? ONBOARDING_SECOND_ALLERGY_PAYWALL_BULLETS : reasonCopy.bullets;
 
   useEffect(() => {
     if (isOpen) {
       trackUsageEvent("paywall_view", {
         properties: { paywall_reason: resolvedReason },
       });
-      trackPaywallTextShown(
-        paywallCustomMessage && !isOnboardingSecondAllergy
-          ? `unified_custom_${resolvedReason}`
-          : `unified_default_${resolvedReason}`,
-        { surface: "unified_paywall" }
-      );
+      trackPaywallTextShown(resolvedReason, { surface: "unified_paywall" });
     }
-  }, [isOpen, paywallReason, paywallCustomMessage, resolvedReason, isOnboardingSecondAllergy]);
+  }, [isOpen, resolvedReason]);
 
   const handleStartTrial = async () => {
     trackUsageEvent("paywall_primary_click", {
@@ -165,10 +154,10 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                   ) : (
                     <>
                       <h2 className="text-xl font-semibold leading-snug text-foreground text-balance">
-                        {UNIFIED_PAYWALL_TITLE}
+                        {reasonCopy.title}
                       </h2>
                       <p className="text-sm text-muted-foreground leading-snug text-balance">
-                        {UNIFIED_PAYWALL_SUBTITLE}
+                        {reasonCopy.body}
                       </p>
                     </>
                   )}

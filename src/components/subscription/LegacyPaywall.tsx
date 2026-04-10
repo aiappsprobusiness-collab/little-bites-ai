@@ -61,12 +61,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
       trackUsageEvent("paywall_view", {
         properties: { paywall_reason: resolvedReason },
       });
-      trackPaywallTextShown(
-        paywallCustomMessage && !isOnboardingSecondAllergy
-          ? `legacy_custom_${resolvedReason}`
-          : `legacy_context_${resolvedReason}`,
-        { surface: "legacy_paywall" }
-      );
+      trackPaywallTextShown(resolvedReason, { surface: "legacy_paywall" });
     }
   }, [isOpen, paywallReason, paywallCustomMessage, resolvedReason, isOnboardingSecondAllergy]);
 

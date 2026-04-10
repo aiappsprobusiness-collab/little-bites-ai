@@ -21,6 +21,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { useAppStore } from "@/store/useAppStore";
 import { normalizeAllergyToken } from "@/utils/allergyAliases";
+import { PAYWALL_ADD_CHILD_CUSTOM_MESSAGE } from "@/constants/paywallCustomMessages";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
@@ -84,9 +85,6 @@ export function ProfileEditSheet({
   skipFillAndRedirectWhenCreated = false,
   welcomeAfterEmailConfirm = false,
 }: ProfileEditSheetProps) {
-  const FAMILY_LIMIT_MESSAGE =
-    "Добавьте всю семью в Premium и получайте рецепты для всех детей сразу";
-
   const { toast } = useToast();
   const navigate = useNavigate();
   const { members, updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
@@ -148,9 +146,9 @@ export function ProfileEditSheet({
     add: (raw: string) => {
       if (!hasAccess && allergies.length >= 1) {
         toast({
-          title: "Несколько аллергий — в полной версии",
+          title: "Важно учитывать всё питание ребёнка",
           description:
-            "На бесплатном плане в одном профиле доступна одна аллергия. Ниже можно открыть условия подписки.",
+            "На бесплатном плане в профиле доступна одна аллергия. Полная версия позволяет указать несколько — откройте условия подписки ниже.",
         });
         setPaywallReason("onboarding_second_allergy_free");
         setPaywallCustomMessage(null);
@@ -232,7 +230,7 @@ export function ProfileEditSheet({
     if (isCreate) {
       if (!hasAccess && members.length >= limits.maxProfiles) {
         setPaywallReason("add_child_limit");
-        setPaywallCustomMessage(FAMILY_LIMIT_MESSAGE);
+        setPaywallCustomMessage(PAYWALL_ADD_CHILD_CUSTOM_MESSAGE);
         setShowPaywall(true);
         return;
       }
