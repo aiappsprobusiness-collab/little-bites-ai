@@ -15,17 +15,24 @@ import {
 import { cn } from "@/lib/utils";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 
+const COMPARISON_GRID =
+  "grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_minmax(0,1.15fr)] gap-x-2 gap-y-1";
+
 function CellIcon({ row, side }: { row: FreeVsPremiumRow; side: "free" | "premium" }) {
   const cell = side === "free" ? row.free : row.premium;
   const text = side === "free" ? row.freeText : row.premiumText;
   if (cell === "text" && text) {
-    return <span className="text-[11px] sm:text-xs font-medium text-center leading-tight px-0.5">{text}</span>;
+    return (
+      <span className="block w-full min-w-0 text-[11px] sm:text-xs font-medium text-left leading-snug whitespace-normal [overflow-wrap:anywhere]">
+        {text}
+      </span>
+    );
   }
   const ok = cell === "yes";
   if (ok) {
-    return <Check className="w-4 h-4 text-emerald-600 mx-auto" strokeWidth={2.5} aria-hidden />;
+    return <Check className="w-4 h-4 text-emerald-600 shrink-0" strokeWidth={2.5} aria-hidden />;
   }
-  return <Lock className="w-4 h-4 text-muted-foreground/80 mx-auto" aria-hidden />;
+  return <Lock className="w-4 h-4 text-muted-foreground/80 shrink-0" aria-hidden />;
 }
 
 export type FreeVsPremiumModalProps = {
@@ -67,21 +74,21 @@ export function FreeVsPremiumModal({ open, onClose, showTrialCta, onTryTrial }: 
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3 sm:px-3">
               <div className="rounded-xl border border-border/50 overflow-hidden text-[13px]">
-                <div className="grid grid-cols-[1fr_minmax(3.5rem,auto)_minmax(3.5rem,auto)] gap-1 bg-muted/40 px-2 py-2 font-semibold text-foreground/90">
-                  <span>Функция</span>
-                  <span className="text-center">{FREE_VS_PREMIUM_COL_FREE}</span>
-                  <span className="text-center">{FREE_VS_PREMIUM_COL_PREMIUM}</span>
+                <div className={cn(COMPARISON_GRID, "bg-muted/40 px-2 py-2 font-semibold text-foreground/90 items-end")}>
+                  <span className="min-w-0 pb-0.5">Функция</span>
+                  <span className="min-w-0 text-left">{FREE_VS_PREMIUM_COL_FREE}</span>
+                  <span className="min-w-0 text-left">{FREE_VS_PREMIUM_COL_PREMIUM}</span>
                 </div>
                 {FREE_VS_PREMIUM_ROWS.map((row) => (
                   <div
                     key={row.feature}
-                    className="grid grid-cols-[1fr_minmax(3.5rem,auto)_minmax(3.5rem,auto)] gap-1 px-2 py-2 border-t border-border/40 items-center"
+                    className={cn(COMPARISON_GRID, "px-2 py-2 border-t border-border/40 items-start")}
                   >
-                    <span className="text-foreground/90 leading-snug pr-1">{row.feature}</span>
-                    <div className="flex justify-center">
+                    <span className="text-foreground/90 leading-snug pr-1 min-w-0">{row.feature}</span>
+                    <div className="flex min-w-0 justify-start">
                       <CellIcon row={row} side="free" />
                     </div>
-                    <div className="flex justify-center">
+                    <div className="flex min-w-0 justify-start">
                       <CellIcon row={row} side="premium" />
                     </div>
                   </div>

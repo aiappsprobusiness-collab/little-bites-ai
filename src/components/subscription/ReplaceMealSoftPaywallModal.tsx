@@ -6,7 +6,8 @@ import {
   REPLACE_MEAL_PAYWALL_CTA_BACK,
   REPLACE_MEAL_PAYWALL_CTA_PRICING,
   REPLACE_MEAL_PAYWALL_CTA_TRIAL,
-  REPLACE_MEAL_PAYWALL_SUBTITLE,
+  REPLACE_MEAL_PAYWALL_SUBTITLE_LEAD,
+  REPLACE_MEAL_PAYWALL_SUBTITLE_TAGLINE,
   REPLACE_MEAL_PAYWALL_TITLE,
 } from "@/constants/replaceMealPaywallCopy";
 
@@ -54,7 +55,10 @@ export function ReplaceMealSoftPaywallModal({
                 <h2 className="text-lg font-semibold leading-snug text-foreground text-balance">
                   {REPLACE_MEAL_PAYWALL_TITLE}
                 </h2>
-                <p className="text-sm text-muted-foreground leading-snug text-balance">{REPLACE_MEAL_PAYWALL_SUBTITLE}</p>
+                <div className="space-y-2 text-sm text-muted-foreground leading-snug">
+                  <p className="text-balance">{REPLACE_MEAL_PAYWALL_SUBTITLE_LEAD}</p>
+                  <p className="text-balance">{REPLACE_MEAL_PAYWALL_SUBTITLE_TAGLINE}</p>
+                </div>
               </div>
 
               <div className="shrink-0 flex flex-col gap-2 px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 border-t border-border/40 bg-background/95 backdrop-blur-sm">
@@ -80,7 +84,7 @@ export function ReplaceMealSoftPaywallModal({
                 </Button>
                 <button
                   type="button"
-                  className="w-full py-2 text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                  className="w-full py-2.5 text-sm font-medium text-foreground/90 hover:text-foreground underline underline-offset-2 decoration-foreground/35 hover:decoration-foreground disabled:opacity-50"
                   disabled={isStartingTrial}
                   onClick={onOpenPricing}
                 >
