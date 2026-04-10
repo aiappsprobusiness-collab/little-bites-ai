@@ -14,19 +14,16 @@ import { HAS_SEEN_WELCOME_KEY } from "@/utils/navigation";
 
 const BENEFIT_CARDS = [
   {
-    emoji: "",
-    title: "Ребёнок отказывается есть? 🙈",
-    text: "Мы подберём блюда, которые дети принимают охотнее — без уговоров и стресса",
+    title: "Ребёнок не ест?",
+    text: "Подбираем блюда, которые дети принимают легче",
   },
   {
-    emoji: "",
-    title: "Не хочется готовить отдельно? 🍽",
-    text: "Готовый план питания на день — для ребёнка и всей семьи\nБез лишней готовки и раздумий",
+    title: "Не нужно готовить отдельно",
+    text: "Один план питания для всей семьи",
   },
   {
-    emoji: "",
-    title: "У каждого ребёнка свои особенности 💬",
-    text: "Учтём возраст, аллергии и вкусы\nИ исключим то, что ребёнок не ест ✔",
+    title: "Учитываем особенности ребёнка",
+    text: "Возраст, аллергии и вкусовые предпочтения",
   },
 ];
 
@@ -62,13 +59,16 @@ export default function LandingOnboardingScreen() {
     });
   }, [loading, user]);
 
-  const buildAuthParams = (): string => {
+  /** Атрибуция (share_ref и т.д.) + опционально `mode=signup` только для CTA регистрации. */
+  const buildAuthParams = (opts: { signup: boolean }): string => {
     const params = new URLSearchParams(location.search);
     const entryPoint = params.get("entry_point");
     const shareRef = params.get("share_ref");
     const shareType = params.get("share_type");
     const next = new URLSearchParams();
-    next.set("mode", "signup");
+    if (opts.signup) {
+      next.set("mode", "signup");
+    }
     if (entryPoint) next.set("entry_point", entryPoint);
     if (shareRef) next.set("share_ref", shareRef);
     if (shareType) next.set("share_type", shareType);
@@ -77,7 +77,7 @@ export default function LandingOnboardingScreen() {
 
   const goToAuth = () => {
     trackLandingEvent("landing_cta_login_click");
-    const search = buildAuthParams();
+    const search = buildAuthParams({ signup: false });
     navigate(search ? `/auth?${search}` : "/auth", { replace: true });
   };
 
@@ -86,7 +86,7 @@ export default function LandingOnboardingScreen() {
       trackLandingEvent("landing_demo_save_click");
     }
     trackLandingEvent("landing_cta_free_click");
-    const search = buildAuthParams();
+    const search = buildAuthParams({ signup: true });
     navigate(search ? `/auth?${search}` : "/auth", { replace: true, state: { tab: "signup" } });
   };
 
@@ -123,67 +123,54 @@ export default function LandingOnboardingScreen() {
         background: "var(--gradient-hero)",
       }}
     >
-      <main className="max-w-md mx-auto w-full px-4 py-8 pb-14">
-        {/* A) HERO */}
-        <section className="text-center mb-10">
-          <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground mb-2">
+      <main className="max-w-md mx-auto w-full px-4 py-6 pb-12">
+        {/* A) HERO — максимум 2 строки */}
+        <section className="text-center mb-6">
+          <h1 className="text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-foreground">
             MomRecipes 🌿
-          </p>
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground leading-snug mb-2">
-            Спокойствие за питание ребёнка — каждый день
           </h1>
-          <p className="text-lg sm:text-xl font-medium text-foreground/95 leading-snug mb-2">
-            Не нужно думать, что приготовить — мы уже всё продумали за вас ✔
-          </p>
-          <p className="text-sm sm:text-base text-muted-foreground mb-8">
-            Меню, рецепты и советы — за пару минут
+          <p className="mt-1.5 text-sm sm:text-base text-muted-foreground text-balance">
+            Меню для ребёнка за пару минут
           </p>
         </section>
 
-        {/* B) 3 карточки преимуществ */}
-        <section className="space-y-4 mb-12">
+        {/* B) Карточки: заголовок + одна короткая строка */}
+        <section className="grid gap-3 mb-6">
           {BENEFIT_CARDS.map((card) => (
             <div
               key={card.title}
-              className="rounded-2xl bg-primary/5 border border-primary/10 px-4 py-4 shadow-sm"
+              className="rounded-2xl bg-primary/5 border border-primary/10 p-4 shadow-sm flex flex-col min-h-[5.5rem] justify-center"
             >
-              <div className="flex gap-3 items-start">
-                {card.emoji ? (
-                  <span className="text-2xl shrink-0" aria-hidden>
-                    {card.emoji}
-                  </span>
-                ) : null}
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-foreground">{card.title}</p>
-                  <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-line">
-                    {card.text}
-                  </p>
-                </div>
-              </div>
+              <p className="text-[15px] sm:text-base font-semibold text-foreground leading-tight text-balance">
+                {card.title}
+              </p>
+              <p className="text-[13px] sm:text-sm text-muted-foreground mt-1.5 leading-[1.35] text-pretty">
+                {card.text}
+              </p>
             </div>
           ))}
         </section>
 
-        {/* C) CTA row */}
-        <section className="flex flex-col sm:flex-row gap-3 justify-center mb-10">
+        {/* C) CTA */}
+        <section className="flex flex-col sm:flex-row gap-3 justify-center mb-8">
           <Button
-            className="rounded-xl h-12 px-6 font-semibold"
+            className="rounded-xl h-14 min-h-[3.5rem] px-6 text-base font-semibold shadow-sm"
             onClick={goToFreeCta}
           >
             Получить свой план
           </Button>
           <Button
             variant="outline"
-            className="rounded-xl h-12 px-6 font-semibold border-2 border-primary/30 bg-transparent"
+            className="rounded-xl h-14 min-h-[3.5rem] px-6 font-semibold border-2 border-primary/30 bg-transparent"
             onClick={goToAuth}
           >
             Войти
           </Button>
         </section>
 
-        {/* D) Пример рецепта в приложении */}
-        <section aria-labelledby="welcome-recipe-title">
-          <h2 id="welcome-recipe-title" className="text-lg font-semibold text-foreground mb-3">
+        {/* D) Пример рецепта */}
+        <section aria-labelledby="welcome-recipe-title" className="mt-2">
+          <h2 id="welcome-recipe-title" className="text-base font-semibold text-foreground mb-3">
             Как выглядит рецепт в приложении
           </h2>
           <WelcomeRecipeBlock
@@ -195,7 +182,7 @@ export default function LandingOnboardingScreen() {
         </section>
 
         {/* E) Финальный CTA */}
-        <section className="mb-6">
+        <section className="mb-6 mt-8">
           <div className="rounded-2xl bg-muted/40 border border-border/60 px-4 py-4">
             <p className="text-base font-semibold text-foreground mb-2">
               Хочется перестать каждый день думать о еде?
@@ -222,14 +209,11 @@ export default function LandingOnboardingScreen() {
               </li>
             </ul>
             <Button
-              className="w-full rounded-xl h-14 text-base font-semibold mb-3"
+              className="w-full rounded-xl h-14 text-base font-semibold"
               onClick={goToFreeCta}
             >
               Получить свой план
             </Button>
-            <p className="text-center text-xs text-muted-foreground">
-              Можно остаться на бесплатной версии
-            </p>
           </div>
         </section>
       </main>
