@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, copyFileSync, existsSync } from "fs";
 import { execSync } from "child_process";
 import { componentTagger } from "lovable-tagger";
 
@@ -33,6 +33,30 @@ function swVersionPlugin() {
         }
       } catch (e) {
         console.warn("[sw-version] Could not patch sw.js:", e);
+      }
+    },
+  };
+}
+
+/**
+ * GitHub Pages отдаёт только статические файлы: запросы вида /auth/reset-password без файла на диске
+ * должны получить копию index.html как 404.html (см. GitHub Pages custom 404).
+ */
+function githubPagesSpaFallbackPlugin() {
+  return {
+    name: "github-pages-spa-fallback",
+    apply: "build",
+    closeBundle() {
+      const outDir = path.resolve(__dirname, "dist");
+      const indexPath = path.join(outDir, "index.html");
+      const notFoundPath = path.join(outDir, "404.html");
+      try {
+        if (existsSync(indexPath)) {
+          copyFileSync(indexPath, notFoundPath);
+          console.log("[github-pages-spa-fallback] wrote 404.html (SPA shell)");
+        }
+      } catch (e) {
+        console.warn("[github-pages-spa-fallback] could not copy index.html to 404.html:", e);
       }
     },
   };
@@ -77,7 +101,12 @@ export default defineConfig(({ mode }) => ({
     },
     chunkSizeWarningLimit: 1000,
   },
-  plugins: [react(), swVersionPlugin(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    swVersionPlugin(),
+    githubPagesSpaFallbackPlugin(),
+    mode === "development" && componentTagger(),
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
