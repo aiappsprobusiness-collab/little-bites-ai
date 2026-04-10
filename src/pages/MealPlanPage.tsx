@@ -3036,64 +3036,6 @@ export default function MealPlanPage() {
             </>
           )}
 
-          {hasAnyWeekPlan &&
-            missingDayKeys.length === 1 &&
-            missingDayKeys[0] === endKey &&
-            !isFree &&
-            !isInfantPlanUi &&
-            !isAnyGenerating && (
-              <div className="mt-4 flex flex-col gap-1">
-                <p className="text-typo-caption text-muted-foreground">Последний день без плана</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-fit rounded-xl"
-                  onClick={async () => {
-                    setPoolUpgradeLoading(true);
-                    try {
-                      const result = await runPoolUpgrade({
-                        type: "day",
-                        member_id: memberIdForPlan,
-                        member_data: memberDataForPlan,
-                        day_key: formatLocalDate(rollingDates[6]),
-                        day_keys: dayKeys,
-                      });
-                      await invalidateMealPlanQueriesForPlannedDate(queryClient, {
-                        userId: user?.id,
-                        plannedDate: formatLocalDate(rollingDates[6]),
-                      });
-                      const filled = result.filledSlotsCount ?? result.replacedCount ?? 0;
-                      const total = result.totalSlots ?? 4;
-                      if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
-                        showPartialFillToast(toast, navigate, { filled, total });
-                      } else {
-                        const aiFallback = result.aiFallbackCount ?? 0;
-                        const desc = aiFallback > 0
-                          ? `Подобрано из базы: ${result.replacedCount ?? 0}, добавлено AI: ${aiFallback}`
-                          : `Подобрано: ${filled} из ${total}`;
-                        toast({ title: "Подобрать рецепты", description: desc });
-                      }
-                    } catch (e: unknown) {
-                      const raw = e instanceof Error ? e.message : "Не удалось подобрать рецепты";
-                      const msg = planErrorMessage(raw, "Не удалось подобрать рецепты");
-                      if (msg === "LIMIT_REACHED") {
-                        /* Paywall уже показан в usePlanGenerationJob, тост не показываем */
-                      } else if (msg === "member_id_required") {
-                        toast({ description: "Выберите профиль ребёнка вверху" });
-                      } else if (msg.includes("слишком много времени")) {
-                        showPartialFillToast(toast, navigate, {});
-                      } else {
-                        toast({ variant: "destructive", title: "Ошибка", description: msg });
-                      }
-                    } finally {
-                      setPoolUpgradeLoading(false);
-                    }
-                  }}
-                >
-                  Собрать день
-                </Button>
-              </div>
-            )}
         </div>
       </div>
 

@@ -39,7 +39,7 @@
 
 ### 5. Страница плана: прочие сужения и дубли
 
-- **Fill day** (оба CTA + «последний день без плана»): вместо широкого префикса — `invalidateMealPlanQueriesForPlannedDate` на целевой `day_key`.
+- **Fill day** (CTA в hero): вместо широкого префикса — `invalidateMealPlanQueriesForPlannedDate` на целевой `day_key`.
 - **Fill week:** по-прежнему широкий префикс (затронута вся неделя).
 - **Удаление блюда:** убрана лишняя инвалидация в обработчике — достаточно `deleteMealPlan.onSuccess`.
 - **Clear day/week:** убран дубль `invalidateQueries` после `clearWeekPlan` (у мутации уже есть invalidate + refetch по predicate).
