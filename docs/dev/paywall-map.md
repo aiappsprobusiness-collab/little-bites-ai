@@ -70,7 +70,7 @@
 | `plan_fill_day` | Лимит заполнения дня / плана | `usePlanGenerationJob.ts`, Edge `LIMIT_REACHED` → `paywallReasonFromLimitFeature` |
 | `meal_replace` | Замена блюда (жёсткий гейт) | `runReplaceOccupiedMealSlot.ts`, `MealPlanPage` |
 | `shopping_list` | Список покупок | `FavoritesPage`, `RecipePage`, `MealPlanPage` |
-| `limit_chat` | Дневной лимит чата рецептов | `ChatPage`, Edge `chat_recipe` |
+| `limit_chat` | Дневной лимит чата рецептов | `ChatPage` (Free: сначала мягкий `RecipeChatSoftLimitDialog`, полный Paywall только по CTA «Получить больше рецептов»), Edge `chat_recipe` |
 | `help_limit` | Дневной лимит Help | `ChatPage`, `SosTiles`, Edge `help` |
 | `generate_recipe` | Из `PoolExhaustedSheet`: «сгенерировать в чате» для Free | `PoolExhaustedSheet.tsx` |
 | `sos_topic_locked` | Тема с `requiredTier: "paid"` | `SosTiles`, `SosScenarioScreen` |
@@ -113,6 +113,8 @@
 | `PoolExhaustedSheet` | Исчерпан пул вариантов в слоте; для Free «в чат» → глобальный Paywall `generate_recipe`. |
 | `ReplaceMealSoftPaywallModal` | Мягкий экран перед заменой блюда; тексты `src/constants/replaceMealPaywallCopy.ts`. |
 | `FriendlyLimitDialog` | Мягкий диалог без полноценного paywall (напр. лимит Help у Premium) — `SosTiles`, `HomePage`, `ChatPage`, `ProfilePage`. |
+| `RecipeChatSoftLimitDialog` | Free: исчерпан дневной лимит подборов в чате рецептов — экран без цен; `paywall_text` с `paywall_reason: recipe_soft_limit`; полный Paywall с `limit_chat` только по кнопке «Получить больше рецептов`. |
+| Текст лимита в шапке чата (рецепты, Free) | Короткие фразы без «X из Y»: `getRemainingRecipesText` в `src/utils/recipePickHintCopy.ts` (привязка к `remaining` из `useSubscription`). |
 | `FreeVsPremiumModal` | Таблица сравнения; из `MealPlanPage` при `FF_WEEK_PAYWALL_PREVIEW && !FF_UNIFIED_PAYWALL`. |
 | `TrialLifecycleModal` | Предупреждение о конце trial → по кнопке открывает глобальный Paywall с `trial_*`. |
 | `TrialActivatedModal` | После активации trial (`trial_onboarding_*` события). |

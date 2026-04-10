@@ -403,6 +403,15 @@
     background-color: var(--chat-surface-bg);
   }
 
+  /**
+   * Поле ввода в composer: без системного синего outline (Chrome/Edge/Android).
+   * Оливковая рамка задаётся контейнером (.border-primary); здесь только сброс UA.
+   */
+  textarea.chat-composer-field:focus,
+  textarea.chat-composer-field:focus-visible {
+    outline: none !important;
+  }
+
   /** Типографика: H1 24px/700, Section/Header 18px/600, Body 15px/400–500, Subtext 13–14px/muted. Токены: text-typo-h1, text-typo-header, text-typo-body, text-typo-subtext. */
 
   /** AI thinking: 3 точки с staggered анимацией (~1.2s цикл). */

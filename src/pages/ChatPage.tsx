@@ -7,6 +7,7 @@ import { SubscriptionTierBadge } from "@/components/layout/SubscriptionTierBadge
 import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
 import { Paywall } from "@/components/subscription/Paywall";
 import { FriendlyLimitDialog } from "@/components/subscription/FriendlyLimitDialog";
+import { RecipeChatSoftLimitDialog } from "@/components/subscription/RecipeChatSoftLimitDialog";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatEmptyState, EMPTY_STATE_QUICK_SUGGESTIONS } from "@/components/chat/ChatEmptyState";
 import { ChatInputBar } from "@/components/chat/ChatInputBar";
@@ -44,7 +45,6 @@ import { getRedirectOrIrrelevantMessage, getRedirectOrIrrelevantMeta, type Syste
 import type { BlockedMeta } from "@/types/chatBlocked";
 import { useAppStore } from "@/store/useAppStore";
 import { trackUsageEvent } from "@/utils/usageEvents";
-import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { A2HS_EVENT_AFTER_FIRST_RECIPE, A2HS_EVENT_AFTER_TWO_RECIPES } from "@/hooks/usePWAInstall";
 import {
@@ -54,6 +54,7 @@ import {
   PREMIUM_HELP_LIMIT_TITLE,
 } from "@/utils/friendlyLimitCopy";
 import { PREMIUM_TRIAL_CHAT_DAILY_LIMIT, PREMIUM_TRIAL_HELP_DAILY_LIMIT } from "@/utils/subscriptionRules";
+import { getRemainingRecipesText } from "@/utils/recipePickHintCopy";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
 /** Порог (px) от низа скролла: если пользователь в пределах — автоскролл вниз при новых сообщениях. */
@@ -317,6 +318,8 @@ export default function ChatPage() {
   /** Истина только после того, как локальный messages синхронизирован с historyMessages (пустой или с историей). Не показываем ChatEmptyState пока false. */
   const [isChatBootstrapped, setIsChatBootstrapped] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  /** Free: лимит подборов рецептов — сначала мягкий экран, полный paywall только по CTA. */
+  const [recipeSoftLimitOpen, setRecipeSoftLimitOpen] = useState(false);
   const [friendlyLimitOpen, setFriendlyLimitOpen] = useState(false);
   const [friendlyLimitKind, setFriendlyLimitKind] = useState<"chat" | "help" | null>(null);
   const [showHintsModal, setShowHintsModal] = useState(false);
@@ -845,6 +848,18 @@ export default function ChatPage() {
     [selectedMemberId, subscriptionStatus, user?.id, mode]
   );
 
+  const handleRequestFullPaywallFromRecipeSoftLimit = useCallback(() => {
+    useAppStore.getState().setPaywallReason("limit_chat");
+    useAppStore.getState().setPaywallCustomMessage(null);
+    setShowPaywall(true);
+    trackUsageEvent("recipe_soft_limit_open_full_paywall", {
+      properties: {
+        entry_point: mode === "help" ? "chat_help_tab" : "chat_recipes_tab",
+        ...(user?.id ? { user_id: user.id } : {}),
+      },
+    });
+  }, [mode, user?.id]);
+
   const handleSend = useCallback(async (text?: string) => {
     const toSend = (text ?? input).trim();
     if (!toSend || isChatting || sendInProgressRef.current) return;
@@ -877,7 +892,10 @@ export default function ChatPage() {
           usedToday,
           aiDailyLimit ?? PREMIUM_TRIAL_CHAT_DAILY_LIMIT
         );
+      } else if (mode === "recipes") {
+        setRecipeSoftLimitOpen(true);
       } else {
+        /* help-вкладка: прежняя логика limit_chat при исчерпании той же квоты */
         useAppStore.getState().setPaywallReason("limit_chat");
         useAppStore.getState().setPaywallCustomMessage(null);
         setShowPaywall(true);
@@ -1426,19 +1444,29 @@ export default function ChatPage() {
       const limitPayload = (err as { payload?: { feature: string } })?.payload;
       if (err?.message === "LIMIT_REACHED" && limitPayload?.feature) {
         const feat = limitPayload.feature as LimitReachedFeature;
-        useAppStore.getState().setPaywallReason(paywallReasonFromLimitFeature(feat));
-        useAppStore.getState().setPaywallCustomMessage(
-          `${getLimitReachedTitle(feat)}\n\n${getLimitReachedMessage(feat)}`
-        );
-        setShowPaywall(true);
-        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+        if (!hasAccess && feat === "chat_recipe") {
+          setRecipeSoftLimitOpen(true);
+          setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+        } else {
+          useAppStore.getState().setPaywallReason(paywallReasonFromLimitFeature(feat));
+          useAppStore.getState().setPaywallCustomMessage(
+            `${getLimitReachedTitle(feat)}\n\n${getLimitReachedMessage(feat)}`
+          );
+          setShowPaywall(true);
+          setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+        }
       } else if (err?.message === "usage_limit_exceeded") {
-        useAppStore.getState().setPaywallReason("limit_chat");
-        useAppStore.getState().setPaywallCustomMessage(
-          `${getLimitReachedTitle("chat_recipe")}\n\n${getLimitReachedMessage("chat_recipe")}`
-        );
-        setShowPaywall(true);
-        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+        if (!hasAccess) {
+          setRecipeSoftLimitOpen(true);
+          setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+        } else {
+          useAppStore.getState().setPaywallReason("limit_chat");
+          useAppStore.getState().setPaywallCustomMessage(
+            `${getLimitReachedTitle("chat_recipe")}\n\n${getLimitReachedMessage("chat_recipe")}`
+          );
+          setShowPaywall(true);
+          setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
+        }
       } else {
         const redirectOrIrrelevant = getRedirectOrIrrelevantMessage(userMessage.content);
         const fallbackText = redirectOrIrrelevant ?? "Не удалось распознать рецепт. Попробуйте уточнить запрос.";
@@ -1590,20 +1618,15 @@ export default function ChatPage() {
   const ageMonths = selectedMember?.age_months ?? members[0]?.age_months ?? null;
   const ageLabel = ageMonths != null ? (ageMonths < 12 ? `${ageMonths} мес` : `${Math.floor(ageMonths / 12)} ${ageMonths % 12 === 0 ? "лет" : "г."}`) : null;
 
+  /** Free: краткая подсказка по лимиту подборов (без «X из Y», см. getRemainingRecipesText). */
   const chatHeaderMeta =
     mode !== "help" && isFree && aiDailyLimit !== null
-        ? (
-          <span className="block">
-            <span className="text-[11px] text-muted-foreground/80 block">
-              Сегодня осталось {remaining} из {aiDailyLimit} AI-запросов
-            </span>
-            <Progress
-              value={(usedToday / aiDailyLimit) * 100}
-              className="h-[2px] mt-px w-full rounded-full bg-border"
-            />
-          </span>
+      ? (
+          <p className="text-[11px] leading-snug text-muted-foreground/70">
+            {getRemainingRecipesText(remaining ?? 0)}
+          </p>
         )
-        : undefined;
+      : undefined;
 
   /** Для hero: имя профиля (Семья / имя ребёнка). Объявлено до recipesHeaderCenter. */
   const chatProfileName = useMemo(() => {
@@ -1702,7 +1725,9 @@ export default function ChatPage() {
                 <ChatModeHint mode="member" />
               </div>
             )}
-            {chatHeaderMeta != null && <div className="mt-0.5">{chatHeaderMeta}</div>}
+            {chatHeaderMeta != null && (
+              <div className="mt-2 pt-0.5">{chatHeaderMeta}</div>
+            )}
           </div>
         )}
 
@@ -1772,8 +1797,6 @@ export default function ChatPage() {
           {/* Пустое состояние чата рецептов: приветствие и подсказки (показываем после инициализации; при пустой истории не сбрасываем bootstrapped) */}
           {mode === "recipes" && isChatBootstrapped && messages.length === 0 && members.length > 0 && (
             <ChatEmptyState
-              profileName={chatProfileName}
-              isFamily={selectedMemberId === "family"}
               suggestions={EMPTY_STATE_QUICK_SUGGESTIONS}
               onSuggestionClick={(text) => {
                 setInput(text);
@@ -1899,6 +1922,12 @@ export default function ChatPage() {
         description={friendlyLimitKind === "help" ? PREMIUM_HELP_LIMIT_BODY : PREMIUM_CHAT_LIMIT_BODY}
         secondaryLabel="Попробовать завтра"
         paywallTextKey={friendlyLimitKind === "help" ? "friendly_limit_help_paid" : "friendly_limit_chat_paid"}
+      />
+
+      <RecipeChatSoftLimitDialog
+        open={recipeSoftLimitOpen}
+        onOpenChange={setRecipeSoftLimitOpen}
+        onRequestFullPaywall={handleRequestFullPaywallFromRecipeSoftLimit}
       />
 
       <Paywall

@@ -33,7 +33,7 @@ const AUTH_INPUT_CLASS =
  * Публичный экран: новый пароль после перехода по ссылке из письма (recovery session).
  */
 export default function AuthUpdatePasswordPage() {
-  const { user, loading, authReady, updatePassword } = useAuth();
+  const { user, loading, authReady, updatePassword, isRecoverySession } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
@@ -48,8 +48,12 @@ export default function AuthUpdatePasswordPage() {
     if (!authReady || loading) return;
     if (!user) {
       navigate("/auth", { replace: true, state: { message: "Ссылка недействительна или сессия истекла. Запросите новое письмо." } });
+      return;
     }
-  }, [authReady, loading, user, navigate]);
+    if (!isRecoverySession) {
+      navigate("/", { replace: true });
+    }
+  }, [authReady, loading, user, isRecoverySession, navigate]);
 
   const onSubmit = async (data: FormData) => {
     trackUsageEvent("auth_password_reset_submit");
@@ -67,7 +71,7 @@ export default function AuthUpdatePasswordPage() {
     navigate("/", { replace: true });
   };
 
-  if (!authReady || loading) {
+  if (!authReady || loading || (user && !isRecoverySession)) {
     return (
       <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center auth-page-bg px-4">
         <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
@@ -89,7 +93,7 @@ export default function AuthUpdatePasswordPage() {
           className="text-center mb-4 sm:mb-6 px-2"
         >
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground mb-2">
-            Новый пароль
+            Установите новый пароль
           </h1>
           <p className="text-sm text-muted-foreground leading-relaxed">
             Придумайте новый пароль для входа в аккаунт.
@@ -169,7 +173,7 @@ export default function AuthUpdatePasswordPage() {
                     disabled={form.formState.isSubmitting}
                   >
                     {form.formState.isSubmitting ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
-                    <span>Сохранить пароль</span>
+                    <span>{form.formState.isSubmitting ? "Обновление пароля…" : "Сохранить пароль"}</span>
                   </Button>
                 </form>
               </Form>

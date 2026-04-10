@@ -28,7 +28,7 @@ const BENEFIT_CARDS = [
 ];
 
 export default function LandingOnboardingScreen() {
-  const { user, loading } = useAuth();
+  const { user, loading, isRecoverySession } = useAuth();
   const { members, isLoading: isMembersLoading } = useFamily();
   const navigate = useNavigate();
   const location = useLocation();
@@ -99,6 +99,10 @@ export default function LandingOnboardingScreen() {
         </div>
       </div>
     );
+  }
+
+  if (user && isRecoverySession) {
+    return <Navigate to="/auth/reset-password" replace />;
   }
 
   if (user) {

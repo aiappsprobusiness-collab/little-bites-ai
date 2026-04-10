@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useLayoutEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Loader2 } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -78,16 +77,32 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
     return (
       <div
         className={cn(
-          "relative z-20 shrink-0 border-t border-border bg-background",
-          "p-4 pt-2 max-w-full overflow-x-hidden",
+          "relative z-20 shrink-0 w-full max-w-full overflow-x-hidden",
+          /* Без границ и отдельного фона — совпадает с .chat-page-bg родителя */
+          "bg-transparent",
+          "px-4 pt-2 pb-3",
           className
         )}
       >
-        <div className="flex w-full min-w-0 max-w-full items-end gap-2">
-          <div className="relative flex-1 min-w-0">
+        {/* Единая «капсула» composer: скругление только снаружи, без вложенных рамок */}
+        <div
+          className={cn(
+            "flex w-full min-w-0 max-w-full items-end gap-1",
+            "rounded-[1.75rem] overflow-hidden",
+            "bg-muted/50 dark:bg-muted/30",
+            "pl-4 pr-1.5 py-1.5",
+            "transition-[border-color,box-shadow] duration-200",
+            /* Постоянная рамка + при фокусе толще/ярче (inset ring), без сдвига как у outline снаружи */
+            "border-2 border-primary/40",
+            "focus-within:border-primary",
+            "focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/35"
+          )}
+        >
+          {/* Колонка по высоте = textarea: иначе items-center на оверлее даёт сдвиг относительно курсора */}
+          <div className="relative min-h-[40px] min-w-0 flex-1 self-end overflow-hidden">
             {showPlaceholderOverlay && (
               <div
-                className="absolute inset-0 flex items-center pointer-events-none rounded-xl py-2.5 px-3"
+                className="pointer-events-none absolute inset-x-0 top-0 flex items-start pr-2 pt-2"
                 aria-hidden
               >
                 <AnimatePresence mode="wait">
@@ -97,14 +112,15 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="text-sm text-muted-foreground truncate"
+                    className="block w-full truncate text-sm leading-5 text-muted-foreground"
                   >
                     {currentPlaceholder}
                   </motion.span>
                 </AnimatePresence>
               </div>
             )}
-            <Textarea
+            {/* Нативный textarea: без стилей shadcn Textarea (ring/outline), иначе в Chrome/Edge остаётся синий outline */}
+            <textarea
               ref={setTextareaRef}
               value={value}
               onChange={(e) => onChange(e.target.value)}
@@ -113,11 +129,19 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
               placeholder={nativePlaceholder}
               disabled={disabled}
               rows={1}
+              autoComplete="off"
               className={cn(
-                "flex-1 min-w-0 min-h-[44px] max-h-[120px] w-full resize-none scrollbar-none",
-                "rounded-xl border-border focus-visible:border-primary/40 border-primary/20",
-                "leading-5 text-sm py-2.5 px-3 placeholder:text-muted-foreground",
-                "transition-[height] duration-100 ease-out"
+                "chat-composer-field",
+                "block min-h-[40px] w-full min-w-0 max-h-[120px] resize-none scrollbar-none",
+                "rounded-none border-0 bg-transparent shadow-none",
+                "text-foreground",
+                "!outline-none focus:!outline-none focus-visible:!outline-none",
+                "!ring-0 !ring-offset-0 focus-visible:!ring-0 focus-visible:!ring-offset-0",
+                /* Одна линия с оверлеем: те же text-sm + leading-5 и py-2, что у подсказки */
+                "text-sm leading-5 tracking-normal",
+                "py-2 pr-2 pl-0 placeholder:text-muted-foreground",
+                "transition-[height] duration-100 ease-out",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
               )}
             />
           </div>
@@ -128,7 +152,13 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
             disabled={!value.trim() || isSending || disabled}
             onClick={onSend}
             aria-label="Отправить"
-            className="h-11 w-11 shrink-0 rounded-xl bg-primary text-primary-foreground"
+            className={cn(
+              "h-10 w-10 shrink-0 rounded-full",
+              "bg-primary text-primary-foreground shadow-none",
+              "hover:bg-primary/90",
+              "ring-offset-0 focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-0",
+              "[&_svg]:!size-4"
+            )}
           >
             {isSending ? (
               <Loader2 className="w-4 h-4 animate-spin" />

@@ -14,7 +14,7 @@ import { trackUsageEvent } from "@/utils/usageEvents";
  * Не маркетинговый лендинг — короткий, приложенческий стиль.
  */
 export default function AppPreloginScreen() {
-  const { user, loading } = useAuth();
+  const { user, loading, isRecoverySession } = useAuth();
   const { members, isLoading: isMembersLoading } = useFamily();
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,6 +44,10 @@ export default function AppPreloginScreen() {
         </div>
       </div>
     );
+  }
+
+  if (user && isRecoverySession) {
+    return <Navigate to="/auth/reset-password" replace />;
   }
 
   if (user) {

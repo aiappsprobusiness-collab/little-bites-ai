@@ -76,7 +76,7 @@ export default function AuthCallbackPage() {
       if (cancelled) return;
 
       if (isPasswordRecovery) {
-        navigate("/auth/update-password", { replace: true });
+        navigate("/auth/reset-password", { replace: true });
         return;
       }
 

@@ -76,6 +76,8 @@ function AuthCallbackRedirectGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
   useEffect(() => {
     if (location.pathname === "/auth/callback") return;
+    // Прямой redirect из письма на /auth/reset-password: токены в hash обрабатывает клиент на месте.
+    if (location.pathname === "/auth/reset-password") return;
     if (hasAuthParamsInUrl(location.search, location.hash || "")) {
       window.location.replace(`/auth/callback${location.search}${location.hash}`);
     }
@@ -241,7 +243,8 @@ const App = () => (
               <Route path="/auth" element={<AuthPage />} />
               {/* Публичный маршрут: обрабатывает magic link / email confirmation, сам ждёт session и редиректит; не оборачивать в ProtectedRoute */}
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
-              <Route path="/auth/update-password" element={<AuthUpdatePasswordPage />} />
+              <Route path="/auth/reset-password" element={<AuthUpdatePasswordPage />} />
+              <Route path="/auth/update-password" element={<Navigate to="/auth/reset-password" replace />} />
               <Route path="/welcome" element={<LandingOnboardingScreen />} />
               <Route path="/prelogin" element={<AppPreloginScreen />} />
               <Route path="/r/:shareRef" element={<PublicRecipeSharePage />} />

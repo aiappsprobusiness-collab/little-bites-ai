@@ -18,16 +18,17 @@ function hasAuthParamsInUrl(search: string, hash: string): boolean {
 
 /**
  * Root "/" — умная маршрутизация:
+ * - в URL есть токены из письма (magic link / confirm / recovery) → /auth/callback (раньше проверки user — иначе recovery уходит в приложение)
+ * - сессия recovery (JWT amr: recovery) → /auth/reset-password
  * - авторизован, members загружены и пусто → профиль + создание первого ребёнка (как после письма)
  * - авторизован, есть члены семьи → /meal-plan
- * - в URL есть токены из письма (magic link / confirm) → /auth/callback (сохраняем hash/query)
  * - не авторизован, первый визит без UTM → /welcome
  * - не авторизован, уже видел welcome или есть utm_* → /auth
  */
 const SLOW_LOAD_SEC = 10;
 
 export function RootRedirect() {
-  const { user, loading } = useAuth();
+  const { user, loading, isRecoverySession } = useAuth();
   const { members, isLoading: isMembersLoading } = useFamily();
   const location = useLocation();
   const [slowHint, setSlowHint] = useState(false);
@@ -59,6 +60,20 @@ export function RootRedirect() {
     );
   }
 
+  // Токены из письма обрабатываем раньше проверки user: иначе recovery-сессия уводит сразу в приложение.
+  if (hasAuthParamsInUrl(location.search, location.hash || "")) {
+    return (
+      <Navigate
+        to={{ pathname: "/auth/callback", search: location.search, hash: location.hash }}
+        replace
+      />
+    );
+  }
+
+  if (user && isRecoverySession) {
+    return <Navigate to="/auth/reset-password" replace />;
+  }
+
   if (user) {
     if (isMembersLoading) {
       return (
@@ -74,16 +89,6 @@ export function RootRedirect() {
       return <Navigate to={PROFILE_FIRST_CHILD_ONBOARDING} replace />;
     }
     return <Navigate to="/meal-plan" replace />;
-  }
-
-  // Ссылка из письма могла привести на корень с #access_token=... — отдаём callback-странице
-  if (hasAuthParamsInUrl(location.search, location.hash || "")) {
-    return (
-      <Navigate
-        to={{ pathname: "/auth/callback", search: location.search, hash: location.hash }}
-        replace
-      />
-    );
   }
 
   if (shouldShowWelcomePage()) {

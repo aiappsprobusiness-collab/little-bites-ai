@@ -74,7 +74,7 @@ if (ADS_ENABLED && mode === "recipes" && !hasAccess && usedToday >= 1) {
 
 ## Лимиты для free (правила и бэкенд)
 
-- В `src/utils/subscriptionRules.ts`: у free задано `aiDailyLimit: 2` (2 AI-запроса в день в режиме рецептов).
+- В `src/utils/subscriptionRules.ts`: у free задано `aiDailyLimit: 2` (2 ИИ-запроса в день в режиме рецептов).
 - На бэкенде в `deepseek-chat/index.ts` для типа `chat`/`recipe` у не-premium пользователя проверяется лимит по той же фиче `chat_recipe` и константе `FREE_FEATURE_LIMIT = 2`: если `used >= FREE_FEATURE_LIMIT`, возвращается 429 и запрос не выполняется. После успешной генерации в `usage_events` пишется событие с `feature: "chat_recipe"`.
 
 Итого: **реклама не увеличивает лимит** — она лишь обязательный шаг перед второй генерацией в день; лимит по-прежнему 2 запроса в день, учёт только по `usage_events.chat_recipe`.

@@ -5,10 +5,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { setActiveSessionKeyForUser, clearStoredSessionKey } from '@/utils/activeSessionKey';
 import { clearOnLogout } from '@/utils/authStorageCleanup';
 import { logAuthBootstrap, logAuthSessionResult, logAuthStateChange } from '@/utils/authSessionDebug';
+import { isRecoveryJwtSession } from '@/utils/authRecoverySession';
 
 interface AuthContextType {
   session: Session | null;
   user: User | null;
+  /** Сессия после ссылки «сброс пароля» (JWT amr: recovery). До смены пароля нельзя пускать в основное приложение. */
+  isRecoverySession: boolean;
   /** true пока не завершена первая попытка восстановить сессию (getSession). */
   loading: boolean;
   /** true только после завершения первичного getSession(). Нужно, чтобы не показывать ложный empty state при медленном восстановлении сессии, stale storage и edge cases в Android browser. */
@@ -20,7 +23,7 @@ interface AuthContextType {
     options?: { acceptedTermsVersion?: string },
   ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  /** Запрос письма со ссылкой сброса пароля (redirect на `/auth/callback` с `type=recovery`). */
+  /** Запрос письма со ссылкой сброса пароля (redirect на страницу с `type=recovery` в hash). */
   requestPasswordReset: (email: string) => Promise<{ error: Error | null }>;
   /** После перехода по ссылке из письма (сессия recovery). */
   updatePassword: (password: string) => Promise<{ error: Error | null }>;
@@ -184,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const requestPasswordReset = async (email: string) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/callback`,
+        redirectTo: `${typeof window !== "undefined" ? window.location.origin : ""}/auth/reset-password`,
       });
       if (error) {
         let msg = error.message;
@@ -234,12 +237,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const authReady = !loading;
+  const isRecoverySession = session !== null && isRecoveryJwtSession(session);
 
   return (
     <AuthContext.Provider
       value={{
         session,
         user,
+        isRecoverySession,
         loading,
         authReady,
         signUp,

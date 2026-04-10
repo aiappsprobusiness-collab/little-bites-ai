@@ -11,20 +11,16 @@ import { cn } from "@/lib/utils";
 const CHAT_EMPTY_CARD_SURFACE =
   "relative rounded-2xl bg-primary-light border border-primary-border shadow-soft";
 
-/** Тексты быстрых подсказок для пустого состояния (на «вы», 1–2 строки). */
+/** Тексты быстрых подсказок для пустого состояния (1 строка на кнопку). */
 export const EMPTY_STATE_QUICK_SUGGESTIONS = [
-  "Приготовить из того, что есть дома:",
-  "Подбери завтрак с кальцием",
-  "Посоветуй быстрый ужин",
-  "Полезный перекус",
+  "Что приготовить из того, что есть дома",
+  "Завтрак с кальцием",
+  "Быстрый ужин на сегодня",
+  "Полезный перекус для ребёнка",
 ] as const;
 
 export interface ChatEmptyStateProps {
-  /** Имя выбранного профиля (Семья / имя ребёнка). */
-  profileName: string;
-  /** Семейный профиль — адаптировать текст приветствия. */
-  isFamily: boolean;
-  /** Подсказки для плашек (обычно 3). */
+  /** Подсказки для плашек (обычно 4). */
   suggestions?: readonly string[];
   /** Клик по подсказке: подставить текст в поле ввода. */
   onSuggestionClick: (text: string) => void;
@@ -37,17 +33,10 @@ export interface ChatEmptyStateProps {
  * Шапка (профиль + ⋮) рендерится в ChatPage sticky — здесь только контент ленты.
  */
 export function ChatEmptyState({
-  profileName,
-  isFamily,
   suggestions = EMPTY_STATE_QUICK_SUGGESTIONS,
   onSuggestionClick,
   className,
 }: ChatEmptyStateProps) {
-  const welcomeLine1 = isFamily
-    ? "Здравствуйте, я — ваш личный помощник Momrecipes! Подберу блюда для всей семьи и учту возраст и особенности питания."
-    : `Здравствуйте, я — ваш личный помощник Momrecipes! Подберу блюда для профиля ${profileName} и учту возраст и особенности питания.`;
-  const welcomeLine2 = "Напишите запрос или выберите подсказку ниже.";
-
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       {/* Приветственная карточка — tinted surface (bg-primary-light), не белый */}
@@ -57,11 +46,17 @@ export function ChatEmptyState({
         transition={{ duration: 0.28, ease: "easeOut" }}
         className={cn(CHAT_EMPTY_CARD_SURFACE, "p-[18px] max-w-[85%]")}
       >
-        <p className="text-[15px] leading-[1.45] text-foreground whitespace-pre-wrap">
-          {welcomeLine1}
-          {"\n\n"}
-          {welcomeLine2}
-        </p>
+        <div className="text-[15px] leading-[1.45] text-foreground space-y-3">
+          <p className="font-semibold">
+            Этот чат — ваш помощник по рецептам <span aria-hidden>🍲</span>
+          </p>
+          <p>
+            Здесь мы не общаемся, а быстро подбираем блюда для выбранного вами члена семьи с учётом
+            возраста и питания.
+          </p>
+          <p>Просто напишите, что хотите приготовить — и получите готовые идеи блюд.</p>
+          <p>Напишите запрос или выберите подсказку ниже.</p>
+        </div>
       </motion.div>
 
       {/* Подсказки: размер шрифта ровно как в пузырьке пользователя (12px), баблы крупнее */}

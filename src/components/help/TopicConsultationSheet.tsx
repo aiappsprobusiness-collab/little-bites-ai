@@ -5,7 +5,6 @@ import {
   SheetContent,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -547,20 +546,41 @@ export function TopicConsultationSheet({
                 </div>
               </div>
 
-              {/* Composer Help: autosize как ChatInputBar; компактная кнопка Send */}
+              {/* Composer Help: тот же единый «капсульный» composer, что ChatInputBar */}
               <form
                 onSubmit={handleSubmit}
-                className="shrink-0 p-4 pt-2 border-t border-border bg-background"
+                className="shrink-0 p-4 pt-2 bg-background"
               >
-                <div className="flex gap-2 items-end">
-                  <Textarea
+                <div
+                  className={cn(
+                    "flex w-full min-w-0 max-w-full items-end gap-1",
+                    "rounded-[1.75rem] overflow-hidden",
+                    "bg-muted/50 dark:bg-muted/30",
+                    "pl-4 pr-1.5 py-1.5",
+                    "transition-[border-color,box-shadow] duration-200",
+                    "border-2 border-primary/40",
+                    "focus-within:border-primary",
+                    "focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/35"
+                  )}
+                >
+                  <textarea
                     ref={inputRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onInput={syncComposerHeight}
                     placeholder="Напишите, что происходит…"
                     rows={1}
-                    className="flex-1 min-w-0 min-h-[44px] max-h-[120px] resize-none scrollbar-none rounded-xl border-border focus-visible:border-primary/40 border-primary/20 leading-5 text-sm py-2.5 px-3"
+                    autoComplete="off"
+                    className={cn(
+                      "chat-composer-field",
+                      "flex-1 min-w-0 min-h-[40px] max-h-[120px] w-full resize-none scrollbar-none",
+                      "rounded-none border-0 bg-transparent shadow-none",
+                      "text-foreground",
+                      "!outline-none focus:!outline-none focus-visible:!outline-none",
+                      "!ring-0 !ring-offset-0 focus-visible:!ring-0 focus-visible:!ring-offset-0",
+                      "leading-5 text-sm py-2 pr-2 pl-0 placeholder:text-muted-foreground",
+                      "disabled:opacity-50 disabled:cursor-not-allowed"
+                    )}
                     disabled={isSending}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -572,7 +592,13 @@ export function TopicConsultationSheet({
                   <Button
                     type="submit"
                     size="icon"
-                    className="h-11 w-11 shrink-0 rounded-xl bg-primary text-primary-foreground"
+                    className={cn(
+                      "h-10 w-10 shrink-0 rounded-full",
+                      "bg-primary text-primary-foreground shadow-none",
+                      "hover:bg-primary/90",
+                      "ring-offset-0 focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-0",
+                      "[&_svg]:!size-4"
+                    )}
                     disabled={!input.trim() || isSending}
                   >
                     {isSending ? (

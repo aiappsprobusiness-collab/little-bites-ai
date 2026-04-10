@@ -7,7 +7,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, isRecoverySession } = useAuth();
 
   if (loading) {
     return (
@@ -22,6 +22,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  if (isRecoverySession) {
+    return <Navigate to="/auth/reset-password" replace />;
   }
 
   return <>{children}</>;
