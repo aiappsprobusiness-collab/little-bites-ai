@@ -17,16 +17,15 @@ const CHAT_EMPTY_CARD_SURFACE =
  */
 const WIDTH_ASSISTANT_LIKE = "w-full max-w-[96%] self-start";
 
-/**
- * Как пузырёк пользователя в `ChatMessage`: обёртка `max-w-[80%]`.
- */
-const WIDTH_USER_BUBBLE_LIKE = "w-full max-w-[80%] self-end";
+/** Подсказки: ширина по тексту, справа; не шире колонки пользователя. */
+const SUGGESTION_WIDTH = "w-fit max-w-[80%] self-end ml-auto";
 
 /**
- * Тот же силуэт, что у `role === "user"` в ChatMessage (не «таблетка», а сообщение с хвостом).
+ * Верхний блок — `rounded-2xl` (высокий прямоугольник).
+ * У подсказок одна строка и мало высоты: при том же `rounded-2xl` углы визуально читаются как «таблетка».
+ * Чуть меньший радиус (`rounded-xl`) даёт тот же характер углов, что у большой карточки, без капсулы.
  */
-const USER_BUBBLE_SHELL =
-  "rounded-2xl rounded-br-sm border border-primary/25 shadow-soft";
+const SUGGESTION_SHELL = "rounded-xl border border-primary/25 shadow-soft";
 
 /**
  * Текст как у поля ввода чата (`ChatInputBar`: `text-sm leading-5`) и читаемого тела в ленте.
@@ -93,12 +92,12 @@ export function ChatEmptyState({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
             className={cn(
-              "relative text-left break-words",
-              WIDTH_USER_BUBBLE_LIKE,
-              "px-3 py-3",
+              "relative inline-flex text-left break-words",
+              SUGGESTION_WIDTH,
+              "px-3 py-2.5",
               "text-sm leading-5 font-normal",
               "bg-primary text-primary-foreground",
-              USER_BUBBLE_SHELL,
+              SUGGESTION_SHELL,
               "cursor-pointer hover:bg-primary/90 active:scale-[0.98] active:shadow-none",
               "transition-[background-color,transform] duration-100"
             )}

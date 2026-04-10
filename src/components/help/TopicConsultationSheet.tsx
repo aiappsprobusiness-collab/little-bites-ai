@@ -554,10 +554,10 @@ export function TopicConsultationSheet({
                 <div
                   className={cn(
                     "chat-composer-capsule",
-                    "flex w-full min-w-0 max-w-full items-end gap-1",
-                    "rounded-[1.75rem] overflow-hidden",
+                    "flex w-full min-w-0 max-w-full items-end gap-2",
+                    "rounded-2xl overflow-hidden",
                     "bg-muted/50 dark:bg-muted/30",
-                    "pl-4 pr-1.5 py-1.5",
+                    "pl-3 pr-2 py-2",
                     "transition-[border-color] duration-200",
                     "border-2 border-primary/40",
                     "focus-within:border-primary"
@@ -592,9 +592,8 @@ export function TopicConsultationSheet({
                   />
                   <Button
                     type="submit"
-                    size="icon"
                     className={cn(
-                      "h-10 w-10 shrink-0 rounded-full",
+                      "h-10 min-w-10 shrink-0 rounded-xl px-3",
                       "bg-primary text-primary-foreground shadow-none",
                       "hover:bg-primary/90",
                       "ring-offset-0 focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-0",
