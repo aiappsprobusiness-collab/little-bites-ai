@@ -69,7 +69,8 @@ const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_ca
 function hasAuthParamsInUrl(search: string, hash: string): boolean {
   const inHash = /access_token|refresh_token|type=recovery/.test(hash || "");
   const params = new URLSearchParams(search);
-  return inHash || params.has("access_token") || params.has("refresh_token");
+  // PKCE: ?code=... (после клика из письма до обмена на сессию)
+  return inHash || params.has("access_token") || params.has("refresh_token") || params.has("code");
 }
 
 /** Netlify/host может отдавать `/auth/callback/` — без нормализации guard зацикливает replace. */

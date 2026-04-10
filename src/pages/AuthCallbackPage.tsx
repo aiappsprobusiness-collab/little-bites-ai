@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { setActiveSessionKeyForUser } from "@/utils/activeSessionKey";
 import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
+import { isRecoveryJwtSession } from "@/utils/authRecoverySession";
 
 const POLL_INTERVAL_MS = 300;
 const MAX_WAIT_MS = 5000;
@@ -16,7 +17,8 @@ function hasAuthParams(): boolean {
   return (
     /access_token|refresh_token|type=recovery/.test(hash) ||
     params.has("access_token") ||
-    params.has("refresh_token")
+    params.has("refresh_token") ||
+    params.has("code")
   );
 }
 
@@ -26,6 +28,12 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     let cancelled = false;
+
+    /** До await: hash ещё может быть целым. После getSession Supabase часто уже очистил URL — нельзя полагаться только на type=recovery в строке. */
+    const recoveryHintFromUrl =
+      typeof window !== "undefined" &&
+      (/type=recovery/.test(window.location.hash || "") ||
+        new URLSearchParams(window.location.search).get("type") === "recovery");
 
     const run = async () => {
       const start = Date.now();
@@ -56,11 +64,9 @@ export default function AuthCallbackPage() {
         return () => clearTimeout(timer);
       }
 
-      /** Сброс пароля: в hash/query приходит `type=recovery` (до очистки URL). */
+      /** Сброс пароля: JWT amr recovery и/или type=recovery в URL (если hash ещё не снят). */
       const isPasswordRecovery =
-        typeof window !== "undefined" &&
-        (/type=recovery/.test(window.location.hash || "") ||
-          new URLSearchParams(window.location.search).get("type") === "recovery");
+        isRecoveryJwtSession(session) || recoveryHintFromUrl;
 
       // Очищаем URL от токенов
       if (typeof window !== "undefined") {

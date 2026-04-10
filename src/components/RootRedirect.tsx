@@ -13,7 +13,7 @@ const BOOT_SCREEN_CLASS =
 function hasAuthParamsInUrl(search: string, hash: string): boolean {
   const inHash = /access_token|refresh_token|type=recovery/.test(hash || "");
   const params = new URLSearchParams(search);
-  return inHash || params.has("access_token") || params.has("refresh_token");
+  return inHash || params.has("access_token") || params.has("refresh_token") || params.has("code");
 }
 
 /**

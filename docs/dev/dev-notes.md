@@ -161,6 +161,7 @@ WHERE min_age_months IS NULL OR max_age_months IS NULL;
 - **Dashboard:** *Authentication → URL Configuration* — в **Redirect URLs** должны быть полные URL **без лишнего слэша в конце пути** (как в коде): `https://…/auth/callback`, `https://…/auth/reset-password`. Вариант `…/auth/callback/` (со слэшем) — отдельная строка; если хост редиректит на URL со слэшем, в списке должен быть именно тот вариант, куда реально приходит браузер. Иначе редирект после письма заблокируется и возможны ошибки `/auth` в Network.
 - **Шаблон письма «Reset password»** (Supabase Hosted): в теле письма ссылку нужно вести через **`{{ .ConfirmationURL }}`** (или эквивалент для вашей версии шаблона) — это полный URL с токеном и корректным `redirectTo`. Не подставлять вручную только `SiteURL` без токена.
 - **GitHub Pages:** прямой заход на вложенный маршрут SPA (`/auth/reset-password`, `/recipe/…`) требует **`404.html`** в корне деплоя — копия собранного `index.html`, иначе сервер отдаёт настоящий **404** без приложения. Генерация: плагин `github-pages-spa-fallback` в `vite.config.ts` (при `npm run build`); workflow `.github/workflows/pages.yml` дублирует шаг на всякий случай.
+- **`AuthCallbackPage`:** нельзя определять recovery только по `type=recovery` в URL **после** `await getSession()` — к этому моменту клиент Supabase уже мог очистить hash. Решение: **`isRecoveryJwtSession(session)`** и ранний снимок URL в начале `useEffect`; в guard/root — учитывать PKCE **`?code=`** в query.
 
 ---
 
