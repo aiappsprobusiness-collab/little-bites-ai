@@ -73,6 +73,12 @@ function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
  */
 export const MEAL_PLANS_QUERY_SINGLE_DAY_SENTINEL = '_single_day_' as const;
 
+/** Все строки meal_plans_v2 пользователя без фильтра member_id (отдельный кэш). */
+export const MEAL_PLANS_KEY_ALL_MEMBER_ROWS = '__all_member_rows__' as const;
+
+/** Scope member_id ещё не определён (например Free «Семья» до загрузки members) — отдельный кэш, запрос отключён. */
+export const MEAL_PLANS_KEY_PENDING_MEMBER_SCOPE = '__pending_plan_member_scope__' as const;
+
 /** Единый формат query key для meal_plans_v2: invalidate/refetch по predicate работают предсказуемо. */
 export function mealPlansKey(params: {
   userId: string | undefined;
@@ -80,8 +86,15 @@ export function mealPlansKey(params: {
   start: string;
   end?: string;
   mutedWeekKey?: string | null;
+  /** Явный запрос всех строк (FamilyDashboard); иначе при `memberId === undefined` ключ — pending. */
+  allMemberRows?: boolean;
 }): unknown[] {
-  const k: unknown[] = ['meal_plans_v2', params.userId, params.memberId ?? null, params.start];
+  const memberPart = params.allMemberRows
+    ? MEAL_PLANS_KEY_ALL_MEMBER_ROWS
+    : params.memberId === undefined
+      ? MEAL_PLANS_KEY_PENDING_MEMBER_SCOPE
+      : (params.memberId ?? null);
+  const k: unknown[] = ['meal_plans_v2', params.userId, memberPart, params.start];
   if (params.end !== undefined) {
     k.push(params.end);
   } else {
@@ -91,21 +104,26 @@ export function mealPlansKey(params: {
   return k;
 }
 
-/** memberId: конкретный id = планы этого члена; null = "Семья" (member_id is null); undefined = не фильтровать. */
+/**
+ * memberId: id члена; null = строка «Семья»; undefined = scope ещё не готов (запрос выключен), кроме allMemberRows.
+ * allMemberRows: все строки пользователя без фильтра по member_id (редко, см. FamilyDashboard).
+ */
 export function useMealPlans(
   memberId?: string | null,
-  options?: { mutedWeekKey?: string | null }
+  options?: { mutedWeekKey?: string | null; allMemberRows?: boolean }
 ) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const mutedWeekKey = options?.mutedWeekKey ?? null;
+  const allMemberRows = options?.allMemberRows === true;
+  const scopeReady = allMemberRows || memberId !== undefined;
 
   const getMealPlans = (startDate: Date, endDate: Date) => {
     const startStr = formatLocalDate(startDate);
     const endStr = formatLocalDate(endDate);
     return useQuery({
-      queryKey: mealPlansKey({ userId: user?.id, memberId, start: startStr, end: endStr, mutedWeekKey }),
+      queryKey: mealPlansKey({ userId: user?.id, memberId, start: startStr, end: endStr, mutedWeekKey, allMemberRows }),
       queryFn: async ({ signal }): Promise<MealPlanItemV2[]> => {
         if (!user) return [];
         let query = supabase
@@ -115,7 +133,9 @@ export function useMealPlans(
           .gte('planned_date', startStr)
           .lte('planned_date', endStr);
 
-        if (memberId === null) query = query.is('member_id', null);
+        if (allMemberRows) {
+          /* no member_id filter */
+        } else if (memberId === null) query = query.is('member_id', null);
         else if (memberId) query = query.eq('member_id', memberId);
 
         const { data: rows, error } = await query
@@ -129,7 +149,7 @@ export function useMealPlans(
         if (mutedWeekKey !== null && rangeKeyForMute === mutedWeekKey) return [];
         return [];
       },
-      enabled: !!user,
+      enabled: !!user && scopeReady,
       staleTime: TAB_NAV_STALE_MS,
       refetchOnMount: false,
       refetchOnWindowFocus: false,
@@ -139,7 +159,7 @@ export function useMealPlans(
   const getMealPlansByDate = (date: Date) => {
     const dateStr = formatLocalDate(date);
     return useQuery({
-      queryKey: mealPlansKey({ userId: user?.id, memberId, start: dateStr, mutedWeekKey }),
+      queryKey: mealPlansKey({ userId: user?.id, memberId, start: dateStr, mutedWeekKey, allMemberRows }),
       queryFn: async ({ signal }): Promise<MealPlanItemV2[]> => {
         if (!user) return [];
 
@@ -149,7 +169,9 @@ export function useMealPlans(
           .eq('user_id', user.id)
           .eq('planned_date', dateStr);
 
-        if (memberId === null) query = query.is('member_id', null);
+        if (allMemberRows) {
+          /* no member_id filter */
+        } else if (memberId === null) query = query.is('member_id', null);
         else if (memberId) query = query.eq('member_id', memberId);
 
         const { data: rows, error } = await query.abortSignal(signal);
@@ -160,7 +182,7 @@ export function useMealPlans(
         if (mutedWeekKey !== null && isDateInRollingRange(dateStr, mutedWeekKey)) return [];
         return [];
       },
-      enabled: !!user,
+      enabled: !!user && scopeReady,
       staleTime: TAB_NAV_STALE_MS,
       refetchOnMount: false,
       refetchOnWindowFocus: false,

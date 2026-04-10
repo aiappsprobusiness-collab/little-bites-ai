@@ -280,7 +280,7 @@ export function usePlanShoppingIngredients(
       if (!user) return [];
       return loadPlanShoppingIngredients(user.id, range, memberId);
     },
-    enabled: !!user,
+    enabled: !!user && memberId !== undefined,
     staleTime: 60_000,
   });
 }

@@ -48,7 +48,7 @@ export function FamilyDashboard({ onAddMember }: FamilyDashboardProps) {
   const today = new Date();
   const { data: todayMeals = [], isLoading: isLoadingMeals } = getMealPlansByDate(today);
 
-  const mealPlansHook = useMealPlans();
+  const mealPlansHook = useMealPlans(undefined, { allMemberRows: true });
   const { data: allMeals = [] } = mealPlansHook.getMealPlansByDate(today);
 
   // State for dialog

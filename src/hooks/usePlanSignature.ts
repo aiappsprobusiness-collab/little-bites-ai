@@ -75,7 +75,7 @@ export function usePlanSignature(range: "today" | "week", memberId: string | nul
       if (!user) return "";
       return loadPlanSignature(user.id, range, memberId);
     },
-    enabled: !!user,
+    enabled: !!user && memberId !== undefined,
     staleTime: 60_000,
   });
 }

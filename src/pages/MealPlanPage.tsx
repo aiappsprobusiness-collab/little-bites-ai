@@ -376,6 +376,8 @@ export default function MealPlanPage() {
   const mealPlanMemberId = isFree && selectedMemberId === "family"
     ? (members[0]?.id ?? undefined)
     : (isFamilyMode ? null : (selectedMemberId || undefined));
+  /** До появления первого ребёнка в списке — не дергаем meal_plans_v2 (тот же scope, что RecipePage). */
+  const planMemberScopePending = isFree && selectedMemberId === "family" && !members[0]?.id;
   const isInfantPlanUi = isInfantComplementaryPlanContext({
     memberId: mealPlanMemberId ?? null,
     isFamilyMode,
@@ -836,7 +838,7 @@ export default function MealPlanPage() {
   const planMealsForSelectedDay = isWeekPlansSuccess ? dayMealPlansFromWeek : dayMealPlans;
 
   /** Скелетон блока приёмов только пока неделя ещё не успешно загружена и идёт посуточный fetch. */
-  const showPlanMealsSkeleton = !isWeekPlansSuccess && (isLoading || isFetching);
+  const showPlanMealsSkeleton = !isWeekPlansSuccess && (isLoading || isFetching || planMemberScopePending);
 
   /** Актуальные планы выбранного дня для async автодобора прикорма (совпадают с тем, что видит пользователь). */
   const dayMealPlansRef = useRef(planMealsForSelectedDay);

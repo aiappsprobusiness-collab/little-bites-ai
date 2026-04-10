@@ -196,9 +196,14 @@ export default function RecipePage() {
         ? state!.memberId ?? null
         : mealPlanMemberIdForShoppingSync({ hasAccess, selectedMemberId, members })
       : undefined;
+  /** Free «Семья» до загрузки members: scope как на MealPlanPage — undefined, запрос плана выключен. */
+  const planMemberScopePending = Boolean(
+    fromMealPlan && plannedDate && planMealType && !hasExplicitPlanMemberId && planRowMemberId === undefined
+  );
   const planDate = fromMealPlan && plannedDate ? new Date(plannedDate + "T12:00:00") : new Date();
   const mealPlansApi = useMealPlans(planRowMemberId, { mutedWeekKey: recipePlanMutedWeekKey });
   const { data: dayPlans, isLoading: dayPlanLoading } = mealPlansApi.getMealPlansByDate(planDate);
+  const dayPlanBlocked = dayPlanLoading || planMemberScopePending;
   const planSlot =
     fromMealPlan && plannedDate && planMealType && id
       ? dayPlans?.find(
@@ -379,7 +384,7 @@ export default function RecipePage() {
       return;
     }
     if (!id || !plannedDate || !planMealType) return;
-    if (dayPlanLoading) return;
+    if (dayPlanBlocked) return;
 
     const planSlotSyncKey = `${plannedDate}-${planMealType}-${planRowMemberId ?? "fam"}-${id}`;
 
@@ -424,7 +429,7 @@ export default function RecipePage() {
     planRowMemberId,
     slotServings,
     servingsSelected,
-    dayPlanLoading,
+    dayPlanBlocked,
     planSlotResolved,
   ]);
 
@@ -434,6 +439,9 @@ export default function RecipePage() {
   const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!fromMealPlan || plannedDate == null || planMealType == null) {
+      return undefined;
+    }
+    if (planMemberScopePending) {
       return undefined;
     }
     if (!planSlotResolved) {
@@ -484,6 +492,7 @@ export default function RecipePage() {
     plannedDate,
     planMealType,
     planRowMemberId,
+    planMemberScopePending,
     planSlotResolved,
     slotServings,
     servingsSelected,
