@@ -396,7 +396,7 @@ export default function MealPlanPage() {
         : [],
     [selectedMember]
   );
-  const { memberDataForPlan, starterProfile } = useMealPlanMemberData();
+  const { memberDataForPlan } = useMealPlanMemberData();
 
   const infantPoolMemberData = useMemo((): MemberDataForPool | null => {
     if (!memberDataForPlan || !("age_months" in memberDataForPlan) || memberDataForPlan.age_months == null) return null;
@@ -522,7 +522,7 @@ export default function MealPlanPage() {
     if (key) localStorage.setItem(MEAL_PLAN_MUTED_WEEK_STORAGE_KEY, key);
     else localStorage.removeItem(MEAL_PLAN_MUTED_WEEK_STORAGE_KEY);
   }, []);
-  const { getMealPlans, getMealPlansByDate, clearWeekPlan, deleteMealPlan } = useMealPlans(mealPlanMemberId, starterProfile, { mutedWeekKey });
+  const { getMealPlans, getMealPlansByDate, clearWeekPlan, deleteMealPlan } = useMealPlans(mealPlanMemberId, { mutedWeekKey });
 
   const memberIdForPlan = mealPlanMemberId ?? null;
   const { isFavorite: isFavoriteForPlan, toggleFavorite: toggleFavoritePlan } = useFavorites("all");
@@ -808,22 +808,13 @@ export default function MealPlanPage() {
   }, []);
 
   /** Ключи кэша планов для optimistic update после replace_slot. */
-  const profileKey = useMemo(() => {
-    const p = memberDataForPlan;
-    if (!p) return null;
-    return [
-      [...(p.allergies ?? [])].sort().join(","),
-      (p.likes ?? []).map((s) => String(s).trim().toLowerCase()).join("|"),
-      (p.dislikes ?? []).map((s) => String(s).trim().toLowerCase()).join("|"),
-    ].join(";");
-  }, [memberDataForPlan]);
   const mealPlansKeyWeek = useMemo(
-    () => mealPlansKey({ userId: user?.id, memberId: mealPlanMemberId, start: formatLocalDate(rollingDates[0]), end: formatLocalDate(rollingDates[6]), profileKey, mutedWeekKey }),
-    [user?.id, mealPlanMemberId, rollingDates, profileKey, mutedWeekKey]
+    () => mealPlansKey({ userId: user?.id, memberId: mealPlanMemberId, start: formatLocalDate(rollingDates[0]), end: formatLocalDate(rollingDates[6]), mutedWeekKey }),
+    [user?.id, mealPlanMemberId, rollingDates, mutedWeekKey]
   );
   const mealPlansKeyDay = useMemo(
-    () => mealPlansKey({ userId: user?.id, memberId: mealPlanMemberId, start: selectedDayKey, profileKey, mutedWeekKey }),
-    [user?.id, mealPlanMemberId, selectedDayKey, profileKey, mutedWeekKey]
+    () => mealPlansKey({ userId: user?.id, memberId: mealPlanMemberId, start: selectedDayKey, mutedWeekKey }),
+    [user?.id, mealPlanMemberId, selectedDayKey, mutedWeekKey]
   );
 
   const { data: dayMealPlans = [], isLoading, isFetching } = getMealPlansByDate(selectedDate);

@@ -25,6 +25,7 @@
 - **`deleteMealPlan`:** `select` с `planned_date`, возврат `{ planned_date }`, onSuccess — узкая (без широкого fallback при успехе).
 - **`updateSlotIngredientOverrides.onSuccess`:** узкая по `params.planned_date`.
 - **`updateSlotServings.onSuccess`:** только **`patchCachedMealPlansServings`** + **`invalidateQueries(['plan_signature'])`**. Инвалидация **`meal_plans_v2` по дате убрана:** сразу после PATCH refetch мог вернуть предыдущее значение `meals.*.servings` и перезаписать кэш → бесконечный цикл PATCH↔GET и мигание порций (1↔4) на экране рецепта из плана.
+- **Ключ React Query `meal_plans_v2`:** из ключа убран **`profileKey`** (аллергии/likes/dislikes). Он не участвовал в `queryFn`, но при первом заходе на рецепт из плана профиль «догружался» → менялся ключ → новый кэш/refetch и чередование `slotServings` с экрана плана и «пустого» ключа (мигание 1↔4). Однодневный ключ дополнен маркером **`_single_day_`**, чтобы [4] не совпадал с `mutedWeekKey` (YYYY-MM-DD) и не ломался **`mealPlanQueryTouchesPlannedDate`**.
 - **`updateMealPlan.onSuccess`:** узкая по `data.planned_date`, иначе fallback на широкий префикс (на всякий случай).
 - **`markAsCompleted`:** `planned_date` в select, узкая инвалидация.
 - **`mealPlanQueryTouchesDate`** внутри хука делегирует в общий `mealPlanQueryTouchesPlannedDate`.

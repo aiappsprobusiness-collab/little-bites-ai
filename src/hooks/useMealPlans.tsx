@@ -67,37 +67,37 @@ function expandMealsRow(row: MealPlansV2Row): MealPlanItemV2[] {
   return result;
 }
 
+/**
+ * Однодневный ключ: между `start` и `mutedWeekKey` нужен маркер, иначе [4] может быть YYYY-MM-DD
+ * (mutedWeekKey) и путается с `end` недели в mealPlanQueryTouchesPlannedDate.
+ */
+export const MEAL_PLANS_QUERY_SINGLE_DAY_SENTINEL = '_single_day_' as const;
+
 /** Единый формат query key для meal_plans_v2: invalidate/refetch по predicate работают предсказуемо. */
 export function mealPlansKey(params: {
   userId: string | undefined;
   memberId: string | null | undefined;
   start: string;
   end?: string;
-  profileKey?: string | null;
   mutedWeekKey?: string | null;
 }): unknown[] {
   const k: unknown[] = ['meal_plans_v2', params.userId, params.memberId ?? null, params.start];
-  if (params.end !== undefined) k.push(params.end);
-  k.push(params.profileKey ?? null, params.mutedWeekKey ?? null);
+  if (params.end !== undefined) {
+    k.push(params.end);
+  } else {
+    k.push(MEAL_PLANS_QUERY_SINGLE_DAY_SENTINEL);
+  }
+  k.push(params.mutedWeekKey ?? null);
   return k;
 }
 
 /** memberId: конкретный id = планы этого члена; null = "Семья" (member_id is null); undefined = не фильтровать. */
 export function useMealPlans(
   memberId?: string | null,
-  _profile?: { allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[] } | null,
   options?: { mutedWeekKey?: string | null }
 ) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-
-  const profileKey: string | null = _profile
-    ? [
-        [...(_profile.allergies ?? [])].sort().join(","),
-        (_profile.likes ?? []).map((p) => String(p).trim().toLowerCase()).join("|"),
-        (_profile.dislikes ?? []).map((p) => String(p).trim().toLowerCase()).join("|"),
-      ].join(";")
-    : null;
 
   const mutedWeekKey = options?.mutedWeekKey ?? null;
 
@@ -105,7 +105,7 @@ export function useMealPlans(
     const startStr = formatLocalDate(startDate);
     const endStr = formatLocalDate(endDate);
     return useQuery({
-      queryKey: mealPlansKey({ userId: user?.id, memberId, start: startStr, end: endStr, profileKey, mutedWeekKey }),
+      queryKey: mealPlansKey({ userId: user?.id, memberId, start: startStr, end: endStr, mutedWeekKey }),
       queryFn: async ({ signal }): Promise<MealPlanItemV2[]> => {
         if (!user) return [];
         let query = supabase
@@ -139,7 +139,7 @@ export function useMealPlans(
   const getMealPlansByDate = (date: Date) => {
     const dateStr = formatLocalDate(date);
     return useQuery({
-      queryKey: mealPlansKey({ userId: user?.id, memberId, start: dateStr, profileKey, mutedWeekKey }),
+      queryKey: mealPlansKey({ userId: user?.id, memberId, start: dateStr, mutedWeekKey }),
       queryFn: async ({ signal }): Promise<MealPlanItemV2[]> => {
         if (!user) return [];
 
@@ -359,7 +359,7 @@ export function useMealPlans(
     },
   });
 
-  /** Ключ: ['meal_plans_v2', userId, memberId, start, end?, profileKey, mutedWeekKey] — без end одна дата; с end — диапазон. */
+  /** Ключ: ['meal_plans_v2', userId, memberId, start, end | _single_day_, mutedWeekKey]. */
   const mealPlanQueryTouchesDate = (queryKey: unknown, plannedDate: string): boolean =>
     mealPlanQueryTouchesPlannedDate(queryKey, user?.id, plannedDate);
 

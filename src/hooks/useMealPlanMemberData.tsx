@@ -27,8 +27,8 @@ export type MealPlanMemberDataForEdge = {
 };
 
 /**
- * Профиль для Edge / useMealPlans profileKey — должен совпадать на MealPlanPage и RecipePage,
- * иначе разные queryKey и «мигание» порций при открытии рецепта из плана.
+ * Профиль для Edge / пула. Ключ кэша meal_plans_v2 больше не зависит от профиля (данные плана в БД
+ * не меняются от аллергий); совпадение memberId + mutedWeekKey с MealPlanPage важно для RecipePage.
  */
 export function useMealPlanMemberData(): {
   memberDataForPlan: MealPlanMemberDataForEdge | null;

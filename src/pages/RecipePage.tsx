@@ -49,7 +49,7 @@ import {
   buildShoppingIngredientPayloadsFromRecipe,
   recipeRpcIngredientsToShoppingRows,
 } from "@/utils/shopping/shoppingListMerge";
-import { useMealPlanMemberData, readMealPlanMutedWeekKeyFromStorage } from "@/hooks/useMealPlanMemberData";
+import { readMealPlanMutedWeekKeyFromStorage } from "@/hooks/useMealPlanMemberData";
 import { mealPlanPathWithOptionalDate } from "@/utils/mealPlanNavigation";
 import {
   AlertDialog,
@@ -112,7 +112,6 @@ export default function RecipePage() {
   const location = useLocation();
   const { toast } = useToast();
   const { selectedMember, selectedMemberId, members } = useFamily();
-  const { starterProfile } = useMealPlanMemberData();
   /** Совпадает с queryKey MealPlanPage — иначе план на дату грузится заново без кэша и слот/порции «прыгают». */
   const recipePlanMutedWeekKey = useMemo(() => readMealPlanMutedWeekKeyFromStorage(), []);
   const { hasAccess } = useSubscription();
@@ -198,7 +197,7 @@ export default function RecipePage() {
         : mealPlanMemberIdForShoppingSync({ hasAccess, selectedMemberId, members })
       : undefined;
   const planDate = fromMealPlan && plannedDate ? new Date(plannedDate + "T12:00:00") : new Date();
-  const mealPlansApi = useMealPlans(planRowMemberId, starterProfile, { mutedWeekKey: recipePlanMutedWeekKey });
+  const mealPlansApi = useMealPlans(planRowMemberId, { mutedWeekKey: recipePlanMutedWeekKey });
   const { data: dayPlans, isLoading: dayPlanLoading } = mealPlansApi.getMealPlansByDate(planDate);
   const planSlot =
     fromMealPlan && plannedDate && planMealType && id
