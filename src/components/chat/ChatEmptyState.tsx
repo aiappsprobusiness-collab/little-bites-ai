@@ -11,6 +11,31 @@ import { cn } from "@/lib/utils";
 const CHAT_EMPTY_CARD_SURFACE =
   "relative rounded-2xl bg-primary-light border border-primary-border shadow-soft";
 
+/**
+ * Как колонка ответа ассистента с карточкой рецепта в `ChatMessage`: обёртка `max-w-[96%]`.
+ * Карточка рецепта внутри — `w-full` (см. `recipeTokens.recipeCard`).
+ */
+const WIDTH_ASSISTANT_LIKE = "w-full max-w-[96%] self-start";
+
+/**
+ * Как пузырёк пользователя в `ChatMessage`: обёртка `max-w-[80%]`.
+ */
+const WIDTH_USER_BUBBLE_LIKE = "w-full max-w-[80%] self-end";
+
+/**
+ * Тот же силуэт, что у `role === "user"` в ChatMessage (не «таблетка», а сообщение с хвостом).
+ */
+const USER_BUBBLE_SHELL =
+  "rounded-2xl rounded-br-sm border border-primary/25 shadow-soft";
+
+/**
+ * Текст как у поля ввода чата (`ChatInputBar`: `text-sm leading-5`) и читаемого тела в ленте.
+ */
+const EMPTY_STATE_BODY_TEXT = "text-sm leading-relaxed text-foreground";
+
+/** Заголовок блока — ближе к шапке рецепта в чате (`RecipeHeader` chat: ~15px). */
+const EMPTY_STATE_TITLE_TEXT = "text-[15px] font-semibold leading-snug text-foreground";
+
 /** Тексты быстрых подсказок для пустого состояния (1 строка на кнопку). */
 export const EMPTY_STATE_QUICK_SUGGESTIONS = [
   "Что приготовить из того, что есть дома",
@@ -29,8 +54,8 @@ export interface ChatEmptyStateProps {
 }
 
 /**
- * Пустое состояние вкладки «Чат» (режим рецептов): приветственная карточка и крупные подсказки-плашки.
- * Шапка (профиль + ⋮) рендерится в ChatPage sticky — здесь только контент ленты.
+ * Пустое состояние вкладки «Чат» (режим рецептов): приветственная карточка и подсказки.
+ * Ширины и типографика согласованы с лентой сообщений и карточкой рецепта (см. ChatMessage + RecipeCard chat).
  */
 export function ChatEmptyState({
   suggestions = EMPTY_STATE_QUICK_SUGGESTIONS,
@@ -39,15 +64,14 @@ export function ChatEmptyState({
 }: ChatEmptyStateProps) {
   return (
     <div className={cn("flex flex-col gap-4", className)}>
-      {/* Приветственная карточка — tinted surface (bg-primary-light), не белый */}
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.28, ease: "easeOut" }}
-        className={cn(CHAT_EMPTY_CARD_SURFACE, "p-[18px] max-w-[85%]")}
+        className={cn(CHAT_EMPTY_CARD_SURFACE, "p-3 sm:p-4", WIDTH_ASSISTANT_LIKE)}
       >
-        <div className="text-[15px] leading-[1.45] text-foreground space-y-3">
-          <p className="font-semibold">
+        <div className={cn(EMPTY_STATE_BODY_TEXT, "space-y-2.5")}>
+          <p className={EMPTY_STATE_TITLE_TEXT}>
             Этот чат — ваш помощник по рецептам <span aria-hidden>🍲</span>
           </p>
           <p>
@@ -59,8 +83,7 @@ export function ChatEmptyState({
         </div>
       </motion.div>
 
-      {/* Подсказки: размер шрифта ровно как в пузырьке пользователя (12px), баблы крупнее */}
-      <div className="flex flex-col gap-3 mt-3">
+      <div className="flex flex-col gap-2 mt-1">
         {[...suggestions].slice(0, 4).map((text) => (
           <motion.button
             key={text}
@@ -70,10 +93,12 @@ export function ChatEmptyState({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.2 }}
             className={cn(
-              "relative rounded-2xl shadow-soft max-w-[85%] self-end text-left",
-              "px-4 py-4 min-h-[48px]",
-              "text-[15px] leading-snug break-words font-normal",
+              "relative text-left break-words",
+              WIDTH_USER_BUBBLE_LIKE,
+              "px-3 py-3",
+              "text-sm leading-5 font-normal",
               "bg-primary text-primary-foreground",
+              USER_BUBBLE_SHELL,
               "cursor-pointer hover:bg-primary/90 active:scale-[0.98] active:shadow-none",
               "transition-[background-color,transform] duration-100"
             )}

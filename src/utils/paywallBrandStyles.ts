@@ -23,9 +23,9 @@ export const PAYWALL_MODAL_BOTTOM_PANEL = "border-t border-primary/10 bg-backgro
 /** Обёртка блока тарифов (`PaywallSubscriptionPlans`); задать padding отдельно (`p-2` / `p-3`). */
 export const PAYWALL_PLANS_CONTAINER = "rounded-xl border border-primary/20 bg-primary-pill-surface/45";
 
-/** Блок иконки премиума (корона и т.п.) */
+/** Блок иконки премиума (корона и т.п.): рамка оливковая, ~толщина штриха иконки (2px) */
 export const PAYWALL_HERO_ICON_WRAP =
-  "rounded-xl bg-primary-pill-surface ring-1 ring-primary/30 shadow-sm shadow-primary/15";
+  "rounded-xl border-2 border-primary bg-primary-pill-surface/90 shadow-sm shadow-primary/10";
 
 export const PAYWALL_HERO_ICON_CLASS = "text-primary";
 

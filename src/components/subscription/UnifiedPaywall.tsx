@@ -154,11 +154,15 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                 <div className="flex justify-center shrink-0">
                   <div
                     className={cn(
-                      "w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center",
+                      "flex items-center justify-center min-w-[44px] min-h-[44px] w-11 h-11 sm:w-12 sm:h-12",
                       PAYWALL_HERO_ICON_WRAP,
                     )}
                   >
-                    <Crown className={cn("w-[18px] h-[18px]", PAYWALL_HERO_ICON_CLASS)} />
+                    <Crown
+                      className={cn("w-[22px] h-[22px] sm:w-6 sm:h-6", PAYWALL_HERO_ICON_CLASS)}
+                      strokeWidth={2}
+                      aria-hidden
+                    />
                   </div>
                 </div>
 

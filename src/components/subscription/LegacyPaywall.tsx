@@ -148,8 +148,13 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
               )}
             >
               <div className="flex justify-center shrink-0 py-1">
-                <div className={cn("w-11 h-11 flex items-center justify-center", PAYWALL_HERO_ICON_WRAP)}>
-                  <Crown className={cn("w-5 h-5", PAYWALL_HERO_ICON_CLASS)} />
+                <div
+                  className={cn(
+                    "flex items-center justify-center min-w-[48px] min-h-[48px] w-12 h-12",
+                    PAYWALL_HERO_ICON_WRAP,
+                  )}
+                >
+                  <Crown className={cn("w-6 h-6", PAYWALL_HERO_ICON_CLASS)} strokeWidth={2} aria-hidden />
                 </div>
               </div>
 
