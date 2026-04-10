@@ -4,17 +4,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
 import { shouldShowWelcomePage } from "@/utils/navigation";
+import { shouldHandOffEmailAuthToCallback } from "@/utils/authEmailLinkParams";
 import { Loader2, WifiOff } from "lucide-react";
 
 /** Тот же фон, что splash (`--splash-bg`), чтобы между fade splash и первым экраном не было скачка. */
 const BOOT_SCREEN_CLASS =
   "min-h-screen min-h-dvh flex items-center justify-center bg-splash";
-
-function hasAuthParamsInUrl(search: string, hash: string): boolean {
-  const inHash = /access_token|refresh_token|type=recovery/.test(hash || "");
-  const params = new URLSearchParams(search);
-  return inHash || params.has("access_token") || params.has("refresh_token") || params.has("code");
-}
 
 /**
  * Root "/" — умная маршрутизация:
@@ -61,7 +56,7 @@ export function RootRedirect() {
   }
 
   // Токены из письма обрабатываем раньше проверки user: иначе recovery-сессия уводит сразу в приложение.
-  if (hasAuthParamsInUrl(location.search, location.hash || "")) {
+  if (shouldHandOffEmailAuthToCallback(location.pathname, location.search, location.hash || "")) {
     return (
       <Navigate
         to={{ pathname: "/auth/callback", search: location.search, hash: location.hash }}

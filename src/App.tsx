@@ -61,17 +61,10 @@ import { ReactQueryDiag } from "./dev/ReactQueryDiag";
 import { AppThemeProvider } from "@/components/theme/AppThemeProvider";
 import { ThemeProfileSync } from "@/components/theme/ThemeProfileSync";
 import { ThemeColorMeta } from "@/components/theme/ThemeColorMeta";
+import { shouldHandOffEmailAuthToCallback } from "@/utils/authEmailLinkParams";
 
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
-
-/** Если в URL есть токены из письма (magic link / confirm), а мы не на /auth/callback — перенаправить туда. */
-function hasAuthParamsInUrl(search: string, hash: string): boolean {
-  const inHash = /access_token|refresh_token|type=recovery/.test(hash || "");
-  const params = new URLSearchParams(search);
-  // PKCE: ?code=... (после клика из письма до обмена на сессию)
-  return inHash || params.has("access_token") || params.has("refresh_token") || params.has("code");
-}
 
 /** Netlify/host может отдавать `/auth/callback/` — без нормализации guard зацикливает replace. */
 function isAuthCallbackPath(pathname: string): boolean {
@@ -89,7 +82,7 @@ function AuthCallbackRedirectGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isAuthCallbackPath(location.pathname)) return;
     if (isAuthResetPasswordPath(location.pathname)) return;
-    if (hasAuthParamsInUrl(location.search, location.hash || "")) {
+    if (shouldHandOffEmailAuthToCallback(location.pathname, location.search, location.hash || "")) {
       window.location.replace(`/auth/callback${location.search}${location.hash}`);
     }
   }, [location.pathname, location.search, location.hash]);
