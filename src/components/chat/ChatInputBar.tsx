@@ -87,15 +87,15 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
         {/* Единая «капсула» composer: скругление только снаружи, без вложенных рамок */}
         <div
           className={cn(
+            "chat-composer-capsule",
             "flex w-full min-w-0 max-w-full items-end gap-1",
             "rounded-[1.75rem] overflow-hidden",
             "bg-muted/50 dark:bg-muted/30",
             "pl-4 pr-1.5 py-1.5",
-            "transition-[border-color,box-shadow] duration-200",
-            /* Постоянная рамка + при фокусе толще/ярче (inset ring), без сдвига как у outline снаружи */
+            "transition-[border-color] duration-200",
+            /* Только оливковая рамка; без ring (box-shadow), иначе в светлой теме видна вторая «обводка». */
             "border-2 border-primary/40",
-            "focus-within:border-primary",
-            "focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/35"
+            "focus-within:border-primary"
           )}
         >
           {/* Колонка по высоте = textarea: иначе items-center на оверлее даёт сдвиг относительно курсора */}
@@ -136,6 +136,7 @@ export const ChatInputBar = forwardRef<HTMLTextAreaElement | null, ChatInputBarP
                 "rounded-none border-0 bg-transparent shadow-none",
                 "text-foreground",
                 "!outline-none focus:!outline-none focus-visible:!outline-none",
+                "!shadow-none focus:!shadow-none focus-visible:!shadow-none",
                 "!ring-0 !ring-offset-0 focus-visible:!ring-0 focus-visible:!ring-offset-0",
                 /* Одна линия с оверлеем: те же text-sm + leading-5 и py-2, что у подсказки */
                 "text-sm leading-5 tracking-normal",

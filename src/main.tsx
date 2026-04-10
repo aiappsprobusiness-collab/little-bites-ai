@@ -43,8 +43,13 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
       .then((reg) => {
         window.__swRegistration = reg;
 
+        /** Не слать событие чаще раза в несколько секунд — иначе при сбоях/гонках возможен шторм тостов. */
+        let lastSwUpdateNotifyAt = 0;
         const notifyUpdateAvailable = () => {
           if (reg.waiting && navigator.serviceWorker.controller) {
+            const now = Date.now();
+            if (now - lastSwUpdateNotifyAt < 4000) return;
+            lastSwUpdateNotifyAt = now;
             window.dispatchEvent(new Event("sw-update-available"));
           }
         };

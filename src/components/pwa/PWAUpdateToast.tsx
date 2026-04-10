@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 
@@ -8,9 +8,12 @@ import { ToastAction } from "@/components/ui/toast";
  */
 export function PWAUpdateToast() {
   const { toast } = useToast();
+  const shownRef = useRef(false);
 
   useEffect(() => {
     const onUpdate = () => {
+      if (shownRef.current) return;
+      shownRef.current = true;
       toast({
         title: "Доступна новая версия",
         description: "Нажмите «Обновить», чтобы загрузить изменения.",

@@ -222,8 +222,8 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                       className={cn(
                         "w-full h-10 text-sm rounded-xl",
                         isOnboardingSecondAllergy
-                          ? "text-gray-800 hover:text-gray-950 dark:text-muted-foreground dark:hover:text-foreground"
-                          : "text-muted-foreground hover:text-foreground",
+                          ? "text-gray-600 hover:text-gray-800 dark:text-muted-foreground dark:hover:text-foreground"
+                          : "text-gray-500 hover:text-gray-700 dark:text-muted-foreground dark:hover:text-foreground",
                       )}
                       onClick={handleContinueFree}
                     >
@@ -236,8 +236,8 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                       className={cn(
                         "text-center text-xs leading-snug px-1",
                         isOnboardingSecondAllergy
-                          ? "text-gray-800 dark:text-muted-foreground"
-                          : "text-muted-foreground",
+                          ? "text-gray-600 dark:text-muted-foreground"
+                          : "text-gray-500 dark:text-muted-foreground",
                       )}
                     >
                       {UNIFIED_PAYWALL_FOOTER}

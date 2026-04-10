@@ -553,14 +553,14 @@ export function TopicConsultationSheet({
               >
                 <div
                   className={cn(
+                    "chat-composer-capsule",
                     "flex w-full min-w-0 max-w-full items-end gap-1",
                     "rounded-[1.75rem] overflow-hidden",
                     "bg-muted/50 dark:bg-muted/30",
                     "pl-4 pr-1.5 py-1.5",
-                    "transition-[border-color,box-shadow] duration-200",
+                    "transition-[border-color] duration-200",
                     "border-2 border-primary/40",
-                    "focus-within:border-primary",
-                    "focus-within:ring-2 focus-within:ring-inset focus-within:ring-primary/35"
+                    "focus-within:border-primary"
                   )}
                 >
                   <textarea
@@ -577,6 +577,7 @@ export function TopicConsultationSheet({
                       "rounded-none border-0 bg-transparent shadow-none",
                       "text-foreground",
                       "!outline-none focus:!outline-none focus-visible:!outline-none",
+                      "!shadow-none focus:!shadow-none focus-visible:!shadow-none",
                       "!ring-0 !ring-offset-0 focus-visible:!ring-0 focus-visible:!ring-offset-0",
                       "leading-5 text-sm py-2 pr-2 pl-0 placeholder:text-muted-foreground",
                       "disabled:opacity-50 disabled:cursor-not-allowed"

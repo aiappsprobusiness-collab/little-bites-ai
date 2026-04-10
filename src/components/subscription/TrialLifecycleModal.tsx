@@ -93,7 +93,12 @@ export function TrialLifecycleModal({
               >
                 Оформить полную версию
               </Button>
-              <Button variant="ghost" size="sm" className="w-full h-10 text-sm rounded-xl" onClick={onSecondary}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full h-10 text-sm rounded-xl text-gray-500 hover:text-gray-700 dark:text-muted-foreground dark:hover:text-foreground"
+                onClick={onSecondary}
+              >
                 {variant === "ending_soon" ? "Позже" : "Остаться на бесплатной версии"}
               </Button>
             </div>

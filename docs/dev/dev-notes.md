@@ -158,7 +158,7 @@ WHERE min_age_months IS NULL OR max_age_months IS NULL;
 ## Auth: сброс пароля (Supabase)
 
 - **Клиент:** `requestPasswordReset` → `resetPasswordForEmail` с `redirectTo: <origin>/auth/reset-password`. Пока в JWT есть `amr` с методом `recovery`, доступ в основное приложение блокируется (`ProtectedRoute`, `RootRedirect` и др.); форма смены пароля — **`/auth/reset-password`** (`updateUser({ password })`). Старые письма с редиректом на `/auth/callback` по-прежнему обрабатываются: `AuthCallbackPage` по `type=recovery` ведёт на `/auth/reset-password`.
-- **Dashboard:** *Authentication → URL Configuration* — в **Redirect URLs** должны быть и `/auth/reset-password`, и `/auth/callback` (и при необходимости localhost для dev). Иначе редирект после письма заблокируется.
+- **Dashboard:** *Authentication → URL Configuration* — в **Redirect URLs** должны быть полные URL **без лишнего слэша в конце пути** (как в коде): `https://…/auth/callback`, `https://…/auth/reset-password`. Вариант `…/auth/callback/` (со слэшем) — отдельная строка; если хост редиректит на URL со слэшем, в списке должен быть именно тот вариант, куда реально приходит браузер. Иначе редирект после письма заблокируется и возможны ошибки `/auth` в Network.
 - **Шаблон письма «Reset password»** (Supabase Hosted): в теле письма ссылку нужно вести через **`{{ .ConfirmationURL }}`** (или эквивалент для вашей версии шаблона) — это полный URL с токеном и корректным `redirectTo`. Не подставлять вручную только `SiteURL` без токена.
 
 ---

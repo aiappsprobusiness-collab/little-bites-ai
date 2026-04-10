@@ -164,7 +164,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                       <p className="text-sm font-semibold text-primary leading-snug">
                         {trialFreeShortLine(TRIAL_DURATION_DAYS)}
                       </p>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
+                      <p className="text-xs text-gray-500 dark:text-muted-foreground leading-relaxed">
                         Отменить можно в любой момент
                       </p>
                     </div>
@@ -217,8 +217,8 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                     className={cn(
                       "w-full h-10 text-sm rounded-xl",
                       isOnboardingSecondAllergy
-                        ? "text-gray-800 hover:text-gray-950 dark:text-muted-foreground dark:hover:text-foreground"
-                        : "text-muted-foreground hover:text-foreground",
+                        ? "text-gray-600 hover:text-gray-800 dark:text-muted-foreground dark:hover:text-foreground"
+                        : "text-gray-500 hover:text-gray-700 dark:text-muted-foreground dark:hover:text-foreground",
                     )}
                     onClick={handleContinueFree}
                   >

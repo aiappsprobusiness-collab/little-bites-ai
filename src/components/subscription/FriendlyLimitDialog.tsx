@@ -49,7 +49,7 @@ export function FriendlyLimitDialog({
             {description}
           </p>
         </DialogHeader>
-        <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end pt-2">
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end sm:space-x-0 pt-2">
           {secondaryLabel ? (
             <Button
               type="button"

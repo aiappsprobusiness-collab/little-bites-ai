@@ -175,7 +175,9 @@ export function WeekPreviewPaywallSheet({
                 </>
               )}
             </Button>
-            <p className="text-center text-xs text-muted-foreground leading-relaxed">Можно отменить в любой момент</p>
+            <p className="text-center text-xs text-gray-500 dark:text-muted-foreground leading-relaxed">
+              Можно отменить в любой момент
+            </p>
           </div>
         )}
       </SheetContent>

@@ -42,18 +42,22 @@ export function RecipeChatSoftLimitDialog({
             В бесплатной версии есть ограничение на количество подборов в день
           </p>
         </DialogHeader>
-        <DialogFooter className="flex-col gap-2 sm:flex-col pt-2">
+        {/*
+          DialogFooter по умолчанию: sm:space-x-2 — в колонке даёт margin-left второй кнопке (визуально «съехала» вправо).
+          Явно: колонка, w-full, sm:space-x-0.
+        */}
+        <DialogFooter className="flex w-full flex-col gap-2 pt-2 sm:flex-col sm:space-x-0">
           <Button
             type="button"
             variant="outline"
-            className="w-full rounded-xl"
+            className="w-full shrink-0 rounded-xl"
             onClick={() => onOpenChange(false)}
           >
             Попробовать завтра
           </Button>
           <Button
             type="button"
-            className="w-full rounded-xl"
+            className="w-full shrink-0 rounded-xl"
             onClick={() => {
               onRequestFullPaywall();
               onOpenChange(false);

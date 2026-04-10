@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 type PaywallLegalConsentNoteProps = {
   className?: string;
-  /** Светлая тема: контрастнее текст (gray-700+), тёмная без изменений. */
+  /** `readableLight` — ссылки чуть темнее основного текста в светлой теме. */
   tone?: "default" | "readableLight";
 };
 
@@ -13,50 +13,22 @@ type PaywallLegalConsentNoteProps = {
  */
 export function PaywallLegalConsentNote({ className, tone = "default" }: PaywallLegalConsentNoteProps) {
   const readable = tone === "readableLight";
+  const baseLight = "text-gray-500 dark:text-muted-foreground";
+  const linkLight = readable
+    ? "text-gray-600 hover:text-gray-800 dark:text-foreground/90 dark:hover:text-foreground"
+    : "text-gray-600 hover:text-gray-800 dark:hover:text-foreground";
   return (
-    <p
-      className={cn(
-        "text-center leading-snug",
-        readable
-          ? "text-gray-700 dark:text-muted-foreground"
-          : "text-muted-foreground",
-        className,
-      )}
-    >
+    <p className={cn("text-center leading-snug", baseLight, className)}>
       Оплачивая подписку, вы соглашаетесь с{" "}
-      <Link
-        to="/terms"
-        className={cn(
-          "underline",
-          readable
-            ? "text-gray-800 hover:text-gray-950 dark:text-foreground/90 dark:hover:text-foreground"
-            : "hover:text-foreground",
-        )}
-      >
+      <Link to="/terms" className={cn("underline underline-offset-2", linkLight)}>
         условиями
       </Link>
       ,{" "}
-      <Link
-        to="/privacy"
-        className={cn(
-          "underline",
-          readable
-            ? "text-gray-800 hover:text-gray-950 dark:text-foreground/90 dark:hover:text-foreground"
-            : "hover:text-foreground",
-        )}
-      >
+      <Link to="/privacy" className={cn("underline underline-offset-2", linkLight)}>
         конфиденциальностью
       </Link>{" "}
       и{" "}
-      <Link
-        to="/subscription/terms"
-        className={cn(
-          "underline",
-          readable
-            ? "text-gray-800 hover:text-gray-950 dark:text-foreground/90 dark:hover:text-foreground"
-            : "hover:text-foreground",
-        )}
-      >
+      <Link to="/subscription/terms" className={cn("underline underline-offset-2", linkLight)}>
         подпиской
       </Link>
       .

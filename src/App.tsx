@@ -72,12 +72,22 @@ function hasAuthParamsInUrl(search: string, hash: string): boolean {
   return inHash || params.has("access_token") || params.has("refresh_token");
 }
 
+/** Netlify/host может отдавать `/auth/callback/` — без нормализации guard зацикливает replace. */
+function isAuthCallbackPath(pathname: string): boolean {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  return p === "/auth/callback";
+}
+
+function isAuthResetPasswordPath(pathname: string): boolean {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  return p === "/auth/reset-password";
+}
+
 function AuthCallbackRedirectGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
   useEffect(() => {
-    if (location.pathname === "/auth/callback") return;
-    // Прямой redirect из письма на /auth/reset-password: токены в hash обрабатывает клиент на месте.
-    if (location.pathname === "/auth/reset-password") return;
+    if (isAuthCallbackPath(location.pathname)) return;
+    if (isAuthResetPasswordPath(location.pathname)) return;
     if (hasAuthParamsInUrl(location.search, location.hash || "")) {
       window.location.replace(`/auth/callback${location.search}${location.hash}`);
     }

@@ -264,17 +264,20 @@ function DayTabButton({
       whileTap={effectivelyDisabled ? undefined : { scale: 0.98 }}
       transition={{ duration: 0.12 }}
       onClick={onClick}
-      className={`
-        relative flex flex-col items-center justify-center min-w-[36px] min-h-[32px] py-1 px-2 rounded-md shrink-0 transition-colors border text-[12px]
-        ${isLocked
+      className={cn(
+        "plan-day-tab relative flex flex-col items-center justify-center min-w-[36px] min-h-[32px] py-1 px-2 rounded-md shrink-0 transition-colors border text-[12px]",
+        /* UA даёт синий outline (особенно у первого элемента в скролле); фокус — оливковый ring */
+        "outline-none focus:outline-none focus-visible:outline-none",
+        "focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-0",
+        "[-webkit-tap-highlight-color:transparent]",
+        isLocked
           ? "bg-muted/80 border-border text-muted-foreground cursor-not-allowed"
           : isActive
             ? "bg-primary text-primary-foreground border-primary"
-            : "bg-background border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-        }
-        ${!isActive && isToday && !isLocked ? "ring-1 ring-primary/20" : ""}
-        ${disabled ? "pointer-events-none opacity-70" : ""}
-      `}
+            : "bg-background border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
+        !isActive && isToday && !isLocked && "ring-1 ring-primary/20",
+        disabled && "pointer-events-none opacity-70"
+      )}
     >
       {status === "loading" && (
         <span
@@ -327,11 +330,11 @@ export default function MealPlanPage() {
       shareIntro: string;
     }
     | {
-        kind: "week";
-        days: SharedPlanPayloadWeek["days"];
-        headerIndex: number;
-        ctaIndex: number;
-      }
+      kind: "week";
+      days: SharedPlanPayloadWeek["days"];
+      headerIndex: number;
+      ctaIndex: number;
+    }
     | null
   >(null);
   const [shareMenuSending, setShareMenuSending] = useState(false);
@@ -1660,8 +1663,8 @@ export default function MealPlanPage() {
       await startTrial({
         resumeAfterOnboarding: resume
           ? async () => {
-              await resume();
-            }
+            await resume();
+          }
           : undefined,
       });
       setReplaceMealSoftPaywallOpen(false);
@@ -2418,43 +2421,45 @@ export default function MealPlanPage() {
           {/* 2) Чипсы дней — только для плана 12+; в прикорме (&lt;12 мес) недельная лента скрыта */}
           {!isInfantPlanUi ? (
             <div
-              className="flex gap-1 overflow-x-auto overflow-y-hidden pb-2 -mx-4 px-4 scrollbar-none min-w-0 max-w-full"
+              className="flex justify-center overflow-x-auto overflow-y-hidden pb-2 -mx-4 px-4 scrollbar-none min-w-0 max-w-full"
               style={{ scrollbarWidth: "none" }}
             >
-              {rollingDates.map((date, index) => {
-                const dayKey = formatLocalDate(date);
-                const isDayLockedForFree = isFree && dayKey !== todayKey;
-                return (
-                  <DayTabButton
-                    key={dayKey}
-                    dayLabel={getDayLabel(date)}
-                    dateNum={date.getDate()}
-                    isSelected={selectedDay === index}
-                    status={getDayStatus(index)}
-                    isToday={dayKey === todayKey}
-                    disabled={false}
-                    isLocked={isDayLockedForFree}
-                    onClick={() => {
-                      if (isDayLockedForFree) {
-                        if (FF_UNIFIED_PAYWALL) {
-                          setPaywallReason("week_preview");
-                          setPaywallCustomMessage(null);
-                          setShowPaywall(true);
-                        } else if (FF_WEEK_PAYWALL_PREVIEW) {
-                          setShowWeekPreviewSheet(true);
-                        } else {
-                          toast({
-                            title: "Это в полной версии",
-                            description: "План на неделю — чтобы не думать о меню каждый день.",
-                          });
+              <div className="flex gap-1 shrink-0">
+                {rollingDates.map((date, index) => {
+                  const dayKey = formatLocalDate(date);
+                  const isDayLockedForFree = isFree && dayKey !== todayKey;
+                  return (
+                    <DayTabButton
+                      key={dayKey}
+                      dayLabel={getDayLabel(date)}
+                      dateNum={date.getDate()}
+                      isSelected={selectedDay === index}
+                      status={getDayStatus(index)}
+                      isToday={dayKey === todayKey}
+                      disabled={false}
+                      isLocked={isDayLockedForFree}
+                      onClick={() => {
+                        if (isDayLockedForFree) {
+                          if (FF_UNIFIED_PAYWALL) {
+                            setPaywallReason("week_preview");
+                            setPaywallCustomMessage(null);
+                            setShowPaywall(true);
+                          } else if (FF_WEEK_PAYWALL_PREVIEW) {
+                            setShowWeekPreviewSheet(true);
+                          } else {
+                            toast({
+                              title: "Это в полной версии",
+                              description: "План на неделю — чтобы не думать о меню каждый день.",
+                            });
+                          }
+                          return;
                         }
-                        return;
-                      }
-                      selectPlanDayIndex(index);
-                    }}
-                  />
-                );
-              })}
+                        selectPlanDayIndex(index);
+                      }}
+                    />
+                  );
+                })}
+              </div>
             </div>
           ) : null}
 
@@ -2629,29 +2634,29 @@ export default function MealPlanPage() {
             </>
           ) : (
             <>
-            {/* Лёгкая подсказка в чат — под днями недели; показ после паузы/скролла, скрытие при действиях (Free) */}
-            {showPlanSoftChatHint ? (
-              <div className="mt-3 mb-2 px-0.5">
-                <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">
-                  Не нашли подходящее блюдо?
-                </p>
-                <button
-                  type="button"
-                  className="mt-0.5 flex min-h-9 w-full max-w-full items-center justify-between gap-2 rounded-lg py-1 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground active:opacity-90 touch-manipulation"
-                  onClick={() => navigate("/chat")}
-                >
-                  <span>Подобрать в чате</span>
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
-                </button>
-              </div>
-            ) : null}
-            <div
-              className={cn(
-                "pb-4",
-                isInfantPlanUi || !isFree || !showPlanSoftChatHint ? "mt-3" : "mt-0",
-                isInfantPlanUi ? "space-y-3" : "space-y-4"
-              )}
-            >
+              {/* Лёгкая подсказка в чат — под днями недели; показ после паузы/скролла, скрытие при действиях (Free) */}
+              {showPlanSoftChatHint ? (
+                <div className="mt-3 mb-2 px-0.5">
+                  <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">
+                    Не нашли подходящее блюдо?
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-0.5 flex min-h-9 w-full max-w-full items-center justify-between gap-2 rounded-lg py-1 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground active:opacity-90 touch-manipulation"
+                    onClick={() => navigate("/chat")}
+                  >
+                    <span>Подобрать в чате</span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
+                  </button>
+                </div>
+              ) : null}
+              <div
+                className={cn(
+                  "pb-4",
+                  isInfantPlanUi || !isFree || !showPlanSoftChatHint ? "mt-3" : "mt-0",
+                  isInfantPlanUi ? "space-y-3" : "space-y-4"
+                )}
+              >
                 {planSlotsForRender.map((slot) => {
                   const infantSlotSectionHeading =
                     isInfantPlanUi && "sectionHeading" in slot && typeof slot.sectionHeading === "string"

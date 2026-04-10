@@ -404,11 +404,30 @@
   }
 
   /**
-   * Поле ввода в composer: без системного синего outline (Chrome/Edge/Android).
-   * Оливковая рамка задаётся контейнером (.border-primary); здесь только сброс UA.
+   * Composer чата: только оливковая рамка на .chat-composer-capsule (border-primary).
+   * В светлой теме Chrome/Edge часто рисуют второй контур через box-shadow на :focus-visible;
+   * Tailwind ring тоже = box-shadow — давал «двойную» обводку и оттенок, похожий на синий.
    */
+  .chat-composer-capsule:focus-within {
+    outline: none !important;
+    box-shadow: none !important;
+    /* сброс переменных ring, если когда-либо добавят утилиты ring-* */
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+  }
+
+  textarea.chat-composer-field {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   textarea.chat-composer-field:focus,
   textarea.chat-composer-field:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+  /** План: чипсы дней недели — без синего UA-outline (кольцо фокуса задаётся Tailwind ring-primary). */
+  button.plan-day-tab:focus {
     outline: none !important;
   }
 
