@@ -24,6 +24,7 @@
 - **`createMealPlan.onSuccess`:** узкая инвалидация по `variables.planned_date`.
 - **`deleteMealPlan`:** `select` с `planned_date`, возврат `{ planned_date }`, onSuccess — узкая (без широкого fallback при успехе).
 - **`updateSlotIngredientOverrides.onSuccess`:** узкая по `params.planned_date`.
+- **`updateSlotServings.onSuccess`:** только **`patchCachedMealPlansServings`** + **`invalidateQueries(['plan_signature'])`**. Инвалидация **`meal_plans_v2` по дате убрана:** сразу после PATCH refetch мог вернуть предыдущее значение `meals.*.servings` и перезаписать кэш → бесконечный цикл PATCH↔GET и мигание порций (1↔4) на экране рецепта из плана.
 - **`updateMealPlan.onSuccess`:** узкая по `data.planned_date`, иначе fallback на широкий префикс (на всякий случай).
 - **`markAsCompleted`:** `planned_date` в select, узкая инвалидация.
 - **`mealPlanQueryTouchesDate`** внутри хука делегирует в общий `mealPlanQueryTouchesPlannedDate`.

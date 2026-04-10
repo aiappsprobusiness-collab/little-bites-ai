@@ -428,10 +428,9 @@ export function useMealPlans(
     },
     onSuccess: (_row, params) => {
       patchCachedMealPlansServings(params);
-      // Узкая инвалидация: только запросы плана, затрагивающие эту дату (не весь meal_plans_v2 пользователя).
-      queryClient.invalidateQueries({
-        predicate: (q) => mealPlanQueryTouchesDate(q.queryKey, params.planned_date),
-      });
+      // Не вызываем invalidateQueries по meal_plans_v2: refetch сразу после PATCH может вернуть
+      // строку до commit и перезаписать кэш старыми servings → цикл PATCH↔GET и «прыжки» порций на RecipePage.
+      // Актуальные данные уже в кэше через patchCachedMealPlansServings (все ключи, пересекающие дату).
       queryClient.invalidateQueries({ queryKey: ['plan_signature'] });
     },
   });
