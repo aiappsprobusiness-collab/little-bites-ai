@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Crown, Check, Heart } from "lucide-react";
+import { X, Crown, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -17,8 +17,7 @@ import { PaywallSubscriptionPlans } from "@/components/subscription/PaywallSubsc
 import { paywallSubscribeCtaLabel } from "@/utils/subscriptionPricing";
 import type { PaywallSharedProps } from "./LegacyPaywall";
 import {
-  ONBOARDING_SECOND_ALLERGY_PAYWALL_BULLETS,
-  ONBOARDING_SECOND_ALLERGY_PAYWALL_SUBTITLE,
+  ONBOARDING_SECOND_ALLERGY_PAYWALL_BODY,
   ONBOARDING_SECOND_ALLERGY_PAYWALL_TITLE,
 } from "@/utils/onboardingSecondAllergyPaywallCopy";
 
@@ -54,7 +53,6 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
   const showPayForm = !hasAccess || hasTrialAccess;
   const trialUnavailable = trialUsed && !hasTrialAccess;
   const reasonCopy = useMemo(() => getPaywallReasonCopy(paywallReason), [paywallReason]);
-  const paywallBullets = isOnboardingSecondAllergy ? ONBOARDING_SECOND_ALLERGY_PAYWALL_BULLETS : reasonCopy.bullets;
 
   useEffect(() => {
     if (isOpen) {
@@ -147,8 +145,8 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                       <h2 className="text-xl font-semibold leading-snug text-gray-900 dark:text-foreground text-balance">
                         {ONBOARDING_SECOND_ALLERGY_PAYWALL_TITLE}
                       </h2>
-                      <p className="text-sm text-gray-800 dark:text-muted-foreground leading-snug text-balance">
-                        {ONBOARDING_SECOND_ALLERGY_PAYWALL_SUBTITLE}
+                      <p className="text-sm text-gray-800 dark:text-muted-foreground leading-snug text-balance whitespace-pre-line">
+                        {ONBOARDING_SECOND_ALLERGY_PAYWALL_BODY}
                       </p>
                     </>
                   ) : (
@@ -156,32 +154,12 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                       <h2 className="text-xl font-semibold leading-snug text-foreground text-balance">
                         {reasonCopy.title}
                       </h2>
-                      <p className="text-sm text-muted-foreground leading-snug text-balance">
+                      <p className="text-sm text-muted-foreground leading-snug text-balance whitespace-pre-line">
                         {reasonCopy.body}
                       </p>
                     </>
                   )}
                 </div>
-
-                <ul className="space-y-1 min-w-0 pb-0 mt-3">
-                  {paywallBullets.map((text, index) => (
-                    <li key={`${text}-${index}`} className="flex items-start gap-2 text-[13px] leading-snug min-w-0">
-                      <span className="w-3.5 h-3.5 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-                        <Check className="w-2 h-2 text-primary" strokeWidth={3} />
-                      </span>
-                      <span
-                        className={cn(
-                          "min-w-0 flex-1",
-                          isOnboardingSecondAllergy
-                            ? "text-gray-900 dark:text-foreground/90"
-                            : "text-foreground/90",
-                        )}
-                      >
-                        {text}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
               </div>
 
               <div className="shrink-0 flex flex-col gap-2 px-4 pt-1.5 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pt-2 border-t border-border/40 bg-background/95 backdrop-blur-sm">

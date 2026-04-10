@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { Lock, Heart, Check } from "lucide-react";
+import { Lock, Heart } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -106,21 +106,10 @@ export function WeekPreviewPaywallSheet({
           <SheetTitle className="text-lg font-semibold leading-snug text-balance">
             {copy.title}
           </SheetTitle>
-          <SheetDescription className="text-sm text-muted-foreground leading-relaxed text-balance">
+          <SheetDescription className="text-sm text-muted-foreground leading-relaxed text-balance whitespace-pre-line">
             {copy.body}
           </SheetDescription>
         </SheetHeader>
-
-        <ul className="shrink-0 space-y-2.5 min-w-0">
-          {copy.bullets.map((text, index) => (
-            <li key={`${text}-${index}`} className="flex items-start gap-2.5 text-xs leading-relaxed min-w-0">
-              <span className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-                <Check className="w-2.5 h-2.5 text-primary" strokeWidth={3} />
-              </span>
-              <span className="text-foreground/95 min-w-0 flex-1">{text}</span>
-            </li>
-          ))}
-        </ul>
 
         <div className="rounded-xl border border-border bg-card/50 p-3 space-y-2 shrink-0 min-w-0">
           <p className="text-sm font-medium text-foreground leading-snug">{previewDayLabel}</p>

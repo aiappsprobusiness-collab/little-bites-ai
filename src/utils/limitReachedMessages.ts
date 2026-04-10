@@ -1,5 +1,5 @@
 /**
- * Тексты для paywall при LIMIT_REACHED по фиче (Free 2/день и др.).
+ * Тексты для кастомного paywall при LIMIT_REACHED (две строки в message).
  */
 
 export type LimitReachedFeature = "chat_recipe" | "plan_refresh" | "plan_fill_day" | "help";
@@ -21,14 +21,14 @@ export function getLimitReachedTitle(feature: LimitReachedFeature): string {
 export function getLimitReachedMessage(feature: LimitReachedFeature): string {
   switch (feature) {
     case "chat_recipe":
-      return "В бесплатной версии есть лимит на вопросы. С полной версией можно получать помощь без ограничений.";
+      return "В бесплатной версии есть лимит на вопросы\nС полной — можно получать помощь без ограничений";
     case "help":
-      return "В бесплатной версии есть лимит. В полной — можно обращаться без ограничений.";
+      return "В бесплатной версии есть лимит\nС полной — можно обращаться без ограничений";
     case "plan_refresh":
-      return "Обновление плана доступно в полной версии. Меняйте блюда без лишних раздумий.";
+      return "Обновление плана — в полной версии\nМеняйте блюда без лишних раздумий";
     case "plan_fill_day":
-      return "В бесплатной версии есть ограничения на генерацию. В полной — можно обновлять план без ограничений.";
+      return "В бесплатной версии есть лимит на генерацию\nВ полной — обновляйте план без ограничений";
     default:
-      return "Попробуйте завтра или откройте полную версию — там больше свободы в действиях.";
+      return "Попробуйте завтра или откройте полную версию";
   }
 }

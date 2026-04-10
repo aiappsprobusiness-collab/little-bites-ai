@@ -32,14 +32,14 @@
 - **По умолчанию:** `UnifiedPaywall` (если `VITE_FF_UNIFIED_PAYWALL !== "false"`).
 - **Откат:** `LegacyPaywall` при `VITE_FF_UNIFIED_PAYWALL=false`.
 
-### Копирайт и единый стиль (2026)
+### Копирайт и единый стиль (минималистичный)
 
-- **Контекст по причине:** для `UnifiedPaywall` без `paywallCustomMessage` заголовок, абзац и буллеты берутся из **`getPaywallReasonCopy(paywallReason)`** (`paywallReasonCopy.ts`).
-- **Структура текста:** ситуация (узнавание) → пояснение ограничения Free и ценности полной версии → три буллета (в т.ч. мягкое предложение trial / полный доступ). CTA и тарифы не зашиваются в буллеты как отдельные кнопки — они внизу модалки.
-- **Онбординг вторая аллергия:** отдельные строки в `onboardingSecondAllergyPaywallCopy.ts`.
-- **Мягкая замена блюда:** `replaceMealPaywallCopy.ts` (modal до trial).
-- **Кастомные врезки** (дневник, лимиты из Edge, лимит семьи): `paywallCustomMessage` + те же буллеты по `paywall_reason`; общий текст лимита семьи — `src/constants/paywallCustomMessages.ts` (`PAYWALL_ADD_CHILD_CUSTOM_MESSAGE`). Сообщения про вторую аллергию вне онбординга — `friendlyLimitCopy.ts` (`FREE_ALLERGY_PAYWALL_MESSAGE`).
-- **`unifiedPaywallCopy.ts`:** футер, подсказки trial; запасной «герой» на случай внешних импортов — основной UI использует `paywallReasonCopy`.
+- **Только `title` + `body`:** контент из **`getPaywallReasonCopy(paywallReason)`** (`paywallReasonCopy.ts`). В `body` до двух строк, разделитель `\n` (рендер с `whitespace-pre-line`). Буллетов нет.
+- **Формат `body`:** [почему недоступно] → [что станет проще]. CTA и тарифы только внизу модалки.
+- **Онбординг вторая аллергия:** `onboardingSecondAllergyPaywallCopy.ts` — title + body (две строки).
+- **Мягкая замена блюда:** `replaceMealPaywallCopy.ts` (две короткие строки под заголовком).
+- **Кастомные врезки** (дневник, лимиты из Edge, лимит семьи): `paywallCustomMessage` (коротко, часто две строки); семья — `paywallCustomMessages.ts`. Аллергии вне онбординга — `friendlyLimitCopy.ts` (`FREE_ALLERGY_PAYWALL_MESSAGE`).
+- **`unifiedPaywallCopy.ts`:** футер и подсказки trial.
 
 ### Zustand (`src/store/useAppStore.ts`)
 

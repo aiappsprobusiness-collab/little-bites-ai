@@ -27,7 +27,7 @@ export default function FoodDiary() {
     if (!hasAccess) {
       setPaywallReason("sos_premium_feature");
       setPaywallCustomMessage(
-        "Дневник и разбор «нашей тарелки» доступны в полной версии.\n\nВ бесплатной версии удобнее один профиль; в полной — общий контекст для нескольких детей без путаницы."
+        "Дневник и разбор тарелки — в полной версии\nВ бесплатной — один профиль; в полной — контекст для всей семьи"
       );
       setShowPaywall(true);
     }

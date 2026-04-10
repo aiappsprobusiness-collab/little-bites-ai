@@ -66,7 +66,7 @@
 |---------|-----|----------|
 | `auth_page_view` | view | AuthPage |
 | `auth_start` | click | Начало submit login/signup |
-| `cta_start_click` | click | Кнопка «Начать» (дублирует старт с welcome-контекста) |
+| `cta_start_click` | click | Отправка формы регистрации на AuthPage (дублирует `auth_start` на том же submit) |
 | `auth_success` | outcome | Успешный вход/регистрация |
 | `auth_error` | outcome | Ошибка |
 

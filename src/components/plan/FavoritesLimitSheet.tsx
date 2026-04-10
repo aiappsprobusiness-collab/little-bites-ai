@@ -1,5 +1,4 @@
 import { useEffect, useMemo } from "react";
-import { Check } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -40,17 +39,7 @@ export function FavoritesLimitSheet() {
             {copy.title}
           </SheetTitle>
         </SheetHeader>
-        <p className="text-sm text-muted-foreground leading-relaxed text-balance">{copy.body}</p>
-        <ul className="space-y-2.5 min-w-0 shrink-0">
-          {copy.bullets.map((text, index) => (
-            <li key={`${text}-${index}`} className="flex items-start gap-2.5 text-xs leading-relaxed min-w-0">
-              <span className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-                <Check className="w-2.5 h-2.5 text-primary" strokeWidth={3} />
-              </span>
-              <span className="text-foreground/95 min-w-0 flex-1">{text}</span>
-            </li>
-          ))}
-        </ul>
+        <p className="text-sm text-muted-foreground leading-relaxed text-balance whitespace-pre-line">{copy.body}</p>
         <div className="flex flex-col gap-3 mt-2 shrink-0">
           <Button
             size="sm"

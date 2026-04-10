@@ -214,7 +214,7 @@ Read-only слой поверх `public.usage_events`: `event_group`, `event_typ
 | auth_start | AuthPage | usage_events | то же | Начало попытки входа/регистрации |
 | auth_success | AuthPage | usage_events | то же | Успешный вход/регистрация |
 | auth_error | AuthPage | usage_events | properties: { message } | Ошибка входа |
-| cta_start_click | AuthPage | usage_events | то же | Клик CTA «Начать» |
+| cta_start_click | AuthPage | usage_events | то же | Отправка формы регистрации (signup submit; дубль с `auth_start` на том же действии) |
 | share_recipe_cta_click | PublicRecipeSharePage (`trackLandingEvent`) | usage_events | properties: share_ref, share_type, entry_point | Клик CTA на публичной странице рецепта `/r/:shareRef` |
 | **Member** |
 | member_create_start | AddChildForm | usage_events | то же | Начало создания члена семьи |

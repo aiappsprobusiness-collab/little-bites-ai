@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Crown, Check, Heart } from "lucide-react";
+import { X, Crown, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -141,28 +141,12 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                     <h2 className="text-lg font-semibold leading-snug text-foreground text-balance">
                       {copy.title}
                     </h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed text-balance">
+                    <p className="text-sm text-muted-foreground leading-relaxed text-balance whitespace-pre-line">
                       {copy.body}
                     </p>
-                    {copy.subtitle.trim() ? (
-                      <p className="text-sm text-muted-foreground/90 leading-relaxed pt-0.5 text-balance">
-                        {copy.subtitle}
-                      </p>
-                    ) : null}
                   </>
                 )}
               </div>
-
-              <ul className="shrink-0 space-y-2.5 min-w-0 py-1">
-                {copy.bullets.map((text, index) => (
-                  <li key={`${text}-${index}`} className="flex items-start gap-2.5 text-xs leading-relaxed min-w-0">
-                    <span className="w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
-                      <Check className="w-2.5 h-2.5 text-primary" strokeWidth={3} />
-                    </span>
-                    <span className="text-foreground/95 min-w-0 flex-1">{text}</span>
-                  </li>
-                ))}
-              </ul>
               <p className="text-center text-[11px] text-muted-foreground/90 leading-relaxed px-1 shrink-0 pb-1">
                 Тысячи мам уже используют каждый день
               </p>

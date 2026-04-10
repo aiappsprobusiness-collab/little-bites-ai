@@ -186,25 +186,17 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center sm:justify-start p-4 pt-5 sm:p-5 sm:pt-8 pb-8 sm:pb-14 auth-page-bg">
       <div className="w-full max-w-md mx-auto flex flex-col items-center">
-        {/* Hero — заголовок и подзаголовок */}
+        {/* Hero: бренд + одна строка ценности (без маркетинговых абзацев) */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-4 sm:mb-6 px-2"
+          className="text-center mb-3 sm:mb-4 px-2 space-y-1"
         >
-          <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground mb-2">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
             MomRecipes 🌿
-          </p>
-          <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground leading-snug mb-2">
-            Спокойствие за питание ребёнка — каждый день
           </h1>
-          <p className="text-base sm:text-lg font-medium text-foreground/90 leading-snug mb-1.5">
-            Меню на сегодня за 1 минуту
-          </p>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Учитываем возраст, аллергии и продукты,
-            <br />
-            которые ребёнок любит или не ест.
+          <p className="text-base sm:text-lg font-medium text-foreground/90 leading-snug text-balance">
+            Меню для ребёнка — за 1 минуту
           </p>
         </motion.div>
 
@@ -216,9 +208,9 @@ export default function AuthPage() {
           className="w-full"
         >
           <Card className="backdrop-blur-xl rounded-[28px] sm:rounded-[32px] bg-card/95 text-card-foreground border border-border/40 shadow-card dark:bg-card/92 dark:border-white/10 dark:shadow-[0_24px_48px_-28px_rgba(0,0,0,0.85)]">
-            <CardContent className="px-4 sm:px-6 pt-6 sm:pt-7 pb-5 sm:pb-6">
+            <CardContent className="px-4 sm:px-6 pt-5 sm:pt-6 pb-5 sm:pb-6">
               <Tabs key={defaultAuthTab} defaultValue={defaultAuthTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6 rounded-[20px] bg-slate-100/80 p-1 h-11 dark:bg-[#353742]">
+                <TabsList className="grid w-full grid-cols-2 mb-5 rounded-[20px] bg-slate-100/80 p-1 h-11 dark:bg-[#353742]">
                   <TabsTrigger
                     value="login"
                     className="rounded-[16px] text-[#8b8e9d] dark:text-[#a3a6b4] dark:data-[state=active]:bg-[#1d1e27] dark:data-[state=active]:text-white dark:data-[state=active]:shadow-none"
@@ -229,7 +221,7 @@ export default function AuthPage() {
                     value="signup"
                     className="rounded-[16px] text-[#8b8e9d] dark:text-[#a3a6b4] dark:data-[state=active]:bg-[#1d1e27] dark:data-[state=active]:text-white dark:data-[state=active]:shadow-none"
                   >
-                    Начать
+                    Регистрация
                   </TabsTrigger>
                 </TabsList>
 
@@ -361,7 +353,7 @@ export default function AuthPage() {
                           const { ref: fieldRef, ...rest } = field;
                           return (
                             <FormItem>
-                              <FormLabel className="text-muted-foreground font-normal dark:text-[#b1b4c2]">Пароль (от 6 символов)</FormLabel>
+                              <FormLabel className="text-muted-foreground font-normal dark:text-[#b1b4c2]">Пароль</FormLabel>
                               <FormControl>
                                 <div className="relative">
                                   <Input
@@ -437,11 +429,8 @@ export default function AuthPage() {
                         disabled={isLoading}
                       >
                         {isLoading ? <Loader2 className="w-4 h-4 animate-spin shrink-0" /> : null}
-                        <span>Создать меню</span>
+                        <span>Продолжить</span>
                       </Button>
-                      <p className="text-center text-sm text-muted-foreground mt-2 dark:text-[#9ca0af]">
-                        Бесплатно. Без карты.
-                      </p>
                     </form>
                   </Form>
                 </TabsContent>
