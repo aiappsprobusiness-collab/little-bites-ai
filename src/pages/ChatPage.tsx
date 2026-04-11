@@ -618,7 +618,8 @@ export default function ChatPage() {
       return (
         r.includes("Этот чат помогает подбирать рецепты") ||
         r.includes("Этот вопрос лучше задать во вкладке «Помощник»") ||
-        r.includes("Для малышей до года мы не генерируем") ||
+        r.includes("не генерируем рецепты автоматически") ||
+        r.includes("не создаём рецепты автоматически") ||
         r.includes("Сейчас подбирать рецепты ещё рано")
       );
     };
@@ -659,7 +660,9 @@ export default function ChatPage() {
             const systemHintType: SystemHintRoute =
               rawHint === "assistant_topic_redirect" || rawHint === "assistant_irrelevant" || rawHint === "curated_under_12_recipe"
                 ? (rawHint as SystemHintRoute)
-                : r.includes("Для малышей до года мы не генерируем") || r.includes("Сейчас подбирать рецепты ещё рано")
+                : r.includes("не генерируем рецепты автоматически") ||
+                  r.includes("не создаём рецепты автоматически") ||
+                  r.includes("Сейчас подбирать рецепты ещё рано")
                   ? "curated_under_12_recipe"
                   : r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
                     ? "assistant_topic_redirect"
