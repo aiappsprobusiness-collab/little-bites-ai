@@ -203,7 +203,9 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
     /** Редирект в Помощник или нерелевантный ответ — показывать content как есть, не как «ошибку парсинга» */
     const isRedirectOrIrrelevantContent =
       role === "assistant" &&
-      (content.includes("Этот чат помогает подбирать рецепты") || content.includes("Этот вопрос лучше задать во вкладке «Помощник»"));
+      (content.includes("Этот чат помогает подбирать рецепты") ||
+        content.includes("В этом чате мы помогаем подбирать блюда") ||
+        content.includes("Этот вопрос лучше задать во вкладке «Помощник»"));
     const isRecipeParseFailure =
       !forcePlainText &&
       role === "assistant" &&

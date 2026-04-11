@@ -7,8 +7,7 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { checkFoodRelevance } from "./isRelevantQuery.ts";
-import { detectAssistantTopic } from "./assistantTopicDetect.ts";
+import { resolveRecipeChatIntent } from "./recipeChatIntent.ts";
 import {
   NO_ARTICLES_RULE,
   GREETING_STYLE_RULE,
@@ -514,9 +513,21 @@ serve(async (req) => {
     let relevanceAllowed = true;
 
     if (type === "chat") {
-      // 1) Сначала проверка темы Помощника: если запрос про прикорм/аллергию/стул и т.д. — мягкий redirect без вызова модели
-      const assistantTopic = detectAssistantTopic(userMessage);
-      if (assistantTopic.matched) {
+      // Маршрут чата: intent scoring (assistant / irrelevant / recipe) без вызова модели
+      const intent = resolveRecipeChatIntent(userMessage);
+      safeLog(JSON.stringify({
+        tag: "CHAT_INTENT",
+        requestId,
+        route: intent.route,
+        reason: intent.reason,
+        margin: intent.margin,
+        winner: intent.winner,
+        scores: intent.scores,
+        topicKey: intent.topic?.topicKey,
+      }));
+
+      if (intent.route === "assistant_topic" && intent.topic) {
+        const assistantTopic = intent.topic;
         console.log(JSON.stringify({
           tag: "CHAT_ROUTE",
           route: "assistant_topic",
@@ -539,18 +550,16 @@ serve(async (req) => {
         );
       }
 
-      // 2) Проверка релевантности запроса для рецепта (food relevance)
-      const relevance = checkFoodRelevance(userMessage);
-      relevanceAllowed = relevance.allowed;
+      relevanceAllowed = intent.route !== "irrelevant";
 
       safeLog(JSON.stringify({
         tag: "FOOD_RELEVANCE",
         requestId,
-        relevance_result: relevance.allowed ? "allow" : "reject",
-        reason: relevance.reason,
-        matched_terms: relevance.matchedTerms,
-        matched_patterns: relevance.matchedPatterns,
-        clearly_non_food: relevance.clearlyNonFood,
+        relevance_result: relevanceAllowed ? "allow" : "reject",
+        reason: intent.reason,
+        intent_route: intent.route,
+        scores: intent.scores,
+        margin: intent.margin,
       }));
 
       if (!relevanceAllowed) {
@@ -558,9 +567,7 @@ serve(async (req) => {
           tag: "CHAT_ROUTE",
           route: "irrelevant",
           requestId,
-          reason: relevance.reason,
-          matched_terms: relevance.matchedTerms,
-          matched_patterns: relevance.matchedPatterns,
+          reason: intent.reason,
         }));
         const rejectMessage = "В этом чате мы помогаем подбирать блюда. Попробуйте изменить запрос, и мы предложим подходящий вариант.";
         return new Response(

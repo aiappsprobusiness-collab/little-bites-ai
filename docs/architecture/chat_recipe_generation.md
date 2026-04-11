@@ -6,7 +6,8 @@
 
 ## Карта системы (1 экран)
 
-Четыре доменных модуля (Edge, `supabase/functions/deepseek-chat/`):
+Доменные модули (Edge, `supabase/functions/deepseek-chat/`):
+- **recipeChatIntent.ts** + **assistantTopicDetect.ts** — маршрут чата (`assistant_topic` / `irrelevant` / рецепт): взвешенный скоринг намерения и `detectAssistantTopic` для `topicKey`. Подробнее: **`docs/architecture/RECIPE_CHAT_INTENT_SCORING.md`**.
 - **domain/policies** — аллергии, dislikes, «без X», токены, границы слов; формирование ответа «заблокировано».
 - **domain/family** — семейный режим: исключение <12 мес, kid-safety 12–35 мес, server-truth контекст, лайки, storage member.
 - **domain/recipe_io** — парсинг/валидация/retry JSON рецепта, описание/совет шефа, ремонт и санитизация.
@@ -111,20 +112,28 @@
 
 ### 3.2 Маршрутизация запросов во вкладке Чат (type === "chat")
 
-На Edge для типа `chat` применяется **порядок проверок** (без вызова модели при redirect):
+На Edge для типа `chat` вызывается **`resolveRecipeChatIntent`** (`recipeChatIntent.ts`) — **взвешенный скоринг намерения** без LLM: считаются независимые сигналы `assistantScore`, `foodScore`, `recipeContextScore`, `offtopicScore`, затем `recipePathScore = foodScore + recipeContextScore`. Три корзины сравниваются: **assistant** / **offtopic** / **recipe** (по `recipePathScore`). Учитывается **margin** (разница 1-го и 2-го места): при `margin < 2` действует прежний **fail-open к рецепту**, кроме случая, когда срабатывает `detectAssistantTopic` и балл assistant не ниже recipe path — тогда редирект в Помощник. Тема вкладки «Помощник» по-прежнему определяется **`detectAssistantTopic`** (`assistantTopicDetect.ts`) при финальном решении «assistant»: нужны и достаточный скор, и совпадение с темой (topicKey для `/sos?scenario=`). Для темы «стул» слово **«кал»** сопоставляется только как отдельное слово (паттерн `_shared/russianStoolKalPattern.ts`); клиентский fallback (`chatRouteFallback.ts`) использует тот же паттерн.
 
-1. **Тема вкладки «Помощник»** — `detectAssistantTopic` (`assistantTopicDetect.ts`): если запрос явно про прикорм, аллергию/сыпь, стул/ЖКТ, срыгивания, отказ от еды, режим кормления, дневник питания или срочную помощь, возвращается мягкое сообщение с предложением задать вопрос во вкладке «Помощник» (с указанием темы при совпадении). Модель не вызывается. Лог: `CHAT_ROUTE: assistant_topic` (topicKey, matchedTerms). Для темы «стул» слово **«кал»** сопоставляется только как отдельное слово (паттерн `_shared/russianStoolKalPattern.ts`), чтобы не перехватывать «калорийный», «калории» и т.п.; клиентский fallback (`chatRouteFallback.ts`) использует тот же паттерн.
-2. **Релевантность для рецепта** — `checkFoodRelevance` (`isRelevantQuery.ts`): при `allowed: false` возвращается мягкое сообщение о том, что чат помогает подбирать рецепты. Модель не вызывается. Лог: `CHAT_ROUTE: irrelevant` (reason, matched_terms/patterns).
-3. **Рецепт** — при `allowed: true` выполняется обычная генерация рецепта. Лог: `CHAT_ROUTE: recipe`.
+Исходы:
 
-Принцип: **fail-open** — при сомнении разрешать генерацию рецепта; темы Помощника и нерелевантные запросы отсекаются только по явным ключевым словам/паттернам.
+| Исход | Когда | Лог |
+|--------|--------|-----|
+| **assistant_topic** | Решение «Помощник» + `detectAssistantTopic.matched` | `CHAT_ROUTE: assistant_topic`, `CHAT_INTENT` (scores, margin, topicKey) |
+| **irrelevant** | Сильный off-topic или жёсткие отсеки (`too_short`, `no_vowels`) | `CHAT_ROUTE: irrelevant`, `CHAT_INTENT` |
+| **recipe** | Рецепт / fail-open | `CHAT_ROUTE: recipe`, `CHAT_INTENT` |
+
+Дополнительно логируется **`FOOD_RELEVANCE`** для совместимости: `relevance_result` allow/reject по маршруту (не `recipe` и не `assistant_topic` с отказом → reject только для `irrelevant`).
+
+**Совместимость API:** `checkFoodRelevance` / `isRelevantQuery` (`isRelevantQuery.ts`) делегируют в тот же `resolveRecipeChatIntent`: `allowed: false` только при `route: "irrelevant"`.
+
+Принцип: при **низкой марже** по-прежнему **fail-open к рецепту** (кроме явного совпадения с темой Помощника при конкурирующих баллах); off-topic с высоким баллом и лидерством корзины отсекает запрос до модели.
 
 Ответы redirect/irrelevant возвращают в теле JSON поля `route` (`assistant_topic` или `irrelevant`), при `assistant_topic` — `topicKey` и `topicTitle` (и при необходимости `topicShortTitle`) для перехода во вкладку «Помощник» по сценарию (`/sos?scenario=<topicKey>`). На фронте такие сообщения отображаются карточкой системной подсказки (`SystemHintCard`), без кнопок рецепта (избранное, поделиться, в план). Клиент при сохранении в `chat_history` записывает в `meta` поля `systemHintType`, `topicKey`, `topicTitle`, `topicShortTitle`, чтобы после переключения вкладки/remount карточка и кнопка «Перейти в тему» восстанавливались с корректной навигацией в нужную тему. Для **`under_12_curated_recipe_block`** в `meta.systemHintType` сохраняется **`curated_under_12_recipe`** (кнопки «Открыть план» / «Помощь маме»).
 
 ### 3.3 Релевантность запроса (тариф)
 
-- **Фактическое поведение Edge (`index.ts`, `type === "chat"`):** перед генерацией рецепта вызывается **`checkFoodRelevance`** (внутри — `isRelevantQuery` / `isRelevantQuery.ts`). При `allowed: false` возвращается ответ с `route: "irrelevant"`, модель не вызывается. **Отдельного ветвления Free vs Premium через `isRelevantPremiumQuery` в этом обработчике нет** — тариф на этом шаге не меняет проверку релевантности.
-- Функция **`isRelevantPremiumQuery`** может существовать в кодовой базе для иных сценариев; для описанного потока чата с рецептом источником истины — **`checkFoodRelevance`**.
+- **Фактическое поведение Edge (`index.ts`, `type === "chat"`):** маршрут задаётся **`resolveRecipeChatIntent`**; **`checkFoodRelevance`** отражает тот же результат для вспомогательных вызовов (`allowed: false` только при `irrelevant`). **Отдельного ветвления Free vs Premium через `isRelevantPremiumQuery` в этом обработчике нет** — тариф на этом шаге не меняет проверку.
+- Подробнее про веса и пороги: **`docs/architecture/RECIPE_CHAT_INTENT_SCORING.md`**.
 
 ### 3.4 Лимиты
 
