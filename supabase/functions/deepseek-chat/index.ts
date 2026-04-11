@@ -469,8 +469,10 @@ serve(async (req) => {
       maxCookingTime: reqMaxCookingTime,
       servings: reqServings,
       from_plan_replace: fromPlanReplace = false,
+      isRetry: isRetryFromBody = false,
     } = body;
     const type = reqType as "chat" | "recipe" | "sos_consultant" | "balance_check";
+    const isRetry = isRetryFromBody === true;
 
     // Неподдерживаемые типы (планы вынесены в generate-plan и др.)
     if (reqType === "single_day" || reqType === "diet_plan") {
@@ -1337,7 +1339,7 @@ serve(async (req) => {
     if (userId && supabase) {
       if (type === "sos_consultant") {
         await supabase.from("usage_events").insert({ user_id: userId, member_id: null, feature: "help" });
-      } else if ((type === "chat" || type === "recipe") && responseRecipes.length > 0 && !fromPlanReplace) {
+      } else if ((type === "chat" || type === "recipe") && responseRecipes.length > 0 && !fromPlanReplace && !isRetry) {
         await supabase.from("usage_events").insert({ user_id: userId, member_id: memberIdForDb, feature: "chat_recipe" });
       }
     }

@@ -107,6 +107,8 @@ export function useDeepSeekAPI() {
       extraSystemSuffix,
       mealType,
       maxCookingTime,
+      /** Second client call in the same send (anti-duplicate retry); Edge skips duplicate usage_events. */
+      isRetry,
     }: {
       messages: ChatMessage[];
       type?: 'chat' | 'recipe' | 'diet_plan' | 'sos_consultant';
@@ -120,6 +122,7 @@ export function useDeepSeekAPI() {
       mealType?: string;
       /** Optional max cooking time in minutes. */
       maxCookingTime?: number;
+      isRetry?: boolean;
     }) => {
       if (typeof performance !== 'undefined' && performance.mark) {
         performance.mark('chat_request_start');
@@ -227,6 +230,7 @@ export function useDeepSeekAPI() {
             ...(maxCookingTime != null && Number.isFinite(maxCookingTime) && { maxCookingTime }),
             ...(servingsForRecipe != null && isRecipeLike && { servings: servingsForRecipe }),
             ...((type === 'chat' || type === 'recipe') && { target_locale: getAppLocale() }),
+            ...(isRetry === true && { isRetry: true }),
           }),
         });
         clearTimeout(timeoutId);

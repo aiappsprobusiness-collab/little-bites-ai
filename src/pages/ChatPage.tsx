@@ -70,7 +70,9 @@ function useChatOpenTrack() {
   }, [location.pathname]);
 }
 
-/** Сменяющиеся надписи во время генерации рецепта (интервал 2.5 с), по аналогии с Планом. Нейтрально по возрасту (дети, подростки, взрослые). */
+/** Интервал смены ротируемых подсказок во время генерации рецепта (было 5 с, +2 с). */
+const RECIPE_GENERATION_PHRASE_INTERVAL_MS = 7000;
+/** Сменяющиеся надписи во время генерации рецепта. Нейтрально по возрасту (дети, подростки, взрослые). */
 const RECIPE_GENERATION_PHRASES = [
   "Совет шефа: лимонный сок мягко раскрывает вкус рыбы и помогает использовать меньше соли.",
   "Знаете ли вы? Запекание овощей делает их естественно слаще и ароматнее — отличный способ подружить детей с овощами.",
@@ -204,7 +206,6 @@ const RECIPE_GENERATION_PHRASES = [
 ];
 
 /** Задержка (мс) перед показом блока с советами при ожидании ответа. Пока не прошло это время, блок не показываем — быстрые ответы (redirect в Помощник, irrelevant) не сопровождаются советами. */
-const RECIPE_TIP_DELAY_MS = 2500;
 
 /** Статичный плейсхолдер чата рецептов, если пользователь отключил ротацию подсказок в профиле. */
 const RECIPES_CHAT_PLACEHOLDER_STATIC = "Что приготовить?";
@@ -358,8 +359,20 @@ export default function ChatPage() {
 
   /** Индекс фразы при генерации рецепта (случайная смена каждые 5 с). */
   const [recipeStatusPhraseIndex, setRecipeStatusPhraseIndex] = useState(0);
-  /** Показывать ли блок с советами во время ожидания: только после задержки, чтобы при быстром ответе (redirect/irrelevant) не показывать. */
-  const [showRecipeGenerationTip, setShowRecipeGenerationTip] = useState(false);
+  /** Страница была перезагружена/закрыта во время незавершённой генерации (sessionStorage). */
+  const [wasGenerationInterrupted, setWasGenerationInterrupted] = useState(false);
+
+  useEffect(() => {
+    try {
+      const flag = sessionStorage.getItem("recipe_generation_in_progress");
+      if (flag === "true") {
+        setWasGenerationInterrupted(true);
+        sessionStorage.removeItem("recipe_generation_in_progress");
+      }
+    } catch {
+      // ignore private mode / quota
+    }
+  }, []);
 
   useEffect(() => {
     if (!isChatting || mode !== "recipes") return;
@@ -371,7 +384,7 @@ export default function ChatPage() {
         const next = Math.floor(Math.random() * len);
         return next === prev ? (prev + 1) % len : next;
       });
-    }, 5000);
+    }, RECIPE_GENERATION_PHRASE_INTERVAL_MS);
     return () => clearInterval(id);
   }, [isChatting, mode]);
 
@@ -386,17 +399,6 @@ export default function ChatPage() {
       });
     }
   }, [showChatOnboarding, user, isLoadingMembers, members.length]);
-
-  // Показывать блок с советами только после задержки — пока не началась «долгая» генерация рецепта, не показываем
-  useEffect(() => {
-    if (!isChatting) {
-      setShowRecipeGenerationTip(false);
-      return;
-    }
-    if (mode !== "recipes") return;
-    const t = setTimeout(() => setShowRecipeGenerationTip(true), RECIPE_TIP_DELAY_MS);
-    return () => clearTimeout(t);
-  }, [isChatting, mode]);
 
   const [hintsSeen, setHintsSeen] = useState(() =>
     typeof localStorage !== "undefined" && !!localStorage.getItem(CHAT_HINTS_SEEN_KEY)
@@ -429,8 +431,10 @@ export default function ChatPage() {
     const memberIds = members.map((c) => c.id).join(",");
     const key = `${selectedMemberId ?? "family"}|${memberIds}`;
     if (prevProfileKeyRef.current && prevProfileKeyRef.current !== key) {
-      setMessages([]);
-      chatScrollRestoredRef.current = false;
+      if (!isChatting) {
+        setMessages([]);
+        chatScrollRestoredRef.current = false;
+      }
       // Статус-индикатор при смене профиля (1 строка, 1.5 сек)
       const isFamily = selectedMemberId === "family";
       const allergies = isFamily
@@ -449,7 +453,7 @@ export default function ChatPage() {
       }, 1500);
     }
     prevProfileKeyRef.current = key;
-  }, [mode, selectedMemberId, members, selectedMember]);
+  }, [mode, selectedMemberId, members, selectedMember, isChatting]);
 
   useEffect(() => {
     return () => {
@@ -1025,7 +1029,14 @@ export default function ChatPage() {
       let parsed = parseRecipesFromChat(userMessage.content, "");
       let apiRecipes: unknown[] = [];
 
+      try {
+        sessionStorage.setItem("recipe_generation_in_progress", "true");
+      } catch {
+        // ignore private mode
+      }
+
       while (attempts < 2) {
+        const isRetry = attempts > 0;
         response = await chat({
           messages: chatMessages,
           type: "chat",
@@ -1033,6 +1044,7 @@ export default function ChatPage() {
           overrideSelectedMember: selectedMember,
           overrideMembers: members,
           mealType: detectMealType(userMessage.content) || undefined,
+          isRetry,
           extraSystemSuffix:
             (attempts > 0 ? "Previous recipe was duplicated. Generate a DIFFERENT recipe now. " : "") + varietySuffix,
           onChunk:
@@ -1489,6 +1501,11 @@ export default function ChatPage() {
         }
       }
     } finally {
+      try {
+        sessionStorage.removeItem("recipe_generation_in_progress");
+      } catch {
+        // ignore
+      }
       sendInProgressRef.current = false;
     }
   }, [
@@ -1716,7 +1733,9 @@ export default function ChatPage() {
             <TabProfileMenuRow
               profileSlot={
                 <MemberSelectorButton
-                  onProfileChange={() => setMessages([])}
+                  onProfileChange={() => {
+                    if (!isChatting) setMessages([]);
+                  }}
                   className="shrink-0"
                   {...(recipesInfantProfileChipProps ?? {})}
                 />
@@ -1742,6 +1761,19 @@ export default function ChatPage() {
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {/* Статус при смене профиля: 1.5 сек, плавное появление/исчезновение (резерв 20px без сдвига) */}
+          {mode === "recipes" && wasGenerationInterrupted && (
+            <div
+              className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2.5 text-[13px] leading-snug text-foreground/90"
+              role="status"
+            >
+              <p className="whitespace-pre-wrap">
+                ⚠️ Вы покинули страницу во время генерации рецепта.
+                {"\n"}
+                Результат мог не сохраниться. Попробуйте снова.
+              </p>
+            </div>
+          )}
+
           {mode === "recipes" && (
             <div className="min-h-[16px] flex items-center pt-0.5">
               <AnimatePresence mode="wait">
@@ -1869,14 +1901,21 @@ export default function ChatPage() {
                 transition={{ duration: 0.2 }}
                 className="flex justify-start"
               >
-                <div className="rounded-2xl p-4 bg-card border border-border shadow-soft max-w-[85%]">
-                  <p className="text-sm text-foreground leading-relaxed">
-                    {mode === "help"
-                      ? "Думаю…"
-                      : showRecipeGenerationTip
-                        ? RECIPE_GENERATION_PHRASES[recipeStatusPhraseIndex]
-                        : "Думаю…"}
-                  </p>
+                <div className="rounded-2xl p-4 bg-card border border-border shadow-soft max-w-[85%] w-full min-w-0">
+                  {mode === "help" ? (
+                    <p className="text-sm text-foreground leading-relaxed">Думаю…</p>
+                  ) : (
+                    <>
+                      {/* Служебное предупреждение — мельче и muted, в обеих темах через токены shadcn */}
+                      <p className="w-full min-w-0 text-[11px] sm:text-xs text-muted-foreground leading-snug text-pretty">
+                        {"⏳ Генерация может занять до 30 секунд. Если вы уйдёте со страницы, результат может не\u00A0сохраниться."}
+                      </p>
+                      {/* Основной контент ожидания — подсказка визуально доминирует */}
+                      <p className="text-sm font-medium text-foreground leading-relaxed mt-3 pt-3 border-t border-border/60">
+                        {RECIPE_GENERATION_PHRASES[recipeStatusPhraseIndex]}
+                      </p>
+                    </>
+                  )}
                   <div className="flex items-center gap-1.5 mt-2" aria-hidden>
                     <span className="chat-thinking-dot" />
                     <span className="chat-thinking-dot" />
