@@ -7,7 +7,7 @@ import {
   extractKeyProductKeysFromTextBlob,
   isTechnicalIngredientText,
   normalizeProductKey,
-} from "./keyIngredientSignals";
+} from "./keyIngredientSignals.ts";
 
 export type IngredientForProductKey = {
   name?: string | null;
