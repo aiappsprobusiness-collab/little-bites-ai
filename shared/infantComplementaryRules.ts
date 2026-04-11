@@ -15,6 +15,23 @@ export type IngredientForProductKey = {
   category?: string | null;
 };
 
+/**
+ * Пул плана для прикорма (один ребёнок 4–11 мес): только curated `source=seed` + `trust_level=core`.
+ * Не «Семья», не взрослый; 0–3 мес — без этого ограничения (узкий edge-case).
+ */
+export function isInfantComplementarySeedCorePoolAge(
+  memberData: { age_months?: number | null; type?: string | null } | null | undefined,
+  memberId: string | null | undefined,
+): boolean {
+  if (memberId == null || String(memberId).trim() === "") return false;
+  const t = (memberData?.type ?? "").toLowerCase();
+  if (t === "adult" || t === "family") return false;
+  const age = memberData?.age_months;
+  if (age == null || !Number.isFinite(Number(age))) return false;
+  const a = Math.max(0, Math.round(Number(age)));
+  return a >= 4 && a < 12;
+}
+
 /** Все распознанные ключевые продукты (до maxKeys). */
 export function extractAllKeyProductKeysFromIngredients(
   ingredients: IngredientForProductKey[] | null | undefined,

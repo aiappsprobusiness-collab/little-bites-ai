@@ -18,6 +18,8 @@
 
 **Клиент (`recipePool.ts`, `useReplaceMealSlot`):** для возраста профиля **&lt; 12 мес** к запросу в `recipes` добавляется PostgREST-фильтр по `min_age_months` / `max_age_months` (эквивалент `recipeFitsAgeMonthsRow`), затем сортировка **`score` DESC, `created_at` DESC** (`applyInfantUnder12PoolSortOrder`) и `LIMIT`. Раньше использовался только `created_at` DESC — после массового импорта каталога 12+ мес последние N строк по дате создания могли не содержать ни одной строки, подходящей младенцу, хотя infant seed в базе есть.
 
+**Прикорм 4–11 мес (один ребёнок, слоты primary/secondary):** выборка пула для подстановки в план — **`source = seed` AND `trust_level = core`** (`isInfantComplementarySeedCorePoolAge` в `shared/infantComplementaryRules.ts`); в автоподбор не попадают `chat_ai` / `week_ai` / `manual` и т.д. Паритет с Edge: **`generate-plan`** → `fetchPoolCandidates(..., { infantSeedCoreOnly: true })`. Для возраста 0–3 мес при тех же слотах прикорма запрос остаётся широким (редкий случай).
+
 **Curated infant seed (4–6, 7–8 и 9–11 мес):** импорт и идемпотентность — `docs/dev/infant-seed-import.md` (`source = seed`, `trust_level = core` — curated каталог; **trusted** = поведенческое доверие, не синоним seed-каталога).
 
 **Curated toddler seed (12–36 мес):** отдельный snapshot и импорт — `docs/dev/toddler-seed-import.md`, тег батча `toddler_curated_v1`.

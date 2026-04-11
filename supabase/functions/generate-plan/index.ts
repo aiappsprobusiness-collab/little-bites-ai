@@ -30,6 +30,7 @@ import {
 import {
   evaluateInfantRecipeComplementaryRules,
   evaluateInfantSecondaryFamiliarOnly,
+  isInfantComplementarySeedCorePoolAge,
 } from "../../../shared/infantComplementaryRules.ts";
 import { passesPreferenceFilters } from "./preferenceRules.ts";
 import {
@@ -415,8 +416,39 @@ const POOL_SEED_CATALOG_FETCH_LIMIT = 600;
 /**
  * Pool: две выборки (seed/starter целиком + manual/week_ai/chat_ai с лимитом), merge по id;
  * сортировка: trust tier, затем score DESC.
+ * `infantSeedCoreOnly`: прикорм 4–11 мес — только curated каталог (`source=seed`, `trust_level=core`).
  */
-async function fetchPoolCandidates(supabase: SupabaseClient, _userId: string, _memberId: string | null, limitCandidates: number): Promise<RecipeRowPool[]> {
+async function fetchPoolCandidates(
+  supabase: SupabaseClient,
+  _userId: string,
+  _memberId: string | null,
+  limitCandidates: number,
+  options?: { infantSeedCoreOnly?: boolean },
+): Promise<RecipeRowPool[]> {
+  if (options?.infantSeedCoreOnly) {
+    const { data, error } = await supabase
+      .from("recipes")
+      .select(POOL_SELECT_FIELDS)
+      .eq("source", "seed")
+      .eq("trust_level", "core")
+      .order("score", { ascending: false })
+      .limit(POOL_SEED_CATALOG_FETCH_LIMIT);
+    if (error) {
+      safeWarn("generate-plan fetchPoolCandidates infant seed/core", error.message);
+      return [];
+    }
+    const list = (data ?? []) as RecipeRowPool[];
+    list.sort((a, b) => {
+      const oa = trustOrder(a.trust_level);
+      const ob = trustOrder(b.trust_level);
+      if (oa !== ob) return oa - ob;
+      const sa = a.score ?? 0;
+      const sb = b.score ?? 0;
+      return sb - sa;
+    });
+    return list;
+  }
+
   const [seedRes, otherRes] = await Promise.all([
     supabase
       .from("recipes")
@@ -1353,7 +1385,10 @@ serve(async (req) => {
       const excludeRecipeIds = [...(body.exclude_recipe_ids ?? []), ...replaceRecipeIds];
       // include body.exclude_title_keys (session) + week/last days so recentSignatures and exclude set match.
       const excludeTitleKeys = [...new Set([...(body.exclude_title_keys ?? []), ...replaceTitleKeys])];
-      const pool = await fetchPoolCandidates(supabase, userId, effectiveMemberId, POOL_LIMIT_ONE_DAY);
+      const infantSeedCoreOnlyReplace = isInfantComplementarySeedCorePoolAge(replaceMemberData, memberId);
+      const pool = await fetchPoolCandidates(supabase, userId, effectiveMemberId, POOL_LIMIT_ONE_DAY, {
+        infantSeedCoreOnly: infantSeedCoreOnlyReplace,
+      });
       const poolForReplace =
         memberId == null && mealType === "dinner" ? pool.filter((r) => isFamilyDinnerCandidate(r)) : pool;
       const replaceCulturalSummaryAcc = debugCulturalPlan() ? createEmptyCulturalSummaryAccumulator() : undefined;
@@ -1527,7 +1562,41 @@ serve(async (req) => {
     }
 
     const poolLimit = dayKeys.length > 1 ? POOL_LIMIT_WEEK : POOL_LIMIT_ONE_DAY;
-    const poolCandidates = await fetchPoolCandidates(supabase, userId, effectiveMemberId, poolLimit);
+
+    let poolRunMemberHint: MemberDataPool | null = memberData;
+    if (memberId != null) {
+      const { data: mRun } = await supabase
+        .from("members")
+        .select("age_months, allergies, dislikes, type, introduced_product_keys, introducing_product_key, introducing_started_at")
+        .eq("id", effectiveMemberId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      const mr = mRun as {
+        age_months?: number | null;
+        allergies?: string[] | null;
+        dislikes?: string[] | null;
+        type?: string | null;
+        introduced_product_keys?: string[] | null;
+        introducing_product_key?: string | null;
+        introducing_started_at?: string | null;
+      } | null;
+      if (mr) {
+        poolRunMemberHint = {
+          ...(memberData ?? {}),
+          age_months: mr.age_months ?? memberData?.age_months,
+          allergies: Array.isArray(mr.allergies) && mr.allergies.length > 0 ? mr.allergies : (memberData?.allergies ?? []),
+          dislikes: Array.isArray(mr.dislikes) && mr.dislikes.length > 0 ? mr.dislikes : (memberData?.dislikes ?? []),
+          type: mr.type ?? memberData?.type,
+          introduced_product_keys: Array.isArray(mr.introduced_product_keys) ? mr.introduced_product_keys : (memberData?.introduced_product_keys ?? []),
+          introducing_product_key: mr.introducing_product_key ?? memberData?.introducing_product_key ?? null,
+          introducing_started_at: mr.introducing_started_at ?? memberData?.introducing_started_at ?? null,
+        };
+      }
+    }
+    const infantSeedCoreOnlyForPoolRun = isInfantComplementarySeedCorePoolAge(poolRunMemberHint, memberId);
+    const poolCandidates = await fetchPoolCandidates(supabase, userId, effectiveMemberId, poolLimit, {
+      infantSeedCoreOnly: infantSeedCoreOnlyForPoolRun,
+    });
 
     let effectiveMemberData: MemberDataPool | null = memberData;
     let membersForScoring: Array<{ age_months?: number | null }> = [];

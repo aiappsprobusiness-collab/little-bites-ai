@@ -2,11 +2,26 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateInfantRecipeComplementaryRules,
   evaluateInfantSecondaryFamiliarOnly,
+  isInfantComplementarySeedCorePoolAge,
 } from "@shared/infantComplementaryRules";
 
 function ing(rows: Array<{ name?: string; display_text?: string }>) {
   return rows.map((r) => ({ ...r, category: null as string | null }));
 }
+
+describe("isInfantComplementarySeedCorePoolAge", () => {
+  it("true для одного ребёнка 4–11 мес", () => {
+    expect(isInfantComplementarySeedCorePoolAge({ age_months: 7, type: "child" }, "m1")).toBe(true);
+    expect(isInfantComplementarySeedCorePoolAge({ age_months: 4, type: "child" }, "m1")).toBe(true);
+    expect(isInfantComplementarySeedCorePoolAge({ age_months: 11, type: "child" }, "m1")).toBe(true);
+  });
+  it("false для семьи, без member_id, возраста вне 4–11", () => {
+    expect(isInfantComplementarySeedCorePoolAge({ age_months: 7, type: "child" }, null)).toBe(false);
+    expect(isInfantComplementarySeedCorePoolAge({ age_months: 7, type: "family" }, "m1")).toBe(false);
+    expect(isInfantComplementarySeedCorePoolAge({ age_months: 3, type: "child" }, "m1")).toBe(false);
+    expect(isInfantComplementarySeedCorePoolAge({ age_months: 12, type: "child" }, "m1")).toBe(false);
+  });
+});
 
 describe("shared infantComplementaryRules (parity with Edge)", () => {
   it("старт: одно овощное пюре из тройки — ok", () => {

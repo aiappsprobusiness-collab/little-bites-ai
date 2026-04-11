@@ -16,6 +16,7 @@ import {
   scoreInfantIntroducingPeriodSort,
   type IngredientForProductKey,
 } from "@/utils/introducedProducts";
+import { isInfantComplementarySeedCorePoolAge } from "@shared/infantComplementaryRules";
 import {
   addKeyIngredientKeysToCounts,
   computeWeeklyKeyIngredientPenaltyCalibrated,
@@ -31,6 +32,16 @@ const IS_DEV =
 
 /** Как Edge `POOL_TRUST_OR`: в пул подбора не попадают рецепты с `trust_level = blocked`. */
 export const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
+
+/** Прикорм 4–11 мес: только каталог seed + trust core (паритет с generate-plan). */
+function shouldUseInfantVerifiedSeedCorePoolQuery(
+  memberData: MemberDataForPool | null | undefined,
+  memberId: string | null | undefined,
+  resolvedInfantSlotRole: "primary" | "secondary" | null,
+): boolean {
+  if (resolvedInfantSlotRole !== "primary" && resolvedInfantSlotRole !== "secondary") return false;
+  return isInfantComplementarySeedCorePoolAge(memberData ?? null, memberId ?? null);
+}
 
 /** [POOL DEBUG] логи только при ?debugPool=1 (не спамим в проде). */
 function isDebugPool(): boolean {
@@ -741,6 +752,12 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
   const needsIngredientsForWeeklyDiversity =
     usedKeyIngredientCounts != null || usedKeyIngredientCountsByMealType != null;
 
+  const infantVerifiedSeedCore = shouldUseInfantVerifiedSeedCorePoolQuery(
+    memberData ?? null,
+    args.memberId ?? null,
+    resolvedListInfantRole,
+  );
+
   const selectFields =
     hasAllergies ||
     hasDislikes ||
@@ -755,11 +772,9 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
     memberData?.age_months ??
     (memberData?.age_years != null && Number.isFinite(memberData.age_years) ? memberData.age_years * 12 : null);
 
-  let poolQuery = supabase
-    .from("recipes")
-    .select(selectFields)
-    .in("source", [...POOL_SOURCES])
-    .or(POOL_TRUST_OR);
+  let poolQuery = infantVerifiedSeedCore
+    ? supabase.from("recipes").select(selectFields).eq("source", "seed").eq("trust_level", "core")
+    : supabase.from("recipes").select(selectFields).in("source", [...POOL_SOURCES]).or(POOL_TRUST_OR);
   poolQuery = applyUnder12PoolAgeMonthsSqlFilter(poolQuery, ageMonthsForPool);
   poolQuery = applyInfantUnder12PoolSortOrder(poolQuery, ageMonthsForPool);
   const { data: rows, error } = await poolQuery.limit(limitCandidates);
@@ -824,6 +839,12 @@ export async function pickRecipeFromPool(
   const needsIngredientsForWeeklyDiversity =
     usedKeyIngredientCounts != null || usedKeyIngredientCountsByMealType != null;
 
+  const infantVerifiedSeedCore = shouldUseInfantVerifiedSeedCorePoolQuery(
+    memberData ?? null,
+    memberId,
+    resolvedInfantSlotRole,
+  );
+
   const selectFields =
     hasAllergies ||
     hasDislikes ||
@@ -838,11 +859,9 @@ export async function pickRecipeFromPool(
     memberData?.age_months ??
     (memberData?.age_years != null && Number.isFinite(memberData.age_years) ? memberData.age_years * 12 : null);
 
-  let q = supabase
-    .from("recipes")
-    .select(selectFields)
-    .in("source", [...POOL_SOURCES])
-    .or(POOL_TRUST_OR);
+  let q = infantVerifiedSeedCore
+    ? supabase.from("recipes").select(selectFields).eq("source", "seed").eq("trust_level", "core")
+    : supabase.from("recipes").select(selectFields).in("source", [...POOL_SOURCES]).or(POOL_TRUST_OR);
   q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
   q = applyInfantUnder12PoolSortOrder(q, ageMonthsForPool).limit(limitCandidates);
 
