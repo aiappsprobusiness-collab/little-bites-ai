@@ -58,6 +58,10 @@
 - Полный набор: `npm run test:edge` (нужен [Deno](https://deno.land/) в `PATH`).
 - Только intent + релевантность + темы Помощника без глобального Deno: `npm run test:edge:chat-intent` (использует `npx deno@2.2.0` и `--no-lock` из-за версии `deno.lock` в репозитории).
 
+## Словари тем Помощника
+
+Расширяемые phrase bank / keywords / regex для `detectAssistantTopic` лежат в **`supabase/functions/deepseek-chat/assistantTopicDetect.ts`** (источник правды на Edge). Клиентский fallback — **`src/utils/chatRouteFallback.ts`** (подмножество ключей). Периодически синхронизировать при добавлении разговорных формулировок (кожа, стул, отказ от еды и т.д.).
+
 ## Связанные документы
 
 - `docs/architecture/chat_recipe_generation.md` §3.2–3.3

@@ -54,6 +54,22 @@ Deno.test("recipeChatIntent: зеленый кал — assistant_topic (стул
   }
 });
 
+Deno.test("recipeChatIntent: ребенок какается каждые 30 минут — assistant_topic (стул)", () => {
+  const r = resolveRecipeChatIntent("ребенок какается каждые 30 минут");
+  assertEquals(r.route, "assistant_topic");
+  if (r.route === "assistant_topic") {
+    assertEquals(r.topic?.topicKey, "constipation_diarrhea");
+  }
+});
+
+Deno.test("recipeChatIntent: красные пятна на коже — assistant_topic (аллергия)", () => {
+  const r = resolveRecipeChatIntent("красные пятна на коже");
+  assertEquals(r.route, "assistant_topic");
+  if (r.route === "assistant_topic") {
+    assertEquals(r.topic?.topicKey, "allergy");
+  }
+});
+
 Deno.test("recipeChatIntent: scores монотонны для еды", () => {
   const a = computeChatIntentScores("курица", "курица");
   const b = computeChatIntentScores("курица с рисом", "курица с рисом");
