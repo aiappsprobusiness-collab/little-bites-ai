@@ -28,7 +28,7 @@
 - `recipe_id` — если есть сохранённый рецепт (для blocked = null);
 - `meta` — опционально. Два варианта:
   - **Blocked (follow-up):** `{ blocked: true, original_query, blocked_items, suggested_alternatives, intended_dish_hint }` (см. `BlockedMeta` в `src/types/chatBlocked.ts`).
-  - **Redirect в Помощник:** для ответов «этот вопрос лучше задать во вкладке Помощник» сохраняются `{ systemHintType: "assistant_topic_redirect", topicKey, topicTitle, topicShortTitle }`, чтобы после перезагрузки/переключения вкладки карточка и кнопка «Перейти в тему» восстанавливались с нужной темой и навигацией `/sos?scenario=<topicKey>`.
+  - **Redirect в «Помощь маме»:** для ответов «этот вопрос лучше задать во вкладке «Помощь маме»» (ранее мог быть текст с «Помощник») сохраняются `{ systemHintType: "assistant_topic_redirect", topicKey, topicTitle, topicShortTitle }`, чтобы после перезагрузки/переключения вкладки карточка и кнопка «Перейти в тему» восстанавливались с нужной темой и навигацией `/sos?scenario=<topicKey>`.
 
 **Edge-функция `deepseek-chat` в БД не пишет:** она только возвращает JSON (в т.ч. blocked). Запись в `chat_history` выполняет клиент после получения ответа.
 

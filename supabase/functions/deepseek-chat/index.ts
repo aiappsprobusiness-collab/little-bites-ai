@@ -536,7 +536,7 @@ serve(async (req) => {
           matchedBy: assistantTopic.matchedBy ?? undefined,
           matchedTerms: assistantTopic.matchedTerms ?? [],
         }));
-        const assistantMessage = "Этот вопрос лучше задать во вкладке «Помощник».";
+        const assistantMessage = "Этот вопрос лучше задать во вкладке «Помощь маме».";
         return new Response(
           JSON.stringify({
             message: assistantMessage,

@@ -76,7 +76,7 @@ export function getRedirectOrIrrelevantMeta(userMessage: string): RedirectOrIrre
     const byPattern = patterns?.some((re) => re.test(lower)) ?? false;
     if (byKeyword || byPattern) {
       return {
-        message: "Этот вопрос лучше задать во вкладке «Помощник».",
+        message: "Этот вопрос лучше задать во вкладке «Помощь маме».",
         route: "assistant_topic_redirect",
         topicKey,
         topicTitle,

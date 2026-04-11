@@ -622,7 +622,8 @@ export default function ChatPage() {
       return (
         r.includes("Этот чат помогает подбирать рецепты") ||
         r.includes("В этом чате мы помогаем подбирать блюда") ||
-        r.includes("Этот вопрос лучше задать во вкладке «Помощник»") ||
+        (r.includes("Этот вопрос лучше задать во вкладке «Помощник»") ||
+          r.includes("Этот вопрос лучше задать во вкладке «Помощь маме»")) ||
         r.includes("не генерируем рецепты автоматически") ||
         r.includes("не создаём рецепты автоматически") ||
         r.includes("Сейчас подбирать рецепты ещё рано")
@@ -669,7 +670,8 @@ export default function ChatPage() {
                   r.includes("не создаём рецепты автоматически") ||
                   r.includes("Сейчас подбирать рецепты ещё рано")
                   ? "curated_under_12_recipe"
-                  : r.includes("Этот вопрос лучше задать во вкладке «Помощник»")
+                  : (r.includes("Этот вопрос лучше задать во вкладке «Помощник»") ||
+                    r.includes("Этот вопрос лучше задать во вкладке «Помощь маме»"))
                     ? "assistant_topic_redirect"
                     : "assistant_irrelevant";
             const fallbackMeta = getRedirectOrIrrelevantMeta(msg.message ?? "");

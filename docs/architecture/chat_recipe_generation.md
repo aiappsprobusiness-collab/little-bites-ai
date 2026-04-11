@@ -55,7 +55,7 @@
 | blocked | 200 | `blocked: true`, `blocked_by`, `message`, `blocked_items`, `suggested_alternatives`, `original_query` | Запрос содержит аллерген/dislike (кроме «без X»). Модель не вызывается. |
 | ok (рецепт) | 200 | `message`, `recipes`, `recipe_id?` | Успешная генерация. |
 | ok (без рецепта) | 200 | `message`, `recipes: []` | Заглушка, SOS, анализ тарелки. |
-| redirect/irrelevant | 200 | `message`, `recipes: []`, `route: "assistant_topic" \| "irrelevant"`, при assistant_topic — `topicKey`, `topicTitle`, `topicShortTitle` | Маршрутизация: тема Помощника или нерелевантный запрос; фронт рендерит SystemHintCard (короткий текст, «Тема: {topicShortTitle}», кнопка «Перейти в Помощник»). |
+| redirect/irrelevant | 200 | `message`, `recipes: []`, `route: "assistant_topic" \| "irrelevant"`, при assistant_topic — `topicKey`, `topicTitle`, `topicShortTitle` | Маршрутизация: тема «Помощь маме» или нерелевантный запрос; фронт рендерит SystemHintCard (короткий текст с предложением задать вопрос во вкладке «Помощь маме», «Тема: {topicShortTitle}», кнопка «Перейти в тему» / «Помощь маме»). |
 | under_12_curated_recipe_block | 200 | `message`, `recipes: []`, `route: "under_12_curated_recipe_block"`, **`reason_code`: `"under_12_curated_recipe_block"`** | Только **recipe-generation path**: одиночный профиль **child** с числовым возрастом **0–11 мес**. LLM не вызывается, рецепт не сохраняется. Лог: `under_12_curated_recipe_block`. |
 | ошибка | 200/429/500 | `error`, `message` | Лимит, таймаут, API/сервер. |
 
@@ -112,13 +112,13 @@
 
 ### 3.2 Маршрутизация запросов во вкладке Чат (type === "chat")
 
-На Edge для типа `chat` вызывается **`resolveRecipeChatIntent`** (`recipeChatIntent.ts`) — **взвешенный скоринг намерения** без LLM: считаются независимые сигналы `assistantScore`, `foodScore`, `recipeContextScore`, `offtopicScore`, затем `recipePathScore = foodScore + recipeContextScore`. Три корзины сравниваются: **assistant** / **offtopic** / **recipe** (по `recipePathScore`). Учитывается **margin** (разница 1-го и 2-го места): при `margin < 2` действует прежний **fail-open к рецепту**, кроме случая, когда срабатывает `detectAssistantTopic` и балл assistant не ниже recipe path — тогда редирект в Помощник. Тема вкладки «Помощник» по-прежнему определяется **`detectAssistantTopic`** (`assistantTopicDetect.ts`) при финальном решении «assistant»: нужны и достаточный скор, и совпадение с темой (topicKey для `/sos?scenario=`). Для темы «стул» слово **«кал»** сопоставляется только как отдельное слово (паттерн `_shared/russianStoolKalPattern.ts`); клиентский fallback (`chatRouteFallback.ts`) использует тот же паттерн.
+На Edge для типа `chat` вызывается **`resolveRecipeChatIntent`** (`recipeChatIntent.ts`) — **взвешенный скоринг намерения** без LLM: считаются независимые сигналы `assistantScore`, `foodScore`, `recipeContextScore`, `offtopicScore`, затем `recipePathScore = foodScore + recipeContextScore`. Три корзины сравниваются: **assistant** / **offtopic** / **recipe** (по `recipePathScore`). Учитывается **margin** (разница 1-го и 2-го места): при `margin < 2` действует прежний **fail-open к рецепту**, кроме случая, когда срабатывает `detectAssistantTopic` и балл assistant не ниже recipe path — тогда редирект во вкладку «Помощь маме». Тема по-прежнему определяется **`detectAssistantTopic`** (`assistantTopicDetect.ts`) при финальном решении «assistant»: нужны и достаточный скор, и совпадение с темой (topicKey для `/sos?scenario=`). Для темы «стул» слово **«кал»** сопоставляется только как отдельное слово (паттерн `_shared/russianStoolKalPattern.ts`); клиентский fallback (`chatRouteFallback.ts`) использует тот же паттерн.
 
 Исходы:
 
 | Исход | Когда | Лог |
 |--------|--------|-----|
-| **assistant_topic** | Решение «Помощник» + `detectAssistantTopic.matched` | `CHAT_ROUTE: assistant_topic`, `CHAT_INTENT` (scores, margin, topicKey) |
+| **assistant_topic** | Решение «Помощь маме» + `detectAssistantTopic.matched` | `CHAT_ROUTE: assistant_topic`, `CHAT_INTENT` (scores, margin, topicKey) |
 | **irrelevant** | Сильный off-topic или жёсткие отсеки (`too_short`, `no_vowels`) | `CHAT_ROUTE: irrelevant`, `CHAT_INTENT` |
 | **recipe** | Рецепт / fail-open | `CHAT_ROUTE: recipe`, `CHAT_INTENT` |
 
@@ -126,9 +126,9 @@
 
 **Совместимость API:** `checkFoodRelevance` / `isRelevantQuery` (`isRelevantQuery.ts`) делегируют в тот же `resolveRecipeChatIntent`: `allowed: false` только при `route: "irrelevant"`.
 
-Принцип: при **низкой марже** по-прежнему **fail-open к рецепту** (кроме явного совпадения с темой Помощника при конкурирующих баллах); off-topic с высоким баллом и лидерством корзины отсекает запрос до модели.
+Принцип: при **низкой марже** по-прежнему **fail-open к рецепту** (кроме явного совпадения с темой «Помощь маме» при конкурирующих баллах); off-topic с высоким баллом и лидерством корзины отсекает запрос до модели.
 
-Ответы redirect/irrelevant возвращают в теле JSON поля `route` (`assistant_topic` или `irrelevant`), при `assistant_topic` — `topicKey` и `topicTitle` (и при необходимости `topicShortTitle`) для перехода во вкладку «Помощник» по сценарию (`/sos?scenario=<topicKey>`). На фронте такие сообщения отображаются карточкой системной подсказки (`SystemHintCard`), без кнопок рецепта (избранное, поделиться, в план). Клиент при сохранении в `chat_history` записывает в `meta` поля `systemHintType`, `topicKey`, `topicTitle`, `topicShortTitle`, чтобы после переключения вкладки/remount карточка и кнопка «Перейти в тему» восстанавливались с корректной навигацией в нужную тему. Для **`under_12_curated_recipe_block`** в `meta.systemHintType` сохраняется **`curated_under_12_recipe`** (кнопки «Открыть план» / «Помощь маме»).
+Ответы redirect/irrelevant возвращают в теле JSON поля `route` (`assistant_topic` или `irrelevant`), при `assistant_topic` — `topicKey` и `topicTitle` (и при необходимости `topicShortTitle`) для перехода во вкладку «Помощь маме» по сценарию (`/sos?scenario=<topicKey>`). Текст `message` для `assistant_topic`: «Этот вопрос лучше задать во вкладке «Помощь маме».» На фронте такие сообщения отображаются карточкой системной подсказки (`SystemHintCard`), без кнопок рецепта (избранное, поделиться, в план). Клиент при сохранении в `chat_history` записывает в `meta` поля `systemHintType`, `topicKey`, `topicTitle`, `topicShortTitle`, чтобы после переключения вкладки/remount карточка и кнопка «Перейти в тему» восстанавливались с корректной навигацией в нужную тему. Для **`under_12_curated_recipe_block`** в `meta.systemHintType` сохраняется **`curated_under_12_recipe`** (кнопки «Открыть план» / «Помощь маме»).
 
 ### 3.3 Релевантность запроса (тариф)
 

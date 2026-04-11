@@ -3,7 +3,7 @@ import { Info, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface SystemHintCardProps {
-  /** Текст подсказки (короткий для редиректа: «Этот вопрос лучше задать во вкладке «Помощник».»). */
+  /** Текст подсказки (короткий для редиректа: «Этот вопрос лучше задать во вкладке «Помощь маме».»). */
   text: string;
   /** Ключ темы Помощника для /sos?scenario= */
   topicKey?: string;
