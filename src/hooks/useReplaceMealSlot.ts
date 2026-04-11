@@ -197,6 +197,7 @@ export function useReplaceMealSlot(
       ) => {
         const ranked = pickFromPoolRankingLite(cands as PoolRankLiteRow[], {
           rankSalt,
+          ageMonths: params.memberData?.age_months ?? null,
           getSlotFit: (row) =>
             computeSlotFitForPoolRow(row as PoolRecipeRow, {
               slotNorm,

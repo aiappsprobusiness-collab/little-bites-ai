@@ -2,7 +2,13 @@
  * Общий смысл ранжирования пула: Edge generate-plan и client poolRankLite.
  * Источник правды: trust / exploration / db contribution / composite / salt / jitter.
  * Формула feedback в БД и пороги candidate→trusted не меняются здесь.
+ *
+ * Ranking Enhancement v3.3: при `mode: 'adult'` — усиление candidate/emerging и adaptive exploration;
+ * при `mode: 'infant'` или без `mode` — поведение как до v3.3 (legacy).
  */
+
+/** Режим ранжирования плана по возрасту слота (per-slot). */
+export type PlanRankingMode = "infant" | "adult";
 
 /** Доля слотов с exploration-boost для candidate / legacy null (детерминированно от salt). */
 export const EXPLORATION_PICK_THRESHOLD_PCT = 25;
@@ -39,6 +45,13 @@ export type RankingInput = {
    * В проде не передавать.
    */
   jitterOverride?: number;
+  /**
+   * v3.3: `'adult'` — candidate boost / emerging / adaptive exploration.
+   * Без `mode` или `'infant'` — legacy (как до v3.3), infant pipeline не меняется.
+   */
+  mode?: PlanRankingMode;
+  /** v3.3 adult: порог % для explorationPickActive (25 или 35). Игнорируется в legacy/infant. */
+  explorationThresholdPct?: number;
 };
 
 /** Рецепты с trust_level = blocked в пул подбора не допускаются (фильтр до скоринга). */
@@ -91,6 +104,63 @@ export function dbScoreContribution(score: number | null | undefined): number {
   return Math.max(-4, Math.min(22, v));
 }
 
+/** v3.3: candidate / NULL при положительном score — множитель к вкладу БД (без изменения колонки score). */
+export function dbScoreContributionForRanking(
+  score: number | null | undefined,
+  trustLevel: string | null | undefined,
+  mode: PlanRankingMode,
+): number {
+  const base = dbScoreContribution(score);
+  if (mode !== "adult") return base;
+  if (!isCandidateTrustForV33(trustLevel)) return base;
+  if ((score ?? 0) <= 0) return base;
+  return base * 1.4;
+}
+
+/** Candidate для правил v3.3: `candidate` или NULL (legacy). */
+export function isCandidateTrustForV33(trustLevel: string | null | undefined): boolean {
+  if (trustLevel === null || trustLevel === undefined) return true;
+  const t = trustLevel.trim();
+  if (t === "") return true;
+  return t.toLowerCase() === "candidate";
+}
+
+export function isEstablishedTrust(trustLevel: string | null | undefined): boolean {
+  const x = trustLevel?.trim().toLowerCase();
+  return x === "trusted" || x === "core" || x === "seed" || x === "starter";
+}
+
+/** `age_months == null` → adult (спека v3.3). */
+export function resolvePlanRankingMode(ageMonths: number | null | undefined): PlanRankingMode {
+  if (ageMonths == null || !Number.isFinite(Number(ageMonths))) return "adult";
+  return Math.max(0, Math.round(Number(ageMonths))) < 12 ? "infant" : "adult";
+}
+
+/**
+ * Adaptive exploration (только adult): после фильтров слота.
+ * Infant и пустой пул → 25%.
+ */
+export function computeExplorationThresholdPct(
+  mode: PlanRankingMode,
+  candidates: Array<{ trust_level?: string | null }>,
+): number {
+  const total = candidates.length;
+  if (total === 0) return 25;
+  if (mode === "infant") return 25;
+  const established = candidates.reduce((n, c) => n + (isEstablishedTrust(c.trust_level) ? 1 : 0), 0);
+  const ratio = established / total;
+  return ratio >= 0.6 ? 25 : 35;
+}
+
+export function computeEmergingBoost(score: number | null | undefined): number {
+  const s = score ?? 0;
+  return Math.max(0, Math.min(1, s * 0.05));
+}
+
+export function isEmergingV33(trustLevel: string | null | undefined, score: number | null | undefined): boolean {
+  return isCandidateTrustForV33(trustLevel) && (score ?? 0) >= 4;
+}
+
 /** Не для прод composite — только тесты или особый override. */
 export function rankJitter(rng: () => number, max: number = RANK_JITTER_MAX): number {
   return rng() * max;
@@ -127,13 +197,80 @@ export function explainRankingTail(
   return { trustBonus, dbContribution, explorationBoost, jitter };
 }
 
-/** Composite после eligibility: slotFit + trust + db + exploration + jitter (единая формула). */
-export function computeCompositeScore(input: RankingInput): number {
-  const tail = explainRankingTail(
+/** v3.3 adult: exploration с заданным порогом %; вклад БД с множителем для candidate. */
+export function explainRankingTailAdult(
+  trustLevel: string | null | undefined,
+  score: number | null | undefined,
+  recipeId: string,
+  rankSalt: string,
+  explorationThresholdPct: number,
+  jitterOverride?: number,
+): RankingTailBreakdown {
+  const explorationBoost =
+    explorationPickActive(rankSalt, explorationThresholdPct) && isCandidateTrustLevel(trustLevel)
+      ? EXPLORATION_CANDIDATE_BOOST
+      : 0;
+  const trustBonus = trustRankingBonus(trustLevel);
+  const dbContribution = dbScoreContributionForRanking(score, trustLevel, "adult");
+  const jitter = jitterOverride !== undefined ? jitterOverride : rankJitterFromSeed(rankSalt, recipeId);
+  return { trustBonus, dbContribution, explorationBoost, jitter };
+}
+
+/** Поля хвоста без slotFit (для отладки и Edge/client). */
+export type RankingTailInput = Pick<
+  RankingInput,
+  "trustLevel" | "score" | "recipeId" | "rankSalt" | "jitterOverride" | "mode" | "explorationThresholdPct"
+>;
+
+/**
+ * Хвост ранжирования согласован с `computeCompositeScore` (legacy vs v3.3 adult).
+ */
+export function getRankingTailBreakdown(input: RankingTailInput): RankingTailBreakdown {
+  const mode = input.mode;
+  if (mode === undefined || mode === "infant") {
+    return explainRankingTail(input.trustLevel, input.score, input.recipeId, input.rankSalt, input.jitterOverride);
+  }
+  const pct = input.explorationThresholdPct ?? 25;
+  return explainRankingTailAdult(
     input.trustLevel,
     input.score,
     input.recipeId,
     input.rankSalt,
+    pct,
+    input.jitterOverride,
+  );
+}
+
+/** Composite после eligibility: slotFit + trust + db + exploration + jitter (единая формула). */
+export function computeCompositeScore(input: RankingInput): number {
+  const mode = input.mode;
+  if (mode === undefined || mode === "infant") {
+    const tail = explainRankingTail(
+      input.trustLevel,
+      input.score,
+      input.recipeId,
+      input.rankSalt,
+      input.jitterOverride,
+    );
+    let sum =
+      input.slotFit +
+      tail.trustBonus +
+      tail.dbContribution +
+      tail.explorationBoost +
+      tail.jitter;
+    if (input.trustLevel?.trim().toLowerCase() === "candidate") {
+      sum += CANDIDATE_COMPOSITE_NUDGE;
+    }
+    return sum;
+  }
+
+  const explorationPct = input.explorationThresholdPct ?? 25;
+  const tail = explainRankingTailAdult(
+    input.trustLevel,
+    input.score,
+    input.recipeId,
+    input.rankSalt,
+    explorationPct,
     input.jitterOverride,
   );
   let sum =
@@ -144,6 +281,9 @@ export function computeCompositeScore(input: RankingInput): number {
     tail.jitter;
   if (input.trustLevel?.trim().toLowerCase() === "candidate") {
     sum += CANDIDATE_COMPOSITE_NUDGE;
+  }
+  if (isEmergingV33(input.trustLevel, input.score)) {
+    sum += computeEmergingBoost(input.score);
   }
   return sum;
 }

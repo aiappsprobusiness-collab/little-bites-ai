@@ -12,6 +12,21 @@
 - **Две выборки и merge:** (1) `source IN ('seed','starter')` с лимитом **600** — чтобы curated-каталог (сотни рецептов с `score = 0`) **всегда** попадал в память; (2) `source IN ('manual','week_ai','chat_ai')` с лимитом `max(limitCandidates, 200)` (для дня `limitCandidates = 120`, для недели — `280`). Иначе при **одном** запросе `ORDER BY score DESC LIMIT 120` почти все строки с нулевым score дают **произвольный** срез БД, и детские каталоги часто **не входят** в выборку → 0 кандидатов после фильтра по возрасту/слоту.
 - **После merge:** предварительная сортировка по `trustOrder` и `score` DESC — для порядка в памяти; **финальный выбор слота** — по **`computeCompositeScore`** (slot-fit Edge + trust + `recipes.score` + exploration + **`rankJitterFromSeed(rankSalt, recipeId)`**). В slot-fit Edge для **недели** и для **replace_slot** (не прикорм) дополнительно вычитается **ingredient diversity penalty** (`computeWeeklyKeyIngredientPenaltyCalibrated` в `shared/keyIngredientSignals.ts`): глобальные счётчики, усиление **primary** относительно secondary, для **breakfast/snack** — дополнительный мягкий слой по `usedKeyIngredientCountsByMealType` и степлерам (apple, banana, oatmeal, rice). Соль **`rank_salt`** задаётся **`buildAlignedRankSalt`** (см. `shared/planRankTrustShared.ts`, §6.1–6.3 в `PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md`, кратко **`docs/plan-generation.md`**).
 
+### Ranking Enhancement v3.3 (только shared-ранжирование)
+
+Реализовано в **`shared/planRankTrustShared.ts`**, без изменений SQL, колонки **`recipes.score`**, **`recompute_recipe_score_and_trust`** и переходов **`trust_level`**.
+
+- **Режим per-slot:** `mode = resolvePlanRankingMode(age_months)` — при `age_months == null` → **adult**; при `&lt; 12` → **infant**; иначе **adult**.
+- **Infant (`mode === 'infant'`):** composite и хвост ранжирования **идентичны legacy** (как до v3.3): прикорм 0–11 мес по ветке ранжирования не меняется.
+- **Adult (`mode === 'adult'`):**
+  - **Candidate boost:** к базовому `dbScoreContribution(score)` для `trust_level === 'candidate'` или `NULL` при **`score > 0`** применяется множитель **1.4** (колонка `score` в БД не меняется).
+  - **Emerging:** если candidate/NULL и **`score >= 4`**, к composite добавляется **`clamp(score * 0.05, 0, 1)`**.
+  - **Adaptive exploration:** после всех фильтров слота считается доля «устойчивых» строк (`trusted`, `core`, `seed`, `starter`); если среди кандидатов таких **≥ 60%**, порог exploration **25%**, иначе **35%**; пустой пул и infant — **25%**.
+- **Edge:** `generate-plan` передаёт `planRankingAgeMonths` из `member_data.age_months` в `pickBestRecipeForSlotWithGoalScoring`.
+- **Клиент:** `poolRankLite` получает **`ageMonths`** из профиля (`recipePool`, `useReplaceMealSlot`).
+
+Тесты: `src/utils/planRankTrustShared.v33.test.ts`, обновлён `poolRankLite.test.ts` (для сценариев legacy без v3.3 в rank — `ageMonths: 6` (infant)).
+
 **Клиент** (`recipePool.ts`, `poolRankLite.ts`, `useReplaceMealSlot`): та же выборка по `source` и **`POOL_TRUST_OR`**, тот же **`computeCompositeScore`** и та же **форма** `rank_salt`, что и Edge при совпадении контекста (`plannedDayKey`, `mealType`, infant-вариант, **`rankEntropy`** за сессию — см. **`docs/plan-generation.md`**). Полный slot-fit Edge на клиенте **не** воспроизводится — остаётся **slot-fit-lite**; см. §6.2–**6.3** `PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md` (**Client ↔ Edge ranking synchronization**).
 
 **Диагностика сравнения:** Edge — лог **`RANK_DEBUG`** (рядом с `CHAT_PLAN_RANK_PICK` при rank-debug); клиент — консоль **`RANK_DEBUG`** при `?rankDebug=1` или `?debugPool=1`.

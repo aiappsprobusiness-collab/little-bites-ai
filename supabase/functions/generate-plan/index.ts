@@ -54,9 +54,11 @@ import {
   buildAlignedRankSalt,
   buildRankSalt,
   computeCompositeScore,
-  explainRankingTail,
+  computeExplorationThresholdPct,
   explorationPickActive,
+  getRankingTailBreakdown,
   rankJitter,
+  resolvePlanRankingMode,
   stableSortPoolForRanking,
 } from "./planRankComposite.ts";
 
@@ -597,6 +599,7 @@ function pickFromPoolInMemory(
       includeCulturalComparison,
       planPickDebug: { ...goalHints?.planPickDebug, meal_slot: slot },
       rng: goalHints?.rankRng,
+      planRankingAgeMonths: memberData?.age_months ?? null,
     },
   );
   if (!scoredPick) return null;
@@ -910,6 +913,8 @@ function pickBestRecipeForSlotWithGoalScoring(
     includeCulturalComparison?: boolean;
     planPickDebug?: { day_key?: string; request_id?: string; meal_slot?: string; rank_salt?: string };
     rng?: () => number;
+    /** Per-slot age для Ranking v3.3 (null/undefined → adult). */
+    planRankingAgeMonths?: number | null;
   },
 ): {
   r: RecipeRowPool;
@@ -929,7 +934,9 @@ function pickBestRecipeForSlotWithGoalScoring(
     dbg?.rank_salt != null && String(dbg.rank_salt).length > 0
       ? String(dbg.rank_salt)
       : buildRankSalt(dbg ?? {});
-  const exploreSlot = explorationPickActive(rankSalt);
+  const planMode = resolvePlanRankingMode(options?.planRankingAgeMonths);
+  const explorationThresholdPct = computeExplorationThresholdPct(planMode, candidates);
+  const exploreSlot = explorationPickActive(rankSalt, explorationThresholdPct);
 
   const sel = selectedGoal && GOAL_SET.has(selectedGoal) && selectedGoal !== "balanced" ? selectedGoal : undefined;
   const eligible = familyScoring?.eligibleMembers ?? [];
@@ -945,22 +952,23 @@ function pickBestRecipeForSlotWithGoalScoring(
     const finalBeforeCultural = baseScore + goalBonus + ageBonus + softBonus;
     const finalScoreAfterCultural = finalBeforeCultural + culturalBonus;
     const jitterOverride = options?.rng ? rankJitter(rng) : undefined;
-    const tail = explainRankingTail(r.trust_level, r.score, r.id, rankSalt, jitterOverride);
-    const compositeWithoutCultural = computeCompositeScore({
-      slotFit: finalBeforeCultural,
+    const rankInputBase = {
       trustLevel: r.trust_level,
       score: r.score,
       recipeId: r.id,
       rankSalt,
       jitterOverride,
+      mode: planMode,
+      explorationThresholdPct,
+    };
+    const tail = getRankingTailBreakdown(rankInputBase);
+    const compositeWithoutCultural = computeCompositeScore({
+      slotFit: finalBeforeCultural,
+      ...rankInputBase,
     });
     const compositeWithCultural = computeCompositeScore({
       slotFit: finalScoreAfterCultural,
-      trustLevel: r.trust_level,
-      score: r.score,
-      recipeId: r.id,
-      rankSalt,
-      jitterOverride,
+      ...rankInputBase,
     });
     return {
       r,

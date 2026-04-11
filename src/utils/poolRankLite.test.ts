@@ -32,6 +32,7 @@ describe("pickFromPoolRankingLite", () => {
       rankSalt: "t|salt",
       rankJitterForRecipeId: noJitter,
       getSlotFit: () => 20,
+      ageMonths: 6,
     });
     expect(out?.row.id).toBe("c");
   });
@@ -45,6 +46,7 @@ describe("pickFromPoolRankingLite", () => {
       rankSalt: "no-explore-zzzz|m|breakfast",
       rankJitterForRecipeId: noJitter,
       getSlotFit: () => 15,
+      ageMonths: 6,
     });
     expect(out?.row.id).toBe("k");
   });
@@ -58,6 +60,7 @@ describe("pickFromPoolRankingLite", () => {
       rankSalt: "no-explore-zzzz|m|lunch",
       rankJitterForRecipeId: noJitter,
       getSlotFit: () => 10,
+      ageMonths: 6,
     });
     expect(out?.row.id).toBe("high");
   });
@@ -71,8 +74,8 @@ describe("pickFromPoolRankingLite", () => {
       rankSalt: "u|snack|pool|2026-03-15",
       getSlotFit: () => 12,
     };
-    const x = pickFromPoolRankingLite(rows, opts);
-    const y = pickFromPoolRankingLite(rows, opts);
+    const x = pickFromPoolRankingLite(rows, { ...opts, ageMonths: 6 });
+    const y = pickFromPoolRankingLite(rows, { ...opts, ageMonths: 6 });
     expect(x?.row.id).toBe(y?.row.id);
     expect(x?.debug.winner_composite).toBe(y?.debug.winner_composite);
   });
@@ -83,6 +86,7 @@ describe("pickFromPoolRankingLite", () => {
       rankSalt: "d|k|dinner",
       rankJitterForRecipeId: noJitter,
       getSlotFit: () => 11,
+      ageMonths: 6,
     });
     expect(out?.debug.top3[0]?.trust_bonus).toBe(trustRankingBonus("core"));
     expect(out?.debug.top3[0]?.composite).toBeGreaterThan(0);

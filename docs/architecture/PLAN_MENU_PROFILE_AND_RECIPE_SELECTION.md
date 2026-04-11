@@ -219,7 +219,7 @@ Dislikes — **жёсткое исключение**: рецепт, содерж
 
 ### 6.3 Синхронизация ranking Client ↔ Edge
 
-**Цель:** одинаковая **форма** `rank_salt` (в конец соли добавляется **`rankEntropy`**: на Edge — `plan_generation_jobs.id` / `request_id` за один run; на клиенте — один UUID на неделю замены / сессию; см. **`docs/plan-generation.md`**), **exploration** (~25% слотов по хэшу соли), **jitter** (`rankJitterFromSeed(rankSalt, recipeId)`), и единая формула **`computeCompositeScore`** (`shared/planRankTrustShared.ts`), чтобы клиент и Edge оставались согласованы, а при **новом** job/sессии порядок мог меняться.
+**Цель:** одинаковая **форма** `rank_salt` (в конец соли добавляется **`rankEntropy`**: на Edge — `plan_generation_jobs.id` / `request_id` за один run; на клиенте — один UUID на неделю замены / сессию; см. **`docs/plan-generation.md`**), **exploration** (базово по хэшу соли; **Ranking v3.3:** для слотов **adult** адаптивно **25% или 35%** по доле established trust в отфильтрованном пуле; для **infant** и legacy без `mode` — **25%**), **jitter** (`rankJitterFromSeed(rankSalt, recipeId)`), и единая формула **`computeCompositeScore`** (`shared/planRankTrustShared.ts` — см. **Ranking Enhancement v3.3** в **`docs/dev/POOL_AND_CHAT_RECIPES.md`**), чтобы клиент и Edge оставались согласованы, а при **новом** job/sессии порядок мог меняться. Per-slot **`age_months`**: `poolRankLite` и Edge передают режим **infant | adult** (`age_months == null` → adult).
 
 **Недельный dedup:** исключения по слотам текущей недели и 4 предыдущих дней применяются **всегда** для multi-day run (раньше при малом adult-пуле отключались).
 

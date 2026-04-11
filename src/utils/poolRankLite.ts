@@ -6,13 +6,17 @@
 import {
   buildAlignedRankSalt,
   computeCompositeScore,
-  explainRankingTail,
+  computeExplorationThresholdPct,
   explorationPickActive,
+  getRankingTailBreakdown,
   isPoolTrustEligible,
+  resolvePlanRankingMode,
+  type PlanRankingMode,
   type RankingInput,
+  type RankingTailInput,
 } from "@shared/planRankTrustShared";
 
-export type { RankingInput };
+export type { RankingInput, RankingTailInput, PlanRankingMode };
 
 export type PoolRankLiteRow = {
   id: string;
@@ -63,6 +67,10 @@ export type PickFromPoolRankingLiteOptions = {
    * (jitter = rankJitterFromSeed(rankSalt, id)).
    */
   rankJitterForRecipeId?: (recipeId: string) => number;
+  /**
+   * Возраст профиля (мес.) для Ranking v3.3. Пусто / null → adult (как в спеке).
+   */
+  ageMonths?: number | null;
 };
 
 /**
@@ -76,20 +84,27 @@ export function pickFromPoolRankingLite(
   if (eligible.length === 0) return null;
 
   const rankSalt = options.rankSalt;
-  const exploreSlot = explorationPickActive(rankSalt);
+  const planMode = resolvePlanRankingMode(options.ageMonths);
+  const explorationThresholdPct = computeExplorationThresholdPct(planMode, eligible);
+  const exploreSlot = explorationPickActive(rankSalt, explorationThresholdPct);
 
   const scored = eligible.map((row) => {
     const slotFit = options.getSlotFit(row);
     const jitterOverride = options.rankJitterForRecipeId?.(row.id);
-    const composite = computeCompositeScore({
-      slotFit,
+    const rankInput = {
       trustLevel: row.trust_level,
       score: row.score,
       recipeId: row.id,
       rankSalt,
       jitterOverride,
+      mode: planMode,
+      explorationThresholdPct,
+    };
+    const composite = computeCompositeScore({
+      slotFit,
+      ...rankInput,
     });
-    const tail = explainRankingTail(row.trust_level, row.score, row.id, rankSalt, jitterOverride);
+    const tail = getRankingTailBreakdown(rankInput);
     return {
       row,
       slotFit,

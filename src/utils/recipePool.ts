@@ -927,6 +927,7 @@ export async function pickRecipeFromPool(
   });
   const ranked = pickFromPoolRankingLite(filtered as PoolRankLiteRow[], {
     rankSalt,
+    ageMonths: memberData?.age_months ?? null,
     getSlotFit: (row) =>
       computeSlotFitForPoolRow(row as PoolRecipeRow, {
         slotNorm,
