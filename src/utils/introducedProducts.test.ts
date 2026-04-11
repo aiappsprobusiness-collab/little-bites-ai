@@ -81,7 +81,7 @@ describe("evaluateInfantRecipeComplementaryRules", () => {
       []
     );
     expect(r.valid).toBe(false);
-    expect(r.reason).toBe("start_multi_food_rows");
+    expect(r.reason).toBe("start_multiple_keys");
   });
 
   it("start: rejects single row oatmeal / porridge key", () => {

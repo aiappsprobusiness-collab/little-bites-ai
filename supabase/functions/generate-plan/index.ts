@@ -27,6 +27,10 @@ import {
   computeWeeklyKeyIngredientPenaltyCalibrated,
   deriveKeyIngredientSignals,
 } from "../../../shared/keyIngredientSignals.ts";
+import {
+  evaluateInfantRecipeComplementaryRules,
+  evaluateInfantSecondaryFamiliarOnly,
+} from "../../../shared/infantComplementaryRules.ts";
 import { passesPreferenceFilters } from "./preferenceRules.ts";
 import {
   type CulturalFamiliarityCountKey,
@@ -75,13 +79,23 @@ function normalizeMealType(value: string | null | undefined): NormalizedMealType
   return MEAL_TYPE_ALIASES[key] ?? MEAL_TYPE_ALIASES[value.trim()] ?? null;
 }
 
-type MemberDataPool = { allergies?: string[]; preferences?: string[]; likes?: string[]; dislikes?: string[]; age_months?: number; type?: string | null };
+type MemberDataPool = {
+  allergies?: string[];
+  preferences?: string[];
+  likes?: string[];
+  dislikes?: string[];
+  age_months?: number;
+  type?: string | null;
+  introduced_product_keys?: string[];
+  introducing_product_key?: string | null;
+  introducing_started_at?: string | null;
+};
 type RecipeRowPool = {
   id: string; title: string; norm_title?: string | null; description: string | null; meal_type?: string | null;
   is_soup?: boolean | null;
   max_age_months?: number | null; min_age_months?: number | null;
   nutrition_goals?: unknown;
-  recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
+  recipe_ingredients?: Array<{ name?: string; display_text?: string; category?: string | null }> | null;
   score?: number | null;
   trust_level?: string | null;
   /** Stage 4.4: культурные метаданные (scoring только familiarity на MVP). */
@@ -393,7 +407,7 @@ function getCheapFilteredCount(
 }
 
 const POOL_SELECT_FIELDS =
-  "id, title, norm_title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text)";
+  "id, title, norm_title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text, category)";
 const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
 /** Все curated seed/starter должны попадать в память: при одном LIMIT по score почти все рецепты имеют score=0, и первые N строк из БД — случайные, без каталога infant/toddler. */
 const POOL_SEED_CATALOG_FETCH_LIMIT = 600;
@@ -1073,11 +1087,20 @@ function getInfantComplementaryDishCount(ageMonths: number, dayKey: string, memb
   return (infantSeedHash(`${dayKey}|${memberId ?? ""}|c2`) % 10) < 8 ? 2 : 1;
 }
 
+function getIntroducedProductKeysForInfant(memberData: MemberDataPool | null): string[] {
+  const raw = memberData?.introduced_product_keys;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((k): k is string => typeof k === "string" && k.trim().length > 0);
+}
+
+type InfantComplementarySlotRole = "primary" | "secondary";
+
 function filterInfantComplementaryCandidates(
   pool: RecipeRowPool[],
   memberData: MemberDataPool | null,
   excludeRecipeIds: string[],
   excludeTitleKeys: string[],
+  infantSlotRole: InfantComplementarySlotRole,
 ): RecipeRowPool[] {
   const excludeSet = new Set(excludeRecipeIds);
   const excludeTitleSet = new Set(excludeTitleKeys.map((k) => k.toLowerCase().trim()).filter(Boolean));
@@ -1103,6 +1126,23 @@ function filterInfantComplementaryCandidates(
     const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
     return slotSanityCheck(resolved, [r.title ?? "", r.description ?? "", ing].join(" "));
   });
+  const introduced = getIntroducedProductKeysForInfant(memberData);
+  if (infantSlotRole === "secondary") {
+    if (introduced.length === 0) return [];
+    filtered = filtered.filter((r) =>
+      evaluateInfantSecondaryFamiliarOnly(r.recipe_ingredients ?? null, introduced, {
+        title: r.title,
+        description: r.description,
+      }).valid
+    );
+  } else {
+    filtered = filtered.filter((r) =>
+      evaluateInfantRecipeComplementaryRules(r.recipe_ingredients ?? null, introduced, {
+        title: r.title,
+        description: r.description,
+      }).valid
+    );
+  }
   return filtered;
 }
 
@@ -1111,6 +1151,7 @@ function pickInfantComplementaryFromPool(
   memberData: MemberDataPool | null,
   excludeRecipeIds: string[],
   excludeTitleKeys: string[],
+  infantSlotRole: InfantComplementarySlotRole,
   usedBaseCounts: Record<string, number> | undefined,
   goalHints: {
     preferredGoals?: Set<string>;
@@ -1132,7 +1173,7 @@ function pickInfantComplementaryFromPool(
   softBonus: number;
   culturalFamiliarityKey: CulturalFamiliarityCountKey;
 } | null {
-  const work = filterInfantComplementaryCandidates(pool, memberData, excludeRecipeIds, excludeTitleKeys);
+  const work = filterInfantComplementaryCandidates(pool, memberData, excludeRecipeIds, excludeTitleKeys, infantSlotRole);
   if (work.length === 0) return null;
   const recentSignatures = buildRecentSignatureSet(excludeTitleKeys);
   const ctx: ScoreRecipeCtx = {
@@ -1273,8 +1314,21 @@ serve(async (req) => {
         replaceMemberData = buildFamilyMemberDataForPlan(membersList);
         replaceMembersForScoring = membersList;
       } else {
-        const { data: memberRow } = await supabase.from("members").select("age_months, allergies, dislikes, type").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
-        const m = memberRow as { age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null; type?: string | null } | null;
+        const { data: memberRow } = await supabase
+          .from("members")
+          .select("age_months, allergies, dislikes, type, introduced_product_keys, introducing_product_key, introducing_started_at")
+          .eq("id", effectiveMemberId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        const m = memberRow as {
+          age_months?: number | null;
+          allergies?: string[] | null;
+          dislikes?: string[] | null;
+          type?: string | null;
+          introduced_product_keys?: string[] | null;
+          introducing_product_key?: string | null;
+          introducing_started_at?: string | null;
+        } | null;
         if (m) {
           replaceMemberData = {
             ...(memberData ?? {}),
@@ -1282,6 +1336,9 @@ serve(async (req) => {
             allergies: Array.isArray(m.allergies) && m.allergies.length > 0 ? m.allergies : (memberData?.allergies ?? []),
             dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
             type: m.type ?? memberData?.type,
+            introduced_product_keys: Array.isArray(m.introduced_product_keys) ? m.introduced_product_keys : (memberData?.introduced_product_keys ?? []),
+            introducing_product_key: m.introducing_product_key ?? memberData?.introducing_product_key ?? null,
+            introducing_started_at: m.introducing_started_at ?? memberData?.introducing_started_at ?? null,
           };
           replaceMembersForScoring = [{ age_months: m.age_months ?? memberData?.age_months ?? null }];
         } else if (memberData?.age_months != null) {
@@ -1352,11 +1409,13 @@ serve(async (req) => {
       let picked: { id: string; title: string } | null = null;
       if (isInfantComplementaryPlan(replaceMemberData, memberId)) {
         if (mealType === "breakfast" || mealType === "lunch") {
+          const infantReplaceRole: InfantComplementarySlotRole = mealType === "breakfast" ? "primary" : "secondary";
           const ip = pickInfantComplementaryFromPool(
             poolForReplace,
             replaceMemberData,
             excludeRecipeIds,
             excludeTitleKeys,
+            infantReplaceRole,
             undefined,
             replaceGoalHints,
           );
@@ -1479,8 +1538,21 @@ serve(async (req) => {
       effectiveMemberData = buildFamilyMemberDataForPlan(membersList);
       safeLog("family_mode", { members_count: membersList.length });
     } else {
-      const { data: memberRow } = await supabase.from("members").select("age_months, allergies, dislikes, type").eq("id", effectiveMemberId).eq("user_id", userId).maybeSingle();
-      const m = memberRow as { age_months?: number | null; allergies?: string[] | null; dislikes?: string[] | null; type?: string | null } | null;
+      const { data: memberRow } = await supabase
+        .from("members")
+        .select("age_months, allergies, dislikes, type, introduced_product_keys, introducing_product_key, introducing_started_at")
+        .eq("id", effectiveMemberId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      const m = memberRow as {
+        age_months?: number | null;
+        allergies?: string[] | null;
+        dislikes?: string[] | null;
+        type?: string | null;
+        introduced_product_keys?: string[] | null;
+        introducing_product_key?: string | null;
+        introducing_started_at?: string | null;
+      } | null;
       if (m) {
         effectiveMemberData = {
           ...(memberData ?? {}),
@@ -1488,6 +1560,9 @@ serve(async (req) => {
           allergies: Array.isArray(m.allergies) && m.allergies.length > 0 ? m.allergies : (memberData?.allergies ?? []),
           dislikes: Array.isArray(m.dislikes) && m.dislikes.length > 0 ? m.dislikes : (memberData?.dislikes ?? []),
           type: m.type ?? memberData?.type,
+          introduced_product_keys: Array.isArray(m.introduced_product_keys) ? m.introduced_product_keys : (memberData?.introduced_product_keys ?? []),
+          introducing_product_key: m.introducing_product_key ?? memberData?.introducing_product_key ?? null,
+          introducing_started_at: m.introducing_started_at ?? memberData?.introducing_started_at ?? null,
         };
         membersForScoring = [{ age_months: m.age_months ?? memberData?.age_months ?? null }];
       } else if (memberData?.age_months != null) {
@@ -1522,7 +1597,23 @@ serve(async (req) => {
 
     let cheapTotal = 0;
     if (isInfantPlanRun && effectiveMemberData?.age_months != null) {
-      cheapTotal = filterInfantComplementaryCandidates(poolCandidates, effectiveMemberData, [], []).length > 0 ? 1 : 0;
+      const ageM = Math.max(0, Math.round(Number(effectiveMemberData.age_months)));
+      const firstDayKey = dayKeys[0] ?? getTodayKey();
+      const dishCountPreview = getInfantComplementaryDishCount(ageM, firstDayKey, effectiveMemberId);
+      const nPrimary = filterInfantComplementaryCandidates(poolCandidates, effectiveMemberData, [], [], "primary").length;
+      const nSecondary = filterInfantComplementaryCandidates(poolCandidates, effectiveMemberData, [], [], "secondary").length;
+      const primaryOk = nPrimary > 0;
+      const secondaryOk = dishCountPreview < 2 || nSecondary > 0;
+      cheapTotal = primaryOk && secondaryOk ? 1 : 0;
+      if (cheapTotal === 0) {
+        safeLog("INFANT_CHEAP_ZERO_DETAIL", {
+          requestId,
+          n_primary_candidates: nPrimary,
+          n_secondary_candidates: nSecondary,
+          dish_count_preview: dishCountPreview,
+          introduced_count: getIntroducedProductKeysForInfant(effectiveMemberData).length,
+        });
+      }
     } else {
       for (const mk of MEAL_KEYS) cheapTotal += getCheapFilteredCount(poolCandidates, mk, [], [], effectiveMemberData);
     }
@@ -1667,6 +1758,7 @@ serve(async (req) => {
           effectiveMemberData,
           usedRecipeIds,
           [...usedTitleKeys],
+          "primary",
           baseCountsForSlot,
           goalHintsBase,
         );
@@ -1718,6 +1810,7 @@ serve(async (req) => {
             effectiveMemberData,
             usedRecipeIds,
             [...usedTitleKeys],
+            "secondary",
             baseCountsForSlot,
             goalHints2,
           );

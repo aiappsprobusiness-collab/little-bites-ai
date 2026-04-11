@@ -48,7 +48,11 @@ const PRODUCT_ALIAS_PATTERNS: Array<{ key: string; patterns: RegExp[]; label: st
   { key: "hake", label: "Хек", patterns: [/хек/iu, /\bhake\b/iu] },
   { key: "pollock", label: "Минтай", patterns: [/минта/iu, /\bpollock\b/iu] },
   { key: "fish", label: "Рыба", patterns: [/рыба/iu, /\bfish\b/iu] },
-  { key: "egg", label: "Яйцо", patterns: [/яйц/iu, /\begg\b/iu] },
+  {
+    key: "egg",
+    label: "Яйцо",
+    patterns: [/яйц/iu, /\begg\b/iu, /желтк/iu, /яичн/iu, /\byolk\b/iu],
+  },
   { key: "cottage_cheese", label: "Творог", patterns: [/творо/iu, /\bcottage\s*cheese\b/iu] },
   { key: "kefir", label: "Кефир", patterns: [/кефир/iu, /\bkefir\b/iu] },
   { key: "yogurt", label: "Йогурт", patterns: [/йогурт/iu, /\byogh?urt\b/iu] },
@@ -107,6 +111,25 @@ export function normalizeProductKey(raw: string | null | undefined): string | nu
     if (item.patterns.some((rx) => rx.test(text))) return item.key;
   }
   return null;
+}
+
+/**
+ * Все канонические ключи продуктов, упомянутые в названии/описании (для правил прикорма вместе с ингредиентами).
+ */
+export function extractKeyProductKeysFromTextBlob(text: string | null | undefined): string[] {
+  if (text == null || typeof text !== "string" || !text.trim()) return [];
+  const normalized = normalizeText(text);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of PRODUCT_ALIAS_PATTERNS) {
+    if (item.patterns.some((rx) => rx.test(normalized))) {
+      if (!seen.has(item.key)) {
+        seen.add(item.key);
+        out.push(item.key);
+      }
+    }
+  }
+  return out;
 }
 
 export function getKeyIngredientLabel(productKey: string): string {

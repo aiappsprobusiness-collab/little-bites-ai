@@ -14,6 +14,7 @@ import {
   getSanityBlockedReasons,
   recipeFitsAgeMonthsRow,
   applyUnder12PoolAgeMonthsSqlFilter,
+  applyInfantUnder12PoolSortOrder,
   filterPoolCandidatesForSlot,
   memberHasDislikesForPool,
   computeSlotFitForPoolRow,
@@ -149,7 +150,8 @@ export function useReplaceMealSlot(
         .in("source", [...POOL_SOURCES])
         .or(POOL_TRUST_OR);
       q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
-      const { data: rows, error } = await q.order("created_at", { ascending: false }).limit(80);
+      q = applyInfantUnder12PoolSortOrder(q, ageMonthsForPool);
+      const { data: rows, error } = await q.limit(80);
       if (error || !rows?.length) return null;
 
       type Row = {

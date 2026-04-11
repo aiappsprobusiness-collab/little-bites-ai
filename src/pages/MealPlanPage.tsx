@@ -134,7 +134,7 @@ import {
 } from "@/hooks/usePWAInstall";
 import {
   getInfantNovelProductKeysForIntroduce,
-  getInfantPrimaryProductSummaryLine,
+  getInfantPrimaryProductSummaryParts,
   getIntroducingDisplayDay,
   getProductDisplayLabel,
   isIntroducingGracePeriod,
@@ -1380,6 +1380,18 @@ export default function MealPlanPage() {
     const hasDbPlanForToday = weekPlans.some((p) => p.planned_date === todayKey && !p.isStarter);
     if (hasDbPlanForToday) return;
     initialPlanRanRef.current = true;
+    /** Прикорм &lt;12: не вызываем Edge upgrade — слоты добирает клиентский пул с правилами прикорма (см. useEffect infant client fill). */
+    const ageM = memberDataForPlan?.age_months;
+    const skipEdgeInfantInitialFill =
+      memberIdForPlan != null &&
+      ageM != null &&
+      Number.isFinite(ageM) &&
+      Math.max(0, Math.round(ageM)) < 12;
+    if (skipEdgeInfantInitialFill) {
+      setPlanInitialized();
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+      return;
+    }
     runPoolUpgrade({
       type: "day",
       member_id: memberIdForPlan,
@@ -2667,12 +2679,14 @@ export default function MealPlanPage() {
                   const recipeId = plannedMeal ? getPlannedMealRecipeId(plannedMeal) : null;
                   const hasDish = !!(plannedMeal && recipeId && recipe?.title);
                   const isPrimaryEmpty = !hasDish && firstEmptySlotId === slot.id;
-                  const infantPrimarySummaryLine =
+                  const infantPrimarySummaryParts =
                     isInfantPlanUi && isInfantNewRecipePlanSlot(slot.id) && recipeId
-                      ? getInfantPrimaryProductSummaryLine(
-                        previews[recipeId]?.ingredientNames,
-                        introducedProductKeys
-                      )
+                      ? getInfantPrimaryProductSummaryParts(
+                          previews[recipeId]?.ingredientNames,
+                          introducedProductKeys,
+                          recipe?.title ?? null,
+                          previews[recipeId]?.description ?? null
+                        )
                       : null;
                   const novelKeysForIntroduce =
                     isInfantPlanUi && isInfantNewRecipePlanSlot(slot.id) && recipeId && recipe?.title
@@ -2686,14 +2700,24 @@ export default function MealPlanPage() {
                     <div key={slot.id} className={cn(infantSlotSectionHeading && "space-y-1")}>
                       {infantSlotSectionHeading ? (
                         <div className="px-0.5 space-y-0.5">
-                          <p className="text-xs font-semibold text-foreground/90 tracking-tight">
-                            {infantSlotSectionHeading}
-                          </p>
-                          {infantPrimarySummaryLine ? (
-                            <p className="text-[11px] font-normal text-muted-foreground leading-snug">
-                              {infantPrimarySummaryLine}
-                            </p>
-                          ) : null}
+                          {isInfantNewRecipePlanSlot(slot.id) && infantPrimarySummaryParts ? (
+                            <>
+                              <p className="text-xs font-semibold text-foreground/90 tracking-tight">
+                                {infantPrimarySummaryParts.novelHeading}
+                              </p>
+                              {infantPrimarySummaryParts.familiarLine ? (
+                                <p className="text-[11px] font-normal text-muted-foreground leading-snug">
+                                  {infantPrimarySummaryParts.familiarLine}
+                                </p>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs font-semibold text-foreground/90 tracking-tight">
+                                {infantSlotSectionHeading}
+                              </p>
+                            </>
+                          )}
                         </div>
                       ) : null}
                       {hasDish ? (

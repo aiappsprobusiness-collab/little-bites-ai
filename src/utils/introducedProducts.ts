@@ -2,15 +2,18 @@ import { formatLocalDate } from "@/utils/dateUtils";
 import {
   extractKeyProductKeysFromIngredients as extractKeyProductKeysFromIngredientsShared,
   getKeyIngredientLabel,
-  isTechnicalIngredientText,
   normalizeProductKey as normalizeProductKeyFromShared,
 } from "@shared/keyIngredientSignals";
+import {
+  ALLOWED_START_PRODUCT_KEYS,
+  evaluateInfantRecipeComplementaryRules,
+  evaluateInfantSecondaryFamiliarOnly,
+  extractAllKeyProductKeysFromIngredients as extractAllKeyProductKeysFromIngredientsShared,
+  type InfantRecipeValidityResult,
+  type IngredientForProductKey as IngredientForProductKeyShared,
+} from "@shared/infantComplementaryRules";
 
-export type IngredientForProductKey = {
-  name?: string | null;
-  display_text?: string | null;
-  category?: string | null;
-};
+export type IngredientForProductKey = IngredientForProductKeyShared;
 
 export function normalizeProductKey(raw: string | null | undefined): string | null {
   return normalizeProductKeyFromShared(raw);
@@ -49,7 +52,7 @@ export function extractAllKeyProductKeysFromIngredients(
   ingredients: IngredientForProductKey[] | null | undefined,
   maxKeys = 100
 ): string[] {
-  return extractKeyProductKeysFromIngredientsShared(ingredients, maxKeys);
+  return extractAllKeyProductKeysFromIngredientsShared(ingredients, maxKeys);
 }
 
 export function partitionInfantNovelAndFamiliarKeys(
@@ -62,8 +65,8 @@ export function partitionInfantNovelAndFamiliarKeys(
   return { novelKeys, familiarKeys };
 }
 
-/** Ключи продуктов для первого прикорма (0 введённых): только овощи из тройки. */
-export const ALLOWED_START_PRODUCT_KEYS = new Set<string>(["zucchini", "broccoli", "cauliflower"]);
+export { ALLOWED_START_PRODUCT_KEYS };
+export type { InfantRecipeTextMeta } from "@shared/infantComplementaryRules";
 
 export type InfantFeedingMode = "standard" | "early_start";
 
@@ -73,139 +76,31 @@ export function getInfantFeedingMode(ageMonths: number | null | undefined): Infa
   return "standard";
 }
 
-function countNonTechnicalFoodIngredientRows(ingredients: IngredientForProductKey[] | null | undefined): number {
-  if (!ingredients?.length) return 0;
-  let n = 0;
-  for (const item of ingredients) {
-    const merged = [item.display_text ?? "", item.name ?? ""].join(" ").trim();
-    if (!merged) continue;
-    if (isTechnicalIngredientText(merged)) continue;
-    n++;
-  }
-  return n;
-}
+export type { InfantRecipeValidityResult };
 
-/** Есть ли пищевая строка без канонического ключа — нельзя считать familiar «всё введено» и нельзя корректно считать novel после старта. */
-function hasNonTechnicalFoodRowWithoutProductKey(
-  ingredients: IngredientForProductKey[] | null | undefined
-): boolean {
-  if (!ingredients?.length) return false;
-  for (const item of ingredients) {
-    const merged = [item.display_text ?? "", item.name ?? ""].join(" ").trim();
-    if (!merged) continue;
-    if (isTechnicalIngredientText(merged)) continue;
-    if (!normalizeProductKey(merged)) return true;
-  }
-  return false;
-}
-
-export type InfantRecipeValidityResult = {
-  valid: boolean;
-  reason: string;
-  canonicalKeys: string[];
-  novelKeys: string[];
-};
-
-/**
- * Блок «Сегодня можно попробовать» (primary): старт — одна строка продукта из ALLOWED_START;
- * после старта — **ровно один** новый продукт, остальные только из введённых (не «только знакомые» — они во втором блоке).
- */
-export function evaluateInfantRecipeComplementaryRules(
-  ingredients: IngredientForProductKey[] | null | undefined,
-  introducedProductKeys: string[]
-): InfantRecipeValidityResult {
-  const introduced = introducedProductKeys.filter(Boolean);
-  const introducedSet = new Set(introduced);
-  const canonicalKeys = extractAllKeyProductKeysFromIngredients(ingredients, 100);
-  const foodRows = countNonTechnicalFoodIngredientRows(ingredients);
-  const novelKeys = canonicalKeys.filter((k) => !introducedSet.has(k));
-
-  if (introduced.length === 0) {
-    if (foodRows !== 1) {
-      return {
-        valid: false,
-        reason: foodRows === 0 ? "start_no_food_ingredient_rows" : "start_multi_food_rows",
-        canonicalKeys,
-        novelKeys,
-      };
-    }
-    if (canonicalKeys.length !== 1) {
-      return {
-        valid: false,
-        reason: canonicalKeys.length === 0 ? "start_no_recognized_product" : "start_multiple_keys",
-        canonicalKeys,
-        novelKeys,
-      };
-    }
-    if (!ALLOWED_START_PRODUCT_KEYS.has(canonicalKeys[0])) {
-      return { valid: false, reason: "start_not_allowed_product", canonicalKeys, novelKeys };
-    }
-    return { valid: true, reason: "start_ok", canonicalKeys, novelKeys };
-  }
-
-  if (canonicalKeys.length === 0) {
-    return { valid: false, reason: "after_no_recognized_keys", canonicalKeys, novelKeys };
-  }
-  if (hasNonTechnicalFoodRowWithoutProductKey(ingredients)) {
-    return {
-      valid: false,
-      reason: "after_unrecognized_food_row",
-      canonicalKeys,
-      novelKeys,
-    };
-  }
-  if (novelKeys.length !== 1) {
-    return {
-      valid: false,
-      reason: novelKeys.length === 0 ? "after_no_novel_for_new_block" : "after_multiple_novel_products",
-      canonicalKeys,
-      novelKeys,
-    };
-  }
-  return { valid: true, reason: "after_ok", canonicalKeys, novelKeys };
-}
-
-/** Secondary-слот: только продукты из введённых (без новинок). */
-export function evaluateInfantSecondaryFamiliarOnly(
-  ingredients: IngredientForProductKey[] | null | undefined,
-  introducedProductKeys: string[]
-): InfantRecipeValidityResult {
-  const introducedSet = new Set(introducedProductKeys.filter(Boolean));
-  const canonicalKeys = extractAllKeyProductKeysFromIngredients(ingredients, 100);
-  const novelKeys = canonicalKeys.filter((k) => !introducedSet.has(k));
-  if (hasNonTechnicalFoodRowWithoutProductKey(ingredients)) {
-    return {
-      valid: false,
-      reason: "secondary_unrecognized_food_row",
-      canonicalKeys,
-      novelKeys,
-    };
-  }
-  if (canonicalKeys.length === 0) {
-    return { valid: false, reason: "secondary_no_keys", canonicalKeys, novelKeys };
-  }
-  if (novelKeys.length > 0) {
-    return { valid: false, reason: "secondary_has_novel", canonicalKeys, novelKeys };
-  }
-  return { valid: true, reason: "secondary_ok", canonicalKeys, novelKeys };
-}
+export { evaluateInfantRecipeComplementaryRules, evaluateInfantSecondaryFamiliarOnly };
 
 export type ValidInfantRecipesContext = {
   introducedProductKeys: string[];
   infantSlotRole?: "primary" | "secondary" | null;
 };
 
-export function getValidInfantRecipes<T extends { id: string; recipe_ingredients?: IngredientForProductKey[] | null }>(
-  recipes: T[],
-  context: ValidInfantRecipesContext
-): T[] {
+export function getValidInfantRecipes<
+  T extends {
+    id: string;
+    recipe_ingredients?: IngredientForProductKey[] | null;
+    title?: string | null;
+    description?: string | null;
+  },
+>(recipes: T[], context: ValidInfantRecipesContext): T[] {
   const introduced = context.introducedProductKeys.filter(Boolean);
   const role = context.infantSlotRole ?? "primary";
   const ing = (r: T) => (r.recipe_ingredients ?? null) as IngredientForProductKey[] | null;
+  const meta = (r: T) => ({ title: r.title ?? null, description: r.description ?? null });
   if (role === "secondary") {
-    return recipes.filter((r) => evaluateInfantSecondaryFamiliarOnly(ing(r), introduced).valid);
+    return recipes.filter((r) => evaluateInfantSecondaryFamiliarOnly(ing(r), introduced, meta(r)).valid);
   }
-  return recipes.filter((r) => evaluateInfantRecipeComplementaryRules(ing(r), introduced).valid);
+  return recipes.filter((r) => evaluateInfantRecipeComplementaryRules(ing(r), introduced, meta(r)).valid);
 }
 
 /** Логи отклонения рецептов: `?debugInfant=1` в URL. */
@@ -217,10 +112,11 @@ export function isInfantComplementaryFeedDebug(): boolean {
 /** Строки для UI: «Новый продукт: …», при необходимости «Знакомый продукт: …». */
 export function getInfantPrimaryIntroducingLinesFromIngredientNames(
   ingredientNames: string[] | null | undefined,
-  introducedProductKeys: string[]
+  introducedProductKeys: string[],
+  recipeMeta?: { title?: string | null; description?: string | null } | null
 ): string[] {
   const ing = (ingredientNames ?? []).map((name) => ({ name, display_text: name }));
-  const ev = evaluateInfantRecipeComplementaryRules(ing, introducedProductKeys);
+  const ev = evaluateInfantRecipeComplementaryRules(ing, introducedProductKeys, recipeMeta ?? null);
   if (!ev.valid) return [];
   const { novelKeys, familiarKeys } = partitionInfantNovelAndFamiliarKeys(ev.canonicalKeys, introducedProductKeys);
   const lines: string[] = [];
@@ -238,40 +134,61 @@ export function getInfantPrimaryIntroducingLinesFromIngredientNames(
   return lines;
 }
 
+/** Две строки для UI: заголовок «Новый продукт: …» и вторичная «Знакомый продукт: …». */
+export function getInfantPrimaryProductSummaryParts(
+  ingredientNames: string[] | null | undefined,
+  introducedProductKeys: string[],
+  recipeTitle?: string | null,
+  recipeDescription?: string | null
+): { novelHeading: string; familiarLine: string | null } | null {
+  const ing = (ingredientNames ?? []).map((name) => ({ name, display_text: name }));
+  const ev = evaluateInfantRecipeComplementaryRules(ing, introducedProductKeys, {
+    title: recipeTitle ?? null,
+    description: recipeDescription ?? null,
+  });
+  if (!ev.valid) return null;
+  const { novelKeys, familiarKeys } = partitionInfantNovelAndFamiliarKeys(ev.canonicalKeys, introducedProductKeys);
+  if (novelKeys.length === 0) return null;
+  const novelLabels = novelKeys.map((k) => getProductDisplayLabel(k));
+  const familiarLabels = familiarKeys.map((k) => getProductDisplayLabel(k));
+  const novelHeading =
+    novelKeys.length === 1
+      ? `Новый продукт: ${novelLabels[0]}`
+      : `Новый продукт: ${novelLabels.join(", ")}`;
+  const familiarLine =
+    familiarKeys.length === 0
+      ? null
+      : familiarKeys.length === 1
+        ? `Знакомый продукт: ${familiarLabels[0]}`
+        : `Знакомые продукты: ${familiarLabels.join(", ")}`;
+  return { novelHeading, familiarLine };
+}
+
 /**
- * Одна компактная строка для плана прикорма над карточкой primary (без дублирования длинных подписей).
- * Формат: «Яблоко · знакомый: гречка» и варианты для нескольких продуктов.
+ * Одна компактная строка (совместимость); для плана предпочтительнее `getInfantPrimaryProductSummaryParts`.
  */
 export function getInfantPrimaryProductSummaryLine(
   ingredientNames: string[] | null | undefined,
-  introducedProductKeys: string[]
+  introducedProductKeys: string[],
+  recipeTitle?: string | null,
+  recipeDescription?: string | null
 ): string | null {
-  const ing = (ingredientNames ?? []).map((name) => ({ name, display_text: name }));
-  const ev = evaluateInfantRecipeComplementaryRules(ing, introducedProductKeys);
-  if (!ev.valid) return null;
-  const { novelKeys, familiarKeys } = partitionInfantNovelAndFamiliarKeys(ev.canonicalKeys, introducedProductKeys);
-  const novelLabels = novelKeys.map((k) => getProductDisplayLabel(k));
-  const familiarLabels = familiarKeys.map((k) => getProductDisplayLabel(k));
-
-  if (novelKeys.length === 1 && familiarLabels.length > 0) {
-    return `${novelLabels[0]} · знакомый: ${familiarLabels.join(", ")}`;
+  const parts = getInfantPrimaryProductSummaryParts(
+    ingredientNames,
+    introducedProductKeys,
+    recipeTitle,
+    recipeDescription
+  );
+  if (!parts) return null;
+  if (parts.familiarLine) {
+    const novel = parts.novelHeading.replace(/^Новый продукт:\s*/i, "").trim();
+    const fam = parts.familiarLine
+      .replace(/^Знакомый продукт:\s*/i, "")
+      .replace(/^Знакомые продукты:\s*/i, "")
+      .trim();
+    return `${novel} · знакомый: ${fam}`;
   }
-  if (novelKeys.length === 1) {
-    return novelLabels[0];
-  }
-  if (novelLabels.length > 1 && familiarLabels.length > 0) {
-    return `${novelLabels.join(", ")} · знакомый: ${familiarLabels.join(", ")}`;
-  }
-  if (novelLabels.length > 1) {
-    return novelLabels.join(", ");
-  }
-  if (familiarLabels.length === 1) {
-    return `Знакомый: ${familiarLabels[0]}`;
-  }
-  if (familiarLabels.length > 1) {
-    return `Знакомые: ${familiarLabels.join(", ")}`;
-  }
-  return null;
+  return parts.novelHeading.replace(/^Новый продукт:\s*/i, "").trim();
 }
 
 /**

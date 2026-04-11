@@ -374,6 +374,20 @@ export function applyUnder12PoolAgeMonthsSqlFilter<T extends { or: (filters: str
     .or(`max_age_months.is.null,max_age_months.gte.${a}`);
 }
 
+/**
+ * Для возраста &lt;12 мес: сортировка score ↓, затем created_at ↓ — чтобы LIMIT не забирал только недавние импорты вне infant-возраста.
+ * Для 12+ — только created_at (как раньше).
+ */
+export function applyInfantUnder12PoolSortOrder<Q extends { order: (c: string, o?: { ascending?: boolean; nullsFirst?: boolean }) => Q }>(
+  query: Q,
+  ageMonths: number | null | undefined
+): Q {
+  if (ageMonths == null || !Number.isFinite(ageMonths) || ageMonths >= 12) {
+    return query.order("created_at", { ascending: false });
+  }
+  return query.order("score", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false });
+}
+
 /** Токены аллергенов из allergenTokens (курица→кур/куриц, орехи→орех, молоко→dairy и т.д.). */
 function getAllergyTokens(memberData: MemberDataForPool | null | undefined): string[] {
   return buildBlockedTokens(memberData?.allergies);
@@ -535,7 +549,8 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
     filtered = filtered.filter((r) => {
       const ev = evaluateInfantSecondaryFamiliarOnly(
         (r.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
-        introducedKeys
+        introducedKeys,
+        { title: r.title, description: r.description }
       );
       if (!ev.valid && isInfantComplementaryFeedDebug()) {
         console.log("[INFANT_RULE]", {
@@ -570,7 +585,8 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
     filtered = filtered.filter((r) => {
       const ev = evaluateInfantRecipeComplementaryRules(
         (r.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
-        introducedKeys
+        introducedKeys,
+        { title: r.title, description: r.description }
       );
       if (!ev.valid && isInfantComplementaryFeedDebug()) {
         console.log("[INFANT_RULE]", {
@@ -745,7 +761,8 @@ export async function listFilteredPoolRecipesForPlanSlot(args: ListFilteredPoolR
     .in("source", [...POOL_SOURCES])
     .or(POOL_TRUST_OR);
   poolQuery = applyUnder12PoolAgeMonthsSqlFilter(poolQuery, ageMonthsForPool);
-  const { data: rows, error } = await poolQuery.order("created_at", { ascending: false }).limit(limitCandidates);
+  poolQuery = applyInfantUnder12PoolSortOrder(poolQuery, ageMonthsForPool);
+  const { data: rows, error } = await poolQuery.limit(limitCandidates);
 
   if (error || !rows?.length) return [];
 
@@ -827,7 +844,7 @@ export async function pickRecipeFromPool(
     .in("source", [...POOL_SOURCES])
     .or(POOL_TRUST_OR);
   q = applyUnder12PoolAgeMonthsSqlFilter(q, ageMonthsForPool);
-  q = q.order("created_at", { ascending: false }).limit(limitCandidates);
+  q = applyInfantUnder12PoolSortOrder(q, ageMonthsForPool).limit(limitCandidates);
 
   if (excludeRecipeIds.length > 0 && excludeRecipeIds.length < 50) {
     const idsList = excludeRecipeIds.join(",");

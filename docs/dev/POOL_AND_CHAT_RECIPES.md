@@ -16,7 +16,7 @@
 
 **Диагностика сравнения:** Edge — лог **`RANK_DEBUG`** (рядом с `CHAT_PLAN_RANK_PICK` при rank-debug); клиент — консоль **`RANK_DEBUG`** при `?rankDebug=1` или `?debugPool=1`.
 
-**Клиент (`recipePool.ts`, `useReplaceMealSlot`):** для возраста профиля **&lt; 12 мес** к запросу в `recipes` добавляется PostgREST-фильтр по `min_age_months` / `max_age_months` (эквивалент `recipeFitsAgeMonthsRow`), **до** `ORDER BY created_at DESC` и `LIMIT`. Иначе после массового импорта каталога 12+ мес последние N строк по дате создания могут не содержать ни одной строки, подходящей младенцу, и вкладка прикорма показывает «Пока нет подходящих вариантов…», хотя infant seed в базе есть.
+**Клиент (`recipePool.ts`, `useReplaceMealSlot`):** для возраста профиля **&lt; 12 мес** к запросу в `recipes` добавляется PostgREST-фильтр по `min_age_months` / `max_age_months` (эквивалент `recipeFitsAgeMonthsRow`), затем сортировка **`score` DESC, `created_at` DESC** (`applyInfantUnder12PoolSortOrder`) и `LIMIT`. Раньше использовался только `created_at` DESC — после массового импорта каталога 12+ мес последние N строк по дате создания могли не содержать ни одной строки, подходящей младенцу, хотя infant seed в базе есть.
 
 **Curated infant seed (4–6, 7–8 и 9–11 мес):** импорт и идемпотентность — `docs/dev/infant-seed-import.md` (`source = seed`, `trust_level = core` — curated каталог; **trusted** = поведенческое доверие, не синоним seed-каталога).
 
@@ -139,6 +139,7 @@
 
 ## 7. Журнал: прикорм на вкладке «План» (март 2026)
 
+- **Edge generate-plan и прикорм (апрель 2026):** фильтрация infant-слотов по тем же правилам продуктов, что и клиент (`shared/infantComplementaryRules.ts`): primary vs secondary, учёт `introduced_product_keys` из тела запроса и из **`members`**. Канонические ключи продуктов объединяются из **ингредиентов** и **`title`/`description`** (чтобы «желток» только в названии не проходил во «знакомое» без введённого яйца). Быстрый отказ `cheap_zero` логирует `INFANT_CHEAP_ZERO_DETAIL` (число кандидатов primary/secondary и т.д.). Первый автозаход на План без плана на сегодня для &lt;12 мес **не вызывает** Edge upgrade — слоты добирает клиент.
 - **Root cause ложного исчерпания пула:** клиентский infant replace/fill использовал те же `exclude`, что и 12+ — **все** `recipe_id` / title за **всю неделю** плюс session. При большом пуле это сужало кандидатов после 2–3 замен. **Исправление:** `infantDayReplaceExcludeRecipeIdsMerged` / `infantDayReplaceExcludeTitleKeysMerged` — только **выбранный день** + session для этой даты (`MealPlanPage`).
 - **Дёрганье экрана:** после успешной infant-замены/добора убран лишний **`invalidateQueries(['meal_plans_v2'])`** там, где сразу вызывается **`applyReplaceSlotToPlanCache`**; `replaceSlotWithRecipe` принимает **`{ skipInvalidate: true }`**.
 - **Файлы:** `src/pages/MealPlanPage.tsx`, `src/hooks/useReplaceMealSlot.ts`, `src/components/plan/PoolExhaustedSheet.tsx`, `src/utils/recipePool.ts` (комментарии), документ **`docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md`**.

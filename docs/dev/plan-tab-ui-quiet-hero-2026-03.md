@@ -54,7 +54,7 @@
 | `docs/architecture/PLAN_MENU_PROFILE_AND_RECIPE_SELECTION.md` | UX плана, §5.4 прикорм (hero, подписи слотов) |
 | `docs/refactor/recipe-core-multilang-progress.md` | актуализация ссылок на UI целей/профиля |
 | `docs/dev/plan-tab-ui-quiet-hero-2026-03.md` | этот файл (в т.ч. §7 прикорм) |
-| `src/utils/introducedProducts.ts` | `getInfantPrimaryProductSummaryLine` |
+| `src/utils/introducedProducts.ts` | `getInfantPrimaryProductSummaryParts` / `getInfantPrimaryProductSummaryLine` |
 | `src/utils/introducedProducts.test.ts` | тесты summary-line |
 
 ## Ручная проверка (dev)
@@ -74,7 +74,7 @@
 
 ## 7. Прикорм (&lt;12 мес) — март 2026 (точечная доработка)
 
-**Файлы:** `src/pages/MealPlanPage.tsx`, `src/index.css` (при необходимости), `src/utils/introducedProducts.ts` (`getInfantPrimaryProductSummaryLine`), при необходимости тесты в `introducedProducts.test.ts`.
+**Файлы:** `src/pages/MealPlanPage.tsx`, `src/index.css` (при необходимости), `src/utils/introducedProducts.ts` (`getInfantPrimaryProductSummaryParts`), при необходимости тесты в `introducedProducts.test.ts`.
 
 **Изменения UX:**
 
@@ -83,7 +83,7 @@
 - Под чипом ребёнка — **единый info-блок** (справочный мелкий текст + при 4–5 мес предупреждение про врача); CTA ниже блока.
 - Hero прикорма: заголовок + дата + бейдж/меню — **отдельная верхняя строка**; блок с чипом и текстом на **полную ширину карточки** (убрано сжатие основного текста из‑за соседней колонки с меню в одном flex-ряду).
 - **«Помощь маме»** и **«Уже введённые продукты»** — не на всю ширину: `max-w` ~половина контейнера на `sm+`, на узком экране до ~100% с разумным пределом в `rem`.
-- Заголовок прикорма: **«План прикорма на сегодня»**; над карточками — **«Новый продукт»** / **«Уже знакомое блюдо»**, строка продуктов из `getInfantPrimaryProductSummaryLine`; **«Помощь маме»** и **«Уже введённые продукты»** визуально вторичные (outline / ghost).
+- Заголовок прикорма: **«План прикорма на сегодня»**; над primary — **`getInfantPrimaryProductSummaryParts`** («Новый продукт: …», при необходимости «Знакомый продукт: …»); над secondary — **«Уже знакомое блюдо»**; **«Помощь маме»** и **«Уже введённые продукты»** визуально вторичные (outline / ghost).
 
 **Ручная проверка:** порядок блоков в hero; длина строк основного абзаца на широком телефоне; ширина CTA; читаемость секции над первой карточкой; второй слот; профиль 12+ и «Семья» без регрессий.
 
