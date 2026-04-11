@@ -41,7 +41,7 @@ type ChatBlockedResponse = {
 
 ## UI
 
-- При `response.blocked === true` (или legacy `blockedByAllergy` / `blockedByDislike`) сообщение ассистента рендерится как **обычный текстовый пузырь**.
+- При `response.blocked === true` (или legacy `blockedByAllergy` / `blockedByDislike`) текст ответа показывается в **`SystemHintCard`** (как редиректы и подсказка 0–11 мес): иконка Info, фон `bg-muted`, время и удаление внутри карточки — **единый вид** с остальными системными сообщениями вкладки «Чат».
 - **Карточка рецепта не показывается** (`preParsedRecipe: null`).
 - Состояние «ИИ уточняет состав…» показывается только пока реально идёт стрим генерации (не при blocked).
 
@@ -53,8 +53,8 @@ type ChatBlockedResponse = {
 
 ## Текст сообщения пользователю
 
-- **Аллергия:** «У профиля «{name}» указана аллергия на {items}. Попробуйте изменить запрос или выбрать другой профиль.» (без имени: «У профиля указана аллергия на …»). Тот же текст при **post-recipe safety** (модель вернула конфликтный рецепт).
-- **Dislike:** «Профиль «{name}» не любит: {items}. …»; опционально вторая строка «Попробуйте заменить на: …» (клиент, `findAlternatives` в `src/types/chatBlocked.ts`).
+- **Аллергия (с именем):** «У «{name}» в анкете указана аллергия на {items}. … не подбираем такие блюда в чате … 🤍 …»; без имени профиля — «В профиле указана аллергия на …». Тот же смысл при **post-recipe safety** (Edge, `buildBlockedMessageEdge`).
+- **Dislike:** «Для «{name}» отмечено «не любит»: {items}. …»; опционально вторая строка «Попробуйте заменить на: …» (клиент, `findAlternatives` в `src/types/chatBlocked.ts`).
 
 Словарь замен для dislike — эвристический (курица → индейка и т.д.), в UI аллергии не показывается.
 
@@ -72,7 +72,7 @@ type ChatBlockedResponse = {
 | Pre-check (allergy + dislike) | `src/utils/chatBlockedCheck.ts` |
 | Токены dislikes        | `src/utils/dislikeTokens.ts` |
 | Вызов pre-check, ответ | `src/hooks/useDeepSeekAPI.tsx` |
-| Рендер (без карточки)   | `src/pages/ChatPage.tsx` |
+| Рендер (SystemHintCard) | `src/components/chat/ChatMessage.tsx` (`isBlockedRefusal`) |
 | Edge страховка, ответ   | `supabase/functions/deepseek-chat/index.ts` |
 
 ## Тесты

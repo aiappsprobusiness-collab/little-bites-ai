@@ -40,3 +40,6 @@ ios/
 
 # Temporary DB dumps (e.g. supabase db dump -f supabase_dump_temp.sql)
 supabase_dump*.sql
+
+# Supabase CLI local cache (linked project metadata)
+supabase/.temp/

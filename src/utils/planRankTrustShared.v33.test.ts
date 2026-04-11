@@ -140,3 +140,96 @@ describe("Ranking Enhancement v3.3 (shared)", () => {
     expect(adultPos - infantSame).toBeCloseTo((base * 1.4 - base) + emerging, 5);
   });
 });
+
+/**
+ * Модель «прироста» в финальном composite (не в БД):
+ * один и тот же candidate, один slotFit/salt/jitter, сравнение mode=infant (legacy) vs mode=adult (v3.3).
+ */
+describe("v3.3: моделирование прироста composite для candidate к same slotFit", () => {
+  const salt = "model-v33|pool|rank";
+  const jitter = 0;
+  const explorationPct = 25;
+  const slotFit = 22;
+
+  function legacyComposite(score: number, recipeId: string): number {
+    return computeCompositeScore({
+      slotFit,
+      trustLevel: "candidate",
+      score,
+      recipeId,
+      rankSalt: salt,
+      jitterOverride: jitter,
+      mode: "infant",
+    });
+  }
+
+  function adultV33Composite(score: number, recipeId: string): number {
+    return computeCompositeScore({
+      slotFit,
+      trustLevel: "candidate",
+      score,
+      recipeId,
+      rankSalt: salt,
+      jitterOverride: jitter,
+      mode: "adult",
+      explorationThresholdPct: explorationPct,
+    });
+  }
+
+  it.each([
+    { score: 6, label: "score=6 (порог «сильного» candidate в спеке)" },
+    { score: 6.5, label: "score=6.5" },
+    { score: 10, label: "score=10" },
+    { score: 20, label: "score=20 (emerging cap)" },
+  ])("adult > legacy для candidate $label", ({ score }) => {
+    const rid = `cand-${score}`;
+    const leg = legacyComposite(score, rid);
+    const adv = adultV33Composite(score, rid);
+    expect(adv).toBeGreaterThan(leg);
+    const delta = adv - leg;
+    expect(delta).toBeGreaterThan(0);
+    // При score>=4 есть emerging; при score>0 — множитель db
+    const baseDb = dbScoreContribution(score);
+    const expectedMinLift = (baseDb * 1.4 - baseDb) + (score >= 4 ? Math.min(1, score * 0.05) : 0);
+    expect(delta).toBeCloseTo(expectedMinLift, 5);
+  });
+
+  it("trusted: adult без множителя к db — прирост 0 относительно legacy при том же exploration", () => {
+    const recipeId = "trusted-same";
+    const score = 15;
+    const leg = computeCompositeScore({
+      slotFit,
+      trustLevel: "trusted",
+      score,
+      recipeId,
+      rankSalt: salt,
+      jitterOverride: jitter,
+      mode: "infant",
+    });
+    const adv = computeCompositeScore({
+      slotFit,
+      trustLevel: "trusted",
+      score,
+      recipeId,
+      rankSalt: salt,
+      jitterOverride: jitter,
+      mode: "adult",
+      explorationThresholdPct: explorationPct,
+    });
+    expect(adv).toBe(leg);
+  });
+
+  it("candidate score<=0: множитель 1.4 к db не применяется; при score<4 без emerging", () => {
+    const rid = "cand-low";
+    const leg = legacyComposite(0, rid);
+    const adv = adultV33Composite(0, rid);
+    const legNeg = legacyComposite(-1, rid);
+    const advNeg = adultV33Composite(-1, rid);
+    const base0 = dbScoreContribution(0);
+    const baseNeg = dbScoreContribution(-1);
+    expect(adv - leg).toBeCloseTo(0, 10);
+    expect(advNeg - legNeg).toBeCloseTo(0, 10);
+    expect(base0).toBe(0);
+    expect(baseNeg).toBeLessThan(0);
+  });
+});

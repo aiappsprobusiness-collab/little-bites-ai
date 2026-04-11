@@ -483,9 +483,11 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
         >
           {(() => {
             const isConsultationBubble = role === "assistant" && forcePlainText;
-            const isSystemHint = role === "assistant" && !!systemHintType;
+            /** Карточка как у системных подсказок (Info, единый фон) — редиректы, 0–11 мес, отказ аллергия/dislike */
+            const isSystemHintCardLayout =
+              role === "assistant" && (!!systemHintType || isBlockedRefusal);
             const Wrapper = isConsultationBubble ? HelpSectionCard : "div";
-            const wrapperClassName = isSystemHint
+            const wrapperClassName = isSystemHintCardLayout
               ? "relative max-w-full"
               : isConsultationBubble
                 ? "rounded-2xl rounded-bl-sm border border-border bg-card shadow-soft p-4"
@@ -498,13 +500,13 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       : "relative p-3 rounded-2xl bg-card border border-border shadow-soft";
             return (
               <Wrapper className={wrapperClassName}>
-            {role === "assistant" && systemHintType ? (
+            {role === "assistant" && (systemHintType || isBlockedRefusal) ? (
               <SystemHintCard
                 text={content}
-                topicKey={topicKey}
-                topicShortTitle={topicShortTitle}
-                onOpenAssistant={onOpenAssistant}
-                extraActions={systemHintExtraActions}
+                topicKey={systemHintType ? topicKey : undefined}
+                topicShortTitle={systemHintType ? topicShortTitle : undefined}
+                onOpenAssistant={systemHintType ? onOpenAssistant : undefined}
+                extraActions={systemHintType ? systemHintExtraActions : undefined}
                 actionSlot={
                   <button
                     type="button"
@@ -626,7 +628,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             ) : (
               <p className="text-typo-muted whitespace-pre-wrap select-none leading-snug break-words">{displayContent}</p>
             )}
-            {!forcePlainText && !systemHintType && (role !== "assistant" || !isStreaming) && (
+            {!forcePlainText && !systemHintType && !isBlockedRefusal && (role !== "assistant" || !isStreaming) && (
             <p className={`text-xs mt-1.5 ${role === "user" ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
               {timestamp.toLocaleTimeString("ru-RU", {
                 hour: "2-digit",
@@ -634,7 +636,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
               })}
             </p>
             )}
-            {role === "assistant" && !isStreaming && !isConsultationMode && !systemHintType && (
+            {role === "assistant" && !isStreaming && !isConsultationMode && !systemHintType && !isBlockedRefusal && (
               <div
                 className="flex flex-row items-center justify-between gap-2 mt-3 pt-3 border-t border-border/50 shrink-0"
                 style={{ touchAction: "manipulation" }}

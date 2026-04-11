@@ -599,9 +599,17 @@ export default function ChatPage() {
         return true;
       }
       if (
-        (r.includes("Попробуйте изменить запрос") || r.includes("Измените запрос")) &&
-        r.includes("выберите другой профиль") &&
-        (r.includes("аллерг") || r.includes("не любит"))
+        (r.includes("Попробуйте изменить запрос") ||
+          r.includes("Измените запрос") ||
+          r.includes("Можно переформулировать запрос")) &&
+        (r.includes("выбрать другой профиль") || r.includes("выберите другой профиль")) &&
+        (r.includes("аллерг") || r.includes("не любит") || r.includes("отмечено «не любит»"))
+      ) {
+        return true;
+      }
+      if (
+        r.includes("не подбираем такие блюда в чате") &&
+        (r.includes("аллерг") || r.includes("🤍"))
       ) {
         return true;
       }
