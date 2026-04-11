@@ -4,6 +4,10 @@
  */
 
 import { RUSSIAN_STOOL_KAL_PATTERN } from "../../supabase/functions/_shared/russianStoolKalPattern.ts";
+import {
+  CHAT_MESSAGE_ASSISTANT_REDIRECT,
+  CHAT_MESSAGE_IRRELEVANT,
+} from "../../supabase/functions/_shared/chatRecipeRoutingMessages.ts";
 
 type AssistantTopicKeywordRow = {
   topicKey: string;
@@ -38,7 +42,7 @@ const IRRELEVANT_KEYWORDS = [
   "политик", "биткоин", "криптовалют",
 ];
 
-const MESSAGE_IRRELEVANT = "В этом чате мы помогаем подбирать блюда. Попробуйте изменить запрос, и мы предложим подходящий вариант.";
+const MESSAGE_IRRELEVANT = CHAT_MESSAGE_IRRELEVANT;
 
 function normalize(text: string): string {
   return (text ?? "").trim().toLowerCase();
@@ -76,7 +80,7 @@ export function getRedirectOrIrrelevantMeta(userMessage: string): RedirectOrIrre
     const byPattern = patterns?.some((re) => re.test(lower)) ?? false;
     if (byKeyword || byPattern) {
       return {
-        message: "Этот вопрос лучше задать во вкладке «Помощь маме».",
+        message: CHAT_MESSAGE_ASSISTANT_REDIRECT,
         route: "assistant_topic_redirect",
         topicKey,
         topicTitle,

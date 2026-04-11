@@ -3,7 +3,7 @@ import { Info, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export interface SystemHintCardProps {
-  /** Текст подсказки (короткий для редиректа: «Этот вопрос лучше задать во вкладке «Помощь маме».»). */
+  /** Текст подсказки (редирект в «Помощь маме» — см. `CHAT_MESSAGE_ASSISTANT_REDIRECT` в `_shared/chatRecipeRoutingMessages.ts`). */
   text: string;
   /** Ключ темы Помощника для /sos?scenario= */
   topicKey?: string;

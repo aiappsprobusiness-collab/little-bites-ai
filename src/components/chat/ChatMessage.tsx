@@ -205,8 +205,10 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       role === "assistant" &&
       (content.includes("Этот чат помогает подбирать рецепты") ||
         content.includes("В этом чате мы помогаем подбирать блюда") ||
+        content.includes("Мы помогаем подбирать блюда и идеи для готовки") ||
         (content.includes("Этот вопрос лучше задать во вкладке «Помощник»") ||
-          content.includes("Этот вопрос лучше задать во вкладке «Помощь маме»")));
+          content.includes("Этот вопрос лучше задать во вкладке «Помощь маме»") ||
+          content.includes("Похоже, этот вопрос лучше разобрать во вкладке «Помощь маме»")));
     const isRecipeParseFailure =
       !forcePlainText &&
       role === "assistant" &&

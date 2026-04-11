@@ -9,6 +9,10 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { resolveRecipeChatIntent } from "./recipeChatIntent.ts";
 import {
+  CHAT_MESSAGE_ASSISTANT_REDIRECT,
+  CHAT_MESSAGE_IRRELEVANT,
+} from "../_shared/chatRecipeRoutingMessages.ts";
+import {
   NO_ARTICLES_RULE,
   GREETING_STYLE_RULE,
   FAMILY_RECIPE_INSTRUCTION,
@@ -536,7 +540,7 @@ serve(async (req) => {
           matchedBy: assistantTopic.matchedBy ?? undefined,
           matchedTerms: assistantTopic.matchedTerms ?? [],
         }));
-        const assistantMessage = "Этот вопрос лучше задать во вкладке «Помощь маме».";
+        const assistantMessage = CHAT_MESSAGE_ASSISTANT_REDIRECT;
         return new Response(
           JSON.stringify({
             message: assistantMessage,
@@ -569,7 +573,7 @@ serve(async (req) => {
           requestId,
           reason: intent.reason,
         }));
-        const rejectMessage = "В этом чате мы помогаем подбирать блюда. Попробуйте изменить запрос, и мы предложим подходящий вариант.";
+        const rejectMessage = CHAT_MESSAGE_IRRELEVANT;
         return new Response(
           JSON.stringify({ message: rejectMessage, recipes: [], route: "irrelevant" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
