@@ -55,7 +55,11 @@ export function FavoriteCard({ favorite, onTap, onToggleFavorite, index = 0, isP
               className="h-9 w-9 rounded-xl flex items-center justify-center text-primary/90 bg-muted/30 border border-border/50 hover:bg-muted/55 active:scale-[0.98] transition-all shrink-0"
               aria-label="Убрать из избранного"
             >
-              <Heart className="h-[17px] w-[17px] fill-primary/75 text-primary" strokeWidth={1.5} />
+              <Heart
+                className="h-[17px] w-[17px] fill-current text-primary"
+                strokeWidth={0}
+                aria-hidden
+              />
             </button>
             {onAddToPlan && (
               <button
