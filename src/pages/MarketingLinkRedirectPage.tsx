@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { getStaticMarketingLink } from "@/config/marketingLinks";
-import { getMarketingLinkBySlug } from "@/utils/marketingLinks";
+import { getMarketingLinkBySlug, incrementMarketingLinkClicks } from "@/utils/marketingLinks";
 import { trackUsageEventAwait } from "@/utils/usageEvents";
 
 function resolveRedirectHref(path: string): string {
@@ -24,10 +24,12 @@ export default function MarketingLinkRedirectPage() {
 
     void (async () => {
       let path = "/";
+      let hitFromDb = false;
       try {
         const row = await getMarketingLinkBySlug(raw);
         if (row?.url) {
           path = row.url;
+          hitFromDb = true;
         } else {
           path = getStaticMarketingLink(raw)?.url ?? "/";
         }
@@ -36,6 +38,12 @@ export default function MarketingLinkRedirectPage() {
       }
 
       const destination_url = resolveRedirectHref(path);
+
+      if (hitFromDb && path !== "/") {
+        void incrementMarketingLinkClicks(raw).catch(() => {
+          /* редирект не блокируем */
+        });
+      }
 
       try {
         if (path !== "/") {

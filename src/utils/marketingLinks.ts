@@ -121,6 +121,17 @@ export async function getMarketingLinkBySlug(slug: string): Promise<MarketingLin
   return data;
 }
 
+/**
+ * Увеличивает `click_count` для строки в `marketing_links` (RPC SECURITY DEFINER).
+ * Для легаси-статики без строки в БД не вызывать.
+ */
+export async function incrementMarketingLinkClicks(slug: string): Promise<void> {
+  const key = slug.trim();
+  if (!key) return;
+  const { error } = await supabase.rpc("increment_marketing_link_clicks", { p_slug: key });
+  if (error) throw error;
+}
+
 /** Публичный домен для копирования /go/ ссылок в админке. */
 export const MARKETING_GO_PUBLIC_ORIGIN = "https://momrecipes.online";
 

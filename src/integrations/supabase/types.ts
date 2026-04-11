@@ -546,6 +546,7 @@ export type Database = {
           content: string
           medium: string
           source: string
+          click_count: number
           created_at: string
         }
         Insert: {
@@ -556,6 +557,7 @@ export type Database = {
           content: string
           medium?: string
           source?: string
+          click_count?: number
           created_at?: string
         }
         Update: {
@@ -566,6 +568,7 @@ export type Database = {
           content?: string
           medium?: string
           source?: string
+          click_count?: number
           created_at?: string
         }
         Relationships: []
@@ -614,6 +617,7 @@ export type Database = {
         Returns: boolean
       }
       increment_usage: { Args: { _user_id: string }; Returns: undefined }
+      increment_marketing_link_clicks: { Args: { p_slug: string }; Returns: undefined }
     }
     Enums: {
       app_role: "admin" | "user"

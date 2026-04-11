@@ -550,9 +550,12 @@ RLS: INSERT — authenticated; SELECT — anon, authenticated (редирект 
 | content    | text NOT NULL | `utm_content` |
 | medium     | text NOT NULL DEFAULT `shorts` | `utm_medium` |
 | source     | text NOT NULL DEFAULT `youtube` | `utm_source` |
+| click_count | integer NOT NULL DEFAULT 0 | Счётчик переходов по `/go/:slug` (инкремент RPC `increment_marketing_link_clicks`, не для легаси-статики без строки в БД) |
 | created_at | timestamptz NOT NULL | |
 
-RLS: SELECT — anon, authenticated; INSERT — anon, authenticated (доступ к UI ограничен флагом на фронте). Миграция: `20260412120000_marketing_links.sql`.
+RLS: SELECT — anon, authenticated; INSERT — anon, authenticated (доступ к UI ограничен флагом на фронте). Миграции: `20260412120000_marketing_links.sql`, `20260412130000_marketing_links_click_count.sql`.
+
+**RPC `increment_marketing_link_clicks(p_slug text)`** — `SECURITY DEFINER`, `UPDATE` только `click_count += 1` по `slug`; `GRANT EXECUTE` для `anon`, `authenticated`. Вызывается с клиента при редиректе `MarketingLinkRedirectPage` для строк из этой таблицы.
 
 ---
 

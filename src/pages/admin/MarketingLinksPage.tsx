@@ -137,6 +137,7 @@ export default function MarketingLinksPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Slug</TableHead>
+                <TableHead className="text-right">Clicks</TableHead>
                 <TableHead>Campaign</TableHead>
                 <TableHead>Content</TableHead>
                 <TableHead className="max-w-[200px] truncate">URL</TableHead>
@@ -147,6 +148,7 @@ export default function MarketingLinksPage() {
               {list.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="font-mono text-xs">{row.slug}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.click_count ?? 0}</TableCell>
                   <TableCell className="text-sm">{row.campaign}</TableCell>
                   <TableCell className="text-sm">{row.content}</TableCell>
                   <TableCell className="max-w-[220px] truncate font-mono text-xs text-muted-foreground" title={row.url}>
