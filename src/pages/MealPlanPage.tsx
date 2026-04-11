@@ -3137,7 +3137,6 @@ export default function MealPlanPage() {
         onOpenChange={setShoppingBuildSheetOpen}
         planMemberId={memberIdForPlan}
         hasAccess={hasAccess}
-        navigateToShoppingTabOnSuccess
       />
 
       <Sheet open={planProfileHelpOpen} onOpenChange={setPlanProfileHelpOpen}>

@@ -8,6 +8,12 @@
 
 3. **Конкретный баг в эффекте сохранения на `RecipePage`**: при **`slotServings === servingsSelected`** эффект делал **ранний `return` без функции cleanup**. После успешного debounce-сохранения кэш патчился → слот и UI совпадали → последний запуск эффекта **не регистрировал cleanup**. При **закрытии карточки до истечения 400 ms** debounce предыдущий cleanup уже мог отработать на **устаревшем замыкании** (`servingsSelected` / `slotServings` не те), а **финальный flush при unmount отсутствовал** — запись в Supabase не вызывалась.
 
+## Назначение из чата / «Добавить в план» и кэш
+
+1. После успешного **`assign_recipe_to_plan_slot`** кэш React Query для плана нужно сбрасывать по префиксу **`['meal_plans_v2', userId]`** с **`refetchType: 'all'`**, чтобы подтянулись и **inactive**-запросы (план не смонтирован, пользователь в чате). Узкая инвалидация только по predicate и дате могла не совпасть со всеми вариантами ключа (неделя vs день, `mutedWeekKey`, разный `member_id`).
+
+2. **Free + «Семья» в листе:** в RPC уходит **`member_id` первого ребёнка**, как на `MealPlanPage` (`mealPlanMemberId` для Free family). Раньше при выборе «Семья» передавался **`null`** (как у Premium), а план читал **строку ребёнка** — в UI оставался старый слот до полного перезагрузки.
+
 ## Где хранится выбранное число порций
 
 - **Персистентно:** `meal_plans_v2.meals[breakfast|lunch|snack|dinner].servings` для строки с **`user_id` + `planned_date` + `member_id`** (для «Семья» Premium — `member_id IS NULL`).
@@ -35,6 +41,8 @@
 
 - `src/pages/RecipePage.tsx` — refs для актуальных значений; эффект сохранения **всегда** возвращает cleanup при контексте плана; debounce и flush по refs; таймер вызывает `updateSlotServings` тоже по refs.
 - `src/hooks/useMealPlans.tsx` — в **`updateSlotServings.onSuccess`**: узкая **`invalidateQueries({ predicate })`** по дате (в дополнение к патчу кэша и `plan_signature`).
+- `src/hooks/useAssignRecipeToPlanSlot.ts` — после assign: инвалидация **`['meal_plans_v2', userId]`** + `refetchType: 'all'`.
+- `src/components/plan/AddToPlanSheet.tsx` — выравнивание **`member_id`** для Free «Семья» с `MealPlanPage`.
 - `docs/architecture/shopping_list_product_model.md` — актуализирован абзац про порции и пункт ручной проверки.
 - `docs/dev/plan-recipe-servings-persistence-2026-03.md` — этот документ.
 

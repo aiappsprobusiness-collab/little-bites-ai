@@ -336,7 +336,13 @@ export function useShoppingList(options?: UseShoppingListOptions) {
   });
 
   const adjustRecipeServingsInShoppingList = useMutation({
-    mutationFn: async ({ recipeId, newServings }: { recipeId: string; newServings: number }) => {
+    mutationFn: async (params: {
+      recipeId: string;
+      newServings: number;
+      /** Если в meta ещё нет снимка порций (например, вклад из плана), база для первого пересчёта. */
+      baselineServingsIfMissing?: number;
+    }) => {
+      const { recipeId, newServings, baselineServingsIfMissing } = params;
       if (!user) throw new Error("Not authenticated");
       if (!listId) throw new Error("No active list");
       const clamped = Math.max(1, Math.min(20, Math.round(newServings)));
@@ -346,7 +352,13 @@ export function useShoppingList(options?: UseShoppingListOptions) {
       const rsRaw = prevFull.recipe_shopping_servings;
       const rs =
         rsRaw != null && typeof rsRaw === "object" && !Array.isArray(rsRaw) ? (rsRaw as Record<string, number>) : null;
-      const oldS = rs?.[recipeId];
+      const fromMeta = rs?.[recipeId];
+      const oldS =
+        typeof fromMeta === "number" && fromMeta >= 1
+          ? fromMeta
+          : typeof baselineServingsIfMissing === "number" && baselineServingsIfMissing >= 1
+            ? baselineServingsIfMissing
+            : undefined;
       if (oldS == null || typeof oldS !== "number" || oldS < 1) {
         throw new Error("missing_recipe_servings_snapshot");
       }
@@ -364,18 +376,127 @@ export function useShoppingList(options?: UseShoppingListOptions) {
         oldS,
         clamped,
       );
-      for (const u of updates) {
-        const { error: upErr } = await supabase
-          .from("shopping_list_items")
-          .update({ amount: u.amount, unit: u.unit, meta: u.meta })
-          .eq("id", u.id);
-        if (upErr) throw upErr;
+      const rowResults = await Promise.all(
+        updates.map((u) =>
+          supabase
+            .from("shopping_list_items")
+            .update({ amount: u.amount, unit: u.unit, meta: u.meta })
+            .eq("id", u.id)
+        ),
+      );
+      for (const res of rowResults) {
+        if (res.error) throw res.error;
       }
 
-      const nextRs = { ...rs, [recipeId]: clamped };
+      const nextRs = { ...(rs ?? {}), [recipeId]: clamped };
       const { error: metaErr } = await supabase
         .from("shopping_lists")
         .update({ meta: { ...prevFull, recipe_shopping_servings: nextRs } })
+        .eq("id", listId);
+      if (metaErr) throw metaErr;
+    },
+    onSuccess: () => {
+      if (listId) queryClient.invalidateQueries({ queryKey: ITEMS_QUERY_KEY(listId) });
+      if (user?.id) queryClient.invalidateQueries({ queryKey: activeShoppingListQueryKey(user.id) });
+    },
+  });
+
+  /**
+   * Несколько рецептов → одна загрузка meta+строк, пересчёт по цепочке в памяти, пакет UPDATE.
+   * Устраняет N отдельных round-trip и лаг UI при массовой смене порций.
+   */
+  const bulkAdjustRecipeServingsInShoppingList = useMutation({
+    mutationFn: async (
+      entriesIn: {
+        recipeId: string;
+        newServings: number;
+        baselineServingsIfMissing?: number;
+      }[],
+    ) => {
+      if (!user) throw new Error("Not authenticated");
+      if (!listId) throw new Error("No active list");
+      const byId = new Map<string, (typeof entriesIn)[0]>();
+      for (const e of entriesIn) byId.set(e.recipeId, e);
+      const entries = [...byId.values()];
+      if (entries.length === 0) return;
+
+      const { data: listRow, error: listErr } = await supabase.from("shopping_lists").select("meta").eq("id", listId).single();
+      if (listErr) throw listErr;
+      const prevFull = (listRow?.meta as Record<string, unknown>) ?? {};
+      const rsRaw = prevFull.recipe_shopping_servings;
+      let rs: Record<string, number> =
+        rsRaw != null && typeof rsRaw === "object" && !Array.isArray(rsRaw)
+          ? { ...(rsRaw as Record<string, number>) }
+          : {};
+
+      const { data: itemRows, error: itemsErr } = await supabase
+        .from("shopping_list_items")
+        .select("id, shopping_list_id, name, amount, unit, category, is_purchased, recipe_id, recipe_title, meta")
+        .eq("shopping_list_id", listId);
+      if (itemsErr) throw itemsErr;
+
+      let working = JSON.parse(JSON.stringify(itemRows ?? [])) as ShoppingListItemRow[];
+
+      for (const { recipeId, newServings, baselineServingsIfMissing } of entries) {
+        const clamped = Math.max(1, Math.min(20, Math.round(newServings)));
+        const fromMeta = rs[recipeId];
+        const oldS =
+          typeof fromMeta === "number" && fromMeta >= 1
+            ? fromMeta
+            : typeof baselineServingsIfMissing === "number" && baselineServingsIfMissing >= 1
+              ? baselineServingsIfMissing
+              : undefined;
+        if (oldS == null || typeof oldS !== "number" || oldS < 1) continue;
+        if (clamped === oldS) {
+          rs[recipeId] = clamped;
+          continue;
+        }
+
+        const updates = computeShoppingItemUpdatesForRecipeServings(working, recipeId, oldS, clamped);
+        for (const u of updates) {
+          const i = working.findIndex((r) => r.id === u.id);
+          if (i >= 0) {
+            working[i] = { ...working[i], amount: u.amount, unit: u.unit, meta: u.meta };
+          }
+        }
+        rs[recipeId] = clamped;
+      }
+
+      const orig = (itemRows ?? []) as ShoppingListItemRow[];
+      const origById = new Map(orig.map((r) => [r.id, r]));
+
+      const dbUpdates: {
+        id: string;
+        amount: number | null;
+        unit: string | null;
+        meta: ShoppingListItemMeta | null;
+      }[] = [];
+      for (const w of working) {
+        const o = origById.get(w.id);
+        if (!o) continue;
+        const changed =
+          o.amount !== w.amount ||
+          o.unit !== w.unit ||
+          JSON.stringify(o.meta ?? null) !== JSON.stringify(w.meta ?? null);
+        if (changed) {
+          dbUpdates.push({ id: w.id, amount: w.amount, unit: w.unit, meta: w.meta ?? null });
+        }
+      }
+
+      if (dbUpdates.length > 0) {
+        const rowResults = await Promise.all(
+          dbUpdates.map((u) =>
+            supabase.from("shopping_list_items").update({ amount: u.amount, unit: u.unit, meta: u.meta }).eq("id", u.id),
+          ),
+        );
+        for (const res of rowResults) {
+          if (res.error) throw res.error;
+        }
+      }
+
+      const { error: metaErr } = await supabase
+        .from("shopping_lists")
+        .update({ meta: { ...prevFull, recipe_shopping_servings: rs } })
         .eq("id", listId);
       if (metaErr) throw metaErr;
     },
@@ -461,6 +582,8 @@ export function useShoppingList(options?: UseShoppingListOptions) {
     isAddingToList: addRecipeIngredients.isPending,
     adjustRecipeServingsInShoppingList: adjustRecipeServingsInShoppingList.mutateAsync,
     isAdjustingRecipeServings: adjustRecipeServingsInShoppingList.isPending,
+    bulkAdjustRecipeServingsInShoppingList: bulkAdjustRecipeServingsInShoppingList.mutateAsync,
+    isBulkAdjustingRecipeServings: bulkAdjustRecipeServingsInShoppingList.isPending,
     deleteItem: deleteItem.mutateAsync,
     insertItem: insertItem.mutateAsync,
     removePurchased: removePurchased.mutateAsync,

@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { formatLocalDate } from "@/utils/dateUtils";
 import { getRollingDayKeys } from "@/utils/dateRange";
-import { invalidateMealPlanQueriesForPlannedDate } from "@/utils/mealPlanQueryInvalidation";
 
 export interface AssignRecipeToPlanSlotParams {
   member_id: string | null;
@@ -33,10 +32,14 @@ export function useAssignRecipeToPlanSlot(memberId: string | null | undefined) {
       if (error) throw error;
       return data as { id: string; planned_date: string; meal_type: string; recipe_id: string; title: string };
     },
-    onSuccess: (_data, variables) => {
-      void invalidateMealPlanQueriesForPlannedDate(queryClient, {
-        userId: user?.id,
-        plannedDate: variables.day_key,
+    onSuccess: async () => {
+      const uid = user?.id;
+      if (!uid) return;
+      // Префикс по userId: инвалидация только по predicate + дате не покрывала все ключи
+      // (rolling week/day, mutedWeekKey, разные member); экран плана часто unmounted → без refetchType «all» stale до F5.
+      await queryClient.invalidateQueries({
+        queryKey: ["meal_plans_v2", uid],
+        refetchType: "all",
       });
     },
   });

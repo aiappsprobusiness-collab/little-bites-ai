@@ -10,6 +10,7 @@ import { useMyRecipes } from "@/hooks/useMyRecipes";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { scaleIngredientDisplay } from "@/types/recipe";
 import { applyIngredientOverrides, ingredientKey } from "@/types/ingredientOverrides";
@@ -51,6 +52,7 @@ import {
 } from "@/utils/shopping/shoppingListMerge";
 import { readMealPlanMutedWeekKeyFromStorage } from "@/hooks/useMealPlanMemberData";
 import { mealPlanPathWithOptionalDate } from "@/utils/mealPlanNavigation";
+import { markShoppingListEntranceStagger } from "@/utils/shopping/shoppingListEntrance";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -724,6 +726,17 @@ export default function RecipePage() {
       });
       toast({
         title: wasEmpty ? "Создали список и добавили ингредиенты ✓" : "Добавили в список покупок ✓",
+        action: (
+          <ToastAction
+            altText="Открыть список продуктов"
+            onClick={() => {
+              markShoppingListEntranceStagger();
+              navigate("/favorites", { state: { tab: "shopping_list" } });
+            }}
+          >
+            К списку продуктов
+          </ToastAction>
+        ),
       });
     } catch {
       toast({ variant: "destructive", title: "Не удалось добавить в список" });

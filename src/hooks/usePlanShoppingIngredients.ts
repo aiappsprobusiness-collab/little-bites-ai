@@ -54,12 +54,18 @@ export function planShoppingIngredientsQueryKey(
   return ["plan_shopping_ingredients", userId, range, memberId ?? "family"] as const;
 }
 
+/** Результат агрегации из плана: позиции + сумма порций по каждому recipe_id (для степпера в списке и meta). */
+export type PlanShoppingLoadResult = {
+  ingredients: AggregatedIngredient[];
+  recipeServingsByRecipeId: Record<string, number>;
+};
+
 /** Агрегация ингредиентов из плана (без React Query). */
 export async function loadPlanShoppingIngredients(
   userId: string,
   range: "today" | "week",
   memberId: string | null | undefined
-): Promise<AggregatedIngredient[]> {
+): Promise<PlanShoppingLoadResult> {
   const startDate = new Date();
   const endDate = range === "today" ? startDate : addDays(startDate, 6);
   const startStr = formatLocalDate(startDate);
@@ -92,7 +98,12 @@ export async function loadPlanShoppingIngredients(
     }
   }
 
-  if (slotEntries.length === 0) return [];
+  const recipeServingsByRecipeId: Record<string, number> = {};
+  for (const e of slotEntries) {
+    recipeServingsByRecipeId[e.recipe_id] = (recipeServingsByRecipeId[e.recipe_id] ?? 0) + e.servings;
+  }
+
+  if (slotEntries.length === 0) return { ingredients: [], recipeServingsByRecipeId };
 
   const recipeIds = [...new Set(slotEntries.map((e) => e.recipe_id))];
   const [recipesRes, ingredientsRes] = await Promise.all([
@@ -261,7 +272,7 @@ export async function loadPlanShoppingIngredients(
       dual_display_unit: v.dual_display_unit,
     });
   }
-  return result;
+  return { ingredients: result, recipeServingsByRecipeId };
 }
 
 /**
@@ -276,8 +287,8 @@ export function usePlanShoppingIngredients(
 
   return useQuery({
     queryKey: ["plan_shopping_ingredients", user?.id, range, memberId ?? "family"],
-    queryFn: async (): Promise<AggregatedIngredient[]> => {
-      if (!user) return [];
+    queryFn: async (): Promise<PlanShoppingLoadResult> => {
+      if (!user) return { ingredients: [], recipeServingsByRecipeId: {} };
       return loadPlanShoppingIngredients(user.id, range, memberId);
     },
     enabled: !!user && memberId !== undefined,

@@ -11,6 +11,7 @@ import { useShoppingList, type ShoppingListSyncMeta } from "@/hooks/useShoppingL
 import { loadPlanShoppingIngredients, planShoppingIngredientsQueryKey } from "@/hooks/usePlanShoppingIngredients";
 import { loadPlanSignature, planSignatureQueryKey } from "@/hooks/usePlanSignature";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { markShoppingListEntranceStagger } from "@/utils/shopping/shoppingListEntrance";
 
@@ -20,8 +21,6 @@ export type BuildShoppingListFromPlanSheetProps = {
   /** Как в meal_plans_v2 для видимого плана (см. mealPlanMemberScope). */
   planMemberId: string | null;
   hasAccess: boolean;
-  /** После успешной сборки открыть вкладку списка в Избранном. */
-  navigateToShoppingTabOnSuccess?: boolean;
 };
 
 /**
@@ -32,7 +31,6 @@ export function BuildShoppingListFromPlanSheet({
   onOpenChange,
   planMemberId,
   hasAccess,
-  navigateToShoppingTabOnSuccess = false,
 }: BuildShoppingListFromPlanSheetProps) {
   const [range, setRange] = useState<"today" | "week">("today");
   const [pending, setPending] = useState(false);
@@ -56,7 +54,11 @@ export function BuildShoppingListFromPlanSheet({
     if (!user?.id || !listId || !hasAccess) return;
     setPending(true);
     try {
-      const planIngredients = await loadPlanShoppingIngredients(user.id, range, planMemberId);
+      const { ingredients: planIngredients, recipeServingsByRecipeId } = await loadPlanShoppingIngredients(
+        user.id,
+        range,
+        planMemberId
+      );
       const planSignature = await loadPlanSignature(user.id, range, planMemberId);
       if (planIngredients.length === 0) {
         toast({
@@ -82,16 +84,27 @@ export function BuildShoppingListFromPlanSheet({
         last_synced_member_id: planMemberId ?? null,
         last_synced_plan_signature: planSignature ?? "",
         last_synced_at: new Date().toISOString(),
+        recipe_shopping_servings: recipeServingsByRecipeId,
       };
       await replaceItems({ items: payload, syncMeta: newSyncMeta });
-      markShoppingListEntranceStagger();
       await queryClient.invalidateQueries({ queryKey: planShoppingIngredientsQueryKey(user.id, range, planMemberId) });
       await queryClient.invalidateQueries({ queryKey: planSignatureQueryKey(user.id, range, planMemberId) });
-      toast({ title: "Список собран из меню", description: "Можно редактировать и отмечать купленное." });
+      toast({
+        title: "Список собран из меню",
+        description: "Можно редактировать и отмечать купленное.",
+        action: (
+          <ToastAction
+            altText="Открыть список продуктов"
+            onClick={() => {
+              markShoppingListEntranceStagger();
+              navigate("/favorites", { state: { tab: "shopping_list", shoppingListJustBuilt: true } });
+            }}
+          >
+            К списку продуктов
+          </ToastAction>
+        ),
+      });
       onOpenChange(false);
-      if (navigateToShoppingTabOnSuccess) {
-        navigate("/favorites", { state: { tab: "shopping_list", shoppingListJustBuilt: true } });
-      }
     } catch {
       toast({ variant: "destructive", title: "Не удалось собрать список" });
     } finally {

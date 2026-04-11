@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useFamily } from "@/contexts/FamilyContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useAssignRecipeToPlanSlot, getRollingDayKeys } from "@/hooks/useAssignRecipeToPlanSlot";
 import { useMealPlans } from "@/hooks/useMealPlans";
 import type { MealPlanItemV2 } from "@/hooks/useMealPlans";
@@ -98,6 +99,8 @@ export function AddToPlanSheet({
   onSuccess,
 }: AddToPlanSheetProps) {
   const { members } = useFamily();
+  const { hasAccess } = useSubscription();
+  const isFreeTier = !hasAccess;
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(defaultMemberId ?? null);
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
   const [selectedMealType, setSelectedMealType] = useState<RecipePlanMealType>(() =>
@@ -107,7 +110,16 @@ export function AddToPlanSheet({
   const dayKeys = useMemo(() => getRollingDayKeys(), [open]);
 
   const { toast } = useToast();
-  const memberIdForRpc = selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId;
+  /**
+   * Должен совпадать с MealPlanPage: Free + «Семья» → строка плана с member_id = первого ребёнка,
+   * Premium «Семья» → member_id IS NULL. Иначе RPC пишет в одну строку, а план читает другую — до F5 старый слот.
+   */
+  const memberIdForRpc = useMemo(() => {
+    const family = selectedMemberId === "family" || !selectedMemberId;
+    if (!family) return selectedMemberId as string;
+    if (!isFreeTier) return null;
+    return members[0]?.id ?? null;
+  }, [selectedMemberId, isFreeTier, members]);
   const { assignRecipeToPlanSlot, isAssigning } = useAssignRecipeToPlanSlot(memberIdForRpc);
 
   const rollingStart = getRollingStartKey();

@@ -13,7 +13,6 @@ import {
   type ShoppingListSyncMeta,
 } from "@/hooks/useShoppingList";
 import { usePlanShoppingIngredients } from "@/hooks/usePlanShoppingIngredients";
-import { usePlanSignature } from "@/hooks/usePlanSignature";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useFamily } from "@/contexts/FamilyContext";
 import { mealPlanMemberIdForShoppingSync } from "@/utils/mealPlanMemberScope";
@@ -41,10 +40,7 @@ import {
 import { capitalizeIngredientName } from "@/utils/ingredientDisplay";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import {
-  SHOPPING_LIST_ENTRANCE_SESSION_KEY,
-  markShoppingListEntranceStagger,
-} from "@/utils/shopping/shoppingListEntrance";
+import { SHOPPING_LIST_ENTRANCE_SESSION_KEY } from "@/utils/shopping/shoppingListEntrance";
 import { computeEffectiveShoppingItemView } from "@/utils/shopping/shoppingListEffectiveView";
 
 const CATEGORY_ORDER: ProductCategory[] = ["vegetables", "fruits", "dairy", "meat", "grains", "other"];
@@ -247,12 +243,13 @@ export function ShoppingListView() {
     isLoading: listLoading,
     setItemPurchased,
     clearList,
-    replaceItems,
     deleteItem,
     insertItem,
     removePurchased,
     adjustRecipeServingsInShoppingList,
     isAdjustingRecipeServings,
+    bulkAdjustRecipeServingsInShoppingList,
+    isBulkAdjustingRecipeServings,
   } = useShoppingList();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -264,62 +261,16 @@ export function ShoppingListView() {
   /** Выбранные рецепты в sheet фильтра; источник правды для чекбоксов (в т.ч. «Все рецепты» = полный набор id). */
   const [draftRecipeIds, setDraftRecipeIds] = useState<Set<string>>(() => new Set());
   const [recipeSearch, setRecipeSearch] = useState("");
+  /** Значение степпера «для всех отмеченных» в sheet фильтра (инициализируется при открытии). */
+  const [bulkServingsValue, setBulkServingsValue] = useState(4);
   const recipeFilterSheetWasOpenRef = useRef(false);
   const recipeFilterMasterCheckboxRef = useRef<HTMLInputElement>(null);
 
-  const { data: planIngredients, isLoading: planLoading } = usePlanShoppingIngredients(range, memberId);
-  const { data: planSignature } = usePlanSignature(range, memberId);
+  const { data: planData, isLoading: planLoading } = usePlanShoppingIngredients(range, memberId);
+  const planIngredients = planData?.ingredients ?? [];
+  const planRecipeServingsMap = planData?.recipeServingsByRecipeId ?? {};
 
   const syncMetaStored = listMeta as ShoppingListSyncMeta | undefined;
-  /** План на экране разошёлся с подписью последней сборки — без автоперезаписи списка. */
-  const planDrift = useMemo(() => {
-    if (planSignature == null || planSignature === "") return false;
-    if (syncMetaStored?.last_synced_range !== range) return true;
-    const storedMember = syncMetaStored?.last_synced_member_id ?? null;
-    if (storedMember !== (memberId ?? null)) return true;
-    return syncMetaStored?.last_synced_plan_signature !== planSignature;
-  }, [planSignature, syncMetaStored, range, memberId]);
-
-  const handleRebuildFromPlan = async () => {
-    if (!listId || planIngredients === undefined) return;
-    if (planIngredients.length === 0) {
-      toast({
-        title: "Нет блюд в меню за выбранный период",
-        description: "Переключите «Сегодня» / «Неделя» или добавьте рецепты в план.",
-      });
-      return;
-    }
-    const payload = planIngredients.map((ing) => ({
-      name: ing.name,
-      amount: ing.displayAmount ?? ing.amount,
-      unit: ing.displayUnit ?? ing.unit,
-      category: ing.category,
-      source_recipes: ing.source_recipes?.length ? ing.source_recipes : undefined,
-      merge_key: ing.merge_key,
-      source_contributions: ing.source_contributions?.length ? ing.source_contributions : undefined,
-      aggregation_unit: ing.aggregation_unit,
-      dual_display_amount_sum: ing.dual_display_amount_sum,
-      dual_display_unit: ing.dual_display_unit,
-    }));
-    const newSyncMeta: ShoppingListSyncMeta = {
-      last_synced_range: range,
-      last_synced_member_id: memberId ?? null,
-      last_synced_plan_signature: planSignature ?? "",
-      last_synced_at: new Date().toISOString(),
-      recipe_shopping_servings: {},
-    };
-    try {
-      if (payload.length === 0) {
-        await replaceItems({ items: [], syncMeta: newSyncMeta });
-      } else {
-        await replaceItems({ items: payload, syncMeta: newSyncMeta });
-      }
-      markShoppingListEntranceStagger();
-      toast({ title: "Список собран заново из меню" });
-    } catch {
-      toast({ variant: "destructive", title: "Не удалось собрать список" });
-    }
-  };
 
   const handleCopy = () => {
     const recipeFilterSet = selectedRecipeIds.size > 0 ? selectedRecipeIds : null;
@@ -369,67 +320,101 @@ export function ShoppingListView() {
     return [...byId.values()];
   }, [items]);
 
-  /** Рецепты, которые реально есть в строках списка (для отсечения устаревших ключей в meta). */
-  const activeRecipeIdsFromItems = useMemo(() => {
-    const s = new Set<string>();
-    for (const item of items) {
-      for (const c of item.meta?.source_contributions ?? []) {
-        if (c.recipe_id) s.add(c.recipe_id);
-      }
-      for (const r of item.meta?.source_recipes ?? []) {
-        if (r.id) s.add(r.id);
-      }
-      if (item.recipe_id) s.add(item.recipe_id);
-    }
-    return s;
-  }, [items]);
-
-  /** Рецепты, добавленные из карточки: в list meta есть snapshot порций. */
-  const recipesWithServingsSnapshot = useMemo(() => {
+  /** Текущие порции по рецепту: снимок в meta или сумма из плана за выбранный период. */
+  const servingsByRecipeId = useMemo(() => {
     const rs = syncMetaStored?.recipe_shopping_servings;
-    if (!rs || typeof rs !== "object") return [];
-    const list: { id: string; title: string; servings: number }[] = [];
-    for (const rid of Object.keys(rs)) {
-      if (!activeRecipeIdsFromItems.has(rid)) continue;
-      const raw = rs[rid as keyof typeof rs];
-      if (typeof raw !== "number" || raw < 1) continue;
-      let title = "";
-      for (const item of items) {
-        const fromMeta = item.meta?.source_recipes?.find((x) => x.id === rid);
-        if (fromMeta?.title) {
-          title = fromMeta.title;
-          break;
-        }
-        if (item.recipe_id === rid && item.recipe_title) {
-          title = item.recipe_title;
-          break;
+    const out: Record<string, number> = {};
+    for (const r of uniqueRecipes) {
+      const fromMeta = rs?.[r.id];
+      if (typeof fromMeta === "number" && fromMeta >= 1) {
+        out[r.id] = Math.round(fromMeta);
+      } else {
+        const fromPlan = planRecipeServingsMap[r.id];
+        if (typeof fromPlan === "number" && fromPlan >= 1) {
+          out[r.id] = Math.round(fromPlan);
         }
       }
-      list.push({ id: rid, title: title || "Рецепт", servings: Math.round(raw) });
     }
-    list.sort((a, b) => a.title.localeCompare(b.title, "ru"));
-    return list;
-  }, [syncMetaStored, items, activeRecipeIdsFromItems]);
+    return out;
+  }, [uniqueRecipes, syncMetaStored, planRecipeServingsMap]);
 
   const handleRecipeServingsChange = (recipeId: string, next: number) => {
-    adjustRecipeServingsInShoppingList({ recipeId, newServings: next }).catch(() => {
+    const rs = syncMetaStored?.recipe_shopping_servings;
+    const hasMeta = typeof rs?.[recipeId] === "number" && rs[recipeId] >= 1;
+    const baselineServingsIfMissing = hasMeta ? undefined : planRecipeServingsMap[recipeId];
+    adjustRecipeServingsInShoppingList({ recipeId, newServings: next, baselineServingsIfMissing }).catch(() => {
       toast({ variant: "destructive", title: "Не удалось пересчитать порции" });
     });
   };
 
-  /** При открытии sheet: черновик = полный набор id (если фильтр не задан) или текущий subset. */
+  const canApplyBulkServings = useMemo(() => {
+    const rs = syncMetaStored?.recipe_shopping_servings;
+    for (const id of draftRecipeIds) {
+      const fromMeta = typeof rs?.[id] === "number" && rs[id] >= 1;
+      const fromPlan = typeof planRecipeServingsMap[id] === "number" && planRecipeServingsMap[id] >= 1;
+      if (fromMeta || fromPlan) return true;
+    }
+    return false;
+  }, [draftRecipeIds, syncMetaStored, planRecipeServingsMap]);
+
+  const portionsBusy = isAdjustingRecipeServings || isBulkAdjustingRecipeServings;
+
+  const handleBulkServingsChange = (next: number) => {
+    const clamped = Math.max(1, Math.min(20, Math.round(next)));
+    setBulkServingsValue(clamped);
+    const ids = [...draftRecipeIds];
+    if (ids.length === 0) {
+      toast({ title: "Отметьте хотя бы один рецепт" });
+      return;
+    }
+    const rs = syncMetaStored?.recipe_shopping_servings;
+    const entries = ids
+      .map((recipeId) => {
+        const hasMeta = typeof rs?.[recipeId] === "number" && rs[recipeId] >= 1;
+        return {
+          recipeId,
+          newServings: clamped,
+          baselineServingsIfMissing: hasMeta ? undefined : planRecipeServingsMap[recipeId],
+        };
+      })
+      .filter((e) => {
+        const fromMeta = typeof rs?.[e.recipeId] === "number" && rs[e.recipeId] >= 1;
+        const fromPlan =
+          typeof planRecipeServingsMap[e.recipeId] === "number" && planRecipeServingsMap[e.recipeId] >= 1;
+        return fromMeta || fromPlan;
+      });
+    if (entries.length === 0) {
+      toast({
+        title: "Нет данных о порциях",
+        description:
+          "Для отмеченных блюд нет снимка порций. Добавьте их из карточки рецепта или соберите список из меню.",
+      });
+      return;
+    }
+    bulkAdjustRecipeServingsInShoppingList(entries).catch(() => {
+      toast({ variant: "destructive", title: "Не удалось применить порции" });
+    });
+  };
+
+  /** При открытии sheet: черновик рецептов + стартовое значение массовых порций. */
   useEffect(() => {
     const wasOpen = recipeFilterSheetWasOpenRef.current;
     if (filterSheetOpen && !wasOpen) {
       const allIds = uniqueRecipes.map((r) => r.id);
-      if (selectedRecipeIds.size === 0) {
-        setDraftRecipeIds(new Set(allIds));
-      } else {
-        setDraftRecipeIds(new Set(selectedRecipeIds));
-      }
+      const nextDraft =
+        selectedRecipeIds.size === 0 ? new Set(allIds) : new Set(selectedRecipeIds);
+      setDraftRecipeIds(nextDraft);
+      const vals = [...nextDraft]
+        .map((id) => servingsByRecipeId[id])
+        .filter((v): v is number => v != null);
+      setBulkServingsValue(
+        vals.length > 0
+          ? Math.max(1, Math.min(20, Math.round(vals.reduce((a, b) => a + b, 0) / vals.length)))
+          : 4,
+      );
     }
     recipeFilterSheetWasOpenRef.current = filterSheetOpen;
-  }, [filterSheetOpen, uniqueRecipes, selectedRecipeIds]);
+  }, [filterSheetOpen, uniqueRecipes, selectedRecipeIds, servingsByRecipeId]);
 
   const recipeFilterMasterChecked = useMemo(() => {
     if (uniqueRecipes.length === 0) return false;
@@ -644,7 +629,6 @@ export function ShoppingListView() {
         onOpenChange={setBuildSheetOpen}
         planMemberId={memberId}
         hasAccess={hasAccess}
-        navigateToShoppingTabOnSuccess={false}
       />
 
       {/* Верхний ряд: Сегодня/Неделя + селектор профиля */}
@@ -673,20 +657,6 @@ export function ShoppingListView() {
         </div>
         <MemberSelectorButton className="shrink-0 ml-auto" />
       </div>
-
-      {!loading && items.length > 0 && planDrift && (
-        <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <p className="text-xs text-muted-foreground">В меню есть изменения после последней сборки.</p>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="h-8 text-xs shrink-0 border-border/60"
-            onClick={() => void handleRebuildFromPlan()}
-          >
-            Собрать заново
-          </Button>
-        </div>
-      )}
 
       {/* Поиск, фильтр и меню — одна строка, если список не пустой; иначе только «Ещё» */}
       {!loading && (
@@ -723,7 +693,6 @@ export function ShoppingListView() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => void handleRebuildFromPlan()}>Собрать заново из меню</DropdownMenuItem>
               <DropdownMenuItem onClick={handleCopy} disabled={items.length === 0}>
                 <Copy className="w-3.5 h-3.5 mr-2" />
                 Скопировать список
@@ -740,52 +709,6 @@ export function ShoppingListView() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-      )}
-
-      {!loading && recipesWithServingsSnapshot.length > 0 && (
-        <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5 space-y-2">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/90">
-            Порции из рецепта
-          </p>
-          <div className="flex flex-col gap-2.5">
-            {recipesWithServingsSnapshot.map((r) => (
-              <div key={r.id} className="flex items-center gap-3 min-w-0">
-                <span className="text-xs text-foreground flex-1 min-w-0 truncate" title={r.title}>
-                  {r.title}
-                </span>
-                <div
-                  className="inline-flex items-center rounded-full bg-primary-light/50 border border-primary-border/70 overflow-hidden shrink-0"
-                  role="group"
-                  aria-label={`Порции: ${r.title}`}
-                >
-                  <motion.button
-                    type="button"
-                    disabled={isAdjustingRecipeServings || r.servings <= 1}
-                    onClick={() => handleRecipeServingsChange(r.id, r.servings - 1)}
-                    whileTap={{ scale: 0.96 }}
-                    className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 text-base leading-none font-medium touch-manipulation"
-                    aria-label="Уменьшить порции"
-                  >
-                    −
-                  </motion.button>
-                  <span className="min-w-[1.25rem] px-0.5 text-center text-xs font-semibold text-foreground tabular-nums">
-                    {r.servings}
-                  </span>
-                  <motion.button
-                    type="button"
-                    disabled={isAdjustingRecipeServings || r.servings >= 20}
-                    onClick={() => handleRecipeServingsChange(r.id, r.servings + 1)}
-                    whileTap={{ scale: 0.96 }}
-                    className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 text-base leading-none font-medium touch-manipulation"
-                    aria-label="Увеличить порции"
-                  >
-                    +
-                  </motion.button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
@@ -826,9 +749,6 @@ export function ShoppingListView() {
               </div>
             </div>
             <div className="rounded-xl border border-border/50 bg-muted/20 px-3 py-3">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/90 mb-2.5">
-                Рецепты
-              </p>
               <input
                 type="search"
                 placeholder="Поиск по рецепту…"
@@ -836,32 +756,132 @@ export function ShoppingListView() {
                 onChange={(e) => setRecipeSearch(e.target.value)}
                 className="flex h-8 w-full rounded-md border border-border/60 bg-background/80 px-2.5 py-1 text-xs mb-2.5"
               />
-              <label className="flex items-center gap-2.5 py-1 cursor-pointer min-h-9">
-                <input
-                  ref={recipeFilterMasterCheckboxRef}
-                  type="checkbox"
-                  checked={recipeFilterMasterChecked}
-                  onChange={(e) => handleRecipeFilterMasterChange(e.target.checked)}
-                  className="h-4 w-4 rounded border-border shrink-0"
-                />
-                <span className="text-sm text-foreground/90">Все рецепты</span>
-              </label>
-              <ul className="max-h-36 overflow-y-auto space-y-1 mt-1">
-                {filteredRecipesForSheet.map((r) => (
-                  <li key={r.id}>
-                    <label className="flex items-center gap-2.5 py-1 min-h-8 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={draftRecipeIds.has(r.id)}
-                        onChange={() => toggleDraftRecipe(r.id)}
-                        className="h-4 w-4 rounded border-border shrink-0"
-                      />
-                      <span className="text-sm text-foreground/85 truncate min-w-0 flex-1" title={r.title || undefined}>
-                        {r.title || "Без названия"}
+              <div className="flex items-center gap-2 py-1 min-h-9">
+                <label className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
+                  <input
+                    ref={recipeFilterMasterCheckboxRef}
+                    type="checkbox"
+                    checked={recipeFilterMasterChecked}
+                    onChange={(e) => handleRecipeFilterMasterChange(e.target.checked)}
+                    className="h-4 w-4 rounded border-border shrink-0"
+                  />
+                  <span className="text-sm text-foreground/90">Все рецепты</span>
+                </label>
+                <div
+                  className="w-[108px] shrink-0 flex justify-end"
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  {draftRecipeIds.size > 0 && canApplyBulkServings ? (
+                    <div
+                      className="inline-flex items-center rounded-full bg-primary-light/50 border border-primary-border/70 overflow-hidden shrink-0"
+                      role="group"
+                      aria-label="Порции для отмеченных рецептов"
+                    >
+                      <motion.button
+                        type="button"
+                        disabled={portionsBusy || bulkServingsValue <= 1}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleBulkServingsChange(bulkServingsValue - 1);
+                        }}
+                        whileTap={{ scale: 0.96 }}
+                        className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 text-base leading-none font-medium touch-manipulation"
+                        aria-label="Уменьшить порции у отмеченных"
+                      >
+                        −
+                      </motion.button>
+                      <span className="min-w-[1.25rem] px-0.5 text-center text-xs font-semibold text-foreground tabular-nums">
+                        {bulkServingsValue}
                       </span>
-                    </label>
-                  </li>
-                ))}
+                      <motion.button
+                        type="button"
+                        disabled={portionsBusy || bulkServingsValue >= 20}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleBulkServingsChange(bulkServingsValue + 1);
+                        }}
+                        whileTap={{ scale: 0.96 }}
+                        className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 text-base leading-none font-medium touch-manipulation"
+                        aria-label="Увеличить порции у отмеченных"
+                      >
+                        +
+                      </motion.button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground tabular-nums w-full text-right pr-0.5" title="Отметьте рецепты с известными порциями">
+                      —
+                    </span>
+                  )}
+                </div>
+              </div>
+              <ul className="max-h-44 overflow-y-auto space-y-1 mt-1">
+                {filteredRecipesForSheet.map((r) => {
+                  const sv = servingsByRecipeId[r.id];
+                  const canPortions = sv != null;
+                  return (
+                    <li key={r.id} className="flex items-center gap-2 py-1 min-h-9">
+                      <label className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={draftRecipeIds.has(r.id)}
+                          onChange={() => toggleDraftRecipe(r.id)}
+                          className="h-4 w-4 rounded border-border shrink-0"
+                        />
+                        <span className="text-sm text-foreground/85 truncate min-w-0" title={r.title || undefined}>
+                          {r.title || "Без названия"}
+                        </span>
+                      </label>
+                      <div
+                        className="w-[108px] shrink-0 flex justify-end"
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        {canPortions ? (
+                          <div
+                            className="inline-flex items-center rounded-full bg-primary-light/50 border border-primary-border/70 overflow-hidden shrink-0"
+                            role="group"
+                            aria-label={`Порции: ${r.title || "Рецепт"}`}
+                          >
+                            <motion.button
+                              type="button"
+                              disabled={portionsBusy || sv <= 1}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRecipeServingsChange(r.id, sv - 1);
+                              }}
+                              whileTap={{ scale: 0.96 }}
+                              className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 text-base leading-none font-medium touch-manipulation"
+                              aria-label="Уменьшить порции"
+                            >
+                              −
+                            </motion.button>
+                            <span className="min-w-[1.25rem] px-0.5 text-center text-xs font-semibold text-foreground tabular-nums">
+                              {sv}
+                            </span>
+                            <motion.button
+                              type="button"
+                              disabled={portionsBusy || sv >= 20}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleRecipeServingsChange(r.id, sv + 1);
+                              }}
+                              whileTap={{ scale: 0.96 }}
+                              className="h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40 text-base leading-none font-medium touch-manipulation"
+                              aria-label="Увеличить порции"
+                            >
+                              +
+                            </motion.button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground tabular-nums w-full text-right pr-0.5">—</span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
             <label className="flex items-center gap-2.5 py-1 cursor-pointer min-h-10">
