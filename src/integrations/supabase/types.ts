@@ -537,6 +537,39 @@ export type Database = {
         Update: { id?: string; share_ref?: string; recipe_id?: string; created_at?: string }
         Relationships: [{ foreignKeyName: "share_refs_recipe_id_fkey"; columns: ["recipe_id"]; isOneToOne: false; referencedRelation: "recipes"; referencedColumns: ["id"] }]
       }
+      marketing_links: {
+        Row: {
+          id: string
+          slug: string
+          url: string
+          campaign: string
+          content: string
+          medium: string
+          source: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          slug: string
+          url: string
+          campaign: string
+          content: string
+          medium?: string
+          source?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          slug?: string
+          url?: string
+          campaign?: string
+          content?: string
+          medium?: string
+          source?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

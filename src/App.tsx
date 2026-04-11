@@ -32,6 +32,7 @@ import LandingOnboardingScreen from "./pages/LandingOnboardingScreen";
 import AppPreloginScreen from "./pages/AppPreloginScreen";
 import { RootRedirect } from "./components/RootRedirect";
 import MarketingLinkRedirectPage from "./pages/MarketingLinkRedirectPage";
+import MarketingLinksPage from "./pages/admin/MarketingLinksPage";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
@@ -112,6 +113,13 @@ function AttributionCapture() {
     captureAttributionFromLocationOnce();
   }, []);
   return null;
+}
+
+/** Админ-страницы: только при VITE_ADMIN_MODE=true (см. .env). */
+function AdminMarketingLinksRoute() {
+  const enabled = import.meta.env.VITE_ADMIN_MODE === "true";
+  if (!enabled) return <Navigate to="/" replace />;
+  return <MarketingLinksPage />;
 }
 
 function LegacyCacheClear() {
@@ -254,6 +262,7 @@ const App = () => (
               <Route path="/prelogin" element={<AppPreloginScreen />} />
               <Route path="/r/:shareRef" element={<PublicRecipeSharePage />} />
               <Route path="/go/:slug" element={<MarketingLinkRedirectPage />} />
+              <Route path="/admin/marketing-links" element={<AdminMarketingLinksRoute />} />
               <Route path="/p/:ref" element={<SharedPlanPage />} />
               <Route path="/" element={<RootRedirect />} />
               <Route

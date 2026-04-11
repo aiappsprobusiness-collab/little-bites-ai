@@ -180,3 +180,11 @@ WHERE min_age_months IS NULL OR max_age_months IS NULL;
 - **Ошибка (`destructive`):** красный фон, иконка `AlertCircle`, крестик виден.
 - **С действием / бесконечное ожидание** (например PWA «Обновить», `duration: Infinity`): кнопка `ToastAction` и крестик остаются.
 - **Позиция:** мобильный viewport — под заголовком (`--layout-header-offset` + `0.5rem`), не перекрывает sticky TopBar; `z-30` (контент ниже шапки `z-40`).
+
+---
+
+## Маркетинговые короткие ссылки `/go/:slug`
+
+- **БД:** `public.marketing_links` (см. `docs/database/DATABASE_SCHEMA.md`). **Миграция:** `supabase/migrations/20260412120000_marketing_links.sql` — применить через Supabase CLI / dashboard.
+- **Код:** `src/utils/marketingLinks.ts` (`createMarketingLink`, `getMarketingLinks`, `getMarketingLinkBySlug`), статический fallback — `src/config/marketingLinks.ts` (`STATIC_MARKETING_LINKS`), редирект — `src/pages/MarketingLinkRedirectPage.tsx`.
+- **Админка:** `/admin/marketing-links` доступна только если в `.env` задано **`VITE_ADMIN_MODE=true`** (Vite не подставляет переменные без префикса `VITE_`). Копирование полного URL: `https://momrecipes.online/go/{slug}` (константа `getPublicGoUrl` / `MARKETING_GO_PUBLIC_ORIGIN` в `src/utils/marketingLinks.ts`).

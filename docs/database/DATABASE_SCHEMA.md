@@ -537,6 +537,25 @@ RLS: INSERT — authenticated; SELECT — anon, authenticated (редирект 
 
 ---
 
+### `public.marketing_links`
+
+Маркетинговые короткие ссылки `/go/:slug` → редирект на приложение с UTM в поле `url`. Создание — из админ-UI (`/admin/marketing-links` при `VITE_ADMIN_MODE=true`) или вставка в таблицу; легаси-статика в коде см. `STATIC_MARKETING_LINKS` в `src/config/marketingLinks.ts`.
+
+| Колонка    | Тип     | Описание |
+|------------|---------|----------|
+| id         | uuid PK | |
+| slug       | text NOT NULL UNIQUE | Сегмент пути `/go/:slug` |
+| url        | text NOT NULL | Относительный путь с query UTM, например `/?utm_source=...` |
+| campaign   | text NOT NULL | `utm_campaign` |
+| content    | text NOT NULL | `utm_content` |
+| medium     | text NOT NULL DEFAULT `shorts` | `utm_medium` |
+| source     | text NOT NULL DEFAULT `youtube` | `utm_source` |
+| created_at | timestamptz NOT NULL | |
+
+RLS: SELECT — anon, authenticated; INSERT — anon, authenticated (доступ к UI ограничен флагом на фронте). Миграция: `20260412120000_marketing_links.sql`.
+
+---
+
 ### `public.shared_plans`
 
 Шаринг плана дня: `/p/:ref`. payload — дата, приёмы пищи (названия, типы).

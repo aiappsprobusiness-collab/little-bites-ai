@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { MARKETING_LINKS } from "@/config/marketingLinks";
+import { getStaticMarketingLink } from "@/config/marketingLinks";
+import { getMarketingLinkBySlug } from "@/utils/marketingLinks";
 import { trackUsageEventAwait } from "@/utils/usageEvents";
 
 function resolveRedirectHref(path: string): string {
@@ -9,7 +10,7 @@ function resolveRedirectHref(path: string): string {
 }
 
 /**
- * GET /go/:slug — логирует клик, затем client-side redirect на целевой URL с UTM.
+ * GET /go/:slug — сначала БД `marketing_links`, затем статический fallback; лог, client-side redirect.
  */
 export default function MarketingLinkRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -21,18 +22,28 @@ export default function MarketingLinkRedirectPage() {
       return;
     }
 
-    const entry = MARKETING_LINKS[raw];
-    const path = entry?.url ?? "/";
-    const destination_url = resolveRedirectHref(path);
-
     void (async () => {
+      let path = "/";
       try {
-        if (entry) {
+        const row = await getMarketingLinkBySlug(raw);
+        if (row?.url) {
+          path = row.url;
+        } else {
+          path = getStaticMarketingLink(raw)?.url ?? "/";
+        }
+      } catch {
+        path = getStaticMarketingLink(raw)?.url ?? "/";
+      }
+
+      const destination_url = resolveRedirectHref(path);
+
+      try {
+        if (path !== "/") {
           await trackUsageEventAwait("marketing_link_click", {
             properties: {
               slug: raw,
               destination_url,
-              source: entry.source ?? "youtube_short_link",
+              source: "youtube_short_link",
             },
           });
         }
