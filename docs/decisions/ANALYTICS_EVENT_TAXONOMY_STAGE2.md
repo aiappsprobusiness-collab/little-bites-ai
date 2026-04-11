@@ -59,6 +59,7 @@
 | `landing_cta_login_click` | click | Welcome | CTA «Войти» → /auth |
 | `prelogin_cta_click` | click | AppPreloginScreen | `properties.target`: `login` \| `signup` |
 | `landing_demo_save_click` | click | Welcome | Перед `landing_cta_free_click`, если демо было в viewport |
+| `marketing_link_click` | click | `MarketingLinkRedirectPage` (`/go/:slug`) | `slug`, `destination_url`, `source` (по умолчанию `youtube_short_link`); колонка `feature` в БД = это имя события |
 
 ### 3.2 Auth
 

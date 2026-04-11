@@ -31,6 +31,7 @@ import SharedPlanPage from "./pages/SharedPlanPage";
 import LandingOnboardingScreen from "./pages/LandingOnboardingScreen";
 import AppPreloginScreen from "./pages/AppPreloginScreen";
 import { RootRedirect } from "./components/RootRedirect";
+import MarketingLinkRedirectPage from "./pages/MarketingLinkRedirectPage";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
@@ -252,6 +253,7 @@ const App = () => (
               <Route path="/welcome" element={<LandingOnboardingScreen />} />
               <Route path="/prelogin" element={<AppPreloginScreen />} />
               <Route path="/r/:shareRef" element={<PublicRecipeSharePage />} />
+              <Route path="/go/:slug" element={<MarketingLinkRedirectPage />} />
               <Route path="/p/:ref" element={<SharedPlanPage />} />
               <Route path="/" element={<RootRedirect />} />
               <Route

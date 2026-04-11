@@ -340,29 +340,29 @@ export interface TrackUsageEventOptions {
   properties?: Record<string, unknown>;
 }
 
-/**
- * Отправить событие в usage_events (fire-and-forget).
- * Автоматически добавляет: anon_id, session_id, page, entry_point, utm, share_ref, share_channel,
- * onboarding-контекст (properties.onboarding + fallback колонок utm_* из onboarding_attribution).
- */
-export function trackUsageEvent(
+interface TrackUsageEventPayload {
+  featureKey: string;
+  body: Record<string, unknown>;
+}
+
+function buildTrackUsageEventPayload(
   feature: string,
-  options: TrackUsageEventOptions = {}
-): void {
-  if (!feature || typeof feature !== "string") return;
+  options: TrackUsageEventOptions
+): TrackUsageEventPayload | null {
+  if (!feature || typeof feature !== "string") return null;
   const featureKey = feature.trim();
-  if (!featureKey) return;
+  if (!featureKey) return null;
 
   if (isClientForbiddenUsageFeature(featureKey)) {
     if (import.meta.env.DEV) {
       console.warn("[usageEvents] skip limit-sensitive feature (server-only):", featureKey);
     }
-    return;
+    return null;
   }
 
   const baseUrl = SUPABASE_URL?.replace(/\/$/, "");
   const anonKey = SUPABASE_PUBLISHABLE_KEY;
-  if (!baseUrl || !anonKey) return;
+  if (!baseUrl || !anonKey) return null;
 
   const now = Date.now();
   const page = typeof window !== "undefined" ? window.location.pathname || "" : "";
@@ -384,17 +384,17 @@ export function trackUsageEvent(
   const fp = propsFingerprint(options.properties);
 
   if (isInFeatureBackoff(featureKey, now)) {
-    return;
+    return null;
   }
   if (shouldSkipDedup(featureKey, page, entryPoint, fp, now)) {
-    return;
+    return null;
   }
 
   const anonId = getOrCreateAnonId();
   const sessionId = getOrCreateSessionId();
   const utm = resolveUtmForBody(ob);
 
-  const body = {
+  const body: Record<string, unknown> = {
     feature: featureKey,
     anon_id: anonId,
     session_id: sessionId,
@@ -409,9 +409,15 @@ export function trackUsageEvent(
     console.debug("[usageEvents]", featureKey, body);
   }
 
-  const url = `${baseUrl}${TRACK_EDGE_PATH}`;
+  return { featureKey, body };
+}
 
-  supabase.auth.getSession().then(({ data: { session } }) => {
+function postTrackUsageEventToEdge(featureKey: string, body: Record<string, unknown>): Promise<void> {
+  const baseUrl = SUPABASE_URL?.replace(/\/$/, "");
+  const anonKey = SUPABASE_PUBLISHABLE_KEY;
+  if (!baseUrl || !anonKey) return Promise.resolve();
+  const url = `${baseUrl}${TRACK_EDGE_PATH}`;
+  return supabase.auth.getSession().then(({ data: { session } }) => {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       apikey: anonKey,
@@ -419,29 +425,63 @@ export function trackUsageEvent(
     if (session?.access_token) {
       headers.Authorization = `Bearer ${session.access_token}`;
     }
-    fetch(url, {
+    return fetch(url, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
       keepalive: true,
-    })
-      .then((res) => {
-        if (!res.ok) {
-          recordFeatureFailure(featureKey, Date.now());
-          if (import.meta.env.DEV) {
-            console.warn("[usageEvents] track-usage-event failed, feature backoff:", featureKey, res.status);
-          }
-        } else {
-          recordFeatureSuccess(featureKey);
-        }
-      })
-      .catch(() => {
+    }).then((res) => {
+      if (!res.ok) {
         recordFeatureFailure(featureKey, Date.now());
         if (import.meta.env.DEV) {
-          console.warn("[usageEvents] track-usage-event network error, feature backoff:", featureKey);
+          console.warn("[usageEvents] track-usage-event failed, feature backoff:", featureKey, res.status);
         }
-      });
+      } else {
+        recordFeatureSuccess(featureKey);
+      }
+    });
   });
+}
+
+/**
+ * Отправить событие в usage_events (fire-and-forget).
+ * Автоматически добавляет: anon_id, session_id, page, entry_point, utm, share_ref, share_channel,
+ * onboarding-контекст (properties.onboarding + fallback колонок utm_* из onboarding_attribution).
+ */
+export function trackUsageEvent(
+  feature: string,
+  options: TrackUsageEventOptions = {}
+): void {
+  const payload = buildTrackUsageEventPayload(feature, options);
+  if (!payload) return;
+  const { featureKey, body } = payload;
+  void postTrackUsageEventToEdge(featureKey, body).catch(() => {
+    recordFeatureFailure(featureKey, Date.now());
+    if (import.meta.env.DEV) {
+      console.warn("[usageEvents] track-usage-event network error, feature backoff:", featureKey);
+    }
+  });
+}
+
+/**
+ * Как trackUsageEvent, но ждёт завершения HTTP-запроса (для редиректов, чтобы не оборвать отправку).
+ * Ошибки сети глотаются; редирект можно выполнять сразу после await.
+ */
+export async function trackUsageEventAwait(
+  feature: string,
+  options: TrackUsageEventOptions = {}
+): Promise<void> {
+  let featureKeyForBackoff: string | null = null;
+  try {
+    const payload = buildTrackUsageEventPayload(feature, options);
+    if (!payload) return;
+    featureKeyForBackoff = payload.featureKey;
+    await postTrackUsageEventToEdge(payload.featureKey, payload.body);
+  } catch {
+    if (featureKeyForBackoff) {
+      recordFeatureFailure(featureKeyForBackoff, Date.now());
+    }
+  }
 }
 
 // --- Share virality ---
