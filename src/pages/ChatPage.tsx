@@ -984,6 +984,59 @@ export default function ChatPage() {
         return;
       }
 
+      /** Если запрос по тем же ключам, что и клиентский fallback — не дергаем Edge: нет `isChatting`, нет бабла «генерация рецепта». */
+      const queryForIntent = rewrittenQuery ?? toSend;
+      const earlyRouteMeta = getRedirectOrIrrelevantMeta(queryForIntent);
+      if (earlyRouteMeta) {
+        streamDoneForMessageIdRef.current = assistantMessageId;
+        skipHistorySyncUntilRef.current = Date.now() + CHAT_HISTORY_SYNC_SKIP_MS;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                ...m,
+                content: earlyRouteMeta.message,
+                rawContent: undefined,
+                isStreaming: false,
+                preParsedRecipe: null,
+                systemHintType: earlyRouteMeta.route,
+                topicKey: earlyRouteMeta.topicKey,
+                topicTitle: earlyRouteMeta.topicTitle,
+                topicShortTitle: earlyRouteMeta.topicShortTitle,
+              }
+              : m
+          )
+        );
+        try {
+          const historyId = await saveChat({
+            message: userMessage.content,
+            response: earlyRouteMeta.message,
+            recipeId: null,
+            childId: selectedMemberId === "family" || !selectedMemberId ? null : selectedMemberId,
+            meta: {
+              systemHintType: earlyRouteMeta.route,
+              ...(earlyRouteMeta.route === "assistant_topic_redirect" && earlyRouteMeta.topicKey != null && {
+                topicKey: earlyRouteMeta.topicKey,
+                topicTitle: earlyRouteMeta.topicTitle,
+                topicShortTitle: earlyRouteMeta.topicShortTitle,
+              }),
+            },
+          });
+          if (historyId) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === userMessage.id || m.id === assistantMessageId
+                  ? { ...m, chatHistoryRowId: historyId }
+                  : m
+              )
+            );
+          }
+        } catch (e) {
+          safeError("Failed to save client fast-path redirect/irrelevant to chat history:", e);
+        }
+        return;
+      }
+
       const activeProfileId = selectedMemberId ?? "family";
       const profiles: Profile[] = members.map((m) => ({
         id: m.id,

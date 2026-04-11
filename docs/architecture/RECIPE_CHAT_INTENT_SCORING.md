@@ -49,7 +49,7 @@
 
 ## Клиент
 
-- Fallback при сбое бэкенда: `src/utils/chatRouteFallback.ts` (упрощённые ключевые слова; расширен список off-topic в части паритета с Edge).
+- Клиент: `src/utils/chatRouteFallback.ts` вызывает **`resolveRecipeChatIntent`** (импорт из `supabase/functions/deepseek-chat/recipeChatIntent.ts`) — те же правила, что на Edge. При маршруте не `recipe` чат рецептов в **`ChatPage`** отвечает **без вызова Edge** (без индикатора «генерация рецепта»), см. `chat_recipe_generation.md`.
 - Восстановление истории: в `ChatPage` для ответа нерелевантности учитываются характерные подстроки (в т.ч. старый текст «В этом чате мы помогаем…» и новый из `CHAT_MESSAGE_IRRELEVANT` в `_shared/chatRecipeRoutingMessages.ts`).
 
 ## Тесты
