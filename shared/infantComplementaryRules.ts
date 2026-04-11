@@ -126,6 +126,44 @@ export function evaluateInfantRecipeComplementaryRules(
       novelKeys,
     };
   }
+  const novel = novelKeys[0];
+  /** Ввод курицы ≠ яйца: в одном блюде не смешиваем мясной и яичный продукт для блока «новый продукт». */
+  if (novel === "chicken") {
+    if (!canonicalKeys.includes("chicken")) {
+      return {
+        valid: false,
+        reason: "after_chicken_intro_recipe_must_contain_chicken",
+        canonicalKeys,
+        novelKeys,
+      };
+    }
+    if (canonicalKeys.includes("egg")) {
+      return {
+        valid: false,
+        reason: "after_chicken_intro_recipe_must_not_contain_egg",
+        canonicalKeys,
+        novelKeys,
+      };
+    }
+  }
+  if (novel === "egg") {
+    if (!canonicalKeys.includes("egg")) {
+      return {
+        valid: false,
+        reason: "after_egg_intro_recipe_must_contain_egg",
+        canonicalKeys,
+        novelKeys,
+      };
+    }
+    if (canonicalKeys.includes("chicken")) {
+      return {
+        valid: false,
+        reason: "after_egg_intro_recipe_must_not_contain_chicken",
+        canonicalKeys,
+        novelKeys,
+      };
+    }
+  }
   return { valid: true, reason: "after_ok", canonicalKeys, novelKeys };
 }
 

@@ -36,6 +36,12 @@ const PRODUCT_ALIAS_PATTERNS: Array<{ key: string; patterns: RegExp[]; label: st
   { key: "buckwheat", label: "Гречка", patterns: [/греч/iu, /\bbuckwheat\b/iu] },
   { key: "rice", label: "Рис", patterns: [/рис/iu, /\brice\b/iu] },
   { key: "turkey", label: "Индейка", patterns: [/индейк/iu, /индей/iu, /\bturkey\b/iu] },
+  /** Яйцо раньше курицы: «куриные яйца» и т.п. не должны давать ключ chicken. */
+  {
+    key: "egg",
+    label: "Яйцо",
+    patterns: [/яйц/iu, /\begg\b/iu, /желтк/iu, /яичн/iu, /\byolk\b/iu],
+  },
   { key: "chicken", label: "Курица", patterns: [/куриц/iu, /курин/iu, /\bchicken\b/iu] },
   { key: "beef", label: "Говядина", patterns: [/говядин/iu, /говяж/iu, /\bbeef\b/iu] },
   {
@@ -48,11 +54,6 @@ const PRODUCT_ALIAS_PATTERNS: Array<{ key: string; patterns: RegExp[]; label: st
   { key: "hake", label: "Хек", patterns: [/хек/iu, /\bhake\b/iu] },
   { key: "pollock", label: "Минтай", patterns: [/минта/iu, /\bpollock\b/iu] },
   { key: "fish", label: "Рыба", patterns: [/рыба/iu, /\bfish\b/iu] },
-  {
-    key: "egg",
-    label: "Яйцо",
-    patterns: [/яйц/iu, /\begg\b/iu, /желтк/iu, /яичн/iu, /\byolk\b/iu],
-  },
   { key: "cottage_cheese", label: "Творог", patterns: [/творо/iu, /\bcottage\s*cheese\b/iu] },
   { key: "kefir", label: "Кефир", patterns: [/кефир/iu, /\bkefir\b/iu] },
   { key: "yogurt", label: "Йогурт", patterns: [/йогурт/iu, /\byogh?urt\b/iu] },

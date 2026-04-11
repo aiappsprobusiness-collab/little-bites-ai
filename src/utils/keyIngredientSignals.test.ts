@@ -19,6 +19,12 @@ describe("normalizeProductKey", () => {
     expect(normalizeProductKey("apple")).toBe("apple");
     expect(normalizeProductKey("яблочное пюре")).toBe("apple");
   });
+
+  it("куриные яйца — egg, не chicken (отдельный продукт от мяса курицы)", () => {
+    expect(normalizeProductKey("Куриные яйца — 2 шт")).toBe("egg");
+    expect(normalizeProductKey("Куриное яйцо")).toBe("egg");
+    expect(normalizeProductKey("Филе курицы")).toBe("chicken");
+  });
 });
 
 describe("rawPenaltyUnitsFromPrior", () => {

@@ -168,8 +168,22 @@ type RecipeJson = {
   fats?: number | null;
   carbs?: number | null;
   ingredients?: Array<Record<string, unknown>>;
-  steps?: Array<{ step_number?: number; instruction: string }>;
+  /** Как в buildInfantSeedRecipes: строки или `{ step_number?, instruction }` */
+  steps?: Array<string | { step_number?: number; instruction?: string }>;
 };
+
+function normalizeSeedStep(raw: string | { step_number?: number; instruction?: string }, index: number): {
+  step_number: number;
+  instruction: string;
+} {
+  if (typeof raw === "string") {
+    return { step_number: index + 1, instruction: raw.trim() };
+  }
+  return {
+    step_number: raw.step_number ?? index + 1,
+    instruction: String(raw.instruction ?? "").trim(),
+  };
+}
 
 async function purgeBatch() {
   const { data: rows, error: selErr } = await supabase
@@ -283,11 +297,15 @@ async function replaceIngredientsAndSteps(recipeId: string, r: RecipeJson) {
   const { error: ie } = await supabase.from("recipe_ingredients").insert(ingredients);
   if (ie) return { ok: false as const, error: ie, phase: "insert_ingredients" };
 
-  const steps = (r.steps ?? []).map((s, i) => ({
-    recipe_id: recipeId,
-    step_number: s.step_number ?? i + 1,
-    instruction: s.instruction ?? "",
-  }));
+  const rawSteps = r.steps ?? [];
+  const steps = rawSteps.map((s, i) => {
+    const n = normalizeSeedStep(s, i);
+    return {
+      recipe_id: recipeId,
+      step_number: n.step_number,
+      instruction: n.instruction,
+    };
+  });
 
   const { error: se } = await supabase.from("recipe_steps").insert(steps);
   if (se) return { ok: false as const, error: se, phase: "insert_steps" };
