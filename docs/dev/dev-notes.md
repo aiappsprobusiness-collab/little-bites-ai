@@ -185,6 +185,6 @@ WHERE min_age_months IS NULL OR max_age_months IS NULL;
 
 ## Маркетинговые короткие ссылки `/go/:slug`
 
-- **БД:** `public.marketing_links` (см. `docs/database/DATABASE_SCHEMA.md`). **Миграция:** `supabase/migrations/20260412120000_marketing_links.sql` — применить через Supabase CLI / dashboard.
+- **БД:** `public.marketing_links` (см. `docs/database/DATABASE_SCHEMA.md`). **Миграция:** `supabase/migrations/20260412120000_marketing_links.sql` — обычно `npx supabase db push` или вставка SQL в **Dashboard → SQL Editor**. **Зафиксировано:** в production миграция применена **вручную** в SQL Editor (эквивалент `db push`; запись по запросу — не через CLI).
 - **Код:** `src/utils/marketingLinks.ts` (`createMarketingLink`, `getMarketingLinks`, `getMarketingLinkBySlug`), статический fallback — `src/config/marketingLinks.ts` (`STATIC_MARKETING_LINKS`), редирект — `src/pages/MarketingLinkRedirectPage.tsx`.
 - **Админка:** `/admin/marketing-links` доступна только если в `.env` задано **`VITE_ADMIN_MODE=true`** (Vite не подставляет переменные без префикса `VITE_`). Копирование полного URL: `https://momrecipes.online/go/{slug}` (константа `getPublicGoUrl` / `MARKETING_GO_PUBLIC_ORIGIN` в `src/utils/marketingLinks.ts`).
