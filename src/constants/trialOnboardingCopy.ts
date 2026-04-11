@@ -16,7 +16,8 @@ export const TRIAL_ONBOARDING_BULLETS = [
 ] as const;
 
 export function trialOnboardingFooterPhrase(days: number = TRIAL_DURATION_DAYS): string {
-  return `Через ${days} ${days === 1 ? "день" : days < 5 ? "дня" : "дней"} вернётся бесплатная версия`;
+  const dayWord = days === 1 ? "день" : days >= 2 && days <= 4 ? "дня" : "дней";
+  return `Бесплатная версия вернётся через ${days} ${dayWord}`;
 }
 
 export const TRIAL_ONBOARDING_CTA_CONTINUE = "Продолжить";

@@ -112,7 +112,6 @@ export function TrialActivatedModal({ open, userId, onClose, onOpenPricing }: Tr
                 <div className="text-center space-y-1 px-0.5">
                   <h2 className="text-xl font-semibold leading-snug text-foreground text-balance">{TRIAL_ONBOARDING_TITLE}</h2>
                   <p className="text-sm font-medium text-foreground/90">{TRIAL_ONBOARDING_INTRO}</p>
-                  <p className="text-xs text-muted-foreground leading-snug text-balance">{subtitle}</p>
                 </div>
 
                 <ul className="space-y-1.5 min-w-0 pb-0 mt-2">
@@ -125,6 +124,8 @@ export function TrialActivatedModal({ open, userId, onClose, onOpenPricing }: Tr
                     </li>
                   ))}
                 </ul>
+
+                <p className="text-xs text-muted-foreground leading-snug text-balance text-center mt-2 px-0.5">{subtitle}</p>
               </div>
 
               <div
