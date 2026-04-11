@@ -343,8 +343,31 @@ export default function RecipePage() {
 
   const [overrides, setOverrides] = useState<IngredientOverrides>({});
   const [servingsSelected, setServingsSelected] = useState(1);
+  /** Ручной степпер ±: не перетирать servings из эффектов и повторных fetch. */
   const userHasChangedServingsRef = useRef(false);
-  const lastSyncedPlanSlotKeyRef = useRef<string | null>(null);
+  /**
+   * Один раз на «экран» (ключ навигации): после гидрации не подставлять снова base/recommended из recipe
+   * и не сбрасывать порции при refetch React Query — иначе 4↔1 и цикл пересчёта ингредиентов.
+   */
+  const servingsHydratedViewKeyRef = useRef<string | null>(null);
+
+  /** Ключ вида карточки: избранное / каталог / слот плана — смена сбрасывает гидрацию в отдельном эффекте. */
+  const servingsViewKey = useMemo(() => {
+    if (!id) return "";
+    if (fromFavorites) return `fav:${id}`;
+    if (fromMealPlan) {
+      if (!plannedDate || !planMealType) return "";
+      return `plan:${plannedDate}:${planMealType}:${planRowMemberId ?? "fam"}:${id}`;
+    }
+    return `cat:${id}`;
+  }, [id, fromFavorites, fromMealPlan, plannedDate, planMealType, planRowMemberId]);
+
+  useEffect(() => {
+    if (!servingsViewKey) return;
+    userHasChangedServingsRef.current = false;
+    servingsHydratedViewKeyRef.current = null;
+  }, [servingsViewKey]);
+
   /** Актуальные значения для cleanup при unmount (избегаем stale closure и случая без cleanup при slotServings === servingsSelected). */
   const fromMealPlanPersistRef = useRef(false);
   const plannedDatePersistRef = useRef<string | null>(null);
@@ -366,67 +389,64 @@ export default function RecipePage() {
 
   // Порции из плана: не ждём загрузку recipe — id из URL + dayPlans из кэша; иначе кадр с 1 и скачок после fetch рецепта.
   // Пока слота нет в dayPlans (кэш/ключ запроса), не подставляем servings_recommended — иначе «мигание» с реальным meals.*.servings.
+  // Если в слоте нет meals.*.servings — дефолт по servings_base (канон для ингредиентов), не по recommended (часто 4), иначе 4↔1.
   // После save слота кэш плана патчится в updateSlotServings (без invalidate всего meal_plans_v2).
   useEffect(() => {
+    if (!servingsViewKey) return;
+
     if (fromFavorites) {
+      if (servingsHydratedViewKeyRef.current === servingsViewKey) return;
       setServingsSelected(1);
-      lastSyncedPlanSlotKeyRef.current = null;
+      servingsHydratedViewKeyRef.current = servingsViewKey;
       return;
     }
+
     if (!fromMealPlan) {
       if (!recipe?.id) return;
-      lastSyncedPlanSlotKeyRef.current = null;
-      userHasChangedServingsRef.current = false;
+      if (userHasChangedServingsRef.current) return;
+      if (servingsHydratedViewKeyRef.current === servingsViewKey) return;
       const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
       const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 4;
       const defaultServings = base >= 4 ? base : recommended;
       setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
+      servingsHydratedViewKeyRef.current = servingsViewKey;
       return;
     }
+
     if (!id || !plannedDate || !planMealType) return;
     if (dayPlanBlocked) return;
 
-    const planSlotSyncKey = `${plannedDate}-${planMealType}-${planRowMemberId ?? "fam"}-${id}`;
+    if (userHasChangedServingsRef.current) return;
 
-    if (planSlotSyncKey !== lastSyncedPlanSlotKeyRef.current) {
-      userHasChangedServingsRef.current = false;
-      if (slotServings != null && slotServings >= 1) {
-        lastSyncedPlanSlotKeyRef.current = planSlotSyncKey;
+    if (servingsHydratedViewKeyRef.current === servingsViewKey) {
+      if (slotServings != null && slotServings >= 1 && slotServings !== servingsSelected) {
         setServingsSelected(slotServings);
-        return;
       }
-      if (!recipe?.id) {
-        return;
+      if (slotServings === servingsSelected) {
+        userHasChangedServingsRef.current = false;
       }
-      if (!planSlotResolved) {
-        return;
-      }
-      lastSyncedPlanSlotKeyRef.current = planSlotSyncKey;
-      const base = (recipe as { servings_base?: number | null }).servings_base ?? 1;
-      const recommended = (recipe as { servings_recommended?: number | null }).servings_recommended ?? 4;
-      const defaultServings = base >= 4 ? base : recommended;
-      setServingsSelected(defaultServings >= 1 ? defaultServings : 1);
       return;
     }
-    if (
-      slotServings != null &&
-      slotServings >= 1 &&
-      slotServings !== servingsSelected &&
-      !userHasChangedServingsRef.current
-    ) {
+
+    if (slotServings != null && slotServings >= 1) {
       setServingsSelected(slotServings);
+      servingsHydratedViewKeyRef.current = servingsViewKey;
+      return;
     }
-    if (slotServings === servingsSelected) {
-      userHasChangedServingsRef.current = false;
-    }
+    if (!recipe?.id) return;
+    if (!planSlotResolved) return;
+
+    const sb = Math.max(1, (recipe as { servings_base?: number | null }).servings_base ?? 1);
+    setServingsSelected(sb);
+    servingsHydratedViewKeyRef.current = servingsViewKey;
   }, [
-    id,
-    recipe?.id,
+    servingsViewKey,
     fromFavorites,
     fromMealPlan,
+    id,
+    recipe?.id,
     plannedDate,
     planMealType,
-    planRowMemberId,
     slotServings,
     servingsSelected,
     dayPlanBlocked,
