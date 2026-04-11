@@ -64,6 +64,12 @@ function dayFillClass(filledCount: number): string {
 
 const MEAL_SLOT_FILLED_BG = "bg-primary/[0.12] border-primary/[0.35] text-foreground";
 
+/** Как у выбранного дня и приёма пищи: зелёное кольцо, не наезжает на край при небольшом inset ряда. */
+const SELECTED_CHIP_RING = "ring-2 ring-primary ring-offset-2 ring-offset-background";
+
+/** Inset для рядов чипов: место под ring + ring-offset, чтобы не резалось у края sheet. */
+const CHIP_ROW_INSET = "px-1.5 sm:px-2";
+
 export interface AddToPlanSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -209,14 +215,14 @@ export function AddToPlanSheet({
           {/* 1) Кому */}
           <div>
             <p className="text-sm font-medium text-foreground mb-2">Кому</p>
-            <div className="flex flex-wrap gap-2">
+            <div className={cn("flex flex-wrap gap-2", CHIP_ROW_INSET)}>
               <button
                 type="button"
                 onClick={() => setSelectedMemberId("family")}
                 className={cn(
                   "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                   (selectedMemberId === "family" || !selectedMemberId)
-                    ? "bg-primary/10 border-primary/30 text-foreground"
+                    ? cn("bg-primary/10 border-primary/30 text-foreground", SELECTED_CHIP_RING)
                     : "bg-transparent border-border text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -230,7 +236,7 @@ export function AddToPlanSheet({
                   className={cn(
                     "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                     selectedMemberId === m.id
-                      ? "bg-primary/10 border-primary/30 text-foreground"
+                      ? cn("bg-primary/10 border-primary/30 text-foreground", SELECTED_CHIP_RING)
                       : "bg-transparent border-border text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -243,7 +249,7 @@ export function AddToPlanSheet({
           {/* 2) Когда */}
           <div>
             <p className="text-sm font-medium text-foreground mb-2">Когда</p>
-            <div className="flex flex-wrap gap-2">
+            <div className={cn("flex flex-wrap gap-2", CHIP_ROW_INSET)}>
               {dayKeys.map((key) => {
                 const filledCount = filledCountByDay[key] ?? 0;
                 const isPinnedTargetDay = targetSlot?.dayKey === key;
@@ -260,7 +266,7 @@ export function AddToPlanSheet({
                       "px-3 py-2 rounded-full text-sm font-medium border transition-colors flex items-center gap-1 min-w-0",
                       dayFillClass(filledCount),
                       isDisabled && "opacity-50 cursor-not-allowed",
-                      isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                      isSelected && SELECTED_CHIP_RING
                     )}
                   >
                     <Calendar className="w-3.5 h-3.5 shrink-0" />
@@ -274,7 +280,7 @@ export function AddToPlanSheet({
           {/* 3) Приём пищи */}
           <div>
             <p className="text-sm font-medium text-foreground mb-2">Приём пищи</p>
-            <div className="flex flex-wrap gap-2">
+            <div className={cn("flex flex-wrap gap-2", CHIP_ROW_INSET)}>
               {MEAL_OPTIONS.map((m) => {
                 const slotFilled = selectedDayKey != null && isSlotFilledForDay(selectedDayKey, m.id);
                 const isSelected = selectedMealType === m.id;
@@ -287,7 +293,7 @@ export function AddToPlanSheet({
                     className={cn(
                       "px-3 py-2 rounded-full text-sm font-medium border transition-colors",
                       slotFilled ? MEAL_SLOT_FILLED_BG : "bg-transparent border-border text-muted-foreground",
-                      isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background text-foreground",
+                      isSelected && cn(SELECTED_CHIP_RING, "text-foreground"),
                       targetSlot && "opacity-80 cursor-default"
                     )}
                   >
