@@ -170,3 +170,13 @@ WHERE min_age_months IS NULL OR max_age_months IS NULL;
 - **`AuthCallbackPage`**, **`RootRedirect` (`/`)**, **`AppPreloginScreen`**, **`LandingOnboardingScreen`**, редирект с **`/meal-plan`** при 0 профилях: если у пользователя нет записей в `members`, целевой путь — `/profile?openCreateProfile=1&welcome=1` (константа `PROFILE_FIRST_CHILD_ONBOARDING` в `src/utils/firstChildOnboarding.ts`). Параметр `welcome=1` одноразово включает приветственный блок в модалке «Новый профиль» (`ProfileEditSheet`); из URL он удаляется при открытии.
 - **Глобальный paywall** (`UnifiedPaywall` / `LegacyPaywall` в `App.tsx`): слой `z-[100]`, чтобы окно подписки было **поверх** нижних sheet/диалогов (`z-50`), например при попытке добавить вторую аллергию на Free из формы создания профиля.
 - **Free, одна аллергия:** подсказка под полем — `FREE_ALLERGY_SINGLE_HINT_CREATE`. При попытке второй аллергии **в онбординге первого профиля** (`ProfileEditSheet` / `AddChildForm`) открывается единый paywall с причиной `onboarding_second_allergy_free` и текстами из `onboardingSecondAllergyPaywallCopy.ts` (не сбрасывать форму: см. `sameKey` в `ProfileEditSheet` и блокировку закрытия sheet, пока открыт paywall). Редактирование существующего ребёнка (`ChildProfileEditPage`) по-прежнему использует `allergies_locked` и `FREE_ALLERGY_PAYWALL_MESSAGE`.
+
+---
+
+## Toast (Radix UI)
+
+- **Код:** `src/components/ui/toast.tsx`, `toaster.tsx`, `src/hooks/use-toast.ts`.
+- **Успех (default):** оливковый фон (`bg-primary`), белый текст, скругление `rounded-2xl`, иконка `CheckCircle2`; крестик скрыт. Автоскрытие по умолчанию **2.3 с** (`DEFAULT_TOAST_DURATION_MS`), если `duration` в вызове не задан.
+- **Ошибка (`destructive`):** красный фон, иконка `AlertCircle`, крестик виден.
+- **С действием / бесконечное ожидание** (например PWA «Обновить», `duration: Infinity`): кнопка `ToastAction` и крестик остаются.
+- **Позиция:** мобильный viewport — под заголовком (`--layout-header-offset` + `0.5rem`), не перекрывает sticky TopBar; `z-30` (контент ниже шапки `z-40`).

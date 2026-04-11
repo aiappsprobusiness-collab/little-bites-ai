@@ -136,8 +136,13 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">;
 
+/** Автоскрытие для обычных уведомлений (без явного duration). Infinity — только Radix. */
+const DEFAULT_TOAST_DURATION_MS = 2300;
+
 function toast({ duration, ...rest }: Toast) {
   const id = genId();
+
+  const resolvedDuration = duration === undefined ? DEFAULT_TOAST_DURATION_MS : duration;
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -159,7 +164,7 @@ function toast({ duration, ...rest }: Toast) {
       ...rest,
       id,
       open: true,
-      ...(duration !== undefined ? { duration } : {}),
+      duration: resolvedDuration,
       onOpenChange: (open) => {
         if (!open) dismiss();
       },
@@ -167,8 +172,8 @@ function toast({ duration, ...rest }: Toast) {
   });
 
   /* Radix Root получает duration; дублируем таймер только для конечных значений (Infinity — только Radix). */
-  if (typeof duration === "number" && duration > 0 && Number.isFinite(duration)) {
-    durationTimeouts.set(id, setTimeout(() => dismiss(), duration));
+  if (typeof resolvedDuration === "number" && resolvedDuration > 0 && Number.isFinite(resolvedDuration)) {
+    durationTimeouts.set(id, setTimeout(() => dismiss(), resolvedDuration));
   }
 
   return {
