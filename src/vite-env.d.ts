@@ -1,5 +1,9 @@
 /// <reference types="vite/client" />
 
+interface Window {
+  _tmr?: Array<Record<string, unknown>>;
+}
+
 interface ImportMetaEnv {
   readonly VITE_DEEPSEEK_API_KEY: string;
   readonly VITE_SUPABASE_URL: string;

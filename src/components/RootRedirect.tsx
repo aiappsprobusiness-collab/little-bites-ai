@@ -17,8 +17,8 @@ const BOOT_SCREEN_CLASS =
  * - сессия recovery (JWT amr: recovery) → /auth/reset-password
  * - авторизован, members загружены и пусто → профиль + создание первого ребёнка (как после письма)
  * - авторизован, есть члены семьи → /meal-plan
- * - не авторизован, первый визит без UTM → /welcome
- * - не авторизован, уже видел welcome или есть utm_* → /auth
+ * - не авторизован, первый визит (нет hasSeenWelcome в localStorage) → /welcome
+ * - не авторизован, уже видел welcome → /auth
  */
 const SLOW_LOAD_SEC = 10;
 

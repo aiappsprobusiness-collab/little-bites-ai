@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -64,6 +64,7 @@ import { AppThemeProvider } from "@/components/theme/AppThemeProvider";
 import { ThemeProfileSync } from "@/components/theme/ThemeProfileSync";
 import { ThemeColorMeta } from "@/components/theme/ThemeColorMeta";
 import { shouldHandOffEmailAuthToCallback } from "@/utils/authEmailLinkParams";
+import { TOP_MAIL_RU_COUNTER_ID } from "@/constants/topMailRuCounter";
 
 /** Ключи localStorage V1: удаляем только их, не трогая sb-*-auth-token (Supabase). */
 const V1_STORAGE_KEYS = ["child_id", "last_child", "user_usage_data", "recipe_cache"];
@@ -112,6 +113,32 @@ function AttributionCapture() {
   useEffect(() => {
     captureAttributionFromLocationOnce();
   }, []);
+  return null;
+}
+
+/** Доп. pageView при смене маршрута SPA; первый просмотр — из сниппета в index.html (без дубля). */
+function TopMailRuSpaPageView() {
+  const location = useLocation();
+  const lastRouteKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = `${location.pathname}${location.search}${location.hash}`;
+
+    if (lastRouteKeyRef.current === null) {
+      lastRouteKeyRef.current = key;
+      return;
+    }
+    if (lastRouteKeyRef.current === key) return;
+
+    lastRouteKeyRef.current = key;
+    window._tmr = window._tmr || [];
+    window._tmr.push({
+      id: TOP_MAIL_RU_COUNTER_ID,
+      type: "pageView",
+      start: Date.now(),
+    });
+  }, [location.pathname, location.search, location.hash]);
+
   return null;
 }
 
@@ -238,6 +265,7 @@ const App = () => (
           <ThemeProfileSync />
           <ThemeColorMeta />
           <AppHeightSync />
+          <TopMailRuSpaPageView />
           <AttributionCapture />
           <LegacyCacheClear />
           <FamilyProvider>

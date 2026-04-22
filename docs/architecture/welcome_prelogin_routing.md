@@ -3,7 +3,7 @@
 ## 1. Список новых и изменённых файлов
 
 ### Новые файлы
-- `src/utils/navigation.ts` — `shouldShowWelcomePage()`: первый заход на `/` без UTM → welcome; `localStorage` ключ `hasSeenWelcome`; наличие `utm_source` / `utm_campaign` / `utm_medium` пропускает welcome (редирект на `/auth`)
+- `src/utils/navigation.ts` — `shouldShowWelcomePage()`: первый заход на `/` (нет `hasSeenWelcome` в `localStorage`) → welcome; UTM на первом визите welcome не отменяет
 - `src/utils/standalone.ts` — определение standalone PWA (display-mode, navigator.standalone)
 - `src/utils/onboardingAttribution.ts` — сохранение атрибуции (utm_*, entry_point, ref, shareRef) в `onboarding_attribution`
 - `src/utils/landingAnalytics.ts` — безопасная обёртка событий аналитики (landing_view, landing_demo_open, share_*_cta_click и др.)
@@ -14,7 +14,7 @@
 - `src/pages/AppPreloginScreen.tsx` — приложенческий pre-login экран `/prelogin`
 
 ### Изменённые файлы
-- `src/components/RootRedirect.tsx` — для неавторизованных: первый визит без UTM → `/welcome`, иначе → `/auth` (см. `shouldShowWelcomePage()`)
+- `src/components/RootRedirect.tsx` — для неавторизованных: первый визит → `/welcome`, иначе → `/auth` (см. `shouldShowWelcomePage()`)
 - `src/pages/LandingOnboardingScreen.tsx` — при монтировании `localStorage.hasSeenWelcome`
 - `src/App.tsx` — добавлены маршруты `/welcome`, `/prelogin`, root `/` отдаёт `<RootRedirect />`
 - `src/pages/SharedPlanPage.tsx` — CTA «Собрать свой план» ведёт на `/welcome` с сохранением query (entry_point, share_ref, share_type); сохранение атрибуции; трекинг share_day_plan_cta_click / share_week_plan_cta_click
@@ -28,7 +28,7 @@
 
 ### Root `/`
 - **Авторизован**, после загрузки `members`: при **0** записей в `members` → редирект на `/profile?openCreateProfile=1&welcome=1` (создание первого ребёнка, как после письма подтверждения); при наличии членов семьи → `/meal-plan` (текущий app-home). Welcome для авторизованных не показывается.
-- **Не авторизован**, в URL нет токенов из письма: если в query есть **любой из** `utm_source`, `utm_campaign`, `utm_medium` → редирект на `/auth` (рекламный трафик без welcome). Иначе, если в `localStorage` **нет** `hasSeenWelcome` → редирект на `/welcome`. Иначе → редирект на `/auth` (повторный заход).
+- **Не авторизован**, в URL нет токенов из письма: если в `localStorage` **нет** `hasSeenWelcome` → редирект на `/welcome` (в т.ч. при наличии `utm_*` в query). Иначе → редирект на `/auth` (повторный заход).
 - Маршрут `/prelogin` — компактный pre-login экран; автоматический выбор `/prelogin` vs `/welcome` при открытии `/` в `RootRedirect` не зашит (см. актуальный `RootRedirect.tsx`).
 - Standalone для других частей приложения: `src/utils/standalone.ts`.
 
@@ -60,7 +60,7 @@
    - Открыть `https://momrecipes.online/` (или localhost) в обычном браузере, выйти из аккаунта.
    - Ожидание: редирект на `/welcome`, отображается короткий welcome-экран; после этого `hasSeenWelcome` установлен.
    - Повторно открыть `/` — ожидание: редирект на `/auth` (без welcome).
-   - Открыть `/?utm_source=test` при отсутствии `hasSeenWelcome` — ожидание: редирект на `/auth`, без `/welcome`.
+   - Открыть `/?utm_source=test` при отсутствии `hasSeenWelcome` — ожидание: редирект на `/welcome` (рекламные метки не пропускают welcome на первом визите).
    - Проверить: «Попробовать пример» → открывается sheet с рецептом; «Сохранить рецепт» → переход на `/auth` и toast; «Попробовать бесплатно» → переход на `/auth`. С экрана входа ссылка «Посмотреть пример рецепта» → `/welcome`.
 
 2. **Неавторизованный пользователь в standalone PWA**

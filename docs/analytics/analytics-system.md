@@ -16,7 +16,9 @@
 
 ## Overview
 
-Аналитика в проекте Little Bites строится на **событиях в Supabase**: таблицы `usage_events`, `token_usage_log`, `subscription_plan_audit`, `plan_generation_jobs`, а также вспомогательные таблицы `chat_history`, `plate_logs`, `share_refs`. События пишутся с **фронтенда** (через Edge Function `track-usage-event` и напрямую в часть таблиц) и с **Edge Functions** (deepseek-chat, generate-plan, payment-webhook). Отдельной внешней системы аналитики (Amplitude/Mixpanel и т.п.) в коде нет — всё хранится в БД.
+Аналитика в проекте Little Bites строится на **событиях в Supabase**: таблицы `usage_events`, `token_usage_log`, `subscription_plan_audit`, `plan_generation_jobs`, а также вспомогательные таблицы `chat_history`, `plate_logs`, `share_refs`. События пишутся с **фронтенда** (через Edge Function `track-usage-event` и напрямую в часть таблиц) и с **Edge Functions** (deepseek-chat, generate-plan, payment-webhook). Отдельной внешней продуктовой аналитики (Amplitude/Mixpanel и т.п.) в коде нет — всё хранится в БД.
+
+**Рекламный счётчик (VK Ads / Top.Mail.Ru):** в `index.html` подключён пиксель Top.Mail.Ru (`_tmr`, id счётчика в константе `src/constants/topMailRuCounter.ts`). Первый `pageView` уходит при загрузке документа; при навигации в SPA (`BrowserRouter`) компонент `TopMailRuSpaPageView` в `src/App.tsx` дополнительно пушит `pageView` в `window._tmr` при смене пути (без дубля на первом экране — он уже учтён сниппетом в HTML). Данные счётчика живут у VK/Mail.ru, не в Supabase.
 
 Основные цели текущей реализации:
 - **Лимиты по фичам**: учёт по `usage_events` и RPC `get_usage_count_today` (сутки UTC). **Free:** `chat_recipe` и `help` — 2/день каждая. **Premium/Trial:** те же фичи для **скрытых** продуктовых лимитов **20/день** (чат-рецепт и «Помощь маме»); пороги в `src/utils/subscriptionRules.ts` и зеркале Edge `supabase/functions/_shared/subscriptionLimits.ts`.
