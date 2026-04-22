@@ -24,7 +24,7 @@
 | `src/utils/textareaAutosize.ts` | Общая автовысота textarea (clamp по max px, `overflow-y` hidden / auto). Используют `ChatInputBar` и `TopicConsultationSheet`. |
 | `src/data/helpTopicChips.ts` | Quick chips для topic `"quick"`: **`access` и порядок как на главной** — сначала все `free` (Не хочет есть, Когда срочно к врачу), затем все `paid` (Новый продукт → … → Наша тарелка). Экспорт: `getPremiumQuickChipTexts()`, `isPremiumQuickChipText(text)`. |
 | `src/features/help/config/popularQuestions.ts` | Пул «Сегодня спрашивают»: у **Free** в ротации только вопросы с `access: "free"` (сценарии «не ест» / срочно к врачу и близкие формулировки); остальные помечены `premium`. Тап по premium при `!hasAccess` на главной Help открывает paywall без sheet. |
-| `src/hooks/useDeepSeekAPI.tsx` | Запрос к `deepseek-chat`. При 429 и `code === 'LIMIT_REACHED'` или `error === 'LIMIT_REACHED'` бросает `Error('LIMIT_REACHED')` (payload опционален). При успешном ответе help — вызывает `refetchUsage()`. |
+| `src/hooks/useDeepSeekAPI.tsx` | Запрос к `deepseek-chat`. При 429 и `code === 'LIMIT_REACHED'` или `error === 'LIMIT_REACHED'` бросает `Error('LIMIT_REACHED')` (payload опционален). При успешном ответе help — вызывает `refetchUsage()`. **Таймаут help:** `HELP_REQUEST_TIMEOUT_MS` (см. §8) — должен перекрывать полный цикл Edge + DeepSeek. |
 | `src/hooks/useSubscription.tsx` | `helpRemaining`, `helpLimitExceeded` из `get_usage_count_today(..., "help")` и `limits.helpDailyLimit`. `refetchUsage()` инвалидирует запросы `["usage-help-today", user?.id]` и др. |
 
 ---
@@ -107,7 +107,20 @@
 
 ---
 
-## 8. Расширение
+## 8. Таймауты «Помощь маме» (клиент ↔ Edge ↔ DeepSeek)
+
+**Симптом:** в логах Edge запрос `sos_consultant` завершается `status: "ok"` и `llm_main_ms` десятки секунд, а пользователь видит обрыв / `HELP_TIMEOUT` / пусто. **Причина:** у `fetch()` к DeepSeek Promise часто резолвится уже по **заголовкам** ответа; чтение **`response.text()`** (тело JSON) идёт отдельно и может занять ещё десятки секунд. Если клиент обрывает запрос к Edge раньше (короткий `AbortSignal`), HTTP-ответ пользователю не доходит, хотя Edge позже успешно дописывает ответ в своих логах.
+
+**Согласование (актуальная реализация):**
+
+- **Edge `deepseek-chat`:** для `sos_consultant` общий бюджет на один вызов DeepSeek **`MAIN_LLM_TIMEOUT_MS` = 90 000 ms** (заголовки + тело в пределах одного дедлайна; чтение тела через `withTimeout`, см. `HELP_LLM_DEEPSEEK_PHASE` / `HELP_LLM_BODY_READ` в логах).
+- **Клиент:** `HELP_REQUEST_TIMEOUT_MS` в `useDeepSeekAPI.tsx` = **110 000 ms**, чтобы перекрыть Edge + пост-LLM работу (usage, ответ JSON) с запасом.
+
+При превышении бюджета на чтение тела Edge возвращает **200** с `error: "timeout"` и русским `message` — в help-ветке клиента это попадает в текст ответа как обычное сообщение (не «тишина»).
+
+---
+
+## 9. Расширение
 
 - **Тексты и чипсы:** правки в `helpTopicChips.ts` и в `popularQuestions.ts`.
 - **Категории дня / ротация:** правки в `popularQuestions.ts` (`CATEGORY_BY_DAY_OF_WEEK`, логика в `getPopularQuestionForToday`).

@@ -196,7 +196,8 @@ export function useDeepSeekAPI() {
         return blockedCheck;
       }
 
-      const HELP_REQUEST_TIMEOUT_MS = 30_000;
+      /** Должен быть ≥ бюджета Edge на DeepSeek для `sos_consultant` (заголовки + чтение тела) + запас на DB; иначе клиент обрывает запрос раньше, чем Edge успевает отдать JSON. */
+      const HELP_REQUEST_TIMEOUT_MS = 110_000;
       const RECIPE_REQUEST_TIMEOUT_MS = 90_000; // рецепт: не зависать бесконечно после деплоя/сетевых сбоев
       chatAbortRef.current = new AbortController();
       const timeoutMs = isHelpMode ? HELP_REQUEST_TIMEOUT_MS : RECIPE_REQUEST_TIMEOUT_MS;

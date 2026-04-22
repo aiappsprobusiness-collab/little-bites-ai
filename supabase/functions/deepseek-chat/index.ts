@@ -122,6 +122,28 @@ function logPerf(step: string, start: number, requestId?: string, extra?: Record
   console.log(JSON.stringify(obj));
 }
 
+/**
+ * `fetch()` к DeepSeek часто резолвится по получению заголовков; `response.text()` идёт отдельно и не отменяется тем же AbortSignal.
+ * Без ограничения на чтение тела таймаут «на весь LLM» фактически не действует.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  if (ms <= 0) {
+    return Promise.reject(Object.assign(new Error(label), { name: "AbortError" }));
+  }
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(Object.assign(new Error(label), { name: "AbortError" }));
+    }, ms);
+  });
+  return Promise.race([
+    promise.finally(() => {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    }),
+    timeoutPromise,
+  ]);
+}
+
 /** Нормализация title для сравнения (anti-duplicate). Та же логика, что в pool/diag. */
 function normalizeTitleKey(title: string): string {
   return (title ?? "")
@@ -1060,7 +1082,8 @@ serve(async (req) => {
         ...(isRecipeRequest && { response_format: { type: "json_object" } }),
       };
 
-      const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "sos_consultant" ? 30000 : 120000);
+      /** Help: длинные ответы + медленная выдача тела JSON; бюджет на весь вызов DeepSeek (headers + body), см. HELP_LLM_DEEPSEEK_PHASE. */
+      const MAIN_LLM_TIMEOUT_MS = isRecipeRequest ? 25000 : (type === "sos_consultant" ? 90000 : 120000);
       const timeoutMs = MAIN_LLM_TIMEOUT_MS;
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -1090,7 +1113,6 @@ serve(async (req) => {
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
-        clearTimeout(timeoutId);
       } catch (error) {
         clearTimeout(timeoutId);
         safeError("deepseek-chat request error", serializeError(error));
@@ -1120,10 +1142,26 @@ serve(async (req) => {
         }
         throw error;
       }
+      clearTimeout(timeoutId);
       logPerf("llm_ttfb", tLlmStart, requestId);
+      if (type === "sos_consultant") {
+        console.log(JSON.stringify({
+          tag: "HELP_LLM_DEEPSEEK_PHASE",
+          requestId,
+          budget_ms: timeoutMs,
+          ttfb_ms: Date.now() - tLlmStart,
+          note: "fetch resolved (headers); body read uses remaining budget",
+        }));
+      }
 
       if (!response.ok) {
-        const errorText = await response.text();
+        const errBodyMs = Math.min(15_000, Math.max(1, timeoutMs - (Date.now() - tLlmStart)));
+        let errorText: string;
+        try {
+          errorText = await withTimeout(response.text(), errBodyMs, "DeepSeek error body read timeout");
+        } catch {
+          errorText = "";
+        }
         safeError("DeepSeek API error", { ...serializeError(new Error(`HTTP ${response.status}`)), status: response.status, body: errorText.slice(0, 500) });
         if (response.status === 429) {
           return new Response(
@@ -1139,10 +1177,30 @@ serve(async (req) => {
       }
 
       const tBodyStart = Date.now();
+      const bodyBudgetMs = Math.max(1, timeoutMs - (Date.now() - tLlmStart));
       let bodyText: string;
       try {
-        bodyText = await response.text();
+        bodyText = await withTimeout(
+          response.text(),
+          bodyBudgetMs,
+          "LLM response body read timeout",
+        );
       } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          safeWarn("deepseek-chat LLM body timeout", { requestId, bodyBudgetMs, elapsedMs: Date.now() - tLlmStart });
+          logPerf("llm_body", tBodyStart, requestId, { response_chars: 0, timeout: 1 });
+          logPerf("llm_total", tLlmStart, requestId);
+          logPerf("llm_main_ms", tLlmStart, requestId);
+          latencyAuditLlmMainMs = Date.now() - tLlmStart;
+          logPerf("total_ms", t0, requestId);
+          return new Response(
+            JSON.stringify({
+              error: "timeout",
+              message: "Ответ занял слишком много времени. Попробуйте короче сформулировать вопрос или повторить запрос.",
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
         safeWarn("response.text failed", serializeError(err));
         return new Response(
           JSON.stringify({ error: "parse_error", message: "Не удалось прочитать ответ ИИ. Попробуйте ещё раз." }),
@@ -1150,6 +1208,14 @@ serve(async (req) => {
         );
       }
       const llmBodyMs = Date.now() - tBodyStart;
+      if (type === "sos_consultant") {
+        console.log(JSON.stringify({
+          tag: "HELP_LLM_BODY_READ",
+          requestId,
+          body_read_ms: llmBodyMs,
+          total_llm_ms: Date.now() - tLlmStart,
+        }));
+      }
       try {
         data = JSON.parse(bodyText) as { choices?: Array<{ message?: { content?: string } }>; usage?: unknown };
       } catch (err) {
