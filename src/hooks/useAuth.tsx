@@ -85,9 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else if (!session && readRecoveryPendingFlag()) {
         setRecoveryPendingFlag(false);
         setRecoveryFromAuthEvent(false);
+      } else if (session && !isRecoveryJwtSession(session)) {
+        // Обычная сессия (в т.ч. после подтверждения регистрации): сбросить recovery-флаги.
+        // Раньше isRecoveryUrlPresent() срабатывал на любой access_token в hash — оставался recoveryFromAuthEvent.
+        setRecoveryPendingFlag(false);
+        setRecoveryFromAuthEvent(false);
       }
-      // НЕ сбрасывать recovery при session && !isRecoveryJwtSession — это затирало PASSWORD_RECOVERY
-      // до того, как JWT успевал содержать amr recovery.
+      // PASSWORD_RECOVERY в onAuthStateChange по-прежнему может выставить recovery после getSession.
       setLoading(false);
       initializedRef.current = true;
     }).catch((err) => {

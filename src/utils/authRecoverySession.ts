@@ -41,8 +41,11 @@ export function isRecoveryJwtSession(session: Session | null): boolean {
 }
 
 /**
- * В адресе ещё есть токены/code от письма — сессия подключается асинхронно.
- * Нельзя сразу редиректить на /auth с «сессия истекла».
+ * В URL явно сценарий **сброса пароля** (recovery), а не любое письмо с токеном.
+ *
+ * Раньше считалось «recovery» при любом `access_token` в hash на `/auth/callback` — из‑за этого
+ * подтверждение регистрации (`type=signup`) помечалось как recovery, и после колбэка
+ * `ProtectedRoute` уводил на `/auth/reset-password`.
  */
 export function isRecoveryUrlPresent(): boolean {
   if (typeof window === "undefined") return false;
@@ -50,11 +53,7 @@ export function isRecoveryUrlPresent(): boolean {
   if (!["/auth/reset-password", "/auth/callback", "/"].includes(p)) return false;
   const h = window.location.hash || "";
   const q = new URLSearchParams(window.location.search);
-  return (
-    /access_token|refresh_token|type=recovery/.test(h) ||
-    q.has("access_token") ||
-    q.has("refresh_token") ||
-    q.has("code") ||
-    q.get("type") === "recovery"
-  );
+  if (/type=recovery/.test(h) || q.get("type") === "recovery") return true;
+  if (p === "/auth/reset-password" && (/access_token|refresh_token/.test(h) || q.has("code"))) return true;
+  return false;
 }

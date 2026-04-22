@@ -28,6 +28,7 @@
 ## 2. Логика маршрутизации
 
 ### Root `/`
+- **Recovery vs письмо о регистрации:** признак «сессия сброса пароля» для UI (`isRecoveryUrlPresent` / `recoveryFromAuthEvent` в `useAuth`) — только `type=recovery` в hash/query или страница `/auth/reset-password` с токенами. Подтверждение email после регистрации (`/auth/callback` + `type=signup` и токены) **не** должно помечаться как recovery (см. `src/utils/authRecoverySession.ts`).
 - **Авторизован**, после загрузки `members`: при **0** записей в `members` → редирект на `/profile?openCreateProfile=1&welcome=1` (создание первого ребёнка, как после письма подтверждения); при наличии членов семьи → `/meal-plan` (текущий app-home). Welcome для авторизованных не показывается.
 - **Не авторизован**, в URL нет токенов из письма: если в `localStorage` **нет** `hasSeenWelcome` → редирект на `/welcome` (в т.ч. при наличии `utm_*` в query). Иначе → редирект на `/auth` (повторный заход).
 - Маршрут `/prelogin` — компактный pre-login экран; автоматический выбор `/prelogin` vs `/welcome` при открытии `/` в `RootRedirect` не зашит (см. актуальный `RootRedirect.tsx`).
