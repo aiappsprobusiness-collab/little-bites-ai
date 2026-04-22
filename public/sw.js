@@ -173,22 +173,10 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Other: network with cache fallback
-  event.respondWith(
-    fetch(request)
-      .then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          safeCachePut(RUNTIME_NAME, request, copy);
-        }
-        return res;
-      })
-      .catch(() =>
-        caches.match(request).then(
-          (cached) => cached || new Response("", { status: 503, statusText: "Service Unavailable" })
-        )
-      )
-  );
+  // Сторонние скрипты/ресурсы (счётчики Mail.ru, CDN и т.д.): только прямой fetch.
+  // Не кэшируем и не подменяем сбой сети на 503 — иначе в DevTools «503 (from service worker)»
+  // маскирует реальную причину (офлайн, блокировщик, таймаут).
+  event.respondWith(fetch(request));
 });
 
 // ——— MESSAGE (skipWaiting from UI) ———
