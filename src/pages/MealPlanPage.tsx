@@ -258,15 +258,15 @@ function DayTabButton({
   const isActive = isSelected;
   const effectivelyDisabled = disabled || isLocked;
   return (
-    <motion.button
+    <button
       type="button"
       disabled={disabled}
-      whileTap={effectivelyDisabled ? undefined : { scale: 0.98 }}
-      transition={{ duration: 0.12 }}
       onClick={onClick}
+      data-plan-day-selected={isActive ? "true" : "false"}
       className={cn(
         "plan-day-tab relative flex flex-col items-center justify-center min-w-[36px] min-h-[32px] py-1 px-2 rounded-md shrink-0 transition-colors border text-[12px]",
-        /* UA-контур и box-shadow сбрасываются в index.css (.plan-day-tab); кольцо только :focus-visible */
+        !effectivelyDisabled && "active:scale-[0.98] transition-transform duration-100",
+        /* Фокус/рамка: см. index.css вне @layer — WebKit подменяет border на accent-синий */
         "outline-none focus:outline-none focus-visible:outline-none",
         "[-webkit-tap-highlight-color:transparent]",
         isLocked
@@ -286,7 +286,7 @@ function DayTabButton({
       )}
       <span className="font-medium relative z-0 opacity-90">{dayLabel}</span>
       <span className="font-semibold leading-tight relative z-0">{dateNum}</span>
-    </motion.button>
+    </button>
   );
 }
 const mealTypes = [
@@ -581,6 +581,20 @@ export default function MealPlanPage() {
     if (isFree && todayIndex >= 0) return todayIndex;
     return 0;
   }, [dateFromUrl, rollingDates, isFree, todayIndex]);
+
+  /**
+   * WebKit/Android иногда оставляют фокус на первом чипе в горизонтальном скролле при другом выбранном дне
+   * (синяя системная «рама»). Снимаем фокус только если активен не тот чип, что data-plan-day-selected.
+   */
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const el = document.activeElement;
+      if (!(el instanceof HTMLElement) || !el.classList.contains("plan-day-tab")) return;
+      const selectedEl = document.querySelector('.plan-day-tab[data-plan-day-selected="true"]');
+      if (selectedEl instanceof HTMLElement && el !== selectedEl) el.blur();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [selectedDay]);
 
   const selectPlanDayIndex = useCallback(
     (index: number) => {
