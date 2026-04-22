@@ -2410,7 +2410,7 @@ export default function MealPlanPage() {
                         🔒
                       </span>
                       <span>Собрать неделю</span>
-                      <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/75">Полная</span>
+                      <span className="text-[10px] font-medium tracking-wide text-muted-foreground/75">Premium</span>
                     </>
                   ) : (
                     <span>Собрать неделю</span>
