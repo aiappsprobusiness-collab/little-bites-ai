@@ -5,7 +5,12 @@ import { supabase } from '@/integrations/supabase/client';
 import { setActiveSessionKeyForUser, clearStoredSessionKey } from '@/utils/activeSessionKey';
 import { clearOnLogout } from '@/utils/authStorageCleanup';
 import { logAuthBootstrap, logAuthSessionResult, logAuthStateChange } from '@/utils/authSessionDebug';
-import { isRecoveryJwtSession, isRecoveryUrlPresent } from '@/utils/authRecoverySession';
+import {
+  isRecoveryJwtSession,
+  isRecoveryUrlPresent,
+  readRecoveryPendingFlag,
+  setRecoveryPendingFlag,
+} from '@/utils/authRecoverySession';
 
 interface AuthContextType {
   session: Session | null;
@@ -31,27 +36,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const STORAGE_RECOVERY_PENDING = 'lb-auth-recovery-pending';
-
-function readRecoveryPendingFlag(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return sessionStorage.getItem(STORAGE_RECOVERY_PENDING) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function setRecoveryPendingFlag(on: boolean) {
-  if (typeof window === 'undefined') return;
-  try {
-    if (on) sessionStorage.setItem(STORAGE_RECOVERY_PENDING, '1');
-    else sessionStorage.removeItem(STORAGE_RECOVERY_PENDING);
-  } catch {
-    /* ignore */
-  }
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -87,9 +71,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRecoveryFromAuthEvent(false);
       } else if (session && !isRecoveryJwtSession(session)) {
         // Обычная сессия (в т.ч. после подтверждения регистрации): сбросить recovery-флаги.
-        // Раньше isRecoveryUrlPresent() срабатывал на любой access_token в hash — оставался recoveryFromAuthEvent.
-        setRecoveryPendingFlag(false);
-        setRecoveryFromAuthEvent(false);
+        // Не сбрасывать, пока в URL ещё токены сброса пароля — иначе старая сессия вкладки затирает сценарий из письма.
+        if (!isRecoveryUrlPresent()) {
+          setRecoveryPendingFlag(false);
+          setRecoveryFromAuthEvent(false);
+        }
       }
       // PASSWORD_RECOVERY в onAuthStateChange по-прежнему может выставить recovery после getSession.
       setLoading(false);
@@ -308,6 +294,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /** Пока сессия не подтянулась, recoveryFromAuthEvent из URL/storage держит пользователя на форме сброса. */
   const isRecoverySession =
     recoveryFromAuthEvent ||
+    readRecoveryPendingFlag() ||
     (session !== null && isRecoveryJwtSession(session));
 
   return (

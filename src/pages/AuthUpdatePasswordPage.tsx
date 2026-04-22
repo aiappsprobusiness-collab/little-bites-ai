@@ -60,7 +60,8 @@ export default function AuthUpdatePasswordPage() {
       });
       return;
     }
-    if (!isRecoverySession) {
+    // Не уводить в приложение, если пришли по ссылке из письма (токены/code), а recovery в JWT ещё не распознан.
+    if (!isRecoverySession && !urlHadTokens) {
       navigate("/", { replace: true });
     }
   }, [authReady, loading, user, isRecoverySession, navigate, urlHadTokens]);
@@ -115,7 +116,7 @@ export default function AuthUpdatePasswordPage() {
     );
   }
 
-  if (user && !isRecoverySession) {
+  if (user && !isRecoverySession && !urlHadTokens) {
     return (
       <div className="min-h-screen min-h-dvh flex flex-col items-center justify-center auth-page-bg px-4">
         <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />

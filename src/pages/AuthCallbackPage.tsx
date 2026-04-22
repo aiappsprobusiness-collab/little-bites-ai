@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { setActiveSessionKeyForUser } from "@/utils/activeSessionKey";
 import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
-import { isRecoveryJwtSession } from "@/utils/authRecoverySession";
+import { isRecoveryJwtSession, setRecoveryPendingFlag } from "@/utils/authRecoverySession";
 
 const POLL_INTERVAL_MS = 300;
 const MAX_WAIT_MS = 5000;
@@ -82,6 +82,7 @@ export default function AuthCallbackPage() {
       if (cancelled) return;
 
       if (isPasswordRecovery) {
+        setRecoveryPendingFlag(true);
         navigate("/auth/reset-password", { replace: true });
         return;
       }

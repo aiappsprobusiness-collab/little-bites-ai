@@ -1,5 +1,27 @@
 import type { Session } from "@supabase/supabase-js";
 
+/** Синхрон с `useAuth`: пока true — считаем сценарий сброса пароля (в т.ч. после редиректа с `/auth/callback` без hash). */
+const STORAGE_RECOVERY_PENDING = "lb-auth-recovery-pending";
+
+export function readRecoveryPendingFlag(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(STORAGE_RECOVERY_PENDING) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setRecoveryPendingFlag(on: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (on) sessionStorage.setItem(STORAGE_RECOVERY_PENDING, "1");
+    else sessionStorage.removeItem(STORAGE_RECOVERY_PENDING);
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Расшифровка payload JWT (без проверки подписи — только для клиентских подсказок UI;
  * сервер по-прежнему должен валидировать токен).
