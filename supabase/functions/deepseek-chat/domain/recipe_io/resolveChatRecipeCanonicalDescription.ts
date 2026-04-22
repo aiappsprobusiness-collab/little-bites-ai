@@ -19,6 +19,8 @@ export type ResolveChatRecipeDescriptionResult = {
   source: ChatCanonicalDescriptionSource;
   rejectionReasonRaw: string | null;
   rejectionReasonAfterRepair: string | null;
+  /** Время HTTP-вызова repair LLM (мс); null если repair не вызывался. */
+  repairLlmMs: number | null;
 };
 
 function acceptsLlmDescription(text: string, title: string): boolean {
@@ -64,6 +66,7 @@ export async function resolveChatRecipeCanonicalDescription(input: {
       source: "llm_raw",
       rejectionReasonRaw: null,
       rejectionReasonAfterRepair: null,
+      repairLlmMs: null,
     };
   }
 
@@ -84,6 +87,7 @@ export async function resolveChatRecipeCanonicalDescription(input: {
       source: "emergency_fallback",
       rejectionReasonRaw,
       rejectionReasonAfterRepair: null,
+      repairLlmMs: null,
     };
   }
 
@@ -95,10 +99,20 @@ export async function resolveChatRecipeCanonicalDescription(input: {
     }),
   );
 
+  const tRepairLlm = Date.now();
   const repaired = await repairChatRecipeDescription(t0, apiKey, {
     title,
     ingredients: input.ingredientNames,
   });
+  const repairLlmMs = Date.now() - tRepairLlm;
+  log(
+    JSON.stringify({
+      tag: "PERF",
+      step: "llm_description_repair_ms",
+      ms: repairLlmMs,
+      requestId: input.requestId,
+    }),
+  );
   const t1 = normalizeSpaces(repaired ?? "");
 
   if (repaired && acceptsLlmDescription(t1, title)) {
@@ -114,6 +128,7 @@ export async function resolveChatRecipeCanonicalDescription(input: {
       source: "llm_repair",
       rejectionReasonRaw,
       rejectionReasonAfterRepair: null,
+      repairLlmMs,
     };
   }
 
@@ -135,5 +150,6 @@ export async function resolveChatRecipeCanonicalDescription(input: {
     source: "emergency_fallback",
     rejectionReasonRaw,
     rejectionReasonAfterRepair,
+    repairLlmMs,
   };
 }

@@ -76,6 +76,8 @@ import {
   isChatDescriptionDebugEnabled,
   prepareChefAdvicePipeline,
   explainChefAdviceRejectionWhenNull,
+  explainCanonicalDescriptionRejection,
+  detectDescriptionDishType,
   resolveChatRecipeCanonicalDescription,
 } from "./domain/recipe_io/index.ts";
 import { checkTitleIngredientConsistency } from "../_shared/titleIngredientConsistencyGuard.ts";
@@ -366,6 +368,9 @@ serve(async (req) => {
   }
 
   const t0 = Date.now();
+  /** Для LATENCY_AUDIT: основной DeepSeek и опционально repair description (второй вызов). */
+  let latencyAuditLlmMainMs: number | null = null;
+  let latencyAuditDescriptionRepairMs: number | null = null;
   try {
     logPerf("start", t0);
 
@@ -1092,6 +1097,8 @@ serve(async (req) => {
         if (error instanceof Error && error.name === "AbortError") {
           logPerf("llm_ttfb", tLlmStart, requestId);
           logPerf("llm_total", tLlmStart, requestId);
+          logPerf("llm_main_ms", tLlmStart, requestId);
+          latencyAuditLlmMainMs = Date.now() - tLlmStart;
           logPerf("total_ms", t0, requestId);
           if (isRecipeRequest) {
             const minimal = getMinimalRecipe((body as { mealType?: string }).mealType ?? "snack");
@@ -1156,6 +1163,8 @@ serve(async (req) => {
       logPerf("llm_body", tBodyStart, requestId, { response_chars: assistantMessage.length });
       const llmTotalMs = Date.now() - tLlmStart;
       logPerf("llm_total", tLlmStart, requestId);
+      logPerf("llm_main_ms", tLlmStart, requestId);
+      latencyAuditLlmMainMs = llmTotalMs;
       if (!assistantMessage) {
         return new Response(
           JSON.stringify({ error: "empty_response", message: "ИИ не вернул ответ. Попробуйте переформулировать запрос." }),
@@ -1207,10 +1216,22 @@ serve(async (req) => {
           steps: stepStrsGate,
         });
         if (!descOk) {
+          const titleGate = String(validated.title ?? "").trim();
+          const descGate = String(validated.description ?? "").trim();
           safeLog(JSON.stringify({
             tag: "DESCRIPTION_QUALITY_GATE_RAW_LLM",
             requestId,
             rawLlmDescriptionFailsGate: true,
+            rejection_reason_raw: explainCanonicalDescriptionRejection(validated.description ?? "", { title: validated.title }),
+            title_len: titleGate.length,
+            desc_len: descGate.length,
+            meal_type: validated.mealType ?? undefined,
+            meal_type_for_prompt: normalizeMealTypeKey(mealTypeForPrompt) || undefined,
+            simple_meal_only_query: simpleMealOnlyQuery,
+            subscription_status: subscriptionStatus,
+            advice_ok: adviceOk,
+            raw_chef_advice_nonempty: Boolean(String(validated.chefAdvice ?? "").trim()),
+            dish_type_hint: detectDescriptionDishType(titleGate, ingNamesGate, validated.mealType ?? undefined),
             note:
               "Сырой validated.description не прошёл gate; финал после санитайзеров — resolveChatRecipeCanonicalDescription (сырой LLM → repair → emergency). Промпт и гейт согласованы на макс. 210 симв.",
           }));
@@ -1525,6 +1546,25 @@ serve(async (req) => {
         requestId,
         log: (line) => safeLog(line),
       });
+      latencyAuditDescriptionRepairMs = canonicalResolved.repairLlmMs;
+      const mealTypeRec = typeof recipe.mealType === "string" ? recipe.mealType : undefined;
+      safeLog(JSON.stringify({
+        tag: "DESCRIPTION_GATE_SUMMARY",
+        requestId,
+        canonical_description_source: canonicalResolved.source,
+        rejection_reason_raw: canonicalResolved.rejectionReasonRaw,
+        rejection_reason_after_repair: canonicalResolved.rejectionReasonAfterRepair,
+        repair_llm_ms: canonicalResolved.repairLlmMs,
+        subscription_status: subscriptionStatus,
+        simple_meal_only_query: simpleMealOnlyQuery,
+        meal_type_for_prompt: normalizeMealTypeKey(mealTypeForPrompt) || undefined,
+        meal_type_recipe: mealTypeRec,
+        title_len: finalTitleForBenefit.length,
+        desc_len_sanitized_input: currentDesc.length,
+        chef_advice_saved: enforcedChefAdvice != null && String(enforcedChefAdvice).trim() !== "",
+        dish_type_hint: detectDescriptionDishType(finalTitleForBenefit, ingNamesForEnforce, mealTypeRec),
+        quality_retry_skipped_due_to_advice_failure: recipeQualityRetrySkippedDueToBadChefAdvice,
+      }));
       canonicalDbDescriptionForPersist = canonicalResolved.description;
       (recipe as Record<string, unknown>).description = canonicalResolved.description;
       assistantMessage = JSON.stringify(recipe);
@@ -1818,7 +1858,14 @@ serve(async (req) => {
       responseBody.auth_required_to_save = true;
     }
     logPerf("total_ms", t0, requestId);
-    safeLog(JSON.stringify({ tag: "LATENCY_AUDIT", requestId, total_ms: Date.now() - t0, latencyPhase: "response_returned" }));
+    safeLog(JSON.stringify({
+      tag: "LATENCY_AUDIT",
+      requestId,
+      total_ms: Date.now() - t0,
+      latencyPhase: "response_returned",
+      ...(latencyAuditLlmMainMs != null ? { llm_main_ms: latencyAuditLlmMainMs } : {}),
+      ...(latencyAuditDescriptionRepairMs != null ? { llm_description_repair_ms: latencyAuditDescriptionRepairMs } : {}),
+    }));
     return new Response(
       JSON.stringify(responseBody),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
