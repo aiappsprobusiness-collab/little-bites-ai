@@ -121,7 +121,7 @@ function AttributionCapture() {
   return null;
 }
 
-/** Доп. pageView при смене маршрута SPA; первый просмотр — из сниппета в index.html (без дубля). */
+/** Доп. pageView при смене маршрута SPA; первый просмотр — из сниппета в index.html `<head>` (без дубля). */
 function TopMailRuSpaPageView() {
   const location = useLocation();
   const lastRouteKeyRef = useRef<string | null>(null);

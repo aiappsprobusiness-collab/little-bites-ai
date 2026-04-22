@@ -81,17 +81,7 @@
         opacity: 1;
       }
     </style>
-  </head>
-
-  <body>
-    <script>
-      window.__momRecipesSplashStartMs = Date.now();
-    </script>
-    <div id="splash-screen" role="img" aria-label="Mom Recipes"></div>
-    <div id="root"></div>
-    <!-- PWA: Service Worker registered in main.tsx (production). Offline fallback: /offline.html -->
-    <script type="module" src="/src/main.tsx"></script>
-    <!-- Top.Mail.Ru counter (VK Ads) -->
+    <!-- Top.Mail.Ru counter (VK Ads): основной скрипт в head (рекомендация VK). <noscript> с img — в body (в head внутри noscript нельзя img по HTML5). -->
     <script type="text/javascript">
       var _tmr = window._tmr || (window._tmr = []);
       _tmr.push({ id: "3760703", type: "pageView", start: new Date().getTime() });
@@ -113,6 +103,16 @@
         }
       })(document, window, "tmr-code");
     </script>
+  </head>
+
+  <body>
+    <script>
+      window.__momRecipesSplashStartMs = Date.now();
+    </script>
+    <div id="splash-screen" role="img" aria-label="Mom Recipes"></div>
+    <div id="root"></div>
+    <!-- PWA: Service Worker registered in main.tsx (production). Offline fallback: /offline.html -->
+    <script type="module" src="/src/main.tsx"></script>
     <noscript>
       <div>
         <img
