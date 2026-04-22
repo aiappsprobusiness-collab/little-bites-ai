@@ -10,7 +10,7 @@ import {
 export interface ProfileHeaderCardProps {
   displayName: string;
   status: string;
-  /** Почта аккаунта (под именем вместо «Подписка активна» для Premium). */
+  /** Почта аккаунта (под именем для Free и Premium; для Trial — строка «Пробный период»). */
   accountEmail?: string | null;
   onEditClick: (e: React.MouseEvent) => void;
   trialUntilFormatted: string | null;
@@ -39,11 +39,7 @@ export function ProfileHeaderCard({
   const isTrial = tier === "trial";
   const isFree = tier === "free";
 
-  const statusSubtext = isFree
-    ? null
-    : isTrial
-      ? "Пробный период"
-      : accountEmail?.trim() ?? "";
+  const nameSubtext = isTrial ? "Пробный период" : accountEmail?.trim() ?? "";
 
   const row2Secondary = isFree
     ? "базовые возможности"
@@ -71,11 +67,11 @@ export function ProfileHeaderCard({
               <div className="text-lg font-semibold text-foreground truncate leading-tight">
                 {displayName}
               </div>
-              {!isFree && (
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate" title={statusSubtext || undefined}>
-                  {statusSubtext}
+              {nameSubtext ? (
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate" title={nameSubtext}>
+                  {nameSubtext}
                 </p>
-              )}
+              ) : null}
             </div>
           </button>
         </div>
