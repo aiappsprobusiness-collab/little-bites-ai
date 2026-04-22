@@ -1,4 +1,12 @@
-import { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  type KeyboardEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -12,9 +20,11 @@ import {
   Check,
   ClipboardList,
   ChevronRight,
+  Heart,
   HeartHandshake,
   Info,
   Loader2,
+  MessageCircle,
   Plus,
   ShoppingCart,
   Sparkles,
@@ -90,7 +100,7 @@ function isPerf(): boolean {
  * 2) Fill week (Premium): только POOL. В dev: [FILL] source=POOL only.
  * 3) Replace (↻): Free — paywall; Premium/Trial — pool-first, затем AI. В dev: [REPLACE] source=AI premiumOnly.
  * 4) Edge replace_slot: при Free и пустом пуле возвращает premium_required (без вызова AI).
- * 5) Занятый слот: ограничение pool-автозамены по slot/day; после лимита или pool_exhausted — fallback через PoolExhaustedSheet.
+ * 5) Занятый слот: прикорм — лимит pool-автозамены по slot/day; после лимита или pool_exhausted — PoolExhaustedSheet. 12+: со 2-й успешной замены слота за день Edge replace_pool=personal (сначала только chat_ai/week_ai/manual).
  */
 
 import { applyReplaceSlotToPlanCache, applyClearSlotToPlanCache } from "@/utils/planCache";
@@ -245,6 +255,9 @@ function DayTabButton({
   disabled,
   isLocked,
   onClick,
+  planDayIndex,
+  planWeekLength,
+  onPlanDayArrowNavigate,
 }: {
   dayLabel: string;
   dateNum: number;
@@ -254,27 +267,62 @@ function DayTabButton({
   disabled?: boolean;
   isLocked?: boolean;
   onClick: () => void;
+  /** Roving tabindex + стрелки: только у ленты дней на Плане */
+  planDayIndex?: number;
+  planWeekLength?: number;
+  onPlanDayArrowNavigate?: (nextIndex: number) => void;
 }) {
   const isActive = isSelected;
   const effectivelyDisabled = disabled || isLocked;
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (isActive && planDayIndex !== undefined && onPlanDayArrowNavigate && planWeekLength) {
+      if (e.key === "ArrowRight") {
+        if (planDayIndex < planWeekLength - 1) {
+          e.preventDefault();
+          onPlanDayArrowNavigate(planDayIndex + 1);
+        }
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        if (planDayIndex > 0) {
+          e.preventDefault();
+          onPlanDayArrowNavigate(planDayIndex - 1);
+        }
+        return;
+      }
+    }
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      if (!disabled) onClick();
+    }
+  };
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
+    <div
+      role="tab"
+      aria-selected={isActive}
+      tabIndex={disabled ? -1 : isActive ? 0 : -1}
+      aria-disabled={disabled || undefined}
       data-plan-day-selected={isActive ? "true" : "false"}
+      onClick={() => {
+        if (disabled) return;
+        onClick();
+      }}
+      onKeyDown={handleKeyDown}
+      onMouseDown={(e) => {
+        /* Нативный <button> в Chrome даёт «синюю» системную рамку; div + preventDefault стабильнее */
+        if (!isActive) e.preventDefault();
+      }}
       className={cn(
-        "plan-day-tab relative flex flex-col items-center justify-center min-w-[36px] min-h-[32px] py-1 px-2 rounded-md shrink-0 transition-colors border text-[12px]",
-        !effectivelyDisabled && "active:scale-[0.98] transition-transform duration-100",
-        /* Фокус/рамка: см. index.css вне @layer — WebKit подменяет border на accent-синий */
-        "outline-none focus:outline-none focus-visible:outline-none",
-        "[-webkit-tap-highlight-color:transparent]",
+        "plan-day-tab relative flex flex-col items-center justify-center min-w-[36px] min-h-[32px] py-1 px-2 rounded-md shrink-0 transition-colors border border-solid text-[12px] select-none",
+        !effectivelyDisabled && "active:scale-[0.98] transition-transform duration-100 cursor-pointer",
+        isLocked && "cursor-not-allowed",
+        !effectivelyDisabled && "hover:border-primary/40 hover:text-foreground",
         isLocked
-          ? "bg-muted/80 border-border text-muted-foreground cursor-not-allowed"
+          ? "bg-muted/80 border-border text-muted-foreground"
           : isActive
             ? "bg-primary text-primary-foreground border-primary"
-            : "bg-background border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
-        !isActive && isToday && !isLocked && "ring-1 ring-primary/20",
+            : "bg-background border-border text-muted-foreground",
+        !isActive && isToday && !isLocked && "plan-day-tab--today",
         disabled && "pointer-events-none opacity-70"
       )}
     >
@@ -286,7 +334,7 @@ function DayTabButton({
       )}
       <span className="font-medium relative z-0 opacity-90">{dayLabel}</span>
       <span className="font-semibold leading-tight relative z-0">{dateNum}</span>
-    </button>
+    </div>
   );
 }
 const mealTypes = [
@@ -583,17 +631,17 @@ export default function MealPlanPage() {
   }, [dateFromUrl, rollingDates, isFree, todayIndex]);
 
   /**
-   * WebKit/Android иногда оставляют фокус на первом чипе в горизонтальном скролле при другом выбранном дне
-   * (синяя системная «рама»). Снимаем фокус только если активен не тот чип, что data-plan-day-selected.
+   * Roving tabindex: в таб-ордер попадает только выбранный чип — иначе Tab всегда садился на первый в DOM
+   * («сегодня»), и Chrome рисовал синюю рамку при другом выбранном дне.
+   * useLayoutEffect: переносим фокус до отрисовки кадра с «чужим» фокусом.
    */
-  useEffect(() => {
-    const id = requestAnimationFrame(() => {
-      const el = document.activeElement;
-      if (!(el instanceof HTMLElement) || !el.classList.contains("plan-day-tab")) return;
-      const selectedEl = document.querySelector('.plan-day-tab[data-plan-day-selected="true"]');
-      if (selectedEl instanceof HTMLElement && el !== selectedEl) el.blur();
-    });
-    return () => cancelAnimationFrame(id);
+  useLayoutEffect(() => {
+    const selectedEl = document.querySelector(
+      '.plan-day-tab[data-plan-day-selected="true"]'
+    );
+    if (selectedEl instanceof HTMLElement) {
+      selectedEl.focus({ preventScroll: true });
+    }
   }, [selectedDay]);
 
   const selectPlanDayIndex = useCallback(
@@ -611,6 +659,32 @@ export default function MealPlanPage() {
       );
     },
     [isFree, rollingDates, setSearchParams]
+  );
+
+  const navigatePlanDayByArrow = useCallback(
+    (nextIndex: number) => {
+      const d = rollingDates[nextIndex];
+      if (!d) return;
+      const dayKey = formatLocalDate(d);
+      const isDayLockedForFree = isFree && dayKey !== todayKey;
+      if (isDayLockedForFree) {
+        if (FF_UNIFIED_PAYWALL) {
+          setPaywallReason("week_preview");
+          setPaywallCustomMessage(null);
+          setShowPaywall(true);
+        } else if (FF_WEEK_PAYWALL_PREVIEW) {
+          setShowWeekPreviewSheet(true);
+        } else {
+          toast({
+            title: "Это в полной версии",
+            description: "План на неделю — чтобы не думать о меню каждый день.",
+          });
+        }
+        return;
+      }
+      selectPlanDayIndex(nextIndex);
+    },
+    [rollingDates, isFree, todayKey, selectPlanDayIndex, toast]
   );
 
   /** Free: день зафиксирован на «сегодня» — держим `?date=` в синхроне с URL (шаринг, возврат). */
@@ -642,14 +716,14 @@ export default function MealPlanPage() {
     mealType: string;
     infantReason?: InfantPoolExhaustedReason;
   } | null>(null);
-  /** Успешные pool-замены по ключу `${dayKey}_${mealType}` (только занятый слот, кнопка «Заменить» / подбор из пула). */
+  /** Успешные автозамены 12+ по `${dayKey}_${mealType}` (pool или AI): лимит прикорма + replace_pool=personal со 2-й замены. */
   const [poolAutoReplaceCountBySlot, setPoolAutoReplaceCountBySlot] = useState<Record<string, number>>({});
   /** История подошедших вариантов прикорма по ключу `${dayKey}_${mealType}`. */
   const [infantMatchedHistoryBySlot, setInfantMatchedHistoryBySlot] = useState<
     Record<string, Array<{ recipeId: string; title: string }>>
   >({});
   const [clearConfirm, setClearConfirm] = useState<"day" | "week" | null>(null);
-  /** Session-level excludes per day for replace_slot: после каждой замены добавляем recipe_id и titleKey, чтобы не крутить одни и те же рецепты. */
+  /** Session-level excludes per day for replace_slot: после замены добавляем и новый рецепт, и заменённый (он пропадает из weekPlans при optimistic update — иначе второй ↻ снова может вернуть первое блюдо). */
   const [sessionExcludeRecipeIds, setSessionExcludeRecipeIds] = useState<Record<string, string[]>>({});
   const [sessionExcludeTitleKeys, setSessionExcludeTitleKeys] = useState<Record<string, string[]>>({});
   /** Локальная коррекция week-индикаторов до завершения refetch после очистки дня/недели. dayKey -> true = считать день пустым. */
@@ -2449,7 +2523,11 @@ export default function MealPlanPage() {
               className="flex justify-center overflow-x-auto overflow-y-hidden pb-2 -mx-4 px-4 scrollbar-none min-w-0 max-w-full"
               style={{ scrollbarWidth: "none" }}
             >
-              <div className="flex gap-1 shrink-0">
+              <div
+                className="flex gap-1 shrink-0"
+                role="tablist"
+                aria-orientation="horizontal"
+              >
                 {rollingDates.map((date, index) => {
                   const dayKey = formatLocalDate(date);
                   const isDayLockedForFree = isFree && dayKey !== todayKey;
@@ -2463,6 +2541,9 @@ export default function MealPlanPage() {
                       isToday={dayKey === todayKey}
                       disabled={false}
                       isLocked={isDayLockedForFree}
+                      planDayIndex={index}
+                      planWeekLength={rollingDates.length}
+                      onPlanDayArrowNavigate={navigatePlanDayByArrow}
                       onClick={() => {
                         if (isDayLockedForFree) {
                           if (FF_UNIFIED_PAYWALL) {
@@ -2870,20 +2951,26 @@ export default function MealPlanPage() {
                         <div
                           className={cn(
                             recipeCard,
-                            "flex flex-col items-start justify-center gap-3 px-3 pt-3 pb-4 min-h-[88px] touch-manipulation",
+                            "flex flex-col items-start justify-center gap-2 px-3 pt-3 pb-3 min-h-[88px] touch-manipulation",
                             isPrimaryEmpty
                               ? "bg-primary/[0.06]"
                               : "bg-muted/50 border-border/60 shadow-none"
                           )}
                         >
-                          <span
-                            className={cn(
-                              recipeMealBadge,
-                              !isPrimaryEmpty && "opacity-90"
-                            )}
-                          >
-                            {slot.label}
-                          </span>
+                          <div className="flex flex-row flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span
+                              className={cn(
+                                recipeMealBadge,
+                                "shrink-0",
+                                !isPrimaryEmpty && "opacity-90"
+                              )}
+                            >
+                              {slot.label}
+                            </span>
+                            {!isInfantPlanUi ? (
+                              <span className="text-sm text-muted-foreground">Не выбран</span>
+                            ) : null}
+                          </div>
                           {isInfantPlanUi ? (
                             <p className="text-sm text-foreground/90 leading-relaxed flex items-start gap-2.5 pr-1">
                               <Loader2 className="w-4 h-4 shrink-0 mt-0.5 animate-spin text-primary/60" aria-hidden />
@@ -2896,120 +2983,72 @@ export default function MealPlanPage() {
                                 isPrimaryEmpty ? "text-foreground" : "text-muted-foreground"
                               )}
                             >
-                              Блюдо не выбрано
+                              Подобрать рецепт:
                             </p>
                           )}
                           {!isAnyGenerating && !isInfantPlanUi && (
-                            <button
-                              type="button"
-                              className={cn(
-                                "text-sm font-medium underline underline-offset-2 text-left w-fit min-h-[44px] py-1 -my-1 transition-colors active:scale-95",
-                                isPrimaryEmpty
-                                  ? "text-primary hover:text-primary/80 active:text-primary/70"
-                                  : "text-primary/75 hover:text-primary active:text-primary/85"
-                              )}
-                              onClick={async () => {
-                                if (replacingSlotKey != null) return;
-                                if (isFree) {
-                                  dismissPlanSoftChatHint();
-                                  setPaywallReason("meal_replace");
-                                  setPaywallCustomMessage(null);
-                                  setShowPaywall(true);
-                                  return;
-                                }
-                                if (import.meta.env.DEV) console.info("[REPLACE] source=AI premiumOnly", { dayKey: selectedDayKey, slot: slot.id });
-                                const slotKey = `${selectedDayKey}_${slot.id}`;
-                                setReplacingSlotKey(slotKey);
-                                try {
-                                  const result = await replaceMealSlotAuto({
-                                    dayKey: selectedDayKey,
-                                    mealType: slot.id,
-                                    excludeRecipeIds: replaceExcludeRecipeIdsMerged,
-                                    excludeTitleKeys: replaceExcludeTitleKeysMerged,
-                                    memberData: memberDataForPlan
-                                      ? {
-                                        allergies: memberDataForPlan.allergies,
-                                        likes: memberDataForPlan.likes,
-                                        dislikes: memberDataForPlan.dislikes,
-                                        age_months: memberDataForPlan.age_months,
-                                      }
-                                      : undefined,
-                                    isFree,
-                                  });
-                                  if (result.ok) {
-                                    setSessionExcludeRecipeIds((prev) => ({
-                                      ...prev,
-                                      [selectedDayKey]: [...(prev[selectedDayKey] ?? []), result.newRecipeId],
-                                    }));
-                                    setSessionExcludeTitleKeys((prev) => ({
-                                      ...prev,
-                                      [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(result.title)],
-                                    }));
-                                    applyReplaceSlotToPlanCache(queryClient, { mealPlansKeyWeek, mealPlansKeyDay }, {
-                                      dayKey: selectedDayKey,
-                                      mealType: slot.id,
-                                      newRecipeId: result.newRecipeId,
-                                      title: result.title,
-                                      plan_source: result.plan_source,
-                                    }, mealPlanMemberId ?? null);
-                                    toast({
-                                      description: "Блюдо добавлено в план",
-                                      duration: 2500,
-                                    });
-                                    if (isPlanDebug()) {
-                                      console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: true, reason: result.reason });
-                                    }
-                                  } else {
-                                    const code = (result as { code?: string }).code;
-                                    if (code === "LIMIT_REACHED") {
-                                      setPaywallReason("plan_refresh");
-                                      setPaywallCustomMessage(
-                                        `${getLimitReachedTitle("plan_refresh")}\n\n${getLimitReachedMessage("plan_refresh")}`
-                                      );
-                                      setShowPaywall(true);
-                                    } else if (code === "pool_exhausted") {
-                                      await clearSlotAndOpenPoolFallback({
-                                        dayKey: selectedDayKey,
-                                        mealType: slot.id,
-                                        planSlotId: null,
-                                      });
-                                    } else {
-                                      const err = "error" in result ? result.error : "";
-                                      if (err === "limit") {
-                                        toast({
-                                          variant: "destructive",
-                                          title: "Лимит",
-                                          description: "В бесплатной версии — 2 замены в день. В полной — без ограничений.",
-                                        });
-                                      } else if (err === "premium_required") {
-                                        setPaywallReason("meal_replace");
-                                        setPaywallCustomMessage(null);
-                                        setShowPaywall(true);
-                                      } else {
-                                        toast({
-                                          variant: "destructive",
-                                          title: "Не удалось подобрать",
-                                          description: err === "unauthorized" ? "Нужна авторизация" : err,
-                                        });
-                                      }
-                                    }
-                                    if (isPlanDebug()) {
-                                      console.info("[replace_slot]", { requestId: result.requestId, dayKey: selectedDayKey, memberId: mealPlanMemberId, slot: slot.id, ok: false, reason: result.reason, error: "error" in result ? result.error : undefined });
-                                    }
-                                  }
-                                } catch (e: unknown) {
-                                  toast({
-                                    variant: "destructive",
-                                    title: "Ошибка",
-                                    description: e instanceof Error ? e.message : "Не удалось подобрать рецепт",
-                                  });
-                                } finally {
-                                  setReplacingSlotKey(null);
-                                }
-                              }}
+                            <div
+                              className="flex w-full flex-row items-stretch gap-1 rounded-xl border border-border/55 bg-muted/30 p-1"
+                              role="group"
+                              aria-label="Действия для пустого слота"
                             >
-                              Подобрать рецепт
-                            </button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                title="Добавить из избранного"
+                                className="min-h-9 flex-1 min-w-0 gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold leading-tight text-foreground shadow-none hover:bg-background/90 hover:text-foreground [&_svg]:size-3.5"
+                                onClick={() => {
+                                  dismissPlanSoftChatHint();
+                                  navigate("/favorites", {
+                                    state: {
+                                      fromPlanSlot: true as const,
+                                      plannedDate: selectedDayKey,
+                                      mealType: slot.id,
+                                      memberId:
+                                        mealPlanMemberId === undefined ? undefined : mealPlanMemberId,
+                                    },
+                                  });
+                                }}
+                              >
+                                <Heart className="shrink-0 text-primary/85" aria-hidden />
+                                <span className="min-w-0 truncate">В Избранном</span>
+                              </Button>
+                              <div className="w-px shrink-0 self-stretch bg-border/60" aria-hidden />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                title={
+                                  isFree
+                                    ? "Сгенерировать в чате (полная версия)"
+                                    : "Сгенерировать в чате"
+                                }
+                                className="min-h-9 flex-1 min-w-0 gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold leading-tight text-foreground shadow-none hover:bg-background/90 hover:text-foreground [&_svg]:size-3.5"
+                                onClick={() => {
+                                  dismissPlanSoftChatHint();
+                                  if (isFree) {
+                                    setPaywallReason("generate_recipe");
+                                    setPaywallCustomMessage(null);
+                                    setShowPaywall(true);
+                                    return;
+                                  }
+                                  const prefillMessage = getPlanSlotChatPrefillMessage(slot.id);
+                                  navigate("/chat", {
+                                    state: {
+                                      fromPlanSlot: true,
+                                      plannedDate: selectedDayKey,
+                                      mealType: slot.id,
+                                      memberId:
+                                        mealPlanMemberId === undefined ? undefined : mealPlanMemberId,
+                                      prefillMessage,
+                                      prefillOnly: true,
+                                    },
+                                  });
+                                }}
+                              >
+                                <MessageCircle className="shrink-0 text-primary/85" aria-hidden />
+                                <span className="min-w-0 truncate">В чате</span>
+                              </Button>
+                            </div>
                           )}
                         </div>
                       )}

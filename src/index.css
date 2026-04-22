@@ -763,22 +763,42 @@ input[type="date"]::-webkit-datetime-edit-year-field {
 }
 
 /**
- * План — чипы дней недели (MealPlanPage): вне @layer, чтобы перебить utilities Tailwind.
- * Реальная причина «синего ободка» у первого/не выбранного дня:
- * - WebKit/Android подменяют border-color на системный accent при :focus (синий), даже без :focus-visible;
- * - фокус часто «залипает» на первом фокусируемом элементе в overflow-x-auto.
- * data-plan-day-selected задаётся в JSX; кольцо с клавиатуры только у выбранного дня.
+ * План — чипы дней (MealPlanPage): вне @layer, чтобы перебить utilities Tailwind.
+ * Чипы — div[role=tab], не <button>: у нативной кнопки в Chrome/Edge остаётся системная «синяя» рамка
+ * при фокусе/первом элементе в overflow-x, её нельзя полностью убрать стилями.
+ * «Сегодня» без ring-* — только маркер .plan-day-tab--today::after (ring на тёмном часто читается как синий контур).
  */
-button.plan-day-tab[data-plan-day-selected="false"]:focus,
-button.plan-day-tab[data-plan-day-selected="false"]:active {
+.plan-day-tab {
+  -webkit-tap-highlight-color: transparent;
+  outline: none !important;
+}
+
+.plan-day-tab.plan-day-tab--today::after {
+  content: "";
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 55%, transparent);
+  pointer-events: none;
+}
+
+.plan-day-tab[data-plan-day-selected="false"]:focus,
+.plan-day-tab[data-plan-day-selected="false"]:active {
   outline: none !important;
   border-color: var(--border) !important;
   box-shadow: none !important;
   --tw-ring-offset-shadow: 0 0 #0000;
   --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-color: transparent;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-width: 0px;
 }
 
-button.plan-day-tab[data-plan-day-selected="false"]:focus-visible {
+.plan-day-tab[data-plan-day-selected="false"]:focus-visible {
   outline: none !important;
   border-color: var(--border) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 45%, transparent) !important;
@@ -786,13 +806,13 @@ button.plan-day-tab[data-plan-day-selected="false"]:focus-visible {
   --tw-ring-shadow: 0 0 #0000;
 }
 
-button.plan-day-tab[data-plan-day-selected="true"]:focus,
-button.plan-day-tab[data-plan-day-selected="true"]:active {
+.plan-day-tab[data-plan-day-selected="true"]:focus,
+.plan-day-tab[data-plan-day-selected="true"]:active {
   outline: none !important;
   border-color: var(--primary) !important;
 }
 
-button.plan-day-tab[data-plan-day-selected="true"]:focus-visible {
+.plan-day-tab[data-plan-day-selected="true"]:focus-visible {
   outline: none !important;
   border-color: var(--primary) !important;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 50%, transparent) !important;
