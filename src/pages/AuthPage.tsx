@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { trackUsageEvent, captureAttributionFromLocationOnce } from "@/utils/usageEvents";
 import { LEGAL_TERMS_VERSION } from "@/constants/legalVersions";
+import { AUTH_SIGNUP_SUCCESS_PATH } from "@/constants/authSignupSuccess";
 
 const loginSchema = z.object({
   email: z.string().email("Введите корректный email"),
@@ -173,7 +174,7 @@ export default function AuthPage() {
       } else {
         trackUsageEvent("auth_success");
         toast({ title: "Регистрация успешна!", description: "Проверьте почту для подтверждения аккаунта" });
-        navigate("/profile", { replace: true });
+        navigate(AUTH_SIGNUP_SUCCESS_PATH, { replace: true });
       }
     } catch (err) {
       trackUsageEvent("auth_error", { properties: { message: err instanceof Error ? err.message : "Произошла непредвиденная ошибка" } });

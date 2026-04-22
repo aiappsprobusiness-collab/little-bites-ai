@@ -20,6 +20,8 @@
 
 **Рекламный счётчик (VK Ads / Top.Mail.Ru):** в `index.html` подключён пиксель Top.Mail.Ru (`_tmr`, id счётчика в константе `src/constants/topMailRuCounter.ts`). Первый `pageView` уходит при загрузке документа; при навигации в SPA (`BrowserRouter`) компонент `TopMailRuSpaPageView` в `src/App.tsx` дополнительно пушит `pageView` в `window._tmr` при смене пути (без дубля на первом экране — он уже учтён сниппетом в HTML). Данные счётчика живут у VK/Mail.ru, не в Supabase.
 
+**Цель «успешная регистрация» (URL в кабинете VK Ads):** стабильный путь **`/auth/signup-success`** (константа `AUTH_SIGNUP_SUCCESS_PATH` в `src/constants/authSignupSuccess.ts`; на проде: `https://momrecipes.online/auth/signup-success`). Пользователь попадает сюда после успешной отправки формы регистрации на `/auth` (`AuthPage`). Если Supabase сразу выдал сессию (без ожидания письма), этот экран кратко показывается и редиректит на `/`. Подтверждение email по ссылке из письма по-прежнему обрабатывается на `/auth/callback` → дальше в приложение; отдельная цель «подтвердил почту» этим URL не покрывается.
+
 Основные цели текущей реализации:
 - **Лимиты по фичам**: учёт по `usage_events` и RPC `get_usage_count_today` (сутки UTC). **Free:** `chat_recipe` и `help` — 2/день каждая. **Premium/Trial:** те же фичи для **скрытых** продуктовых лимитов **20/день** (чат-рецепт и «Помощь маме»); пороги в `src/utils/subscriptionRules.ts` и зеркале Edge `supabase/functions/_shared/subscriptionLimits.ts`.
 - **Trial/Premium flow**: события auth, paywall, trial_started, purchase_*.
