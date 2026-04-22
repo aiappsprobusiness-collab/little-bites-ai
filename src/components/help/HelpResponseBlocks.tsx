@@ -7,6 +7,10 @@ import { shouldShowHelpDoctorReminder, stripHelpDoctorSection } from "@/utils/st
 
 type IconComponent = React.ComponentType<{ className?: string }>;
 
+/** Как в `ChatMessage` (режим консультации): `prose` не наследует цвет на `strong`/`li` без явных утилит; в тёмной теме иначе «чёрные» заголовки пунктов. */
+const HELP_MARKDOWN_PROSE =
+  "prose prose-sm dark:prose-invert max-w-none prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-ol:text-foreground prose-ul:text-foreground [&>*]:text-foreground";
+
 /** Заголовки блоков в ответе Помощника (с эмодзи, ## или ** или просто текст). */
 const BLOCK_PATTERNS: { pattern: RegExp; icon: IconComponent; label: string }[] = [
   { pattern: /^(?:\s*[#*]*\s*[📌]*\s*)?Коротко\s*[*#]*\s*$/im, icon: Pin, label: "Коротко" },
@@ -90,7 +94,7 @@ export function HelpResponseBlocks({
   if (!hasBlocks) {
     return (
       <div className={cn("space-y-0 text-sm leading-[1.6]", className)}>
-        <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-foreground">
+        <div className={cn(HELP_MARKDOWN_PROSE, "prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5")}>
           <ReactMarkdown remarkPlugins={[remarkGfm]}>{safeContent}</ReactMarkdown>
         </div>
         {showReminder ? <HelpDoctorReminderLine /> : null}
@@ -104,7 +108,7 @@ export function HelpResponseBlocks({
         if (part.type === "plain") {
           if (!part.content) return null;
           return (
-            <div key={idx} className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0.5 [&>*]:text-foreground">
+            <div key={idx} className={cn(HELP_MARKDOWN_PROSE, "prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5")}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.content}</ReactMarkdown>
             </div>
           );
@@ -119,7 +123,7 @@ export function HelpResponseBlocks({
               <Icon className="w-4 h-4 text-primary shrink-0" aria-hidden />
               <span className="font-semibold text-foreground text-[13px]">{part.label}</span>
             </div>
-            <div className="prose prose-sm max-w-none prose-p:my-0.5 prose-ul:my-0.5 prose-li:my-0 [&>*]:text-foreground text-[13px] pl-6">
+            <div className={cn(HELP_MARKDOWN_PROSE, "prose-p:my-0.5 prose-ul:my-0.5 prose-ol:my-0.5 prose-li:my-0 text-[13px] pl-6")}>
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{part.content || "—"}</ReactMarkdown>
             </div>
           </div>
