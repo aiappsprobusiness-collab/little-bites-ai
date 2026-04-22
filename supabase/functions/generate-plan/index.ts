@@ -95,6 +95,8 @@ type MemberDataPool = {
 };
 type RecipeRowPool = {
   id: string; title: string; norm_title?: string | null; description: string | null; meal_type?: string | null;
+  /** Для режима replace_pool=personal: только manual | week_ai | chat_ai после первой замены. */
+  source?: string | null;
   is_soup?: boolean | null;
   max_age_months?: number | null; min_age_months?: number | null;
   nutrition_goals?: unknown;
@@ -410,8 +412,16 @@ function getCheapFilteredCount(
 }
 
 const POOL_SELECT_FIELDS =
-  "id, title, norm_title, description, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text, category)";
+  "id, title, norm_title, description, source, meal_type, is_soup, min_age_months, max_age_months, nutrition_goals, score, trust_level, cuisine, region, familiarity, recipe_ingredients(name, display_text, category)";
 const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
+/** Рецепты пользователя / недели / чата — при replace_pool=personal подбираем только их (те же фильтры профиля и слота). */
+const PERSONAL_REPLACE_POOL_SOURCES = new Set(["manual", "week_ai", "chat_ai"]);
+function filterPoolToPersonalReplaceSources(rows: RecipeRowPool[]): RecipeRowPool[] {
+  return rows.filter((r) => {
+    const s = (r.source ?? "").trim().toLowerCase();
+    return PERSONAL_REPLACE_POOL_SOURCES.has(s);
+  });
+}
 /** Все curated seed/starter должны попадать в память: при одном LIMIT по score почти все рецепты имеют score=0, и первые N строк из БД — случайные, без каталога infant/toddler. */
 const POOL_SEED_CATALOG_FETCH_LIMIT = 600;
 
@@ -1306,6 +1316,11 @@ serve(async (req) => {
       exclude_title_keys?: string[];
       /** 1 = first try (may return retry_suggested); 2 = second try → then show PoolExhaustedSheet. Default 1. */
       attempt?: number;
+      /**
+       * `personal` (12+ / семья): сначала только рецепты `manual` | `week_ai` | `chat_ai` с теми же фильтрами профиля/слота;
+       * если кандидат не найден — fallback на полный пул (как `default`). Прикорм и infant-seed-only игнорируют.
+       */
+      replace_pool?: "default" | "personal";
       /** Опционально; для текущего продукта не используется при скоринге пула (теги остаются на рецепте). */
       nutrition_goals?: string[];
       /** Опционально; мягкий приоритет только при явной передаче не-balanced ключа (клиент Плана не шлёт). */
@@ -1341,6 +1356,7 @@ serve(async (req) => {
     if (action === "replace_slot") {
       const dayKey = typeof body.day_key === "string" ? body.day_key : null;
       const mealType = typeof body.meal_type === "string" ? body.meal_type : null;
+      const replacePool: "default" | "personal" = body.replace_pool === "personal" ? "personal" : "default";
       if (!dayKey || !mealType || !MEAL_KEYS.includes(mealType as NormalizedMealType)) {
         return new Response(JSON.stringify({ error: "missing_day_key_or_meal_type" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -1465,11 +1481,22 @@ serve(async (req) => {
           if (ip) picked = { id: ip.id, title: ip.title };
         }
       } else {
-        const p1 = pickFromPoolInMemory(poolForReplace, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
-        picked = p1 ? { id: p1.id, title: p1.title } : null;
+        const pickAdultReplace = (slice: RecipeRowPool[]) => {
+          const p = pickFromPoolInMemory(slice, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
+          return p ? { id: p.id, title: p.title } : null;
+        };
+        const usePersonalFirst =
+          replacePool === "personal" &&
+          !isInfantComplementaryPlan(replaceMemberData, memberId) &&
+          !infantSeedCoreOnlyReplace;
+        if (usePersonalFirst) {
+          const personalSlice = filterPoolToPersonalReplaceSources(poolForReplace);
+          picked = pickAdultReplace(personalSlice) ?? pickAdultReplace(poolForReplace);
+        } else {
+          picked = pickAdultReplace(poolForReplace);
+        }
         if (!picked && memberId == null && mealType === "dinner" && poolForReplace.length < MIN_FAMILY_DINNER) {
-          const p2 = pickFromPoolInMemory(pool, mealType, replaceMemberData, excludeRecipeIds, excludeTitleKeys, undefined, replaceGoalHints);
-          picked = p2 ? { id: p2.id, title: p2.title } : null;
+          picked = pickAdultReplace(pool);
         }
       }
       if (picked) {

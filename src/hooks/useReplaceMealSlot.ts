@@ -570,6 +570,8 @@ export function useReplaceMealSlot(
       mealType: string;
       excludeRecipeIds: string[];
       excludeTitleKeys: string[];
+      /** Со 2-й успешной замены слота за день — Edge сначала ищет только manual/week_ai/chat_ai (см. generate-plan replace_pool). */
+      replacePool?: "default" | "personal";
       memberData?: MemberDataForPool | null;
       isFree: boolean;
     }): Promise<
@@ -587,10 +589,12 @@ export function useReplaceMealSlot(
       const token = freshSession?.access_token ?? undefined;
       if (!token) return { ok: false, error: "unauthorized" };
 
+      const replacePool = params.replacePool === "personal" ? "personal" : "default";
       const autoBase = {
         day_key: params.dayKey,
         meal_type: params.mealType,
         source: "auto" as const,
+        replace_pool: replacePool,
       };
       trackUsageEvent("plan_slot_replace_attempt", {
         memberId: memberId ?? null,
@@ -609,6 +613,7 @@ export function useReplaceMealSlot(
           exclude_recipe_ids: params.excludeRecipeIds,
           exclude_title_keys: params.excludeTitleKeys,
           attempt,
+          replace_pool: replacePool,
         };
         if (isDebugPlanEnabled()) replaceBody.debug_plan = true;
         const res = await invokeGeneratePlan(SUPABASE_URL, token, replaceBody, {
@@ -692,6 +697,7 @@ export function useReplaceMealSlot(
             meal_type: params.mealType,
             source: data.pickedSource === "pool" ? "auto_pool" : "auto_ai",
             plan_source: planSource,
+            replace_pool: replacePool,
           },
         });
         return {

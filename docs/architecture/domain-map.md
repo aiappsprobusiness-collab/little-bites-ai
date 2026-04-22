@@ -54,7 +54,7 @@
 
 - **Назначение:** пул рецептов пользователя для автозаполнения плана (source: seed, starter, manual, week_ai, chat_ai). Фильтрация по meal_type, is_soup (lunch = только супы), аллергиям, возрасту, предпочтениям.
 - **Таблицы:** `recipes`, `recipe_ingredients`, `recipe_steps`. Выборка через RPC/запросы по user_id и source. Индексы для пула (миграции recipes_pool_*).
-- **UI:** план использует пул через Edge generate-plan; клиент «Подобрать рецепт» использует recipePool.ts (pickRecipeFromPool, passesProfileFilter).
+- **UI:** план использует пул через Edge generate-plan; клиентский подбор из пула — `recipePool.ts` / `useReplaceMealSlot` (замена занятого слота ↻, частичное заполнение дня и т.д.); пустой слот в списке дня — избранное / чат с prefill (как `PoolExhaustedSheet`), без дублирования пула в отдельной ссылке.
 - **Edge:** `generate-plan`: fetchPoolCandidates, pickFromPool (mealType, soup-only для lunch, profile filter по аллергиям/возрасту/предпочтениям). _shared: allergens, familyPlan, planValidation, plan/familyDinnerFilter.
 - **Зависимости:** members (фильтры), recipes.meal_type / recipes.is_soup (MEAL_TYPE_AND_LUNCH_SOUP).
 

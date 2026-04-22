@@ -72,6 +72,7 @@ export type ReplaceOccupiedMealDeps = {
     mealType: string;
     excludeRecipeIds: string[];
     excludeTitleKeys: string[];
+    replacePool?: "default" | "personal";
     memberData?: {
       allergies?: string[] | null;
       likes?: string[] | null;
@@ -241,13 +242,20 @@ export async function runReplaceOccupiedMealSlot(
         recipeId: picked.id,
         recipeTitle: picked.title,
       });
+      /** Иначе после optimistic update старый id пропадает из weekPlans → со второй ↻ снова может выбраться то же блюдо. */
       setSessionExcludeRecipeIds((prev) => ({
         ...prev,
-        [selectedDayKey]: [...(prev[selectedDayKey] ?? []), picked.id],
+        [selectedDayKey]: [...new Set([...(prev[selectedDayKey] ?? []), recipeId, picked.id])],
       }));
       setSessionExcludeTitleKeys((prev) => ({
         ...prev,
-        [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(picked.title)],
+        [selectedDayKey]: [
+          ...new Set([
+            ...(prev[selectedDayKey] ?? []),
+            normalizeTitleKey(recipe.title),
+            normalizeTitleKey(picked.title),
+          ]),
+        ].filter(Boolean),
       }));
       applyReplaceSlotToPlanCache(
         queryClient,
@@ -290,6 +298,8 @@ export async function runReplaceOccupiedMealSlot(
       mealType: slot.id,
       excludeRecipeIds: replaceExcludeRecipeIdsMerged,
       excludeTitleKeys: replaceExcludeTitleKeysMerged,
+      replacePool:
+        !isInfantPlanUi && (poolAutoReplaceCountBySlot[slotKey] ?? 0) >= 1 ? "personal" : "default",
       memberData: memberDataForPlan
         ? {
             allergies: memberDataForPlan.allergies,
@@ -305,13 +315,20 @@ export async function runReplaceOccupiedMealSlot(
         toast({ description: "Нет других вариантов" });
         return;
       }
+      /** Старый id не остаётся в merged excludes: replaceExclude* строится из текущего плана, после replace слот уже с новым рецептом. */
       setSessionExcludeRecipeIds((prev) => ({
         ...prev,
-        [selectedDayKey]: [...(prev[selectedDayKey] ?? []), result.newRecipeId],
+        [selectedDayKey]: [...new Set([...(prev[selectedDayKey] ?? []), recipeId, result.newRecipeId])],
       }));
       setSessionExcludeTitleKeys((prev) => ({
         ...prev,
-        [selectedDayKey]: [...(prev[selectedDayKey] ?? []), normalizeTitleKey(result.title)],
+        [selectedDayKey]: [
+          ...new Set([
+            ...(prev[selectedDayKey] ?? []),
+            normalizeTitleKey(recipe.title),
+            normalizeTitleKey(result.title),
+          ]),
+        ].filter(Boolean),
       }));
       applyReplaceSlotToPlanCache(
         queryClient,
@@ -325,12 +342,11 @@ export async function runReplaceOccupiedMealSlot(
         },
         mealPlanMemberId ?? null
       );
-      if (result.pickedSource === "pool" || result.plan_source === "pool") {
-        setPoolAutoReplaceCountBySlot((prev) => ({
-          ...prev,
-          [slotKey]: (prev[slotKey] ?? 0) + 1,
-        }));
-      }
+      /** Считаем любую успешную автозамену 12+ (pool или AI), чтобы со 2-й попытки уходить в replace_pool=personal. */
+      setPoolAutoReplaceCountBySlot((prev) => ({
+        ...prev,
+        [slotKey]: (prev[slotKey] ?? 0) + 1,
+      }));
       if (isInfantPremiumAutoreplaceLocal) {
         appendInfantMatchedVariant({
           dayKey: selectedDayKey,

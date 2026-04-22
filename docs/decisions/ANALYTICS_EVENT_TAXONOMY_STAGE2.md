@@ -115,9 +115,9 @@
 | `plan_fill_day_success` | outcome | Клиент: вызов генерации завершён успешно |
 | `plan_fill_day_error` | outcome | Клиент: ошибка |
 | `plan_fill_day` | server_quota | generate-plan (free) | **Не путать** с клиентскими `plan_fill_*` |
-| `plan_slot_replace_attempt` | click | useReplaceMealSlot | `day_key`, `meal_type`, `source` |
+| `plan_slot_replace_attempt` | click | useReplaceMealSlot | `day_key`, `meal_type`, `source`, опц. `replace_pool` (`default` \| `personal`) |
 | `plan_slot_replace_fail` | outcome | useReplaceMealSlot | `reason`, опц. `error_type` / `fail_code` |
-| `plan_slot_replace_success` | outcome | useReplaceMealSlot | `source`: assign, pool_pick, ai_chat, auto_pool, auto_ai |
+| `plan_slot_replace_success` | outcome | useReplaceMealSlot | `source`: assign, pool_pick, ai_chat, auto_pool, auto_ai; опц. `replace_pool` |
 | `partial_week_toast_favorites_click` | click | Toast частичной недели |
 | `partial_week_toast_assistant_click` | click | Toast → ассистент |
 
