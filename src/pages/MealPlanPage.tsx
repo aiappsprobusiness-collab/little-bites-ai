@@ -266,9 +266,8 @@ function DayTabButton({
       onClick={onClick}
       className={cn(
         "plan-day-tab relative flex flex-col items-center justify-center min-w-[36px] min-h-[32px] py-1 px-2 rounded-md shrink-0 transition-colors border text-[12px]",
-        /* UA даёт синий outline (особенно у первого элемента в скролле); фокус — оливковый ring */
+        /* UA-контур и box-shadow сбрасываются в index.css (.plan-day-tab); кольцо только :focus-visible */
         "outline-none focus:outline-none focus-visible:outline-none",
-        "focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-0",
         "[-webkit-tap-highlight-color:transparent]",
         isLocked
           ? "bg-muted/80 border-border text-muted-foreground cursor-not-allowed"

@@ -426,9 +426,26 @@
     box-shadow: none !important;
   }
 
-  /** План: чипсы дней недели — без синего UA-outline (кольцо фокуса задаётся Tailwind ring-primary). */
-  button.plan-day-tab:focus {
+  /**
+   * План: чипсы дней — без синего контура UA (Chrome/Android часто рисуют его через box-shadow на :focus-visible).
+   * Раньше был только outline:none на :focus — для «первого элемента в горизонтальном скролле» этого мало (регрессия).
+   * Кольцо с клавиатуры — одно, через primary (светлая/тёмная тема из --primary).
+   */
+  .plan-day-tab:focus {
     outline: none !important;
+  }
+
+  .plan-day-tab:focus:not(:focus-visible) {
+    box-shadow: none !important;
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+  }
+
+  .plan-day-tab:focus-visible {
+    outline: none !important;
+    --tw-ring-offset-shadow: 0 0 #0000;
+    --tw-ring-shadow: 0 0 #0000;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 50%, transparent) !important;
   }
 
   /** Типографика: H1 24px/700, Section/Header 18px/600, Body 15px/400–500, Subtext 13–14px/muted. Токены: text-typo-h1, text-typo-header, text-typo-body, text-typo-subtext. */
