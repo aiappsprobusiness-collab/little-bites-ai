@@ -10,7 +10,6 @@ declare global {
     __beforeInstallPromptEvent?: BeforeInstallPromptEvent;
     __promptPWAInstall?: () => Promise<void>;
     __swRegistration?: ServiceWorkerRegistration;
-    __skipWaitingTriggered?: boolean;
     /** Время старта показа splash (inline в index.html) */
     __momRecipesSplashStartMs?: number;
   }
@@ -69,12 +68,7 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
         setInterval(() => reg.update(), 60 * 60 * 1000);
       })
       .catch(() => {});
-
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (window.__skipWaitingTriggered) {
-        window.location.reload();
-      }
-    });
+    /** Перезагрузка после skipWaiting — только из PWAUpdateToast (once + fallback), см. PWAUpdateToast.tsx */
   });
 }
 

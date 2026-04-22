@@ -83,12 +83,16 @@ function isAuthResetPasswordPath(pathname: string): boolean {
 
 function AuthCallbackRedirectGuard({ children }: { children: ReactNode }) {
   const location = useLocation();
+  /** Один replace на URL: иначе Strict Mode / повтор эффекта даёт второй replace → отмена навигации и шторм (см. docs). */
+  const emailHandoffKeyRef = useRef<string | null>(null);
   useEffect(() => {
     if (isAuthCallbackPath(location.pathname)) return;
     if (isAuthResetPasswordPath(location.pathname)) return;
-    if (shouldHandOffEmailAuthToCallback(location.pathname, location.search, location.hash || "")) {
-      window.location.replace(`/auth/callback${location.search}${location.hash}`);
-    }
+    if (!shouldHandOffEmailAuthToCallback(location.pathname, location.search, location.hash || "")) return;
+    const key = `${location.pathname}${location.search}${location.hash || ""}`;
+    if (emailHandoffKeyRef.current === key) return;
+    emailHandoffKeyRef.current = key;
+    window.location.replace(`/auth/callback${location.search}${location.hash}`);
   }, [location.pathname, location.search, location.hash]);
   return <>{children}</>;
 }

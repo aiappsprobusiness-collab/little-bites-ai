@@ -23,8 +23,29 @@ export function PWAUpdateToast() {
           <ToastAction
             altText="Обновить"
             onClick={() => {
-              window.__skipWaitingTriggered = true;
-              window.__swRegistration?.waiting?.postMessage({ type: "SKIP_WAITING" });
+              const waiting = window.__swRegistration?.waiting;
+              if (!waiting) {
+                window.location.reload();
+                return;
+              }
+              let fallback: ReturnType<typeof setTimeout> | undefined;
+              let didReload = false;
+              const onCtrl = () => {
+                done();
+              };
+              const done = () => {
+                if (didReload) return;
+                didReload = true;
+                if (fallback !== undefined) {
+                  clearTimeout(fallback);
+                  fallback = undefined;
+                }
+                navigator.serviceWorker.removeEventListener("controllerchange", onCtrl);
+                window.location.reload();
+              };
+              navigator.serviceWorker.addEventListener("controllerchange", onCtrl);
+              fallback = window.setTimeout(done, 2500);
+              waiting.postMessage({ type: "SKIP_WAITING" });
             }}
           >
             Обновить
