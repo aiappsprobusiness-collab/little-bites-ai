@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { trackUsageEvent, captureAttributionFromLocationOnce } from "@/utils/usageEvents";
+import { HAS_SEEN_WELCOME_KEY } from "@/utils/navigation";
 import { LEGAL_TERMS_VERSION } from "@/constants/legalVersions";
 import { AUTH_SIGNUP_SUCCESS_PATH } from "@/constants/authSignupSuccess";
 
@@ -78,6 +79,25 @@ export default function AuthPage() {
   useEffect(() => {
     if (location.search) captureAttributionFromLocationOnce();
   }, [location.search]);
+
+  useEffect(() => {
+    const st = location.state as { fromRootFirstVisit?: boolean; message?: string; tab?: string } | null;
+    if (!st?.fromRootFirstVisit) return;
+    try {
+      localStorage.setItem(HAS_SEEN_WELCOME_KEY, "true");
+    } catch {
+      // ignore
+    }
+    const { fromRootFirstVisit: _root, ...rest } = st;
+    if (Object.keys(rest).length > 0) {
+      navigate(
+        { pathname: location.pathname, search: location.search, hash: location.hash },
+        { replace: true, state: rest }
+      );
+    } else {
+      navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true });
+    }
+  }, [location.state, location.pathname, location.search, location.hash, navigate]);
 
   useEffect(() => {
     const message = (location.state as { message?: string } | null)?.message;

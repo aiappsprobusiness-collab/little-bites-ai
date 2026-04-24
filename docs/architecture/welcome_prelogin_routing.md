@@ -3,7 +3,7 @@
 ## 1. Список новых и изменённых файлов
 
 ### Новые файлы
-- `src/utils/navigation.ts` — `shouldShowWelcomePage()`: первый заход на `/` (нет `hasSeenWelcome` в `localStorage`) → welcome; UTM на первом визите welcome не отменяет
+- `src/utils/navigation.ts` — `WELCOME_PRELOGIN_FROM_ROOT_ENABLED` (вкл/выкл `/welcome` с root); `shouldShowWelcomePage()`: нет `hasSeenWelcome` → первый визит; `buildRootFirstAuthSearch()` — `/auth?mode=signup&…` UTM; UTM с `/` в query к `/auth` сохраняется
 - `src/utils/standalone.ts` — определение standalone PWA (display-mode, navigator.standalone)
 - `src/utils/onboardingAttribution.ts` — сохранение атрибуции (utm_*, entry_point, ref, shareRef) в `onboarding_attribution`
 - `src/utils/landingAnalytics.ts` — безопасная обёртка событий аналитики (landing_view, landing_demo_open, share_*_cta_click и др.)
@@ -14,12 +14,12 @@
 - `src/pages/AppPreloginScreen.tsx` — приложенческий pre-login экран `/prelogin`
 
 ### Изменённые файлы
-- `src/components/RootRedirect.tsx` — для неавторизованных: первый визит → `/welcome`, иначе → `/auth` (см. `shouldShowWelcomePage()`)
+- `src/components/RootRedirect.tsx` — для гостя: при первом визите и `WELCOME_PRELOGIN_FROM_ROOT_ENABLED === true` → `/welcome`; иначе, если `false` и первый визит → `/auth?mode=signup` + `state.fromRootFirstVisit` (клиент выставляет `hasSeenWelcome` на Auth); иначе → `/auth` (вход), query сохраняется
 - `src/pages/LandingOnboardingScreen.tsx` — при монтировании `localStorage.hasSeenWelcome`
 - `src/App.tsx` — добавлены маршруты `/welcome`, `/prelogin`, root `/` отдаёт `<RootRedirect />`
 - `src/pages/SharedPlanPage.tsx` — CTA «Собрать свой план» ведёт на `/welcome` с сохранением query (entry_point, share_ref, share_type); сохранение атрибуции; трекинг share_day_plan_cta_click / share_week_plan_cta_click
 - `src/pages/PublicRecipeSharePage.tsx` — публичная страница рецепта по `/r/:shareRef` (вместо редиректа на `/recipe/:id`). При not_found — сообщение и кнопка на `/welcome`.
-- `src/pages/AuthPage.tsx` — событие `auth_page_view` вместо `landing_view`; ссылка «Попробовать пример без регистрации» → `/welcome` с трекингом share_recipe_cta_click при наличии share-атрибуции; поддержка `location.state.tab === 'signup'` для дефолтной вкладки; на регистрации обязательный чекбокс согласия со ссылками на `/terms` и `/privacy` (см. `docs/dev/legal-copy-and-auth-consent.md`); после успешной регистрации редирект на публичный `/auth/signup-success` (цель VK Ads)
+- `src/pages/AuthPage.tsx` — `state.fromRootFirstVisit`: `localStorage.hasSeenWelcome` (первый заход с root без welcome); остальное: событие `auth_page_view` вместо `landing_view`; ссылка «Попробовать пример без регистрации» → `/welcome` с трекингом share_recipe_cta_click при наличии share-атрибуции; `location.state.tab === 'signup'`; согласия на `/terms` и `/privacy` (см. `docs/dev/legal-copy-and-auth-consent.md`); после успешной регистрации — `/auth/signup-success` (цель VK Ads)
 - `src/pages/AuthSignupSuccessPage.tsx` — экран «Регистрация успешна» / редирект в приложение при наличии сессии
 - `src/utils/usageEvents.ts` — экспорт `hasShareRecipeAttribution()` для проверки прихода по shared recipe
 
@@ -30,7 +30,7 @@
 ### Root `/`
 - **Recovery vs письмо о регистрации:** признак «сессия сброса пароля» для UI (`isRecoveryUrlPresent` / `recoveryFromAuthEvent` в `useAuth`) — только `type=recovery` в hash/query или страница `/auth/reset-password` с токенами. Подтверждение email после регистрации (`/auth/callback` + `type=signup` и токены) **не** должно помечаться как recovery (см. `src/utils/authRecoverySession.ts`).
 - **Авторизован**, после загрузки `members`: при **0** записей в `members` → редирект на `/profile?openCreateProfile=1&welcome=1` (создание первого ребёнка, как после письма подтверждения); при наличии членов семьи → `/meal-plan` (текущий app-home). Welcome для авторизованных не показывается.
-- **Не авторизован**, в URL нет токенов из письма: если в `localStorage` **нет** `hasSeenWelcome` → редирект на `/welcome` (в т.ч. при наличии `utm_*` в query). Иначе → редирект на `/auth` (повторный заход).
+- **Не авторизован**, в URL нет токенов из письма: **нет** `hasSeenWelcome` (первый визит): при `WELCOME_PRELOGIN_FROM_ROOT_ENABLED` → `/welcome` (см. `RootRedirect`). При `WELCOME_PRELOGIN_FROM_ROOT_ENABLED === false` (текущее) → `/auth?mode=signup&…` (query с `/` сохраняется), `location.state.fromRootFirstVisit` → на `Auth` выставляется `hasSeenWelcome` и снимается `state` (без `setItem` в render в `RootRedirect`). **Повторный** заход → редирект на `/auth` (вкладка вход, как раньше), `search` с `/` к `/auth` передаётся.
 - Маршрут `/prelogin` — компактный pre-login экран; автоматический выбор `/prelogin` vs `/welcome` при открытии `/` в `RootRedirect` не зашит (см. актуальный `RootRedirect.tsx`).
 - Standalone для других частей приложения: `src/utils/standalone.ts`.
 

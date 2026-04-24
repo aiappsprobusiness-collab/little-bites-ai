@@ -3,7 +3,11 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
-import { shouldShowWelcomePage } from "@/utils/navigation";
+import {
+  WELCOME_PRELOGIN_FROM_ROOT_ENABLED,
+  shouldShowWelcomePage,
+  buildRootFirstAuthSearch,
+} from "@/utils/navigation";
 import { shouldHandOffEmailAuthToCallback } from "@/utils/authEmailLinkParams";
 import { Loader2, WifiOff } from "lucide-react";
 
@@ -17,8 +21,8 @@ const BOOT_SCREEN_CLASS =
  * - сессия recovery (JWT amr: recovery) → /auth/reset-password
  * - авторизован, members загружены и пусто → профиль + создание первого ребёнка (как после письма)
  * - авторизован, есть члены семьи → /meal-plan
- * - не авторизован, первый визит (нет hasSeenWelcome в localStorage) → /welcome
- * - не авторизован, уже видел welcome → /auth
+ * - не авторизован, первый визит (нет hasSeenWelcome) → /welcome, если WELCOME_PRELOGIN_FROM_ROOT_ENABLED; иначе /auth?mode=signup+state (см. AuthPage, localStorage)
+ * - не авторизован, не первый визит → /auth (вкладка вход)
  */
 const SLOW_LOAD_SEC = 10;
 
@@ -87,8 +91,17 @@ export function RootRedirect() {
   }
 
   if (shouldShowWelcomePage()) {
-    return <Navigate to="/welcome" replace />;
+    if (WELCOME_PRELOGIN_FROM_ROOT_ENABLED) {
+      return <Navigate to="/welcome" replace />;
+    }
+    return (
+      <Navigate
+        to={{ pathname: "/auth", search: buildRootFirstAuthSearch(location.search) }}
+        state={{ fromRootFirstVisit: true }}
+        replace
+      />
+    );
   }
 
-  return <Navigate to="/auth" replace />;
+  return <Navigate to={{ pathname: "/auth", search: location.search }} replace />;
 }
