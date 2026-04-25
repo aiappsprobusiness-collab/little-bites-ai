@@ -60,8 +60,19 @@
         } catch (e) {}
       })();
     </script>
-    <!-- Критичный splash: до загрузки main.tsx (иначе пустой WebView и «мигание») -->
-    <link rel="preload" href="/splash/splash-screen.png" as="image" />
+    <!-- Критичный splash: до загрузки main.tsx (иначе пустой WebView и «мигание»). На /vk не прелоадим — трафик с рекламы. -->
+    <link id="mom-splash-img-preload" rel="preload" href="/splash/splash-screen.png" as="image" />
+    <script>
+      (function () {
+        try {
+          var p = location.pathname.replace(/\/+$/, "") || "/";
+          if (p === "/vk") {
+            var link = document.getElementById("mom-splash-img-preload");
+            if (link) link.remove();
+          }
+        } catch (e) {}
+      })();
+    </script>
     <style>
       html,
       body {
@@ -110,6 +121,17 @@
       window.__momRecipesSplashStartMs = Date.now();
     </script>
     <div id="splash-screen" role="img" aria-label="Mom Recipes"></div>
+    <script>
+      (function () {
+        try {
+          var p = location.pathname.replace(/\/+$/, "") || "/";
+          if (p === "/vk") {
+            var el = document.getElementById("splash-screen");
+            if (el) el.remove();
+          }
+        } catch (e) {}
+      })();
+    </script>
     <div id="root"></div>
     <!-- PWA: Service Worker registered in main.tsx (production). Offline fallback: /offline.html -->
     <script type="module" src="/src/main.tsx"></script>

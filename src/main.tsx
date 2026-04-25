@@ -80,6 +80,13 @@ createRoot(document.getElementById("root")!).render(<App />);
 const SPLASH_MIN_VISIBLE_MS = 2800;
 const SPLASH_FADE_OUT_MS = 400;
 
+/** Лендинг VK: splash убран в index.html; здесь — нулевая задержка, если узел ещё есть. */
+function isVkFunnelPath(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  return path === "/vk";
+}
+
 function isStartupPerf(): boolean {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("perf") === "1";
@@ -114,14 +121,17 @@ function hideSplashWhenReady() {
   };
 
   const elapsed = Date.now() - start;
-  const wait = Math.max(0, SPLASH_MIN_VISIBLE_MS - elapsed);
+  const minVisible = isVkFunnelPath() ? 0 : SPLASH_MIN_VISIBLE_MS;
+  const wait = Math.max(0, minVisible - elapsed);
   if (isStartupPerf()) {
-    console.log("[perf] pwa splash hide schedule ms", { wait, elapsed, min: SPLASH_MIN_VISIBLE_MS });
+    console.log("[perf] pwa splash hide schedule ms", { wait, elapsed, min: minVisible });
   }
   setTimeout(fadeOut, wait);
 }
 
-if (document.readyState === "complete") {
+if (isVkFunnelPath()) {
+  hideSplashWhenReady();
+} else if (document.readyState === "complete") {
   hideSplashWhenReady();
 } else {
   window.addEventListener("load", hideSplashWhenReady);

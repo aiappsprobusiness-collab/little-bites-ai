@@ -16,6 +16,10 @@ export interface RecipeCardHeaderProps {
   title: string;
   benefitLabel?: string | null;
   description?: string | null;
+  /** Как на странице рецепта: «В одной порции:» + типографика details. По умолчанию `card` в превью. */
+  nutritionHeaderVariant?: "card" | "details";
+  /** Переопределить тон КБЖУ (например `default` для VK-превью вместо тихого collection). */
+  nutritionToneOverride?: "default" | "quiet";
 }
 
 export interface RecipeCardProps {
@@ -53,6 +57,8 @@ export interface RecipeCardProps {
    * `infant` — плотнее шапка и тело, колонка действий слева с разделителем (прикорм в плане).
    */
   previewPresentation?: "default" | "collection" | "infant";
+  /** В превью `collection`: чипсы целей как на странице рецепта (не `quiet`). */
+  previewNutritionGoalsLoud?: boolean;
   /**
    * Возрастной диапазон рецепта (для блоков подсказок).
    * Используется для infant UX: label "Совет от шефа" -> "Подсказка для мамы".
@@ -86,6 +92,7 @@ export function RecipeCard({
   nutritionGoalsQuiet = false,
   servingsCount = 1,
   previewPresentation = "default",
+  previewNutritionGoalsLoud = false,
   recipeMaxAgeMonths = null,
 }: RecipeCardProps) {
   const isPreview = variant === "preview";
@@ -93,7 +100,11 @@ export function RecipeCard({
   const isCollectionPreview = isPreview && previewPresentation === "collection";
   const isInfantPreview = isPreview && previewPresentation === "infant";
   const headerVariant: RecipeHeaderVariant = isPreview ? "compact" : isFull ? "full" : "chat";
-  const headerWithNutrition = { ...header, nutrition };
+  const { nutritionToneOverride, nutritionHeaderVariant, ...headerRest } = header;
+  const headerWithNutrition = { ...headerRest, nutrition };
+  const resolvedNutritionTone =
+    nutritionToneOverride ?? (isCollectionPreview || isInfantPreview ? "quiet" : "default");
+  const resolvedNutritionHeaderVariant = nutritionHeaderVariant ?? "card";
 
   const tipBody = (showChefTip && chefAdvice?.trim()) ? chefAdvice!.trim() : (advice?.trim() ?? chefAdvice?.trim());
   const isChefTipFromSource = !!(showChefTip && chefAdvice?.trim());
@@ -123,7 +134,10 @@ export function RecipeCard({
         <NutritionGoalsChips
           goals={nutritionGoals}
           maxVisible={nutritionGoalsMaxVisible}
-          quiet={nutritionGoalsQuiet || isCollectionPreview || isInfantPreview}
+          quiet={
+            !previewNutritionGoalsLoud &&
+            (nutritionGoalsQuiet || isCollectionPreview || isInfantPreview)
+          }
           className={cn(
             isCollectionPreview ? "-mt-1 mb-1.5" : isInfantPreview ? "-mt-1.5 mb-0.5" : "-mt-2 mb-1",
           )}
@@ -191,7 +205,8 @@ export function RecipeCard({
             <RecipeHeader
               {...headerWithNutrition}
               variant="compact"
-              nutritionTone={isCollectionPreview || isInfantPreview ? "quiet" : "default"}
+              nutritionTone={resolvedNutritionTone}
+              nutritionHeaderVariant={resolvedNutritionHeaderVariant}
               compactCollection={isCollectionPreview}
               compactDensity={isInfantPreview ? "tight" : "default"}
               className="bg-transparent shadow-none rounded-none -mb-px"
@@ -222,7 +237,12 @@ export function RecipeCard({
 
   return (
     <div className={cn(recipeCard, className)}>
-      <RecipeHeader {...headerWithNutrition} variant={headerVariant} />
+      <RecipeHeader
+        {...headerWithNutrition}
+        variant={headerVariant}
+        nutritionTone={resolvedNutritionTone}
+        nutritionHeaderVariant={resolvedNutritionHeaderVariant}
+      />
       <div className={cn(bodyPadding, bodySpace)}>
         {innerBody}
       </div>

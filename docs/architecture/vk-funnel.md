@@ -4,6 +4,8 @@
 
 ## Маршруты и файлы
 
+**Splash:** для пути `/vk` в `index.html` не прелоадится `splash-screen.png`, узел `#splash-screen` удаляется сразу после парса DOM; в `src/main.tsx` минимальное время показа splash = 0 и скрытие без ожидания `window.load` — быстрее первый paint для рекламного трафика.
+
 | Область | Путь |
 |--------|------|
 | Страница воронки | `src/pages/VkFunnelPage.tsx`, маршрут `/vk` в `src/App.tsx` |
@@ -17,7 +19,7 @@
 
 - Каталог: `supabase/functions/vk-preview-plan/` (`index.ts` — тонкий entrypoint, логика в модулях).
 - Пул: `recipes` с `source in (seed, starter)`, фильтры как в плане (возраст, аллергии, dislikes, soft likes), обед = суп.
-- В ответе каждого приёма пищи: `cooking_time_minutes` (из `recipes.cooking_time_minutes` / `cooking_time`), `nutrition_goals`, КБЖУ, `description`. На `/vk` карточки рендерятся через тот же **`RecipeCard`** (`variant="preview"`, `previewPresentation="collection"`), что превью в плане/избранном: `RecipeHeader` + `RecipeNutritionHeader` (чип приёма пищи, время, ккал, БЖУ), описание в шапке; под шапкой — тихие чипы целей (`NutritionGoalsChips`), без ингредиентов и без нижних блоков рецепта.
+- В ответе каждого приёма пищи: `cooking_time_minutes` (из `recipes.cooking_time_minutes` / `cooking_time`), `nutrition_goals`, КБЖУ, `description`. На `/vk` карточки — **`RecipeCard`** (`variant="preview"`, `previewPresentation="collection"`) с настройками как у **hero-блока страницы рецепта**: `RecipeNutritionHeader` в режиме **`details`** и тон **`default`** («В одной порции:», белки/жиры/углеводы полными словами); строка **«Польза для…»** с иконкой 🌿 по возрасту из формы (`getBenefitLabel`); текст описания — из API, иначе детерминированный `buildRecipeBenefitDescription` (стабильный ключ `vk_session_id` + слот + заголовок); чипсы целей — **не** `quiet` (`previewNutritionGoalsLoud`). Без ингредиентов и без нижних блоков рецепта.
 - Если в БД &lt; 3 слотов — опциональный вызов DeepSeek (см. `docs/architecture/system-prompts-map.md` §VK preview), иначе mock для пустых слотов.
 - **Не** пишет в user-bound таблицы.
 

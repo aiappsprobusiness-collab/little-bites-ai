@@ -13,6 +13,8 @@ import { invokeVkPreviewPlan } from "@/api/vkPreviewPlan";
 import type { DayPlan, MealSlot, VkPreviewMeal } from "@/types/vkFunnel";
 import { ensureVkSessionId, readVkDraftRaw, saveVkDraft, updateVkDraftPreview } from "@/utils/vkDraft";
 import { cn } from "@/lib/utils";
+import { getBenefitLabel } from "@/utils/ageCategory";
+import { buildRecipeBenefitDescription } from "@/utils/recipeBenefitDescription";
 
 const AGE_PRESETS: { label: string; months: number }[] = [
   { label: "6–11 мес", months: 9 },
@@ -39,8 +41,19 @@ const MEAL_LABEL: Record<MealSlot, string> = {
   snack: "Перекус",
 };
 
-/** Превью блюда: тот же `RecipeCard`, что в плане/избранном — шапка до описания + чипы целей (как в превью карточки). */
-function VkPreviewRecipeCard({ meal }: { meal: VkPreviewMeal }) {
+/**
+ * Превью блюда: верхний блок как на странице рецепта — КБЖУ (`details`), строка «Польза для…» с 🌿,
+ * описание (из API или детерминированный fallback), чипсы целей как на деталке.
+ */
+function VkPreviewRecipeCard({
+  meal,
+  ageMonths,
+  vkSessionId,
+}: {
+  meal: VkPreviewMeal;
+  ageMonths: number;
+  vkSessionId: string;
+}) {
   const nutrition =
     meal.calories != null || meal.protein != null || meal.fat != null || meal.carbs != null
       ? {
@@ -51,15 +64,29 @@ function VkPreviewRecipeCard({ meal }: { meal: VkPreviewMeal }) {
         }
       : null;
 
+  const canonical = (meal.description ?? "").trim();
+  const fallbackDescription = buildRecipeBenefitDescription({
+    recipeId: null,
+    stableKey: `${vkSessionId}:${meal.type}:${meal.title}`,
+    goals: meal.nutrition_goals ?? [],
+    title: meal.title,
+  });
+  const headerDescription = canonical.length > 0 ? canonical : fallbackDescription;
+  const benefitLabel = getBenefitLabel(ageMonths);
+
   return (
     <RecipeCard
       variant="preview"
       previewPresentation="collection"
+      previewNutritionGoalsLoud
       header={{
         mealLabel: MEAL_LABEL[meal.type],
         cookingTimeMinutes: meal.cooking_time_minutes ?? null,
         title: meal.title,
-        description: meal.description ?? null,
+        benefitLabel,
+        description: headerDescription,
+        nutritionHeaderVariant: "details",
+        nutritionToneOverride: "default",
       }}
       ingredients={[]}
       showIngredientChips={false}
@@ -67,7 +94,6 @@ function VkPreviewRecipeCard({ meal }: { meal: VkPreviewMeal }) {
       nutrition={nutrition}
       nutritionGoals={meal.nutrition_goals ?? []}
       nutritionGoalsMaxVisible={3}
-      nutritionGoalsQuiet
     />
   );
 }
@@ -365,7 +391,7 @@ export default function VkFunnelPage() {
             {plan?.meals?.length ? (
               <div className="space-y-3">
                 {plan.meals.map((m) => (
-                  <VkPreviewRecipeCard key={m.type} meal={m} />
+                  <VkPreviewRecipeCard key={m.type} meal={m} ageMonths={ageMonths} vkSessionId={vkSessionId} />
                 ))}
               </div>
             ) : null}

@@ -22,6 +22,8 @@ export interface RecipeHeaderProps {
   compactCollection?: boolean;
   /** Узкая плотность для компактной карточки (напр. прикорм в плане на мобильном). */
   compactDensity?: "default" | "tight";
+  /** См. `RecipeCard` — как на деталке рецепта (`details`) или компактная карточка (`card`). */
+  nutritionHeaderVariant?: "card" | "details";
 }
 
 export function RecipeHeader({
@@ -37,6 +39,7 @@ export function RecipeHeader({
   nutritionTone = "default",
   compactCollection = false,
   compactDensity = "default",
+  nutritionHeaderVariant = "card",
 }: RecipeHeaderProps) {
   const isCompact = variant === "compact";
   const isFull = variant === "full";
@@ -72,14 +75,17 @@ export function RecipeHeader({
           mealTypeLabel={mealLabel}
           cookingTimeMinutes={cookingTimeMinutes}
           nutrition={nutrition}
-          variant="card"
+          variant={nutritionHeaderVariant}
           tone={nutritionTone}
         />
       </div>
       {showDescription && (
         <div className="space-y-0.5">
           {benefitLabel && (
-            <p className="text-[11px] font-medium text-muted-foreground">{benefitLabel}</p>
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <span aria-hidden="true">🌿</span>
+              <span>{benefitLabel}</span>
+            </p>
           )}
           <p className="text-xs text-muted-foreground leading-relaxed break-words">
             {descriptionText}
