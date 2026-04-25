@@ -75,7 +75,7 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { getDebugPlanFromStorage, setDebugPlanInStorage } from "@/utils/debugPlan";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { ShareIosIcon } from "@/components/icons/ShareIosIcon";
@@ -3192,19 +3192,46 @@ export default function MealPlanPage() {
       />
 
       <Sheet open={planProfileHelpOpen} onOpenChange={setPlanProfileHelpOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl max-h-[88vh] overflow-y-auto pt-6 pb-8">
-          <SheetHeader className="text-left pr-8">
-            <SheetTitle>Профиль и меню</SheetTitle>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl max-h-[88vh] overflow-y-auto px-4 pb-8 pt-3 sm:px-6"
+        >
+          <div className="mx-auto mb-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/20" aria-hidden />
+          <SheetHeader className="space-y-1.5 text-left pr-10">
+            <SheetTitle>Как учитывается профиль</SheetTitle>
+            <SheetDescription>
+              {isFamilySelected(selectedMemberId, members)
+                ? "Общее меню для семьи с учётом правил ниже."
+                : "Данные выбранного ребёнка влияют на подбор блюд на этой вкладке."}
+            </SheetDescription>
           </SheetHeader>
           {members.length > 0 && memberDataForPlan ? (
-            <PlanProfileHelpBody
-              className="mt-4"
-              mode={isFamilySelected(selectedMemberId, members) ? "family" : "member"}
-              memberAgeMonths={"age_months" in memberDataForPlan ? memberDataForPlan.age_months : undefined}
-              memberAllergies={memberDataForPlan.allergies}
-              memberLikes={"likes" in memberDataForPlan ? memberDataForPlan.likes : undefined}
-              memberDislikes={memberDataForPlan.dislikes}
-            />
+            <>
+              <PlanProfileHelpBody
+                className="mt-4"
+                mode={isFamilySelected(selectedMemberId, members) ? "family" : "member"}
+                memberAgeMonths={"age_months" in memberDataForPlan ? memberDataForPlan.age_months : undefined}
+                memberAllergies={memberDataForPlan.allergies}
+                memberLikes={"likes" in memberDataForPlan ? memberDataForPlan.likes : undefined}
+                memberDislikes={memberDataForPlan.dislikes}
+              />
+              <Link
+                to={
+                  isFamilySelected(selectedMemberId, members) || !selectedMemberId || selectedMemberId === "family"
+                    ? "/profile"
+                    : `/profile/child/${selectedMemberId}`
+                }
+                onClick={() => setPlanProfileHelpOpen(false)}
+                className="mt-4 flex w-full min-h-[50px] items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 text-sm text-foreground shadow-[0_1px_3px_0_rgba(0,0,0,0.04)] transition-colors hover:bg-muted/20 active:bg-muted/30"
+              >
+                <span className="min-w-0 flex-1 text-left">
+                  {isFamilySelected(selectedMemberId, members)
+                    ? "Профиль и дети"
+                    : "Редактировать карточку ребёнка"}
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" strokeWidth={2} aria-hidden />
+              </Link>
+            </>
           ) : null}
         </SheetContent>
       </Sheet>
