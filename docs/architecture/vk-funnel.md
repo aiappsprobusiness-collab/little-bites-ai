@@ -17,6 +17,7 @@
 
 - Каталог: `supabase/functions/vk-preview-plan/` (`index.ts` — тонкий entrypoint, логика в модулях).
 - Пул: `recipes` с `source in (seed, starter)`, фильтры как в плане (возраст, аллергии, dislikes, soft likes), обед = суп.
+- В ответе каждого приёма пищи: при наличии в БД — `nutrition_goals` (whitelist как в `recipes.nutrition_goals`), макросы `protein` / `fat` / `carbs` (граммы), `calories`. На `/vk` карточки показывают цели (подписи как в приложении), строку Б/Ж/У и кнопку «Показать полностью» для длинного описания.
 - Если в БД &lt; 3 слотов — опциональный вызов DeepSeek (см. `docs/architecture/system-prompts-map.md` §VK preview), иначе mock для пустых слотов.
 - **Не** пишет в user-bound таблицы.
 

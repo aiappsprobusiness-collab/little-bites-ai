@@ -13,6 +13,7 @@ import { invokeVkPreviewPlan } from "@/api/vkPreviewPlan";
 import type { DayPlan, MealSlot, VkPreviewMeal } from "@/types/vkFunnel";
 import { ensureVkSessionId, readVkDraftRaw, saveVkDraft, updateVkDraftPreview } from "@/utils/vkDraft";
 import { cn } from "@/lib/utils";
+import { normalizeNutritionGoals, nutritionGoalLabel } from "@/utils/nutritionGoals";
 
 const AGE_PRESETS: { label: string; months: number }[] = [
   { label: "6–11 мес", months: 9 },
@@ -38,6 +39,72 @@ const MEAL_LABEL: Record<MealSlot, string> = {
   dinner: "Ужин",
   snack: "Перекус",
 };
+
+/** Порог длины описания: короткий текст без кнопки «ещё», длинный — сворачиваем без обрыва «в никуда». */
+const DESCRIPTION_COLLAPSE_AT = 96;
+
+function VkMealResultCard({ meal }: { meal: VkPreviewMeal }) {
+  const [descExpanded, setDescExpanded] = useState(false);
+  const desc = meal.description?.trim() ?? "";
+  const showDescToggle = desc.length > DESCRIPTION_COLLAPSE_AT;
+  const goals = normalizeNutritionGoals(meal.nutrition_goals);
+  const hasMacros =
+    (meal.protein != null && Number.isFinite(meal.protein)) ||
+    (meal.fat != null && Number.isFinite(meal.fat)) ||
+    (meal.carbs != null && Number.isFinite(meal.carbs));
+
+  return (
+    <Card className="border-border/60 shadow-sm">
+      <CardContent className="p-4 space-y-2">
+        <p className="text-xs font-semibold text-primary uppercase tracking-wide">{MEAL_LABEL[meal.type]}</p>
+        <p className="text-base font-semibold leading-snug text-pretty">{meal.title}</p>
+        {goals.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {goals.map((g) => (
+              <span
+                key={g}
+                className="inline-flex items-center rounded-md border border-border/70 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground/90"
+              >
+                {nutritionGoalLabel(g)}
+              </span>
+            ))}
+          </div>
+        ) : null}
+        {hasMacros ? (
+          <p className="text-xs text-muted-foreground tabular-nums">
+            Б {meal.protein != null ? `${Math.round(meal.protein)} г` : "—"} · Ж{" "}
+            {meal.fat != null ? `${Math.round(meal.fat)} г` : "—"} · У{" "}
+            {meal.carbs != null ? `${Math.round(meal.carbs)} г` : "—"}
+          </p>
+        ) : null}
+        {desc ? (
+          <div className="space-y-1">
+            <p
+              className={cn(
+                "text-sm text-muted-foreground text-pretty break-words leading-relaxed",
+                !descExpanded && showDescToggle ? "line-clamp-3" : null,
+              )}
+            >
+              {desc}
+            </p>
+            {showDescToggle ? (
+              <button
+                type="button"
+                onClick={() => setDescExpanded((v) => !v)}
+                className="text-xs font-medium text-primary hover:underline touch-manipulation"
+              >
+                {descExpanded ? "Свернуть" : "Показать полностью"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {meal.calories != null ? (
+          <p className="text-xs text-muted-foreground pt-0.5">~{Math.round(meal.calories)} ккал</p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
 
 function toggleInList(list: string[], v: string, max: number): string[] {
   const t = v.trim().toLowerCase();
@@ -200,19 +267,6 @@ export default function VkFunnelPage() {
       on ? "bg-primary text-primary-foreground border-primary" : "bg-background/80 border-border hover:border-primary/50",
     );
 
-  const renderMealCard = (m: VkPreviewMeal) => (
-    <Card key={m.type} className="border-border/60 shadow-sm">
-      <CardContent className="p-4 space-y-1">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">{MEAL_LABEL[m.type]}</p>
-        <p className="text-base font-semibold leading-snug">{m.title}</p>
-        {m.description ? <p className="text-sm text-muted-foreground line-clamp-3">{m.description}</p> : null}
-        {m.calories != null ? (
-          <p className="text-xs text-muted-foreground">~{m.calories} ккал</p>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-
   return (
     <div className="min-h-screen min-h-dvh flex flex-col gradient-hero pb-safe">
       <main className="flex-1 w-full max-w-md mx-auto px-4 pt-8 pb-10 flex flex-col gap-6">
@@ -342,7 +396,13 @@ export default function VkFunnelPage() {
                 </Button>
               </div>
             ) : null}
-            {plan?.meals?.length ? <div className="space-y-3">{plan.meals.map(renderMealCard)}</div> : null}
+            {plan?.meals?.length ? (
+              <div className="space-y-3">
+                {plan.meals.map((m) => (
+                  <VkMealResultCard key={m.type} meal={m} />
+                ))}
+              </div>
+            ) : null}
             {!loadError && !plan?.meals?.length ? (
               <p className="text-sm text-muted-foreground text-center">Пока пусто — попробуйте снова.</p>
             ) : null}

@@ -1,3 +1,4 @@
+import { normalizeNutritionGoalsFromDb } from "../_shared/recipeGoals.ts";
 import type { MealSlot, MemberDataPool, VkPreviewMeal } from "./types.ts";
 import { mockMealForSlot } from "./mockSlots.ts";
 
@@ -11,6 +12,7 @@ type AiMealPartial = {
   protein?: number;
   fat?: number;
   carbs?: number;
+  nutrition_goals?: unknown;
 };
 
 function isMealSlot(s: string): s is MealSlot {
@@ -32,6 +34,8 @@ function normalizeAiMeal(slot: MealSlot, raw: AiMealPartial): VkPreviewMeal | nu
   if (f !== undefined) meal.fat = f;
   const cb = num(raw.carbs);
   if (cb !== undefined) meal.carbs = cb;
+  const goals = normalizeNutritionGoalsFromDb(raw.nutrition_goals);
+  if (goals.length) meal.nutrition_goals = [...goals];
   return meal;
 }
 
@@ -53,7 +57,8 @@ export async function fetchAiMealsForSlots(
 
   const system =
     `Ты помощник по детскому питанию. Верни ТОЛЬКО валидный JSON-объект без markdown.\n` +
-    `Структура: {"meals":[{"type":"breakfast|lunch|dinner|snack","title":"...","description":"кратко","calories":число}]}\n` +
+    `Структура: {"meals":[{"type":"breakfast|lunch|dinner|snack","title":"...","description":"1–2 предложения о пользе","calories":число,"protein":число,"fat":число,"carbs":число,"nutrition_goals":["balanced","iron_support","brain_development","weight_gain","gentle_digestion","energy_boost"]}]}\n` +
+    `Поля protein/fat/carbs — граммы на порцию (оценка). nutrition_goals: 1–3 ключа из списка выше, релевантные блюду.\n` +
     `Правила: строго учитывай аллергии (никогда не предлагай продукты с аллергенами); учитывай нелюбимое; супы только для lunch; без острого и кофе для детей до 3 лет.\n` +
     `Верни ровно по одному блюду на каждый из типов: ${missing.join(", ")}.`;
 

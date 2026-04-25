@@ -139,7 +139,7 @@ Map of all AI prompts used by Edge Functions. Based on real code in `supabase/fu
 
 **Prompt location:** Inline system + user strings in **vk-preview-plan/aiSlots.ts** (`fetchAiMealsForSlots`). Не использует **deepseek-chat/prompts.ts** и не пишет рецепты в БД.
 
-**Output:** JSON `{ "meals": [ { "type", "title", "description?", "calories?", ... } ] }` — только недостающие `type`; при ошибке/таймауте слоты добиваются **mock** в **mockSlots.ts**.
+**Output:** JSON `{ "meals": [ { "type", "title", "description?", "calories?", "protein?", "fat?", "carbs?", "nutrition_goals?" } ] }` — только недостающие `type`; `nutrition_goals` — 1–3 ключа из whitelist БД; при ошибке/таймауте слоты добиваются **mock** в **mockSlots.ts**.
 
 **Files:** vk-preview-plan/index.ts, vk-preview-plan/orchestrate.ts, vk-preview-plan/slotDb.ts, vk-preview-plan/aiSlots.ts, vk-preview-plan/mockSlots.ts.
 

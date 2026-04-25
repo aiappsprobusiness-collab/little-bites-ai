@@ -30,6 +30,11 @@ function normalizeGoals(input: unknown): NutritionGoal[] {
   return out;
 }
 
+/** Whitelist `recipes.nutrition_goals` (jsonb) для публичных ответов API. */
+export function normalizeNutritionGoalsFromDb(input: unknown): NutritionGoal[] {
+  return normalizeGoals(input);
+}
+
 /**
  * Rule-based nutrition goals inference from recipe text.
  * Returns compact list (max 3) to avoid noisy tagging.
@@ -71,7 +76,7 @@ export function inferNutritionGoals(recipe: unknown): NutritionGoal[] {
   if (nonBalanced.length === 0 || nonBalanced.length >= 3) add("balanced");
 
   // Keep compact set: prefer specific goals, then balanced.
-  const ordered = [...nonBalanced.slice(0, 2)];
+  const ordered: NutritionGoal[] = [...nonBalanced.slice(0, 2)];
   if (goals.includes("balanced") || ordered.length === 0) ordered.push("balanced");
 
   return normalizeGoals(ordered).slice(0, 3);

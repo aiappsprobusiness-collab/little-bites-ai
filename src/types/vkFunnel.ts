@@ -8,6 +8,7 @@ export type VkPreviewMeal = {
   protein?: number;
   fat?: number;
   carbs?: number;
+  nutrition_goals?: string[];
 };
 
 export type DayPlanMeta = {

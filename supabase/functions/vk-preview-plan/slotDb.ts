@@ -9,6 +9,7 @@ import {
   buildRecipePreferenceText,
 } from "../generate-plan/preferenceRules.ts";
 import { getMemberAgeContext, isAdultContext } from "../_shared/memberAgeContext.ts";
+import { normalizeNutritionGoalsFromDb } from "../_shared/recipeGoals.ts";
 import type { MealSlot, MemberDataPool, RecipeRowPool, VkPreviewMeal } from "./types.ts";
 
 const MEAL_KEYS = ["breakfast", "lunch", "snack", "dinner"] as const;
@@ -146,7 +147,7 @@ function likeBoostScore(r: RecipeRowPool, likes: string[]): number {
 }
 
 const POOL_SELECT_FIELDS =
-  "id, title, norm_title, description, source, meal_type, is_soup, min_age_months, max_age_months, calories, proteins, fats, carbs, score, trust_level, recipe_ingredients(name, display_text, category)";
+  "id, title, norm_title, description, source, meal_type, is_soup, min_age_months, max_age_months, calories, proteins, fats, carbs, nutrition_goals, score, trust_level, recipe_ingredients(name, display_text, category)";
 const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
 const POOL_SEED_CATALOG_FETCH_LIMIT = 600;
 
@@ -238,14 +239,16 @@ export function pickDbSlots(
     const protein = pick.proteins != null ? Number(pick.proteins) : undefined;
     const fat = pick.fats != null ? Number(pick.fats) : undefined;
     const carbs = pick.carbs != null ? Number(pick.carbs) : undefined;
+    const goals = normalizeNutritionGoalsFromDb(pick.nutrition_goals);
     meals[slot] = {
       type: slot,
       title: (pick.title ?? "Блюдо").trim(),
-      ...(desc ? { description: desc.slice(0, 400) } : {}),
+      ...(desc ? { description: desc.slice(0, 500) } : {}),
       ...(Number.isFinite(cal) ? { calories: Math.round(cal!) } : {}),
       ...(Number.isFinite(protein) ? { protein: Math.round(protein!) } : {}),
       ...(Number.isFinite(fat) ? { fat: Math.round(fat!) } : {}),
       ...(Number.isFinite(carbs) ? { carbs: Math.round(carbs!) } : {}),
+      ...(goals.length ? { nutrition_goals: [...goals] } : {}),
     };
   }
 

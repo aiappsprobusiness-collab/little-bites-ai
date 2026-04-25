@@ -17,6 +17,8 @@ export type VkPreviewMeal = {
   protein?: number;
   fat?: number;
   carbs?: number;
+  /** Ключи целей питания (whitelist как в recipes.nutrition_goals). */
+  nutrition_goals?: string[];
 };
 
 export type DayPlanMeta = {
@@ -47,6 +49,7 @@ export type RecipeRowPool = {
   recipe_ingredients?: Array<{ name?: string; display_text?: string; category?: string | null }> | null;
   score?: number | null;
   trust_level?: string | null;
+  nutrition_goals?: unknown;
 };
 
 export type MemberDataPool = {
