@@ -17,6 +17,8 @@
 |--------|------|
 | Страница воронки | `src/pages/VkFunnelPage.tsx`, маршруты `/vk` и `/vk/` в `src/App.tsx` |
 | Редирект с `/` | `src/components/RootRedirect.tsx`, флаги `VK_ROOT_REDIRECT_ENABLED` и `shouldShowWelcomePage()` в `src/utils/navigation.ts` |
+
+**Hero (первый кадр /vk, до шагов 1–3):** визуал согласован с `/auth` — фон `auth-page-bg` (тот же кремовый/радиальный градиент, что у экрана входа), над карточкой бренд **MomRecipes** и подзаголовок «Меню для ребёнка — за 1 минуту»; в белой «стеклянной» карточке с тенью — оффер («…за 10 секунд»), пояснение, три коротких пункта пользы с отметками, CTA «Составить меню»; лёгкий декоративный акцент (лист) внизу блока.
 | Черновик + TTL 24h | `src/utils/vkDraft.ts`, ключ `lb.vkDraft.v1` |
 | Вызов превью | `src/api/vkPreviewPlan.ts` → Edge `vk-preview-plan` |
 | Типы | `src/types/vkFunnel.ts` |

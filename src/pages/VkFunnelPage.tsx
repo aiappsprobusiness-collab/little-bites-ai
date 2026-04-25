@@ -3,9 +3,10 @@ import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RecipeCard } from "@/components/recipe/RecipeCard";
-import { Loader2 } from "lucide-react";
+import { Check, Leaf, Loader2 } from "lucide-react";
 import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
 import { getAnalyticsPlatform } from "@/utils/analyticsPlatform";
@@ -31,6 +32,12 @@ const ALLERGY_OPTIONS = ["бкм", "орехи", "арахис", "яйца", "р
 const LIKE_OPTIONS = ["овощи", "фрукты", "мясо", "рыба", "крупы", "молочное", "супы", "запеканки", "паста"];
 
 const DISLIKE_OPTIONS = ["овощи", "рыба", "мясо", "молочное", "крупы", "супы", "острое", "грибы", "бобовые"];
+
+const HERO_BENEFIT_LINES = [
+  "Возраст — порции и текстура под малыша",
+  "Аллергии — не попадут в день",
+  "Вкусы — что любит и чего нет",
+];
 
 type Step = "hero" | 1 | 2 | 3 | "loading" | "result";
 
@@ -242,7 +249,7 @@ export default function VkFunnelPage() {
 
   if (loading || membersLoading) {
     return (
-      <div className="min-h-screen min-h-dvh flex items-center justify-center gradient-hero">
+      <div className="min-h-screen min-h-dvh flex items-center justify-center auth-page-bg">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -260,26 +267,54 @@ export default function VkFunnelPage() {
     );
 
   return (
-    <div className="min-h-screen min-h-dvh flex flex-col gradient-hero pb-safe">
-      <main className="flex-1 w-full max-w-md mx-auto px-4 pt-8 pb-10 flex flex-col gap-6">
+    <div className="min-h-screen min-h-dvh flex flex-col auth-page-bg pb-safe">
+      <main className="flex-1 w-full max-w-md mx-auto px-4 pt-5 sm:pt-8 pb-10 flex flex-col gap-6">
         {step === "hero" ? (
-          <>
-            <div className="text-center space-y-3">
-              <h1 className="text-2xl sm:text-3xl font-bold text-balance leading-tight">
-                Получите меню для ребёнка на день за 10 секунд
-              </h1>
-              <p className="text-muted-foreground text-base">С учётом возраста, аллергий и предпочтений</p>
+          <div className="flex flex-col gap-5 w-full">
+            <div className="text-center space-y-1 px-1">
+              <p className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">MomRecipes 🌿</p>
+              <p className="text-base sm:text-lg font-medium text-foreground/90 leading-snug text-balance">
+                Меню для ребёнка — за 1 минуту
+              </p>
             </div>
-            <Button
-              className="w-full h-14 text-base font-semibold rounded-2xl"
-              onClick={() => {
-                trackVk("vk_start_onboarding", { step: "hero" });
-                setStep(1);
-              }}
-            >
-              Составить меню
-            </Button>
-          </>
+            <Card className="backdrop-blur-xl rounded-[28px] sm:rounded-[32px] bg-card/95 text-card-foreground border border-border/40 shadow-card dark:bg-card/92 dark:border-white/10 dark:shadow-[0_24px_48px_-28px_rgba(0,0,0,0.85)]">
+              <CardContent className="px-4 sm:px-6 pt-6 sm:pt-6 pb-6 space-y-5">
+                <div className="text-center space-y-3">
+                  <h1 className="text-2xl sm:text-[1.6rem] font-bold text-balance leading-tight">
+                    Получите меню для ребёнка на день за 10 секунд
+                  </h1>
+                  <p className="text-muted-foreground text-base leading-snug">
+                    С учётом возраста, аллергий и предпочтений
+                  </p>
+                </div>
+                <ul className="space-y-2.5 text-sm text-foreground/85 dark:text-foreground/80">
+                  {HERO_BENEFIT_LINES.map((line) => (
+                    <li key={line} className="flex gap-2.5 items-start text-left">
+                      <span
+                        className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary"
+                        aria-hidden
+                      >
+                        <Check className="h-3 w-3 stroke-[2.5]" />
+                      </span>
+                      <span className="leading-snug pt-0.5">{line}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  className="w-full h-14 text-base font-semibold rounded-2xl shadow-button"
+                  onClick={() => {
+                    trackVk("vk_start_onboarding", { step: "hero" });
+                    setStep(1);
+                  }}
+                >
+                  Составить меню
+                </Button>
+              </CardContent>
+            </Card>
+            <div className="flex flex-col items-center gap-1 text-primary/25 dark:text-primary/30" aria-hidden>
+              <Leaf className="w-9 h-9" strokeWidth={1.25} />
+            </div>
+          </div>
         ) : null}
 
         {step === 1 ? (
