@@ -147,7 +147,7 @@ function likeBoostScore(r: RecipeRowPool, likes: string[]): number {
 }
 
 const POOL_SELECT_FIELDS =
-  "id, title, norm_title, description, source, meal_type, is_soup, min_age_months, max_age_months, calories, proteins, fats, carbs, nutrition_goals, score, trust_level, recipe_ingredients(name, display_text, category)";
+  "id, title, norm_title, description, source, meal_type, is_soup, min_age_months, max_age_months, calories, proteins, fats, carbs, nutrition_goals, cooking_time_minutes, cooking_time, score, trust_level, recipe_ingredients(name, display_text, category)";
 const POOL_TRUST_OR = "trust_level.is.null,trust_level.neq.blocked";
 const POOL_SEED_CATALOG_FETCH_LIMIT = 600;
 
@@ -240,6 +240,9 @@ export function pickDbSlots(
     const fat = pick.fats != null ? Number(pick.fats) : undefined;
     const carbs = pick.carbs != null ? Number(pick.carbs) : undefined;
     const goals = normalizeNutritionGoalsFromDb(pick.nutrition_goals);
+    const cookRaw = pick.cooking_time_minutes ?? pick.cooking_time;
+    const cookNum =
+      cookRaw != null && Number.isFinite(Number(cookRaw)) ? Math.max(0, Math.round(Number(cookRaw))) : undefined;
     meals[slot] = {
       type: slot,
       title: (pick.title ?? "Блюдо").trim(),
@@ -248,6 +251,7 @@ export function pickDbSlots(
       ...(Number.isFinite(protein) ? { protein: Math.round(protein!) } : {}),
       ...(Number.isFinite(fat) ? { fat: Math.round(fat!) } : {}),
       ...(Number.isFinite(carbs) ? { carbs: Math.round(carbs!) } : {}),
+      ...(cookNum != null && cookNum > 0 ? { cooking_time_minutes: cookNum } : {}),
       ...(goals.length ? { nutrition_goals: [...goals] } : {}),
     };
   }

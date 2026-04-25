@@ -9,6 +9,7 @@ const MOCK_BY_SLOT: Record<MealSlot, VkPreviewMeal> = {
     protein: 8,
     fat: 5,
     carbs: 36,
+    cooking_time_minutes: 15,
     nutrition_goals: ["energy_boost", "gentle_digestion"],
   },
   lunch: {
@@ -19,6 +20,7 @@ const MOCK_BY_SLOT: Record<MealSlot, VkPreviewMeal> = {
     protein: 6,
     fat: 4,
     carbs: 28,
+    cooking_time_minutes: 40,
     nutrition_goals: ["gentle_digestion", "balanced"],
   },
   dinner: {
@@ -29,6 +31,7 @@ const MOCK_BY_SLOT: Record<MealSlot, VkPreviewMeal> = {
     protein: 22,
     fat: 9,
     carbs: 18,
+    cooking_time_minutes: 35,
     nutrition_goals: ["balanced", "weight_gain"],
   },
   snack: {
@@ -39,6 +42,7 @@ const MOCK_BY_SLOT: Record<MealSlot, VkPreviewMeal> = {
     protein: 10,
     fat: 4,
     carbs: 16,
+    cooking_time_minutes: 5,
     nutrition_goals: ["energy_boost"],
   },
 };

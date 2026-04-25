@@ -3,8 +3,8 @@ import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { RecipeCard } from "@/components/recipe/RecipeCard";
 import { Loader2 } from "lucide-react";
 import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
@@ -13,7 +13,6 @@ import { invokeVkPreviewPlan } from "@/api/vkPreviewPlan";
 import type { DayPlan, MealSlot, VkPreviewMeal } from "@/types/vkFunnel";
 import { ensureVkSessionId, readVkDraftRaw, saveVkDraft, updateVkDraftPreview } from "@/utils/vkDraft";
 import { cn } from "@/lib/utils";
-import { normalizeNutritionGoals, nutritionGoalLabel } from "@/utils/nutritionGoals";
 
 const AGE_PRESETS: { label: string; months: number }[] = [
   { label: "6–11 мес", months: 9 },
@@ -40,69 +39,36 @@ const MEAL_LABEL: Record<MealSlot, string> = {
   snack: "Перекус",
 };
 
-/** Порог длины описания: короткий текст без кнопки «ещё», длинный — сворачиваем без обрыва «в никуда». */
-const DESCRIPTION_COLLAPSE_AT = 96;
-
-function VkMealResultCard({ meal }: { meal: VkPreviewMeal }) {
-  const [descExpanded, setDescExpanded] = useState(false);
-  const desc = meal.description?.trim() ?? "";
-  const showDescToggle = desc.length > DESCRIPTION_COLLAPSE_AT;
-  const goals = normalizeNutritionGoals(meal.nutrition_goals);
-  const hasMacros =
-    (meal.protein != null && Number.isFinite(meal.protein)) ||
-    (meal.fat != null && Number.isFinite(meal.fat)) ||
-    (meal.carbs != null && Number.isFinite(meal.carbs));
+/** Превью блюда: тот же `RecipeCard`, что в плане/избранном — шапка до описания + чипы целей (как в превью карточки). */
+function VkPreviewRecipeCard({ meal }: { meal: VkPreviewMeal }) {
+  const nutrition =
+    meal.calories != null || meal.protein != null || meal.fat != null || meal.carbs != null
+      ? {
+          calories: meal.calories ?? null,
+          proteins: meal.protein ?? null,
+          fats: meal.fat ?? null,
+          carbs: meal.carbs ?? null,
+        }
+      : null;
 
   return (
-    <Card className="border-border/60 shadow-sm">
-      <CardContent className="p-4 space-y-2">
-        <p className="text-xs font-semibold text-primary uppercase tracking-wide">{MEAL_LABEL[meal.type]}</p>
-        <p className="text-base font-semibold leading-snug text-pretty">{meal.title}</p>
-        {goals.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {goals.map((g) => (
-              <span
-                key={g}
-                className="inline-flex items-center rounded-md border border-border/70 bg-muted/50 px-2 py-0.5 text-[11px] font-medium text-foreground/90"
-              >
-                {nutritionGoalLabel(g)}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {hasMacros ? (
-          <p className="text-xs text-muted-foreground tabular-nums">
-            Б {meal.protein != null ? `${Math.round(meal.protein)} г` : "—"} · Ж{" "}
-            {meal.fat != null ? `${Math.round(meal.fat)} г` : "—"} · У{" "}
-            {meal.carbs != null ? `${Math.round(meal.carbs)} г` : "—"}
-          </p>
-        ) : null}
-        {desc ? (
-          <div className="space-y-1">
-            <p
-              className={cn(
-                "text-sm text-muted-foreground text-pretty break-words leading-relaxed",
-                !descExpanded && showDescToggle ? "line-clamp-3" : null,
-              )}
-            >
-              {desc}
-            </p>
-            {showDescToggle ? (
-              <button
-                type="button"
-                onClick={() => setDescExpanded((v) => !v)}
-                className="text-xs font-medium text-primary hover:underline touch-manipulation"
-              >
-                {descExpanded ? "Свернуть" : "Показать полностью"}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {meal.calories != null ? (
-          <p className="text-xs text-muted-foreground pt-0.5">~{Math.round(meal.calories)} ккал</p>
-        ) : null}
-      </CardContent>
-    </Card>
+    <RecipeCard
+      variant="preview"
+      previewPresentation="collection"
+      header={{
+        mealLabel: MEAL_LABEL[meal.type],
+        cookingTimeMinutes: meal.cooking_time_minutes ?? null,
+        title: meal.title,
+        description: meal.description ?? null,
+      }}
+      ingredients={[]}
+      showIngredientChips={false}
+      showHint={false}
+      nutrition={nutrition}
+      nutritionGoals={meal.nutrition_goals ?? []}
+      nutritionGoalsMaxVisible={3}
+      nutritionGoalsQuiet
+    />
   );
 }
 
@@ -399,7 +365,7 @@ export default function VkFunnelPage() {
             {plan?.meals?.length ? (
               <div className="space-y-3">
                 {plan.meals.map((m) => (
-                  <VkMealResultCard key={m.type} meal={m} />
+                  <VkPreviewRecipeCard key={m.type} meal={m} />
                 ))}
               </div>
             ) : null}

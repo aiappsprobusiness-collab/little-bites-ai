@@ -17,6 +17,8 @@ export type VkPreviewMeal = {
   protein?: number;
   fat?: number;
   carbs?: number;
+  /** Минуты приготовления (recipes.cooking_time_minutes / cooking_time). */
+  cooking_time_minutes?: number;
   /** Ключи целей питания (whitelist как в recipes.nutrition_goals). */
   nutrition_goals?: string[];
 };
@@ -46,6 +48,8 @@ export type RecipeRowPool = {
   proteins?: number | string | null;
   fats?: number | string | null;
   carbs?: number | string | null;
+  cooking_time_minutes?: number | null;
+  cooking_time?: number | null;
   recipe_ingredients?: Array<{ name?: string; display_text?: string; category?: string | null }> | null;
   score?: number | null;
   trust_level?: string | null;

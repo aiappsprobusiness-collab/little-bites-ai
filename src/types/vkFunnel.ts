@@ -8,6 +8,7 @@ export type VkPreviewMeal = {
   protein?: number;
   fat?: number;
   carbs?: number;
+  cooking_time_minutes?: number;
   nutrition_goals?: string[];
 };
 
