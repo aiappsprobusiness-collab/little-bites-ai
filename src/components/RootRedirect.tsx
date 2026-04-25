@@ -5,6 +5,7 @@ import { useFamily } from "@/contexts/FamilyContext";
 import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
 import {
   WELCOME_PRELOGIN_FROM_ROOT_ENABLED,
+  VK_ROOT_REDIRECT_ENABLED,
   shouldShowWelcomePage,
   buildRootFirstAuthSearch,
 } from "@/utils/navigation";
@@ -21,7 +22,7 @@ const BOOT_SCREEN_CLASS =
  * - сессия recovery (JWT amr: recovery) → /auth/reset-password
  * - авторизован, members загружены и пусто → профиль + создание первого ребёнка (как после письма)
  * - авторизован, есть члены семьи → /meal-plan
- * - не авторизован, первый визит (нет hasSeenWelcome) → /welcome, если WELCOME_PRELOGIN_FROM_ROOT_ENABLED; иначе /auth?mode=signup+state (см. AuthPage, localStorage)
+ * - не авторизован, первый визит (нет hasSeenWelcome) → /vk, если VK_ROOT_REDIRECT_ENABLED; иначе /welcome, если WELCOME_PRELOGIN_FROM_ROOT_ENABLED; иначе /auth?mode=signup+state
  * - не авторизован, не первый визит → /auth (вкладка вход)
  */
 const SLOW_LOAD_SEC = 10;
@@ -91,6 +92,9 @@ export function RootRedirect() {
   }
 
   if (shouldShowWelcomePage()) {
+    if (VK_ROOT_REDIRECT_ENABLED) {
+      return <Navigate to={{ pathname: "/vk", search: location.search }} replace />;
+    }
     if (WELCOME_PRELOGIN_FROM_ROOT_ENABLED) {
       return <Navigate to="/welcome" replace />;
     }

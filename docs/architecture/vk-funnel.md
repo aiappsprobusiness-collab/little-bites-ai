@@ -2,13 +2,21 @@
 
 Изолированный pre-auth поток для холодного трафика (например VK Ads): превью меню на день без регистрации, затем CTA → `/auth?mode=signup&entry_point=vk` и существующий онбординг / план / paywall.
 
+## Редирект с корня `/` (временно)
+
+- **Правило:** гость, **первый визит** в этом браузере (в `localStorage` ещё нет `hasSeenWelcome` — тот же критерий, что и для «первого» захода на `/auth?mode=signup` с корня), открывает `https://momrecipes.online/` → **client-side** переход на `/vk` с **сохранением** query-строки (UTM и т.д.).
+- **Не затрагивает:** ссылки из писем (tokens → `/auth/callback` раньше), recovery → сброс пароля, **авторизованных** пользователей (как и раньше — онбординг / `/meal-plan`), **повторные** визиты гостя (`hasSeenWelcome` выставляется, в т.ч. с экранов welcome/prelogin) — с `/` ведут на `/auth` по прежней логике.
+- **Переключатель:** `VK_ROOT_REDIRECT_ENABLED` в `src/utils/navigation.ts` (`true` = редирект включён). Имеет **приоритет** над `WELCOME_PRELOGIN_FROM_ROOT_ENABLED` для первого визита.
+- **Локальные пометки об изменениях** (что / зачем / когда, не коммитим): `VK_FUNNEL_LOCAL_CHANGELOG.md` в корне — см. `docs/dev/vk-funnel-local-changelog.md`.
+
 ## Маршруты и файлы
 
 **Splash:** для пути `/vk` в `index.html` не прелоадится `splash-screen.png`, узел `#splash-screen` удаляется сразу после парса DOM; в `src/main.tsx` минимальное время показа splash = 0 и скрытие без ожидания `window.load` — быстрее первый paint для рекламного трафика.
 
 | Область | Путь |
 |--------|------|
-| Страница воронки | `src/pages/VkFunnelPage.tsx`, маршрут `/vk` в `src/App.tsx` |
+| Страница воронки | `src/pages/VkFunnelPage.tsx`, маршруты `/vk` и `/vk/` в `src/App.tsx` |
+| Редирект с `/` | `src/components/RootRedirect.tsx`, флаги `VK_ROOT_REDIRECT_ENABLED` и `shouldShowWelcomePage()` в `src/utils/navigation.ts` |
 | Черновик + TTL 24h | `src/utils/vkDraft.ts`, ключ `lb.vkDraft.v1` |
 | Вызов превью | `src/api/vkPreviewPlan.ts` → Edge `vk-preview-plan` |
 | Типы | `src/types/vkFunnel.ts` |
@@ -37,7 +45,8 @@
 
 ## Ручная проверка
 
-1. Открыть `/vk` в инкогнито → hero → 3 шага → превью (4 карточки или частично + retry).
-2. «Получить полный план» → URL содержит `mode=signup&entry_point=vk`.
-3. Регистрация → создание ребёнка: поля возраста/аллергий презаполнены из черновика (если TTL не истёк).
-4. Убедиться, что `/welcome`, `/prelogin`, `/auth`, `/meal-plan` без регрессий.
+1. **Инкогнито, корень:** открыть `https://momrecipes.online/` (или локально `/`) — должен открыться поток `/vk` (при `VK_ROOT_REDIRECT_ENABLED === true` и пустом `hasSeenWelcome`). Повторно открыть `/` в той же сессии — редиректа на `/vk` с корня нет, ожидаемое поведение гостя на `/auth`.
+2. Открыть `/vk` в инкогнито → hero → 3 шага → превью (4 карточки или частично + retry).
+3. «Получить полный план» → URL содержит `mode=signup&entry_point=vk`.
+4. Регистрация → создание ребёнка: поля возраста/аллергий презаполнены из черновика (если TTL не истёк).
+5. Убедиться, что `/welcome`, `/prelogin`, `/auth`, `/meal-plan` без регрессий.

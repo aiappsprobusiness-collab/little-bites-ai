@@ -7,6 +7,12 @@ export const HAS_SEEN_WELCOME_KEY = "hasSeenWelcome";
  */
 export const WELCOME_PRELOGIN_FROM_ROOT_ENABLED = false;
 
+/**
+ * Временно: гость с первого визита на домене (нет `hasSeenWelcome`) с `/` → `/vk` с сохранением query (UTM).
+ * Имеет приоритет над `WELCOME_PRELOGIN_FROM_ROOT_ENABLED`. Отключить, когда редирект с корня больше не нужен.
+ */
+export const VK_ROOT_REDIRECT_ENABLED = true;
+
 export function shouldShowWelcomePage(): boolean {
   return !localStorage.getItem(HAS_SEEN_WELCOME_KEY);
 }

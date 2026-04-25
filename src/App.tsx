@@ -296,6 +296,7 @@ const App = () => (
               <Route path="/welcome" element={<LandingOnboardingScreen />} />
               <Route path="/prelogin" element={<AppPreloginScreen />} />
               <Route path="/vk" element={<VkFunnelPage />} />
+              <Route path="/vk/" element={<VkFunnelPage />} />
               <Route path="/r/:shareRef" element={<PublicRecipeSharePage />} />
               <Route path="/go/:slug" element={<MarketingLinkRedirectPage />} />
               <Route path="/admin/marketing-links" element={<AdminMarketingLinksRoute />} />
