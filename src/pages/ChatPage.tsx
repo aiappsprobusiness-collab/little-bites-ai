@@ -31,6 +31,7 @@ import { safeError } from "@/utils/safeLogger";
 import { supabase } from "@/integrations/supabase/client";
 import { MemberSelectorButton, type MemberSelectorButtonProps } from "@/components/family/MemberSelectorButton";
 import { ChatHeaderMenuButton } from "@/components/chat/ChatHeaderMenuButton";
+import { ChatFeedbackDialog } from "@/components/chat/ChatFeedbackDialog";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
 import { getQuickPromptsForMode } from "@/utils/quickPrompts";
 import { QuickPromptsSheet } from "@/components/chat/QuickPromptsSheet";
@@ -415,6 +416,7 @@ export default function ChatPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showAboutAssistant, setShowAboutAssistant] = useState(false);
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
 
   // Ротация подсказок в placeholder (режим рецептов, поле пустое, не идёт генерация)
   useEffect(() => {
@@ -1773,9 +1775,7 @@ export default function ChatPage() {
         onOpenChange={setShowActionsMenu}
         onNewChat={() => setShowClearConfirm(true)}
         onAboutAssistant={() => setShowAboutAssistant(true)}
-        onWriteUs={() => {
-          window.location.href = "mailto:momrecipesai@gmail.com";
-        }}
+        onReportIssue={() => setShowFeedbackDialog(true)}
       />
     </>
   );
@@ -2019,6 +2019,11 @@ export default function ChatPage() {
       <AssistantAboutSheet
         open={showAboutAssistant}
         onOpenChange={setShowAboutAssistant}
+      />
+      <ChatFeedbackDialog
+        open={showFeedbackDialog}
+        onOpenChange={setShowFeedbackDialog}
+        reporter={user?.id ? { userId: user.id, accountEmail: user.email } : undefined}
       />
 
       <FriendlyLimitDialog

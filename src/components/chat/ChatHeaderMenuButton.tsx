@@ -8,20 +8,20 @@ export interface ChatHeaderMenuButtonProps {
   onOpenChange?: (open: boolean) => void;
   onNewChat: () => void;
   onAboutAssistant: () => void;
-  onWriteUs: () => void;
+  onReportIssue: () => void;
   className?: string;
 }
 
 /**
  * Кнопка меню (⋮) для хедера вкладки «Чат». Открывает поповер с действиями:
- * новый чат, о помощнике, написать нам.
+ * новый чат, о помощнике, сообщить об ошибке.
  */
 export function ChatHeaderMenuButton({
   open,
   onOpenChange,
   onNewChat,
   onAboutAssistant,
-  onWriteUs,
+  onReportIssue,
   className,
 }: ChatHeaderMenuButtonProps) {
   return (
@@ -49,7 +49,7 @@ export function ChatHeaderMenuButton({
           onClose={() => onOpenChange?.(false)}
           onNewChat={onNewChat}
           onAboutAssistant={onAboutAssistant}
-          onWriteUs={onWriteUs}
+          onReportIssue={onReportIssue}
         />
       </PopoverContent>
     </Popover>
