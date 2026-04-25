@@ -6,7 +6,7 @@ Map of all AI prompts used by Edge Functions. Based on real code in `supabase/fu
 
 ## Overview
 
-**Which Edge Functions use AI:** Only **deepseek-chat** calls an AI model (DeepSeek API at `https://api.deepseek.com/v1/chat/completions`). **generate-plan** does not call an LLM; it fills meal slots from the recipe pool only (pickFromPoolInMemory). Other Edge Functions (track-usage-event, payment-webhook, create-payment, share-og, share-og-plan) do not use AI.
+**Which Edge Functions use AI:** **deepseek-chat** calls an AI model (DeepSeek API at `https://api.deepseek.com/v1/chat/completions`). **vk-preview-plan** uses the same API endpoint for an optional **anonymous** JSON fill of missing meal slots (не пишет в `recipes` / `meal_plans_v2`; только ответ HTTP). **generate-plan** does not call an LLM; it fills meal slots from the recipe pool only (pickFromPoolInMemory). Other Edge Functions (track-usage-event, payment-webhook, create-payment, share-og, share-og-plan) do not use AI.
 
 **How prompts are built:** System prompts are assembled in **deepseek-chat/index.ts** from:
 - Template constants in **deepseek-chat/prompts.ts** (FREE_RECIPE_TEMPLATE, PREMIUM_RECIPE_TEMPLATE, SOS_PROMPT_TEMPLATE, BALANCE_CHECK_TEMPLATE, RECIPE_SYSTEM_RULES_V3, etc.)
@@ -128,6 +128,20 @@ Map of all AI prompts used by Edge Functions. Based on real code in `supabase/fu
 **Validation:** **recipeSchema.ts** (Zod schema), **domain/recipe_io** (sanitizeAndRepair, **resolveChatRecipeCanonicalDescription**, **pickCanonicalDescription** — последний остаётся для тестов/совместимости, enforceChefAdvice), **_shared/parsing** (validateRecipe, retryFixJson, getRecipeOrFallback). Normalization of mealType, nutrition, ingredients (canonical amount/unit) in recipeSchema and parsing. After validation, **canonicalizeRecipePayload** (_shared/recipeCanonical) builds payload for **create_recipe_with_steps** RPC.
 
 **Where validation happens:** deepseek-chat/index.ts after LLM response: parse response body, extract JSON, validateRecipe (parsing); затем санитайзеры, **resolveChatRecipeCanonicalDescription**, **enforceChefAdvice**, сохранение. **Files:** deepseek-chat/recipeSchema.ts, deepseek-chat/domain/recipe_io/index.ts, deepseek-chat/domain/recipe_io/sanitizeAndRepair.ts, deepseek-chat/domain/recipe_io/resolveChatRecipeCanonicalDescription.ts, deepseek-chat/domain/recipe_io/chatDescriptionRepair.ts, deepseek-chat/domain/recipe_io/chatEmergencyDescription.ts, _shared/parsing/index.ts, _shared/recipeCanonical.ts.
+
+---
+
+## VK preview plan (anonymous day slots)
+
+**Edge Function:** **vk-preview-plan** (`supabase/functions/vk-preview-plan/`).
+
+**Model:** DeepSeek Chat Completions (`https://api.deepseek.com/v1/chat/completions`), `response_format: { type: "json_object" }`, вызывается **только** если после DB-first в слотах &lt; 3 приёмов пищи.
+
+**Prompt location:** Inline system + user strings in **vk-preview-plan/aiSlots.ts** (`fetchAiMealsForSlots`). Не использует **deepseek-chat/prompts.ts** и не пишет рецепты в БД.
+
+**Output:** JSON `{ "meals": [ { "type", "title", "description?", "calories?", ... } ] }` — только недостающие `type`; при ошибке/таймауте слоты добиваются **mock** в **mockSlots.ts**.
+
+**Files:** vk-preview-plan/index.ts, vk-preview-plan/orchestrate.ts, vk-preview-plan/slotDb.ts, vk-preview-plan/aiSlots.ts, vk-preview-plan/mockSlots.ts.
 
 ---
 

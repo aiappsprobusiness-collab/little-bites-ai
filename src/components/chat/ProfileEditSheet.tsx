@@ -24,6 +24,7 @@ import { normalizeAllergyToken } from "@/utils/allergyAliases";
 import { PAYWALL_ADD_CHILD_CUSTOM_MESSAGE } from "@/constants/paywallCustomMessages";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
+import { getVkDraftForProfilePrefill, markVkHandoffConsumed } from "@/utils/vkDraft";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getSubscriptionLimits } from "@/utils/subscriptionRules";
 import {
@@ -119,6 +120,18 @@ export function ProfileEditSheet({
     lastInitRef.current = key;
 
     if (isCreate) {
+      const vk = getVkDraftForProfilePrefill();
+      if (vk) {
+        setName("");
+        setBirthDate(ageMonthsToBirthDate(vk.age_months));
+        setAllergies((vk.allergies ?? []).map(normalizeAllergyToken).slice(0, limits.maxAllergiesPerProfile));
+        setAllergyInput("");
+        setLikes((vk.likes ?? []).slice(0, limits.maxLikesTagsPerProfile));
+        setLikesInput("");
+        setDislikes((vk.dislikes ?? []).slice(0, limits.maxDislikesTagsPerProfile));
+        setDislikesInput("");
+        return;
+      }
       setName("");
       setBirthDate("");
       setAllergies([]);
@@ -138,7 +151,7 @@ export function ProfileEditSheet({
     setLikesInput("");
     setDislikes((member as MembersRow).dislikes ?? []);
     setDislikesInput("");
-  }, [open, isCreate, member]);
+  }, [open, isCreate, member, limits.maxAllergiesPerProfile, limits.maxLikesTagsPerProfile, limits.maxDislikesTagsPerProfile]);
 
   const baseAllergiesHandlers = createTagListHandlers(setAllergies, setAllergyInput);
   const allergiesHandlers = {
@@ -242,6 +255,7 @@ export function ProfileEditSheet({
         return;
       }
       try {
+        const vkHandoff = getVkDraftForProfilePrefill();
         const newMember = await createMember({
           name: trimmedName,
           type,
@@ -249,6 +263,9 @@ export function ProfileEditSheet({
           allergies,
           ...(hasAccess && { likes, dislikes }),
         });
+        if (vkHandoff) {
+          markVkHandoffConsumed();
+        }
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен`, duration: 2000 });
         onOpenChange(false);
         onCreated?.(newMember.id as string);

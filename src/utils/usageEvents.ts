@@ -29,6 +29,7 @@ const TRACK_EDGE_PATH = "/functions/v1/track-usage-event";
 const VIEW_STYLE_FEATURES = new Set<string>([
   "landing_view",
   "prelogin_view",
+  "vk_landing_view",
   "auth_page_view",
   "plan_view_day",
   "chat_open",

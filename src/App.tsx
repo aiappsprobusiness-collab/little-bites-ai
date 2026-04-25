@@ -31,6 +31,7 @@ import PublicRecipeSharePage from "./pages/PublicRecipeSharePage";
 import SharedPlanPage from "./pages/SharedPlanPage";
 import LandingOnboardingScreen from "./pages/LandingOnboardingScreen";
 import AppPreloginScreen from "./pages/AppPreloginScreen";
+import VkFunnelPage from "./pages/VkFunnelPage";
 import { RootRedirect } from "./components/RootRedirect";
 import MarketingLinkRedirectPage from "./pages/MarketingLinkRedirectPage";
 import MarketingLinksPage from "./pages/admin/MarketingLinksPage";
@@ -294,6 +295,7 @@ const App = () => (
               <Route path="/auth/update-password" element={<Navigate to="/auth/reset-password" replace />} />
               <Route path="/welcome" element={<LandingOnboardingScreen />} />
               <Route path="/prelogin" element={<AppPreloginScreen />} />
+              <Route path="/vk" element={<VkFunnelPage />} />
               <Route path="/r/:shareRef" element={<PublicRecipeSharePage />} />
               <Route path="/go/:slug" element={<MarketingLinkRedirectPage />} />
               <Route path="/admin/marketing-links" element={<AdminMarketingLinksRoute />} />

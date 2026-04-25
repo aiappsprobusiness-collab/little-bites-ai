@@ -60,6 +60,12 @@
 | `prelogin_cta_click` | click | AppPreloginScreen | `properties.target`: `login` \| `signup` |
 | `landing_demo_save_click` | click | Welcome | Перед `landing_cta_free_click`, если демо было в viewport |
 | `marketing_link_click` | click | `MarketingLinkRedirectPage` (`/go/:slug`) | `slug`, `destination_url`, `source` (по умолчанию `youtube_short_link`); колонка `feature` в БД = это имя события |
+| `vk_landing_view` | view | `VkFunnelPage` (`/vk`) | `properties`: `entry_point`, `platform`, `vk_session_id`, `step` |
+| `vk_start_onboarding` | click | `VkFunnelPage` | CTA «Составить меню»; те же обязательные поля + `step` |
+| `vk_complete_onboarding` | click | `VkFunnelPage` | Перед запросом превью (3/3 → loading); `step` |
+| `vk_plan_generated` | outcome | `VkFunnelPage` | После успешного `vk-preview-plan`: `fallback_source`, `duration_ms`, `has_preview` |
+| `vk_click_get_full_plan` | click | `VkFunnelPage` | Перед переходом на `/auth?mode=signup&entry_point=vk`; `trackUsageEventAwait` |
+| `vk_auth_success` | outcome | `AuthPage`, `AuthCallbackPage` | После успешной сессии при валидном VK-черновике; `draft_age_ms`, `has_preview`; дедуп по `vk_session_id` в sessionStorage |
 
 ### 3.2 Auth
 

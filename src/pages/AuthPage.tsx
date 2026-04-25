@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { trackUsageEvent, captureAttributionFromLocationOnce } from "@/utils/usageEvents";
+import { trackVkAuthSuccessOnce } from "@/utils/vkAuthAnalytics";
 import { HAS_SEEN_WELCOME_KEY } from "@/utils/navigation";
 import { LEGAL_TERMS_VERSION } from "@/constants/legalVersions";
 import { AUTH_SIGNUP_SUCCESS_PATH } from "@/constants/authSignupSuccess";
@@ -171,6 +172,7 @@ export default function AuthPage() {
         toast({ variant: "destructive", title: "Ошибка входа", description: error.message || "Не удалось войти. Проверьте email и пароль." });
       } else {
         trackUsageEvent("auth_success");
+        trackVkAuthSuccessOnce();
         navigate("/");
       }
     } catch (err) {
@@ -193,6 +195,7 @@ export default function AuthPage() {
         toast({ variant: "destructive", title: "Ошибка регистрации", description: error.message });
       } else {
         trackUsageEvent("auth_success");
+        trackVkAuthSuccessOnce();
         toast({ title: "Регистрация успешна!", description: "Проверьте почту для подтверждения аккаунта" });
         navigate(AUTH_SIGNUP_SUCCESS_PATH, { replace: true });
       }

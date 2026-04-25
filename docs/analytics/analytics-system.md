@@ -213,6 +213,12 @@ Read-only слой поверх `public.usage_events`: `event_group`, `event_typ
 | landing_cta_free_click | LandingOnboardingScreen | usage_events | то же | CTA «Получить свой план» / «Создать меню…» → signup |
 | landing_cta_login_click | LandingOnboardingScreen (`goToAuth`) | usage_events | — | CTA «Войти» → /auth |
 | prelogin_cta_click | AppPreloginScreen | usage_events | properties: { target: `login` \| `signup` } | Кнопки prelogin → /auth |
+| vk_landing_view | VkFunnelPage (`/vk`) | usage_events | `entry_point`, `vk_session_id`, `platform`, `step` в properties | Просмотр VK-воронки |
+| vk_start_onboarding | VkFunnelPage | usage_events | то же | CTA «Составить меню» |
+| vk_complete_onboarding | VkFunnelPage | usage_events | то же | Перед запросом превью |
+| vk_plan_generated | VkFunnelPage | usage_events | `fallback_source`, `duration_ms`, `has_preview` | Успешный ответ `vk-preview-plan` |
+| vk_click_get_full_plan | VkFunnelPage | usage_events | `has_preview` | Перед `/auth?mode=signup&entry_point=vk` |
+| vk_auth_success | AuthPage, AuthCallbackPage | usage_events | `draft_age_ms`, `has_preview`, `vk_session_id` | После успешной сессии при активном VK-черновике |
 | **Auth** |
 | auth_page_view | AuthPage | usage_events | то же | Просмотр страницы входа |
 | auth_start | AuthPage | usage_events | то же | Начало попытки входа/регистрации |

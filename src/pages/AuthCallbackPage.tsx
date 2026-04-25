@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { setActiveSessionKeyForUser } from "@/utils/activeSessionKey";
 import { PROFILE_FIRST_CHILD_ONBOARDING } from "@/utils/firstChildOnboarding";
+import { trackVkAuthSuccessOnce } from "@/utils/vkAuthAnalytics";
 import { isRecoveryJwtSession, setRecoveryPendingFlag } from "@/utils/authRecoverySession";
 
 const POLL_INTERVAL_MS = 300;
@@ -95,10 +96,12 @@ export default function AuthCallbackPage() {
       if (cancelled) return;
 
       if (error) {
+        trackVkAuthSuccessOnce();
         navigate("/meal-plan", { replace: true });
         return;
       }
 
+      trackVkAuthSuccessOnce();
       if (count === 0) {
         navigate(PROFILE_FIRST_CHILD_ONBOARDING, { replace: true });
       } else {
