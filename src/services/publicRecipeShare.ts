@@ -1,6 +1,6 @@
 /**
- * Публичная загрузка рецепта по share_ref для страницы /r/:shareRef.
- * Использует RPC get_recipe_by_share_ref (доступен anon). ML-7: передаём p_locale для локализованного контента.
+ * Публичная загрузка рецепта: по share_ref (/r/:ref) и по id каталога (/recipe/teaser/:id).
+ * RPC доступны anon. ML-7: передаём p_locale для локализованного контента.
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -42,20 +42,7 @@ export interface PublicRecipePayload {
   [key: string]: unknown;
 }
 
-/**
- * Загрузить рецепт по share_ref. Возвращает null, если ref не найден или рецепт недоступен.
- */
-export async function getRecipeByShareRef(shareRef: string): Promise<PublicRecipePayload | null> {
-  const ref = shareRef?.trim();
-  if (!ref) return null;
-
-  const { data, error } = await supabase.rpc("get_recipe_by_share_ref", {
-    p_share_ref: ref,
-    p_locale: getAppLocale(),
-  });
-
-  if (error || data == null) return null;
-
+function parsePublicRecipeRpcPayload(data: unknown, debugLabel: string): PublicRecipePayload | null {
   const raw = data as {
     recipe?: Record<string, unknown>;
     ingredients?: unknown[];
@@ -83,11 +70,41 @@ export async function getRecipeByShareRef(shareRef: string): Promise<PublicRecip
   if (import.meta.env.DEV) {
     const desc = typeof merged.description === "string" ? merged.description.trim() : "";
     const goalsNorm = normalizeNutritionGoals(merged.nutrition_goals);
-    console.debug("[getRecipeByShareRef]", {
+    console.debug(`[${debugLabel}]`, {
       description_source: desc ? "payload" : "empty_will_use_ui_fallback",
       nutrition_goals_count: goalsNorm.length,
     });
   }
 
   return merged;
+}
+
+/**
+ * Загрузить рецепт по share_ref. Возвращает null, если ref не найден или рецепт недоступен.
+ */
+export async function getRecipeByShareRef(shareRef: string): Promise<PublicRecipePayload | null> {
+  const ref = shareRef?.trim();
+  if (!ref) return null;
+
+  const { data, error } = await supabase.rpc("get_recipe_by_share_ref", {
+    p_share_ref: ref,
+    p_locale: getAppLocale(),
+  });
+
+  if (error || data == null) return null;
+  return parsePublicRecipeRpcPayload(data, "getRecipeByShareRef");
+}
+
+/** Каталожный рецепт по id для публичной страницы тизера (anon). */
+export async function getPublicCatalogRecipeById(recipeId: string): Promise<PublicRecipePayload | null> {
+  const id = recipeId?.trim();
+  if (!id) return null;
+
+  const { data, error } = await supabase.rpc("get_public_catalog_recipe_by_id", {
+    p_recipe_id: id,
+    p_locale: getAppLocale(),
+  });
+
+  if (error || data == null) return null;
+  return parsePublicRecipeRpcPayload(data, "getPublicCatalogRecipeById");
 }

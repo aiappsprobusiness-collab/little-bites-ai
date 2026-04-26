@@ -23,6 +23,8 @@ export interface WelcomeRecipeBlockProps {
   recipe?: PublicRecipePayload | null;
   /** Показывать лоадер (для публичной страницы, пока рецепт грузится) */
   isLoading?: boolean;
+  /** Тизер: шаги визуально размыты, полный текст — только в приложении */
+  preparationStepsVariant?: "default" | "teaser";
   /** Один раз: демо-рецепт с лендинга отрисован (landing_demo_open). */
   onLandingDemoRecipeShown?: () => void;
   /** Секция демо попала в viewport (для landing_demo_save_click при последующем CTA). */
@@ -66,6 +68,7 @@ function getDisplayIngredients(recipe: RecipeDisplayIngredients): IngredientItem
 export function WelcomeRecipeBlock({
   recipe: recipeProp,
   isLoading: isLoadingProp,
+  preparationStepsVariant = "default",
   onLandingDemoRecipeShown,
   onLandingDemoSectionVisible,
 }: WelcomeRecipeBlockProps = {}) {
@@ -261,7 +264,19 @@ export function WelcomeRecipeBlock({
               />
             ) : null}
 
-            <RecipeSteps steps={steps} className="mt-6" />
+            {preparationStepsVariant === "teaser" ? (
+              <div className="relative mt-6 overflow-hidden rounded-xl border border-border/60">
+                <div className="pointer-events-none max-h-[220px] select-none overflow-hidden px-1 blur-[8px] opacity-[0.42]">
+                  <RecipeSteps steps={steps} className="mt-0" />
+                </div>
+                <div className="absolute inset-0 flex flex-col items-center justify-end bg-gradient-to-t from-background via-background/80 to-transparent px-4 pb-5 pt-20">
+                  <p className="text-center text-sm font-medium text-foreground">Шаги приготовления</p>
+                  <p className="mt-0.5 text-center text-xs text-muted-foreground">Открой в приложении — там пошагово и удобно готовить</p>
+                </div>
+              </div>
+            ) : (
+              <RecipeSteps steps={steps} className="mt-6" />
+            )}
           </div>
         </div>
 

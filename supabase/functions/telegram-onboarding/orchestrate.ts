@@ -1,4 +1,4 @@
-import { buildAuthSignupUrl, buildRecipePageUrl, buildVkFunnelHandoffUrl } from "./cta.ts";
+import { buildAuthSignupUrl, buildRecipeTeaserPageUrl } from "./cta.ts";
 import { parseAgeMonths, splitCsvTags } from "./validate.ts";
 import type { DayPlan, MealSlot, VkPreviewMeal } from "../vk-preview-plan/types.ts";
 import type { InboundEvent, TelegramButton, TelegramClient, TelegramSession } from "./types.ts";
@@ -38,6 +38,21 @@ const MEAL_LABEL: Record<MealSlot, string> = {
   dinner: "Ужин",
   snack: "Перекус",
 };
+
+const SLOT_ORDER: MealSlot[] = ["breakfast", "lunch", "dinner", "snack"];
+const SLOT_EMOJI: Record<MealSlot, string> = {
+  breakfast: "🍳",
+  lunch: "🍲",
+  dinner: "🍝",
+  snack: "🍎",
+};
+
+const MSG_WELCOME_AGE = [
+  "Привет 👋",
+  "Давай подберём простое меню на день для твоего ребёнка 🍽️",
+  "",
+  "Сначала выбери возраст 👇",
+].join("\n");
 
 function emptySession(chatId: number, userId: number | null): TelegramSession {
   return {
@@ -108,7 +123,7 @@ function multiChipKeyboard(
   });
   rows.push([
     { text: "Далее →", callback_data: "nx" },
-    { text: "Нет ограничений", callback_data: `${prefix}:clear` },
+    { text: "Нет", callback_data: `${prefix}:clear` },
   ]);
   return rows;
 }
@@ -139,53 +154,39 @@ async function refreshChipKeyboard(deps: OrchestratorDeps, session: TelegramSess
   }
 }
 
-function buildPreviewText(plan: DayPlan): string {
-  const lines: string[] = ["Пример меню на день (по вашим ответам):"];
-  for (const meal of plan.meals.slice(0, 4)) {
-    const slot = MEAL_LABEL[meal.type] ?? meal.type;
-    const t =
-      meal.cooking_time_minutes != null && meal.cooking_time_minutes > 0
-        ? `${meal.title} · ${meal.cooking_time_minutes} мин`
-        : meal.title;
-    const kcal = typeof meal.calories === "number" ? ` · ~${meal.calories} ккал` : "";
-    lines.push(`• ${slot}: ${t}${kcal}`);
+function mealTitleForSlot(plan: DayPlan | null, slot: MealSlot): string {
+  const meal = plan?.meals?.find((m) => m.type === slot);
+  if (!meal?.title?.trim()) return "—";
+  if (meal.cooking_time_minutes != null && meal.cooking_time_minutes > 0) {
+    return `${meal.title.trim()} · ${meal.cooking_time_minutes} мин`;
   }
-  lines.push("");
-  lines.push("Полный план, замены блюд и список покупок — после регистрации в приложении.");
-  return lines.join("\n");
+  return meal.title.trim();
 }
 
-function finalKeyboard(
-  authUrl: string,
-  vkUrl: string,
-  meals: VkPreviewMeal[],
-  appBase: string,
-  utm: Record<string, string>,
-): TelegramButton[][] {
-  const rows: TelegramButton[][] = [
-    [{ text: "Зарегистрироваться", url: authUrl }],
-    [{ text: "Открыть превью как на сайте (/vk)", url: vkUrl }],
-  ];
-  for (const meal of meals.slice(0, 4)) {
-    if (!meal.recipe_id) continue;
-    const label = `${MEAL_LABEL[meal.type] ?? meal.type} · рецепт`;
-    rows.push([{ text: label.slice(0, 60), url: buildRecipePageUrl(appBase, meal.recipe_id, utm) }]);
+/** Финальный текст: 4 приёма пищи всегда + одна CTA-строка. Без URL и маркетинговых блоков. */
+function buildFinalBody(plan: DayPlan | null): string {
+  const mealLines = SLOT_ORDER.map(
+    (slot) => `${SLOT_EMOJI[slot]} ${MEAL_LABEL[slot]}: ${mealTitleForSlot(plan, slot)}`,
+  );
+  return ["Вот меню на день по твоим ответам 👇", "", ...mealLines, "", "Хочешь больше вариантов и меню на неделю?"].join("\n");
+}
+
+/** Кнопки слотов (только при наличии recipe_id) + два CTA. */
+function finalKeyboard(authUrl: string, plan: DayPlan | null, appBase: string, utm: Record<string, string>): TelegramButton[][] {
+  const bySlot: Partial<Record<MealSlot, VkPreviewMeal>> = {};
+  for (const m of plan?.meals ?? []) {
+    bySlot[m.type] = m;
   }
-  rows.push([{ text: "Пройти заново", callback_data: "restart" }]);
+  const rows: TelegramButton[][] = [];
+  for (const slot of SLOT_ORDER) {
+    const meal = bySlot[slot];
+    if (meal?.recipe_id) {
+      rows.push([{ text: MEAL_LABEL[slot], url: buildRecipeTeaserPageUrl(appBase, meal.recipe_id, utm) }]);
+    }
+  }
+  rows.push([{ text: "Зарегистрироваться", url: authUrl }]);
+  rows.push([{ text: "Посмотреть ещё рецепты", callback_data: "again" }]);
   return rows;
-}
-
-function buildFinalMessage(authUrl: string, vkUrl: string, plan: DayPlan | null): string {
-  const preview = plan ? buildPreviewText(plan) : "Превью сейчас недоступно, но вы можете продолжить на сайте.";
-  return [
-    preview,
-    "",
-    "— Регистрация —",
-    authUrl,
-    "",
-    "— Карточки как в рекламе VK (полный UI) —",
-    vkUrl,
-  ].join("\n");
 }
 
 export async function handleInboundEvent(event: InboundEvent, deps: OrchestratorDeps): Promise<void> {
@@ -209,18 +210,7 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
     session.status = "active";
     session.utm = parseStartUtm(text);
     await deps.store.upsert(session);
-    await sendPrompt(
-      deps,
-      session,
-      [
-        "Привет! Подберём меню на день для ребёнка.",
-        "",
-        "Какого возраста ребёнок? Выберите вариант ниже (как на сайте).",
-        "",
-        "Начать сначала: отправьте команду /start",
-      ].join("\n"),
-      ageKeyboard(),
-    );
+    await sendPrompt(deps, session, MSG_WELCOME_AGE, ageKeyboard());
     return;
   }
 
@@ -245,7 +235,7 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
     await sendPrompt(
       deps,
       session,
-      ["Есть аллергии? Нажмите на пункты (можно несколько), затем «Далее →». Или напишите: нет"].join("\n"),
+      ["Есть ли у ребёнка аллергии или ограничения?", "Можно выбрать несколько вариантов 👇 или нажать «Нет»"].join("\n"),
       multiChipKeyboard(ALLERGY_OPTIONS, session.allergies, "al"),
     );
     return;
@@ -260,7 +250,7 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
     await sendPrompt(
       deps,
       session,
-      "Что ребёнок любит? Выберите несколько вариантов, затем «Далее →».",
+      ["Что ребёнок обычно любит есть?", "Выбери несколько вариантов 👇"].join("\n"),
       multiChipKeyboard(LIKE_OPTIONS, session.likes, "li"),
     );
     return;
@@ -275,7 +265,7 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
     await sendPrompt(
       deps,
       session,
-      "Что не ест или не любит? Выберите варианты, затем «Далее →». Или напишите: нет",
+      ["Что ребёнок не любит или не ест?", "Можно выбрать варианты или нажать «Нет»"].join("\n"),
       multiChipKeyboard(DISLIKE_OPTIONS, session.dislikes, "di"),
     );
     return;
@@ -304,28 +294,18 @@ async function finishFlow(deps: OrchestratorDeps, session: TelegramSession): Pro
   await deps.store.upsert(session);
 
   const authUrl = buildAuthSignupUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
-  const vkUrl = buildVkFunnelHandoffUrl(deps.appBaseUrl, session.utm);
-  let body = buildFinalMessage(authUrl, vkUrl, plan);
+  let body = buildFinalBody(plan);
   if (body.length > 4000) {
     body = `${body.slice(0, 3900)}…`;
   }
-  const kb = finalKeyboard(authUrl, vkUrl, plan?.meals ?? [], deps.appBaseUrl, session.utm);
+  const kb = finalKeyboard(authUrl, plan, deps.appBaseUrl, session.utm);
 
   try {
     await deps.telegram.sendMessage(session.chat_id, body, kb);
   } catch {
-    const fallback = [
-      "Готово. Ссылки для продолжения:",
-      "",
-      "Регистрация:",
-      authUrl,
-      "",
-      "Превью как на сайте:",
-      vkUrl,
-    ].join("\n");
-    await deps.telegram.sendMessage(session.chat_id, fallback, [
+    await deps.telegram.sendMessage(session.chat_id, buildFinalBody(plan), [
       [{ text: "Зарегистрироваться", url: authUrl }],
-      [{ text: "Открыть /vk", url: vkUrl }],
+      [{ text: "Посмотреть ещё рецепты", callback_data: "again" }],
     ]).catch(() => {});
   }
 }
@@ -338,18 +318,13 @@ async function handleCallback(
   let session = initialSession;
   const data = event.data;
 
-  if (data === "restart") {
+  if (data === "restart" || data === "again") {
     await ack(deps);
     session = emptySession(event.chat_id, event.user_id);
     session.step = "await_age";
     session.status = "active";
     await deps.store.upsert(session);
-    await sendPrompt(
-      deps,
-      session,
-      ["Начинаем заново.", "", "Какого возраста ребёнок? Выберите вариант ниже.", "", "Снова с нуля: /start"].join("\n"),
-      ageKeyboard(),
-    );
+    await sendPrompt(deps, session, MSG_WELCOME_AGE, ageKeyboard());
     return;
   }
 
@@ -366,7 +341,7 @@ async function handleCallback(
         await sendPrompt(
           deps,
           session,
-          ["Есть аллергии? Нажмите на пункты (несколько можно), затем «Далее →»."].join("\n"),
+          ["Есть ли у ребёнка аллергии или ограничения?", "Можно выбрать несколько вариантов 👇 или нажать «Нет»"].join("\n"),
           multiChipKeyboard(ALLERGY_OPTIONS, session.allergies, "al"),
         );
         return;
@@ -386,15 +361,16 @@ async function handleCallback(
   };
 
   if (session.step === "await_allergies") {
-    if (data === "nx") {
+    if (data === "nx" || data === "al:clear") {
       await ack(deps);
+      if (data === "al:clear") session.allergies = [];
       session.step = "await_likes";
       session.prompt_message_id = null;
       await deps.store.upsert(session);
       await sendPrompt(
         deps,
         session,
-        "Что ребёнок любит? Выберите несколько вариантов, затем «Далее →».",
+        ["Что ребёнок обычно любит есть?", "Выбери несколько вариантов 👇"].join("\n"),
         multiChipKeyboard(LIKE_OPTIONS, session.likes, "li"),
       );
       return;
@@ -412,15 +388,16 @@ async function handleCallback(
   }
 
   if (session.step === "await_likes") {
-    if (data === "nx") {
+    if (data === "nx" || data === "li:clear") {
       await ack(deps);
+      if (data === "li:clear") session.likes = [];
       session.step = "await_dislikes";
       session.prompt_message_id = null;
       await deps.store.upsert(session);
       await sendPrompt(
         deps,
         session,
-        "Что не ест или не любит? Выберите варианты, затем «Далее →».",
+        ["Что ребёнок не любит или не ест?", "Можно выбрать варианты или нажать «Нет»"].join("\n"),
         multiChipKeyboard(DISLIKE_OPTIONS, session.dislikes, "di"),
       );
       return;
@@ -438,7 +415,9 @@ async function handleCallback(
   }
 
   if (session.step === "await_dislikes") {
-    if (data === "nx") {
+    if (data === "nx" || data === "di:clear") {
+      if (data === "di:clear") session.dislikes = [];
+      await deps.store.upsert(session);
       /** Сразу закрываем «часики» на кнопке: превью может занять несколько секунд (БД + опционально DeepSeek). */
       await ack(deps, "Подбираю меню…");
       await finishFlow(deps, session);

@@ -45,10 +45,11 @@ function createDeps() {
           type: "breakfast" as const,
           title: "Овсянка",
           recipe_id: "11111111-1111-1111-1111-111111111111",
-          calories: 180,
           cooking_time_minutes: 15,
         },
-        { type: "lunch" as const, title: "Суп", recipe_id: "22222222-2222-2222-2222-222222222222", calories: 210 },
+        { type: "lunch" as const, title: "Суп", recipe_id: "22222222-2222-2222-2222-222222222222" },
+        { type: "dinner" as const, title: "Котлеты", recipe_id: "33333333-3333-3333-3333-333333333333" },
+        { type: "snack" as const, title: "Творог", recipe_id: "44444444-4444-4444-4444-444444444444" },
       ],
       meta: { fallback_source: "db" as const, duration_ms: 50 },
     }),
@@ -57,11 +58,14 @@ function createDeps() {
   return { deps, map, sent };
 }
 
-Deno.test("/start sends age chip keyboard", async () => {
+Deno.test("/start sends age chip keyboard and new welcome copy", async () => {
   const { deps, map, sent } = createDeps();
   await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
   assertEquals(map.get(1)?.step, "await_age");
   assertEquals(sent.length, 1);
+  assertEquals(sent[0].text.includes("Привет 👋"), true);
+  assertEquals(sent[0].text.includes("Сначала выбери возраст"), true);
+  assertEquals(sent[0].text.includes("Начать сначала"), false);
   const kb = sent[0].buttons ?? [];
   assertEquals(kb.some((row) => row.some((b) => b.callback_data === "age:0")), true);
 });
@@ -78,7 +82,27 @@ Deno.test("age chip advances to allergies", async () => {
   assertEquals(map.get(1)?.age_months, 18);
 });
 
-Deno.test("final message includes auth URL and registration button", async () => {
+Deno.test("«Нет» на аллергиях сразу переводит к лайкам", async () => {
+  const { deps, map, sent } = createDeps();
+  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
+  deps.activeCallbackQueryId = "a";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "age:0", callback_query_id: "a", message_id: 1 },
+    deps,
+  );
+  map.get(1)!.allergies = ["яйца"];
+  deps.activeCallbackQueryId = "b";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "al:clear", callback_query_id: "b", message_id: 2 },
+    deps,
+  );
+  assertEquals(map.get(1)?.step, "await_likes");
+  assertEquals(map.get(1)?.allergies.length, 0);
+  const last = sent[sent.length - 1];
+  assertEquals(last.text.includes("любит есть"), true);
+});
+
+Deno.test("final message: four meal lines, CTA line, two conversion buttons + meal links", async () => {
   const { deps, map, sent } = createDeps();
   await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
   deps.activeCallbackQueryId = "a";
@@ -103,10 +127,25 @@ Deno.test("final message includes auth URL and registration button", async () =>
   );
 
   const last = sent[sent.length - 1];
-  assertEquals(last.text.includes("momrecipes.online/auth"), true);
-  const regRow = last.buttons?.find((row) => row.some((b) => b.text === "Зарегистрироваться"));
-  if (!regRow?.[0]?.url) throw new Error("missing registration url button");
-  assertEquals(regRow[0].url.includes("entry_point=telegram"), true);
-  assertEquals(last.buttons?.some((row) => row.some((b) => (b.url ?? "").includes("/recipe/"))), true);
-  assertEquals(last.buttons?.some((row) => row.some((b) => (b.url ?? "").includes("/vk"))), true);
+  assertEquals(last.text.includes("http"), false);
+  assertEquals(last.text.includes("Хочешь больше вариантов"), true);
+  assertEquals(last.text.includes("🍳 Завтрак:"), true);
+  assertEquals(last.text.includes("🍲 Обед:"), true);
+  assertEquals(last.text.includes("🍝 Ужин:"), true);
+  assertEquals(last.text.includes("🍎 Перекус:"), true);
+  assertEquals(last.text.toLowerCase().includes("vk"), false);
+
+  const flat = (last.buttons ?? []).flat();
+  const reg = flat.find((b) => b.text === "Зарегистрироваться");
+  if (!reg?.url) throw new Error("missing register button");
+  assertEquals(reg.url.includes("entry_point=telegram"), true);
+
+  const again = flat.find((b) => b.text === "Посмотреть ещё рецепты");
+  if (again?.callback_data !== "again") throw new Error("missing again button");
+
+  for (const label of ["Завтрак", "Обед", "Ужин", "Перекус"]) {
+    const b = flat.find((x) => x.text === label);
+    if (!b?.url?.includes("/recipe/teaser/")) throw new Error(`missing recipe teaser link for ${label}`);
+  }
+  assertEquals(flat.some((b) => (b.url ?? "").includes("/vk")), false);
 });
