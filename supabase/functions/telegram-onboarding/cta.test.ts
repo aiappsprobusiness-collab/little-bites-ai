@@ -26,9 +26,9 @@ Deno.test("buildRecipePageUrl points to /recipe/:id", () => {
   assertEquals(url.includes("entry_point=telegram"), true);
 });
 
-Deno.test("buildRecipeTeaserPageUrl points to /recipe/teaser/:id", () => {
+Deno.test("buildRecipeTeaserPageUrl points to /t/:id", () => {
   const url = buildRecipeTeaserPageUrl("https://momrecipes.online", "abc-uuid-1", {});
-  assertEquals(new URL(url).pathname, "/recipe/teaser/abc-uuid-1");
+  assertEquals(new URL(url).pathname, "/t/abc-uuid-1");
   assertEquals(url.includes("entry_point=telegram"), true);
 });
 

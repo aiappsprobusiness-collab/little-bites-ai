@@ -28,7 +28,7 @@ import AuthSignupSuccessPage from "./pages/AuthSignupSuccessPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import AuthUpdatePasswordPage from "./pages/AuthUpdatePasswordPage";
 import PublicRecipeSharePage from "./pages/PublicRecipeSharePage";
-import PublicRecipeTeaserPage from "./pages/PublicRecipeTeaserPage";
+import PublicRecipeTeaserPage, { LegacyRecipeTeaserRedirect } from "./pages/PublicRecipeTeaserPage";
 import SharedPlanPage from "./pages/SharedPlanPage";
 import LandingOnboardingScreen from "./pages/LandingOnboardingScreen";
 import AppPreloginScreen from "./pages/AppPreloginScreen";
@@ -299,7 +299,8 @@ const App = () => (
               <Route path="/vk" element={<VkFunnelPage />} />
               <Route path="/vk/" element={<VkFunnelPage />} />
               <Route path="/r/:shareRef" element={<PublicRecipeSharePage />} />
-              <Route path="/recipe/teaser/:id" element={<PublicRecipeTeaserPage />} />
+              <Route path="/t/:id" element={<PublicRecipeTeaserPage />} />
+              <Route path="/recipe/teaser/:id" element={<LegacyRecipeTeaserRedirect />} />
               <Route path="/go/:slug" element={<MarketingLinkRedirectPage />} />
               <Route path="/admin/marketing-links" element={<AdminMarketingLinksRoute />} />
               <Route path="/p/:ref" element={<SharedPlanPage />} />

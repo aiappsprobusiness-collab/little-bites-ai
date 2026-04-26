@@ -1,10 +1,11 @@
 /**
- * Публичный тизер рецепта по id каталога: /recipe/teaser/:id (без логина).
- * Для переходов из Telegram и др.; после входа — полный экран /recipe/:id.
+ * Публичный тизер рецепта по id каталога: /t/:id (без логина).
+ * Короткий путь вне /recipe/* — иначе часть хостингов/редиректов отдаёт SPA как «/» и пользователь попадает на /auth.
+ * Легаси `/recipe/teaser/:id` редиректится на `/t/:id` в App.tsx.
  */
 
 import { useEffect, useMemo } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -20,6 +21,14 @@ const CTA_LABEL = "Открыть в приложении";
 function isUuidLike(s: string): boolean {
   const t = s.trim();
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(t);
+}
+
+/** Редирект со старого URL после деплоя тизера под /recipe/teaser/. */
+export function LegacyRecipeTeaserRedirect() {
+  const { id } = useParams<{ id: string }>();
+  const raw = id?.trim() ?? "";
+  if (!raw) return <Navigate to="/welcome" replace />;
+  return <Navigate to={`/t/${raw}`} replace />;
 }
 
 function buildTeaserAuthSearch(currentSearch: string): string {

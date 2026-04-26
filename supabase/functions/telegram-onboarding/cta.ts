@@ -36,10 +36,10 @@ export function buildRecipePageUrl(baseUrl: string, recipeId: string, utm: Recor
   return url.toString();
 }
 
-/** Публичный тизер рецепта (без авторизации): карточка + размытые шаги, CTA в приложение. Для ссылок из Telegram. */
+/** Публичный тизер рецепта (без авторизации): `/t/:id` — один сегмент пути, без конфликта с `/recipe/:id` (ProtectedRoute). */
 export function buildRecipeTeaserPageUrl(baseUrl: string, recipeId: string, utm: Record<string, string>): string {
   const base = baseUrl.replace(/\/$/, "");
-  const url = new URL(`${base}/recipe/teaser/${encodeURIComponent(recipeId)}`);
+  const url = new URL(`${base}/t/${encodeURIComponent(recipeId)}`);
   url.searchParams.set("entry_point", "telegram");
   url.searchParams.set("utm_source", "telegram");
   for (const key of UTM_KEYS) {

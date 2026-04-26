@@ -121,10 +121,9 @@ function multiChipKeyboard(
     const on = selected.some((x) => x.toLowerCase() === opt);
     return { text: on ? `✓ ${opt}` : opt, callback_data: `${prefix}:${i}` };
   });
-  rows.push([
-    { text: "Далее →", callback_data: "nx" },
-    { text: "Нет", callback_data: `${prefix}:clear` },
-  ]);
+  rows.push([{ text: "Далее →", callback_data: "nx" }]);
+  /** Отдельная строка: надёжнее нажатие; `*_none` без двоеточия — меньше шансов обрезки/коллизий в цепочках. */
+  rows.push([{ text: "Нет", callback_data: `${prefix}_none` }]);
   return rows;
 }
 
@@ -352,7 +351,7 @@ async function handleCallback(
   }
 
   const toggleIdx = (prefix: "al" | "li" | "di", options: string[], list: string[], raw: string): string[] | null => {
-    if (raw === `${prefix}:clear`) return [];
+    if (raw === `${prefix}_none` || raw === `${prefix}:clear`) return [];
     const mm = new RegExp(`^${prefix}:(\\d+)$`).exec(raw);
     if (!mm) return null;
     const i = Number.parseInt(mm[1], 10);
@@ -361,9 +360,9 @@ async function handleCallback(
   };
 
   if (session.step === "await_allergies") {
-    if (data === "nx" || data === "al:clear") {
+    if (data === "nx" || data === "al_none" || data === "al:clear") {
       await ack(deps);
-      if (data === "al:clear") session.allergies = [];
+      if (data === "al_none" || data === "al:clear") session.allergies = [];
       session.step = "await_likes";
       session.prompt_message_id = null;
       await deps.store.upsert(session);
@@ -388,9 +387,9 @@ async function handleCallback(
   }
 
   if (session.step === "await_likes") {
-    if (data === "nx" || data === "li:clear") {
+    if (data === "nx" || data === "li_none" || data === "li:clear") {
       await ack(deps);
-      if (data === "li:clear") session.likes = [];
+      if (data === "li_none" || data === "li:clear") session.likes = [];
       session.step = "await_dislikes";
       session.prompt_message_id = null;
       await deps.store.upsert(session);
@@ -415,8 +414,8 @@ async function handleCallback(
   }
 
   if (session.step === "await_dislikes") {
-    if (data === "nx" || data === "di:clear") {
-      if (data === "di:clear") session.dislikes = [];
+    if (data === "nx" || data === "di_none" || data === "di:clear") {
+      if (data === "di_none" || data === "di:clear") session.dislikes = [];
       await deps.store.upsert(session);
       /** Сразу закрываем «часики» на кнопке: превью может занять несколько секунд (БД + опционально DeepSeek). */
       await ack(deps, "Подбираю меню…");
