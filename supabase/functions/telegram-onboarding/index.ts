@@ -56,10 +56,13 @@ serve(async (req) => {
   const previewProvider = createPreviewProvider(supabase);
 
   try {
-    await handleInboundEvent(inbound, { store, telegram, appBaseUrl, previewProvider });
-    if (parsed.update.callback_query?.id) {
-      await telegram.answerCallbackQuery(parsed.update.callback_query.id).catch(() => {});
-    }
+    await handleInboundEvent(inbound, {
+      store,
+      telegram,
+      appBaseUrl,
+      previewProvider,
+      activeCallbackQueryId: inbound.kind === "callback" ? inbound.callback_query_id : null,
+    });
     return json({ ok: true }, 200);
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown_error";

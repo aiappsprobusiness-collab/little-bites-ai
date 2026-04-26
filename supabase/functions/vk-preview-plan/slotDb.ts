@@ -245,6 +245,7 @@ export function pickDbSlots(
       cookRaw != null && Number.isFinite(Number(cookRaw)) ? Math.max(0, Math.round(Number(cookRaw))) : undefined;
     meals[slot] = {
       type: slot,
+      recipe_id: pick.id,
       title: (pick.title ?? "Блюдо").trim(),
       ...(desc ? { description: desc.slice(0, 500) } : {}),
       ...(Number.isFinite(cal) ? { calories: Math.round(cal!) } : {}),

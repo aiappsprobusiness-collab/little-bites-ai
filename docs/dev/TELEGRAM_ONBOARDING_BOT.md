@@ -3,9 +3,10 @@
 ## Что реализовано
 
 - Edge webhook-функция: `supabase/functions/telegram-onboarding/`.
-- Хранение состояния диалога: `public.telegram_onboarding_sessions`.
-- Подбор превью: reuse `vk-preview-plan` доменной логики (`buildVkPreviewDayPlan`).
-- CTA после опроса: `/auth?mode=signup&entry_point=telegram` (+ UTM/blogger, если есть).
+- Хранение состояния диалога: `public.telegram_onboarding_sessions` (в т.ч. `prompt_message_id` для обновления чипов).
+- Опрос как на `/vk`: пресеты возраста, мультивыбор аллергий / лайков / дизлайков через **inline keyboard** (`callback_data`) + «Далее →».
+- Подбор превью: reuse `vk-preview-plan` (`buildVkPreviewDayPlan`); у блюд из БД в ответе есть `recipe_id` для deeplink.
+- Финальное сообщение: текст превью + **явные URL** (регистрация и `/vk`) + кнопки: «Зарегистрироваться», «Открыть превью как на сайте (/vk)», по слотам «… · рецепт» → `/recipe/:id`, «Пройти заново».
 
 ## Переменные окружения (Supabase project secrets)
 

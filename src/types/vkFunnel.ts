@@ -2,6 +2,8 @@ export type MealSlot = "breakfast" | "lunch" | "dinner" | "snack";
 
 export type VkPreviewMeal = {
   type: MealSlot;
+  /** UUID из БД для deeplink (опционально; AI/mock могут не иметь id). */
+  recipe_id?: string;
   title: string;
   description?: string;
   calories?: number;

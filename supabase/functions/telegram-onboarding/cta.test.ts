@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { buildAuthSignupUrl } from "./cta.ts";
+import { buildAuthSignupUrl, buildRecipePageUrl, buildVkFunnelHandoffUrl } from "./cta.ts";
 
 Deno.test("buildAuthSignupUrl sets telegram entry point", () => {
   const url = buildAuthSignupUrl({ appBaseUrl: "https://momrecipes.online/" });
@@ -18,4 +18,15 @@ Deno.test("buildAuthSignupUrl forwards attribution params", () => {
   const parsed = new URL(url);
   assertEquals(parsed.searchParams.get("utm_campaign"), "blogger");
   assertEquals(parsed.searchParams.get("blogger_id"), "maria");
+});
+
+Deno.test("buildRecipePageUrl points to /recipe/:id", () => {
+  const url = buildRecipePageUrl("https://momrecipes.online", "abc-uuid-1", { utm_campaign: "tg" });
+  assertEquals(url.includes("/recipe/abc-uuid-1"), true);
+  assertEquals(url.includes("entry_point=telegram"), true);
+});
+
+Deno.test("buildVkFunnelHandoffUrl points to /vk", () => {
+  const url = buildVkFunnelHandoffUrl("https://momrecipes.online/", {});
+  assertEquals(new URL(url).pathname, "/vk");
 });

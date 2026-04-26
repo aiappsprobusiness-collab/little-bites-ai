@@ -43,6 +43,7 @@
 - Состояние шагов хранится в `public.telegram_onboarding_sessions`.
 - После завершения опроса бот вызывает `buildVkPreviewDayPlan` (reuse текущей логики превью) с `entry_point=telegram`.
 - CTA ведёт на `/auth?mode=signup&entry_point=telegram` (+ UTM / `blogger_id` при наличии), дальше работает текущий auth/onboarding.
+- В ответе превью для слотов из БД у блюд есть `recipe_id` — в боте строятся кнопки-ссылки на `/recipe/:id`; для «карточек как на сайте» добавлена кнопка на `/vk` с той же атрибуцией.
 
 ## Handoff после auth
 

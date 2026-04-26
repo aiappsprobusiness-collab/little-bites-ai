@@ -23,6 +23,24 @@ Deno.test("updateToInboundEvent maps text message", () => {
   assertEquals(event.text, "/start");
 });
 
+Deno.test("updateToInboundEvent maps callback_query", () => {
+  const r = parseUpdate({
+    update_id: 2,
+    callback_query: {
+      id: "cq1",
+      from: { id: 9 },
+      message: { message_id: 55, chat: { id: 123 } },
+      data: "age:0",
+    },
+  });
+  if (!r.ok) throw new Error("expected ok");
+  const event = updateToInboundEvent(r.update);
+  if (!event || event.kind !== "callback") throw new Error("expected callback");
+  assertEquals(event.callback_query_id, "cq1");
+  assertEquals(event.message_id, 55);
+  assertEquals(event.data, "age:0");
+});
+
 Deno.test("parseAgeMonths supports months and years", () => {
   assertEquals(parseAgeMonths("18"), 18);
   assertEquals(parseAgeMonths("2 years"), 24);

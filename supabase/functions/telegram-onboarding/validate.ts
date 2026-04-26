@@ -18,12 +18,16 @@ export function parseUpdate(raw: unknown): { ok: true; update: TelegramUpdate } 
 
 export function updateToInboundEvent(update: TelegramUpdate): InboundEvent | null {
   const cb = update.callback_query;
-  if (cb?.message?.chat?.id && typeof cb.data === "string" && cb.data.trim()) {
+  if (cb?.message?.chat?.id && typeof cb.data === "string" && cb.data.trim() && typeof cb.id === "string") {
+    const mid = cb.message.message_id;
+    if (typeof mid !== "number") return null;
     return {
       kind: "callback",
       chat_id: cb.message.chat.id,
       user_id: cb.from.id,
       data: normalizeText(cb.data),
+      callback_query_id: cb.id,
+      message_id: mid,
     };
   }
 

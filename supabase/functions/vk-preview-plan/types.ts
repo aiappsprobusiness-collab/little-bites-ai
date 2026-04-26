@@ -11,6 +11,8 @@ export type VkPreviewPlanRequest = {
 
 export type VkPreviewMeal = {
   type: MealSlot;
+  /** UUID рецепта из БД (только для слотов из pickDbSlots); для AI/mock может отсутствовать. */
+  recipe_id?: string;
   title: string;
   description?: string;
   calories?: number;

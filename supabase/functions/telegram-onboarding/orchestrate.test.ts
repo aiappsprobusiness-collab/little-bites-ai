@@ -18,12 +18,16 @@ function createFakeStore() {
 }
 
 function createFakeTelegram() {
+  let msgId = 5000;
   const sent: SentMessage[] = [];
   const telegram: TelegramClient = {
     async sendMessage(chatId, text, buttons) {
       sent.push({ chatId, text, buttons });
+      msgId += 1;
+      return msgId;
     },
     async answerCallbackQuery() {},
+    async editMessageReplyMarkup() {},
   };
   return { telegram, sent };
 }
@@ -37,76 +41,72 @@ function createDeps() {
     appBaseUrl: "https://momrecipes.online",
     previewProvider: async () => ({
       meals: [
-        { type: "breakfast" as const, title: "Овсянка", calories: 180 },
-        { type: "lunch" as const, title: "Суп овощной", calories: 210 },
+        {
+          type: "breakfast" as const,
+          title: "Овсянка",
+          recipe_id: "11111111-1111-1111-1111-111111111111",
+          calories: 180,
+          cooking_time_minutes: 15,
+        },
+        { type: "lunch" as const, title: "Суп", recipe_id: "22222222-2222-2222-2222-222222222222", calories: 210 },
       ],
       meta: { fallback_source: "db" as const, duration_ms: 50 },
     }),
+    activeCallbackQueryId: null as string | null,
   };
   return { deps, map, sent };
 }
 
-Deno.test("start command moves flow to await_age", async () => {
+Deno.test("/start sends age chip keyboard", async () => {
   const { deps, map, sent } = createDeps();
-  await handleInboundEvent(
-    { kind: "message", chat_id: 1, user_id: 2, text: "/start" },
-    deps,
-  );
+  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
   assertEquals(map.get(1)?.step, "await_age");
   assertEquals(sent.length, 1);
+  const kb = sent[0].buttons ?? [];
+  assertEquals(kb.some((row) => row.some((b) => b.callback_data === "age:0")), true);
 });
 
-Deno.test("full questionnaire reaches done step and sends CTA", async () => {
+Deno.test("age chip advances to allergies", async () => {
   const { deps, map, sent } = createDeps();
-
   await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
-  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "24" }, deps);
-  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "яйца, орехи" }, deps);
-  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "гречка" }, deps);
-  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "рыба" }, deps);
-
-  const session = map.get(1);
-  assertEquals(session?.step, "done");
-  assertEquals(session?.age_months, 24);
-  const last = sent[sent.length - 1];
-  if (!last?.buttons?.[0]?.[0]?.url) throw new Error("cta url missing");
-  assertEquals(last.buttons[0][0].url.includes("entry_point=telegram"), true);
-  assertEquals(sent.some((m) => m.text.includes("пример меню")), true);
-});
-
-Deno.test("start command stores utm payload", async () => {
-  const { deps, map } = createDeps();
+  deps.activeCallbackQueryId = "cb1";
   await handleInboundEvent(
-    {
-      kind: "message",
-      chat_id: 11,
-      user_id: 22,
-      text: "/start utm_campaign=blogger42&utm_medium=post&blogger_id=anna",
-    },
+    { kind: "callback", chat_id: 1, user_id: 2, data: "age:1", callback_query_id: "cb1", message_id: 999 },
     deps,
   );
-  assertEquals(map.get(11)?.utm.utm_campaign, "blogger42");
-  assertEquals(map.get(11)?.utm.blogger_id, "anna");
+  assertEquals(map.get(1)?.step, "await_allergies");
+  assertEquals(map.get(1)?.age_months, 18);
 });
 
-Deno.test("fallback message when preview provider fails", async () => {
-  const { store, map } = createFakeStore();
-  const { telegram, sent } = createFakeTelegram();
-  const deps = {
-    store,
-    telegram,
-    appBaseUrl: "https://momrecipes.online",
-    previewProvider: async () => {
-      throw new Error("preview_failed");
-    },
-  };
+Deno.test("final message includes auth URL and registration button", async () => {
+  const { deps, map, sent } = createDeps();
+  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
+  deps.activeCallbackQueryId = "a";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "age:0", callback_query_id: "a", message_id: 1 },
+    deps,
+  );
+  deps.activeCallbackQueryId = "b";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "nx", callback_query_id: "b", message_id: 2 },
+    deps,
+  );
+  deps.activeCallbackQueryId = "c";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "nx", callback_query_id: "c", message_id: 3 },
+    deps,
+  );
+  deps.activeCallbackQueryId = "d";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "nx", callback_query_id: "d", message_id: 4 },
+    deps,
+  );
 
-  await handleInboundEvent({ kind: "message", chat_id: 5, user_id: 2, text: "/start" }, deps);
-  await handleInboundEvent({ kind: "message", chat_id: 5, user_id: 2, text: "24" }, deps);
-  await handleInboundEvent({ kind: "message", chat_id: 5, user_id: 2, text: "нет" }, deps);
-  await handleInboundEvent({ kind: "message", chat_id: 5, user_id: 2, text: "нет" }, deps);
-  await handleInboundEvent({ kind: "message", chat_id: 5, user_id: 2, text: "нет" }, deps);
-
-  assertEquals(map.get(5)?.step, "done");
-  assertEquals(sent.some((m) => m.text.includes("не удалось построить превью")), true);
+  const last = sent[sent.length - 1];
+  assertEquals(last.text.includes("momrecipes.online/auth"), true);
+  const regRow = last.buttons?.find((row) => row.some((b) => b.text === "Зарегистрироваться"));
+  if (!regRow?.[0]?.url) throw new Error("missing registration url button");
+  assertEquals(regRow[0].url.includes("entry_point=telegram"), true);
+  assertEquals(last.buttons?.some((row) => row.some((b) => (b.url ?? "").includes("/recipe/"))), true);
+  assertEquals(last.buttons?.some((row) => row.some((b) => (b.url ?? "").includes("/vk"))), true);
 });

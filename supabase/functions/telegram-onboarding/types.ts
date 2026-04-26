@@ -43,6 +43,9 @@ export type InboundEvent =
       chat_id: number;
       user_id: number;
       data: string;
+      callback_query_id: string;
+      /** Сообщение, к которому привязана inline-клавиатура (для editMessageReplyMarkup). */
+      message_id: number;
     };
 
 export type SessionStep =
@@ -65,6 +68,8 @@ export type TelegramSession = {
   dislikes: string[];
   utm: Record<string, string>;
   status: SessionStatus;
+  /** message_id промпта с чипами (для обновления клавиатуры). */
+  prompt_message_id: number | null;
 };
 
 export type TelegramButton = {
@@ -74,8 +79,9 @@ export type TelegramButton = {
 };
 
 export type TelegramClient = {
-  sendMessage: (chatId: number, text: string, buttons?: TelegramButton[][]) => Promise<void>;
+  sendMessage: (chatId: number, text: string, buttons?: TelegramButton[][]) => Promise<number | null>;
   answerCallbackQuery: (callbackQueryId: string, text?: string) => Promise<void>;
+  editMessageReplyMarkup: (chatId: number, messageId: number, buttons?: TelegramButton[][]) => Promise<void>;
 };
 
 export type BuildAuthCtaInput = {

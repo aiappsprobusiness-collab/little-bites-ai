@@ -19,3 +19,35 @@ export function buildAuthSignupUrl(input: BuildAuthCtaInput): string {
   }
   return url.toString();
 }
+
+/** Публичная страница рецепта (как во фронте `/recipe/:id`). */
+export function buildRecipePageUrl(baseUrl: string, recipeId: string, utm: Record<string, string>): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const url = new URL(`${base}/recipe/${encodeURIComponent(recipeId)}`);
+  url.searchParams.set("entry_point", "telegram");
+  url.searchParams.set("utm_source", "telegram");
+  for (const key of UTM_KEYS) {
+    const value = utm[key];
+    if (!value || typeof value !== "string") continue;
+    const safe = value.trim().slice(0, 120);
+    if (!safe) continue;
+    url.searchParams.set(key, safe);
+  }
+  return url.toString();
+}
+
+/** Веб-воронка превью (карточки как VK), без передачи анкеты в URL — только атрибуция. */
+export function buildVkFunnelHandoffUrl(baseUrl: string, utm: Record<string, string>): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const url = new URL(`${base}/vk`);
+  url.searchParams.set("entry_point", "telegram");
+  url.searchParams.set("utm_source", "telegram");
+  for (const key of UTM_KEYS) {
+    const value = utm[key];
+    if (!value || typeof value !== "string") continue;
+    const safe = value.trim().slice(0, 120);
+    if (!safe) continue;
+    url.searchParams.set(key, safe);
+  }
+  return url.toString();
+}

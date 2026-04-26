@@ -17,34 +17,53 @@ function buildInlineKeyboard(buttons?: TelegramButton[][]): { inline_keyboard: A
   return { inline_keyboard: keyboard };
 }
 
+async function callTelegram(
+  apiBase: string,
+  method: string,
+  body: Record<string, unknown>,
+): Promise<{ message_id?: number }> {
+  const res = await fetch(`${apiBase}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    result?: { message_id?: number };
+    description?: string;
+  };
+  if (!res.ok || j.ok !== true) {
+    const text = JSON.stringify(j).slice(0, 400);
+    throw new Error(`telegram_api_error_${method}_${res.status}:${text}`);
+  }
+  return j.result ?? {};
+}
+
 export function createTelegramClient(token: string): TelegramClient {
   const apiBase = `https://api.telegram.org/bot${token}`;
-
-  async function callTelegram(method: string, body: Record<string, unknown>): Promise<void> {
-    const res = await fetch(`${apiBase}/${method}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`telegram_api_error_${method}_${res.status}:${text.slice(0, 200)}`);
-    }
-  }
 
   return {
     async sendMessage(chatId, text, buttons) {
       const replyMarkup = buildInlineKeyboard(buttons);
-      await callTelegram("sendMessage", {
+      const result = await callTelegram(apiBase, "sendMessage", {
         chat_id: chatId,
         text,
         ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       });
+      return typeof result.message_id === "number" ? result.message_id : null;
     },
     async answerCallbackQuery(callbackQueryId, text) {
-      await callTelegram("answerCallbackQuery", {
+      await callTelegram(apiBase, "answerCallbackQuery", {
         callback_query_id: callbackQueryId,
-        ...(text ? { text } : {}),
+        ...(text ? { text, show_alert: false } : {}),
+      });
+    },
+    async editMessageReplyMarkup(chatId, messageId, buttons) {
+      const replyMarkup = buildInlineKeyboard(buttons);
+      await callTelegram(apiBase, "editMessageReplyMarkup", {
+        chat_id: chatId,
+        message_id: messageId,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       });
     },
   };
