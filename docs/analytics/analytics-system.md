@@ -222,7 +222,7 @@ Read-only слой поверх `public.usage_events`: `event_group`, `event_typ
 | **Auth** |
 | auth_page_view | AuthPage | usage_events | то же | Просмотр страницы входа |
 | auth_start | AuthPage | usage_events | то же | Начало попытки входа/регистрации |
-| auth_success | AuthPage | usage_events | то же | Успешный вход/регистрация |
+| auth_success | AuthPage | usage_events | то же | Успешный вход/регистрация (в т.ч. для `entry_point=telegram` из CTA бота) |
 | auth_error | AuthPage | usage_events | properties: { message } | Ошибка входа |
 | cta_start_click | AuthPage | usage_events | то же | Отправка формы регистрации (signup submit; дубль с `auth_start` на том же действии) |
 | share_recipe_cta_click | PublicRecipeSharePage (`trackLandingEvent`) | usage_events | properties: share_ref, share_type, entry_point | Клик CTA на публичной странице рецепта `/r/:shareRef` |

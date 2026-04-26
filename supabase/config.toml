@@ -18,5 +18,8 @@ verify_jwt = false
 [functions.vk-preview-plan]
 verify_jwt = false
 
+[functions.telegram-onboarding]
+verify_jwt = false
+
 [functions.translate-recipe]
 verify_jwt = false

@@ -24,6 +24,18 @@ Deno.test("validateRequestBody normalizes and caps arrays", () => {
   if (r.body.entry_point !== "vk") throw new Error("ep");
 });
 
+Deno.test("validateRequestBody accepts telegram entry point", () => {
+  const r = validateRequestBody({
+    age_months: 24,
+    allergies: [],
+    likes: [],
+    dislikes: [],
+    entry_point: "telegram",
+  });
+  if (!r.ok) throw new Error(String(r));
+  if (r.body.entry_point !== "telegram") throw new Error("telegram ep");
+});
+
 Deno.test("assertBodySizeOk rejects huge content-length", () => {
   const r = assertBodySizeOk(String(50_000));
   if (r.ok) throw new Error("expected fail");

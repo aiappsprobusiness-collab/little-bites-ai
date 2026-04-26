@@ -5,7 +5,7 @@ export type VkPreviewPlanRequest = {
   allergies: string[];
   likes: string[];
   dislikes: string[];
-  entry_point?: "vk";
+  entry_point?: "vk" | "telegram";
   utm?: Record<string, string>;
 };
 

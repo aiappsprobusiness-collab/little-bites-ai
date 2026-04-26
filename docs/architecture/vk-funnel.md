@@ -1,6 +1,8 @@
-# VK-воронка (`/vk`)
+# VK-воронка (`/vk`) и Telegram pre-auth источник
 
 Изолированный pre-auth поток для холодного трафика (например VK Ads): превью меню на день без регистрации, затем CTA → `/auth?mode=signup&entry_point=vk` и существующий онбординг / план / paywall.
+
+Для Telegram-бота используется тот же post-auth маршрут (`/auth?mode=signup`) и та же атрибуция `entry_point`, но с источником `telegram`.
 
 ## Редирект с корня `/` (временно)
 
@@ -29,9 +31,18 @@
 
 - Каталог: `supabase/functions/vk-preview-plan/` (`index.ts` — тонкий entrypoint, логика в модулях).
 - Пул: `recipes` с `source in (seed, starter)`, фильтры как в плане (возраст, аллергии, dislikes, soft likes), обед = суп.
+- Входные `entry_point`: `vk` и `telegram` (для Telegram webhook-бота).
 - В ответе каждого приёма пищи: `cooking_time_minutes` (из `recipes.cooking_time_minutes` / `cooking_time`), `nutrition_goals`, КБЖУ, `description`. На `/vk` карточки — **`RecipeCard`** (`variant="preview"`, `previewPresentation="collection"`) с настройками как у **hero-блока страницы рецепта**: `RecipeNutritionHeader` в режиме **`details`** и тон **`default`** («В одной порции:», белки/жиры/углеводы полными словами); строка **«Польза для…»** с иконкой 🌿 по возрасту из формы (`getBenefitLabel`); текст описания — из API, иначе детерминированный `buildRecipeBenefitDescription` (стабильный ключ `vk_session_id` + слот + заголовок); чипсы целей — **не** `quiet` (`previewNutritionGoalsLoud`). Без ингредиентов и без нижних блоков рецепта.
 - Если в БД &lt; 3 слотов — опциональный вызов DeepSeek (см. `docs/architecture/system-prompts-map.md` §VK preview), иначе mock для пустых слотов.
 - **Не** пишет в user-bound таблицы.
+
+## Telegram onboarding bot (edge webhook)
+
+- Каталог: `supabase/functions/telegram-onboarding/` (`index.ts` — thin entrypoint, бизнес-логика в модулях).
+- Бот ведёт диалог до регистрации: возраст → аллергии → likes → dislikes.
+- Состояние шагов хранится в `public.telegram_onboarding_sessions`.
+- После завершения опроса бот вызывает `buildVkPreviewDayPlan` (reuse текущей логики превью) с `entry_point=telegram`.
+- CTA ведёт на `/auth?mode=signup&entry_point=telegram` (+ UTM / `blogger_id` при наличии), дальше работает текущий auth/onboarding.
 
 ## Handoff после auth
 

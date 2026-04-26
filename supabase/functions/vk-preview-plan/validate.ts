@@ -40,7 +40,11 @@ export function validateRequestBody(raw: unknown): { ok: true; body: VkPreviewPl
   const allergies = normalizeStringArray(o.allergies, MAX_ALLERGIES);
   const likes = normalizeStringArray(o.likes, MAX_TAGS);
   const dislikes = normalizeStringArray(o.dislikes, MAX_TAGS);
-  const entry_point = o.entry_point === "vk" ? "vk" : undefined;
+  const entryPointRaw = o.entry_point;
+  const entry_point =
+    entryPointRaw === "vk" || entryPointRaw === "telegram"
+      ? entryPointRaw
+      : undefined;
   let utm: Record<string, string> | undefined;
   if (o.utm != null && typeof o.utm === "object" && !Array.isArray(o.utm)) {
     const u: Record<string, string> = {};
