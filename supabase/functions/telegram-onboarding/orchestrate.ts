@@ -91,12 +91,10 @@ function chunkButtons<T>(items: T[], size: number, map: (item: T, i: number) => 
 
 function ageKeyboard(): TelegramButton[][] {
   const rowSize = 4;
-  const rows = chunkButtons(AGE_PRESETS, rowSize, (p, i) => ({
+  return chunkButtons(AGE_PRESETS, rowSize, (p, i) => ({
     text: p.label,
     callback_data: `age:${i}`,
   }));
-  rows.push([{ text: "Заново", callback_data: "restart" }]);
-  return rows;
 }
 
 function multiChipKeyboard(
@@ -112,7 +110,6 @@ function multiChipKeyboard(
     { text: "Далее →", callback_data: "nx" },
     { text: "Нет ограничений", callback_data: `${prefix}:clear` },
   ]);
-  rows.push([{ text: "Заново", callback_data: "restart" }]);
   return rows;
 }
 
@@ -219,6 +216,8 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
         "Привет! Подберём меню на день для ребёнка.",
         "",
         "Какого возраста ребёнок? Выберите вариант ниже (как на сайте).",
+        "",
+        "Начать сначала: отправьте команду /start",
       ].join("\n"),
       ageKeyboard(),
     );
@@ -293,7 +292,12 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
 }
 
 async function finishFlow(deps: OrchestratorDeps, session: TelegramSession): Promise<void> {
-  const plan = await deps.previewProvider(session).catch(() => null);
+  let plan: DayPlan | null = null;
+  try {
+    plan = await deps.previewProvider(session);
+  } catch {
+    plan = null;
+  }
   session.step = "done";
   session.status = "completed";
   session.prompt_message_id = null;
@@ -301,10 +305,29 @@ async function finishFlow(deps: OrchestratorDeps, session: TelegramSession): Pro
 
   const authUrl = buildAuthSignupUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
   const vkUrl = buildVkFunnelHandoffUrl(deps.appBaseUrl, session.utm);
-  const body = buildFinalMessage(authUrl, vkUrl, plan);
+  let body = buildFinalMessage(authUrl, vkUrl, plan);
+  if (body.length > 4000) {
+    body = `${body.slice(0, 3900)}…`;
+  }
   const kb = finalKeyboard(authUrl, vkUrl, plan?.meals ?? [], deps.appBaseUrl, session.utm);
 
-  await deps.telegram.sendMessage(session.chat_id, body, kb);
+  try {
+    await deps.telegram.sendMessage(session.chat_id, body, kb);
+  } catch {
+    const fallback = [
+      "Готово. Ссылки для продолжения:",
+      "",
+      "Регистрация:",
+      authUrl,
+      "",
+      "Превью как на сайте:",
+      vkUrl,
+    ].join("\n");
+    await deps.telegram.sendMessage(session.chat_id, fallback, [
+      [{ text: "Зарегистрироваться", url: authUrl }],
+      [{ text: "Открыть /vk", url: vkUrl }],
+    ]).catch(() => {});
+  }
 }
 
 async function handleCallback(
@@ -316,6 +339,7 @@ async function handleCallback(
   const data = event.data;
 
   if (data === "restart") {
+    await ack(deps);
     session = emptySession(event.chat_id, event.user_id);
     session.step = "await_age";
     session.status = "active";
@@ -323,10 +347,9 @@ async function handleCallback(
     await sendPrompt(
       deps,
       session,
-      ["Начинаем заново.", "", "Какого возраста ребёнок? Выберите вариант ниже."].join("\n"),
+      ["Начинаем заново.", "", "Какого возраста ребёнок? Выберите вариант ниже.", "", "Снова с нуля: /start"].join("\n"),
       ageKeyboard(),
     );
-    await ack(deps);
     return;
   }
 
@@ -335,6 +358,7 @@ async function handleCallback(
     if (m) {
       const idx = Number.parseInt(m[1], 10);
       if (idx >= 0 && idx < AGE_PRESETS.length) {
+        await ack(deps, `Возраст: ${AGE_PRESETS[idx].label}`);
         session.age_months = AGE_PRESETS[idx].months;
         session.step = "await_allergies";
         session.prompt_message_id = null;
@@ -345,7 +369,6 @@ async function handleCallback(
           ["Есть аллергии? Нажмите на пункты (несколько можно), затем «Далее →»."].join("\n"),
           multiChipKeyboard(ALLERGY_OPTIONS, session.allergies, "al"),
         );
-        await ack(deps, `Возраст: ${AGE_PRESETS[idx].label}`);
         return;
       }
     }
@@ -364,6 +387,7 @@ async function handleCallback(
 
   if (session.step === "await_allergies") {
     if (data === "nx") {
+      await ack(deps);
       session.step = "await_likes";
       session.prompt_message_id = null;
       await deps.store.upsert(session);
@@ -373,15 +397,14 @@ async function handleCallback(
         "Что ребёнок любит? Выберите несколько вариантов, затем «Далее →».",
         multiChipKeyboard(LIKE_OPTIONS, session.likes, "li"),
       );
-      await ack(deps);
       return;
     }
     const next = toggleIdx("al", ALLERGY_OPTIONS, session.allergies, data);
     if (next) {
+      await ack(deps);
       session.allergies = next;
       await deps.store.upsert(session);
       await refreshChipKeyboard(deps, session, multiChipKeyboard(ALLERGY_OPTIONS, session.allergies, "al"));
-      await ack(deps);
       return;
     }
     await ack(deps);
@@ -390,6 +413,7 @@ async function handleCallback(
 
   if (session.step === "await_likes") {
     if (data === "nx") {
+      await ack(deps);
       session.step = "await_dislikes";
       session.prompt_message_id = null;
       await deps.store.upsert(session);
@@ -399,15 +423,14 @@ async function handleCallback(
         "Что не ест или не любит? Выберите варианты, затем «Далее →».",
         multiChipKeyboard(DISLIKE_OPTIONS, session.dislikes, "di"),
       );
-      await ack(deps);
       return;
     }
     const next = toggleIdx("li", LIKE_OPTIONS, session.likes, data);
     if (next) {
+      await ack(deps);
       session.likes = next;
       await deps.store.upsert(session);
       await refreshChipKeyboard(deps, session, multiChipKeyboard(LIKE_OPTIONS, session.likes, "li"));
-      await ack(deps);
       return;
     }
     await ack(deps);
@@ -416,16 +439,17 @@ async function handleCallback(
 
   if (session.step === "await_dislikes") {
     if (data === "nx") {
+      /** Сразу закрываем «часики» на кнопке: превью может занять несколько секунд (БД + опционально DeepSeek). */
+      await ack(deps, "Подбираю меню…");
       await finishFlow(deps, session);
-      await ack(deps);
       return;
     }
     const next = toggleIdx("di", DISLIKE_OPTIONS, session.dislikes, data);
     if (next) {
+      await ack(deps);
       session.dislikes = next;
       await deps.store.upsert(session);
       await refreshChipKeyboard(deps, session, multiChipKeyboard(DISLIKE_OPTIONS, session.dislikes, "di"));
-      await ack(deps);
       return;
     }
     await ack(deps);
