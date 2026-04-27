@@ -26,6 +26,7 @@
 - **Лимиты по фичам**: учёт по `usage_events` и RPC `get_usage_count_today` (сутки UTC). **Free:** `chat_recipe` и `help` — 2/день каждая. **Premium/Trial:** те же фичи для **скрытых** продуктовых лимитов **20/день** (чат-рецепт и «Помощь маме»); пороги в `src/utils/subscriptionRules.ts` и зеркале Edge `supabase/functions/_shared/subscriptionLimits.ts`.
 - **Trial/Premium flow**: события auth, paywall, trial_started, purchase_*.
 - **Вирусность**: атрибуция по share_ref, entry_point, UTM; короткие ссылки `/r/:shareRef`.
+- **Telegram onboarding bot (финальная CTA):** после превью меню бот шлёт одну кнопку «Открыть приложение» с URL на **`/auth`** и query **`mode=signup`**, **`entry_point=telegram`**, UTM по умолчанию **`utm_source=telegram`**, **`utm_medium=onboarding_bot`**, **`utm_content=menu_day_final`** (если в deep-link `/start` не заданы свои — см. `buildTelegramOnboardingFinalAuthUrl` в `supabase/functions/telegram-onboarding/cta.ts`). Ответы опроса в URL **не** передаются. На клиенте `captureAttributionFromLocationOnce()` сохраняет параметры в `localStorage` для последующих событий. Документация сценария: `docs/dev/TELEGRAM_ONBOARDING_BOT.md`.
 - **AI usage**: токены по типам действий в `token_usage_log`.
 - **Генерация плана**: джобы и статусы в `plan_generation_jobs`.
 

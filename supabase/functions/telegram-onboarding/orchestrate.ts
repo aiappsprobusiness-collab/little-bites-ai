@@ -1,6 +1,6 @@
-import { buildAuthSignupUrl, buildRecipeTeaserPageUrl } from "./cta.ts";
+import { buildTelegramOnboardingFinalAuthUrl } from "./cta.ts";
 import { parseAgeMonths, splitCsvTags } from "./validate.ts";
-import type { DayPlan, MealSlot, VkPreviewMeal } from "../vk-preview-plan/types.ts";
+import type { DayPlan, MealSlot } from "../vk-preview-plan/types.ts";
 import type { InboundEvent, TelegramButton, TelegramClient, TelegramSession } from "./types.ts";
 
 export type SessionStore = {
@@ -162,30 +162,33 @@ function mealTitleForSlot(plan: DayPlan | null, slot: MealSlot): string {
   return meal.title.trim();
 }
 
-/** Финальный текст: 4 приёма пищи всегда + одна CTA-строка. Без URL и маркетинговых блоков. */
+/** Финальное сообщение: меню + ценность + оффер; без URL в тексте. */
 function buildFinalBody(plan: DayPlan | null): string {
   const mealLines = SLOT_ORDER.map(
     (slot) => `${SLOT_EMOJI[slot]} ${MEAL_LABEL[slot]}: ${mealTitleForSlot(plan, slot)}`,
   );
-  return ["Вот меню на день по твоим ответам 👇", "", ...mealLines, "", "Хочешь больше вариантов и меню на неделю?"].join("\n");
+  return [
+    "Вот меню на день по твоим ответам 👇",
+    "",
+    ...mealLines,
+    "",
+    "⚡ Я подобрал это за несколько секунд",
+    "Вручную это заняло бы ~20–30 минут",
+    "",
+    "Хочешь не думать об этом каждый день?",
+    "",
+    "Я могу:",
+    "— подбирать новые блюда под ребёнка",
+    "— учитывать, что он не ест",
+    "— помогать, если он отказывается от еды",
+    "",
+    "👇 всё это доступно внутри приложения",
+  ].join("\n");
 }
 
-/** Кнопки слотов (только при наличии recipe_id) + два CTA. */
-function finalKeyboard(authUrl: string, plan: DayPlan | null, appBase: string, utm: Record<string, string>): TelegramButton[][] {
-  const bySlot: Partial<Record<MealSlot, VkPreviewMeal>> = {};
-  for (const m of plan?.meals ?? []) {
-    bySlot[m.type] = m;
-  }
-  const rows: TelegramButton[][] = [];
-  for (const slot of SLOT_ORDER) {
-    const meal = bySlot[slot];
-    if (meal?.recipe_id) {
-      rows.push([{ text: MEAL_LABEL[slot], url: buildRecipeTeaserPageUrl(appBase, meal.recipe_id, utm) }]);
-    }
-  }
-  rows.push([{ text: "Зарегистрироваться", url: authUrl }]);
-  rows.push([{ text: "Посмотреть ещё рецепты", callback_data: "again" }]);
-  return rows;
+/** Одна inline-кнопка: открыть приложение (регистрация) с атрибуцией в URL. */
+function finalKeyboard(authUrl: string): TelegramButton[][] {
+  return [[{ text: "Открыть приложение", url: authUrl }]];
 }
 
 export async function handleInboundEvent(event: InboundEvent, deps: OrchestratorDeps): Promise<void> {
@@ -292,20 +295,17 @@ async function finishFlow(deps: OrchestratorDeps, session: TelegramSession): Pro
   session.prompt_message_id = null;
   await deps.store.upsert(session);
 
-  const authUrl = buildAuthSignupUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
+  const authUrl = buildTelegramOnboardingFinalAuthUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
   let body = buildFinalBody(plan);
   if (body.length > 4000) {
     body = `${body.slice(0, 3900)}…`;
   }
-  const kb = finalKeyboard(authUrl, plan, deps.appBaseUrl, session.utm);
+  const kb = finalKeyboard(authUrl);
 
   try {
     await deps.telegram.sendMessage(session.chat_id, body, kb);
   } catch {
-    await deps.telegram.sendMessage(session.chat_id, buildFinalBody(plan), [
-      [{ text: "Зарегистрироваться", url: authUrl }],
-      [{ text: "Посмотреть ещё рецепты", callback_data: "again" }],
-    ]).catch(() => {});
+    await deps.telegram.sendMessage(session.chat_id, buildFinalBody(plan), finalKeyboard(authUrl)).catch(() => {});
   }
 }
 

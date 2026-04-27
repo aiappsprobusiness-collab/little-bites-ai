@@ -20,6 +20,37 @@ export function buildAuthSignupUrl(input: BuildAuthCtaInput): string {
   return url.toString();
 }
 
+/**
+ * Финальная CTA после превью меню в Telegram: `/auth` с вкладкой регистрации + атрибуция для аналитики.
+ * Не передаёт ответы анкеты (возраст, аллергии и т.д.) — только параметры из deep-link `/start` (utm_*, blogger_id)
+ * и стабильные маркеры канала: `entry_point=telegram`, дефолты `utm_source` / `utm_medium` / `utm_content`, если в ссылке бота их не задали.
+ * На фронте `captureAttributionFromLocationOnce()` кладёт это в localStorage; дальше уходит в `usage_events` при событиях.
+ */
+export function buildTelegramOnboardingFinalAuthUrl(input: BuildAuthCtaInput): string {
+  const baseUrl = input.appBaseUrl.replace(/\/$/, "");
+  const url = new URL(`${baseUrl}/auth`);
+  url.searchParams.set("mode", "signup");
+  url.searchParams.set("entry_point", "telegram");
+
+  const merged: Record<string, string> = { ...(input.utm ?? {}) };
+  const setIfEmpty = (key: (typeof UTM_KEYS)[number], val: string) => {
+    const cur = merged[key]?.trim();
+    if (!cur) merged[key] = val;
+  };
+  setIfEmpty("utm_source", "telegram");
+  setIfEmpty("utm_medium", "onboarding_bot");
+  setIfEmpty("utm_content", "menu_day_final");
+
+  for (const key of UTM_KEYS) {
+    const value = merged[key];
+    if (!value || typeof value !== "string") continue;
+    const safe = value.trim().slice(0, 120);
+    if (!safe) continue;
+    url.searchParams.set(key, safe);
+  }
+  return url.toString();
+}
+
 /** Публичная страница рецепта (как во фронте `/recipe/:id`). */
 export function buildRecipePageUrl(baseUrl: string, recipeId: string, utm: Record<string, string>): string {
   const base = baseUrl.replace(/\/$/, "");

@@ -102,7 +102,7 @@ Deno.test("«Нет» на аллергиях сразу переводит к �
   assertEquals(last.text.includes("любит есть"), true);
 });
 
-Deno.test("final message: four meal lines, CTA line, two conversion buttons + meal links", async () => {
+Deno.test("final message: four meals + value blocks + single «Открыть приложение» with analytics params", async () => {
   const { deps, map, sent } = createDeps();
   await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
   deps.activeCallbackQueryId = "a";
@@ -128,24 +128,24 @@ Deno.test("final message: four meal lines, CTA line, two conversion buttons + me
 
   const last = sent[sent.length - 1];
   assertEquals(last.text.includes("http"), false);
-  assertEquals(last.text.includes("Хочешь больше вариантов"), true);
+  assertEquals(last.text.includes("неделю"), false);
+  assertEquals(last.text.includes("⚡ Я подобрал это за несколько секунд"), true);
+  assertEquals(last.text.includes("внутри приложения"), true);
   assertEquals(last.text.includes("🍳 Завтрак:"), true);
   assertEquals(last.text.includes("🍲 Обед:"), true);
   assertEquals(last.text.includes("🍝 Ужин:"), true);
   assertEquals(last.text.includes("🍎 Перекус:"), true);
-  assertEquals(last.text.toLowerCase().includes("vk"), false);
 
   const flat = (last.buttons ?? []).flat();
-  const reg = flat.find((b) => b.text === "Зарегистрироваться");
-  if (!reg?.url) throw new Error("missing register button");
-  assertEquals(reg.url.includes("entry_point=telegram"), true);
-
-  const again = flat.find((b) => b.text === "Посмотреть ещё рецепты");
-  if (again?.callback_data !== "again") throw new Error("missing again button");
-
-  for (const label of ["Завтрак", "Обед", "Ужин", "Перекус"]) {
-    const b = flat.find((x) => x.text === label);
-    if (!b?.url?.includes("/t/")) throw new Error(`missing recipe teaser link for ${label}`);
-  }
-  assertEquals(flat.some((b) => (b.url ?? "").includes("/vk")), false);
+  assertEquals(flat.length, 1);
+  const open = flat[0]!;
+  assertEquals(open.text, "Открыть приложение");
+  if (!open.url) throw new Error("missing app url");
+  const u = new URL(open.url);
+  assertEquals(u.pathname, "/auth");
+  assertEquals(u.searchParams.get("mode"), "signup");
+  assertEquals(u.searchParams.get("entry_point"), "telegram");
+  assertEquals(u.searchParams.get("utm_source"), "telegram");
+  assertEquals(u.searchParams.get("utm_medium"), "onboarding_bot");
+  assertEquals(u.searchParams.get("utm_content"), "menu_day_final");
 });
