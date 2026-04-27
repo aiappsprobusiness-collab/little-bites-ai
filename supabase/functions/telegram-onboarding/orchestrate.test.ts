@@ -64,7 +64,8 @@ Deno.test("/start sends age chip keyboard and new welcome copy", async () => {
   assertEquals(map.get(1)?.step, "await_age");
   assertEquals(sent.length, 1);
   assertEquals(sent[0].text.includes("Привет 👋"), true);
-  assertEquals(sent[0].text.includes("Сначала выбери возраст"), true);
+  assertEquals(sent[0].text.includes("за 10 секунд"), true);
+  assertEquals(sent[0].text.includes("Сколько лет ребёнку?"), true);
   assertEquals(sent[0].text.includes("Начать сначала"), false);
   const kb = sent[0].buttons ?? [];
   assertEquals(kb.some((row) => row.some((b) => b.callback_data === "age:0")), true);
@@ -99,7 +100,7 @@ Deno.test("«Нет» на аллергиях сразу переводит к �
   assertEquals(map.get(1)?.step, "await_likes");
   assertEquals(map.get(1)?.allergies.length, 0);
   const last = sent[sent.length - 1];
-  assertEquals(last.text.includes("любит есть"), true);
+  assertEquals(last.text.includes("удовольствием"), true);
 });
 
 Deno.test("final message: four meals + value blocks + single «Открыть приложение» with analytics params", async () => {
@@ -130,7 +131,7 @@ Deno.test("final message: four meals + value blocks + single «Открыть п
   assertEquals(last.text.includes("http"), false);
   assertEquals(last.text.includes("неделю"), false);
   assertEquals(last.text.includes("⚡ Я подобрал это за несколько секунд"), true);
-  assertEquals(last.text.includes("внутри приложения"), true);
+  assertEquals(last.text.includes("есть в приложении"), true);
   assertEquals(last.text.includes("🍳 Завтрак:"), true);
   assertEquals(last.text.includes("🍲 Обед:"), true);
   assertEquals(last.text.includes("🍝 Ужин:"), true);

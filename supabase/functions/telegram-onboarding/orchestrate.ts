@@ -47,12 +47,21 @@ const SLOT_EMOJI: Record<MealSlot, string> = {
   snack: "🍎",
 };
 
+/** Приветствие + вопрос про возраст (одно сообщение с клавиатурой пресетов). */
 const MSG_WELCOME_AGE = [
   "Привет 👋",
-  "Давай подберём простое меню на день для твоего ребёнка 🍽️",
+  "Подберу меню для ребёнка за 10 секунд 🍽️",
   "",
-  "Сначала выбери возраст 👇",
+  "С учётом возраста, аллергий и того, что он реально ест",
+  "",
+  "👇 Начнём с возраста",
+  "",
+  "Сколько лет ребёнку? 👶",
 ].join("\n");
+
+const MSG_ALLERGY_Q = ["Есть ли аллергии или ограничения?", "Можно выбрать несколько вариантов 👇"].join("\n");
+const MSG_LIKES_Q = "Что он обычно ест с удовольствием? 😊";
+const MSG_DISLIKES_Q = "Что он отказывается есть? 😅";
 
 function emptySession(chatId: number, userId: number | null): TelegramSession {
   return {
@@ -180,9 +189,9 @@ function buildFinalBody(plan: DayPlan | null): string {
     "Я могу:",
     "— подбирать новые блюда под ребёнка",
     "— учитывать, что он не ест",
-    "— помогать, если он отказывается от еды",
+    "— помогать, если он отказывается",
     "",
-    "👇 всё это доступно внутри приложения",
+    "👇 всё это есть в приложении",
   ].join("\n");
 }
 
@@ -234,12 +243,7 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
     session.step = "await_allergies";
     session.prompt_message_id = null;
     await deps.store.upsert(session);
-    await sendPrompt(
-      deps,
-      session,
-      ["Есть ли у ребёнка аллергии или ограничения?", "Можно выбрать несколько вариантов 👇 или нажать «Нет»"].join("\n"),
-      multiChipKeyboard(ALLERGY_OPTIONS, session.allergies, "al"),
-    );
+    await sendPrompt(deps, session, MSG_ALLERGY_Q, multiChipKeyboard(ALLERGY_OPTIONS, session.allergies, "al"));
     return;
   }
 
@@ -249,12 +253,7 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
     session.step = "await_likes";
     session.prompt_message_id = null;
     await deps.store.upsert(session);
-    await sendPrompt(
-      deps,
-      session,
-      ["Что ребёнок обычно любит есть?", "Выбери несколько вариантов 👇"].join("\n"),
-      multiChipKeyboard(LIKE_OPTIONS, session.likes, "li"),
-    );
+    await sendPrompt(deps, session, MSG_LIKES_Q, multiChipKeyboard(LIKE_OPTIONS, session.likes, "li"));
     return;
   }
 
@@ -264,12 +263,7 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
     session.step = "await_dislikes";
     session.prompt_message_id = null;
     await deps.store.upsert(session);
-    await sendPrompt(
-      deps,
-      session,
-      ["Что ребёнок не любит или не ест?", "Можно выбрать варианты или нажать «Нет»"].join("\n"),
-      multiChipKeyboard(DISLIKE_OPTIONS, session.dislikes, "di"),
-    );
+    await sendPrompt(deps, session, MSG_DISLIKES_Q, multiChipKeyboard(DISLIKE_OPTIONS, session.dislikes, "di"));
     return;
   }
 
@@ -337,12 +331,7 @@ async function handleCallback(
         session.step = "await_allergies";
         session.prompt_message_id = null;
         await deps.store.upsert(session);
-        await sendPrompt(
-          deps,
-          session,
-          ["Есть ли у ребёнка аллергии или ограничения?", "Можно выбрать несколько вариантов 👇 или нажать «Нет»"].join("\n"),
-          multiChipKeyboard(ALLERGY_OPTIONS, session.allergies, "al"),
-        );
+        await sendPrompt(deps, session, MSG_ALLERGY_Q, multiChipKeyboard(ALLERGY_OPTIONS, session.allergies, "al"));
         return;
       }
     }
@@ -366,12 +355,7 @@ async function handleCallback(
       session.step = "await_likes";
       session.prompt_message_id = null;
       await deps.store.upsert(session);
-      await sendPrompt(
-        deps,
-        session,
-        ["Что ребёнок обычно любит есть?", "Выбери несколько вариантов 👇"].join("\n"),
-        multiChipKeyboard(LIKE_OPTIONS, session.likes, "li"),
-      );
+      await sendPrompt(deps, session, MSG_LIKES_Q, multiChipKeyboard(LIKE_OPTIONS, session.likes, "li"));
       return;
     }
     const next = toggleIdx("al", ALLERGY_OPTIONS, session.allergies, data);
@@ -393,12 +377,7 @@ async function handleCallback(
       session.step = "await_dislikes";
       session.prompt_message_id = null;
       await deps.store.upsert(session);
-      await sendPrompt(
-        deps,
-        session,
-        ["Что ребёнок не любит или не ест?", "Можно выбрать варианты или нажать «Нет»"].join("\n"),
-        multiChipKeyboard(DISLIKE_OPTIONS, session.dislikes, "di"),
-      );
+      await sendPrompt(deps, session, MSG_DISLIKES_Q, multiChipKeyboard(DISLIKE_OPTIONS, session.dislikes, "di"));
       return;
     }
     const next = toggleIdx("li", LIKE_OPTIONS, session.likes, data);
