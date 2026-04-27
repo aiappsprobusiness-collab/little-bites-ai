@@ -4,12 +4,12 @@
 
 Для Telegram-бота используется тот же post-auth маршрут (`/auth?mode=signup`) и та же атрибуция `entry_point`, но с источником `telegram`.
 
-## Редирект с корня `/` (временно)
+## Редирект с корня `/` (флаги)
 
-- **Правило:** гость, **первый визит** в этом браузере (в `localStorage` ещё нет `hasSeenWelcome` — тот же критерий, что и для «первого» захода на `/auth?mode=signup` с корня), открывает `https://momrecipes.online/` → **client-side** переход на `/vk` с **сохранением** query-строки (UTM и т.д.).
-- **Не затрагивает:** ссылки из писем (tokens → `/auth/callback` раньше), recovery → сброс пароля, **авторизованных** пользователей (как и раньше — онбординг / `/meal-plan`), **повторные** визиты гостя (`hasSeenWelcome` выставляется, в т.ч. с экранов welcome/prelogin) — с `/` ведут на `/auth` по прежней логике.
-- **Переключатель:** `VK_ROOT_REDIRECT_ENABLED` в `src/utils/navigation.ts` (`true` = редирект включён). Имеет **приоритет** над `WELCOME_PRELOGIN_FROM_ROOT_ENABLED` для первого визита.
-- **Локальные пометки об изменениях** (что / зачем / когда, не коммитим): `VK_FUNNEL_LOCAL_CHANGELOG.md` в корне — см. `docs/dev/vk-funnel-local-changelog.md`.
+- **По умолчанию:** гость, **первый визит** (нет `hasSeenWelcome`), открывает корень сайта → `/welcome` с **сохранением** query (как для `/vk`), при `WELCOME_PRELOGIN_FROM_ROOT_ENABLED === true` и `VK_ROOT_REDIRECT_ENABLED === false` (см. `RootRedirect.tsx`). Для кампаний всё равно надёжнее давать **прямую ссылку** на целевой путь (`/welcome?…`, `/auth?…`, `/vk?…`), а не только голый домен.
+- **Опция «корень = VK»:** при `VK_ROOT_REDIRECT_ENABLED === true` первый визит с `/` → `/vk` с сохранением query. Имеет **приоритет** над `WELCOME_PRELOGIN_FROM_ROOT_ENABLED`.
+- **Не затрагивает:** токены из письма → `/auth/callback`, recovery, авторизованные, повторные визиты гостя (`hasSeenWelcome`).
+- **Локальные пометки:** `docs/dev/vk-funnel-local-changelog.md`.
 
 ## Маршруты и файлы
 
@@ -59,7 +59,7 @@
 
 ## Ручная проверка
 
-1. **Инкогнито, корень:** открыть `https://momrecipes.online/` (или локально `/`) — должен открыться поток `/vk` (при `VK_ROOT_REDIRECT_ENABLED === true` и пустом `hasSeenWelcome`). Повторно открыть `/` в той же сессии — редиректа на `/vk` с корня нет, ожидаемое поведение гостя на `/auth`.
+1. **Инкогнито, корень:** при `VK_ROOT_REDIRECT_ENABLED === true` и пустом `hasSeenWelcome` — ожидается `/vk`; при `false` и включённом welcome — `/welcome`. Повторно открыть `/` — гость на `/auth` (без повторного welcome/vk с корня).
 2. Открыть `/vk` в инкогнито → hero → 3 шага → превью (4 карточки или частично + retry).
 3. «Получить полный план» → URL содержит `mode=signup&entry_point=vk`.
 4. Регистрация → создание ребёнка: поля возраста/аллергий презаполнены из черновика (если TTL не истёк).

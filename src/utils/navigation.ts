@@ -2,16 +2,16 @@
 export const HAS_SEEN_WELCOME_KEY = "hasSeenWelcome";
 
 /**
- * Если `false` — с `/` гостя не ведут на `/welcome`, а сразу на `/auth?mode=signup` (первый визит) или `/auth` (вход, повторный).
+ * Если `false` — с `/` гостя не ведут на `/welcome`, а на `/auth?mode=signup` (первый визит) или `/auth` (вход, повторный).
  * Прямой маршрут `/welcome` и CTA с других страниц не отключает.
  */
-export const WELCOME_PRELOGIN_FROM_ROOT_ENABLED = false;
+export const WELCOME_PRELOGIN_FROM_ROOT_ENABLED = true;
 
 /**
- * Временно: гость с первого визита на домене (нет `hasSeenWelcome`) с `/` → `/vk` с сохранением query (UTM).
- * Имеет приоритет над `WELCOME_PRELOGIN_FROM_ROOT_ENABLED`. Отключить, когда редирект с корня больше не нужен.
+ * Если `true` — первый визит с `/` идёт на `/vk` (холодный рекламный трафик), с приоритетом над welcome.
+ * Реклама и бот должны вести на явные URL (`/auth?…`, `/vk?…`), а не на корень домена.
  */
-export const VK_ROOT_REDIRECT_ENABLED = true;
+export const VK_ROOT_REDIRECT_ENABLED = false;
 
 export function shouldShowWelcomePage(): boolean {
   return !localStorage.getItem(HAS_SEEN_WELCOME_KEY);
