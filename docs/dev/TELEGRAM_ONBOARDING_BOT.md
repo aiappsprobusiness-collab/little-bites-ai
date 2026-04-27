@@ -30,6 +30,8 @@
 
 Реализация URL: `buildTelegramOnboardingFinalAuthUrl` в `supabase/functions/telegram-onboarding/cta.ts`. На клиенте атрибуция из query подхватывается при открытии `/tg-start` (`TelegramStartPage` → `captureAttributionFromLocationOnce`) и далее попадает в события `usage_events` согласно `src/utils/usageEvents.ts`. Классическая регистрация с сайта по-прежнему на **`/auth`**.
 
+**Генерация `t.me/...?start=...` для блогеров (без сайта):** веб-форма в админке — `docs/dev/TELEGRAM_BLOGGER_LINKS.md` (маршрут `/admin/telegram-blogger-links`).
+
 Подробнее про слой событий: `docs/analytics/analytics-system.md` (раздел про Telegram onboarding CTA).
 
 ## Переменные окружения (Supabase project secrets)
@@ -97,3 +99,4 @@ curl "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getWebhookInfo"
 | 2026-04 | Финал: кнопка «Открыть приложение» → `/tg-start` (лайт-signup, без имени) + `mode=signup` и UTM/entry_point; холодный трафик — `/auth`. |
 | 2026-04 | Тизер рецептов для других сценариев остаётся на фронте `/t/:id` (не в финале бота). |
 | 2026-04 | `/tg-start`: копирайт без переноса анкеты в аккаунт; акцент на полном приложении после регистрации. |
+| 2026-04 | Админ-страница `/admin/telegram-blogger-links`: генерация ссылок на бота с `blogger_id` / UTM в `start` (см. `docs/dev/TELEGRAM_BLOGGER_LINKS.md`); таблица `public.telegram_bloggers` |

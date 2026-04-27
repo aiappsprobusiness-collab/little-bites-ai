@@ -573,6 +573,39 @@ export type Database = {
         }
         Relationships: []
       }
+      telegram_bloggers: {
+        Row: {
+          id: string
+          code: string
+          display_name: string
+          channel_url: string | null
+          is_active: boolean
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          display_name: string
+          channel_url?: string | null
+          is_active?: boolean
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          code?: string
+          display_name?: string
+          channel_url?: string | null
+          is_active?: boolean
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

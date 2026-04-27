@@ -37,6 +37,7 @@ import VkFunnelPage from "./pages/VkFunnelPage";
 import { RootRedirect } from "./components/RootRedirect";
 import MarketingLinkRedirectPage from "./pages/MarketingLinkRedirectPage";
 import MarketingLinksPage from "./pages/admin/MarketingLinksPage";
+import TelegramBloggerLinksPage from "./pages/admin/TelegramBloggerLinksPage";
 import NotFound from "./pages/NotFound";
 import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
@@ -155,6 +156,12 @@ function AdminMarketingLinksRoute() {
   const enabled = import.meta.env.VITE_ADMIN_MODE === "true";
   if (!enabled) return <Navigate to="/" replace />;
   return <MarketingLinksPage />;
+}
+
+function AdminTelegramBloggerLinksRoute() {
+  const enabled = import.meta.env.VITE_ADMIN_MODE === "true";
+  if (!enabled) return <Navigate to="/" replace />;
+  return <TelegramBloggerLinksPage />;
 }
 
 function LegacyCacheClear() {
@@ -305,6 +312,7 @@ const App = () => (
               <Route path="/recipe/teaser/:id" element={<LegacyRecipeTeaserRedirect />} />
               <Route path="/go/:slug" element={<MarketingLinkRedirectPage />} />
               <Route path="/admin/marketing-links" element={<AdminMarketingLinksRoute />} />
+              <Route path="/admin/telegram-blogger-links" element={<AdminTelegramBloggerLinksRoute />} />
               <Route path="/p/:ref" element={<SharedPlanPage />} />
               <Route path="/" element={<RootRedirect />} />
               <Route

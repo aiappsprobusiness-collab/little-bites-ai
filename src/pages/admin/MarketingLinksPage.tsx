@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -88,6 +89,12 @@ export default function MarketingLinksPage() {
 
   return (
     <div className="mx-auto max-w-4xl p-4 pb-12">
+      <p className="mb-2 text-sm text-muted-foreground">
+        <Link to="/admin/telegram-blogger-links" className="text-primary underline underline-offset-2">
+          Ссылки на Telegram-бота для блогеров
+        </Link>{" "}
+        (не сайт, атрибуция /start)
+      </p>
       <h1 className="mb-6 text-xl font-semibold tracking-tight">Marketing links</h1>
 
       <form onSubmit={handleCreate} className="mb-10 space-y-4 rounded-lg border border-border bg-card p-4">
