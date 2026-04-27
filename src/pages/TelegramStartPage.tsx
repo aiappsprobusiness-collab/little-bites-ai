@@ -120,7 +120,7 @@ export default function TelegramStartPage() {
             Продолжим?
           </p>
           <p className="text-sm text-muted-foreground leading-snug text-balance max-w-sm mx-auto">
-            Сохрани меню из бота в приложении — подберём новые блюда с учётом твоих ответов в Telegram.
+            Меню семьи, замены блюд и подсказки — всё в одном месте. Меньше рутины, больше спокойствия каждый день.
           </p>
         </motion.div>
 
