@@ -60,13 +60,13 @@ export async function buildVkPreviewDayPlan(
 
   let stillMissing = SLOT_ORDER.filter((s) => !merged[s]);
   if (stillMissing.length > 0) {
-    merged = fillMissingWithMock(stillMissing, merged);
+    merged = fillMissingWithMock(stillMissing, merged, memberData);
     usedMock = true;
   }
 
   stillMissing = SLOT_ORDER.filter((s) => !merged[s]);
   if (stillMissing.length > 0) {
-    merged = fillMissingWithMock(stillMissing, merged);
+    merged = fillMissingWithMock(stillMissing, merged, memberData);
     usedMock = true;
   }
 

@@ -1,6 +1,7 @@
 import { normalizeNutritionGoalsFromDb } from "../_shared/recipeGoals.ts";
+import { passesPreferenceFilters } from "../generate-plan/preferenceRules.ts";
 import type { MealSlot, MemberDataPool, VkPreviewMeal } from "./types.ts";
-import { mockMealForSlot } from "./mockSlots.ts";
+import { pickMockMealForSlot } from "./mockSlots.ts";
 
 const AI_TIMEOUT_MS = 8_000;
 
@@ -102,11 +103,17 @@ export async function fetchAiMealsForSlots(
     if (!Array.isArray(parsed.meals)) return null;
     const out: Partial<Record<MealSlot, VkPreviewMeal>> = {};
     const need = new Set(missing);
+    const profile = { allergies: memberData.allergies, dislikes: memberData.dislikes };
     for (const row of parsed.meals) {
       const t = typeof row.type === "string" ? row.type.trim().toLowerCase() : "";
       if (!isMealSlot(t) || !need.has(t)) continue;
       const m = normalizeAiMeal(t, row);
-      if (m) out[t] = m;
+      if (!m) continue;
+      const ok = passesPreferenceFilters(
+        { title: m.title, description: m.description ?? "", recipe_ingredients: [] },
+        profile,
+      );
+      if (ok) out[t] = m;
     }
     return out;
   } catch {
@@ -116,14 +123,15 @@ export async function fetchAiMealsForSlots(
   }
 }
 
-/** Если AI не заполнил слот — mock. */
+/** Если AI не заполнил слот — mock (с учётом аллергий/dislikes из профиля). */
 export function fillMissingWithMock(
   missing: MealSlot[],
   existing: Partial<Record<MealSlot, VkPreviewMeal>>,
+  memberData?: MemberDataPool | null,
 ): Partial<Record<MealSlot, VkPreviewMeal>> {
   const out = { ...existing };
   for (const s of missing) {
-    if (!out[s]) out[s] = mockMealForSlot(s);
+    if (!out[s]) out[s] = pickMockMealForSlot(s, memberData ?? undefined);
   }
   return out;
 }

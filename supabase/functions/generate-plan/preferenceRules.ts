@@ -1,5 +1,10 @@
 import { getBlockedTokensFromAllergies } from "../_shared/allergens.ts";
 import {
+  buildDislikeExpandedSubstringTokens,
+  recipeTextMatchesChipSpecificDislikes,
+  getDislikeIngredientCategoriesToBlock,
+} from "../_shared/dislikeExpansion.ts";
+import {
   allergyTokenMatchesInPreferenceText,
   normalizeRecipeTextForPreferenceMatch,
 } from "../_shared/recipeAllergyMatch.ts";
@@ -12,7 +17,7 @@ export type PreferenceMemberData = {
 export type PreferenceRecipe = {
   title?: string | null;
   description?: string | null;
-  recipe_ingredients?: Array<{ name?: string; display_text?: string }> | null;
+  recipe_ingredients?: Array<{ name?: string; display_text?: string; category?: string | null }> | null;
 };
 
 function normalizePreferenceText(text: string): string {
@@ -39,6 +44,9 @@ function includesTokenSoft(text: string, token: string): boolean {
   return false;
 }
 
+/** Стемы, которые дают ложные срабатывания при dislike (например «супы» → «суп» в «супер»). */
+const DISLIKE_STEM_SUPPRESS = new Set(["суп"]);
+
 function tokenizeList(list: string[] | null | undefined, withStem = false): string[] {
   if (!Array.isArray(list) || list.length === 0) return [];
   const tokens = new Set<string>();
@@ -48,7 +56,10 @@ function tokenizeList(list: string[] | null | undefined, withStem = false): stri
     for (const token of normalized.split(/\s+/)) {
       if (token.length < 2) continue;
       tokens.add(token);
-      if (withStem && token.length >= 4) tokens.add(token.slice(0, -1));
+      if (withStem && token.length >= 4) {
+        const stem = token.slice(0, -1);
+        if (stem.length >= 2 && !DISLIKE_STEM_SUPPRESS.has(stem)) tokens.add(stem);
+      }
     }
   }
   return [...tokens];
@@ -85,9 +96,31 @@ export function recipeMatchesTokens(recipe: PreferenceRecipe, tokens: string[], 
   return countMatchedPreferenceTokens(text, tokens) > 0;
 }
 
+function recipeViolatesDislikeIngredientCategories(
+  recipe: PreferenceRecipe,
+  dislikes: string[] | null | undefined,
+): boolean {
+  const cats = getDislikeIngredientCategoriesToBlock(dislikes);
+  if (cats.size === 0) return false;
+  for (const ing of recipe.recipe_ingredients ?? []) {
+    const raw = ing.category;
+    if (typeof raw !== "string") continue;
+    const c = raw.trim().toLowerCase();
+    if (c && cats.has(c)) return true;
+  }
+  return false;
+}
+
 export function passesPreferenceFilters(recipe: PreferenceRecipe, memberData: PreferenceMemberData | null | undefined): boolean {
   const allergyTokens = getBlockedTokensFromAllergies(memberData?.allergies);
   if (recipeMatchesAllergyTokens(recipe, allergyTokens, true)) return false;
+
+  const dislikes = memberData?.dislikes;
+  const prefText = buildRecipePreferenceText(recipe, true);
+  const dislikeExpanded = buildDislikeExpandedSubstringTokens(dislikes);
+  if (dislikeExpanded.length > 0 && recipeMatchesAllergyTokens(recipe, dislikeExpanded, true)) return false;
+  if (recipeTextMatchesChipSpecificDislikes(prefText, dislikes)) return false;
+  if (recipeViolatesDislikeIngredientCategories(recipe, dislikes)) return false;
 
   const dislikeTokens = buildDislikeTokens(memberData);
   if (recipeMatchesTokens(recipe, dislikeTokens, true)) return false;

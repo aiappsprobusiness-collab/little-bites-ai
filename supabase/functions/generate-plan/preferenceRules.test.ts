@@ -147,3 +147,59 @@ Deno.test("buildBlockedTokensFromAllergies мясо содержит куриц�
     if (!t.includes(n)) throw new Error(`Expected meat tokens to include ${n}`);
   }
 });
+
+Deno.test("passesPreferenceFilters: dislike чип «овощи» блокирует морковь без слова «овощи»", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Морковь тушёная",
+      description: "",
+      recipe_ingredients: [{ name: "морковь" }],
+    },
+    { dislikes: ["овощи"] },
+  );
+  if (allowed) {
+    throw new Error("Expected vegetable-chip dislike to block carrot-only dish");
+  }
+});
+
+Deno.test("passesPreferenceFilters: dislike «овощи» блокирует овощной суп", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Овощной суп",
+      description: "",
+      recipe_ingredients: [{ name: "кабачок" }],
+    },
+    { dislikes: ["овощи"] },
+  );
+  if (allowed) {
+    throw new Error("Expected vegetable dislike to block овощной in title");
+  }
+});
+
+Deno.test("passesPreferenceFilters: dislike «овощи» + category vegetables в ингредиенте", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Нежное рагу",
+      description: "",
+      recipe_ingredients: [{ name: "филе индейки", category: "vegetables" }],
+    },
+    { dislikes: ["овощи"] },
+  );
+  if (allowed) {
+    throw new Error("Expected vegetables category to be blocked by овощи dislike");
+  }
+});
+
+Deno.test("passesPreferenceFilters: dislike «супы» не цепляет «супер»", () => {
+  const allowed = passesPreferenceFilters(
+    {
+      title: "Суперсытный завтрак",
+      description: "Без супа",
+      recipe_ingredients: [],
+    },
+    { dislikes: ["супы"] },
+  );
+  if (!allowed) {
+    throw new Error("«Супер» must not trigger soup dislike");
+  }
+});

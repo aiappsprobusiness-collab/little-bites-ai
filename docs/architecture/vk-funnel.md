@@ -30,7 +30,7 @@
 ## Edge `vk-preview-plan`
 
 - Каталог: `supabase/functions/vk-preview-plan/` (`index.ts` — тонкий entrypoint, логика в модулях).
-- Пул: `recipes` с `source in (seed, starter)`, фильтры как в плане (возраст, аллергии, dislikes, soft likes), обед = суп.
+- Пул: `recipes` с `source in (seed, starter)`, фильтры как в плане (возраст, аллергии, dislikes, soft likes), обед = суп. Dislikes из чипов («овощи», «мясо», …) расширяются токенами и при наличии — по `recipe_ingredients.category` (см. `supabase/functions/_shared/dislikeExpansion.ts`, `docs/decisions/PREFERENCES_LIKES_DISLIKES.md`).
 - Входные `entry_point`: `vk` и `telegram` (для Telegram webhook-бота).
 - В ответе каждого приёма пищи: `cooking_time_minutes` (из `recipes.cooking_time_minutes` / `cooking_time`), `nutrition_goals`, КБЖУ, `description`. На `/vk` карточки — **`RecipeCard`** (`variant="preview"`, `previewPresentation="collection"`) с настройками как у **hero-блока страницы рецепта**: `RecipeNutritionHeader` в режиме **`details`** и тон **`default`** («В одной порции:», белки/жиры/углеводы полными словами); строка **«Польза для…»** с иконкой 🌿 по возрасту из формы (`getBenefitLabel`); текст описания — из API, иначе детерминированный `buildRecipeBenefitDescription` (стабильный ключ `vk_session_id` + слот + заголовок); чипсы целей — **не** `quiet` (`previewNutritionGoalsLoud`). Без ингредиентов и без нижних блоков рецепта.
 - Если в БД &lt; 3 слотов — опциональный вызов DeepSeek (см. `docs/architecture/system-prompts-map.md` §VK preview), иначе mock для пустых слотов.
