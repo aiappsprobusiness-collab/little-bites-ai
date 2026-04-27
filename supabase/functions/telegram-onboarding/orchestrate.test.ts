@@ -143,7 +143,7 @@ Deno.test("final message: four meals + value blocks + single «Открыть п
   assertEquals(open.text, "Открыть приложение");
   if (!open.url) throw new Error("missing app url");
   const u = new URL(open.url);
-  assertEquals(u.pathname, "/auth");
+  assertEquals(u.pathname, "/tg-start");
   assertEquals(u.searchParams.get("mode"), "signup");
   assertEquals(u.searchParams.get("entry_point"), "telegram");
   assertEquals(u.searchParams.get("utm_source"), "telegram");

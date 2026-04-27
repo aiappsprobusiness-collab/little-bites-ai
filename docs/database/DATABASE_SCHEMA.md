@@ -409,7 +409,7 @@ RLS: по user_id.
 
 #### `analytics.usage_events_enriched`
 
-VIEW: те же строки, что в `usage_events`, плюс производные поля. Миграции: `20260331180000_analytics_usage_events_enriched_view.sql`, затем **`20260401120000_analytics_usage_events_enriched_stage5.sql`** (Stage 5).
+VIEW: те же строки, что в `usage_events`, плюс производные поля. Цепочка правок: `20260331180000_analytics_usage_events_enriched_view.sql`, **`20260401120000_analytics_usage_events_enriched_stage5.sql`**, `20260408120000_analytics_usage_events_enriched_replace_meal_paywall.sql`, **`20260427150000_analytics_usage_events_enriched_tg_start.sql`** (событие `tg_start_page_view` в группе auth).
 
 | Колонка | Описание |
 |---------|----------|

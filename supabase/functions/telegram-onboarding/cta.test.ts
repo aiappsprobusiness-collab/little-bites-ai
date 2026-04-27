@@ -41,7 +41,7 @@ Deno.test("buildRecipeTeaserPageUrl points to /t/:id", () => {
 Deno.test("buildTelegramOnboardingFinalAuthUrl sets signup + stable bot analytics defaults", () => {
   const url = buildTelegramOnboardingFinalAuthUrl({ appBaseUrl: "https://momrecipes.online" });
   const p = new URL(url);
-  assertEquals(p.pathname, "/auth");
+  assertEquals(p.pathname, "/tg-start");
   assertEquals(p.searchParams.get("mode"), "signup");
   assertEquals(p.searchParams.get("entry_point"), "telegram");
   assertEquals(p.searchParams.get("utm_source"), "telegram");

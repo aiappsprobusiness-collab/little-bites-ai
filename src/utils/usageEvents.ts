@@ -31,6 +31,7 @@ const VIEW_STYLE_FEATURES = new Set<string>([
   "prelogin_view",
   "vk_landing_view",
   "auth_page_view",
+  "tg_start_page_view",
   "plan_view_day",
   "chat_open",
   "help_open",

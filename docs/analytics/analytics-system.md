@@ -20,13 +20,13 @@
 
 **Рекламный счётчик (VK Ads / Top.Mail.Ru):** в `index.html` основной сниппет Top.Mail.Ru (`_tmr`, id счётчика в константе `src/constants/topMailRuCounter.ts`) стоит в **`<head>`**; fallback `<noscript>` с `<img>` — в **`body`** (в `<head>` внутри `<noscript>` нельзя размещать `img` по правилам HTML5). Первый `pageView` уходит при загрузке документа; при навигации в SPA (`BrowserRouter`) компонент `TopMailRuSpaPageView` в `src/App.tsx` дополнительно пушит `pageView` в `window._tmr` при смене пути (без дубля на первом экране — он уже учтён сниппетом в HTML). Данные счётчика живут у VK/Mail.ru, не в Supabase.
 
-**Цель «успешная регистрация» (URL в кабинете VK Ads):** стабильный путь **`/auth/signup-success`** (константа `AUTH_SIGNUP_SUCCESS_PATH` в `src/constants/authSignupSuccess.ts`; на проде: `https://momrecipes.online/auth/signup-success`). Пользователь попадает сюда после успешной отправки формы регистрации на `/auth` (`AuthPage`). Если Supabase сразу выдал сессию (без ожидания письма), этот экран кратко показывается и редиректит на `/`. Подтверждение email по ссылке из письма по-прежнему обрабатывается на `/auth/callback` → дальше в приложение; отдельная цель «подтвердил почту» этим URL не покрывается.
+**Цель «успешная регистрация» (URL в кабинете VK Ads):** стабильный путь **`/auth/signup-success`** (константа `AUTH_SIGNUP_SUCCESS_PATH` в `src/constants/authSignupSuccess.ts`; на проде: `https://momrecipes.online/auth/signup-success`). Пользователь попадает сюда после успешной отправки формы регистрации на `/auth` (`AuthPage`) или на **`/tg-start`** (`TelegramStartPage`, лайт-flow после бота). Если Supabase сразу выдал сессию (без ожидания письма), этот экран кратко показывается и редиректит на `/`. Подтверждение email по ссылке из письма по-прежнему обрабатывается на `/auth/callback` → дальше в приложение; отдельная цель «подтвердил почту» этим URL не покрывается.
 
 Основные цели текущей реализации:
 - **Лимиты по фичам**: учёт по `usage_events` и RPC `get_usage_count_today` (сутки UTC). **Free:** `chat_recipe` и `help` — 2/день каждая. **Premium/Trial:** те же фичи для **скрытых** продуктовых лимитов **20/день** (чат-рецепт и «Помощь маме»); пороги в `src/utils/subscriptionRules.ts` и зеркале Edge `supabase/functions/_shared/subscriptionLimits.ts`.
 - **Trial/Premium flow**: события auth, paywall, trial_started, purchase_*.
 - **Вирусность**: атрибуция по share_ref, entry_point, UTM; короткие ссылки `/r/:shareRef`.
-- **Telegram onboarding bot (финальная CTA):** после превью меню бот шлёт одну кнопку «Открыть приложение» с URL на **`/auth`** и query **`mode=signup`**, **`entry_point=telegram`**, UTM по умолчанию **`utm_source=telegram`**, **`utm_medium=onboarding_bot`**, **`utm_content=menu_day_final`** (если в deep-link `/start` не заданы свои — см. `buildTelegramOnboardingFinalAuthUrl` в `supabase/functions/telegram-onboarding/cta.ts`). Ответы опроса в URL **не** передаются. На клиенте `captureAttributionFromLocationOnce()` сохраняет параметры в `localStorage` для последующих событий. Документация сценария: `docs/dev/TELEGRAM_ONBOARDING_BOT.md`.
+- **Telegram onboarding bot (финальная CTA):** после превью меню бот шлёт одну кнопку «Открыть приложение» с URL на **`/tg-start`** и query **`mode=signup`**, **`entry_point=telegram`**, UTM по умолчанию **`utm_source=telegram`**, **`utm_medium=onboarding_bot`**, **`utm_content=menu_day_final`** (если в deep-link `/start` не заданы свои — см. `buildTelegramOnboardingFinalAuthUrl` в `supabase/functions/telegram-onboarding/cta.ts`). Ответы опроса в URL **не** передаются. На клиенте `captureAttributionFromLocationOnce()` сохраняет параметры в `localStorage` для последующих событий; просмотр лайт-страницы пишет **`tg_start_page_view`**. Документация сценария: `docs/dev/TELEGRAM_ONBOARDING_BOT.md`.
 - **AI usage**: токены по типам действий в `token_usage_log`.
 - **Генерация плана**: джобы и статусы в `plan_generation_jobs`.
 
@@ -222,10 +222,11 @@ Read-only слой поверх `public.usage_events`: `event_group`, `event_typ
 | vk_auth_success | AuthPage, AuthCallbackPage | usage_events | `draft_age_ms`, `has_preview`, `vk_session_id` | После успешной сессии при активном VK-черновике |
 | **Auth** |
 | auth_page_view | AuthPage | usage_events | то же | Просмотр страницы входа |
-| auth_start | AuthPage | usage_events | то же | Начало попытки входа/регистрации |
-| auth_success | AuthPage | usage_events | то же | Успешный вход/регистрация (в т.ч. для `entry_point=telegram` из CTA бота) |
-| auth_error | AuthPage | usage_events | properties: { message } | Ошибка входа |
-| cta_start_click | AuthPage | usage_events | то же | Отправка формы регистрации (signup submit; дубль с `auth_start` на том же действии) |
+| tg_start_page_view | TelegramStartPage (`/tg-start`) | usage_events | то же | Просмотр лайт-регистрации после финальной CTA Telegram-бота |
+| auth_start | AuthPage, TelegramStartPage | usage_events | то же | Начало попытки входа/регистрации |
+| auth_success | AuthPage, TelegramStartPage | usage_events | то же | Успешный вход/регистрация (в т.ч. для `entry_point=telegram` из CTA бота) |
+| auth_error | AuthPage, TelegramStartPage | usage_events | properties: { message } | Ошибка входа |
+| cta_start_click | AuthPage, TelegramStartPage | usage_events | то же | Отправка формы регистрации (signup submit; дубль с `auth_start` на том же действии) |
 | share_recipe_cta_click | PublicRecipeSharePage (`trackLandingEvent`) | usage_events | properties: share_ref, share_type, entry_point | Клик CTA на публичной странице рецепта `/r/:shareRef` |
 | **Member** |
 | member_create_start | AddChildForm | usage_events | то же | Начало создания члена семьи |

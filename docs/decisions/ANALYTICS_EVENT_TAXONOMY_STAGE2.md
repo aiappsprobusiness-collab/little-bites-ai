@@ -72,8 +72,9 @@
 | feature | Тип | Источник |
 |---------|-----|----------|
 | `auth_page_view` | view | AuthPage |
+| `tg_start_page_view` | view | TelegramStartPage (`/tg-start`, CTA после Telegram onboarding) |
 | `auth_start` | click | Начало submit login/signup |
-| `cta_start_click` | click | Отправка формы регистрации на AuthPage (дублирует `auth_start` на том же submit) |
+| `cta_start_click` | click | Отправка формы регистрации на AuthPage / TelegramStartPage (дублирует `auth_start` на том же submit) |
 | `auth_success` | outcome | Успешный вход/регистрация |
 | `auth_error` | outcome | Ошибка |
 
@@ -216,7 +217,8 @@
 | Welcome `/welcome` | `landing_view` | `landing_cta_free_click` / `landing_cta_login_click` → `/auth` |
 | Welcome демо | `landing_demo_open` | `landing_demo_save_click` (условно) + `landing_cta_free_click` |
 | Prelogin `/prelogin` | `prelogin_view` | `prelogin_cta_click` → `/auth` |
-| Auth | `auth_page_view` | `auth_start` → `auth_success` |
+| Auth `/auth` | `auth_page_view` | `auth_start` → `auth_success` |
+| Telegram lite `/tg-start` | `tg_start_page_view` | `auth_start` → `auth_success` |
 | Public recipe `/r/...` | `share_landing_view` | `share_recipe_cta_click` → `/auth` |
 | Shared plan `/p/...` | `shared_plan_view` / `shared_plan_not_found_view` | `share_day_plan_cta_click` / `share_week_plan_cta_click` → `/welcome?...` |
 | Paywall modal | `paywall_view` | `paywall_primary_click` / `paywall_secondary_click` → trial / оплата / закрытие |
@@ -228,7 +230,7 @@
 
 ## 6. Funnel: acquisition → activation → conversion (как читать данные)
 
-1. **До auth:** acquisition events + `shared_*` / `share_landing_view` → `auth_page_view` → `auth_success`.
+1. **До auth:** acquisition events + `shared_*` / `share_landing_view` → `auth_page_view` или `tg_start_page_view` → `auth_success`.
 2. **Активация:** `member_create_success` → первый `chat_recipe` (Edge) или `plan_fill_day` (Edge) или `favorite_add` / `plan_slot_replace_success` / **`recipe_view`** (по продукту).
 3. **Monetization:** `paywall_view` → `trial_started` / `purchase_start` → `purchase_success` (клиент) **и** `subscription_plan_audit` (подтверждение оплаты).
 

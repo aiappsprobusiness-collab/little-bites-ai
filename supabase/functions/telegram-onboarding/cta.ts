@@ -21,14 +21,14 @@ export function buildAuthSignupUrl(input: BuildAuthCtaInput): string {
 }
 
 /**
- * Финальная CTA после превью меню в Telegram: `/auth` с вкладкой регистрации + атрибуция для аналитики.
+ * Финальная CTA после превью меню в Telegram: лайт-страница `/tg-start` (signup без поля имени) + атрибуция для аналитики.
  * Не передаёт ответы анкеты (возраст, аллергии и т.д.) — только параметры из deep-link `/start` (utm_*, blogger_id)
  * и стабильные маркеры канала: `entry_point=telegram`, дефолты `utm_source` / `utm_medium` / `utm_content`, если в ссылке бота их не задали.
  * На фронте `captureAttributionFromLocationOnce()` кладёт это в localStorage; дальше уходит в `usage_events` при событиях.
  */
 export function buildTelegramOnboardingFinalAuthUrl(input: BuildAuthCtaInput): string {
   const baseUrl = input.appBaseUrl.replace(/\/$/, "");
-  const url = new URL(`${baseUrl}/auth`);
+  const url = new URL(`${baseUrl}/tg-start`);
   url.searchParams.set("mode", "signup");
   url.searchParams.set("entry_point", "telegram");
 
