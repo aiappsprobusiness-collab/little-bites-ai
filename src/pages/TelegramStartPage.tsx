@@ -108,12 +108,12 @@ export default function TelegramStartPage() {
   }
 
   return (
-    <div className="min-h-screen min-h-dvh flex flex-col items-center justify-start p-4 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-5 sm:pt-5 pb-8 sm:pb-14 auth-page-bg">
+    <div className="min-h-screen min-h-dvh flex flex-col items-center justify-start p-4 pt-[max(2.75rem,calc(env(safe-area-inset-top,0px)+1.5rem))] sm:p-5 sm:pt-10 pb-8 sm:pb-14 auth-page-bg">
       <div className="w-full max-w-md mx-auto flex flex-col items-center">
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-3 sm:mb-4 px-2 space-y-2"
+          className="text-center mb-6 sm:mb-7 px-2 space-y-2"
         >
           <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">MomRecipes 🌿</h1>
           <p className="text-base sm:text-lg font-medium text-foreground/90 leading-snug text-balance">
