@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { pickDbSlots } from "./slotDb.ts";
+import { likeBoostScore, pickDbSlots } from "./slotDb.ts";
 import type { RecipeRowPool } from "./types.ts";
 
 const baseIng = [{ name: "вода", display_text: "вода" }];
@@ -51,4 +51,119 @@ Deno.test("pickDbSlots returns partial when pool empty", () => {
     type: "child",
   });
   assertEquals(filledCount, 0);
+});
+
+Deno.test("likeBoostScore: короткий токен like «рис» матчится подстрокой (includes)", () => {
+  const r = row("x", "Каша", "breakfast", {
+    description: "рисовая нежная",
+    recipe_ingredients: [{ name: "рис круглозёрный" }],
+  });
+  assertEquals(likeBoostScore(r, ["рис"]) >= 1, true);
+  assertEquals(likeBoostScore(r, []), 0);
+});
+
+Deno.test("likeBoostScore: слово «банан» целиком в описании (границы для токена ≥4 символов)", () => {
+  const r = row("x", "Десерт", "snack", {
+    description: "нарезать банан кружочками",
+    recipe_ingredients: baseIng,
+  });
+  assertEquals(likeBoostScore(r, ["банан"]) >= 1, true);
+});
+
+Deno.test("pickDbSlots: при like «рис» выше буст — выше в сортировке, даже при меньшем score", () => {
+  const pool: RecipeRowPool[] = [
+    row("bf-bread", "Булочка с маслом", "breakfast", {
+      score: 999,
+      recipe_ingredients: [{ name: "мука" }, { name: "масло" }],
+    }),
+    row("bf-rice", "Рисовая каша", "breakfast", {
+      score: 1,
+      recipe_ingredients: [{ name: "рис" }, { name: "молоко" }],
+    }),
+    row("2", "Суп с лапшой", "lunch", { is_soup: true }),
+    row("3", "Котлеты", "dinner"),
+    row("4", "Творог", "snack"),
+  ];
+  const { meals } = pickDbSlots(pool, {
+    age_months: 24,
+    allergies: [],
+    likes: ["рис"],
+    dislikes: [],
+    type: "child",
+  });
+  assertEquals(meals.breakfast?.title.includes("Рис"), true);
+  assertEquals(meals.breakfast?.title.includes("Булочк"), false);
+});
+
+Deno.test("pickDbSlots: аллергия «рыба» отсекает рыбный суп, остаётся второй суп", () => {
+  const pool: RecipeRowPool[] = [
+    row("1", "Овсянка", "breakfast"),
+    row("l-fish", "Уха из трески", "lunch", {
+      is_soup: true,
+      recipe_ingredients: [{ name: "треска" }],
+    }),
+    row("l-veg", "Суп с лапшой и курицей", "lunch", {
+      is_soup: true,
+      recipe_ingredients: [{ name: "лапша" }, { name: "куриное филе" }],
+    }),
+    row("3", "Котлеты", "dinner"),
+    row("4", "Творог", "snack"),
+  ];
+  const { meals } = pickDbSlots(pool, {
+    age_months: 24,
+    allergies: ["рыба"],
+    likes: [],
+    dislikes: [],
+    type: "child",
+  });
+  assertEquals(meals.lunch?.title.includes("Уха"), false);
+  assertEquals(meals.lunch?.title.includes("лапшой"), true);
+});
+
+Deno.test("pickDbSlots: dislike «овощи» отсекает блюдо с морковью", () => {
+  const pool: RecipeRowPool[] = [
+    row("1", "Овсянка", "breakfast"),
+    row("2", "Суп", "lunch", { is_soup: true }),
+    row("d-carrot", "Морковь тушёная", "dinner", {
+      recipe_ingredients: [{ name: "морковь" }],
+    }),
+    row("d-pasta", "Паста с маслом", "dinner", {
+      recipe_ingredients: [{ name: "макароны" }, { name: "масло" }],
+    }),
+    row("4", "Творог", "snack"),
+  ];
+  const { meals } = pickDbSlots(pool, {
+    age_months: 24,
+    allergies: [],
+    likes: [],
+    dislikes: ["овощи"],
+    type: "child",
+  });
+  assertEquals(meals.dinner?.title.includes("Морков"), false);
+  assertEquals(meals.dinner?.title.includes("Паста"), true);
+});
+
+Deno.test("pickDbSlots: аллергия БКМ + like «рис» — рисовая каша вместо булочки с молоком", () => {
+  const pool: RecipeRowPool[] = [
+    row("bf-milk", "Молочная булочка", "breakfast", {
+      score: 500,
+      recipe_ingredients: [{ name: "молоко" }, { name: "мука" }],
+    }),
+    row("bf-rice", "Рисовая каша на воде", "breakfast", {
+      score: 10,
+      recipe_ingredients: [{ name: "рис" }, { name: "вода" }],
+    }),
+    row("2", "Суп", "lunch", { is_soup: true }),
+    row("3", "Котлеты", "dinner"),
+    row("4", "Яблоко", "snack"),
+  ];
+  const { meals } = pickDbSlots(pool, {
+    age_months: 24,
+    allergies: ["бкм"],
+    likes: ["рис"],
+    dislikes: [],
+    type: "child",
+  });
+  assertEquals(meals.breakfast?.title.includes("Рис"), true);
+  assertEquals(meals.breakfast?.title.includes("Молочн"), false);
 });

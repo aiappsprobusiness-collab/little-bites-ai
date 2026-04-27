@@ -138,7 +138,8 @@ function recipeTitleDedupeKey(r: { norm_title?: string | null; title?: string | 
   return normalizeTitleKey(raw);
 }
 
-function likeBoostScore(r: RecipeRowPool, likes: string[]): number {
+/** Скоринг лайков для превью (мягкий приоритет при равных прочих фильтрах). Экспорт для unit-тестов. */
+export function likeBoostScore(r: RecipeRowPool, likes: string[]): number {
   if (!likes.length) return 0;
   const text = buildRecipePreferenceText(r, true);
   const tokens = likes.flatMap((x) => x.trim().toLowerCase().split(/\s+/)).filter((t) => t.length >= 3);

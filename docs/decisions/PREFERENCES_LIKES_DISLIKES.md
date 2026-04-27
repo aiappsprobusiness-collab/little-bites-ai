@@ -32,6 +32,7 @@
 - **Колонка:** `public.members.likes` (text[], по умолчанию `'{}'`).
 - **Смысл:** Мягкие предпочтения (например, «любит ягоды»). Не означают «только любимое» и не являются жёстким запретом обратного знака.
 - **Использование:** В **deepseek-chat** — только мягкий сигнал: не обязательный ингредиент и не must-use на каждой генерации. **Recipe JSON path:** likes **не** вставляются в компактный `[CONTEXT]` **generateRecipeSystemPromptV3**; в **index.ts** при ~20% (`shouldFavorLikes`, `_shared/likesFavoring.ts`) добавляются блоки из `_shared/chatLikesSignal.ts` + **LIKES_DIVERSITY_RULE**; если like уже «засветился» в **последних трёх** названиях чат-рецептов, положительный сигнал отключается и добавляется явный анти-повтор по основе блюда. **Non-recipe path:** смягчённые `buildLikesLine` / `buildLikesLineForProfile`. Диагностика: **CHAT_LIKES_DEBUG=true**. В **generate-plan** likes **не** участвуют в фильтрации пула и **не** входят в ранжирование. `extractSoftPrefs` в `_shared/preferences.ts` — для других сценариев, не для скоринга плана.
+- **VK/Telegram превью:** мягкий скоринг `likeBoostScore` в `vk-preview-plan/slotDb.ts` (токены из `likes` и `countMatchedPreferenceTokens` по title/description/ингредиентам); регрессии — `vk-preview-plan/slotDb.test.ts`.
 - **UI:** отдельный блок «Любит» в редактировании профиля (чипы, до 20 пунктов).
 
 ## Legacy: preferences
