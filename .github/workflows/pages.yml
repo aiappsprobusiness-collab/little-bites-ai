@@ -44,11 +44,15 @@ jobs:
         run: |
           echo "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}" >> .env.production
           echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env.production
+          echo "VITE_ADMIN_MODE=${{ secrets.VITE_ADMIN_MODE }}" >> .env.production
+          echo "VITE_TELEGRAM_BOT_USERNAME=${{ secrets.VITE_TELEGRAM_BOT_USERNAME }}" >> .env.production
 
       - name: Build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_ADMIN_MODE: ${{ secrets.VITE_ADMIN_MODE }}
+          VITE_TELEGRAM_BOT_USERNAME: ${{ secrets.VITE_TELEGRAM_BOT_USERNAME }}
         run: npm run build
 
       # SPA fallback: дублирует vite (github-pages-spa-fallback); оставлено на случай старых веток без плагина
