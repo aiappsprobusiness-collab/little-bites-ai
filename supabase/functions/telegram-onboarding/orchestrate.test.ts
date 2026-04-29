@@ -199,7 +199,7 @@ Deno.test("второе прохождение: без повторного пр
 
   assertEquals(getPreviewCalls(), 1);
   const repeat = sent[sent.length - 1];
-  assertEquals(repeat.text.includes("Я уже показал тебе пример меню"), true);
+  assertEquals(repeat.text.includes("Я уже показала тебе пример меню"), true);
   assertEquals(repeat.text.includes("🍳 Завтрак:"), false);
   assertEquals(repeat.text.includes("Привет 👋"), false);
   assertEquals((repeat.buttons ?? []).flat()[0]?.text, "Открыть приложение");
@@ -226,6 +226,6 @@ Deno.test("/start при меню уже показан: сразу повтор
 
   assertEquals(getPreviewCalls(), 0);
   assertEquals(sent.length, 1);
-  assertEquals(sent[0].text.includes("Я уже показал"), true);
+  assertEquals(sent[0].text.includes("Я уже показала тебе пример меню"), true);
   assertEquals(sent[0].text.includes("Сколько лет"), false);
 });
