@@ -63,6 +63,11 @@ const MSG_ALLERGY_Q = ["Есть ли аллергии или ограничен
 const MSG_LIKES_Q = "Что он обычно ест с удовольствием? 😊";
 const MSG_DISLIKES_Q = "Что он отказывается есть? 😅";
 
+/** Повторное прохождение: без новой генерации меню, та же кнопка «Открыть приложение». */
+const MSG_REPEAT_AFTER_MENU_EXAMPLE = [
+  "Я уже показал тебе пример меню 👆 Дальше я могу подбирать новые варианты, учитывать, что ребёнок не ест, и помогать в ежедневном питании 👇 продолжим в приложении",
+].join("\n");
+
 function emptySession(chatId: number, userId: number | null): TelegramSession {
   return {
     chat_id: chatId,
@@ -75,6 +80,7 @@ function emptySession(chatId: number, userId: number | null): TelegramSession {
     utm: {},
     status: "active",
     prompt_message_id: null,
+    menu_example_delivered: false,
   };
 }
 
@@ -186,10 +192,12 @@ function buildFinalBody(plan: DayPlan | null): string {
     "",
     "Хочешь не думать об этом каждый день?",
     "",
-    "Я могу:",
+    "В приложении я могу:",
+    "",
     "— подбирать новые блюда под ребёнка",
-    "— учитывать, что он не ест",
-    "— помогать, если он отказывается",
+    "— учитывать, что он не ест, помогать, если он отказывается",
+    "— генерировать рецепты под любой запрос",
+    "— составлять меню для всей семьи",
     "",
     "👇 всё это есть в приложении",
   ].join("\n");
@@ -216,7 +224,9 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
   const lower = text.toLowerCase();
 
   if (lower === "/start" || lower.startsWith("/start ")) {
+    const preserveMenuExample = existing?.menu_example_delivered === true;
     session = emptySession(event.chat_id, event.user_id ?? null);
+    session.menu_example_delivered = preserveMenuExample;
     session.step = "await_age";
     session.status = "active";
     session.utm = parseStartUtm(text);
@@ -278,23 +288,47 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
 }
 
 async function finishFlow(deps: OrchestratorDeps, session: TelegramSession): Promise<void> {
+  const authUrl = buildTelegramOnboardingFinalAuthUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
+  const kb = finalKeyboard(authUrl);
+
+  if (session.menu_example_delivered) {
+    session.step = "done";
+    session.status = "completed";
+    session.prompt_message_id = null;
+    await deps.store.upsert(session);
+
+    let body = MSG_REPEAT_AFTER_MENU_EXAMPLE;
+    if (body.length > 4000) {
+      body = `${body.slice(0, 3900)}…`;
+    }
+    try {
+      await deps.telegram.sendMessage(session.chat_id, body, kb);
+    } catch {
+      await deps.telegram.sendMessage(session.chat_id, MSG_REPEAT_AFTER_MENU_EXAMPLE, kb).catch(() => {});
+    }
+    return;
+  }
+
   let plan: DayPlan | null = null;
   try {
     plan = await deps.previewProvider(session);
   } catch {
     plan = null;
   }
+  const menuOk = Array.isArray(plan?.meals) && plan.meals.length > 0;
+
   session.step = "done";
   session.status = "completed";
   session.prompt_message_id = null;
+  if (menuOk) {
+    session.menu_example_delivered = true;
+  }
   await deps.store.upsert(session);
 
-  const authUrl = buildTelegramOnboardingFinalAuthUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
   let body = buildFinalBody(plan);
   if (body.length > 4000) {
     body = `${body.slice(0, 3900)}…`;
   }
-  const kb = finalKeyboard(authUrl);
 
   try {
     await deps.telegram.sendMessage(session.chat_id, body, kb);
@@ -313,7 +347,9 @@ async function handleCallback(
 
   if (data === "restart" || data === "again") {
     await ack(deps);
+    const preserveMenuExample = initialSession.menu_example_delivered === true;
     session = emptySession(event.chat_id, event.user_id);
+    session.menu_example_delivered = preserveMenuExample;
     session.step = "await_age";
     session.status = "active";
     await deps.store.upsert(session);

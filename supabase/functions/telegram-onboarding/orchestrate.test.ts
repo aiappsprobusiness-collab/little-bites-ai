@@ -1,5 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { handleInboundEvent, type SessionStore } from "./orchestrate.ts";
+import type { DayPlan } from "../vk-preview-plan/types.ts";
+import { handleInboundEvent, type OrchestratorDeps, type SessionStore } from "./orchestrate.ts";
 import type { TelegramButton, TelegramClient, TelegramSession } from "./types.ts";
 
 type SentMessage = { chatId: number; text: string; buttons?: TelegramButton[][] };
@@ -32,30 +33,38 @@ function createFakeTelegram() {
   return { telegram, sent };
 }
 
+function sampleDayPlan(): DayPlan {
+  return {
+    meals: [
+      {
+        type: "breakfast" as const,
+        title: "Овсянка",
+        recipe_id: "11111111-1111-1111-1111-111111111111",
+        cooking_time_minutes: 15,
+      },
+      { type: "lunch" as const, title: "Суп", recipe_id: "22222222-2222-2222-2222-222222222222" },
+      { type: "dinner" as const, title: "Котлеты", recipe_id: "33333333-3333-3333-3333-333333333333" },
+      { type: "snack" as const, title: "Творог", recipe_id: "44444444-4444-4444-4444-444444444444" },
+    ],
+    meta: { fallback_source: "db" as const, duration_ms: 50 },
+  };
+}
+
 function createDeps() {
   const { store, map } = createFakeStore();
   const { telegram, sent } = createFakeTelegram();
+  let previewCalls = 0;
   const deps = {
     store,
     telegram,
     appBaseUrl: "https://momrecipes.online",
-    previewProvider: async () => ({
-      meals: [
-        {
-          type: "breakfast" as const,
-          title: "Овсянка",
-          recipe_id: "11111111-1111-1111-1111-111111111111",
-          cooking_time_minutes: 15,
-        },
-        { type: "lunch" as const, title: "Суп", recipe_id: "22222222-2222-2222-2222-222222222222" },
-        { type: "dinner" as const, title: "Котлеты", recipe_id: "33333333-3333-3333-3333-333333333333" },
-        { type: "snack" as const, title: "Творог", recipe_id: "44444444-4444-4444-4444-444444444444" },
-      ],
-      meta: { fallback_source: "db" as const, duration_ms: 50 },
-    }),
+    previewProvider: async () => {
+      previewCalls += 1;
+      return sampleDayPlan();
+    },
     activeCallbackQueryId: null as string | null,
   };
-  return { deps, map, sent };
+  return { deps, map, sent, getPreviewCalls: () => previewCalls };
 }
 
 Deno.test("/start sends age chip keyboard and new welcome copy", async () => {
@@ -149,4 +158,49 @@ Deno.test("final message: four meals + value blocks + single «Открыть п
   assertEquals(u.searchParams.get("utm_source"), "telegram");
   assertEquals(u.searchParams.get("utm_medium"), "onboarding_bot");
   assertEquals(u.searchParams.get("utm_content"), "menu_day_final");
+});
+
+async function advanceThroughSurvey(deps: OrchestratorDeps) {
+  deps.activeCallbackQueryId = "a";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "age:0", callback_query_id: "a", message_id: 1 },
+    deps,
+  );
+  deps.activeCallbackQueryId = "b";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "nx", callback_query_id: "b", message_id: 2 },
+    deps,
+  );
+  deps.activeCallbackQueryId = "c";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "nx", callback_query_id: "c", message_id: 3 },
+    deps,
+  );
+  deps.activeCallbackQueryId = "d";
+  await handleInboundEvent(
+    { kind: "callback", chat_id: 1, user_id: 2, data: "nx", callback_query_id: "d", message_id: 4 },
+    deps,
+  );
+}
+
+Deno.test("второе прохождение: без повторного превью, короткий текст и один вызов previewProvider суммарно", async () => {
+  const { deps, map, sent, getPreviewCalls } = createDeps();
+  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
+
+  await advanceThroughSurvey(deps);
+  assertEquals(getPreviewCalls(), 1);
+  assertEquals(map.get(1)?.menu_example_delivered, true);
+
+  const fullMsg = sent[sent.length - 1];
+  assertEquals(fullMsg.text.includes("🍳 Завтрак:"), true);
+  assertEquals(fullMsg.text.includes("Я уже показал"), false);
+
+  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
+  await advanceThroughSurvey(deps);
+
+  assertEquals(getPreviewCalls(), 1);
+  const repeat = sent[sent.length - 1];
+  assertEquals(repeat.text.includes("Я уже показал тебе пример меню"), true);
+  assertEquals(repeat.text.includes("🍳 Завтрак:"), false);
+  assertEquals((repeat.buttons ?? []).flat()[0]?.text, "Открыть приложение");
 });

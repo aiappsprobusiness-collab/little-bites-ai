@@ -187,6 +187,56 @@ function mapSlotToNormalized(slot: MealSlot): NormalizedMealType {
   return slot;
 }
 
+/**
+ * Кандидаты для слота. Для lunch при `lunchSoupOnly` — только супы (как в generate-plan);
+ * если с таким фильтром никого не осталось, вызываем снова с `lunchSoupOnly: false`,
+ * чтобы для превью VK/Telegram подтянуть реальные названия из БД (а не mock).
+ */
+function collectSortedCandidatesForSlot(
+  pool: RecipeRowPool[],
+  normSlot: NormalizedMealType,
+  memberWithType: MemberDataPool,
+  usedIds: Set<string>,
+  usedTitleKeys: Set<string>,
+  lunchSoupOnly: boolean,
+): RecipeRowPool[] {
+  const ageContext = getMemberAgeContext(memberWithType);
+  let candidates = pool.filter((r) => !usedIds.has(r.id));
+  candidates = candidates.filter((r) => !usedTitleKeys.has(recipeTitleDedupeKey(r)));
+  if (ageContext.applyFilter && ageContext.ageMonths != null) {
+    const am = ageContext.ageMonths;
+    candidates = candidates.filter((r) => recipeFitsAgeRange(r, am));
+    candidates = candidates.filter((r) => !recipeBlockedByInfantKeywords(r, am));
+  }
+  if (isAdultContext(memberWithType)) {
+    candidates = candidates.filter((r) => r.max_age_months == null || r.max_age_months > 12);
+  }
+  candidates = candidates.filter((r) => {
+    const resolved = getResolvedMealType(r);
+    return resolved != null && resolved === normSlot;
+  });
+  if (normSlot === "lunch" && lunchSoupOnly) {
+    candidates = candidates.filter(
+      (r) => r.is_soup === true || inferDishCategoryKey(r.title) === "soup",
+    );
+  }
+  candidates = candidates.filter((r) => passesProfileFilter(r, memberWithType));
+  candidates = candidates.filter((r) => {
+    const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
+    return slotSanityCheck(normSlot, [r.title ?? "", r.description ?? "", ing].join(" "));
+  });
+  const likes = memberWithType.likes ?? [];
+  candidates.sort((a, b) => {
+    const lb = likeBoostScore(b, likes);
+    const la = likeBoostScore(a, likes);
+    if (lb !== la) return lb - la;
+    const sb = Number(b.score ?? 0);
+    const sa = Number(a.score ?? 0);
+    return sb - sa;
+  });
+  return candidates;
+}
+
 export function pickDbSlots(
   pool: RecipeRowPool[],
   memberData: MemberDataPool,
@@ -197,40 +247,24 @@ export function pickDbSlots(
   const meals: Partial<Record<MealSlot, VkPreviewMeal>> = {};
   for (const slot of SLOT_ORDER) {
     const normSlot = mapSlotToNormalized(slot);
-    const ageContext = getMemberAgeContext(memberWithType);
-    let candidates = pool.filter((r) => !usedIds.has(r.id));
-    candidates = candidates.filter((r) => !usedTitleKeys.has(recipeTitleDedupeKey(r)));
-    if (ageContext.applyFilter && ageContext.ageMonths != null) {
-      const am = ageContext.ageMonths;
-      candidates = candidates.filter((r) => recipeFitsAgeRange(r, am));
-      candidates = candidates.filter((r) => !recipeBlockedByInfantKeywords(r, am));
-    }
-    if (isAdultContext(memberWithType)) {
-      candidates = candidates.filter((r) => r.max_age_months == null || r.max_age_months > 12);
-    }
-    candidates = candidates.filter((r) => {
-      const resolved = getResolvedMealType(r);
-      return resolved != null && resolved === normSlot;
-    });
-    if (normSlot === "lunch") {
-      candidates = candidates.filter(
-        (r) => r.is_soup === true || inferDishCategoryKey(r.title) === "soup",
+    let candidates = collectSortedCandidatesForSlot(
+      pool,
+      normSlot,
+      memberWithType,
+      usedIds,
+      usedTitleKeys,
+      true,
+    );
+    if (normSlot === "lunch" && candidates.length === 0) {
+      candidates = collectSortedCandidatesForSlot(
+        pool,
+        normSlot,
+        memberWithType,
+        usedIds,
+        usedTitleKeys,
+        false,
       );
     }
-    candidates = candidates.filter((r) => passesProfileFilter(r, memberWithType));
-    candidates = candidates.filter((r) => {
-      const ing = (r.recipe_ingredients ?? []).map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" ")).join(" ");
-      return slotSanityCheck(normSlot, [r.title ?? "", r.description ?? "", ing].join(" "));
-    });
-    const likes = memberWithType.likes ?? [];
-    candidates.sort((a, b) => {
-      const lb = likeBoostScore(b, likes);
-      const la = likeBoostScore(a, likes);
-      if (lb !== la) return lb - la;
-      const sb = Number(b.score ?? 0);
-      const sa = Number(a.score ?? 0);
-      return sb - sa;
-    });
     const pick = candidates[0];
     if (!pick) continue;
     usedIds.add(pick.id);

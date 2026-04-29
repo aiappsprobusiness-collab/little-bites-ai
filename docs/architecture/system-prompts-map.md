@@ -137,7 +137,7 @@ Map of all AI prompts used by Edge Functions. Based on real code in `supabase/fu
 
 **Model:** DeepSeek Chat Completions (`https://api.deepseek.com/v1/chat/completions`), `response_format: { type: "json_object" }`, вызывается **только** если после DB-first в слотах &lt; 3 приёмов пищи.
 
-**Prompt location:** Inline system + user strings in **vk-preview-plan/aiSlots.ts** (`fetchAiMealsForSlots`). Не использует **deepseek-chat/prompts.ts** и не пишет рецепты в БД.
+**Prompt location:** Inline system + user strings in **vk-preview-plan/aiSlots.ts** (`fetchAiMealsForSlots`). Не использует **deepseek-chat/prompts.ts** и не пишет рецепты в БД. System-часть требует **конкретное название блюда** в `title` и запрещает общие фразы без имени блюда.
 
 **Output:** JSON `{ "meals": [ { "type", "title", "description?", "calories?", "protein?", "fat?", "carbs?", "nutrition_goals?" } ] }` — только недостающие `type`; `nutrition_goals` — 1–3 ключа из whitelist БД; при ошибке/таймауте слоты добиваются **mock** в **mockSlots.ts**.
 

@@ -70,6 +70,8 @@ export type TelegramSession = {
   status: SessionStatus;
   /** message_id промпта с чипами (для обновления клавиатуры). */
   prompt_message_id: number | null;
+  /** После первого успешного превью меню — не генерируем меню повторно, только CTA. */
+  menu_example_delivered: boolean;
 };
 
 export type TelegramButton = {

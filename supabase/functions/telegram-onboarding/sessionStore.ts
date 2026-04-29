@@ -13,6 +13,7 @@ type SessionRow = {
   dislikes: string[] | null;
   utm: Record<string, string> | null;
   prompt_message_id: number | null;
+  menu_example_delivered: boolean | null;
 };
 
 function rowToSession(row: SessionRow): TelegramSession {
@@ -27,6 +28,7 @@ function rowToSession(row: SessionRow): TelegramSession {
     dislikes: row.dislikes ?? [],
     utm: row.utm ?? {},
     prompt_message_id: row.prompt_message_id ?? null,
+    menu_example_delivered: row.menu_example_delivered === true,
   };
 }
 
@@ -35,7 +37,9 @@ export function createSessionStore(supabase: SupabaseClient): SessionStore {
     async get(chatId) {
       const { data, error } = await supabase
         .from("telegram_onboarding_sessions")
-        .select("chat_id, telegram_user_id, step, status, age_months, allergies, likes, dislikes, utm, prompt_message_id")
+        .select(
+          "chat_id, telegram_user_id, step, status, age_months, allergies, likes, dislikes, utm, prompt_message_id, menu_example_delivered",
+        )
         .eq("chat_id", chatId)
         .maybeSingle();
       if (error) throw new Error(`session_get_failed:${error.message}`);
@@ -55,6 +59,7 @@ export function createSessionStore(supabase: SupabaseClient): SessionStore {
           dislikes: session.dislikes,
           utm: session.utm,
           prompt_message_id: session.prompt_message_id,
+          menu_example_delivered: session.menu_example_delivered,
           updated_at: new Date().toISOString(),
           last_event_at: new Date().toISOString(),
         },
