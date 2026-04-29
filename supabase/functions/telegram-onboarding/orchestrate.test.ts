@@ -196,11 +196,36 @@ Deno.test("второе прохождение: без повторного пр
   assertEquals(fullMsg.text.includes("Я уже показал"), false);
 
   await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
-  await advanceThroughSurvey(deps);
 
   assertEquals(getPreviewCalls(), 1);
   const repeat = sent[sent.length - 1];
   assertEquals(repeat.text.includes("Я уже показал тебе пример меню"), true);
   assertEquals(repeat.text.includes("🍳 Завтрак:"), false);
+  assertEquals(repeat.text.includes("Привет 👋"), false);
   assertEquals((repeat.buttons ?? []).flat()[0]?.text, "Открыть приложение");
+});
+
+Deno.test("/start при меню уже показан: сразу повторный CTA без опроса", async () => {
+  const { deps, map, sent, getPreviewCalls } = createDeps();
+  const done: TelegramSession = {
+    chat_id: 1,
+    telegram_user_id: 2,
+    step: "done",
+    status: "completed",
+    age_months: 18,
+    allergies: ["яйца"],
+    likes: ["фрукты"],
+    dislikes: [],
+    utm: { utm_source: "telegram" },
+    prompt_message_id: null,
+    menu_example_delivered: true,
+  };
+  map.set(1, done);
+
+  await handleInboundEvent({ kind: "message", chat_id: 1, user_id: 2, text: "/start" }, deps);
+
+  assertEquals(getPreviewCalls(), 0);
+  assertEquals(sent.length, 1);
+  assertEquals(sent[0].text.includes("Я уже показал"), true);
+  assertEquals(sent[0].text.includes("Сколько лет"), false);
 });

@@ -208,6 +208,26 @@ function finalKeyboard(authUrl: string): TelegramButton[][] {
   return [[{ text: "Открыть приложение", url: authUrl }]];
 }
 
+/** Сохранить финальное состояние и отправить короткий CTA (повторный заход без генерации меню). */
+async function upsertAndSendRepeatCta(deps: OrchestratorDeps, session: TelegramSession): Promise<void> {
+  session.step = "done";
+  session.status = "completed";
+  session.prompt_message_id = null;
+  await deps.store.upsert(session);
+
+  const authUrl = buildTelegramOnboardingFinalAuthUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
+  const kb = finalKeyboard(authUrl);
+  let body = MSG_REPEAT_AFTER_MENU_EXAMPLE;
+  if (body.length > 4000) {
+    body = `${body.slice(0, 3900)}…`;
+  }
+  try {
+    await deps.telegram.sendMessage(session.chat_id, body, kb);
+  } catch {
+    await deps.telegram.sendMessage(session.chat_id, MSG_REPEAT_AFTER_MENU_EXAMPLE, kb).catch(() => {});
+  }
+}
+
 export async function handleInboundEvent(event: InboundEvent, deps: OrchestratorDeps): Promise<void> {
   const existing = await deps.store.get(event.chat_id);
   let session = existing ?? emptySession(event.chat_id, event.user_id ?? null);
@@ -224,12 +244,23 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
   const lower = text.toLowerCase();
 
   if (lower === "/start" || lower.startsWith("/start ")) {
-    const preserveMenuExample = existing?.menu_example_delivered === true;
+    const utmMerged = { ...(existing?.utm ?? {}), ...parseStartUtm(text) };
+
+    if (existing?.menu_example_delivered === true) {
+      const repeatSession: TelegramSession = {
+        ...existing,
+        telegram_user_id: event.user_id ?? existing.telegram_user_id ?? null,
+        utm: utmMerged,
+        menu_example_delivered: true,
+      };
+      await upsertAndSendRepeatCta(deps, repeatSession);
+      return;
+    }
+
     session = emptySession(event.chat_id, event.user_id ?? null);
-    session.menu_example_delivered = preserveMenuExample;
     session.step = "await_age";
     session.status = "active";
-    session.utm = parseStartUtm(text);
+    session.utm = utmMerged;
     await deps.store.upsert(session);
     await sendPrompt(deps, session, MSG_WELCOME_AGE, ageKeyboard());
     return;
@@ -288,26 +319,13 @@ export async function handleInboundEvent(event: InboundEvent, deps: Orchestrator
 }
 
 async function finishFlow(deps: OrchestratorDeps, session: TelegramSession): Promise<void> {
-  const authUrl = buildTelegramOnboardingFinalAuthUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
-  const kb = finalKeyboard(authUrl);
-
   if (session.menu_example_delivered) {
-    session.step = "done";
-    session.status = "completed";
-    session.prompt_message_id = null;
-    await deps.store.upsert(session);
-
-    let body = MSG_REPEAT_AFTER_MENU_EXAMPLE;
-    if (body.length > 4000) {
-      body = `${body.slice(0, 3900)}…`;
-    }
-    try {
-      await deps.telegram.sendMessage(session.chat_id, body, kb);
-    } catch {
-      await deps.telegram.sendMessage(session.chat_id, MSG_REPEAT_AFTER_MENU_EXAMPLE, kb).catch(() => {});
-    }
+    await upsertAndSendRepeatCta(deps, session);
     return;
   }
+
+  const authUrl = buildTelegramOnboardingFinalAuthUrl({ appBaseUrl: deps.appBaseUrl, utm: session.utm });
+  const kb = finalKeyboard(authUrl);
 
   let plan: DayPlan | null = null;
   try {
