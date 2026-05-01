@@ -121,8 +121,22 @@ export default function ProfilePage() {
 
   // После magic link / email confirmation: открыть модалку «Новый профиль», только если профилей нет
   useEffect(() => {
-    if (searchParams.get("openCreateProfile") !== "1" || !authReady || isLoading) return;
+    const openFlag = searchParams.get("openCreateProfile") === "1";
+    if (!openFlag || !authReady || isLoading) return;
+
     const lim = getSubscriptionLimits(subscriptionStatus).maxProfiles;
+
+    /** Только что создали ребёнка: подавляем повторное открытие и при необходимости всё равно чистим query (гонка с setSearchParams). */
+    if (suppressEmptyFamilyAutoOpenRef.current) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("openCreateProfile");
+        next.delete("welcome");
+        return next;
+      }, { replace: true });
+      return;
+    }
+
     if (members.length >= lim) {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
@@ -139,6 +153,7 @@ export default function ProfilePage() {
       return;
     }
     if (members.length > 0) return;
+
     if (searchParams.get("welcome") === "1") {
       setWelcomeAfterEmail(true);
     }
