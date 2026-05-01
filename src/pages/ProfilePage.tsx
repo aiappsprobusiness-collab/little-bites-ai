@@ -40,7 +40,6 @@ import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { ProfileHeaderCard } from "@/components/profile/ProfileHeaderCard";
 import { FamilyMemberCard } from "@/components/profile/FamilyMemberCard";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
-import { Loader2 } from "lucide-react";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { isStandalone } from "@/utils/standalone";
 import { useTheme } from "@/hooks/useTheme";
@@ -91,19 +90,29 @@ export default function ProfilePage() {
   const [showLegalModal, setShowLegalModal] = useState(false);
   const [editName, setEditName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
-  const [showGeneratingScreen, setShowGeneratingScreen] = useState(false);
-  const [onboardingMemberId, setOnboardingMemberId] = useState<string | null>(null);
-  const [generatingDone, setGeneratingDone] = useState(false);
   const [showIosInstallDialog, setShowIosInstallDialog] = useState(false);
   const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
   const [showProfileCapDialog, setShowProfileCapDialog] = useState(false);
   const onboardingFirstProfileRef = useRef(false);
+  /** После успешного создания профиля blocking автооткрытие шторки, пока FamilyContext не покажет нового члена (members ещё может быть []). Иначе эффект снова делает setShowMemberSheet(true). */
+  const suppressEmptyFamilyAutoOpenRef = useRef(false);
   const [welcomeAfterEmail, setWelcomeAfterEmail] = useState(false);
   const { canInstall, promptInstall, isInstalled, isIOSDevice } = usePWAInstall();
   const showAppSection = !isInstalled && !isStandalone();
 
+  /** Сбрасываем suppress только при переходе «были члены → стало 0» (удалили всех), чтобы снова можно было автооткрыть шторку. Не сбрасываем при members>0 — иначе гонка с refetch оставляет members===0 и suppress уже false. */
+  const prevMembersLenRef = useRef(members.length);
+  useEffect(() => {
+    const prev = prevMembersLenRef.current;
+    if (prev > 0 && members.length === 0) {
+      suppressEmptyFamilyAutoOpenRef.current = false;
+    }
+    prevMembersLenRef.current = members.length;
+  }, [members.length]);
+
   useEffect(() => {
     if (!authReady || isLoading || members.length > 0) return;
+    if (suppressEmptyFamilyAutoOpenRef.current) return;
     if (!onboardingFirstProfileRef.current) {
       onboardingFirstProfileRef.current = true;
       setShowMemberSheet(true);
@@ -142,12 +151,34 @@ export default function ProfilePage() {
     }, { replace: true });
   }, [searchParams, authReady, isLoading, members.length, setSearchParams, subscriptionStatus, hasAccess, setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
 
-  const handleMemberCreated = (memberId: string) => {
+  const handleMemberCreated = (
+    memberId: string,
+    meta?: { wasEmptyFamilyOnboarding?: boolean },
+  ) => {
+    suppressEmptyFamilyAutoOpenRef.current = true;
     setShowMemberSheet(false);
-    if (onboardingFirstProfileRef.current) {
+
+    const emptyFamilyOnboarding = !!meta?.wasEmptyFamilyOnboarding;
+    if (emptyFamilyOnboarding) {
       onboardingFirstProfileRef.current = false;
-      setOnboardingMemberId(memberId);
-      setShowGeneratingScreen(true);
+      setJustCreatedMemberId(memberId);
+      navigate(getPlanUrlForMember(memberId), { replace: true });
+      void startFillDay(memberId).catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg === "LIMIT_REACHED") {
+          toast({
+            variant: "destructive",
+            title: "Лимит",
+            description: "Сегодняшний лимит подбора исчерпан. Попробуйте завтра или оформите полный доступ.",
+          });
+          return;
+        }
+        toast({
+          variant: "destructive",
+          title: "Ошибка",
+          description: "Не удалось подобрать меню. Попробуйте снова на странице План.",
+        });
+      });
     }
   };
 
@@ -227,55 +258,6 @@ export default function ProfilePage() {
     }
     navigate("/subscription/manage");
   };
-
-  const MIN_LOADING_SCREEN_MS = 4000;
-
-  useEffect(() => {
-    if (!showGeneratingScreen || !onboardingMemberId) return;
-    let cancelled = false;
-    const startTime = Date.now();
-    (async () => {
-      try {
-        await startFillDay(onboardingMemberId);
-        if (cancelled) return;
-        const elapsed = Date.now() - startTime;
-        const remaining = Math.max(0, MIN_LOADING_SCREEN_MS - elapsed);
-        if (remaining > 0) {
-          await new Promise((r) => setTimeout(r, remaining));
-        }
-        if (cancelled) return;
-        setJustCreatedMemberId(onboardingMemberId);
-        setGeneratingDone(true);
-        const t = setTimeout(() => {
-          navigate(getPlanUrlForMember(onboardingMemberId), { replace: true });
-          setShowGeneratingScreen(false);
-          setOnboardingMemberId(null);
-          setGeneratingDone(false);
-        }, 1500);
-        return () => clearTimeout(t);
-      } catch (e) {
-        if (!cancelled) {
-          toast({
-            variant: "destructive",
-            title: "Ошибка",
-            description: "Не удалось подобрать меню. Попробуйте снова на странице План.",
-          });
-          setShowGeneratingScreen(false);
-          setOnboardingMemberId(null);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [showGeneratingScreen, onboardingMemberId, navigate, toast]);
-
-  const GENERATION_STEPS = [
-    "Определяем возраст ребёнка",
-    "Проверяем аллергии",
-    "Подбираем подходящие блюда",
-    "Собираем план питания",
-  ];
 
   if (isLoading) {
     return (
@@ -637,39 +619,6 @@ export default function ProfilePage() {
         description={PREMIUM_PROFILES_MAX_BODY}
         paywallTextKey="friendly_limit_profiles_max"
       />
-
-      {showGeneratingScreen && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-background px-6"
-          aria-live="polite"
-        >
-          <div className="text-center max-w-sm">
-            {generatingDone ? (
-              <p className="text-2xl font-semibold text-foreground">Готово!</p>
-            ) : (
-              <>
-                <h2 className="text-lg font-semibold text-foreground mb-6">
-                  Собираем меню для вашего ребёнка
-                </h2>
-                <ul className="space-y-3 text-left mb-6">
-                  {GENERATION_STEPS.map((step, i) => (
-                    <li key={step} className="flex items-center gap-2 text-sm text-foreground">
-                      <span className="text-primary shrink-0">✓</span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-muted-foreground">
-                  Многие родители делятся такими меню с друзьями
-                </p>
-                <div className="mt-8 flex justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
     </MobileLayout>
   );
 }

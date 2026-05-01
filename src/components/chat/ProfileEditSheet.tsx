@@ -69,8 +69,11 @@ interface ProfileEditSheetProps {
   member: MembersRow | null | undefined;
   createMode?: boolean;
   onAddNew?: () => void;
-  onCreated?: (memberId: string) => void;
-  /** When true, after creating a member we only call onCreated and do not run startFillDay/navigate (parent shows onboarding screen). */
+  onCreated?: (
+    memberId: string,
+    meta?: { wasEmptyFamilyOnboarding: boolean },
+  ) => void;
+  /** When true, after creating a member we only call onCreated and do not run startFillDay/navigate (parent handles redirect). Meta передаётся в onCreated. */
   skipFillAndRedirectWhenCreated?: boolean;
   /** После подтверждения email (`/profile?welcome=1`): короткое приветствие в шапке формы создания профиля. */
   welcomeAfterEmailConfirm?: boolean;
@@ -255,6 +258,8 @@ export function ProfileEditSheet({
         return;
       }
       try {
+        /** До await: после insert+invalidate родитель мог уже перерисоваться с members.length>=1, и проп skipFill стал бы ложным — снимаем факт «семья была пустой» здесь. */
+        const wasEmptyFamilyBeforeCreate = members.length === 0;
         const vkHandoff = getVkDraftForProfilePrefill();
         const newMember = await createMember({
           name: trimmedName,
@@ -268,7 +273,9 @@ export function ProfileEditSheet({
         }
         toast({ title: "Профиль создан", description: `«${trimmedName}» добавлен`, duration: 2000 });
         onOpenChange(false);
-        onCreated?.(newMember.id as string);
+        onCreated?.(newMember.id as string, {
+          wasEmptyFamilyOnboarding: wasEmptyFamilyBeforeCreate,
+        });
 
         if (!skipFillAndRedirectWhenCreated && FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
           try {
