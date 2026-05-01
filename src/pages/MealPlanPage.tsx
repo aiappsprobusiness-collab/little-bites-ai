@@ -1305,12 +1305,12 @@ export default function MealPlanPage() {
     if (hasNoDishes) return;
     planReadyToastShownRef.current = true;
     // Не сбрасываем justCreatedMemberId здесь — баннер «План готов» / «Отправить меню» остаётся до закрытия пользователем
-    const t = toast({
+    toast({
       title: "План питания на сегодня готов 🍽",
       description: "Мы подобрали меню на сегодня",
+      /** Как PWAUpdateToast: висит до закрытия (крестик / свайп Radix), без авто-dismiss. */
+      duration: Number.POSITIVE_INFINITY,
     });
-    const timeoutId = setTimeout(() => t.dismiss(), 2000);
-    return () => clearTimeout(timeoutId);
   }, [justCreatedMemberId, showPlanMealsSkeleton, hasNoDishes, toast]);
 
   const renderStartRef = useRef(0);
