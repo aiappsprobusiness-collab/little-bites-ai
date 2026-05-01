@@ -50,6 +50,9 @@ import {
   isBlockingEmptyFamilyProfileAutoOpen,
 } from "@/utils/profileFirstChildSessionBlock";
 
+/** Пауза перед редиректом на План после первого ребёнка — тост «Профиль создан» успевает отрисоваться (иначе navigate в том же тике его «съедает»). */
+const FIRST_CHILD_PLAN_REDIRECT_MS = 450;
+
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
 
 function memberAvatar(_member: MembersRow, index: number): string {
@@ -174,7 +177,6 @@ export default function ProfilePage() {
     if (emptyFamilyOnboarding) {
       onboardingFirstProfileRef.current = false;
       setJustCreatedMemberId(memberId);
-      navigate(getPlanUrlForMember(memberId), { replace: true });
       void startFillDay(memberId).catch((e) => {
         const msg = e instanceof Error ? e.message : String(e);
         if (msg === "LIMIT_REACHED") {
@@ -191,6 +193,9 @@ export default function ProfilePage() {
           description: "Не удалось подобрать меню. Попробуйте снова на странице План.",
         });
       });
+      window.setTimeout(() => {
+        navigate(getPlanUrlForMember(memberId), { replace: true });
+      }, FIRST_CHILD_PLAN_REDIRECT_MS);
     }
   };
 
