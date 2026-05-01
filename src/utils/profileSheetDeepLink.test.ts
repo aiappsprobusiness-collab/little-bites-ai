@@ -2,9 +2,8 @@ import { describe, it, expect } from "vitest";
 import { shouldOpenSheetForOpenCreateProfileDeepLink } from "./profileSheetDeepLink";
 
 /**
- * Регресс: после создания первого ребёнка `suppressEmptyFamilyAutoOpenRef` = true, но
- * query `openCreateProfile=1` мог остаться на один кадр — второй useEffect на ProfilePage
- * снова открывал шторку, если не проверять suppress (и не чистить URL).
+ * Регресс: после создания первого ребёнка нужно блокировать deeplink-повтор;
+ * query `openCreateProfile=1` мог остаться на один кадр — эффект не должен снова открывать шторку.
  */
 describe("shouldOpenSheetForOpenCreateProfileDeepLink", () => {
   const base = {

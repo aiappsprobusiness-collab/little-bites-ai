@@ -44,6 +44,11 @@ import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { isStandalone } from "@/utils/standalone";
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
+import {
+  setBlockEmptyFamilyProfileAutoOpen,
+  clearBlockEmptyFamilyProfileAutoOpenIfHasMembers,
+  isBlockingEmptyFamilyProfileAutoOpen,
+} from "@/utils/profileFirstChildSessionBlock";
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
 
@@ -94,25 +99,17 @@ export default function ProfilePage() {
   const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
   const [showProfileCapDialog, setShowProfileCapDialog] = useState(false);
   const onboardingFirstProfileRef = useRef(false);
-  /** После успешного создания профиля blocking автооткрытие шторки, пока FamilyContext не покажет нового члена (members ещё может быть []). Иначе эффект снова делает setShowMemberSheet(true). */
-  const suppressEmptyFamilyAutoOpenRef = useRef(false);
   const [welcomeAfterEmail, setWelcomeAfterEmail] = useState(false);
   const { canInstall, promptInstall, isInstalled, isIOSDevice } = usePWAInstall();
   const showAppSection = !isInstalled && !isStandalone();
 
-  /** Сбрасываем suppress только при переходе «были члены → стало 0» (удалили всех), чтобы снова можно было автооткрыть шторку. Не сбрасываем при members>0 — иначе гонка с refetch оставляет members===0 и suppress уже false. */
-  const prevMembersLenRef = useRef(members.length);
   useEffect(() => {
-    const prev = prevMembersLenRef.current;
-    if (prev > 0 && members.length === 0) {
-      suppressEmptyFamilyAutoOpenRef.current = false;
-    }
-    prevMembersLenRef.current = members.length;
+    clearBlockEmptyFamilyProfileAutoOpenIfHasMembers(members.length);
   }, [members.length]);
 
   useEffect(() => {
     if (!authReady || isLoading || members.length > 0) return;
-    if (suppressEmptyFamilyAutoOpenRef.current) return;
+    if (isBlockingEmptyFamilyProfileAutoOpen()) return;
     if (!onboardingFirstProfileRef.current) {
       onboardingFirstProfileRef.current = true;
       setShowMemberSheet(true);
@@ -126,8 +123,8 @@ export default function ProfilePage() {
 
     const lim = getSubscriptionLimits(subscriptionStatus).maxProfiles;
 
-    /** Только что создали ребёнка: подавляем повторное открытие и при необходимости всё равно чистим query (гонка с setSearchParams). */
-    if (suppressEmptyFamilyAutoOpenRef.current) {
+    /** Только что создали ребёнка: подавляем повторное открытие и при необходимости всё равно чистим query (гонка с setSearchParams). Ref не использовать — remount сбрасывает ref. */
+    if (isBlockingEmptyFamilyProfileAutoOpen()) {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.delete("openCreateProfile");
@@ -170,7 +167,7 @@ export default function ProfilePage() {
     memberId: string,
     meta?: { wasEmptyFamilyOnboarding?: boolean },
   ) => {
-    suppressEmptyFamilyAutoOpenRef.current = true;
+    setBlockEmptyFamilyProfileAutoOpen();
     setShowMemberSheet(false);
 
     const emptyFamilyOnboarding = !!meta?.wasEmptyFamilyOnboarding;
