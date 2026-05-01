@@ -1301,6 +1301,8 @@ export default function MealPlanPage() {
   useEffect(() => {
     if (!justCreatedMemberId || planReadyToastShownRef.current) return;
     if (showPlanMealsSkeleton) return;
+    /** Пока нет ни одного слота с recipe_id, неделя/день могут уже быть «success», хотя startFillDay ещё пишет строки — без этого тост «готов» опережает подбор. */
+    if (hasNoDishes) return;
     planReadyToastShownRef.current = true;
     // Не сбрасываем justCreatedMemberId здесь — баннер «План готов» / «Отправить меню» остаётся до закрытия пользователем
     const t = toast({
@@ -1309,7 +1311,7 @@ export default function MealPlanPage() {
     });
     const timeoutId = setTimeout(() => t.dismiss(), 2000);
     return () => clearTimeout(timeoutId);
-  }, [justCreatedMemberId, showPlanMealsSkeleton, toast]);
+  }, [justCreatedMemberId, showPlanMealsSkeleton, hasNoDishes, toast]);
 
   const renderStartRef = useRef(0);
   if (isPerf()) renderStartRef.current = performance.now();
