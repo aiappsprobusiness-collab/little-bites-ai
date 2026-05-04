@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { checkAppConnectivity } from "./checkAppConnectivity";
+import { checkAppConnectivity, connectivityUserMessages } from "./checkAppConnectivity";
 import { resolveAppHealthCheckUrlFromEnv } from "./resolveAppHealthCheckUrl";
 
 describe("resolveAppHealthCheckUrlFromEnv", () => {
@@ -52,7 +52,7 @@ describe("checkAppConnectivity", () => {
     const r = await checkAppConnectivity("https://example.com/health");
     expect(r).toEqual({
       reason: "no_internet",
-      message: "Нет интернета. Проверьте подключение.",
+      message: connectivityUserMessages.noInternet,
     });
   });
 
@@ -142,6 +142,6 @@ describe("checkAppConnectivity", () => {
     );
     const r = await checkAppConnectivity("https://example.com/health", 20);
     expect(r.reason).toBe("timeout");
-    expect(r).toMatchObject({ message: expect.stringContaining("не ответил") });
+    expect(r).toMatchObject({ message: expect.stringMatching(/дольше|интернет|VPN/i) });
   });
 });
