@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_DEEPSEEK_API_KEY: string;
   readonly VITE_SUPABASE_URL: string;
   readonly VITE_SUPABASE_ANON_KEY: string;
+  /** Переопределить URL проверки доступности (HEAD/GET) перед стартом App. Иначе: `{VITE_SUPABASE_URL}/auth/v1/health`. */
+  readonly VITE_APP_HEALTH_URL?: string;
   /** `true` — маршруты /admin/* (док, не секрет) */
   readonly VITE_ADMIN_MODE?: string;
   /** Username бота в Telegram без @ — для `/admin/telegram-blogger-links` */

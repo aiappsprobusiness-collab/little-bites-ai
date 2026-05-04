@@ -58,6 +58,8 @@
 
 **Когда вызывается:** при любом вызове `trackUsageEvent(feature, options)` / `trackLandingEvent(feature, properties)` на клиенте. Fire-and-forget.
 
+**Старт PWA / проверка связи:** `app_connectivity_result` (`src/utils/connectivityAnalytics.ts`, вызов из `bootstrapReactApp`) — см. §3.0 в [ANALYTICS_EVENT_TAXONOMY_STAGE2.md](../decisions/ANALYTICS_EVENT_TAXONOMY_STAGE2.md) и `docs/dev/connectivity-analytics-changelog.md`. Для надёжности при офлайне используется очередь в `localStorage` и `trackUsageEventOk`; публичный API: `trackUsageEventOk` (возвращает `Promise<boolean>`) в `src/utils/usageEvents.ts`.
+
 **Клиент (после Stage 1):** нет глобального cooldown на все события; при ошибке запроса — короткий backoff **только для этого `feature`** (~12 s). Dedup: ~550 ms для действий, ~4 s для «view»-событий (см. `VIEW_STYLE_FEATURES` в `usageEvents.ts`); ключ dedup включает fingerprint переданных `properties`. В payload добавляется `properties.onboarding` из `onboarding_attribution`; при пустом `last_touch_utm` UTM подставляются из onboarding в колонки `utm_*`. **Stage 5:** в каждое событие добавляется `properties.platform` (`web` \| `pwa` \| `ios` \| `android` \| `unknown`) через `getAnalyticsPlatform()` в `analyticsPlatform.ts`.
 
 **Копирайт paywall / trial (отдельно от `paywall_view`):** `feature: paywall_text`, в `properties.paywall_reason` — стабильный ключ показанного текста (в `analytics.usage_events_enriched` → `prop_paywall_reason`). Вызов через `trackPaywallTextShown()` в `src/utils/paywallTextAnalytics.ts` при показе соответствующего UI (не дублирует серверные лимитные `feature`).

@@ -20,6 +20,17 @@
 | После бандла | `src/styles/splash.css` (держать в синхроне с inline) |
 | Скрытие | `src/main.tsx` — после `window.load`, не раньше ~2800 ms от `window.__momRecipesSplashStartMs`, затем fade-out ~400 ms |
 
+### Проверка связи до монтирования App
+
+| Что | Где |
+|-----|-----|
+| Резолв URL | `src/utils/resolveAppHealthCheckUrl.ts` — приоритет `VITE_APP_HEALTH_URL`, иначе `{VITE_SUPABASE_URL}/auth/v1/health` |
+| Логика запроса | `src/utils/checkAppConnectivity.ts` — `navigator.onLine`, затем `HEAD` (при 405 — `GET`), таймаут 5 с через `AbortController` |
+| Точка входа | `src/bootstrapReactApp.tsx` — `mountReactApp()` вызывается из `src/main.tsx` вместо прямого `createRoot(..., <App />)` |
+| Экран ошибки | `src/components/ConnectivityGateScreen.tsx` — при неуспехе HTML-splash снимается сразу, чтобы сообщение не оказалось под `#splash-screen` (z-index) |
+| Отладка | Query `?skipConnectivity=1` — не выполнять проверку и сразу монтировать App |
+| Аналитика | `app_connectivity_result` в `usage_events` (очередь при сбое отправки) — `docs/dev/connectivity-analytics-changelog.md`, taxonomy §3.0 |
+
 ### Manifest и метаданные (согласование с первым кадром)
 
 | Поле / тег | Значение | Зачем |
@@ -41,7 +52,7 @@
 
 ### Отладка (`?perf=1`)
 
-В `main.tsx`: логи момента commit корня React, rAF×2, планирование и старт fade HTML-splash. В `AuthProvider`: `[perf] auth bootstrap ready` при `loading === false`. На странице плана — см. `MealPlanPage` (`[perf]`).
+В `bootstrapReactApp.tsx`: логи момента commit корня React (после проверки связи, если она выполнялась), rAF×2. В `main.tsx`: планирование и старт fade HTML-splash. В `AuthProvider`: `[perf] auth bootstrap ready` при `loading === false`. На странице плана — см. `MealPlanPage` (`[perf]`).
 
 ---
 

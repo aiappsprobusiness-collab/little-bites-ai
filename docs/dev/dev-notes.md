@@ -14,6 +14,8 @@ npm run check:db-docs
 
 - `DATABASE_URL` **или** `SUPABASE_DB_URL` — **URI прямого подключения к Postgres** (Supabase Dashboard → *Project Settings* → *Database* → *Connection string* → URI). Это не `SUPABASE_ANON_KEY` / service role: нужен именно connection string к БД.
 
+**Проверка связи перед стартом PWA (Vite):** опционально `VITE_APP_HEALTH_URL` — URL для `HEAD`/`GET` до монтирования `App`; если не задан, используется `{VITE_SUPABASE_URL}/auth/v1/health`. Обход проверки в браузере: `?skipConnectivity=1`. Подробнее: `docs/dev/STARTUP_UI_AND_PLAN_LOADING.md`. Результат проверки пишется в аналитику (`usage_events.feature = app_connectivity_result`, очередь в `localStorage` при сбое Edge) — `docs/dev/connectivity-analytics-changelog.md`.
+
 **Когда имеет смысл запускать:**
 
 - после миграций, которые добавляют/переименовывают таблицы в `public`;

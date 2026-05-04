@@ -48,6 +48,14 @@
 
 ## 3. Полный каталог событий по группам
 
+### 3.0 PWA / connectivity (client telemetry)
+
+| feature | Тип | Источник | properties |
+|---------|-----|----------|------------|
+| `app_connectivity_result` | outcome | `bootstrapReactApp` (`mountReactApp`) после проверки health | `outcome`: `ok` \| `no_internet` \| `blocked` \| `server_error` \| `timeout` \| `bad_response` \| `skipped`; `check_ms` (длительность проверки, для `skipped` часто `0`); `health_source`: `supabase_default` \| `custom` \| `none`; опц. `http_status` (ответ health); для `skipped` — `skip_reason`: `query` (`?skipConnectivity=1`) \| `no_health_url` (нет env URL); `delivery`: `immediate` \| `replay` (догон из `localStorage` после удачной доставки); для `replay` — `deferred_at_ms` (когда событие попало в очередь) |
+
+**Очередь:** при неудаче POST в `track-usage-event` payload одной проверки кладётся в `localStorage` (`mr_connectivity_pending_analytics`, до 8 записей); при следующем успешном health или старте со `skipped` сначала вызывается flush с `delivery: replay`. Полная история правок: `docs/dev/connectivity-analytics-changelog.md`.
+
 ### 3.1 Acquisition
 
 | feature | Тип | Источник | Примечание |

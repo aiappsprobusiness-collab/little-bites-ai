@@ -1,5 +1,4 @@
-import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
+import { mountReactApp } from "./bootstrapReactApp";
 import { disableDoubleTapZoom } from "./utils/disableDoubleTapZoom";
 import "./index.css";
 import "./styles/splash.css";
@@ -74,7 +73,7 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
 
 disableDoubleTapZoom();
 
-createRoot(document.getElementById("root")!).render(<App />);
+void mountReactApp();
 
 /** Минимум показа брендированного splash (мс); плюс ждём window.load, чтобы не мигать на медленной сети (PWA / браузер). */
 const SPLASH_MIN_VISIBLE_MS = 2800;
@@ -90,15 +89,6 @@ function isVkFunnelPath(): boolean {
 function isStartupPerf(): boolean {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("perf") === "1";
-}
-
-if (typeof window !== "undefined" && isStartupPerf()) {
-  console.log("[perf] pwa react root render (sync)", performance.now());
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      console.log("[perf] pwa first frames after root (rAF×2)", performance.now());
-    });
-  });
 }
 
 function hideSplashWhenReady() {

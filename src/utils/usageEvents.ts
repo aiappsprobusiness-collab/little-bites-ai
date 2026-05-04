@@ -414,35 +414,54 @@ function buildTrackUsageEventPayload(
   return { featureKey, body };
 }
 
-function postTrackUsageEventToEdge(featureKey: string, body: Record<string, unknown>): Promise<void> {
+/** POST в track-usage-event; `true` если ответ 2xx, иначе `false` (ошибка уже учтена в backoff). */
+function postTrackUsageEventToEdge(featureKey: string, body: Record<string, unknown>): Promise<boolean> {
   const baseUrl = SUPABASE_URL?.replace(/\/$/, "");
   const anonKey = SUPABASE_PUBLISHABLE_KEY;
-  if (!baseUrl || !anonKey) return Promise.resolve();
+  if (!baseUrl || !anonKey) return Promise.resolve(false);
   const url = `${baseUrl}${TRACK_EDGE_PATH}`;
-  return supabase.auth.getSession().then(({ data: { session } }) => {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      apikey: anonKey,
-    };
-    if (session?.access_token) {
-      headers.Authorization = `Bearer ${session.access_token}`;
-    }
-    return fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      keepalive: true,
-    }).then((res) => {
-      if (!res.ok) {
-        recordFeatureFailure(featureKey, Date.now());
-        if (import.meta.env.DEV) {
-          console.warn("[usageEvents] track-usage-event failed, feature backoff:", featureKey, res.status);
-        }
-      } else {
-        recordFeatureSuccess(featureKey);
+  const now = Date.now();
+  return supabase.auth
+    .getSession()
+    .then(async ({ data: { session } }) => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+      };
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
       }
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+          keepalive: true,
+        });
+        if (!res.ok) {
+          recordFeatureFailure(featureKey, now);
+          if (import.meta.env.DEV) {
+            console.warn("[usageEvents] track-usage-event failed, feature backoff:", featureKey, res.status);
+          }
+          return false;
+        }
+        recordFeatureSuccess(featureKey);
+        return true;
+      } catch {
+        recordFeatureFailure(featureKey, now);
+        if (import.meta.env.DEV) {
+          console.warn("[usageEvents] track-usage-event network error, feature backoff:", featureKey);
+        }
+        return false;
+      }
+    })
+    .catch(() => {
+      recordFeatureFailure(featureKey, now);
+      if (import.meta.env.DEV) {
+        console.warn("[usageEvents] track-usage-event getSession/post failed:", featureKey);
+      }
+      return false;
     });
-  });
 }
 
 /**
@@ -457,12 +476,7 @@ export function trackUsageEvent(
   const payload = buildTrackUsageEventPayload(feature, options);
   if (!payload) return;
   const { featureKey, body } = payload;
-  void postTrackUsageEventToEdge(featureKey, body).catch(() => {
-    recordFeatureFailure(featureKey, Date.now());
-    if (import.meta.env.DEV) {
-      console.warn("[usageEvents] track-usage-event network error, feature backoff:", featureKey);
-    }
-  });
+  void postTrackUsageEventToEdge(featureKey, body);
 }
 
 /**
@@ -473,17 +487,20 @@ export async function trackUsageEventAwait(
   feature: string,
   options: TrackUsageEventOptions = {}
 ): Promise<void> {
-  let featureKeyForBackoff: string | null = null;
-  try {
-    const payload = buildTrackUsageEventPayload(feature, options);
-    if (!payload) return;
-    featureKeyForBackoff = payload.featureKey;
-    await postTrackUsageEventToEdge(payload.featureKey, payload.body);
-  } catch {
-    if (featureKeyForBackoff) {
-      recordFeatureFailure(featureKeyForBackoff, Date.now());
-    }
-  }
+  await trackUsageEventOk(feature, options);
+}
+
+/**
+ * Отправить событие и дождаться ответа Edge. `true` — HTTP 2xx, событие принято.
+ * При `false` backoff для feature уже выставлен внутри (как у fire-and-forget).
+ */
+export async function trackUsageEventOk(
+  feature: string,
+  options: TrackUsageEventOptions = {},
+): Promise<boolean> {
+  const payload = buildTrackUsageEventPayload(feature, options);
+  if (!payload) return false;
+  return postTrackUsageEventToEdge(payload.featureKey, payload.body);
 }
 
 // --- Share virality ---
