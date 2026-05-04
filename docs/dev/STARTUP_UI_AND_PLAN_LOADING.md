@@ -25,7 +25,7 @@
 | Что | Где |
 |-----|-----|
 | Резолв URL | `src/utils/resolveAppHealthCheckUrl.ts` — приоритет `VITE_APP_HEALTH_URL`, иначе `{VITE_SUPABASE_URL}/auth/v1/health` |
-| Логика запроса | `src/utils/checkAppConnectivity.ts` — `navigator.onLine`, затем `HEAD` (при 405 — `GET`), таймаут 5 с через `AbortController` |
+| Логика запроса | `src/utils/checkAppConnectivity.ts` — `navigator.onLine`, затем `HEAD` (при 405 — `GET`), таймаут 5 с через `AbortController`; для URL того же origin, что `VITE_SUPABASE_URL`, к health добавляются `apikey` и `Authorization: Bearer` с `VITE_SUPABASE_ANON_KEY` (иначе GoTrue часто отвечает 401) |
 | Точка входа | `src/bootstrapReactApp.tsx` — `mountReactApp()` вызывается из `src/main.tsx` вместо прямого `createRoot(..., <App />)` |
 | Экран ошибки | `src/components/ConnectivityGateScreen.tsx` — при неуспехе HTML-splash снимается сразу, чтобы сообщение не оказалось под `#splash-screen` (z-index) |
 | Отладка | Query `?skipConnectivity=1` — не выполнять проверку и сразу монтировать App |

@@ -66,6 +66,28 @@ describe("checkAppConnectivity", () => {
     );
   });
 
+  it("sends apikey and Authorization for health URL on same origin as VITE_SUPABASE_URL", async () => {
+    vi.stubEnv("VITE_SUPABASE_URL", "https://proj.supabase.co");
+    vi.stubEnv("VITE_SUPABASE_ANON_KEY", "test-anon-key");
+    vi.resetModules();
+    const { checkAppConnectivity: check } = await import("./checkAppConnectivity");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await check("https://proj.supabase.co/auth/v1/health");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://proj.supabase.co/auth/v1/health",
+      expect.objectContaining({
+        method: "HEAD",
+        headers: expect.objectContaining({
+          apikey: "test-anon-key",
+          Authorization: "Bearer test-anon-key",
+        }),
+      }),
+    );
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it("retries with GET when HEAD returns 405", async () => {
     const fetchMock = vi
       .fn()

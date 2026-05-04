@@ -4,6 +4,16 @@
 
 ---
 
+## 2026-05-05 — исправление: 401 на Supabase `/auth/v1/health`
+
+**Симптом:** без заголовков `apikey` / `Authorization: Bearer <anon>` GoTrue отвечал **401** на health; клиент классифицировал ответ как `bad_response` («Проверка связи») или при долгом ответе — `timeout`, хотя сеть и VPN могли быть в порядке.
+
+**Исправление:** в `src/utils/checkAppConnectivity.ts` для URL того же origin, что и `VITE_SUPABASE_URL`, к запросу health добавляются заголовки с `VITE_SUPABASE_ANON_KEY` (как у остальных вызовов Supabase с фронта).
+
+**Тест:** `checkAppConnectivity.test.ts` — кейс с `vi.stubEnv` и проверкой заголовков.
+
+---
+
 ## 2026-05-04 — внедрение `app_connectivity_result`
 
 ### Задача

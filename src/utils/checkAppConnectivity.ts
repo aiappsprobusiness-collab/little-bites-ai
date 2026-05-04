@@ -34,8 +34,33 @@ function isNetworkLikeError(e: unknown): boolean {
   );
 }
 
+/** Supabase Auth/REST без `apikey` часто отвечают 401 — health нельзя дергать «голым» fetch. */
+function supabaseAnonHeaders(): Record<string, string> | null {
+  const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (typeof key !== "string" || !key.trim()) return null;
+  return {
+    apikey: key,
+    Authorization: `Bearer ${key}`,
+  };
+}
+
+function isHealthUrlForConfiguredSupabase(healthUrl: string): boolean {
+  const base = import.meta.env.VITE_SUPABASE_URL?.replace(/\/+$/, "");
+  if (!base) return false;
+  try {
+    return new URL(healthUrl).origin === new URL(base).origin;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchHealthOnce(url: string, method: "HEAD" | "GET", signal: AbortSignal): Promise<Response> {
-  return fetch(url, { method, signal, cache: "no-store" });
+  const headers: Record<string, string> = {};
+  const anon = supabaseAnonHeaders();
+  if (anon && isHealthUrlForConfiguredSupabase(url)) {
+    Object.assign(headers, anon);
+  }
+  return fetch(url, { method, signal, cache: "no-store", headers: Object.keys(headers).length ? headers : undefined });
 }
 
 /**
