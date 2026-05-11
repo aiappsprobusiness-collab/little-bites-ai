@@ -67,6 +67,8 @@ npm run backfill:ingredient-canonical -- --diagnose-only --recipe-source=seed --
 
 **Импорт сида:** `scripts/import-infant-seed.ts` (tsx) вызывает **`fillCanonicalForSeedIngredient`**: новые вставки получают канон из JSON или из `amount`/`unit`/`display_text`, если в JSON канон не задан.
 
+Если после canonical backfill остаются строки с бытовыми единицами без «`= N г`» (зубчик, веточка, ломтик хлеба и т.д.), см. **`docs/dev/repair-household-canonical.md`** и команду **`npm run repair:household-canonical`** (эвристики только для repair-скрипта, не для save-time).
+
 ---
 
 ## Backfill dual (безопасный, консервативный)

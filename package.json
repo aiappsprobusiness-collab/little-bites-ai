@@ -55,6 +55,7 @@
     "seed:adult:import": "tsx --tsconfig tsconfig.scripts.json scripts/import-infant-seed.ts --file=data/toddler-seed/adult-216-1200-catalog-recipes.json",
     "backfill:ingredient-dual": "tsx --tsconfig tsconfig.scripts.json scripts/backfill-recipe-ingredient-dual-display.ts",
     "backfill:ingredient-canonical": "tsx --tsconfig tsconfig.scripts.json scripts/backfill-recipe-ingredient-canonical.ts",
+    "repair:household-canonical": "tsx --tsconfig tsconfig.scripts.json scripts/repair-household-canonical.ts",
     "check:db-docs": "node scripts/check-db-docs-consistency.mjs",
     "resize:og-onion": "node scripts/resize-og-onion.mjs"
   },
