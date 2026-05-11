@@ -39,6 +39,9 @@ const toastVariants = cva(
           "toast-success mx-auto w-full border-primary/25 bg-primary text-primary-foreground sm:ml-auto sm:mr-4",
         destructive:
           "destructive mx-auto w-full border-destructive/40 bg-destructive text-destructive-foreground sm:ml-auto sm:mr-4",
+        /** Компактная «карточка» вместо сплошной заливки primary (например частичное заполнение плана). */
+        successSoft:
+          "toast-soft mx-auto w-full rounded-xl border-primary/25 bg-card/95 p-3 text-card-foreground shadow-[var(--shadow-soft)] backdrop-blur-sm sm:ml-auto sm:mr-4",
       },
     },
     defaultVariants: {
@@ -65,6 +68,7 @@ const ToastAction = React.forwardRef<
       "inline-flex h-8 shrink-0 items-center justify-center rounded-lg border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors",
       "hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
       "group-[.toast-success]:border-primary-foreground/35 group-[.toast-success]:bg-primary-foreground/12 group-[.toast-success]:text-primary-foreground hover:group-[.toast-success]:bg-primary-foreground/22",
+      "group-[.toast-soft]:border-primary/30 group-[.toast-soft]:bg-primary/10 group-[.toast-soft]:text-foreground hover:group-[.toast-soft]:bg-primary/16",
       "group-[.destructive]:border-destructive-foreground/35 group-[.destructive]:hover:border-destructive-foreground/50 group-[.destructive]:hover:bg-destructive-foreground/15 group-[.destructive]:focus:ring-destructive-foreground/50",
       className,
     )}
@@ -81,6 +85,7 @@ const ToastClose = React.forwardRef<
     ref={ref}
     className={cn(
       "absolute right-2 top-2 rounded-lg p-1.5 text-primary-foreground/75 opacity-100 transition-colors hover:bg-primary-foreground/15 hover:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-primary-foreground/40",
+      "group-[.toast-soft]:text-muted-foreground group-[.toast-soft]:hover:bg-muted/50 group-[.toast-soft]:hover:text-foreground group-[.toast-soft]:focus:ring-ring/40",
       "group-[.destructive]:text-destructive-foreground/90 group-[.destructive]:hover:bg-destructive-foreground/15 group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive-foreground/50",
       className,
     )}
@@ -99,7 +104,7 @@ const ToastTitle = React.forwardRef<
   <ToastPrimitives.Title
     ref={ref}
     className={cn(
-      "text-typo-body font-semibold leading-snug group-[.toast-success]:font-medium group-[.toast-success]:text-primary-foreground",
+      "text-typo-body font-semibold leading-snug group-[.toast-success]:font-medium group-[.toast-success]:text-primary-foreground group-[.toast-soft]:font-semibold group-[.toast-soft]:text-foreground",
       className,
     )}
     {...props}
@@ -114,7 +119,7 @@ const ToastDescription = React.forwardRef<
   <ToastPrimitives.Description
     ref={ref}
     className={cn(
-      "text-typo-subtext opacity-95 group-[.toast-success]:text-primary-foreground/88 group-[.destructive]:text-destructive-foreground/90",
+      "text-typo-subtext opacity-95 group-[.toast-success]:text-primary-foreground/88 group-[.toast-soft]:text-muted-foreground group-[.toast-soft]:opacity-100 group-[.destructive]:text-destructive-foreground/90",
       className,
     )}
     {...props}

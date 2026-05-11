@@ -164,7 +164,7 @@ function getDayLabel(date: Date): string {
 }
 
 const PARTIAL_FILL_TOAST_DURATION_MS = 7000;
-const PARTIAL_FILL_SUBTITLE = "Добавьте блюда из Избранного или создайте новые в чате с помощником.";
+const PARTIAL_FILL_SUBTITLE = "Добавьте недостающее из Избранного или в чате с помощником.";
 
 /** Мягкая подсказка «в чат» на плане дня (Free): задержка и порог скролла до показа */
 const PLAN_SOFT_CHAT_REVEAL_MS = 2600;
@@ -193,8 +193,9 @@ function PartialFillToastActions({
   dismiss: () => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-2 mt-2">
+    <div className="flex flex-wrap gap-1.5">
       <ToastAction
+        className="h-7 px-2.5 text-xs"
         altText="Открыть Избранное"
         onClick={() => {
           trackUsageEvent("partial_week_toast_favorites_click");
@@ -205,6 +206,7 @@ function PartialFillToastActions({
         Избранное
       </ToastAction>
       <ToastAction
+        className="h-7 px-2.5 text-xs"
         altText="Подобрать в чате"
         onClick={() => {
           trackUsageEvent("partial_week_toast_assistant_click");
@@ -227,6 +229,7 @@ function showPartialFillToast(
   const title =
     filled != null && total != null ? `Подобрали ${filled} из ${total} блюд.` : "Подобрали часть блюд.";
   const r = toast({
+    variant: "successSoft",
     title,
     description: PARTIAL_FILL_SUBTITLE,
     duration: PARTIAL_FILL_TOAST_DURATION_MS,
