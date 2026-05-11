@@ -39,9 +39,9 @@ const toastVariants = cva(
           "toast-success mx-auto w-full border-primary/25 bg-primary text-primary-foreground sm:ml-auto sm:mr-4",
         destructive:
           "destructive mx-auto w-full border-destructive/40 bg-destructive text-destructive-foreground sm:ml-auto sm:mr-4",
-        /** Компактная «карточка» вместо сплошной заливки primary (например частичное заполнение плана). */
+        /** Компактная карточка для светлой темы: без blur/прозрачности — иначе сливается с бежевым фоном приложения. */
         successSoft:
-          "toast-soft mx-auto w-full rounded-xl border-primary/25 bg-card/95 p-3 text-card-foreground shadow-[var(--shadow-soft)] backdrop-blur-sm sm:ml-auto sm:mr-4",
+          "toast-soft mx-auto w-full rounded-xl border-primary/45 bg-card p-3 text-card-foreground shadow-lg ring-1 ring-primary/20 sm:ml-auto sm:mr-4 dark:border-primary/40 dark:ring-primary/25",
       },
     },
     defaultVariants: {
