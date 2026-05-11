@@ -21,6 +21,10 @@
 - Ингредиенты переводятся в те же агрегированные позиции, что и при сборке из плана (те же ключи и единицы), с учётом выбранных **порций** на экране рецепта. **Merge:** суммирование количества при совпадении ключа; в `meta.source_recipes` добавляется рецепт (по `recipeId`, без дублей). Статус «куплено» при обновлении строки **не сбрасывается** (обновляются `amount` и `meta`).
 - Фильтр по рецептам на экране списка строится по **всем** `source_recipes` в строках; рецепты, добавленные из карточки, попадают в тот же фильтр.
 
+### Исключения базового запаса (не в покупках)
+
+При сборке списка из плана и при **«Добавить в покупки»** с карточки часть позиций **не добавляется** в список: считаем, что их обычно держат дома (правила намеренно консервативны — при сомнении строку оставляем). Реализация: `isPantryStapleExcludedFromShopping` в **`src/utils/shopping/pantryStaplesShopping.ts`** (фильтр подключён в `shoppingListMerge.ts` и `usePlanShoppingIngredients.ts`). Примеры: подпись **«по вкусу»** в тексте строки; **вода**; **соль**; типичные **растительные масла** (оливковое/подсолнечное и аналогичные формулировки); **молотый/чёрный/душистый перец** — не путать с болгарским перцем и чили. Состав ингредиентов **на карточке рецепта** не скрывается, меняется только попадание в список покупок. Текст для пользователя (экран списка, sheet «Собрать список», карточка рецепта): константа **`PANTRY_ASSUMPTION_USER_HINT_RU`** в том же файле — при изменении правил обновлять строку и логику согласованно.
+
 ## Где собирать список (IA)
 
 - **Основной вход:** экран **План** → после блока приёмов пищи за день кнопка **«Собрать список продуктов»** (secondary outline, иконка корзины). Открывается sheet **«Собрать список продуктов»** с выбором периода и **«Собрать список»**; после успеха — **toast** с кнопкой **«К списку продуктов»** (без автоперехода). По нажатию — `navigate` на `/favorites` с `state.tab = shopping_list` и `state.shoppingListJustBuilt = true`; перед этим вызывается `markShoppingListEntranceStagger()` для одноразовой stagger-анимации строк (`sessionStorage`, см. `src/utils/shopping/shoppingListEntrance.ts`).
@@ -81,6 +85,7 @@
 | Канонические ключи / алиасы / PCS→г | `src/utils/shopping/canonicalShoppingIngredient.ts`, `src/utils/shopping/normalizeIngredientForShopping.ts` |
 | Purchase-friendly текст строки | `src/utils/shopping/shoppingListPurchaseDisplay.ts`, `shoppingListTextFormatter.ts` |
 | Merge из карточки рецепта | `src/utils/shopping/shoppingListMerge.ts`, `useShoppingList.addRecipeIngredients` |
+| Исключения базового запаса из покупок | `src/utils/shopping/pantryStaplesShopping.ts` (вызов из `shoppingListMerge.ts`, `usePlanShoppingIngredients.ts`) |
 | Подпись плана | `src/hooks/usePlanSignature.ts` (`loadPlanSignature`) |
 | Порции слота на экране рецепта (из плана) | `src/pages/RecipePage.tsx`, `src/hooks/useMealPlans.tsx` (`updateSlotServings`, патч кэша по дате) |
 

@@ -10,6 +10,7 @@ import {
   resolveProductCategoryForShoppingIngredient,
 } from "@/utils/shopping/inferShoppingCategoryFromIngredient";
 import { applyYoToE } from "@/utils/shopping/canonicalShoppingIngredient";
+import { isPantryStapleExcludedFromShopping } from "@/utils/shopping/pantryStaplesShopping";
 
 /** Вклад рецепта в строку (в единицах aggregation_unit, как amountToSum в агрегации). */
 export type ShoppingSourceContribution = {
@@ -162,7 +163,8 @@ export function recipeRpcIngredientsToShoppingRows(ingredients: unknown[] | unde
         measurement_mode: o.measurement_mode != null ? String(o.measurement_mode) : null,
       };
     })
-    .filter((r) => r.name.trim().length > 0);
+    .filter((r) => r.name.trim().length > 0)
+    .filter((r) => !isPantryStapleExcludedFromShopping({ name: r.name, display_text: r.display_text }));
 }
 
 /**
@@ -179,6 +181,7 @@ export function buildShoppingIngredientPayloadsFromRecipe(
   const byKey = new Map<string, ShoppingIngredientPayload>();
 
   for (const ing of rows) {
+    if (isPantryStapleExcludedFromShopping({ name: ing.name, display_text: ing.display_text })) continue;
     const rawCat = inferDbProductCategoryFromText(
       normalizeIngredientTextForCategoryMatch(ing.name, ing.display_text)
     );

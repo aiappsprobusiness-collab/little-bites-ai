@@ -42,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { SHOPPING_LIST_ENTRANCE_SESSION_KEY } from "@/utils/shopping/shoppingListEntrance";
 import { computeEffectiveShoppingItemView } from "@/utils/shopping/shoppingListEffectiveView";
+import { PANTRY_ASSUMPTION_USER_HINT_RU } from "@/utils/shopping/pantryStaplesShopping";
 
 const CATEGORY_ORDER: ProductCategory[] = ["vegetables", "fruits", "dairy", "meat", "grains", "other"];
 const CATEGORY_LABEL: Record<ProductCategory, string> = {
@@ -622,6 +623,7 @@ export function ShoppingListView() {
         {periodSubline != null && (
           <p className="text-xs text-muted-foreground mt-1">{periodSubline}</p>
         )}
+        <p className="text-[11px] leading-snug text-muted-foreground mt-2 max-w-lg">{PANTRY_ASSUMPTION_USER_HINT_RU}</p>
       </div>
 
       <BuildShoppingListFromPlanSheet

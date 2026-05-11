@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 import { markShoppingListEntranceStagger } from "@/utils/shopping/shoppingListEntrance";
+import { PANTRY_ASSUMPTION_USER_HINT_RU } from "@/utils/shopping/pantryStaplesShopping";
 
 export type BuildShoppingListFromPlanSheetProps = {
   open: boolean;
@@ -119,9 +120,12 @@ export function BuildShoppingListFromPlanSheet({
           <SheetTitle className="text-typo-body font-semibold text-foreground leading-tight">
             Собрать список продуктов
           </SheetTitle>
-          <SheetDescription className="text-typo-body font-normal text-foreground/90 leading-relaxed">
-            Соберём продукты из плана, суммируем одинаковые позиции. Список станет вашим черновиком: его можно менять вручную;
-            изменения в плане не перезапишут его сами по себе.
+          <SheetDescription className="text-typo-body font-normal text-foreground/90 leading-relaxed space-y-3">
+            <span className="block">
+              Соберём продукты из плана, суммируем одинаковые позиции. Список станет вашим черновиком: его можно менять вручную;
+              изменения в плане не перезапишут его сами по себе.
+            </span>
+            <span className="block text-xs text-muted-foreground leading-relaxed">{PANTRY_ASSUMPTION_USER_HINT_RU}</span>
           </SheetDescription>
         </SheetHeader>
         <div className="py-5 space-y-3">

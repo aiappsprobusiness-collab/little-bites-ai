@@ -16,6 +16,7 @@ import {
   mergeDualDisplayIntoCarrier,
   type ShoppingSourceContribution,
 } from "@/utils/shopping/shoppingListMerge";
+import { isPantryStapleExcludedFromShopping } from "@/utils/shopping/pantryStaplesShopping";
 
 export interface SourceRecipe {
   id: string;
@@ -182,6 +183,7 @@ export async function loadPlanShoppingIngredients(
     const multiplier = servings / base;
     const ings = ingredientsByRecipe.get(recipe_id) ?? [];
     for (const ing of ings) {
+      if (isPantryStapleExcludedFromShopping({ name: ing.name, display_text: ing.display_text })) continue;
       const category = resolveProductCategoryForShoppingIngredient(
         ing.category,
         ing.name,
