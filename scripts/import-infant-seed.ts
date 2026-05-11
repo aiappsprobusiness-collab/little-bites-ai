@@ -36,7 +36,8 @@ function loadEnv() {
         raw.startsWith('"') && raw.endsWith('"')
           ? raw.slice(1, -1).replace(/\\"/g, '"')
           : raw.replace(/^['']|['']$/g, "");
-      if (!process.env[key]) process.env[key] = value;
+      // Файл `.env` переопределяет уже заданные переменные окружения (например старый INFANT_SEED_CATALOG_USER_ID в Windows).
+      process.env[key] = value;
     }
   }
 }
@@ -149,6 +150,18 @@ if (!purgeOnly) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
+
+async function assertCatalogUserExistsInAuth(): Promise<void> {
+  const { data, error } = await supabase.auth.admin.getUserById(CATALOG_USER_ID!);
+  if (error || !data?.user) {
+    console.error(
+      `INFANT_SEED_CATALOG_USER_ID=${CATALOG_USER_ID}: в auth.users такого пользователя нет (insert в recipes упадёт по FK).`,
+    );
+    console.error("Создайте пользователя: Supabase Dashboard → Authentication → Users → Add user → скопируйте UUID в INFANT_SEED_CATALOG_USER_ID.");
+    if (error?.message) console.error("Ответ API:", error.message);
+    process.exit(1);
+  }
+}
 
 type RecipeJson = {
   title: string;
@@ -359,6 +372,11 @@ async function upsertOne(r: RecipeJson) {
 }
 
 async function main() {
+  // INSERT/UPDATE recipes требует существующего auth.users.id (FK на recipes.user_id).
+  if (!dryRun && !purgeOnly) {
+    await assertCatalogUserExistsInAuth();
+  }
+
   if (purgeOnly) {
     console.log(`purge-only: user_id=${CATALOG_USER_ID}, batchTag=${batchTag}`);
     if (dryRun) {

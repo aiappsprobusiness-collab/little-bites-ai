@@ -1,5 +1,7 @@
 # Infant curated seed-пул (4–6, 7–8 и 9–11 мес)
 
+Полный чеклист восстановления **всех** каталогов (infant + toddler + child + adult) в одну БД: **`docs/dev/RECIPE_CATALOG_RESTORE.md`**.
+
 ## Что в репозитории
 
 - **Исходные наборы (source of truth):**  
