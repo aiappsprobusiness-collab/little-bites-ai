@@ -53,7 +53,6 @@ import {
 import { readMealPlanMutedWeekKeyFromStorage } from "@/hooks/useMealPlanMemberData";
 import { mealPlanPathWithOptionalDate } from "@/utils/mealPlanNavigation";
 import { markShoppingListEntranceStagger } from "@/utils/shopping/shoppingListEntrance";
-import { PANTRY_ASSUMPTION_USER_HINT_RU } from "@/utils/shopping/pantryStaplesShopping";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -956,7 +955,7 @@ export default function RecipePage() {
         />
 
         {id && recipe && !isInfantRecipe(recipe) && (
-          <div className="mt-4 space-y-2">
+          <div className="mt-4">
             <Button
               type="button"
               variant="secondary"
@@ -967,7 +966,6 @@ export default function RecipePage() {
               <ShoppingCart className="w-4 h-4 shrink-0" aria-hidden />
               Добавить в покупки
             </Button>
-            <p className="text-[11px] leading-snug text-muted-foreground px-0.5">{PANTRY_ASSUMPTION_USER_HINT_RU}</p>
           </div>
         )}
 
