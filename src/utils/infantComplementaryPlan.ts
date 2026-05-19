@@ -43,4 +43,35 @@ export function getInfantComplementaryAgeBandU12(ageMonths: number | null): Infa
   return "9_11";
 }
 
-/** Тексты hero прикорма задаются в `MealPlanPage` (единый короткий блок для всех возрастов &lt;12 мес). */
+/** Янтарное предупреждение в hero info-блоке плана прикорма (0–5 мес); с 6 мес — без него. */
+export type InfantPlanHeroNoticeKind = "too_early" | "doctor";
+
+export const INFANT_PLAN_HERO_NOTICE_TOO_EARLY =
+  "До 4 месяцев прикорм обычно не начинают. Сейчас основное питание — грудное молоко или адаптированная смесь. Сроки ввода обсудите с педиатром.";
+
+export const INFANT_PLAN_HERO_NOTICE_DOCTOR =
+  "В 4–5 месяцев прикорм вводят только по согласованию с врачом.";
+
+export const INFANT_PLAN_HERO_BODY_BEFORE_COMPLEMENTARY =
+  "Основное питание — грудное молоко или смесь. Прикорм обычно начинают ближе к 4–6 месяцам.";
+
+export const INFANT_PLAN_HERO_BODY_COMPLEMENTARY_ACTIVE =
+  "Основное питание — грудное молоко или смесь. Прикорм вводится постепенно, обычно 1–2 раза в день.";
+
+export function getInfantPlanHeroNoticeKind(ageMonths: number | null): InfantPlanHeroNoticeKind | null {
+  if (ageMonths == null || !Number.isFinite(ageMonths)) return null;
+  const m = Math.max(0, Math.round(ageMonths));
+  if (m < 4) return "too_early";
+  if (m <= 5) return "doctor";
+  return null;
+}
+
+export function getInfantPlanHeroBodyParagraph(ageMonths: number | null): string {
+  const kind = getInfantPlanHeroNoticeKind(ageMonths);
+  if (kind === "too_early") return INFANT_PLAN_HERO_BODY_BEFORE_COMPLEMENTARY;
+  return INFANT_PLAN_HERO_BODY_COMPLEMENTARY_ACTIVE;
+}
+
+export function getInfantPlanHeroNoticeText(kind: InfantPlanHeroNoticeKind): string {
+  return kind === "too_early" ? INFANT_PLAN_HERO_NOTICE_TOO_EARLY : INFANT_PLAN_HERO_NOTICE_DOCTOR;
+}

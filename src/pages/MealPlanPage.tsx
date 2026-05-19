@@ -110,6 +110,9 @@ import { trackUsageEvent } from "@/utils/usageEvents";
 import { consumeJustCreatedMemberId } from "@/services/planFill";
 import {
   getInfantComplementaryAgeBandU12,
+  getInfantPlanHeroBodyParagraph,
+  getInfantPlanHeroNoticeKind,
+  getInfantPlanHeroNoticeText,
   INFANT_PLAN_SLOT_FAMILIAR,
   INFANT_PLAN_SLOT_NEW_PRODUCT,
   isInfantComplementaryPlanContext,
@@ -440,9 +443,8 @@ export default function MealPlanPage() {
     selectedMember?.age_months != null && Number.isFinite(selectedMember.age_months)
       ? Math.max(0, Math.round(selectedMember.age_months))
       : null;
-  /** Hero плана прикорма: строка про врача только при 4–5 мес; с 6 мес не показываем. */
-  const showInfantComplementaryDoctorNotice =
-    infantAgeMonths != null && infantAgeMonths >= 4 && infantAgeMonths < 6;
+  const infantPlanHeroNoticeKind = getInfantPlanHeroNoticeKind(infantAgeMonths);
+  const infantPlanHeroBodyParagraph = getInfantPlanHeroBodyParagraph(infantAgeMonths);
   const infantAgeBandU12 = useMemo(() => getInfantComplementaryAgeBandU12(infantAgeMonths), [infantAgeMonths]);
   const introducedProductKeys = useMemo(
     () =>
@@ -2230,16 +2232,16 @@ export default function MealPlanPage() {
                     role="region"
                     aria-label="Справка о прикорме"
                   >
-                    {showInfantComplementaryDoctorNotice ? (
+                    {infantPlanHeroNoticeKind ? (
                       <p
                         className="text-xs font-medium leading-snug text-amber-950/85 dark:text-amber-100/90 rounded-md bg-amber-500/[0.09] border border-amber-500/20 px-2 py-1.5"
                         role="status"
                       >
-                        В 4–5 месяцев прикорм вводят только по согласованию с врачом.
+                        {getInfantPlanHeroNoticeText(infantPlanHeroNoticeKind)}
                       </p>
                     ) : null}
                     <p className="text-[12px] sm:text-[13px] leading-[1.45] font-normal text-muted-foreground w-full min-w-0">
-                      Основное питание — грудное молоко или смесь. Прикорм вводится постепенно, обычно 1–2 раза в день.
+                      {infantPlanHeroBodyParagraph}
                     </p>
                     <p className="text-[11px] sm:text-xs leading-snug text-muted-foreground/80 w-full min-w-0">
                       Подробнее о прикорме — в разделе ниже.
