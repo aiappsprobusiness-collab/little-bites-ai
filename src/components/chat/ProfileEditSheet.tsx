@@ -373,11 +373,11 @@ export function ProfileEditSheet({
               </p>
             </div>
           ) : null}
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {isCreate
-              ? "Добавьте профиль, чтобы мы учитывали особенности питания члена вашей семьи."
-              : "Измените данные, чтобы рекомендации учитывали особенности питания."}
-          </p>
+          {!isCreate ? (
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Измените данные, чтобы рекомендации учитывали особенности питания.
+            </p>
+          ) : null}
           <div className="space-y-2 w-full min-w-0">
             <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
             <Input
