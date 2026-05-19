@@ -20,3 +20,9 @@ export const FREE_ALLERGY_PAYWALL_MESSAGE =
 
 export const FREE_ALLERGY_SINGLE_HINT_CREATE =
   "На бесплатном плане в профиле можно указать одну аллергию. Список можно изменить позже в карточке профиля.";
+
+/** После добавления одной аллергии на Free (поле заблокировано). */
+export const FREE_ALLERGY_LIMIT_REACHED_HINT =
+  "Указана одна аллергия — лимит бесплатного плана. Удалите чип, чтобы заменить.";
+
+export const FREE_ALLERGY_UPSELL_LINK_LABEL = "Несколько аллергий — в полной версии";

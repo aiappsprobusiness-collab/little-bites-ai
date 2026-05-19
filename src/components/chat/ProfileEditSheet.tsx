@@ -32,6 +32,11 @@ import {
   PREMIUM_PROFILES_MAX_BODY,
   PREMIUM_PROFILES_MAX_TITLE,
 } from "@/utils/friendlyLimitCopy";
+import {
+  isFreeSingleAllergyLimitReached,
+  openOnboardingSecondAllergyPaywall,
+} from "@/utils/freeAllergyProfileUi";
+import { FreeAllergyUpsellHint } from "@/components/profile/FreeAllergyUpsellHint";
 import { Calendar } from "lucide-react";
 
 function parseTags(s: string): string[] {
@@ -94,7 +99,6 @@ export function ProfileEditSheet({
   const { members, updateMember, createMember, deleteMember, isUpdating, isCreating, isDeleting } = useMembers();
   const { hasAccess, subscriptionStatus } = useSubscription();
   const limits = getSubscriptionLimits(subscriptionStatus);
-  const showPaywall = useAppStore((s) => s.showPaywall);
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
@@ -156,21 +160,21 @@ export function ProfileEditSheet({
     setDislikesInput("");
   }, [open, isCreate, member, limits.maxAllergiesPerProfile, limits.maxLikesTagsPerProfile, limits.maxDislikesTagsPerProfile]);
 
+  const freeAllergyInputBlocked = isFreeSingleAllergyLimitReached(hasAccess, allergies.length);
+
+  const openSecondAllergyPaywall = () => {
+    openOnboardingSecondAllergyPaywall({
+      setPaywallReason,
+      setPaywallCustomMessage,
+      setShowPaywall,
+    });
+  };
+
   const baseAllergiesHandlers = createTagListHandlers(setAllergies, setAllergyInput);
   const allergiesHandlers = {
     ...baseAllergiesHandlers,
     add: (raw: string) => {
-      if (!hasAccess && allergies.length >= 1) {
-        toast({
-          title: "Важно учитывать всё питание ребёнка",
-          description:
-            "На бесплатном плане в профиле доступна одна аллергия. Полная версия позволяет указать несколько — откройте условия подписки ниже.",
-        });
-        setPaywallReason("onboarding_second_allergy_free");
-        setPaywallCustomMessage(null);
-        setShowPaywall(true);
-        return;
-      }
+      if (freeAllergyInputBlocked) return;
       if (hasAccess && allergies.length >= limits.maxAllergiesPerProfile) {
         toast({
           title: "Лимит аллергий",
@@ -342,7 +346,7 @@ export function ProfileEditSheet({
     <Sheet
       open={open}
       onOpenChange={(next) => {
-        if (!next && showPaywall) return;
+        if (!next) setShowPaywall(false);
         onOpenChange(next);
       }}
     >
@@ -350,12 +354,6 @@ export function ProfileEditSheet({
         side="bottom"
         className="rounded-t-3xl flex flex-col max-h-[85vh]"
         aria-describedby="profile-sheet-desc"
-        onPointerDownOutside={(e) => {
-          if (showPaywall) e.preventDefault();
-        }}
-        onInteractOutside={(e) => {
-          if (showPaywall) e.preventDefault();
-        }}
       >
         <p id="profile-sheet-desc" className="sr-only">Редактирование профиля</p>
         <SheetHeader>
@@ -409,22 +407,30 @@ export function ProfileEditSheet({
             </div>
             <p className="text-xs text-muted-foreground">Возраст рассчитывается автоматически</p>
           </div>
-          <TagListEditor
-            label="Аллергии"
-            chipVariant="allergy"
-            items={allergies}
-            inputValue={allergyInput}
-            onInputChange={setAllergyInput}
-            onAdd={allergiesHandlers.add}
-            onEdit={allergiesHandlers.edit}
-            onRemove={allergiesHandlers.remove}
-            placeholder="Например: БКМ, орехи"
-            helperText={
-              !hasAccess && isCreate
-                ? `Введите через запятую или нажмите Enter. ${FREE_ALLERGY_SINGLE_HINT_CREATE}`
-                : "Введите через запятую или нажмите Enter"
-            }
-          />
+          <div className="space-y-1">
+            <TagListEditor
+              label="Аллергии"
+              chipVariant="allergy"
+              items={allergies}
+              inputValue={allergyInput}
+              onInputChange={setAllergyInput}
+              onAdd={allergiesHandlers.add}
+              onEdit={allergiesHandlers.edit}
+              onRemove={allergiesHandlers.remove}
+              placeholder="Например: БКМ, орехи"
+              readOnly={freeAllergyInputBlocked}
+              helperText={
+                !hasAccess && isCreate && !freeAllergyInputBlocked
+                  ? `Введите через запятую или нажмите Enter. ${FREE_ALLERGY_SINGLE_HINT_CREATE}`
+                  : !freeAllergyInputBlocked
+                    ? "Введите через запятую или нажмите Enter"
+                    : undefined
+              }
+            />
+            {freeAllergyInputBlocked ? (
+              <FreeAllergyUpsellHint onLearnMore={openSecondAllergyPaywall} />
+            ) : null}
+          </div>
           {hasAccess && (
             <>
               <TagListEditor

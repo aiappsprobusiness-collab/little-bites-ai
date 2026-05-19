@@ -15,6 +15,11 @@ import {
   PREMIUM_PROFILES_MAX_BODY,
   PREMIUM_PROFILES_MAX_TITLE,
 } from "@/utils/friendlyLimitCopy";
+import {
+  isFreeSingleAllergyLimitReached,
+  openOnboardingSecondAllergyPaywall,
+} from "@/utils/freeAllergyProfileUi";
+import { FreeAllergyUpsellHint } from "@/components/profile/FreeAllergyUpsellHint";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { normalizeAllergyInput } from "@/utils/allergyAliases";
 import { PAYWALL_ADD_CHILD_CUSTOM_MESSAGE } from "@/constants/paywallCustomMessages";
@@ -91,19 +96,19 @@ export function AddChildForm({
     setList((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const freeAllergyInputBlocked = isFreeSingleAllergyLimitReached(hasAccess, allergies.length);
+
+  const openSecondAllergyPaywall = () => {
+    openOnboardingSecondAllergyPaywall({
+      setPaywallReason,
+      setPaywallCustomMessage,
+      setShowPaywall,
+    });
+  };
+
   const allergiesHandlers = {
     add: (raw: string) => {
-      if (!hasAccess && allergies.length >= 1) {
-        toast({
-          title: "Несколько аллергий — в полной версии",
-          description:
-            "На бесплатном плане в одном профиле доступна одна аллергия. Ниже можно открыть условия подписки.",
-        });
-        setPaywallReason("onboarding_second_allergy_free");
-        setPaywallCustomMessage(null);
-        setShowPaywall(true);
-        return;
-      }
+      if (freeAllergyInputBlocked) return;
       const toAdd = parseTags(raw).map((s) => normalizeAllergyInput(s)).filter(Boolean);
       if (toAdd.length) {
         const existing = new Set(allergies.map((s) => s.trim().toLowerCase()));
@@ -269,22 +274,28 @@ export function AddChildForm({
         <p className="text-typo-caption text-muted-foreground">Возраст считается автоматически</p>
       </div>
 
-      <TagListEditor
-        label="Аллергии"
-        chipVariant="allergy"
-        items={allergies}
-        inputValue={allergyInput}
-        onInputChange={setAllergyInput}
-        onAdd={allergiesHandlers.add}
-        onEdit={allergiesHandlers.edit}
-        onRemove={allergiesHandlers.remove}
-        placeholder="Добавить аллергию (запятая или Enter)"
-        helperText={
-          !hasAccess
-            ? `Запятая или Enter. ${FREE_ALLERGY_SINGLE_HINT_CREATE}`
-            : "Запятая или Enter."
-        }
-      />
+      <div className="space-y-1">
+        <TagListEditor
+          label="Аллергии"
+          chipVariant="allergy"
+          items={allergies}
+          inputValue={allergyInput}
+          onInputChange={setAllergyInput}
+          onAdd={allergiesHandlers.add}
+          onEdit={allergiesHandlers.edit}
+          onRemove={allergiesHandlers.remove}
+          placeholder="Добавить аллергию (запятая или Enter)"
+          readOnly={freeAllergyInputBlocked}
+          helperText={
+            !hasAccess && !freeAllergyInputBlocked
+              ? `Запятая или Enter. ${FREE_ALLERGY_SINGLE_HINT_CREATE}`
+              : !hasAccess
+                ? undefined
+                : "Запятая или Enter."
+          }
+        />
+        {freeAllergyInputBlocked ? <FreeAllergyUpsellHint onLearnMore={openSecondAllergyPaywall} /> : null}
+      </div>
 
       {hasAccess && (
         <>

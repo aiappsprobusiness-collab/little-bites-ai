@@ -84,7 +84,7 @@
 | `add_child_limit` | Второй ребёнок / лимит профилей | онбординг, `HomePage`, `ChildProfileEditPage`, `ProfilePage`, формы |
 | `switch_child` | Переключение профиля | `MemberSelectorButton`, `MemberCarousel`, `ProfilePage` |
 | `allergies_locked` | Вторая и далее аллергия | `ChildProfileEditPage` |
-| `onboarding_second_allergy_free` | Вторая аллергия в онбординге (отдельный UI в Unified) | `ProfileEditSheet`, `AddChildForm` |
+| `onboarding_second_allergy_free` | Несколько аллергий на Free — **явный CTA** в онбординге (отдельный UI в Unified) | `FreeAllergyUpsellHint` → `openOnboardingSecondAllergyPaywall` из `ProfileEditSheet`, `AddChildForm` (не при каждом вводе) |
 | `preferences_locked` | Любимое / «не любит» | `ChildProfileEditPage`, `ProfilePage` |
 | `favorites_limit` | Лимит избранного | `useFavorites`, `ChatMessage`; при `!FF_UNIFIED_PAYWALL` ещё `FavoritesLimitSheet` |
 | `article_locked` | Статьи | `ArticlesPage` |
