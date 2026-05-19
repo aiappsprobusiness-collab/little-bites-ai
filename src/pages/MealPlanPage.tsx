@@ -375,7 +375,6 @@ export default function MealPlanPage() {
   const [showWeekPreviewSheet, setShowWeekPreviewSheet] = useState(false);
   const [shoppingBuildSheetOpen, setShoppingBuildSheetOpen] = useState(false);
   const [planProfileHelpOpen, setPlanProfileHelpOpen] = useState(false);
-  const [firstPlanShareBannerDismissed, setFirstPlanShareBannerDismissed] = useState(false);
   const [shareMenuPreview, setShareMenuPreview] = useState<
     | {
       kind: "day";
@@ -1309,13 +1308,8 @@ export default function MealPlanPage() {
     /** Пока нет ни одного слота с recipe_id, неделя/день могут уже быть «success», хотя startFillDay ещё пишет строки — без этого тост «готов» опережает подбор. */
     if (hasNoDishes) return;
     planReadyToastShownRef.current = true;
-    // Не сбрасываем justCreatedMemberId здесь — баннер «План готов» / «Отправить меню» остаётся до закрытия пользователем
-    toast({
-      title: "План питания на сегодня готов 🍽",
-      description: "Мы подобрали меню на сегодня",
-      /** Как PWAUpdateToast: висит до закрытия (крестик / свайп Radix), без авто-dismiss. */
-      duration: Number.POSITIVE_INFINITY,
-    });
+    setJustCreatedMemberIdState(null);
+    toast({ description: "План на день готов", duration: 5000 });
   }, [justCreatedMemberId, showPlanMealsSkeleton, hasNoDishes, toast]);
 
   const renderStartRef = useRef(0);
@@ -2168,46 +2162,6 @@ export default function MealPlanPage() {
             isInfantPlanUi && "scrollbar-none",
           )}
         >
-          {/* Блок приглашения к шарингу после первой генерации */}
-          {justCreatedMemberId && !firstPlanShareBannerDismissed && !isInfantPlanUi && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25 }}
-              className="rounded-2xl bg-card border border-border/70 shadow-[0_1px_6px_-2px_rgba(0,0,0,0.05)] p-4 mb-3 relative"
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setFirstPlanShareBannerDismissed(true);
-                  setJustCreatedMemberIdState(null);
-                }}
-                className="absolute top-3 right-3 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
-                aria-label="Закрыть"
-              >
-                <span className="text-lg leading-none">×</span>
-              </button>
-              <p className="text-sm font-medium text-foreground pr-6 mb-1">
-                План готов! 🎉
-              </p>
-              <p className="text-xs text-muted-foreground mb-3">
-                Многие родители делятся такими меню<br />в семейных чатах.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 rounded-lg border-border/70 bg-background text-primary hover:bg-muted/50 text-xs font-medium gap-1.5"
-                onClick={openShareDayPreview}
-                disabled={isAnyGenerating || !dayHasShareableMeals}
-              >
-                <ShareIosIcon className="w-4 h-4 shrink-0" />
-                Отправить меню
-              </Button>
-              {dayHasShareableMeals ? (
-                <p className="text-[10px] text-muted-foreground mt-1.5">Покажите близким или сохраните себе</p>
-              ) : null}
-            </motion.div>
-          )}
           {/* 1) Hero: «Собрать день» + «Собрать неделю»; отправка меню — под списком блюд */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
