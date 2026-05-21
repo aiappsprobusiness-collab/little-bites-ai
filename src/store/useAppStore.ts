@@ -24,6 +24,9 @@ interface AppState {
   /** Экран Free vs Premium (модалка). */
   showFreeVsPremiumModal: boolean;
   setShowFreeVsPremiumModal: (v: boolean) => void;
+  /** Предложение trial после первого успеха (план / чат). */
+  showPostValueTrialPrompt: boolean;
+  setShowPostValueTrialPrompt: (v: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -45,6 +48,8 @@ export const useAppStore = create<AppState>()(
       setTrialOnboardingResumeCallback: (fn) => set({ trialOnboardingResumeCallback: fn }),
       showFreeVsPremiumModal: false,
       setShowFreeVsPremiumModal: (v) => set({ showFreeVsPremiumModal: v }),
+      showPostValueTrialPrompt: false,
+      setShowPostValueTrialPrompt: (v) => set({ showPostValueTrialPrompt: v }),
     }),
     { name: STORAGE_KEY, partialize: (s) => ({ _version: s._version }) }
   )

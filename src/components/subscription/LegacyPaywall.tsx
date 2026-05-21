@@ -5,6 +5,8 @@ import { X, Crown, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAuth } from "@/hooks/useAuth";
+import { paywallViewProperties } from "@/utils/paywallFunnelAnalytics";
 import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
@@ -46,6 +48,7 @@ function trialFreeShortLine(days: number): string {
 export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const paywallCustomMessage = useAppStore((s) => s.paywallCustomMessage);
   const {
     startPayment,
@@ -70,7 +73,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
   useEffect(() => {
     if (isOpen) {
       trackUsageEvent("paywall_view", {
-        properties: { paywall_reason: resolvedReason },
+        properties: paywallViewProperties(resolvedReason, user?.created_at),
       });
       trackPaywallTextShown(resolvedReason, { surface: "legacy_paywall" });
     }

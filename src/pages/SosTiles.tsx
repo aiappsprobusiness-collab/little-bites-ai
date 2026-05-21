@@ -52,6 +52,7 @@ export default function SosTiles() {
     chips: ReturnType<typeof getChipsForTopic>;
     isLocked: boolean;
     lockedDescription?: string;
+    browseContent?: { intro: string[]; checklistNow?: string[]; redFlags?: string[] };
   } | null>(null);
 
   const helpSections = useMemo(() => {
@@ -85,35 +86,34 @@ export default function SosTiles() {
     const topicMeta = getTopicById(key);
     setInitialMessage(null);
     if (topicConfig) {
-      if (topicConfig.requiredTier === "paid" && !hasAccess) {
-        setPaywallOpen(true);
-        navigate("/sos", { replace: true });
-        return;
-      }
-      trackUsageEvent("help_topic_open", { properties: { topic_id: topicConfig.id } });
+      const browseOnly = topicConfig.requiredTier === "paid" && !hasAccess;
+      trackUsageEvent("help_topic_open", { properties: { topic_id: topicConfig.id, browse_only: browseOnly } });
       setSheetTopic({
         key: topicConfig.id,
         title: getTopicDisplayTitle(topicConfig),
         chips: getChipsForTopic(topicConfig.id),
-        isLocked: false,
-        lockedDescription: undefined,
+        isLocked: browseOnly,
+        lockedDescription: browseOnly ? topicConfig.shortSubtitle : undefined,
+        browseContent: browseOnly
+          ? { intro: topicConfig.intro, checklistNow: topicConfig.checklistNow, redFlags: topicConfig.redFlags }
+          : undefined,
       });
       setSheetOpen(true);
       navigate("/sos", { replace: true });
     } else if (topicMeta) {
       const cfg = getSosTopicConfig(topicMeta.id);
-      if (cfg?.requiredTier === "paid" && !hasAccess) {
-        setPaywallOpen(true);
-        navigate("/sos", { replace: true });
-        return;
-      }
-      trackUsageEvent("help_topic_open", { properties: { topic_id: topicMeta.id } });
+      const browseOnly = cfg?.requiredTier === "paid" && !hasAccess;
+      trackUsageEvent("help_topic_open", { properties: { topic_id: topicMeta.id, browse_only: browseOnly } });
       setSheetTopic({
         key: topicMeta.id,
         title: cfg ? getTopicDisplayTitle(cfg) : topicMeta.label,
         chips: getChipsForTopic(topicMeta.id),
-        isLocked: false,
-        lockedDescription: undefined,
+        isLocked: browseOnly,
+        lockedDescription: browseOnly && cfg ? cfg.shortSubtitle : undefined,
+        browseContent:
+          browseOnly && cfg
+            ? { intro: cfg.intro, checklistNow: cfg.checklistNow, redFlags: cfg.redFlags }
+            : undefined,
       });
       setSheetOpen(true);
       navigate("/sos", { replace: true });
@@ -140,18 +140,18 @@ export default function SosTiles() {
   };
 
   const handleTopicSelect = (topic: SosTopicConfig) => {
-    if (topic.requiredTier === "paid" && !hasAccess) {
-      handleLockedTopic();
-      return;
-    }
-    trackUsageEvent("help_topic_open", { properties: { topic_id: topic.id } });
+    const browseOnly = topic.requiredTier === "paid" && !hasAccess;
+    trackUsageEvent("help_topic_open", { properties: { topic_id: topic.id, browse_only: browseOnly } });
     setInitialMessage(null);
     setSheetTopic({
       key: topic.id,
       title: getTopicDisplayTitle(topic),
       chips: getChipsForTopic(topic.id),
-      isLocked: false,
-      lockedDescription: undefined,
+      isLocked: browseOnly,
+      lockedDescription: browseOnly ? topic.shortSubtitle : undefined,
+      browseContent: browseOnly
+        ? { intro: topic.intro, checklistNow: topic.checklistNow, redFlags: topic.redFlags }
+        : undefined,
     });
     setSheetOpen(true);
   };
@@ -277,6 +277,7 @@ export default function SosTiles() {
           chips={sheetTopic.chips}
           isLocked={sheetTopic.isLocked}
           lockedDescription={sheetTopic.lockedDescription}
+          browseContent={sheetTopic.browseContent}
           onOpenPremium={sheetTopic.isLocked ? handleLockedTopic : undefined}
           hasAccess={sheetTopic.key === "quick" ? hasAccess : undefined}
           onPremiumChipTap={

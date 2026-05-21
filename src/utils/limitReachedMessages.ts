@@ -21,9 +21,9 @@ export function getLimitReachedTitle(feature: LimitReachedFeature): string {
 export function getLimitReachedMessage(feature: LimitReachedFeature): string {
   switch (feature) {
     case "chat_recipe":
-      return "В бесплатной версии есть лимит на количество подборов в день.\nВ полной — можно подбирать блюда без ограничений.";
+      return "В бесплатной версии — до 5 подборов в день.\nВ полной — до 20 подборов в день.";
     case "help":
-      return "В бесплатной версии есть лимит\nС полной — можно обращаться, когда это действительно нужно";
+      return "В бесплатной версии — 2 вопроса в день.\nВ полной — до 20 вопросов в день.";
     case "plan_refresh":
       return "Обновление плана — в полной версии\nМеняйте блюда, когда хочется чего-то другого";
     case "plan_fill_day":

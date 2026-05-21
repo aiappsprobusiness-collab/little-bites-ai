@@ -33,9 +33,10 @@ import { POOL_SOURCES } from "@/utils/recipeCanonical";
 import { isDebugPlanEnabled } from "@/utils/debugPlan";
 import { invokeGeneratePlan } from "@/api/invokeGeneratePlan";
 import { trackUsageEvent } from "@/utils/usageEvents";
+import { FREE_MEAL_SWAP_PER_DAY } from "@/utils/subscriptionRules";
 
 const MEAL_SWAP_FREE_KEY = "mealSwap_free";
-const FREE_SWAP_LIMIT_PER_DAY = 2;
+const FREE_SWAP_LIMIT_PER_DAY = FREE_MEAL_SWAP_PER_DAY;
 
 function getStoredFreeSwap(dayKey: string): { dayKey: string; count: number } {
   if (typeof localStorage === "undefined") return { dayKey: "", count: 0 };
@@ -578,7 +579,7 @@ export function useReplaceMealSlot(
       | { ok: true; pickedSource: "pool" | "ai"; newRecipeId: string; title: string; plan_source: "pool" | "ai"; requestId?: string; reason?: string }
       | { ok: false; error: string; code?: string; requestId?: string; reason?: string }
     > => {
-      if (!hasAccess) {
+      if (!hasAccess && !params.isFree) {
         return { ok: false, error: "premium_required" };
       }
       if (params.isFree && getFreeSwapUsedForDay(params.dayKey)) {
@@ -684,7 +685,7 @@ export function useReplaceMealSlot(
       }
       const recipeId = data.newRecipeId ?? data.recipe_id;
       if (data.pickedSource && recipeId && data.title != null) {
-        if (!didCountFreeSwap) {
+        if (params.isFree && !didCountFreeSwap) {
           didCountFreeSwap = true;
           setFreeSwapUsedForDay(params.dayKey);
         }

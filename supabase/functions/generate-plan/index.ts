@@ -1325,6 +1325,8 @@ serve(async (req) => {
       nutrition_goals?: string[];
       /** Опционально; мягкий приоритет только при явной передаче не-balanced ключа (клиент Плана не шлёт). */
       selected_goal?: string;
+      /** true — не списывать plan_fill_day (первое авто-заполнение при онбординге / первом заходе). */
+      skip_plan_fill_usage?: boolean;
     };
     const action = body.action === "run" ? "run" : body.action === "replace_slot" ? "replace_slot" : body.action === "cancel" ? "cancel" : body.action === "start" ? "start" : null;
     const type = body.type === "day" || body.type === "week" ? body.type : "day";
@@ -1586,7 +1588,8 @@ serve(async (req) => {
     const hasPremium = prof?.premium_until && new Date(prof.premium_until) > new Date();
     const hasTrial = prof?.trial_until && new Date(prof.trial_until) > new Date();
     const isPremiumOrTrial = prof?.status === "premium" || prof?.status === "trial" || !!hasPremium || !!hasTrial;
-    if (!isPremiumOrTrial) {
+    const skipPlanFillUsage = body.skip_plan_fill_usage === true;
+    if (!isPremiumOrTrial && !skipPlanFillUsage) {
       const used = typeof planFillUsed.data === "number" ? planFillUsed.data : 0;
       if (used >= FREE_PLAN_FILL_LIMIT) {
         return new Response(
@@ -2066,7 +2069,7 @@ serve(async (req) => {
       safeLog("CHAT_PLAN_CULTURAL_SUMMARY", finalizeCulturalSummary(culturalSummaryAcc, requestId));
     }
 
-    if (!isPremiumOrTrial) {
+    if (!isPremiumOrTrial && !skipPlanFillUsage) {
       await supabase.from("usage_events").insert({ user_id: userId, member_id: effectiveMemberId, feature: "plan_fill_day" });
     }
 

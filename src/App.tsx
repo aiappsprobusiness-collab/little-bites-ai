@@ -48,6 +48,8 @@ import { PWAInstall } from "./components/pwa/PWAInstall";
 import { PWAUpdateToast } from "./components/pwa/PWAUpdateToast";
 import { Paywall } from "./components/subscription/Paywall";
 import { TrialActivatedModal } from "./components/subscription/TrialActivatedModal";
+import { PostValueTrialPromptModal } from "./components/subscription/PostValueTrialPromptModal";
+import { markPostValueTrialPromptSeen } from "./utils/postValueTrialPromptStorage";
 import { FreeVsPremiumModal } from "./components/subscription/FreeVsPremiumModal";
 import { TrialLifecycleModalsHost } from "./components/subscription/TrialLifecycleModalsHost";
 import { FavoritesLimitSheet } from "./components/plan/FavoritesLimitSheet";
@@ -211,6 +213,40 @@ function TrialActivatedModalHost() {
   );
 }
 
+function PostValueTrialPromptHost() {
+  const { user } = useAuth();
+  const { hasAccess, trialUsed, startTrial, isStartingTrial } = useSubscription();
+  const { toast } = useToast();
+  const open = useAppStore((s) => s.showPostValueTrialPrompt);
+  const setOpen = useAppStore((s) => s.setShowPostValueTrialPrompt);
+
+  if (!user) return null;
+
+  return (
+    <PostValueTrialPromptModal
+      open={open}
+      userId={user.id}
+      onClose={() => setOpen(false)}
+      isStartingTrial={isStartingTrial}
+      onTryTrial={async () => {
+        try {
+          await startTrial();
+          setOpen(false);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "";
+          if (msg === "TRIAL_ALREADY_USED") {
+            toast({ title: PAYWALL_TRIAL_ALREADY_USED, description: "Оформите полную версию для полного доступа." });
+          } else if (msg) {
+            toast({ variant: "destructive", title: "Ошибка", description: msg });
+          }
+        } finally {
+          markPostValueTrialPromptSeen(user.id);
+        }
+      }}
+    />
+  );
+}
+
 function GlobalFreeVsPremiumModalHost() {
   const { hasAccess, trialUsed, startTrial } = useSubscription();
   const { toast } = useToast();
@@ -290,6 +326,7 @@ const App = () => (
             <PWAUpdateToast />
             <GlobalPaywall />
             <TrialActivatedModalHost />
+            <PostValueTrialPromptHost />
             <GlobalFreeVsPremiumModalHost />
             <TrialLifecycleModalsHost />
             {!FF_UNIFIED_PAYWALL ? <FavoritesLimitSheet /> : null}

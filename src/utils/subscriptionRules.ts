@@ -2,6 +2,9 @@
  * Централизованная логика подписок: Free / Trial / Premium.
  * Вся проверка в приложении должна идти через эту утилиту.
  * Trial = 100% функционал Premium (3 дня). Free — ограничения.
+ *
+ * Монетизация карточек Help (free vs paid) — только в `src/data/sosTopics.ts` (`requiredTier`).
+ * Суточные лимиты чата и Help — здесь и в `supabase/functions/_shared/subscriptionLimits.ts`.
  */
 
 /** Длительность trial при активации по кнопке (см. миграции profiles_v2.trial_until). */
@@ -11,6 +14,9 @@ export const TRIAL_DURATION_DAYS = 3;
 export const PREMIUM_TRIAL_CHAT_DAILY_LIMIT = 20;
 /** Суточный лимит запросов «Помощь маме» для Premium/Trial. */
 export const PREMIUM_TRIAL_HELP_DAILY_LIMIT = 20;
+
+/** Free: замен блюда в плане из пула за сутки (локальный счётчик на клиенте). */
+export const FREE_MEAL_SWAP_PER_DAY = 2;
 
 export type SubscriptionTier = "free" | "trial" | "premium";
 
@@ -24,7 +30,6 @@ export interface SubscriptionLimitsConfig {
   /** Макс. тегов «не любит» на профиль (Premium/Trial). */
   maxDislikesTagsPerProfile: number;
   preferencesEnabled: boolean;
-  helpUnlockedBlocks: number;
   /**
    * Макс. успешных генераций рецепта в чате за сутки (UTC), счётчик — usage_events.feature = chat_recipe.
    * null только для внутренних исключений; у тарифов задано явное число.
@@ -45,8 +50,7 @@ export const SUBSCRIPTION_LIMITS: {
     maxLikesTagsPerProfile: 0,
     maxDislikesTagsPerProfile: 0,
     preferencesEnabled: false,
-    helpUnlockedBlocks: 3,
-    aiDailyLimit: 2,
+    aiDailyLimit: 5,
     helpDailyLimit: 2,
   },
   paid: {
@@ -56,7 +60,6 @@ export const SUBSCRIPTION_LIMITS: {
     maxLikesTagsPerProfile: 5,
     maxDislikesTagsPerProfile: 5,
     preferencesEnabled: true,
-    helpUnlockedBlocks: 8,
     aiDailyLimit: PREMIUM_TRIAL_CHAT_DAILY_LIMIT,
     helpDailyLimit: PREMIUM_TRIAL_HELP_DAILY_LIMIT,
   },

@@ -19,9 +19,11 @@
 | Профили (создание / активные) | 1 |
 | Аллергии на профиль | 1 |
 | Теги «любит» / «не любит» | 0 (предпочтения выключены) |
-| Блоки Help (разблокировано) | 3 |
+| Темы Help (доступ к контенту) | 2 темы: `food_refusal`, `urgent_help`; остальные — просмотр статики, paywall на отправку вопроса. См. `sosTopics.ts` / `requiredTier` |
 | Запросы «Помощь маме» в сутки | 2 (`feature`: `help`) |
-| Генерации рецепта в чате в сутки | 2 (`feature`: `chat_recipe`) |
+| Генерации рецепта в чате в сутки | 5 (`feature`: `chat_recipe`) |
+| Замена блюда в плане (pool) | 2/сутки (клиент, `mealSwap_free`) |
+| Первое авто-заполнение плана | не списывает `plan_fill_day` (`skip_plan_fill_usage`) |
 | Избранное | 7 рецептов (см. `favoritesLimit` в `useSubscription`) |
 
 ---
@@ -131,9 +133,17 @@
 ## SOS / Help: что бесплатно
 
 - `src/constants/sos.ts` — для сетки заявлены бесплатные id: `food_refusal`, `urgent_help`.
-- **Источник правды по блокировке карточек:** `src/data/sosTopics.ts` — поле `requiredTier: "free" | "paid"`.
+- **Источник правды по карточкам:** `src/data/sosTopics.ts` — поле `requiredTier: "free" | "paid"`.
+- **Free + paid-тема:** sheet открывается с контентом (`intro`, чеклист); paywall (`sos_topic_locked`) только при **отправке** вопроса.
+- **Лимит help:** 2/сутки (`help` в `subscriptionRules`).
 
-Заблокированная тема → обычно `sos_topic_locked` + глобальный Paywall.
+## Аналитика воронки (первые 24 ч)
+
+Событие `paywall_view` (Unified/Legacy Paywall) дополнительно передаёт:
+- `within_first_24h` — boolean
+- `hours_since_signup` — число (из `user.created_at`)
+
+См. `src/utils/paywallFunnelAnalytics.ts`.
 
 ---
 

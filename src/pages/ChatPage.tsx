@@ -56,6 +56,7 @@ import {
 } from "@/utils/friendlyLimitCopy";
 import { PREMIUM_TRIAL_CHAT_DAILY_LIMIT, PREMIUM_TRIAL_HELP_DAILY_LIMIT } from "@/utils/subscriptionRules";
 import { getRemainingRecipesText } from "@/utils/recipePickHintCopy";
+import { shouldOfferPostValueTrial } from "@/utils/postValueTrialPromptStorage";
 
 const CHAT_HINTS_SEEN_KEY = "chat_hints_seen_v1";
 /** Порог (px) от низа скролла: если пользователь в пределах — автоскролл вниз при новых сообщениях. */
@@ -304,6 +305,7 @@ export default function ChatPage() {
     subscriptionStatus,
     aiDailyLimit,
     hasAccess,
+    trialUsed,
     helpLimitExceeded,
     helpUsed,
     helpDailyLimit,
@@ -1434,6 +1436,15 @@ export default function ChatPage() {
               : m
           )
         );
+
+        if (
+          mode === "recipes" &&
+          showRecipe &&
+          user?.id &&
+          shouldOfferPostValueTrial({ userId: user.id, hasAccess, trialUsed })
+        ) {
+          useAppStore.getState().setShowPostValueTrialPrompt(true);
+        }
 
         if (typeof window !== "undefined") {
           if (localStorage.getItem("a2hs_first_recipe_dispatched") !== "1") {

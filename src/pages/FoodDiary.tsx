@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -12,6 +12,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useFamily } from "@/contexts/FamilyContext";
 import { usePlateLogs } from "@/hooks/usePlateLogs";
 import { SUPABASE_URL } from "@/integrations/supabase/client";
+import {
+  canSendFoodDiaryAsFree,
+  markFoodDiaryFreeSendToday,
+} from "@/utils/foodDiaryFreeTeaser";
 
 export default function FoodDiary() {
   const navigate = useNavigate();
@@ -21,21 +25,6 @@ export default function FoodDiary() {
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
-
-  // Нет доступа (free/expired): при открытии дневника — Paywall
-  useEffect(() => {
-    if (!hasAccess) {
-      setPaywallReason("sos_premium_feature");
-      setPaywallCustomMessage(
-        "Дневник и разбор тарелки — в полной версии\nВ бесплатной — один профиль; в полной — контекст для всей семьи"
-      );
-      setShowPaywall(true);
-    }
-    return () => {
-      setPaywallCustomMessage(null);
-      setPaywallReason(null);
-    };
-  }, [hasAccess, setShowPaywall, setPaywallCustomMessage, setPaywallReason]);
   const { selectedMember, members } = useFamily();
   const { logs, isLoading: logsLoading } = usePlateLogs(30);
   const [input, setInput] = useState("");
@@ -56,9 +45,21 @@ export default function FoodDiary() {
         }
       : null;
 
+  const openDiaryPaywall = useCallback(() => {
+    setPaywallReason("sos_premium_feature");
+    setPaywallCustomMessage(
+      "Разбор тарелки с ИИ — в полной версии\nВ бесплатной — одна проба в день и просмотр истории"
+    );
+    setShowPaywall(true);
+  }, [setShowPaywall, setPaywallCustomMessage, setPaywallReason]);
+
   const sendMessage = useCallback(async () => {
     const text = input.trim();
     if (!text || !session?.access_token || !memberData) return;
+    if (!canSendFoodDiaryAsFree(hasAccess)) {
+      openDiaryPaywall();
+      return;
+    }
     setSending(true);
     setInput("");
     setLastResponse(null);
@@ -80,6 +81,9 @@ export default function FoodDiary() {
       const data = await res.json();
       const assistant = data?.message?.trim() || "Не удалось получить ответ.";
       setLastResponse({ user: text, assistant });
+      if (!hasAccess) {
+        markFoodDiaryFreeSendToday();
+      }
       queryClient.invalidateQueries({ queryKey: ["plate_logs", user?.id] });
     } catch {
       setLastResponse({
@@ -89,7 +93,9 @@ export default function FoodDiary() {
     } finally {
       setSending(false);
     }
-  }, [input, session?.access_token, memberData, selectedMember?.id, members, queryClient, user?.id]);
+  }, [input, session?.access_token, memberData, selectedMember?.id, members, queryClient, user?.id, hasAccess, openDiaryPaywall]);
+
+  const freeTeaserUsed = !hasAccess && !canSendFoodDiaryAsFree(hasAccess);
 
   return (
     <MobileLayout
@@ -106,6 +112,14 @@ export default function FoodDiary() {
           {!memberData && (
             <p className="text-typo-muted text-muted-foreground text-center py-4">
               Добавьте ребёнка в профиле для персональных рекомендаций.
+            </p>
+          )}
+
+          {!hasAccess && (
+            <p className="text-xs text-muted-foreground text-center px-2 leading-relaxed">
+              {freeTeaserUsed
+                ? "Сегодня пробная разборка использована. История ниже доступна; новый разбор — в полной версии."
+                : "Одна бесплатная разборка тарелки в день. История сохраняется."}
             </p>
           )}
 
@@ -161,7 +175,11 @@ export default function FoodDiary() {
         <div className="p-4 border-t bg-white/80 backdrop-blur-sm">
           <div className="flex gap-2 items-end rounded-full bg-slate-100/80 px-4 py-2 border border-slate-200/80">
             <Textarea
-              placeholder="Что малыш съел сегодня? Например: полбаночки кабачка и компот"
+              placeholder={
+                freeTeaserUsed
+                  ? "Разбор на сегодня использован — полная версия без лимита"
+                  : "Что малыш съел сегодня? Например: полбаночки кабачка и компот"
+              }
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {

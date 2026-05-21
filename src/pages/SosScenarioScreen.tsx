@@ -66,17 +66,8 @@ export default function SosScenarioScreen() {
     }
   }, [scenarioKey, navigate]);
 
-  /** Premium-темы без подписки — только paywall, без экрана сценария. */
-  useEffect(() => {
-    if (!scenarioKey) return;
-    const cfg = getSosTopicConfig(scenarioKey);
-    if (cfg?.requiredTier === "paid" && !hasAccess) {
-      setPaywallReason("sos_topic_locked");
-      setPaywallCustomMessage(null);
-      setShowPaywall(true);
-      navigate("/sos", { replace: true });
-    }
-  }, [scenarioKey, hasAccess, setShowPaywall, setPaywallReason, setPaywallCustomMessage, navigate]);
+  const topicCfg = scenarioKey ? getSosTopicConfig(scenarioKey) : undefined;
+  const isBrowseOnlyTopic = topicCfg?.requiredTier === "paid" && !hasAccess;
 
   useEffect(() => {
     if (topic?.id === "food_diary" && memberData && !details) {
@@ -107,6 +98,12 @@ export default function SosScenarioScreen() {
 
   const sendRequest = useCallback(async () => {
     if (!validKey || !topic || !session?.access_token || !memberData || loading) return;
+    if (isBrowseOnlyTopic) {
+      setPaywallReason("sos_topic_locked");
+      setPaywallCustomMessage(null);
+      setShowPaywall(true);
+      return;
+    }
     const ageMonths = memberData.age_months;
     const userMessage = details.trim()
       ? `${topic.label}\n${details.trim()}`
@@ -153,7 +150,20 @@ export default function SosScenarioScreen() {
     } finally {
       setLoading(false);
     }
-  }, [validKey, topic, session?.access_token, memberData, details, loading, appendMessage, scrollToBottom]);
+  }, [
+    validKey,
+    topic,
+    session?.access_token,
+    memberData,
+    details,
+    loading,
+    appendMessage,
+    scrollToBottom,
+    isBrowseOnlyTopic,
+    setPaywallReason,
+    setPaywallCustomMessage,
+    setShowPaywall,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -195,8 +205,15 @@ export default function SosScenarioScreen() {
         {/* Персонализированное описание и чипсы (пока нет сообщений или всегда сверху) */}
         {messages.length === 0 && (
           <>
+            {isBrowseOnlyTopic && topicCfg && (
+              <p className="text-xs text-amber-800/90 bg-amber-50 rounded-lg px-3 py-2 mb-3">
+                Можно читать советы ниже; персональный ответ — в полной версии.
+              </p>
+            )}
             <p className="text-slate-600 text-sm leading-relaxed mb-4">
-              {SOS_TOPIC_DESCRIPTIONS[topic.id] ?? "Опишите ситуацию — получите персональный совет."}
+              {topicCfg?.intro?.[0] ??
+                SOS_TOPIC_DESCRIPTIONS[topic.id] ??
+                "Опишите ситуацию — получите персональный совет."}
             </p>
             {SOS_TOPIC_CHIPS[topic.id]?.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">

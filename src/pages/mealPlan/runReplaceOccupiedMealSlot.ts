@@ -388,7 +388,7 @@ export async function runReplaceOccupiedMealSlot(
           toast({
             variant: "destructive",
             title: "Лимит",
-            description: "2 замены в день (Free). В Premium — без ограничений.",
+            description: "2 замены из пула в день (Free). В полной версии — без ограничений.",
           });
         } else if (err === "premium_required") {
           setPaywallReason("meal_replace");

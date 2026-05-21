@@ -45,8 +45,8 @@ export function RecipeChatSoftLimitDialog({
           <DialogTitle className="text-base font-semibold leading-snug tracking-tight sm:text-lg text-center text-balance px-1">
             Сегодня лимит подборов исчерпан 🙌
           </DialogTitle>
-          <p className="text-[14px] leading-relaxed text-muted-foreground whitespace-pre-line text-center text-balance px-1">{`В бесплатной версии есть лимит на количество подборов в день.
-В полной — можно подбирать блюда без ограничений.`}</p>
+          <p className="text-[14px] leading-relaxed text-muted-foreground whitespace-pre-line text-center text-balance px-1">{`В бесплатной версии — до 5 подборов в день.
+В полной — до 20 подборов в день.`}</p>
         </DialogHeader>
         {/*
           DialogFooter по умолчанию: sm:space-x-2 — в колонке даёт margin-left второй кнопке (визуально «съехала» вправо).

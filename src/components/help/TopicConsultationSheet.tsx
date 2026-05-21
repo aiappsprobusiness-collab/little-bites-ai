@@ -71,6 +71,12 @@ export interface TopicConsultationSheetProps {
   onInitialMessageSent?: () => void;
   /** Текст вопроса «Сегодня спрашивают», если он premium (для preview у Free). */
   popularQuestionTextIfPremium?: string | null;
+  /** Free: просмотр статического контента темы; отправка вопроса → paywall. */
+  browseContent?: {
+    intro: string[];
+    checklistNow?: string[];
+    redFlags?: string[];
+  };
 }
 
 export function TopicConsultationSheet({
@@ -91,6 +97,7 @@ export function TopicConsultationSheet({
   initialMessage,
   onInitialMessageSent,
   popularQuestionTextIfPremium = null,
+  browseContent,
 }: TopicConsultationSheetProps) {
   useEffect(() => {
     if (isOpen) {
@@ -176,7 +183,11 @@ export function TopicConsultationSheet({
   const sendMessage = useCallback(
     async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || !topicKey || isLocked) return;
+      if (!trimmed || !topicKey) return;
+      if (isLocked) {
+        onOpenPremium?.();
+        return;
+      }
 
       const userMsg: TopicSessionMessage = {
         id: `u-${Date.now()}`,
@@ -302,6 +313,7 @@ export function TopicConsultationSheet({
       onLimitReached,
       onPremiumHelpLimit,
       premiumHelpLimitGate,
+      onOpenPremium,
     ]
   );
 
@@ -357,37 +369,54 @@ export function TopicConsultationSheet({
           </div>
 
           {isLocked ? (
-            /* Locked: описание, чипсы disabled, CTA Premium, Назад */
-            <div className="flex-1 flex flex-col px-4 py-6 gap-6 overflow-y-auto">
-              {lockedDescription && (
-                <p className="text-sm text-muted-foreground leading-[1.6]">
-                  {lockedDescription}
-                </p>
-              )}
-              <div className="flex gap-2 overflow-x-auto pb-1 flex-nowrap">
-                {chips.map((chip) => (
-                  <span
-                    key={chip.label}
-                    className="shrink-0 px-3 py-1.5 rounded-full text-[13px] font-medium border border-border bg-muted/30 text-muted-foreground cursor-not-allowed whitespace-nowrap"
-                  >
-                    {chip.label}
-                  </span>
+            <div className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+                {browseContent?.intro.map((p, i) => (
+                  <p key={`intro-${i}`} className="text-sm text-muted-foreground leading-[1.6]">
+                    {p}
+                  </p>
                 ))}
+                {!browseContent && lockedDescription && (
+                  <p className="text-sm text-muted-foreground leading-[1.6]">{lockedDescription}</p>
+                )}
+                {browseContent?.checklistNow && browseContent.checklistNow.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                      Что можно сделать сейчас
+                    </p>
+                    <ul className="text-sm text-muted-foreground space-y-1.5 list-disc pl-4">
+                      {browseContent.checklistNow.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground/90 pt-2">
+                  Персональный ответ по этой теме — в полной версии.
+                </p>
               </div>
-              <div className="mt-auto flex flex-col gap-3 pt-4">
-                <Button
-                  className="h-[52px] rounded-[18px] font-semibold bg-primary text-primary-foreground"
-                  onClick={onOpenPremium}
-                >
-                  Открыть полную версию
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="rounded-[18px]"
-                  onClick={onClose}
-                >
-                  Назад
-                </Button>
+              <div className="shrink-0 px-4 py-3 border-t border-border/80 space-y-2 bg-background">
+                <p className="text-[12px] text-muted-foreground text-center">
+                  Напишите вопрос — откроем полную версию
+                </p>
+                <div className="flex gap-2 items-end rounded-full bg-slate-100/80 px-3 py-2 border border-slate-200/80">
+                  <textarea
+                    rows={1}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Ваш вопрос…"
+                    className="resize-none flex-1 min-h-[40px] max-h-20 bg-transparent border-0 text-sm focus:outline-none"
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="shrink-0 h-9 w-9 rounded-full"
+                    disabled={!input.trim()}
+                    onClick={() => sendMessage(input)}
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (

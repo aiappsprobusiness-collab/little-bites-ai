@@ -58,6 +58,12 @@ import { MEAL_PLAN_DATE_QUERY_PARAM } from "@/utils/mealPlanNavigation";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
+import { shouldOfferPostValueTrial } from "@/utils/postValueTrialPromptStorage";
+import {
+  dismissSecondAllergyUpsellPending,
+  hasSecondAllergyUpsellPending,
+} from "@/utils/secondAllergyUpsellStorage";
+import { openOnboardingSecondAllergyPaywall } from "@/utils/freeAllergyProfileUi";
 import {
   normalizeTitleKey,
   listInfantNewRecipeCandidates,
@@ -122,6 +128,7 @@ import { getSlotDayKey, type InfantPoolExhaustedReason } from "@/utils/infantAut
 import { FF_UNIFIED_PAYWALL, FF_WEEK_PAYWALL_PREVIEW } from "@/config/featureFlags";
 import { WeekPreviewPaywallSheet, type PreviewMeal } from "@/components/plan/WeekPreviewPaywallSheet";
 import { ReplaceMealSoftPaywallModal } from "@/components/subscription/ReplaceMealSoftPaywallModal";
+import { SecondAllergyPlanBanner } from "@/components/plan/SecondAllergyPlanBanner";
 import { runReplaceOccupiedMealSlot, type ReplaceOccupiedMealDeps } from "@/pages/mealPlan/runReplaceOccupiedMealSlot";
 import { BuildShoppingListFromPlanSheet } from "@/components/plan/BuildShoppingListFromPlanSheet";
 import { TagListEditor } from "@/components/ui/tag-list-editor";
@@ -412,7 +419,7 @@ export default function MealPlanPage() {
     if (id) setJustCreatedMemberIdState(id);
   }, []);
 
-  const { hasAccess, subscriptionStatus, planInitialized, setPlanInitialized, startTrial, isStartingTrial } =
+  const { hasAccess, subscriptionStatus, planInitialized, setPlanInitialized, startTrial, isStartingTrial, trialUsed } =
     useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
@@ -714,6 +721,15 @@ export default function MealPlanPage() {
 
   const [replacingSlotKey, setReplacingSlotKey] = useState<string | null>(null);
   const [replaceMealSoftPaywallOpen, setReplaceMealSoftPaywallOpen] = useState(false);
+  const [showSecondAllergyBanner, setShowSecondAllergyBanner] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id || hasAccess) {
+      setShowSecondAllergyBanner(false);
+      return;
+    }
+    setShowSecondAllergyBanner(hasSecondAllergyUpsellPending(user.id));
+  }, [user?.id, hasAccess]);
   const pendingReplaceMealResumeRef = useRef<(() => Promise<void>) | null>(null);
   const [poolExhaustedContext, setPoolExhaustedContext] = useState<{
     dayKey: string;
@@ -1486,10 +1502,14 @@ export default function MealPlanPage() {
       member_data: memberDataForPlan,
       day_key: todayKey,
       day_keys: getRollingDayKeys(),
+      skip_plan_fill_usage: true,
     })
       .then(() => {
         setPlanInitialized();
         queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
+        if (user?.id && shouldOfferPostValueTrial({ userId: user.id, hasAccess, trialUsed })) {
+          useAppStore.getState().setShowPostValueTrialPrompt(true);
+        }
       })
       .catch(() => {
         initialPlanRanRef.current = false;
@@ -1507,6 +1527,8 @@ export default function MealPlanPage() {
     runPoolUpgrade,
     setPlanInitialized,
     queryClient,
+    hasAccess,
+    trialUsed,
   ]);
 
   const getPlannedMealRecipe = (plannedMeal: any) => {
@@ -2557,6 +2579,24 @@ export default function MealPlanPage() {
             </div>
           )}
 
+          {showSecondAllergyBanner && user?.id && (
+            <div className="mt-2 -mx-4 px-4">
+              <SecondAllergyPlanBanner
+                onLearnMore={() => {
+                  openOnboardingSecondAllergyPaywall({
+                    setPaywallReason,
+                    setPaywallCustomMessage,
+                    setShowPaywall,
+                  });
+                }}
+                onDismiss={() => {
+                  dismissSecondAllergyUpsellPending(user.id);
+                  setShowSecondAllergyBanner(false);
+                }}
+              />
+            </div>
+          )}
+
           {justCreatedMemberId && showPlanMealsSkeleton && (
             <div className="flex items-center gap-3 mt-1 -mx-4 px-4">
               <div
@@ -2824,23 +2864,6 @@ export default function MealPlanPage() {
                             onReplace={async () => {
                               if (isAnyGenerating) {
                                 toast({ description: "Идёт генерация плана…" });
-                                return;
-                              }
-                              if (isFree) {
-                                pendingReplaceMealResumeRef.current = async () => {
-                                  await runReplaceOccupiedMealSlot(
-                                    {
-                                      slot,
-                                      plannedMeal: plannedMeal!,
-                                      recipe: recipe!,
-                                      recipeId: recipeId!,
-                                      isFreeTierForReplace: false,
-                                    },
-                                    replaceOccupiedDeps
-                                  );
-                                };
-                                trackUsageEvent("paywall_replace_meal_shown", { memberId: mealPlanMemberId ?? null });
-                                setReplaceMealSoftPaywallOpen(true);
                                 return;
                               }
                               await runReplaceOccupiedMealSlot(

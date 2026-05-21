@@ -15,11 +15,8 @@ import {
   PREMIUM_PROFILES_MAX_BODY,
   PREMIUM_PROFILES_MAX_TITLE,
 } from "@/utils/friendlyLimitCopy";
-import {
-  isFreeSingleAllergyLimitReached,
-  openOnboardingSecondAllergyPaywall,
-} from "@/utils/freeAllergyProfileUi";
-import { FreeAllergyUpsellHint } from "@/components/profile/FreeAllergyUpsellHint";
+import { markSecondAllergyUpsellPending } from "@/utils/secondAllergyUpsellStorage";
+import { useAuth } from "@/hooks/useAuth";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { normalizeAllergyInput } from "@/utils/allergyAliases";
 import { PAYWALL_ADD_CHILD_CUSTOM_MESSAGE } from "@/constants/paywallCustomMessages";
@@ -55,6 +52,7 @@ export function AddChildForm({
   const { toast } = useToast();
   const navigate = useNavigate();
   const { createMember, isCreating } = useMembers();
+  const { user } = useAuth();
   const { subscriptionStatus, hasAccess } = useSubscription();
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
@@ -96,19 +94,8 @@ export function AddChildForm({
     setList((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const freeAllergyInputBlocked = isFreeSingleAllergyLimitReached(hasAccess, allergies.length);
-
-  const openSecondAllergyPaywall = () => {
-    openOnboardingSecondAllergyPaywall({
-      setPaywallReason,
-      setPaywallCustomMessage,
-      setShowPaywall,
-    });
-  };
-
   const allergiesHandlers = {
     add: (raw: string) => {
-      if (freeAllergyInputBlocked) return;
       const toAdd = parseTags(raw).map((s) => normalizeAllergyInput(s)).filter(Boolean);
       if (toAdd.length) {
         const existing = new Set(allergies.map((s) => s.trim().toLowerCase()));
@@ -171,11 +158,15 @@ export function AddChildForm({
 
     trackUsageEvent("member_create_start");
     try {
+      const allergiesToSave = !hasAccess ? allergies.slice(0, limits.maxAllergiesPerProfile) : allergies;
+      if (!hasAccess && allergies.length > 1 && user?.id) {
+        markSecondAllergyUpsellPending(user.id);
+      }
       const newMember = await createMember({
         name: trimmedName,
         type,
         age_months: ageMonths || null,
-        allergies,
+        allergies: allergiesToSave,
         ...(hasAccess && { likes, dislikes }),
       });
       trackUsageEvent("member_create_success", { properties: { member_id: newMember.id } });
@@ -285,16 +276,12 @@ export function AddChildForm({
           onEdit={allergiesHandlers.edit}
           onRemove={allergiesHandlers.remove}
           placeholder="Добавить аллергию (запятая или Enter)"
-          readOnly={freeAllergyInputBlocked}
           helperText={
-            !hasAccess && !freeAllergyInputBlocked
+            !hasAccess
               ? `Запятая или Enter. ${FREE_ALLERGY_SINGLE_HINT_CREATE}`
-              : !hasAccess
-                ? undefined
-                : "Запятая или Enter."
+              : "Запятая или Enter."
           }
         />
-        {freeAllergyInputBlocked ? <FreeAllergyUpsellHint onLearnMore={openSecondAllergyPaywall} /> : null}
       </div>
 
       {hasAccess && (

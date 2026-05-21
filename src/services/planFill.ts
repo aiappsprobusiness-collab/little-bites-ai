@@ -93,6 +93,7 @@ export async function startFillDay(memberId: string): Promise<StartFillDayResult
     member_data,
     day_key: todayKey,
     day_keys,
+    skip_plan_fill_usage: true,
   };
 
   const controller = new AbortController();

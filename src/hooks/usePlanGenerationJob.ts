@@ -96,6 +96,8 @@ export interface StartPlanGenerationParams {
   debug_pool?: boolean;
   /** Включить debug_plan (POOL DIAG / EXCLUDES). Если не задано, подставляется по isDebugPlanEnabled(). */
   debug_plan?: boolean;
+  /** Не учитывать в лимите plan_fill_day (первое авто-заполнение). */
+  skip_plan_fill_usage?: boolean;
 }
 
 export interface PoolUpgradeResult {
@@ -185,6 +187,7 @@ export function usePlanGenerationJob(
         }),
         ...(params.debug_pool && { debug_pool: true }),
         ...(params.debug_plan !== undefined ? { debug_plan: params.debug_plan } : isDebugPlanEnabled() ? { debug_plan: true } : {}),
+        ...(params.skip_plan_fill_usage && { skip_plan_fill_usage: true }),
       };
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), POOL_UPGRADE_TIMEOUT_MS);
