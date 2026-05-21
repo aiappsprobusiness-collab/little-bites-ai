@@ -862,7 +862,7 @@ export default function RecipePage() {
             <motion.button
               type="button"
               onClick={() => {
-                setPaywallReason("plan_week_locked");
+                setPaywallReason("add_to_plan");
                 setPaywallCustomMessage(null);
                 setShowPaywall(true);
               }}

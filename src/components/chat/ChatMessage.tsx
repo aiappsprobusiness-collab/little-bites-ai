@@ -735,7 +735,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setPaywallReason("plan_week_locked");
+                          setPaywallReason("add_to_plan");
                           setPaywallCustomMessage(null);
                           setShowPaywall(true);
                         }}

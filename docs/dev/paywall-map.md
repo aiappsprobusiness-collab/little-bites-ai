@@ -73,7 +73,8 @@
 | `paywall_reason` | Действие / ситуация (Free или общий гейт) | Где задаётся (ориентиры) |
 |------------------|------------------------------------------|---------------------------|
 | `week_preview` | Превью недели, оплата из sheet превью | `WeekPreviewPaywallSheet`, `MealPlanPage` |
-| `plan_week_locked` | Неделя / «в план» без доступа | `MealPlanPage`, `RecipePage`, `ChatMessage` |
+| `plan_week_locked` | Полная неделя плана без доступа | `MealPlanPage` (fallback без FF превью) |
+| `add_to_plan` | Кнопка «В план» из чата / карточки рецепта | `ChatMessage`, `RecipePage` |
 | `plan_refresh` | Лимит пересборки плана | `runReplaceOccupiedMealSlot.ts`, `MealPlanPage` |
 | `plan_fill_day` | Лимит заполнения дня / плана | `usePlanGenerationJob.ts`, Edge `LIMIT_REACHED` → `paywallReasonFromLimitFeature` |
 | `meal_replace` | Замена блюда (жёсткий гейт) | `runReplaceOccupiedMealSlot.ts`, `MealPlanPage` |

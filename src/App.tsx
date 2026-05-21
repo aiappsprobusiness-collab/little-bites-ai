@@ -219,6 +219,7 @@ function PostValueTrialPromptHost() {
   const { toast } = useToast();
   const open = useAppStore((s) => s.showPostValueTrialPrompt);
   const setOpen = useAppStore((s) => s.setShowPostValueTrialPrompt);
+  const variant = useAppStore((s) => s.postValueTrialPromptVariant);
 
   if (!user) return null;
 
@@ -226,6 +227,7 @@ function PostValueTrialPromptHost() {
     <PostValueTrialPromptModal
       open={open}
       userId={user.id}
+      variant={variant}
       onClose={() => setOpen(false)}
       isStartingTrial={isStartingTrial}
       onTryTrial={async () => {

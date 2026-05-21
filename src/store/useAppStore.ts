@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { PostValueTrialPromptVariant } from "@/utils/postValueTrialPromptCopy";
 
 const STORAGE_KEY = "little-bites-app-store";
 
@@ -24,9 +25,11 @@ interface AppState {
   /** Экран Free vs Premium (модалка). */
   showFreeVsPremiumModal: boolean;
   setShowFreeVsPremiumModal: (v: boolean) => void;
-  /** Предложение trial после первого успеха (план / чат). */
+  /** Предложение trial после первого успеха (только с экрана плана). */
   showPostValueTrialPrompt: boolean;
   setShowPostValueTrialPrompt: (v: boolean) => void;
+  postValueTrialPromptVariant: PostValueTrialPromptVariant;
+  setPostValueTrialPromptVariant: (v: PostValueTrialPromptVariant) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -49,7 +52,14 @@ export const useAppStore = create<AppState>()(
       showFreeVsPremiumModal: false,
       setShowFreeVsPremiumModal: (v) => set({ showFreeVsPremiumModal: v }),
       showPostValueTrialPrompt: false,
-      setShowPostValueTrialPrompt: (v) => set({ showPostValueTrialPrompt: v }),
+      setShowPostValueTrialPrompt: (v) =>
+        set((s) => ({
+          ...s,
+          showPostValueTrialPrompt: v,
+          ...(v ? {} : { postValueTrialPromptVariant: "plan_only" as const }),
+        })),
+      postValueTrialPromptVariant: "plan_only",
+      setPostValueTrialPromptVariant: (v) => set({ postValueTrialPromptVariant: v }),
     }),
     { name: STORAGE_KEY, partialize: (s) => ({ _version: s._version }) }
   )

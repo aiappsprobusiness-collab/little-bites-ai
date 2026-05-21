@@ -8,6 +8,7 @@ import type { LimitReachedFeature } from "@/utils/limitReachedMessages";
 export type PaywallReasonKey =
   | "week_preview"
   | "plan_week_locked"
+  | "add_to_plan"
   | "plan_refresh"
   | "plan_fill_day"
   | "meal_replace"
@@ -46,6 +47,10 @@ const COPY: Record<PaywallReasonKey, PaywallReasonCopy> = {
   plan_week_locked: {
     title: "Хотите не думать о меню на неделю?",
     body: PLAN_WEEK_BODY,
+  },
+  add_to_plan: {
+    title: "Хотите добавить это блюдо в план?",
+    body: "Назначение блюд из чата и избранного — в полной версии\nВыберите день и приём пищи в один тап",
   },
   plan_refresh: {
     title: "А если хочется что-то другое?",

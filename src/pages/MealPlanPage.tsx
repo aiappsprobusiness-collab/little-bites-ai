@@ -58,7 +58,7 @@ import { MEAL_PLAN_DATE_QUERY_PARAM } from "@/utils/mealPlanNavigation";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { getRolling7Dates, getRollingStartKey, getRollingEndKey, getRollingDayKeys } from "@/utils/dateRange";
 import { PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
-import { shouldOfferPostValueTrial } from "@/utils/postValueTrialPromptStorage";
+import { schedulePostValueTrialPromptOnPlanPage } from "@/utils/schedulePostValueTrialPrompt";
 import {
   dismissSecondAllergyUpsellPending,
   hasSecondAllergyUpsellPending,
@@ -1507,8 +1507,12 @@ export default function MealPlanPage() {
       .then(() => {
         setPlanInitialized();
         queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "meal_plans_v2" });
-        if (user?.id && shouldOfferPostValueTrial({ userId: user.id, hasAccess, trialUsed })) {
-          useAppStore.getState().setShowPostValueTrialPrompt(true);
+        if (user?.id) {
+          schedulePostValueTrialPromptOnPlanPage({
+            userId: user.id,
+            hasAccess,
+            trialUsed,
+          });
         }
       })
       .catch(() => {

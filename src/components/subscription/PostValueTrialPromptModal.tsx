@@ -3,13 +3,17 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { markPostValueTrialPromptSeen } from "@/utils/postValueTrialPromptStorage";
-import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
+import {
+  getPostValueTrialPromptCopy,
+  type PostValueTrialPromptVariant,
+} from "@/utils/postValueTrialPromptCopy";
 import { PAYWALL_OVERLAY, PAYWALL_MODAL_CARD, PAYWALL_PRIMARY_CTA } from "@/utils/paywallBrandStyles";
 import { cn } from "@/lib/utils";
 
 export type PostValueTrialPromptModalProps = {
   open: boolean;
   userId: string;
+  variant?: PostValueTrialPromptVariant;
   onClose: () => void;
   onTryTrial: () => void | Promise<void>;
   isStartingTrial?: boolean;
@@ -18,15 +22,19 @@ export type PostValueTrialPromptModalProps = {
 export function PostValueTrialPromptModal({
   open,
   userId,
+  variant = "plan_only",
   onClose,
   onTryTrial,
   isStartingTrial = false,
 }: PostValueTrialPromptModalProps) {
+  const copy = getPostValueTrialPromptCopy(variant);
   useEffect(() => {
     if (open) {
-      trackUsageEvent("post_value_trial_prompt_shown");
+      trackUsageEvent("post_value_trial_prompt_shown", {
+        properties: { variant },
+      });
     }
-  }, [open]);
+  }, [open, variant]);
 
   const handleClose = () => {
     markPostValueTrialPromptSeen(userId);
@@ -38,9 +46,6 @@ export function PostValueTrialPromptModal({
     markPostValueTrialPromptSeen(userId);
     await onTryTrial();
   };
-
-  const dayWord =
-    TRIAL_DURATION_DAYS === 1 ? "день" : TRIAL_DURATION_DAYS >= 2 && TRIAL_DURATION_DAYS <= 4 ? "дня" : "дней";
 
   return (
     <AnimatePresence>
@@ -59,11 +64,9 @@ export function PostValueTrialPromptModal({
             className={cn("w-full max-w-md rounded-2xl p-6 space-y-4", PAYWALL_MODAL_CARD)}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-center text-balance">
-              Меню на сегодня готово
-            </h2>
+            <h2 className="text-lg font-semibold text-center text-balance">{copy.title}</h2>
             <p className="text-sm text-muted-foreground text-center whitespace-pre-line leading-relaxed">
-              {`Попробуйте полную версию ${TRIAL_DURATION_DAYS} ${dayWord} бесплатно:\nзамена блюд, неделя плана и до 20 подборов в день.`}
+              {copy.body}
             </p>
             <div className="flex flex-col gap-2 pt-1">
               <Button
