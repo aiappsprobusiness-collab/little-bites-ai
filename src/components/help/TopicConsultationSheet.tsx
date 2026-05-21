@@ -399,13 +399,17 @@ export function TopicConsultationSheet({
                 <p className="text-[12px] text-muted-foreground text-center">
                   Напишите вопрос — откроем полную версию
                 </p>
-                <div className="flex gap-2 items-end rounded-full bg-slate-100/80 px-3 py-2 border border-slate-200/80">
+                <div className="flex gap-2 items-center rounded-full bg-slate-100/80 px-3 py-2 border border-slate-200/80">
                   <textarea
                     rows={1}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Ваш вопрос…"
-                    className="resize-none flex-1 min-h-[40px] max-h-20 bg-transparent border-0 text-sm focus:outline-none"
+                    className={cn(
+                      "resize-none flex-1 min-w-0 min-h-[40px] max-h-20 bg-transparent border-0",
+                      "text-sm leading-5 py-2 pr-2 pl-0 placeholder:text-muted-foreground",
+                      "focus:outline-none"
+                    )}
                   />
                   <Button
                     type="button"
