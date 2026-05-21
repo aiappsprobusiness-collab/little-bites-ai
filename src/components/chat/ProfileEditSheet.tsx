@@ -68,6 +68,10 @@ function createTagListHandlers(
   };
 }
 
+/**
+ * @deprecated Создание профиля перенесено на `ChildProfileEditPage` (`/profile/child/new`).
+ * Компонент оставлен для возможного edit-in-sheet; в `ProfilePage` не монтируется.
+ */
 interface ProfileEditSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;

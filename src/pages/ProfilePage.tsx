@@ -19,7 +19,12 @@ import { useAppStore } from "@/store/useAppStore";
 import { FriendlyLimitDialog } from "@/components/subscription/FriendlyLimitDialog";
 import { PREMIUM_PROFILES_MAX_BODY, PREMIUM_PROFILES_MAX_TITLE } from "@/utils/friendlyLimitCopy";
 import { normalizeAllergyToken } from "@/utils/allergyAliases";
-import { ProfileEditSheet } from "@/components/chat/ProfileEditSheet";
+import {
+  buildProfileChildCreateUrl,
+  PROFILE_FIRST_CHILD_ONBOARDING,
+  PROFILE_OPEN_CREATE_LEGACY_QUERY,
+} from "@/utils/profileCreateRoutes";
+import { shouldNavigateToCreateProfileForDeepLink } from "@/utils/profileCreateDeepLink";
 import {
   Dialog,
   DialogContent,
@@ -39,7 +44,6 @@ import { useToast } from "@/hooks/use-toast";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { ProfileHeaderCard } from "@/components/profile/ProfileHeaderCard";
 import { FamilyMemberCard } from "@/components/profile/FamilyMemberCard";
-import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
 import { isStandalone } from "@/utils/standalone";
 import { useTheme } from "@/hooks/useTheme";
@@ -49,9 +53,6 @@ import {
   clearBlockEmptyFamilyProfileAutoOpenIfHasMembers,
   isBlockingEmptyFamilyProfileAutoOpen,
 } from "@/utils/profileFirstChildSessionBlock";
-
-/** Пауза перед редиректом на План после первого ребёнка — тост «Профиль создан» успевает отрисоваться (иначе navigate в том же тике его «съедает»). */
-const FIRST_CHILD_PLAN_REDIRECT_MS = 450;
 
 const VEGETABLE_EMOJIS = ["🥕", "🥦", "🍅", "🥬", "🌽"];
 
@@ -93,7 +94,6 @@ export default function ProfilePage() {
   const setPaywallCustomMessage = useAppStore((s) => s.setPaywallCustomMessage);
   const setPaywallReason = useAppStore((s) => s.setPaywallReason);
   const setShowPaywall = useAppStore((s) => s.setShowPaywall);
-  const [showMemberSheet, setShowMemberSheet] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
   const [showLegalModal, setShowLegalModal] = useState(false);
   const [editName, setEditName] = useState("");
@@ -102,7 +102,6 @@ export default function ProfilePage() {
   const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
   const [showProfileCapDialog, setShowProfileCapDialog] = useState(false);
   const onboardingFirstProfileRef = useRef(false);
-  const [welcomeAfterEmail, setWelcomeAfterEmail] = useState(false);
   const { canInstall, promptInstall, isInstalled, isIOSDevice } = usePWAInstall();
   const showAppSection = !isInstalled && !isStandalone();
 
@@ -115,22 +114,22 @@ export default function ProfilePage() {
     if (isBlockingEmptyFamilyProfileAutoOpen()) return;
     if (!onboardingFirstProfileRef.current) {
       onboardingFirstProfileRef.current = true;
-      setShowMemberSheet(true);
+      navigate(PROFILE_FIRST_CHILD_ONBOARDING, { replace: true });
     }
-  }, [authReady, isLoading, members.length]);
+  }, [authReady, isLoading, members.length, navigate]);
 
-  // После magic link / email confirmation: открыть модалку «Новый профиль», только если профилей нет
+  // Legacy deeplink `/profile?openCreateProfile=1` → full page create
   useEffect(() => {
-    const openFlag = searchParams.get("openCreateProfile") === "1";
+    const openFlag = searchParams.get(PROFILE_OPEN_CREATE_LEGACY_QUERY) === "1";
     if (!openFlag || !authReady || isLoading) return;
 
     const lim = getSubscriptionLimits(subscriptionStatus).maxProfiles;
+    const welcome = searchParams.get("welcome") === "1";
 
-    /** Только что создали ребёнка: подавляем повторное открытие и при необходимости всё равно чистим query (гонка с setSearchParams). Ref не использовать — remount сбрасывает ref. */
     if (isBlockingEmptyFamilyProfileAutoOpen()) {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
-        next.delete("openCreateProfile");
+        next.delete(PROFILE_OPEN_CREATE_LEGACY_QUERY);
         next.delete("welcome");
         return next;
       }, { replace: true });
@@ -140,7 +139,7 @@ export default function ProfilePage() {
     if (members.length >= lim) {
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
-        next.delete("openCreateProfile");
+        next.delete(PROFILE_OPEN_CREATE_LEGACY_QUERY);
         next.delete("welcome");
         return next;
       }, { replace: true });
@@ -152,52 +151,30 @@ export default function ProfilePage() {
       }
       return;
     }
-    if (members.length > 0) return;
 
-    if (searchParams.get("welcome") === "1") {
-      setWelcomeAfterEmail(true);
+    const shouldNavigate = shouldNavigateToCreateProfileForDeepLink({
+      hasOpenCreateProfileFlag: openFlag,
+      authReady,
+      isLoading,
+      membersLen: members.length,
+      maxProfiles: lim,
+      suppressAfterMemberCreate: isBlockingEmptyFamilyProfileAutoOpen(),
+    });
+
+    if (shouldNavigate) {
+      navigate(
+        welcome ? PROFILE_FIRST_CHILD_ONBOARDING : buildProfileChildCreateUrl(),
+        { replace: true },
+      );
     }
-    setShowMemberSheet(true);
+
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.delete("openCreateProfile");
+      next.delete(PROFILE_OPEN_CREATE_LEGACY_QUERY);
       next.delete("welcome");
       return next;
     }, { replace: true });
-  }, [searchParams, authReady, isLoading, members.length, setSearchParams, subscriptionStatus, hasAccess, setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
-
-  const handleMemberCreated = (
-    memberId: string,
-    meta?: { wasEmptyFamilyOnboarding?: boolean },
-  ) => {
-    setBlockEmptyFamilyProfileAutoOpen();
-    setShowMemberSheet(false);
-
-    const emptyFamilyOnboarding = !!meta?.wasEmptyFamilyOnboarding;
-    if (emptyFamilyOnboarding) {
-      onboardingFirstProfileRef.current = false;
-      setJustCreatedMemberId(memberId);
-      void startFillDay(memberId).catch((e) => {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (msg === "LIMIT_REACHED") {
-          toast({
-            variant: "destructive",
-            title: "Лимит",
-            description: "Сегодняшний лимит подбора исчерпан. Попробуйте завтра или оформите полный доступ.",
-          });
-          return;
-        }
-        toast({
-          variant: "destructive",
-          title: "Ошибка",
-          description: "Не удалось подобрать меню. Попробуйте снова на странице План.",
-        });
-      });
-      window.setTimeout(() => {
-        navigate(getPlanUrlForMember(memberId), { replace: true });
-      }, FIRST_CHILD_PLAN_REDIRECT_MS);
-    }
-  };
+  }, [searchParams, authReady, isLoading, members.length, setSearchParams, subscriptionStatus, hasAccess, setPaywallReason, setPaywallCustomMessage, setShowPaywall, navigate]);
 
   const displayName =
     (user?.user_metadata?.display_name as string)?.trim() ||
@@ -253,7 +230,7 @@ export default function ProfilePage() {
       setShowPaywall(true);
       return;
     }
-    setShowMemberSheet(true);
+    navigate(buildProfileChildCreateUrl());
   };
 
   const handleMemberCardClick = (member: MembersRow) => {
@@ -615,19 +592,6 @@ export default function ProfilePage() {
           </Tabs>
         </DialogContent>
       </Dialog>
-
-      <ProfileEditSheet
-        open={showMemberSheet}
-        onOpenChange={(open) => {
-          setShowMemberSheet(open);
-          if (!open) setWelcomeAfterEmail(false);
-        }}
-        member={null}
-        createMode={true}
-        onCreated={handleMemberCreated}
-        skipFillAndRedirectWhenCreated={members.length === 0}
-        welcomeAfterEmailConfirm={welcomeAfterEmail}
-      />
 
       <FriendlyLimitDialog
         open={showProfileCapDialog}

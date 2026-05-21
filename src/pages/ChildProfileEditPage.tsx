@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,8 @@ import { getProductDisplayLabel, normalizeProductKeys } from "@/utils/introduced
 import { PreferenceChip } from "@/components/profile/PreferenceChip";
 import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
+import { setBlockEmptyFamilyProfileAutoOpen } from "@/utils/profileFirstChildSessionBlock";
+import { shouldEnforceNewProfileMemberLimit } from "@/utils/profileChildNewLimitGuard";
 import type { MembersRow, AllergyItemRow } from "@/integrations/supabase/types-v2";
 
 function parseTags(s: string): string[] {
@@ -43,7 +45,10 @@ function parseTags(s: string): string[] {
 
 export default function ChildProfileEditPage() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const returnPath = searchParams.get("return");
+  const showWelcomeBanner = searchParams.get("welcome") === "1";
   const { toast } = useToast();
   const { members, createMember, updateMember, deleteMember, isCreating, isUpdating, isDeleting } = useMembers();
   const { subscriptionStatus, hasAccess } = useSubscription();
@@ -76,18 +81,27 @@ export default function ChildProfileEditPage() {
   useEffect(() => {
     if (!isNew || !authReady) return;
     const lim = getSubscriptionLimits(subscriptionStatus);
-    if (members.length >= lim.maxProfiles) {
-      navigate("/profile", { replace: true });
-      if (hasAccess) {
-        toast({
-          title: PREMIUM_PROFILES_MAX_TITLE,
-          description: PREMIUM_PROFILES_MAX_BODY.replace(/\n/g, " "),
-        });
-      } else {
-        setPaywallReason("add_child_limit");
-        setPaywallCustomMessage(null);
-        setShowPaywall(true);
-      }
+    const skipAfterSave = savedSuccessfullyRef.current || allowNavigationRef.current;
+    if (
+      !shouldEnforceNewProfileMemberLimit({
+        isNewRoute: isNew,
+        membersLen: members.length,
+        maxProfiles: lim.maxProfiles,
+        skipAfterSuccessfulSave: skipAfterSave,
+      })
+    ) {
+      return;
+    }
+    navigate("/profile", { replace: true });
+    if (hasAccess) {
+      toast({
+        title: PREMIUM_PROFILES_MAX_TITLE,
+        description: PREMIUM_PROFILES_MAX_BODY.replace(/\n/g, " "),
+      });
+    } else {
+      setPaywallReason("add_child_limit");
+      setPaywallCustomMessage(null);
+      setShowPaywall(true);
     }
   }, [isNew, authReady, members.length, subscriptionStatus, hasAccess, navigate, toast, setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
 
@@ -348,6 +362,13 @@ export default function ChildProfileEditPage() {
         savedSuccessfullyRef.current = true;
         allowNavigationRef.current = true;
         setShowExitConfirm(false);
+        if (members.length === 0) {
+          setBlockEmptyFamilyProfileAutoOpen();
+        }
+        if (returnPath) {
+          navigate(returnPath, { replace: true });
+          return;
+        }
         if (FF_AUTO_FILL_AFTER_MEMBER_CREATE) {
           try {
             await startFillDay(newMember.id);
@@ -467,7 +488,7 @@ export default function ChildProfileEditPage() {
 
   return (
     <MobileLayout
-      title=""
+      title={isNew ? "Новый профиль" : ""}
       headerLeft={
         <Button variant="ghost" size="icon" className="h-10 w-10" onClick={handleBack} aria-label="Назад">
           <ArrowLeft className="h-5 w-5" />
@@ -483,6 +504,17 @@ export default function ChildProfileEditPage() {
             </div>
           ) : (
             <>
+              {isNew && showWelcomeBanner ? (
+                <div
+                  className="rounded-xl border border-primary/25 bg-primary/10 px-3.5 py-3 text-sm leading-snug text-foreground"
+                  role="status"
+                >
+                  <p className="font-semibold text-foreground">Добро пожаловать!</p>
+                  <p className="mt-1 text-muted-foreground">
+                    Email подтверждён. Заполните профиль — так меню и рекомендации будут точнее.
+                  </p>
+                </div>
+              ) : null}
               {/* Основная информация: Имя и Дата рождения */}
               <div className="bg-background rounded-[16px] p-4 shadow-sm border border-border flex flex-col gap-4">
                 <div className="space-y-[6px]">
@@ -773,6 +805,8 @@ export default function ChildProfileEditPage() {
                     <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                     <span className="ml-2">Сохраняем...</span>
                   </>
+                ) : isNew ? (
+                  "Создать профиль"
                 ) : (
                   "Сохранить"
                 )}

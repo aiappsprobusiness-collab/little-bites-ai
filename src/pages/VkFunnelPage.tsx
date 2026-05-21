@@ -256,7 +256,7 @@ export default function VkFunnelPage() {
   }
 
   if (user) {
-    const to = members.length === 0 ? "/profile?openCreateProfile=1&welcome=1" : "/meal-plan";
+    const to = members.length === 0 ? "/profile/child/new?welcome=1" : "/meal-plan";
     return <Navigate to={to} replace />;
   }
 
