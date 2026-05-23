@@ -28,6 +28,6 @@
 ## Splash
 
 - **Первый экран (браузер / ОС для PWA):** до показа страницы установленная PWA может показать **короткий** кадр «иконка на фоне» из manifest. Фон **`background_color` / `theme_color` = `#E8F1EC`**, иконки — maskable/any как в таблице выше. Для **нативной** оболочки (Capacitor) — отдельно `capacitor.config` и ассеты; это не требуется для установки с сайта.
-- **Второй экран (кастомный):** только при запуске **с домашнего экрана** (standalone). Полноэкранный фон `/splash/splash-screen.png` в `index.html` (inline CSS под `html[data-pwa-splash]`). В обычном браузере — сразу фон лендинга (`#fafaf7` / dark), без картинки splash. Скрытие в PWA: `main.tsx`, **2800 ms** + fade **400 ms**. Чеклист: `docs/dev/splash-startup-2026-03-progress.md`.
+- **Второй экран (кастомный):** только при запуске **с домашнего экрана** (standalone). Полноэкранный фон `/splash/splash-screen.png` в `index.html` (inline CSS под `html[data-pwa-splash]`). В обычном браузере — сразу **`gradient-hero`** (`--boot-page-gradient` в inline-скрипте темы, те же stop’ы, что `--gradient-hero` в `index.css`), без картинки splash. Скрытие в PWA: `main.tsx`, **2800 ms** + fade **400 ms**. Чеклист: `docs/dev/splash-startup-2026-03-progress.md`.
 
 Документация не является source-of-truth для архитектуры чата/БД; при изменении логики PWA/splash этот файл стоит обновить.

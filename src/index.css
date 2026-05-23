@@ -92,6 +92,7 @@
     --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-gradient-end) 100%);
     --gradient-peach: linear-gradient(135deg, var(--peach) 0%, var(--soft-pink) 100%);
     --gradient-lavender: linear-gradient(135deg, var(--lavender) 0%, var(--soft-blue) 100%);
+    /* Stop’ы дублируются в index.html (--boot-page-gradient) для первого кадра в браузере */
     --gradient-hero: linear-gradient(180deg, var(--background) 0%, var(--color-primary-light) 100%);
     --gradient-auth: radial-gradient(ellipse 80% 70% at 50% 0%, var(--auth-gradient-top) 0%, var(--color-primary-light) 100%);
 
@@ -203,6 +204,7 @@
     --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-gradient-end) 100%);
     --gradient-peach: linear-gradient(135deg, var(--peach) 0%, var(--soft-pink) 100%);
     --gradient-lavender: linear-gradient(135deg, var(--lavender) 0%, var(--soft-blue) 100%);
+    /* Stop’ы дублируются в index.html (--boot-page-gradient) для первого кадра в браузере */
     --gradient-hero: linear-gradient(180deg, var(--background) 0%, var(--color-primary-light) 100%);
     --gradient-auth: radial-gradient(ellipse 80% 70% at 50% 0%, var(--auth-gradient-top) 0%, var(--color-primary-light) 100%);
 

@@ -10,11 +10,13 @@ import {
   buildRootFirstAuthSearch,
 } from "@/utils/navigation";
 import { shouldHandOffEmailAuthToCallback } from "@/utils/authEmailLinkParams";
+import { isStandalonePwa } from "@/utils/standalone";
 import { Loader2, WifiOff } from "lucide-react";
 
-/** Тот же фон, что splash (`--splash-bg`), чтобы между fade splash и первым экраном не было скачка. */
-const BOOT_SCREEN_CLASS =
-  "min-h-screen min-h-dvh flex items-center justify-center bg-splash";
+/** PWA: фон splash после fade; браузер: gradient-hero как у `/welcome` и inline в index.html. */
+const BOOT_SCREEN_CLASS = isStandalonePwa()
+  ? "min-h-screen min-h-dvh flex items-center justify-center bg-splash"
+  : "min-h-screen min-h-dvh flex items-center justify-center gradient-hero";
 
 /**
  * Root "/" — умная маршрутизация:

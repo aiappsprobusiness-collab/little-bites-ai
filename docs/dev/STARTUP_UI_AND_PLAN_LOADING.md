@@ -18,9 +18,11 @@
 | Фон под картинкой | `#E8F1EC` |
 | Условие показа | Только **standalone PWA**: `display-mode: standalone` или iOS `navigator.standalone` (`src/utils/standalone.ts`, дубликат inline в `index.html` → `window.__momRecipesPwaStandalone`, `html[data-pwa-splash]`). В обычном браузере splash **не** рендерится. |
 | До выполнения JS | `index.html` — inline `<style>` и `#splash-screen` только при `data-pwa-splash`; `rel="preload"` картинки — тоже только PWA |
-| Фон в браузере | `index.html` — `#fafaf7` / `#1c1c22` (dark), без splash-картинки, чтобы `/welcome` не мигал |
+| Фон в браузере | `index.html` — inline **`--boot-page-gradient`** (= `--gradient-hero` из `src/index.css`: `#fafaf7→#f3f6ec` / dark `#1c1c22→#2a2f22`), без splash-картинки; совпадает с `/welcome` |
 | После бандла | `src/styles/splash.css` (держать в синхроне с inline) |
 | Скрытие | `src/main.tsx` — только в PWA: после `window.load`, не раньше ~2800 ms от `window.__momRecipesSplashStartMs`, затем fade-out ~400 ms |
+| Что остаётся «загрузкой» в браузере | HTML-splash **нет**; возможны `Loader2` в `RootRedirect` / `LandingOnboardingScreen` (auth, members) и `bootstrapReactApp` connectivity-check до mount — это не splash |
+| Системный кадр ОС | При установленной PWA короткий launch из `manifest` (`background_color`, иконка) — **не убирается**, только выравнивается с `#E8F1EC` |
 
 ### Проверка связи до монтирования App
 
@@ -62,7 +64,7 @@
 
 | Точка | Правило |
 |-------|---------|
-| **RootRedirect** | Только `loading` из auth (без лишнего `mounted`). Фон загрузки **`#E8F1EC`**, не `gradient-hero`, чтобы после fade splash не было резкой смены фона. |
+| **RootRedirect** | Только `loading` из auth. Фон: **`bg-splash`** в standalone PWA (после fade splash), **`gradient-hero`** в браузере (как `/welcome` и inline `index.html`). |
 | **ProtectedRoute** | Тот же фон **`#E8F1EC`** на время `loading`. |
 | **MobileLayout** | `motion.main` с **`initial={false}`** — без повторного fade-in всего `main` при каждом переключении вкладки/маршрута. |
 

@@ -57,6 +57,13 @@
           var dark = t === "dark";
           document.documentElement.classList.toggle("dark", dark);
           document.documentElement.style.setProperty("--splash-bg", dark ? "#1c1c22" : "#e8f1ec");
+          /* --gradient-hero в src/index.css (:root / .dark) — первый кадр /welcome в браузере */
+          var bootTop = dark ? "#1c1c22" : "#fafaf7";
+          var bootBottom = dark ? "#2a2f22" : "#f3f6ec";
+          document.documentElement.style.setProperty(
+            "--boot-page-gradient",
+            "linear-gradient(180deg, " + bootTop + " 0%, " + bootBottom + " 100%)"
+          );
         } catch (e) {}
       })();
     </script>
@@ -91,15 +98,31 @@
       body {
         margin: 0;
         min-height: 100%;
-        background-color: #fafaf7;
       }
-      html.dark,
-      html.dark body {
+      /* Браузер (не PWA): тот же gradient-hero, что LandingOnboardingScreen / .gradient-hero */
+      html:not([data-pwa-splash]),
+      html:not([data-pwa-splash]) body {
+        background-color: #fafaf7;
+        background-image: var(
+          --boot-page-gradient,
+          linear-gradient(180deg, #fafaf7 0%, #f3f6ec 100%)
+        );
+        background-repeat: no-repeat;
+        background-size: 100% 100%;
+        background-attachment: fixed;
+      }
+      html.dark:not([data-pwa-splash]),
+      html.dark:not([data-pwa-splash]) body {
         background-color: #1c1c22;
+        background-image: var(
+          --boot-page-gradient,
+          linear-gradient(180deg, #1c1c22 0%, #2a2f22 100%)
+        );
       }
       html[data-pwa-splash],
       html[data-pwa-splash] body {
         background-color: var(--splash-bg, #e8f1ec);
+        background-image: none;
       }
       html[data-pwa-splash] #splash-screen {
         position: fixed;
