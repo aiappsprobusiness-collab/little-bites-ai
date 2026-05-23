@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FF_MY_RECIPES } from "@/config/featureFlags";
 import { useMyRecipes } from "@/hooks/useMyRecipes";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,7 +40,7 @@ export interface MyRecipeFormSheetProps {
   onSuccess?: () => void;
 }
 
-export function MyRecipeFormSheet({
+function MyRecipeFormSheetInner({
   open,
   onOpenChange,
   recipeId,
@@ -365,4 +366,9 @@ export function MyRecipeFormSheet({
       </SheetContent>
     </Sheet>
   );
+}
+
+export function MyRecipeFormSheet(props: MyRecipeFormSheetProps) {
+  if (!FF_MY_RECIPES) return null;
+  return <MyRecipeFormSheetInner {...props} />;
 }

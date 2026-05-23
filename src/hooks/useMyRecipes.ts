@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { FF_MY_RECIPES } from "@/config/featureFlags";
 import { useAuth } from "./useAuth";
 import { getAppLocale } from "@/utils/appLocale";
 import { normalizeRecipePlanMealType } from "@/utils/recipeMealSlots";
@@ -122,8 +123,10 @@ export function useMyRecipes(locale?: string | null) {
         return preview;
       });
     },
-    enabled: !!user,
+    enabled: FF_MY_RECIPES && !!user,
   });
+
+  const myRecipesDisabledError = () => new Error("My recipes feature is disabled");
 
   const createUserRecipe = useMutation({
     mutationFn: async (params: {
@@ -144,6 +147,7 @@ export function useMyRecipes(locale?: string | null) {
         order_index?: number;
       }[];
     }) => {
+      if (!FF_MY_RECIPES) throw myRecipesDisabledError();
       if (!user) throw new Error("User not authenticated");
       const stepsPayload = params.steps.map((s, i) => ({
         instruction: s.instruction ?? "",
@@ -206,6 +210,7 @@ export function useMyRecipes(locale?: string | null) {
         order_index?: number;
       }[];
     }) => {
+      if (!FF_MY_RECIPES) throw myRecipesDisabledError();
       if (!user) throw new Error("User not authenticated");
       const stepsPayload = params.steps.map((s, i) => ({
         instruction: s.instruction ?? "",
@@ -251,6 +256,7 @@ export function useMyRecipes(locale?: string | null) {
 
   const deleteUserRecipe = useMutation({
     mutationFn: async (recipeId: string) => {
+      if (!FF_MY_RECIPES) throw myRecipesDisabledError();
       if (!user) throw new Error("User not authenticated");
       const { error } = await supabase.rpc("delete_user_recipe", { p_recipe_id: recipeId });
       if (error) throw error;

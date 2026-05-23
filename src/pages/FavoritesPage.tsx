@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate, useLocation } from "react-router-dom";
-import { BookOpen, Heart, MessageCircle, Plus, Lock, ShoppingCart, ChevronLeft } from "lucide-react";
+import { BookOpen, Heart, MessageCircle, Plus, Lock, ShoppingCart } from "lucide-react";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { TabEmptyState } from "@/components/ui/TabEmptyState";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,11 @@ import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { useRecipeIdsByIngredients } from "@/hooks/useRecipeIdsByIngredients";
 import type { SavedFavorite } from "@/hooks/useFavorites";
 import type { IngredientFilterMode } from "@/components/favorites/IngredientFilterBar";
+import { FF_MY_RECIPES } from "@/config/featureFlags";
 import { safeError } from "@/utils/safeLogger";
 import { cn } from "@/lib/utils";
 
-type FavoritesTab = "favorites" | "my_recipes" | "shopping_list";
+type FavoritesTab = "favorites" | "shopping_list" | "my_recipes";
 
 function getRecipeId(favorite: SavedFavorite): string | null {
   const f = favorite as { _recipeId?: string };
@@ -63,9 +64,18 @@ export default function FavoritesPage() {
   );
   const [shoppingPanelEntranceDone, setShoppingPanelEntranceDone] = useState(false);
   useEffect(() => {
-    if (stateTab === "my_recipes") setTab("my_recipes");
-    if (stateTab === "shopping_list") setTab("shopping_list");
-  }, [stateTab]);
+    if (stateTab === "shopping_list") {
+      if (hasAccess) setTab("shopping_list");
+      else {
+        setPaywallReason("shopping_list");
+        setPaywallCustomMessage(null);
+        setShowPaywall(true);
+        setTab("favorites");
+      }
+      return;
+    }
+    if (stateTab === "my_recipes" && FF_MY_RECIPES) setTab("my_recipes");
+  }, [stateTab, hasAccess, setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
 
   useEffect(() => {
     if (!shoppingListFromPlanBuild) return;
@@ -84,6 +94,13 @@ export default function FavoritesPage() {
     }
     setTab("shopping_list");
   };
+
+  const selectFavoritesTab = () => setTab("favorites");
+  const selectSecondaryTab = () => {
+    if (FF_MY_RECIPES) setTab("my_recipes");
+    else openShoppingList();
+  };
+
   const { favorites, removeFavorite } = useFavorites("all", { queryEnabled: tab === "favorites" });
   const { myRecipes } = useMyRecipes();
   const [addToPlanRecipe, setAddToPlanRecipe] = useState<{
@@ -104,7 +121,7 @@ export default function FavoritesPage() {
   const { allowedRecipeIds } = useRecipeIdsByIngredients(ingredientFilterTerms, scope, {
     memberId: null,
     mode: ingredientFilterMode,
-    enabled: true,
+    enabled: tab === "favorites" || (FF_MY_RECIPES && tab === "my_recipes"),
   });
 
   const favoritesFiltered =
@@ -160,78 +177,97 @@ export default function FavoritesPage() {
     setFormOpen(true);
   };
 
+  const secondaryTabActive = FF_MY_RECIPES ? tab === "my_recipes" : tab === "shopping_list";
+  const secondaryTabLabel = FF_MY_RECIPES ? "Мои рецепты" : "Покупки";
+
   return (
     <MobileLayout>
       <div className="px-4 pb-4 overflow-x-hidden max-w-full">
         <div className="flex flex-col gap-3 mb-1">
-          {tab !== "shopping_list" ? (
-            <>
-              <div
-                className="flex rounded-xl bg-muted/35 p-1 gap-0.5"
-                role="tablist"
-                aria-label="Раздел коллекции рецептов"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === "favorites"}
-                  onClick={() => setTab("favorites")}
-                  className={cn(
-                    "flex-1 min-w-0 py-2.5 px-2 text-sm font-medium rounded-lg transition-all",
-                    tab === "favorites"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground/90"
-                  )}
-                >
-                  Избранное
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === "my_recipes"}
-                  onClick={() => setTab("my_recipes")}
-                  className={cn(
-                    "flex-1 min-w-0 py-2.5 px-2 text-sm font-medium rounded-lg transition-all",
-                    tab === "my_recipes"
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground/90"
-                  )}
-                >
-                  Мои рецепты
-                </button>
-              </div>
-            </>
-          ) : (
+          <div
+            className="flex rounded-xl bg-muted/35 p-1 gap-0.5"
+            role="tablist"
+            aria-label="Раздел коллекции рецептов"
+          >
             <button
               type="button"
-              onClick={() => setTab("favorites")}
-              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-fit"
+              role="tab"
+              aria-selected={tab === "favorites"}
+              onClick={selectFavoritesTab}
+              className={cn(
+                "flex-1 min-w-0 py-2.5 px-2 text-sm font-medium rounded-lg transition-all",
+                tab === "favorites"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground/90"
+              )}
             >
-              <ChevronLeft className="w-4 h-4" />
-              К избранному и рецептам
+              Избранное
             </button>
-          )}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={secondaryTabActive}
+              onClick={selectSecondaryTab}
+              className={cn(
+                "flex-1 min-w-0 py-2.5 px-2 text-sm font-medium rounded-lg transition-all inline-flex items-center justify-center gap-1",
+                secondaryTabActive
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground/90"
+              )}
+            >
+              {!FF_MY_RECIPES && (
+                <ShoppingCart className="w-3.5 h-3.5 opacity-70 shrink-0" aria-hidden />
+              )}
+              {secondaryTabLabel}
+              {!FF_MY_RECIPES && !hasAccess && (
+                <Lock className="w-3 h-3 opacity-50 shrink-0" aria-hidden />
+              )}
+            </button>
+          </div>
         </div>
 
-        {(tab === "favorites" || tab === "my_recipes") && (
-        <IngredientFilterBar
-          selectedIngredients={ingredientFilterTerms}
-          onSelectedChange={setIngredientFilterTerms}
-          mode={ingredientFilterMode}
-          onModeChange={setIngredientFilterMode}
-          className="mb-4"
-          endSlot={
-            <button
-              type="button"
-              onClick={openShoppingList}
-              className="shrink-0 inline-flex items-center gap-1.5 text-xs text-muted-foreground/85 hover:text-foreground py-1.5 px-1 -mr-1 transition-colors whitespace-nowrap"
-            >
-              <ShoppingCart className="w-3.5 h-3.5 opacity-60 shrink-0" aria-hidden />
-              Покупки
-              {!hasAccess && <Lock className="w-3 h-3 opacity-50 shrink-0" aria-hidden />}
-            </button>
-          }
-        />
+        {tab === "favorites" && (
+          <IngredientFilterBar
+            selectedIngredients={ingredientFilterTerms}
+            onSelectedChange={setIngredientFilterTerms}
+            mode={ingredientFilterMode}
+            onModeChange={setIngredientFilterMode}
+            className="mb-4"
+            endSlot={
+              FF_MY_RECIPES ? (
+                <button
+                  type="button"
+                  onClick={openShoppingList}
+                  className="shrink-0 inline-flex items-center gap-1.5 text-xs text-muted-foreground/85 hover:text-foreground py-1.5 px-1 -mr-1 transition-colors whitespace-nowrap"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5 opacity-60 shrink-0" aria-hidden />
+                  Покупки
+                  {!hasAccess && <Lock className="w-3 h-3 opacity-50 shrink-0" aria-hidden />}
+                </button>
+              ) : undefined
+            }
+          />
+        )}
+
+        {FF_MY_RECIPES && tab === "my_recipes" && (
+          <IngredientFilterBar
+            selectedIngredients={ingredientFilterTerms}
+            onSelectedChange={setIngredientFilterTerms}
+            mode={ingredientFilterMode}
+            onModeChange={setIngredientFilterMode}
+            className="mb-4"
+            endSlot={
+              <button
+                type="button"
+                onClick={openShoppingList}
+                className="shrink-0 inline-flex items-center gap-1.5 text-xs text-muted-foreground/85 hover:text-foreground py-1.5 px-1 -mr-1 transition-colors whitespace-nowrap"
+              >
+                <ShoppingCart className="w-3.5 h-3.5 opacity-60 shrink-0" aria-hidden />
+                Покупки
+                {!hasAccess && <Lock className="w-3 h-3 opacity-50 shrink-0" aria-hidden />}
+              </button>
+            }
+          />
         )}
 
         {tab === "shopping_list" && hasAccess && (
@@ -251,7 +287,7 @@ export default function FavoritesPage() {
           </motion.div>
         )}
 
-        {tab === "my_recipes" && (
+        {FF_MY_RECIPES && tab === "my_recipes" && (
           <>
             {myRecipes.length === 0 ? (
               <TabEmptyState
@@ -281,7 +317,7 @@ export default function FavoritesPage() {
                   </Button>
                 </div>
                 <div className="space-y-4">
-                {myRecipesFiltered.map((recipe, index) => (
+                  {myRecipesFiltered.map((recipe, index) => (
                     <MyRecipeCard
                       key={recipe.id}
                       recipe={recipe}
@@ -316,7 +352,10 @@ export default function FavoritesPage() {
                               })
                           : undefined
                       }
-                      onEdit={(e) => { e.stopPropagation(); openEditForm(recipe.id); }}
+                      onEdit={(e) => {
+                        e.stopPropagation();
+                        openEditForm(recipe.id);
+                      }}
                       isPremium={hasAccess}
                     />
                   ))}
@@ -347,36 +386,39 @@ export default function FavoritesPage() {
               <>
                 <p className="text-xs text-muted-foreground/80 mb-2.5">Сохранённые рецепты</p>
                 <div className="space-y-4">
-                {favoritesFiltered.map((favorite, index) => (
-                  <FavoriteCard
-                    key={favorite.id}
-                    favorite={favorite}
-                    index={index}
-                    isPremium={hasAccess}
-                    members={members}
-                    onTap={() => handleCardTap(favorite)}
-                    onToggleFavorite={(e) => handleRemove(e, favorite.id)}
-                    onAddToPlan={
-                      hasAccess
-                        ? () => {
-                            const id = getRecipeId(favorite);
-                            const title = favorite.recipe?.title ?? "";
-                            if (id) {
-                              setAddToPlanRecipe({
-                                id,
-                                title,
-                                member_id: planSlotFromNav?.memberId ?? favorite.member_id ?? null,
-                                recipeMealType: favorite.recipe?.mealType ?? null,
-                                ...(planSlotFromNav
-                                  ? { targetDayKey: planSlotFromNav.plannedDate, targetMealType: planSlotFromNav.mealType }
-                                  : {}),
-                              });
+                  {favoritesFiltered.map((favorite, index) => (
+                    <FavoriteCard
+                      key={favorite.id}
+                      favorite={favorite}
+                      index={index}
+                      isPremium={hasAccess}
+                      members={members}
+                      onTap={() => handleCardTap(favorite)}
+                      onToggleFavorite={(e) => handleRemove(e, favorite.id)}
+                      onAddToPlan={
+                        hasAccess
+                          ? () => {
+                              const id = getRecipeId(favorite);
+                              const title = favorite.recipe?.title ?? "";
+                              if (id) {
+                                setAddToPlanRecipe({
+                                  id,
+                                  title,
+                                  member_id: planSlotFromNav?.memberId ?? favorite.member_id ?? null,
+                                  recipeMealType: favorite.recipe?.mealType ?? null,
+                                  ...(planSlotFromNav
+                                    ? {
+                                        targetDayKey: planSlotFromNav.plannedDate,
+                                        targetMealType: planSlotFromNav.mealType,
+                                      }
+                                    : {}),
+                                });
+                              }
                             }
-                          }
-                        : undefined
-                    }
-                  />
-                ))}
+                          : undefined
+                      }
+                    />
+                  ))}
                 </div>
               </>
             )}
@@ -402,12 +444,17 @@ export default function FavoritesPage() {
         />
       )}
 
-      <MyRecipeFormSheet
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        recipeId={formRecipeId}
-        onSuccess={() => { setFormOpen(false); setFormRecipeId(null); }}
-      />
+      {FF_MY_RECIPES && (
+        <MyRecipeFormSheet
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          recipeId={formRecipeId}
+          onSuccess={() => {
+            setFormOpen(false);
+            setFormRecipeId(null);
+          }}
+        />
+      )}
     </MobileLayout>
   );
 }

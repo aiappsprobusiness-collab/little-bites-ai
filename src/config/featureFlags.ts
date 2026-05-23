@@ -18,3 +18,9 @@ export const FF_WEEK_PAYWALL_PREVIEW =
  */
 export const FF_UNIFIED_PAYWALL = import.meta.env.VITE_FF_UNIFIED_PAYWALL !== "false";
 
+/**
+ * Пользовательские рецепты («Мои рецепты»): создание, вкладка, редактирование.
+ * По умолчанию выключено. Включить: VITE_FF_MY_RECIPES=true.
+ */
+export const FF_MY_RECIPES = import.meta.env.VITE_FF_MY_RECIPES === "true";
+

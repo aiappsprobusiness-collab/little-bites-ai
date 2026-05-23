@@ -27,6 +27,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
 import { MyRecipeFormSheet } from "@/components/favorites/MyRecipeFormSheet";
+import { FF_MY_RECIPES } from "@/config/featureFlags";
 import { useFamily } from "@/contexts/FamilyContext";
 import { useAppStore } from "@/store/useAppStore";
 import { getBenefitLabel } from "@/utils/ageCategory";
@@ -669,7 +670,7 @@ export default function RecipePage() {
       await deleteUserRecipe(id);
       toast({ title: "Рецепт удалён" });
       setDeleteConfirmOpen(false);
-      navigate("/favorites", { state: { tab: "my_recipes" } });
+      navigate("/favorites", { state: { tab: FF_MY_RECIPES ? ("my_recipes" as const) : ("favorites" as const) } });
     } catch (e: unknown) {
       toast({ variant: "destructive", title: "Ошибка", description: (e as Error)?.message ?? "Не удалось удалить" });
     }
@@ -875,7 +876,7 @@ export default function RecipePage() {
               <CalendarPlus className="h-4 w-4" />
             </motion.button>
           )}
-          {isUserCustom && (
+          {isUserCustom && FF_MY_RECIPES && (
             <>
               <motion.button
                 type="button"
@@ -1007,7 +1008,7 @@ export default function RecipePage() {
         />
       )}
 
-      {id && isUserCustom && (
+      {id && isUserCustom && FF_MY_RECIPES && (
         <MyRecipeFormSheet
           open={editSheetOpen}
           onOpenChange={setEditSheetOpen}
