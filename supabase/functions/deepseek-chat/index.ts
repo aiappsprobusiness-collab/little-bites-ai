@@ -657,7 +657,7 @@ serve(async (req) => {
         );
       }
     }
-    // Чат-рецепт: Free — 2/день chat_recipe; Premium/Trial — скрытый дневной лимит (plan/help/from_plan_replace не тратят chat_recipe)
+    // Чат-рецепт: Free — 5/день chat_recipe; Premium/Trial — скрытый дневной лимит 20/день (plan/help/from_plan_replace не тратят chat_recipe)
     if ((type === "chat" || type === "recipe") && !fromPlanReplace && userId && supabase && !isPremiumUser) {
       const { data: chatRecipeUsed } = await supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "chat_recipe" });
       const used = typeof chatRecipeUsed === "number" ? chatRecipeUsed : 0;

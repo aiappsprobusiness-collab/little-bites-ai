@@ -65,7 +65,7 @@
 
 **Фронт:** `ChatPage` сохраняет в `chat_history.meta` значение **`systemHintType: "curated_under_12_recipe"`** и показывает **`SystemHintCard`** с кнопками «Открыть план» (`/meal-plan`) и «Помощь маме» (`/sos`).
 
-Примеры: **blocked** — `{"blocked":true,"blocked_by":"allergy","profile_name":"Ребёнок","blocked_items":["орехи"],"suggested_alternatives":[...],"message":"У профиля..."}`. **ok** — `{"message":"{...}","recipes":[{...}],"recipe_id":"uuid"}`. **Лимит** — `{"error":"LIMIT_REACHED","message":"Лимит на сегодня исчерпан.","payload":{"feature":"chat_recipe","limit":2,"used":2}}`.
+Примеры: **blocked** — `{"blocked":true,"blocked_by":"allergy","profile_name":"Ребёнок","blocked_items":["орехи"],"suggested_alternatives":[...],"message":"У профиля..."}`. **ok** — `{"message":"{...}","recipes":[{...}],"recipe_id":"uuid"}`. **Лимит** — `{"error":"LIMIT_REACHED","message":"Лимит на сегодня исчерпан.","payload":{"feature":"chat_recipe","limit":5,"used":5}}`.
 
 **Запуск контрактных тестов (Edge):** нужен [Deno](https://deno.com/). Установка на Windows: `winget install Deno.Deno` или с [deno.land](https://deno.land/#installation). Затем из корня репозитория: `npm run test:edge` или из `supabase/functions`: `deno test deepseek-chat/domain/policies/policies.test.ts deepseek-chat/domain/family/family.test.ts deepseek-chat/domain/recipe_io/recipe_io.test.ts --allow-read`.
 
@@ -139,8 +139,8 @@
 
 ### 3.4 Лимиты
 
-- **Free:** 2 запроса в день на рецепты в чате (фича `chat_recipe`), 2 запроса на SOS (фича `help`). Проверка через `get_usage_count_today` и при необходимости `check_usage_limit`.
-- **Premium/Trial:** без лимита по этим фичам.
+- **Free:** 5 успешных подборов рецепта в день в чате (фича `chat_recipe`), 2 запроса на SOS (фича `help`). Проверка через `get_usage_count_today` на Edge; клиент — `useSubscription` + подсказка в шапке чата (`getRemainingRecipesText`).
+- **Premium/Trial:** скрытые продуктовые лимиты 20/день на `chat_recipe` и `help` (см. `subscriptionRules.ts` / `subscriptionLimits.ts`).
 
 ---
 

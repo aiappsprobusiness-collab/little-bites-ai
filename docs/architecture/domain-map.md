@@ -8,7 +8,7 @@
 
 **Продукт:** приложение для семей с детьми: генерация рецептов под возраст и ограничения (аллергии, «не любят»), планирование питания на день/неделю, AI-чат для рецептов, контент и помощь («Мы рядом»).
 
-**Для кого:** родители (free / trial / premium). Ограничения Free: 1 член семьи, 1 аллергия, лимиты по фичам (2/день chat_recipe, plan_fill_day, help). Premium/Trial: несколько членов, семейный режим в чате и плане, без лимитов по этим фичам.
+**Для кого:** родители (free / trial / premium). Ограничения Free: 1 член семьи, 1 аллергия, лимиты по фичам (5/день chat_recipe, 2/день plan_fill_day и help). Premium/Trial: несколько членов, семейный режим в чате и плане, скрытые лимиты 20/день на chat_recipe и help.
 
 **Ключевые сценарии:** регистрация → создание профиля ребёнка → генерация рецепта в чате → добавление в избранное/план → автозаполнение плана на день/неделю; trial/premium; шаринг рецепта или плана; аналитика и лимиты по usage_events.
 
@@ -93,7 +93,7 @@
 
 ### Analytics / Usage Tracking
 
-- **Назначение:** лимиты Free (2/день на chat_recipe, plan_fill_day, help), воронка (auth, trial, purchase), токены AI, джобы генерации плана.
+- **Назначение:** лимиты Free (5/день chat_recipe, 2/день plan_fill_day и help), воронка (auth, trial, purchase), токены AI, джобы генерации плана.
 - **Таблицы:** `usage_events` (feature, user_id, anon_id, entry_point, utm, properties), `token_usage_log` (action_type, tokens), `plan_generation_jobs` (status, progress), `subscription_plan_audit`, `chat_history`, `plate_logs`.
 - **UI:** события через trackUsageEvent / trackLandingEvent (usageEvents, landingAnalytics).
 - **Edge:** `track-usage-event` (запись в usage_events от клиента); deepseek-chat пишет usage_events, token_usage_log, plate_logs; generate-plan пишет plan_generation_jobs и usage_events; payment-webhook пишет subscription_plan_audit.
@@ -162,7 +162,7 @@
 3. POST deepseek-chat (memberData, messages, generationContextBlock и др.); проверка лимита get_usage_count_today(chat_recipe); при лимите — 429.
 4. Edge: policy block, сборка промпта, вызов модели, парсинг/валидация, create_recipe_with_steps, запись usage_events (chat_recipe).
 5. Клиент: сохранение обмена в chat_history (saveChatMutation); отображение рецепта.
-6. Домены: Chat Recipe Generation, Members, Subscription (лимиты), Recipe Pool (рецепт добавляется), Analytics. Ограничения Free: 2/день chat_recipe; семейный режим только Premium/Trial.
+6. Домены: Chat Recipe Generation, Members, Subscription (лимиты), Recipe Pool (рецепт добавляется), Analytics. Ограничения Free: 5/день chat_recipe; семейный режим только Premium/Trial.
 
 ### Flow: Add recipe to favorites
 
@@ -196,7 +196,7 @@
 ## Cross-Cutting Concerns
 
 - **Subscription gating:** проверки по profiles_v2.status и premium_until/trial_* в приложении и на Edge (deepseek-chat, generate-plan — лимиты, семейный режим). Не менять без учёта payment-webhook и profiles_v2.
-- **Free limits:** фичи chat_recipe, plan_fill_day, help — 2/день; учёт через get_usage_count_today и запись в usage_events **только с Edge** (лимитные feature с клиента блокируются). Сутки UTC.
+- **Free limits:** chat_recipe — 5/день; plan_fill_day и help — 2/день; учёт через get_usage_count_today и запись в usage_events **только с Edge** (лимитные feature с клиента блокируются). Сутки UTC.
 - **Analytics:** с фронта — track-usage-event (продуктовые события); Edge — лимиты + token/plate/jobs/audit. Таксономия и legacy mapping: `docs/decisions/ANALYTICS_EVENT_TAXONOMY_STAGE2.md`. Нет внешней аналитической системы.
 - **RLS:** доступ к данным по auth.uid(); subscriptions и subscription_plan_audit — service_role. share_refs/shared_plans — SELECT для anon по ref.
 - **Legacy compatibility:** см. Known Legacy; при изменениях не ломать обратную совместимость с child_id, recipe_data.

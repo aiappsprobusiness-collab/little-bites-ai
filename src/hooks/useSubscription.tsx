@@ -204,6 +204,22 @@ export function useSubscription() {
     }
   };
 
+  /** Сразу выставить число использованных подборов рецепта в чате (после успеха или LIMIT_REACHED). */
+  const setChatRecipeUsedToday = (used: number) => {
+    if (user?.id != null && Number.isFinite(used)) {
+      queryClient.setQueryData(["usage-chat-recipe-today", user.id], Math.max(0, Math.floor(used)));
+    }
+  };
+
+  /** +1 к счётчику chat_recipe после успешной генерации (оптимистично, до refetch). */
+  const bumpChatRecipeUsedToday = () => {
+    if (user?.id == null) return;
+    queryClient.setQueryData(["usage-chat-recipe-today", user.id], (prev: number | undefined) => {
+      const current = typeof prev === "number" ? prev : 0;
+      return current + 1;
+    });
+  };
+
   const setShowInputHints = useMutation({
     mutationFn: async (value: boolean) => {
       if (!user) throw new Error("User not authenticated");
@@ -420,6 +436,8 @@ export function useSubscription() {
     updateSubscriptionStatus: updateSubscriptionStatus.mutateAsync,
     refetchUsage,
     setHelpUsedToday,
+    setChatRecipeUsedToday,
+    bumpChatRecipeUsedToday,
     startPayment: startPayment.mutateAsync,
     isStartingPayment: startPayment.isPending,
     cancelSubscription: cancelSubscription.mutateAsync,

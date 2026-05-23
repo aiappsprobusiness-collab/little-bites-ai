@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   FREE_MEAL_SWAP_PER_DAY,
   getSubscriptionLimits,
+  isAiDailyLimitExceeded,
   SUBSCRIPTION_LIMITS,
 } from "./subscriptionRules";
 
@@ -34,5 +35,23 @@ describe("FREE_MEAL_SWAP_PER_DAY", () => {
 describe("getSubscriptionLimits", () => {
   it("returns free limits for free tier", () => {
     expect(getSubscriptionLimits("free").aiDailyLimit).toBe(5);
+  });
+});
+
+describe("isAiDailyLimitExceeded (free chat_recipe)", () => {
+  const limit = SUBSCRIPTION_LIMITS.free.aiDailyLimit!;
+
+  it("not exceeded below limit", () => {
+    expect(isAiDailyLimitExceeded(0, limit)).toBe(false);
+    expect(isAiDailyLimitExceeded(4, limit)).toBe(false);
+  });
+
+  it("exceeded at and above limit", () => {
+    expect(isAiDailyLimitExceeded(5, limit)).toBe(true);
+    expect(isAiDailyLimitExceeded(6, limit)).toBe(true);
+  });
+
+  it("null limit never exceeded", () => {
+    expect(isAiDailyLimitExceeded(999, null)).toBe(false);
   });
 });

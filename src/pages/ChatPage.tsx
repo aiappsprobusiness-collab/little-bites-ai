@@ -311,6 +311,8 @@ export default function ChatPage() {
     helpDailyLimit,
     refetchUsage,
     setHelpUsedToday,
+    setChatRecipeUsedToday,
+    bumpChatRecipeUsedToday,
     showInputHints,
   } = useSubscription();
   const isFree = subscriptionStatus === "free";
@@ -1367,6 +1369,10 @@ export default function ChatPage() {
         }
       } else if (finalRecipe && !isBlockedResponse) {
         trackUsageEvent("chat_generate_success");
+        if (mode === "recipes" && hasRecipeFromApi && !hasAccess) {
+          bumpChatRecipeUsedToday();
+          refetchUsage();
+        }
         // Один setMessages с рецептом и recipeId — без второго обновления после тоста «Рецепты сохранены», чтобы не было моргания
         let recipeIdForHistory: string | null = response?.recipe_id ?? null;
         let savedRecipesCount = 0;
@@ -1535,6 +1541,14 @@ export default function ChatPage() {
       if (err?.message === "LIMIT_REACHED" && limitPayload?.feature) {
         const feat = limitPayload.feature as LimitReachedFeature;
         if (!hasAccess && feat === "chat_recipe") {
+          const limitPayloadFull = (err as { payload?: { used?: number; limit?: number } })?.payload;
+          const usedFromServer = limitPayloadFull?.used;
+          if (typeof usedFromServer === "number") {
+            setChatRecipeUsedToday(usedFromServer);
+          } else if (aiDailyLimit != null) {
+            setChatRecipeUsedToday(aiDailyLimit);
+          }
+          refetchUsage();
           setRecipeSoftLimitOpen(true);
           setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
         } else {
@@ -1547,6 +1561,8 @@ export default function ChatPage() {
         }
       } else if (err?.message === "usage_limit_exceeded") {
         if (!hasAccess) {
+          if (aiDailyLimit != null) setChatRecipeUsedToday(aiDailyLimit);
+          refetchUsage();
           setRecipeSoftLimitOpen(true);
           setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== assistantMessageId));
         } else {
@@ -1607,6 +1623,9 @@ export default function ChatPage() {
     aiDailyLimit,
     setHelpUsedToday,
     refetchUsage,
+    bumpChatRecipeUsedToday,
+    setChatRecipeUsedToday,
+    aiDailyLimit,
   ]);
 
   /**
@@ -1713,12 +1732,12 @@ export default function ChatPage() {
   const ageMonths = selectedMember?.age_months ?? members[0]?.age_months ?? null;
   const ageLabel = ageMonths != null ? (ageMonths < 12 ? `${ageMonths} мес` : `${Math.floor(ageMonths / 12)} ${ageMonths % 12 === 0 ? "лет" : "г."}`) : null;
 
-  /** Free: краткая подсказка по лимиту подборов (без «X из Y», см. getRemainingRecipesText). */
+  /** Free: счётчик подборов «осталось X из Y». */
   const chatHeaderMeta =
     mode !== "help" && isFree && aiDailyLimit !== null
       ? (
           <p className="text-[11px] leading-snug text-muted-foreground/70">
-            {getRemainingRecipesText(remaining ?? 0)}
+            {getRemainingRecipesText(remaining ?? 0, aiDailyLimit)}
           </p>
         )
       : undefined;

@@ -377,7 +377,7 @@ RPC `get_token_usage_by_action(_from_date, _to_date, _user_id)` возвраща
 
 **Где используется usage_events для лимитов:**
 
-- **deepseek-chat:** RPC `get_usage_count_today(p_user_id, p_feature)` для фич `help` и `chat_recipe`. Лимит 2/день (FREE_FEATURE_LIMIT = 2). При used >= 2 возвращается 429 LIMIT_REACHED. После успешного ответа — insert в usage_events (help или chat_recipe).
+- **deepseek-chat:** RPC `get_usage_count_today(p_user_id, p_feature)` для фич `help` и `chat_recipe`. **Free:** `chat_recipe` — 5/день, `help` — 2/день (`FREE_AI_DAILY_LIMIT` / `FREE_HELP_DAILY_LIMIT` в `subscriptionLimits.ts`). При `used >=` лимита — 429 LIMIT_REACHED. После успешного ответа — insert в usage_events (help или chat_recipe; `chat_recipe` только при успешной генерации рецепта, не `isRetry`).
 - **generate-plan:** `get_usage_count_today(userId, 'plan_fill_day')`, лимит 2/день (FREE_PLAN_FILL_LIMIT = 2). При used >= 2 — 429. После успешного run для free — insert usage_events feature 'plan_fill_day'.
 
 **Фича plan_refresh:** в миграции и в limitReachedMessages упоминается для сообщений пользователю, но **счётчик plan_refresh в коде нигде не инкрементируется** — только chat_recipe, plan_fill_day, help.

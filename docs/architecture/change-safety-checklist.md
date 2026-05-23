@@ -17,7 +17,7 @@ Before modifying chat or deepseek-chat:
 - create_recipe_with_steps RPC (payload, recipes + recipe_steps + recipe_ingredients)
 - chat_history persistence (who writes, when)
 - token_usage_log (action_type, written from deepseek-chat)
-- usage_events limits (chat_recipe, help — 2/day free; written from Edge after success)
+- usage_events limits (chat_recipe — 5/day free, help/plan_fill_day — 2/day; written from Edge after success)
 - Client: useDeepSeekAPI, useChatHistory, useChatRecipes, chatBlockedCheck / allergenTokens
 
 **Never change:**
@@ -82,7 +82,7 @@ Before modifying subscription or trial:
 - subscription_plan_audit (written on real confirmation; for debugging plan detection)
 - create-payment Edge (order creation)
 - start_trial / trial_on_signup_and_cancel RPC
-- get_usage_count_today (limits: chat_recipe, plan_fill_day, help — 2/day)
+- get_usage_count_today (limits: chat_recipe 5/day, plan_fill_day and help 2/day)
 - Gating in app and Edge (deepseek-chat, generate-plan) that depend on status / premium_until / trial_*
 
 **Never change:**

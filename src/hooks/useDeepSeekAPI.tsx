@@ -272,7 +272,7 @@ export function useDeepSeekAPI() {
             throw e;
           }
           if (code === 'LIMIT_REACHED' || error?.error === 'LIMIT_REACHED') {
-            if (isHelpMode) refetchUsage?.();
+            refetchUsage?.();
             const e = new Error('LIMIT_REACHED') as Error & { payload?: { feature: string; limit: number; used: number } };
             if (error?.payload) e.payload = error.payload;
             throw e;
