@@ -185,17 +185,107 @@ export function getShareSignature(): { line: string; url: string } {
  * Используется в Telegram и мессенджерах.
  * Ссылка формата https://momrecipes.online/r/{shareRef}
  */
-export function buildRecipeShareTextShort(recipeTitle: string, shareUrl: string): string {
+export function buildRecipeShareTextShort(recipeTitle: string, shareUrl: string, description?: string | null): string {
   const title = (recipeTitle || "Рецепт").trim();
   const url = (shareUrl || BASE_URL).trim();
-  return [
-    "🍽 Делюсь рецептом из Mom Recipes",
-    "",
-    title,
-    "",
+  const benefit =
+    description != null && String(description).trim() !== ""
+      ? String(description).trim().slice(0, 120)
+      : null;
+  const lines = [`🍽 ${title}`, ""];
+  if (benefit) {
+    lines.push(benefit, "");
+  }
+  lines.push(
     "Посмотреть рецепт:",
     url,
     "",
-    "В Mom Recipes можно собрать меню для всей семьи с учётом возраста, аллергий и предпочтений.",
-  ].join("\n");
+    "В Mom Recipes можно собрать меню для всей семьи с учётом возраста, аллергий и предпочтений."
+  );
+  return lines.join("\n");
+}
+
+/** Лимит длины для мессенджеров (Telegram ~4096); при превышении — short fallback. */
+export const SHARE_TEXT_MAX_LENGTH = 3500;
+
+/** Источник данных рецепта для шаринга (карточка БД или чат). */
+export interface RecipeShareSource {
+  title: string;
+  description?: string | null;
+  cooking_time_minutes?: number | null;
+  cookingTime?: number | null;
+  max_age_months?: number | null;
+  meal_type?: string | null;
+  mealType?: string | null;
+  mealTypeLabel?: string | null;
+  ingredients?: Array<IngredientItem | string | Record<string, unknown>>;
+  ingredients_items?: IngredientItem[];
+  steps?: Array<{ instruction?: string; step_number?: number } | string> | null;
+  chefAdvice?: string | null;
+  chef_advice?: string | null;
+  advice?: string | null;
+}
+
+function normalizeShareIngredients(source: RecipeShareSource): IngredientItem[] {
+  if (Array.isArray(source.ingredients_items) && source.ingredients_items.length > 0) {
+    return source.ingredients_items;
+  }
+  if (!Array.isArray(source.ingredients) || source.ingredients.length === 0) {
+    return [];
+  }
+  return source.ingredients.map((ing): IngredientItem => {
+    if (typeof ing === "string") return { name: ing };
+    const o = ing as IngredientItem;
+    return o.name != null ? o : { name: String((ing as { name?: string }).name ?? "").trim() };
+  });
+}
+
+function normalizeShareSteps(
+  steps: RecipeShareSource["steps"]
+): Array<{ instruction?: string; step_number?: number }> | null {
+  if (!Array.isArray(steps) || steps.length === 0) return null;
+  return steps.map((s, i) => {
+    if (typeof s === "string") {
+      return { instruction: s, step_number: i + 1 };
+    }
+    return s;
+  });
+}
+
+/**
+ * Полная карточка рецепта для шаринга; при длине > SHARE_TEXT_MAX_LENGTH — короткий текст.
+ */
+export function buildRecipeShareTextForShare(
+  source: RecipeShareSource,
+  recipeId: string,
+  shareUrl: string
+): string {
+  const title = (source.title || "Рецепт").trim();
+  const mealType = source.meal_type ?? source.mealType ?? null;
+  const chefAdvice =
+    source.chefAdvice ??
+    source.chef_advice ??
+    source.advice ??
+    null;
+  const cookingMinutes =
+    source.cooking_time_minutes ?? source.cookingTime ?? null;
+
+  const full = buildRecipeShareText({
+    title,
+    description: source.description,
+    cooking_time_minutes: cookingMinutes,
+    recipeId,
+    ingredients: normalizeShareIngredients(source),
+    steps: normalizeShareSteps(source.steps),
+    chefAdvice,
+    max_age_months: source.max_age_months,
+    mealTypeLabel: source.mealTypeLabel,
+    meal_type: mealType,
+    shareUrl,
+  });
+
+  if (full.length <= SHARE_TEXT_MAX_LENGTH) {
+    return full;
+  }
+  return buildRecipeShareTextShort(title, shareUrl, source.description);
 }

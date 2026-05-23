@@ -7,7 +7,7 @@ import { saveOnboardingAttribution } from "@/utils/onboardingAttribution";
 import { trackLandingEvent } from "@/utils/landingAnalytics";
 import { trackUsageEvent } from "@/utils/usageEvents";
 
-const SOCIAL_PROOF_TEXT = "12 000 семей уже используют MomRecipes";
+const SOCIAL_PROOF_TEXT = "Соберите похожее меню для своей семьи за ~30 секунд";
 
 const MEAL_EMOJI: Record<string, string> = {
   breakfast: "🍳",
@@ -19,6 +19,19 @@ const MEAL_EMOJI: Record<string, string> = {
 function formatDateLabel(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00");
   return d.toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
+}
+
+function buildPlanAuthSearchParams(
+  planRef: string,
+  isWeek: boolean,
+  currentSearch: string
+): string {
+  const params = new URLSearchParams(currentSearch);
+  params.set("mode", "signup");
+  params.set("entry_point", isWeek ? "shared_week_plan" : "shared_day_plan");
+  params.set("share_ref", planRef);
+  params.set("share_type", isWeek ? "week_plan" : "day_plan");
+  return params.toString();
 }
 
 export default function SharedPlanPage() {
@@ -91,13 +104,8 @@ export default function SharedPlanPage() {
         entry_point: "shared_day_plan",
       });
     }
-    const entryPoint = isWeek ? "shared_week_plan" : "shared_day_plan";
-    const shareType = isWeek ? "week_plan" : "day_plan";
-    const params = new URLSearchParams(location.search);
-    params.set("entry_point", entryPoint);
-    params.set("share_ref", planLinkRef ?? "");
-    params.set("share_type", shareType);
-    navigate(`/welcome?${params.toString()}`, { replace: true });
+    const search = buildPlanAuthSearchParams(ref, isWeek, location.search);
+    navigate(`/auth?${search}`, { replace: true });
   };
 
   if (status === "loading") {

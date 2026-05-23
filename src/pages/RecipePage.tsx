@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
-import { ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ThumbsUp, ThumbsDown, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Heart, CalendarPlus, Pencil, Trash2, ThumbsUp, ThumbsDown, ShoppingCart, Copy } from "lucide-react";
 import { useRecipes } from "@/hooks/useRecipes";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useMealPlans } from "@/hooks/useMealPlans";
@@ -14,7 +14,8 @@ import { ToastAction } from "@/components/ui/toast";
 import type { IngredientItem, RecipeDisplayIngredients } from "@/types/recipe";
 import { scaleIngredientDisplay } from "@/types/recipe";
 import { applyIngredientOverrides, ingredientKey } from "@/types/ingredientOverrides";
-import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
+import { buildRecipeShareTextForShare, SHARE_APP_URL } from "@/utils/shareRecipeText";
+import { copyShareTextToClipboard } from "@/utils/shareActions";
 import {
   trackUsageEvent,
   generateShareRef,
@@ -23,6 +24,8 @@ import {
   saveShareRef,
   getShareRecipeUrl,
   trackShareLinkCreated,
+  setShareLandingRecipeId,
+  setShareAttributionFromShortLink,
 } from "@/utils/usageEvents";
 import { supabase } from "@/integrations/supabase/client";
 import { AddToPlanSheet } from "@/components/plan/AddToPlanSheet";
@@ -156,6 +159,10 @@ export default function RecipePage() {
     const sr = searchParams.get("sr");
     if (ep === "share_recipe" || sr) {
       trackUsageEvent("share_landing_view", { properties: { recipe_id: id } });
+      setShareLandingRecipeId(id);
+      if (sr) {
+        setShareAttributionFromShortLink(sr, id);
+      }
     }
   }, [id, searchParams]);
 
@@ -309,8 +316,34 @@ export default function RecipePage() {
         source_screen: "recipe_page",
       },
     });
-    const recipeDisplay = recipe as RecipeDisplayIngredients & { title?: string };
-    const shareText = buildRecipeShareTextShort(recipeDisplay.title ?? "Рецепт", shareUrl);
+    const recipeDisplay = recipe as RecipeDisplayIngredients & {
+      title?: string;
+      description?: string;
+      steps?: { instruction?: string; step_number?: number }[];
+      cooking_time_minutes?: number | null;
+      max_age_months?: number | null;
+      chefAdvice?: string;
+      chef_advice?: string | null;
+    };
+    const shareMealType = (recipe as { meal_type?: string | null }).meal_type ?? null;
+    const shareMealLabel = mealTypeLabel ?? getMealLabel(shareMealType);
+    const shareChefAdvice =
+      recipeDisplay.chefAdvice ?? recipeDisplay.chef_advice ?? (recipe as { advice?: string | null }).advice;
+    const shareText = buildRecipeShareTextForShare(
+      {
+        title: recipeDisplay.title ?? "Рецепт",
+        description: recipeDisplay.description,
+        cooking_time_minutes: recipeDisplay.cooking_time_minutes,
+        max_age_months: recipeDisplay.max_age_months,
+        meal_type: shareMealType,
+        mealTypeLabel: shareMealLabel,
+        ingredients_items: getDisplayIngredients(recipeDisplay),
+        steps: recipeDisplay.steps,
+        chefAdvice: shareChefAdvice ?? undefined,
+      },
+      id,
+      shareUrl
+    );
     let shareCompleted = false;
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
@@ -341,6 +374,74 @@ export default function RecipePage() {
       } catch {
         /* сигнал scoring не критичен для UX */
       }
+    }
+  };
+
+  const handleCopyShare = async () => {
+    if (!id || !recipe) return;
+    const shareRef = generateShareRef();
+    const channel = getShareChannelFromContext(false, true);
+    const saved = await saveShareRef(id, shareRef);
+    if (saved) {
+      trackShareLinkCreated({
+        share_type: "recipe",
+        share_ref: shareRef,
+        surface: "recipe_page",
+        recipe_id: id,
+        has_native_share: false,
+      });
+    }
+    const shareUrl = saved
+      ? getShortShareUrl(shareRef, SHARE_APP_URL)
+      : getShareRecipeUrl(id, channel, shareRef, SHARE_APP_URL);
+    const recipeDisplay = recipe as RecipeDisplayIngredients & {
+      title?: string;
+      description?: string;
+      steps?: { instruction?: string; step_number?: number }[];
+      cooking_time_minutes?: number | null;
+      max_age_months?: number | null;
+      chefAdvice?: string;
+      chef_advice?: string | null;
+    };
+    const shareMealType = (recipe as { meal_type?: string | null }).meal_type ?? null;
+    const shareMealLabel = mealTypeLabel ?? getMealLabel(shareMealType);
+    const shareChefAdvice =
+      recipeDisplay.chefAdvice ?? recipeDisplay.chef_advice ?? (recipe as { advice?: string | null }).advice;
+    const shareText = buildRecipeShareTextForShare(
+      {
+        title: recipeDisplay.title ?? "Рецепт",
+        description: recipeDisplay.description,
+        cooking_time_minutes: recipeDisplay.cooking_time_minutes,
+        max_age_months: recipeDisplay.max_age_months,
+        meal_type: shareMealType,
+        mealTypeLabel: shareMealLabel,
+        ingredients_items: getDisplayIngredients(recipeDisplay),
+        steps: recipeDisplay.steps,
+        chefAdvice: shareChefAdvice ?? undefined,
+      },
+      id,
+      shareUrl
+    );
+    trackUsageEvent("share_click", {
+      properties: {
+        recipe_id: id,
+        share_ref: shareRef,
+        channel: "copy_link",
+        source_screen: "recipe_page",
+      },
+    });
+    if (await copyShareTextToClipboard(shareText)) {
+      toast({ title: "Скопировано", description: "Вставьте текст в WhatsApp или Telegram" });
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        if (sess?.session?.user?.id) {
+          await supabase.rpc("record_recipe_feedback", { p_recipe_id: id, p_action: "shared" });
+        }
+      } catch {
+        /* ignore */
+      }
+    } else {
+      toast({ variant: "destructive", title: "Не удалось скопировать текст" });
     }
   };
 
@@ -810,6 +911,17 @@ export default function RecipePage() {
             title="Поделиться"
           >
             <ShareIosIcon className="h-4 w-4" />
+          </motion.button>
+          <motion.button
+            type="button"
+            onClick={handleCopyShare}
+            whileTap={{ scale: 0.96 }}
+            transition={{ duration: 0.15 }}
+            className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground transition-all"
+            aria-label="Скопировать рецепт"
+            title="Скопировать текст"
+          >
+            <Copy className="h-4 w-4" />
           </motion.button>
           {!isUserCustom && (
             <>

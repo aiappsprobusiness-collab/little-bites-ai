@@ -26,7 +26,6 @@ export type PaywallReasonKey =
   | "preferences_locked"
   | "favorites_limit"
   | "new_product"
-  | "article_locked"
   | "trial_ending_soon"
   | "trial_expired"
   | "free_plan_overview"
@@ -171,13 +170,6 @@ const COPY: Record<PaywallReasonKey, PaywallReasonCopy> = {
       "Спокойный ввод прикорма под возраст",
     ),
   },
-  article_locked: {
-    title: "Хотите узнать больше? 📚",
-    bodyLines: paywallBodyPair(
-      "Часть материалов — в полной версии",
-      "Проверенная информация рядом с планом",
-    ),
-  },
   trial_ending_soon: {
     title: "⏳ Пробный доступ скоро закончится",
     bodyLines: paywallBodyPair(
@@ -211,6 +203,7 @@ const COPY: Record<PaywallReasonKey, PaywallReasonCopy> = {
 const REASON_ALIASES: Record<string, PaywallReasonKey> = {
   limit_plan_fill_day: "plan_fill_day",
   plan_goal_select: "fallback",
+  article_locked: "fallback",
   unknown: "fallback",
 };
 

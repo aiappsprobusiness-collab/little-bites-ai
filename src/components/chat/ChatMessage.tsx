@@ -1,7 +1,7 @@
 import { useState, useRef, forwardRef, useMemo, useEffect, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, ChefHat, Heart, BookOpen, CalendarPlus, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Trash2, ChefHat, Heart, CalendarPlus, ThumbsUp, ThumbsDown, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,7 +25,8 @@ import { HelpSectionCard } from "@/components/help-ui";
 import { HelpDoctorReminderLine } from "@/components/help/HelpDoctorReminderLine";
 import { safeError } from "@/utils/safeLogger";
 import { getBenefitLabel } from "@/utils/ageCategory";
-import { buildRecipeShareTextShort, SHARE_APP_URL } from "@/utils/shareRecipeText";
+import { buildRecipeShareTextForShare, SHARE_APP_URL } from "@/utils/shareRecipeText";
+import { copyShareTextToClipboard } from "@/utils/shareActions";
 import ChatRecipeCard from "@/components/chat/ChatRecipeCard";
 import { SystemHintCard } from "@/components/chat/SystemHintCard";
 import { ConfirmActionModal } from "@/components/ui/confirm-action-modal";
@@ -42,8 +43,6 @@ import {
 } from "@/utils/usageEvents";
 import { shouldShowHelpDoctorReminder, stripHelpDoctorSection } from "@/utils/stripHelpDoctorSection";
 
-const UUID_REGEX = /\[([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/gi;
-
 /** Убирает ведущий JSON (сырой или в блоке ```json) из ответа ИИ — в чате только читаемый текст. */
 function getTextForDisplay(content: string): string {
   let t = content.trim();
@@ -58,11 +57,6 @@ function getTextForDisplay(content: string): string {
     }
   }
   return t || content;
-}
-
-/** Заменяет [uuid] на markdown-ссылку article:uuid для рендера кнопки «Читать статью». */
-function injectArticleLinks(text: string): string {
-  return text.replace(UUID_REGEX, (_, id) => `[Читать статью](article:${id})`);
 }
 
 interface ChatMessageProps {
@@ -81,8 +75,6 @@ interface ChatMessageProps {
   ageMonths?: number | null;
   /** Профиль в карусели: id члена или "family" — тон текста блока пользы */
   selectedProfileId?: string | null;
-  /** При клике на ссылку «Читать статью» в ответе ИИ (база знаний) */
-  onOpenArticle?: (articleId: string) => void;
   /** Уже распарсенный рецепт (из parseRecipesFromChat), чтобы не показывать «Данные повреждены» при расхождении парсеров */
   preParsedRecipe?: Recipe | null;
   /** ID рецепта в БД (от ChatPage после saveRecipesFromChat), для favorites_v2.recipe_id */
@@ -173,7 +165,7 @@ function isValidRecipeId(v: string): boolean {
 }
 
 export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
-  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, selectedProfileId, onOpenArticle, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false, systemHintType, topicKey, topicTitle, topicShortTitle, onOpenAssistant, systemHintExtraActions }, ref) => {
+  ({ id, role, content, timestamp, rawContent, expectRecipe, preParsedRecipe, recipeId: recipeIdProp, isStreaming, onDelete, memberId, memberName, ageMonths, selectedProfileId, forcePlainText = false, isConsultationMode = false, isBlockedRefusal = false, systemHintType, topicKey, topicTitle, topicShortTitle, onOpenAssistant, systemHintExtraActions }, ref) => {
     const [showDelete, setShowDelete] = useState(false);
     const [localRecipeId, setLocalRecipeId] = useState<string | null>(null);
     const [addToPlanOpen, setAddToPlanOpen] = useState(false);
@@ -223,8 +215,6 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       role === "assistant"
         ? (forcePlainText ? content : getTextForDisplay(content))
         : content;
-    const displayWithArticleLinks =
-      role === "assistant" && onOpenArticle ? injectArticleLinks(displayContent) : displayContent;
 
     const recipeId = recipeIdProp ?? localRecipeId;
     const isFavorite = !!(recipeId && isValidRecipeId(recipeId) && isFavoriteFn(recipeId, chatMemberId));
@@ -425,7 +415,22 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
       }
       const title = effectiveRecipe?.title ?? "Рецепт";
       const textToShare = effectiveRecipe?.title
-        ? buildRecipeShareTextShort(title, shareUrl)
+        ? buildRecipeShareTextForShare(
+            {
+              title: effectiveRecipe.title,
+              description: effectiveRecipe.description,
+              cookingTime: effectiveRecipe.cookingTime,
+              mealType: effectiveRecipe.mealType,
+              mealTypeLabel: effectiveRecipe.mealType
+                ? MEAL_LABELS[effectiveRecipe.mealType]
+                : undefined,
+              ingredients: effectiveRecipe.ingredients as IngredientItem[] | undefined,
+              steps: effectiveRecipe.steps,
+              chefAdvice: effectiveRecipe.chefAdvice ?? effectiveRecipe.advice,
+            },
+            rid ?? "",
+            shareUrl
+          )
         : shareText || "";
       if (!textToShare) return;
       trackUsageEvent("share_click", {
@@ -436,6 +441,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           source_screen: "chat",
         },
       });
+      let shareCompleted = false;
       try {
         if (typeof navigator !== "undefined" && navigator.share) {
           await navigator.share({
@@ -443,6 +449,7 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             text: textToShare,
           });
           toast({ title: "Поделиться", description: "Рецепт отправлен" });
+          shareCompleted = true;
         } else {
           const canCopy = typeof navigator !== "undefined" && typeof navigator.clipboard?.writeText === "function";
           if (!canCopy) {
@@ -455,11 +462,86 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
           }
           await navigator.clipboard.writeText(textToShare);
           toast({ title: "Рецепт скопирован для отправки" });
+          shareCompleted = true;
         }
       } catch (e: any) {
         if (e?.name !== "AbortError") {
           toast({ variant: "destructive", title: "Ошибка", description: e.message || "Не удалось поделиться" });
         }
+      }
+      if (shareCompleted && rid && isValidRecipeId(rid) && user) {
+        try {
+          await (supabase.rpc as (n: string, a: Record<string, string>) => Promise<unknown>)(
+            "record_recipe_feedback",
+            { p_recipe_id: rid, p_action: "shared" }
+          );
+        } catch {
+          /* scoring не критичен для UX */
+        }
+      }
+    };
+
+    const handleCopyShare = async () => {
+      const rid = recipeId ?? undefined;
+      const shareRef = generateShareRef();
+      const channel = getShareChannelFromContext(false, true);
+      let shareUrl = SHARE_APP_URL;
+      if (rid) {
+        const saved = await saveShareRef(rid, shareRef);
+        if (saved) {
+          trackShareLinkCreated({
+            share_type: "recipe",
+            share_ref: shareRef,
+            surface: "chat",
+            recipe_id: rid,
+            has_native_share: false,
+          });
+        }
+        shareUrl = saved
+          ? getShortShareUrl(shareRef, SHARE_APP_URL)
+          : getShareRecipeUrl(rid, channel, shareRef, SHARE_APP_URL);
+      }
+      const textToShare = effectiveRecipe?.title
+        ? buildRecipeShareTextForShare(
+            {
+              title: effectiveRecipe.title,
+              description: effectiveRecipe.description,
+              cookingTime: effectiveRecipe.cookingTime,
+              mealType: effectiveRecipe.mealType,
+              mealTypeLabel: effectiveRecipe.mealType
+                ? MEAL_LABELS[effectiveRecipe.mealType]
+                : undefined,
+              ingredients: effectiveRecipe.ingredients as IngredientItem[] | undefined,
+              steps: effectiveRecipe.steps,
+              chefAdvice: effectiveRecipe.chefAdvice ?? effectiveRecipe.advice,
+            },
+            rid ?? "",
+            shareUrl
+          )
+        : shareText || "";
+      if (!textToShare) return;
+      trackUsageEvent("share_click", {
+        properties: {
+          ...(rid ? { recipe_id: rid } : {}),
+          share_ref: shareRef,
+          channel: "copy_link",
+          source_screen: "chat",
+        },
+      });
+      if (await copyShareTextToClipboard(textToShare)) {
+        toast({ title: "Скопировано", description: "Вставьте текст в WhatsApp или Telegram" });
+        if (rid && isValidRecipeId(rid) && user) {
+          try {
+            await (supabase.rpc as (n: string, a: Record<string, string>) => Promise<unknown>)(
+              "record_recipe_feedback",
+              { p_recipe_id: rid, p_action: "shared" }
+            );
+          } catch {
+            /* ignore */
+          }
+        }
+      } else {
+        toast({ variant: "destructive", title: "Не удалось скопировать текст" });
       }
     };
 
@@ -551,77 +633,18 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
             ) : role === "assistant" ? (
               <div className={`chat-message-content text-xs select-none prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-foreground prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5 prose-li:text-foreground prose-strong:text-foreground [&>*]:text-foreground ${forcePlainText ? "consultationCard-inner" : ""}`}>
                 {forcePlainText ? (() => {
-                  const main = stripHelpDoctorSection(displayWithArticleLinks);
-                  const markdownProps = {
-                    remarkPlugins: [remarkGfm] as const,
-                    components: {
-                      a: ({ href, children }: { href?: string; children?: ReactNode }) => {
-                        if (href?.startsWith("article:") && onOpenArticle) {
-                          const articleId = href.slice(8);
-                          return (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              className="h-8 gap-1.5 mt-1 inline-flex"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                onOpenArticle(articleId);
-                              }}
-                            >
-                              <BookOpen className="w-3.5 h-3.5" />
-                              Читать статью
-                            </Button>
-                          );
-                        }
-                        return (
-                          <a href={href} target="_blank" rel="noopener noreferrer">
-                            {children}
-                          </a>
-                        );
-                      },
-                    },
-                  };
+                  const main = stripHelpDoctorSection(displayContent);
                   const showDoctorReminder = shouldShowHelpDoctorReminder(id);
                   return (
                     <>
-                      <ReactMarkdown {...markdownProps}>{main}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{main}</ReactMarkdown>
                       {showDoctorReminder ? <HelpDoctorReminderLine /> : null}
                       <p className="consultationDisclaimer">Это справочная информация.</p>
                     </>
                   );
                 })() : (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    a: ({ href, children }) => {
-                      if (href?.startsWith("article:") && onOpenArticle) {
-                        const articleId = href.slice(8);
-                        return (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="h-8 gap-1.5 mt-1 inline-flex"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              onOpenArticle(articleId);
-                            }}
-                          >
-                            <BookOpen className="w-3.5 h-3.5" />
-                            Читать статью
-                          </Button>
-                        );
-                      }
-                      return (
-                        <a href={href} target="_blank" rel="noopener noreferrer">
-                          {children}
-                        </a>
-                      );
-                    },
-                  }}
-                >
-                  {displayWithArticleLinks}
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {displayContent}
                 </ReactMarkdown>
                 )}
               </div>
@@ -674,6 +697,19 @@ export const ChatMessage = forwardRef<HTMLDivElement, ChatMessageProps>(
                       title="Поделиться"
                     >
                       <ShareIosIcon className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        void handleCopyShare();
+                      }}
+                      disabled={!(effectiveRecipe?.title || shareText)}
+                      className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center text-muted-foreground bg-muted/50 border border-border hover:bg-muted hover:text-foreground disabled:opacity-50 transition-all active:scale-95"
+                      title="Скопировать текст"
+                    >
+                      <Copy className="h-4 w-4" />
                     </button>
                     {canRecipeFeedback ? (
                       <>

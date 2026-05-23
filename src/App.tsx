@@ -22,7 +22,6 @@ import SosTiles from "./pages/SosTiles";
 import SosTopicPage from "./pages/SosTopicPage";
 import SosScenarioScreen from "./pages/SosScenarioScreen";
 import FoodDiary from "./pages/FoodDiary";
-import ArticlesPage from "./pages/ArticlesPage";
 import AuthPage from "./pages/AuthPage";
 import TelegramStartPage from "./pages/TelegramStartPage";
 import AuthSignupSuccessPage from "./pages/AuthSignupSuccessPage";
@@ -463,14 +462,7 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/articles"
-                element={
-                  <ProtectedRoute>
-                    <ArticlesPage />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/articles" element={<Navigate to="/chat" replace />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/subscription/manage" element={

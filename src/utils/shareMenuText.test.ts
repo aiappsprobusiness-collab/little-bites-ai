@@ -1,6 +1,7 @@
 import {
   appendDayMenuShareLink,
   appendShareLinkOnce,
+  buildAllergyShareLine,
   buildDayMenuShareBody,
   buildWeekMenuShareBody,
   weekMealsBrief,
@@ -127,5 +128,27 @@ describe("shareMenuText", () => {
       const u = "https://x.test/p/x";
       expect(appendDayMenuShareLink(`A\n${u}`, u)).toBe(`A\n${u}`);
     });
+  });
+
+  describe("buildAllergyShareLine", () => {
+    it("returns null when allergies empty", () => {
+      expect(buildAllergyShareLine([])).toBeNull();
+      expect(buildAllergyShareLine(undefined)).toBeNull();
+    });
+
+    it("joins allergy labels", () => {
+      expect(buildAllergyShareLine(["Яйцо", "Молоко"])).toBe(
+        "С учётом аллергий: Яйцо, Молоко"
+      );
+    });
+  });
+
+  it("includes allergy line in day menu body", () => {
+    const text = buildDayMenuShareBody(
+      [{ meal_type: "breakfast", label: "Завтрак", title: "Каша" }],
+      { intro: "Intro", allergyLine: "С учётом аллергий: Яйцо" }
+    );
+    expect(text).toContain("Intro");
+    expect(text).toContain("С учётом аллергий: Яйцо");
   });
 });

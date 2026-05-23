@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildRecipeShareText, buildRecipeShareTextShort, getShareSignature, SHARE_APP_URL } from "./shareRecipeText";
+import {
+  buildRecipeShareText,
+  buildRecipeShareTextForShare,
+  buildRecipeShareTextShort,
+  getShareSignature,
+  SHARE_APP_URL,
+  SHARE_TEXT_MAX_LENGTH,
+} from "./shareRecipeText";
 
 describe("shareRecipeText", () => {
   const signature = getShareSignature();
@@ -107,13 +114,53 @@ describe("shareRecipeText", () => {
     it("returns recipe share line, title, link and product value", () => {
       const url = "https://momrecipes.online/r/abc123";
       const text = buildRecipeShareTextShort("Омлет с кабачком", url);
-      expect(text).toContain("🍽 Делюсь рецептом из Mom Recipes");
-      expect(text).toContain("Омлет с кабачком");
+      expect(text).toContain("🍽 Омлет с кабачком");
       expect(text).toContain("Посмотреть рецепт:");
       expect(text).toContain(url);
       expect(text).toContain("собрать меню для всей семьи");
       expect(text).not.toContain("Ингредиенты");
       expect(text).not.toContain("Приготовление");
+    });
+
+    it("includes description snippet when provided", () => {
+      const text = buildRecipeShareTextShort("Суп", "https://x/r/1", "Мягкий суп для прикорма.");
+      expect(text).toContain("Мягкий суп для прикорма.");
+    });
+  });
+
+  describe("buildRecipeShareTextForShare", () => {
+    it("builds full card with share URL in footer", () => {
+      const url = "https://momrecipes.online/r/xyz";
+      const text = buildRecipeShareTextForShare(
+        {
+          title: "Суп",
+          ingredients: [{ name: "Морковь", amount: 1, unit: "шт" }],
+          steps: ["Нарезать", "Сварить"],
+          mealType: "lunch",
+          mealTypeLabel: "Обед",
+        },
+        "recipe-id",
+        url
+      );
+      expect(text).toContain("🧾 Ингредиенты:");
+      expect(text).toContain("1) Нарезать");
+      expect(text.endsWith(`\n— Рецепт из приложения Mom Recipes\n${url}`)).toBe(true);
+    });
+
+    it("falls back to short text when full exceeds SHARE_TEXT_MAX_LENGTH", () => {
+      const url = "https://momrecipes.online/r/long";
+      const longStep = "x".repeat(SHARE_TEXT_MAX_LENGTH);
+      const text = buildRecipeShareTextForShare(
+        {
+          title: "Длинный рецепт",
+          ingredients: [{ name: "A".repeat(500) }],
+          steps: [longStep],
+        },
+        "id",
+        url
+      );
+      expect(text).toContain("🍽 Длинный рецепт");
+      expect(text).not.toContain("🧾 Ингредиенты:");
     });
   });
 });

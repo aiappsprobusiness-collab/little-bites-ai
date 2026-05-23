@@ -136,11 +136,15 @@ import { createSharedPlan, type SharedPlanPayloadWeek } from "@/services/sharedP
 import {
   appendDayMenuShareLink,
   appendShareLinkOnce,
+  buildAllergyShareLine,
   buildDayMenuShareBody,
   buildWeekMenuShareBody,
   getShareIntroText,
   pickWeekMenuShareTextIndices,
+  SHARE_MENU_PREVIEW_HINT,
 } from "@/utils/shareMenuText";
+import { copyShareTextToClipboard } from "@/utils/shareActions";
+import { markPlanShareNudgeShown, shouldShowPlanShareNudge } from "@/utils/planShareNudge";
 import {
   Dialog,
   DialogContent,
@@ -240,6 +244,31 @@ function showPartialFillToast(
     duration: PARTIAL_FILL_TOAST_DURATION_MS,
   });
   r.update({ action: <PartialFillToastActions navigate={navigate} dismiss={r.dismiss} /> });
+}
+
+function showDayPlanReadyToast(
+  toast: ReturnType<typeof useToast>["toast"],
+  options: { filled: number; total: number; onShare: () => void }
+) {
+  const showNudge = shouldShowPlanShareNudge();
+  if (showNudge) {
+    markPlanShareNudgeShown();
+  }
+  const t = toast({
+    title: "Меню на сегодня готово",
+    description: showNudge
+      ? "Отправить подруге в WhatsApp?"
+      : `Подобрано: ${options.filled} из ${options.total}`,
+    duration: showNudge ? 8000 : 2000,
+    action: showNudge ? (
+      <ToastAction altText="Поделиться меню" onClick={options.onShare}>
+        Поделиться
+      </ToastAction>
+    ) : undefined,
+  });
+  if (!showNudge) {
+    setTimeout(() => t.dismiss(), 2000);
+  }
 }
 
 /** Фразы статуса генерации плана (цикл по порядку, без рандома). */
@@ -382,6 +411,7 @@ export default function MealPlanPage() {
       kind: "day";
       meals: Array<{ meal_type: string; label: string; title: string }>;
       shareIntro: string;
+      allergyLine?: string | null;
     }
     | {
       kind: "week";
@@ -1551,8 +1581,11 @@ export default function MealPlanPage() {
       kind: "day",
       meals,
       shareIntro: getShareIntroText(new Date()),
+      allergyLine: buildAllergyShareLine(
+        memberDataForPlan && "allergies" in memberDataForPlan ? memberDataForPlan.allergies : undefined
+      ),
     });
-  }, [planMealsForSelectedDay, mealTypes, previews, toast]);
+  }, [planMealsForSelectedDay, mealTypes, previews, toast, memberDataForPlan]);
 
   const openShareWeekPreview = useCallback(() => {
     if (!user?.id) return;
@@ -1581,14 +1614,14 @@ export default function MealPlanPage() {
         });
         const body = buildDayMenuShareBody(shareMenuPreview.meals, {
           intro: shareMenuPreview.shareIntro,
+          allergyLine: shareMenuPreview.allergyLine,
         });
         const fullText = appendDayMenuShareLink(body, url);
         let sharedOk = false;
         if (typeof navigator !== "undefined" && navigator.share) {
           await navigator.share({ title: "Меню на день", text: fullText });
           sharedOk = true;
-        } else if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(fullText);
+        } else if (await copyShareTextToClipboard(fullText)) {
           toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
           sharedOk = true;
         } else {
@@ -1616,8 +1649,7 @@ export default function MealPlanPage() {
       if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({ title: "Меню на неделю", text: fullText });
         sharedOk = true;
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(fullText);
+      } else if (await copyShareTextToClipboard(fullText)) {
         toast({ title: "Скопировано", description: "Текст со ссылкой в буфере обмена" });
         sharedOk = true;
       } else {
@@ -1640,11 +1672,76 @@ export default function MealPlanPage() {
     toast,
   ]);
 
+  const copyShareMenuPreview = useCallback(async () => {
+    if (!shareMenuPreview || !user?.id) return;
+    setShareMenuSending(true);
+    try {
+      let fullText = "";
+      if (shareMenuPreview.kind === "day") {
+        const { url } = await createSharedPlan(user.id, memberIdForPlan, {
+          date: selectedDayKey,
+          meals: shareMenuPreview.meals,
+        });
+        const body = buildDayMenuShareBody(shareMenuPreview.meals, {
+          intro: shareMenuPreview.shareIntro,
+          allergyLine: shareMenuPreview.allergyLine,
+        });
+        fullText = appendDayMenuShareLink(body, url);
+      } else {
+        const { url } = await createSharedPlan(user.id, memberIdForPlan, {
+          type: "week",
+          startDate: dayKeys[0],
+          endDate: dayKeys[6],
+          days: shareMenuPreview.days,
+        });
+        const dayRows = shareMenuPreview.days.map((d, i) => ({
+          dayShort: getDayLabel(rollingDates[i]),
+          meals: d.meals.map((m) => ({ meal_type: m.slot, title: m.title })),
+        }));
+        const body = buildWeekMenuShareBody(dayRows, {
+          headerIndex: shareMenuPreview.headerIndex,
+          ctaIndex: shareMenuPreview.ctaIndex,
+        });
+        fullText = appendShareLinkOnce(body, url);
+      }
+      if (await copyShareTextToClipboard(fullText)) {
+        trackUsageEvent("share_click", {
+          properties: {
+            channel: "copy_link",
+            source_screen: "meal_plan_preview",
+            share_type: shareMenuPreview.kind === "day" ? "day_plan" : "week_plan",
+          },
+        });
+        toast({
+          title: "Скопировано",
+          description: "Вставьте текст в WhatsApp или Telegram",
+        });
+        setShareMenuPreview(null);
+      } else {
+        toast({ variant: "destructive", description: "Не удалось скопировать текст" });
+      }
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
+      toast({ variant: "destructive", description: e instanceof Error ? e.message : "Не удалось скопировать" });
+    } finally {
+      setShareMenuSending(false);
+    }
+  }, [
+    shareMenuPreview,
+    user?.id,
+    memberIdForPlan,
+    selectedDayKey,
+    dayKeys,
+    rollingDates,
+    toast,
+  ]);
+
   const shareMenuPreviewBody = useMemo(() => {
     if (!shareMenuPreview) return "";
     if (shareMenuPreview.kind === "day") {
       return buildDayMenuShareBody(shareMenuPreview.meals, {
         intro: shareMenuPreview.shareIntro,
+        allergyLine: shareMenuPreview.allergyLine,
       });
     }
     return buildWeekMenuShareBody(
@@ -2294,11 +2391,11 @@ export default function MealPlanPage() {
                       if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
                         showPartialFillToast(toast, navigate, { filled, total });
                       } else {
-                        const planReadyT = toast({
-                          title: "Меню на сегодня готово",
-                          description: `Подобрано: ${filled} из ${total}`,
+                        showDayPlanReadyToast(toast, {
+                          filled,
+                          total,
+                          onShare: () => openShareDayPreview(),
                         });
-                        setTimeout(() => planReadyT.dismiss(), 2000);
                       }
                     } catch (e: unknown) {
                       trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
@@ -2697,11 +2794,11 @@ export default function MealPlanPage() {
                         if (result.partial || (result.ok !== false && (result.emptySlotsCount ?? 0) > 0)) {
                           showPartialFillToast(toast, navigate, { filled, total });
                         } else {
-                          const planReadyT = toast({
-                            title: "Меню на сегодня готово",
-                            description: `Подобрано: ${filled} из ${total}`,
+                          showDayPlanReadyToast(toast, {
+                            filled,
+                            total,
+                            onShare: () => openShareDayPreview(),
                           });
-                          setTimeout(() => planReadyT.dismiss(), 2000);
                         }
                       } catch (e: unknown) {
                         trackUsageEvent("plan_fill_day_error", { properties: { message: e instanceof Error ? e.message : String(e) } });
@@ -3270,10 +3367,11 @@ export default function MealPlanPage() {
           <DialogHeader>
             <DialogTitle>Ваше меню</DialogTitle>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-1">{SHARE_MENU_PREVIEW_HINT}</p>
           <pre className="text-sm text-foreground whitespace-pre-wrap font-sans max-h-[min(50vh,18rem)] overflow-y-auto rounded-lg bg-muted/40 p-3 border border-border/50">
             {shareMenuPreviewBody}
           </pre>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-col gap-2">
             <Button
               type="button"
               className="w-full rounded-xl inline-flex items-center justify-center gap-2"
@@ -3288,6 +3386,15 @@ export default function MealPlanPage() {
               ) : (
                 "Отправить"
               )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full rounded-xl"
+              disabled={shareMenuSending}
+              onClick={() => void copyShareMenuPreview()}
+            >
+              Скопировать текст
             </Button>
           </DialogFooter>
         </DialogContent>

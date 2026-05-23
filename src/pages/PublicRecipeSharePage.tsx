@@ -55,6 +55,11 @@ export default function PublicRecipeSharePage() {
   });
 
   useEffect(() => {
+    if (!decodedRef || !recipe?.id) return;
+    setShareAttributionFromShortLink(decodedRef, recipe.id);
+  }, [decodedRef, recipe?.id]);
+
+  useEffect(() => {
     if (user && recipe?.id) {
       navigate(`/recipe/${recipe.id}`, { replace: true });
     }

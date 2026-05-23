@@ -5,8 +5,12 @@
 ## Общее
 
 - Тексты собираются в **`src/utils/shareMenuText.ts`** (день — `buildDayMenuShareBody`, неделя — `buildWeekMenuShareBody`).
-- Вступление дня — **`getShareIntroText`** в `src/utils/shareDayMenuText.ts`.
-- Ссылка на лендинг плана добавляется отдельно: день — `appendDayMenuShareLink`, неделя — `appendShareLinkOnce` (чтобы не дублировать URL при `navigator.share`).
+- **Рецепт (чат и карточка):** `buildRecipeShareTextForShare` в `src/utils/shareRecipeText.ts` — полная карточка (ингредиенты, шаги, совет) + короткая ссылка `/r/:shareRef` в футере; при длине > 3500 символов — fallback на `buildRecipeShareTextShort`.
+- Вступление дня — **`getShareIntroText`** в `src/utils/shareDayMenuText.ts` (без бренда в каждой строке; бренд/ссылка — в CTA и футере).
+- Опционально после intro — **`buildAllergyShareLine`** (аллергии профиля плана, без имени ребёнка).
+- **Копирование:** `copyShareTextToClipboard` в `src/utils/shareActions.ts` — кнопка «Скопировать текст» в превью плана, на `RecipePage` и в `ChatMessage` (`share_click` с `channel=copy_link`).
+- Превью плана (`MealPlanPage`): подсказка **`SHARE_MENU_PREVIEW_HINT`** (только UI, не уходит в сообщение).
+- Лендинг плана (`SharedPlanPage`): social proof — «Соберите похожее меню для своей семьи за ~30 секунд».
 
 ## Неделя: формат текста
 
@@ -40,5 +44,5 @@
 
 ## Связанные файлы
 
-- UI: `MealPlanPage` (превью «Ваше меню», вызов share / clipboard).
-- Лендинг: `SharedPlanPage`, таблица `shared_plans`.
+- UI: `MealPlanPage` (превью «Ваше меню», вызов share / clipboard; один раз после успешного «Собрать день» — toast с CTA «Поделиться»).
+- Лендинг: `SharedPlanPage`, таблица `shared_plans`. CTA «Собрать свой план» → `/auth?mode=signup&entry_point=shared_*_plan&share_ref=...` (без промежуточного `/welcome`).

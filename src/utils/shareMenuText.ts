@@ -43,6 +43,20 @@ const WEEK_SHARE_CTAS = [
   "👉 Открыть меню и собрать список продуктов:",
 ] as const;
 
+/** Подсказка в UI-превью перед отправкой меню (не уходит в текст сообщения). */
+export const SHARE_MENU_PREVIEW_HINT =
+  "Подруга откроет меню и сможет собрать такое же для своего ребёнка — с учётом возраста и аллергий.";
+
+/**
+ * Одна строка для шаринга, если у профиля заданы аллергии (без имени ребёнка).
+ */
+export function buildAllergyShareLine(allergies: string[] | null | undefined): string | null {
+  if (!Array.isArray(allergies) || allergies.length === 0) return null;
+  const labels = allergies.map((a) => String(a).trim()).filter(Boolean);
+  if (labels.length === 0) return null;
+  return `С учётом аллергий: ${labels.join(", ")}`;
+}
+
 export interface DayMenuShareMeal {
   meal_type: string;
   label: string;
@@ -52,6 +66,8 @@ export interface DayMenuShareMeal {
 export interface BuildDayMenuShareBodyOptions {
   /** Зафиксированная первая строка (превью и отправка совпадают). */
   intro?: string;
+  /** Строка после intro (например аллергии профиля). */
+  allergyLine?: string | null;
   /** Для выбора «сегодня/завтра» и варианта intro, если intro не задан. */
   now?: Date;
   /** Подмешивание случайного варианта intro (тесты). */
@@ -68,7 +84,12 @@ export function buildDayMenuShareBody(
     options?.intro ?? getShareIntroText(now, randomFn);
 
   const byType = new Map(meals.map((m) => [m.meal_type, m]));
-  const lines: string[] = [intro, ""];
+  const lines: string[] = [intro];
+  const allergyLine = options?.allergyLine?.trim();
+  if (allergyLine) {
+    lines.push(allergyLine);
+  }
+  lines.push("");
   for (const slot of DAY_SLOT_ORDER) {
     const m = byType.get(slot);
     const title = m?.title != null ? String(m.title).trim() : "";

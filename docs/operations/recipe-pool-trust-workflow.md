@@ -15,8 +15,8 @@
 - удаление из плана
 - замена блюда в плане
 - лайк / дизлайк
-- **shared** — пользователь успешно поделился рецептом (запись через `record_recipe_feedback`; на карточке рецепта после нативного шаринга или копирования ссылки)
-- **signup_from_share** — регистрация пользователя с атрибуцией рецепту (запись через `record_recipe_feedback` из потока онбординга, когда известны `recipe_id` и `auth.uid()`)
+- **shared** — пользователь успешно поделился рецептом (`record_recipe_feedback` после нативного шаринга или копирования ссылки на `RecipePage` и в `ChatMessage`)
+- **signup_from_share** — регистрация/вход с атрибуцией рецепту: `recordSignupFromShareIfApplicable()` после `auth_success` (`AuthPage`, `TelegramStartPage`), когда `entry_point` ∈ `{share_recipe, shared_recipe}` или `share_type=recipe` и известен `recipe_id` (localStorage `last_touch_share_recipe_id` или SELECT `share_refs` по `share_ref`)
 
 ---
 

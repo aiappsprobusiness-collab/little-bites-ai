@@ -13,7 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { trackUsageEvent, captureAttributionFromLocationOnce } from "@/utils/usageEvents";
+import { trackUsageEvent, captureAttributionFromLocationOnce, recordSignupFromShareIfApplicable } from "@/utils/usageEvents";
 import { trackVkAuthSuccessOnce } from "@/utils/vkAuthAnalytics";
 import { LEGAL_TERMS_VERSION } from "@/constants/legalVersions";
 import { AUTH_SIGNUP_SUCCESS_PATH } from "@/constants/authSignupSuccess";
@@ -78,6 +78,7 @@ export default function TelegramStartPage() {
       } else {
         trackUsageEvent("auth_success");
         trackVkAuthSuccessOnce();
+        void recordSignupFromShareIfApplicable();
         toast({ title: "Регистрация успешна!", description: "Проверьте почту для подтверждения аккаунта" });
         navigate(AUTH_SIGNUP_SUCCESS_PATH, { replace: true });
       }

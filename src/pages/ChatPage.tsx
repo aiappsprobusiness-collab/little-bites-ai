@@ -14,8 +14,6 @@ import { ChatEmptyState, EMPTY_STATE_QUICK_SUGGESTIONS } from "@/components/chat
 import { ChatInputBar } from "@/components/chat/ChatInputBar";
 import { AssistantAboutSheet } from "@/components/chat/AssistantAboutSheet";
 import { FamilyOnboarding } from "@/components/onboarding/FamilyOnboarding";
-import { ArticleReaderModal } from "@/components/articles/ArticleReaderModal";
-import { useArticle } from "@/hooks/useArticles";
 import { useDeepSeekAPI } from "@/hooks/useDeepSeekAPI";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { useFamily } from "@/contexts/FamilyContext";
@@ -332,7 +330,6 @@ export default function ChatPage() {
   const [friendlyLimitKind, setFriendlyLimitKind] = useState<"chat" | "help" | null>(null);
   const [showHintsModal, setShowHintsModal] = useState(false);
   const [badgeVisible, setBadgeVisible] = useState(false);
-  const [openArticleId, setOpenArticleId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -342,7 +339,6 @@ export default function ChatPage() {
   /** Один раз после входа на вкладку: прокрутить ленту к низу после загрузки сообщений. */
   const chatScrollRestoredRef = useRef(false);
 
-  const { article: openArticle, isLoading: isArticleLoading } = useArticle(openArticleId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastAppliedPrefillRef = useRef<string | null>(null);
   const prefillQueryAppliedRef = useRef(false);
@@ -1962,7 +1958,6 @@ export default function ChatPage() {
                 memberName={selectedMember?.name}
                 ageMonths={selectedMember?.age_months ?? undefined}
                 selectedProfileId={selectedMemberId}
-                onOpenArticle={setOpenArticleId}
                 forcePlainText={mode === "help"}
                 isConsultationMode={isConsultationMode}
                 isBlockedRefusal={m.isBlockedRefusal}
@@ -2094,12 +2089,6 @@ export default function ChatPage() {
           useAppStore.getState().setPaywallReason(null);
           useAppStore.getState().setPaywallCustomMessage(null);
         }}
-      />
-      <ArticleReaderModal
-        article={openArticle}
-        open={!!openArticleId}
-        onOpenChange={(open) => !open && setOpenArticleId(null)}
-        isLoading={isArticleLoading}
       />
       <QuickPromptsSheet
         open={showHintsModal}

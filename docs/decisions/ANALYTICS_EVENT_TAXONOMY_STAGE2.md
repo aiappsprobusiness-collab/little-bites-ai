@@ -179,7 +179,7 @@
 
 **Цепочка recipe share:** `share_link_created` (после persist ref) → `share_click` → … → получатель: `share_landing_view` → `recipe_view` → `share_recipe_cta_click` → `/auth` / welcome с query → `auth_success` (с тем же `anon_id` / attribution).
 
-**Цепочка plan share:** `share_link_created` (после insert `shared_plans`) → `shared_plan_view` → CTA → `share_*_plan_cta_click` (с `plan_ref` в properties) → welcome с `entry_point`, `share_ref`.
+**Цепочка plan share:** `share_link_created` (после insert `shared_plans`) → `shared_plan_view` → CTA → `share_*_plan_cta_click` (с `plan_ref` в properties) → `/auth?mode=signup` с `entry_point`, `share_ref`, `share_type`.
 
 ### 3.11 Favorites
 
@@ -228,7 +228,7 @@
 | Auth `/auth` | `auth_page_view` | `auth_start` → `auth_success` |
 | Telegram lite `/tg-start` | `tg_start_page_view` | `auth_start` → `auth_success` |
 | Public recipe `/r/...` | `share_landing_view` | `share_recipe_cta_click` → `/auth` |
-| Shared plan `/p/...` | `shared_plan_view` / `shared_plan_not_found_view` | `share_day_plan_cta_click` / `share_week_plan_cta_click` → `/welcome?...` |
+| Shared plan `/p/...` | `shared_plan_view` / `shared_plan_not_found_view` | `share_day_plan_cta_click` / `share_week_plan_cta_click` → `/auth?mode=signup&...` |
 | Paywall modal | `paywall_view` | `paywall_primary_click` / `paywall_secondary_click` → trial / оплата / закрытие |
 | Week preview sheet | `paywall_view` (source=week_preview) | `paywall_primary_click` → trial или открытие Unified paywall |
 

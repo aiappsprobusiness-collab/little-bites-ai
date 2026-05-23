@@ -90,7 +90,6 @@
 | `onboarding_second_allergy_free` | Несколько аллергий на Free — **явный CTA** в онбординге (отдельный UI в Unified) | `FreeAllergyUpsellHint` → `openOnboardingSecondAllergyPaywall` из `ProfileEditSheet`, `AddChildForm` (не при каждом вводе) |
 | `preferences_locked` | Любимое / «не любит» | `ChildProfileEditPage`, `ProfilePage` |
 | `favorites_limit` | Лимит избранного | `useFavorites`, `ChatMessage`; при `!FF_UNIFIED_PAYWALL` ещё `FavoritesLimitSheet` |
-| `article_locked` | Статьи | `ArticlesPage` |
 | `trial_ending_soon` | Конец trial ≤24ч → из lifecycle модалки | `TrialLifecycleModalsHost` |
 | `trial_expired` | После trial → из lifecycle модалки | `TrialLifecycleModalsHost` |
 | `fallback` | Нет причины, неизвестный ключ, бейдж в чате | `SubscriptionManagePage`, `ProfilePage`, `ChatPage` (`openSubscriptionFromBadge`) |
@@ -164,7 +163,7 @@
 
 ## Известные краевые случаи
 
-1. **Локальный state paywall** на части экранов (`ChatPage`, `ArticlesPage`, `SosTiles` как `paywallOpen`, `HomePage`) — поведение то же, обёртка локальная.
+1. **Локальный state paywall** на части экранов (`ChatPage`, `SosTiles` как `paywallOpen`, `HomePage`) — поведение то же, обёртка локальная.
 2. **«Сегодня спрашивают»** в `SosTiles`: при тапе по премиум-вопросу без доступа выставляется `paywall_reason` = `sos_premium_feature`.
 3. **Бейдж Free** в чате → **`FreeSubscriptionInfoSheet`**; **Premium/Trial** — чип не кликабелен. CTA sheet → таблица **`FreeVsPremiumModal`**, не UnifiedPaywall.
 

@@ -22,6 +22,7 @@ const LAST_UTM_KEY = "last_touch_utm";
 const LAST_ENTRY_POINT_KEY = "last_touch_entry_point";
 const LAST_SHARE_CHANNEL_KEY = "last_touch_share_channel";
 const LAST_SHARE_REF_KEY = "last_touch_share_ref";
+const LAST_SHARE_RECIPE_ID_KEY = "last_touch_share_recipe_id";
 const LAST_SHARE_TYPE_KEY = "last_touch_share_type";
 const TRACK_EDGE_PATH = "/functions/v1/track-usage-event";
 
@@ -280,16 +281,81 @@ function getStoredShareRef(): string | null {
   return localStorage.getItem(LAST_SHARE_REF_KEY);
 }
 
+function getStoredShareRecipeId(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage.getItem(LAST_SHARE_RECIPE_ID_KEY);
+}
+
 /**
  * Сохранить атрибуцию шаринга из короткой ссылки /r/:shareRef (для последующего auth_success и аналитики).
  */
-export function setShareAttributionFromShortLink(shareRef: string): void {
+export function setShareAttributionFromShortLink(shareRef: string, recipeId?: string): void {
   if (typeof localStorage === "undefined") return;
   try {
     localStorage.setItem(LAST_SHARE_REF_KEY, shareRef);
     localStorage.setItem(LAST_ENTRY_POINT_KEY, "share_recipe");
+    if (recipeId) {
+      localStorage.setItem(LAST_SHARE_RECIPE_ID_KEY, recipeId);
+    }
   } catch {
     /* ignore */
+  }
+}
+
+/** recipe_id при просмотре по длинной share-ссылке /recipe/:id?ep=... */
+export function setShareLandingRecipeId(recipeId: string): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(LAST_SHARE_RECIPE_ID_KEY, recipeId);
+  } catch {
+    /* ignore */
+  }
+}
+
+function isSharedRecipeAttributionEntry(entryPoint: string | null | undefined): boolean {
+  return entryPoint === "share_recipe" || entryPoint === "shared_recipe";
+}
+
+/**
+ * После auth_success: если пользователь пришёл с шаринга рецепта — записать signup_from_share (идемпотентно в RPC).
+ */
+export async function recordSignupFromShareIfApplicable(): Promise<void> {
+  const ob = getOnboardingAttribution();
+  const entryPoint = getStoredEntryPoint() ?? ob?.entry_point ?? null;
+  const shareType = getStoredShareType() ?? ob?.share_type ?? null;
+
+  if (!isSharedRecipeAttributionEntry(entryPoint) && shareType !== "recipe") {
+    return;
+  }
+
+  let recipeId = getStoredShareRecipeId();
+  if (!recipeId) {
+    const shareRef = getStoredShareRef() ?? ob?.shareRef ?? null;
+    if (shareRef) {
+      try {
+        const { data } = await supabase
+          .from("share_refs")
+          .select("recipe_id")
+          .eq("share_ref", shareRef)
+          .maybeSingle();
+        recipeId = data?.recipe_id ?? null;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (!recipeId) return;
+
+  try {
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess?.session?.user?.id) return;
+    await supabase.rpc("record_recipe_feedback", {
+      p_recipe_id: recipeId,
+      p_action: "signup_from_share",
+    });
+  } catch {
+    /* scoring не критичен для UX */
   }
 }
 

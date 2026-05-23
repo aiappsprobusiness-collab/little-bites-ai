@@ -107,13 +107,12 @@
 - **Edge:** `create-payment`, `payment-webhook`.
 - **Зависимости:** Subscription & Trial.
 
-### Content / Articles
+### Content / Articles (legacy)
 
-- **Назначение:** статьи по возрасту и премиуму (weaning, safety, nutrition). RLS: SELECT для authenticated.
-- **Таблицы:** `articles` (title, content, category, is_premium, age_category).
-- **UI:** ArticlesPage, ArticleReaderModal.
-- **Edge/Services:** нет Edge; Supabase client.
-- **Зависимости:** profiles_v2 (is_premium для доступа).
+- **Назначение:** таблица `articles` в БД сохранена; **UI снят** (маршрут `/articles` → редирект на `/chat`).
+- **Таблицы:** `articles` — без изменений схемы.
+- **UI:** нет (ранее ArticlesPage, ArticleReaderModal — удалены).
+- **Edge/Services:** нет.
 
 ---
 
@@ -187,7 +186,7 @@
 ### Flow: Share recipe or plan
 
 1. Рецепт: генерация share_ref (или существующий), insert share_refs (saveShareRef); ссылка /r/:shareRef. План: создание shared_plans, ссылка /p/:ref.
-2. Переход по ссылке: PublicRecipeSharePage (/r) → публичная страница рецепта, CTA → auth (signup); SharedPlanPage (/p) → отображение плана, CTA → welcome → auth. OG для ботов: share-og, share-og-plan Edge.
+2. Переход по ссылке: PublicRecipeSharePage (/r) → публичная страница рецепта, CTA → auth (signup); SharedPlanPage (/p) → отображение плана, CTA → auth (signup) с `entry_point=shared_day_plan|shared_week_plan`. OG для ботов: share-og, share-og-plan Edge. После `auth_success` при атрибуции рецепта — `record_recipe_feedback(signup_from_share)` (`recordSignupFromShareIfApplicable` в `usageEvents.ts`).
 3. Атрибуция и события: share_landing_view, share_recipe_cta_click и др. через track-usage-event.
 4. Домены: Sharing, Recipes / Meal Planning, Analytics.
 
