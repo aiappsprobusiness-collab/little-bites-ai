@@ -11,7 +11,7 @@
 
 - В **`index.html`** добавлены inline-стили для `html/body` и `#splash-screen`, **preload** фона `/splash/splash-screen.png`, метка времени `window.__momRecipesSplashStartMs` для единого отсчёта длительности.
 - Убрана анимация появления с нулевой прозрачности; **`src/styles/splash.css`** дублирует правила после загрузки бандла (комментарий про синхронизацию с `index.html`).
-- В **`main.tsx`**: скрытие splash только после **`window.load`** и не раньше **2800 ms** с момента inline-метки; плавный fade-out **400 ms**.
+- В **`main.tsx`**: скрытие splash только в **standalone PWA**; после **`window.load`**, не раньше **2800 ms**, fade-out **400 ms**. В браузере splash не показывается (`index.html` + `isStandalonePwa()`).
 - **`capacitor.config.ts` / `.json`**: параметры SplashScreen для **опциональных** нативных сборок; **основной канал — PWA** (без `cap sync`). Старт для пользователей с сайта: `index.html` + `main.tsx` + manifest; см. **`docs/dev/STARTUP_UI_AND_PLAN_LOADING.md`**.
 - **`public/manifest.json`**: `theme_color` приведён к **`#E8F1EC`** (как фон splash), чтобы PWA/Chrome не контрастировали с брендированным первым кадром.
 - **`public/sw.js`**: в precache добавлен **`/splash/splash-screen.png`** для повторных запусков с активным SW.

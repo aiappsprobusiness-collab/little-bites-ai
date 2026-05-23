@@ -60,16 +60,29 @@
         } catch (e) {}
       })();
     </script>
-    <!-- Критичный splash: до загрузки main.tsx (иначе пустой WebView и «мигание»). На /vk не прелоадим — трафик с рекламы. -->
+    <!-- PWA standalone: метка до paint; логика совпадает с src/utils/standalone.ts -->
+    <script>
+      (function () {
+        try {
+          var standalone = false;
+          if (window.matchMedia("(display-mode: standalone)").matches) standalone = true;
+          else if (window.navigator.standalone === true) standalone = true;
+          window.__momRecipesPwaStandalone = standalone;
+          if (standalone) document.documentElement.setAttribute("data-pwa-splash", "");
+        } catch (e) {
+          window.__momRecipesPwaStandalone = false;
+        }
+      })();
+    </script>
+    <!-- Критичный splash: только установленная PWA; до main.tsx. На /vk не прелоадим. -->
     <link id="mom-splash-img-preload" rel="preload" href="/splash/splash-screen.png" as="image" />
     <script>
       (function () {
         try {
           var p = location.pathname.replace(/\/+$/, "") || "/";
-          if (p === "/vk") {
-            var link = document.getElementById("mom-splash-img-preload");
-            if (link) link.remove();
-          }
+          var link = document.getElementById("mom-splash-img-preload");
+          if (!link) return;
+          if (p === "/vk" || !window.__momRecipesPwaStandalone) link.remove();
         } catch (e) {}
       })();
     </script>
@@ -78,9 +91,17 @@
       body {
         margin: 0;
         min-height: 100%;
+        background-color: #fafaf7;
+      }
+      html.dark,
+      html.dark body {
+        background-color: #1c1c22;
+      }
+      html[data-pwa-splash],
+      html[data-pwa-splash] body {
         background-color: var(--splash-bg, #e8f1ec);
       }
-      #splash-screen {
+      html[data-pwa-splash] #splash-screen {
         position: fixed;
         inset: 0;
         z-index: 9999;
@@ -117,18 +138,19 @@
   </head>
 
   <body>
-    <script>
-      window.__momRecipesSplashStartMs = Date.now();
-    </script>
-    <div id="splash-screen" role="img" aria-label="Mom Recipes"></div>
+    <div id="splash-screen" role="img" aria-label="Mom Recipes" hidden></div>
     <script>
       (function () {
         try {
           var p = location.pathname.replace(/\/+$/, "") || "/";
-          if (p === "/vk") {
-            var el = document.getElementById("splash-screen");
-            if (el) el.remove();
+          var el = document.getElementById("splash-screen");
+          if (!el) return;
+          if (p === "/vk" || !window.__momRecipesPwaStandalone) {
+            el.remove();
+            return;
           }
+          el.removeAttribute("hidden");
+          window.__momRecipesSplashStartMs = Date.now();
         } catch (e) {}
       })();
     </script>

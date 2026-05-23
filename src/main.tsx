@@ -1,5 +1,6 @@
 import { mountReactApp } from "./bootstrapReactApp";
 import { disableDoubleTapZoom } from "./utils/disableDoubleTapZoom";
+import { isStandalonePwa } from "./utils/standalone";
 import "./index.css";
 import "./styles/splash.css";
 
@@ -9,7 +10,9 @@ declare global {
     __beforeInstallPromptEvent?: BeforeInstallPromptEvent;
     __promptPWAInstall?: () => Promise<void>;
     __swRegistration?: ServiceWorkerRegistration;
-    /** Время старта показа splash (inline в index.html) */
+    /** Установленная PWA (inline в index.html, до бандла) */
+    __momRecipesPwaStandalone?: boolean;
+    /** Время старта показа splash (inline в index.html, только PWA) */
     __momRecipesSplashStartMs?: number;
   }
 }
@@ -119,10 +122,15 @@ function hideSplashWhenReady() {
   setTimeout(fadeOut, wait);
 }
 
-if (isVkFunnelPath()) {
-  hideSplashWhenReady();
-} else if (document.readyState === "complete") {
-  hideSplashWhenReady();
+/** HTML-splash только для установленной PWA; в обычном браузере узел снимается в index.html. */
+if (isStandalonePwa()) {
+  if (isVkFunnelPath()) {
+    hideSplashWhenReady();
+  } else if (document.readyState === "complete") {
+    hideSplashWhenReady();
+  } else {
+    window.addEventListener("load", hideSplashWhenReady);
+  }
 } else {
-  window.addEventListener("load", hideSplashWhenReady);
+  document.getElementById("splash-screen")?.remove();
 }

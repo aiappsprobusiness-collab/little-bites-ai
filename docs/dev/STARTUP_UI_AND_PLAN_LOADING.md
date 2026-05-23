@@ -16,9 +16,11 @@
 |-----|-----|
 | Изображение | `/splash/splash-screen.png` |
 | Фон под картинкой | `#E8F1EC` |
-| До выполнения JS | `index.html` — inline `<style>` на `html`/`body` и `#splash-screen`, `rel="preload"` картинки |
+| Условие показа | Только **standalone PWA**: `display-mode: standalone` или iOS `navigator.standalone` (`src/utils/standalone.ts`, дубликат inline в `index.html` → `window.__momRecipesPwaStandalone`, `html[data-pwa-splash]`). В обычном браузере splash **не** рендерится. |
+| До выполнения JS | `index.html` — inline `<style>` и `#splash-screen` только при `data-pwa-splash`; `rel="preload"` картинки — тоже только PWA |
+| Фон в браузере | `index.html` — `#fafaf7` / `#1c1c22` (dark), без splash-картинки, чтобы `/welcome` не мигал |
 | После бандла | `src/styles/splash.css` (держать в синхроне с inline) |
-| Скрытие | `src/main.tsx` — после `window.load`, не раньше ~2800 ms от `window.__momRecipesSplashStartMs`, затем fade-out ~400 ms |
+| Скрытие | `src/main.tsx` — только в PWA: после `window.load`, не раньше ~2800 ms от `window.__momRecipesSplashStartMs`, затем fade-out ~400 ms |
 
 ### Проверка связи до монтирования App
 
