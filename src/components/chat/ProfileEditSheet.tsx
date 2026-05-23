@@ -38,6 +38,12 @@ import {
 } from "@/utils/freeAllergyProfileUi";
 import { FreeAllergyUpsellHint } from "@/components/profile/FreeAllergyUpsellHint";
 import { Calendar } from "lucide-react";
+import {
+  CHILD_NAME_LABEL,
+  CHILD_NAME_PLACEHOLDER,
+  NEW_CHILD_PROFILE_TITLE,
+} from "@/utils/firstChildWelcomeCopy";
+import { FirstChildWelcomeBanner } from "@/components/profile/FirstChildWelcomeBanner";
 
 function parseTags(s: string): string[] {
   return s
@@ -361,32 +367,22 @@ export function ProfileEditSheet({
       >
         <p id="profile-sheet-desc" className="sr-only">Редактирование профиля</p>
         <SheetHeader>
-          <SheetTitle>{isCreate ? "Новый профиль" : `Редактировать — ${member?.name ?? ""}`}</SheetTitle>
+          <SheetTitle>{isCreate ? NEW_CHILD_PROFILE_TITLE : `Редактировать — ${member?.name ?? ""}`}</SheetTitle>
         </SheetHeader>
         <div className="space-y-5 py-4 overflow-y-auto">
-          {isCreate && welcomeAfterEmailConfirm ? (
-            <div
-              className="rounded-xl border border-primary/25 bg-primary/10 px-3.5 py-3 text-sm leading-snug text-foreground"
-              role="status"
-            >
-              <p className="font-semibold text-foreground">Добро пожаловать!</p>
-              <p className="mt-1 text-muted-foreground">
-                Email подтверждён. Заполните профиль — так меню и рекомендации будут точнее.
-              </p>
-            </div>
-          ) : null}
+          {isCreate && welcomeAfterEmailConfirm ? <FirstChildWelcomeBanner /> : null}
           {!isCreate ? (
             <p className="text-sm text-muted-foreground leading-relaxed">
               Измените данные, чтобы рекомендации учитывали особенности питания.
             </p>
           ) : null}
           <div className="space-y-2 w-full min-w-0">
-            <Label htmlFor="profile-name" className="text-sm font-medium">Имя</Label>
+            <Label htmlFor="profile-name" className="text-sm font-medium">{CHILD_NAME_LABEL}</Label>
             <Input
               id="profile-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Например: Маша, Папа"
+              placeholder={CHILD_NAME_PLACEHOLDER}
               className="h-11 w-full min-w-0 max-w-full box-border border-2 focus-visible:ring-offset-0"
             />
           </div>

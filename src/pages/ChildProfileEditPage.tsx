@@ -34,6 +34,12 @@ import { FF_AUTO_FILL_AFTER_MEMBER_CREATE } from "@/config/featureFlags";
 import { startFillDay, setJustCreatedMemberId, getPlanUrlForMember } from "@/services/planFill";
 import { setBlockEmptyFamilyProfileAutoOpen } from "@/utils/profileFirstChildSessionBlock";
 import { shouldEnforceNewProfileMemberLimit } from "@/utils/profileChildNewLimitGuard";
+import {
+  CHILD_NAME_LABEL,
+  CHILD_NAME_PLACEHOLDER,
+  NEW_CHILD_PROFILE_TITLE,
+} from "@/utils/firstChildWelcomeCopy";
+import { FirstChildWelcomeBanner } from "@/components/profile/FirstChildWelcomeBanner";
 import type { MembersRow, AllergyItemRow } from "@/integrations/supabase/types-v2";
 
 function parseTags(s: string): string[] {
@@ -488,7 +494,7 @@ export default function ChildProfileEditPage() {
 
   return (
     <MobileLayout
-      title={isNew ? "Новый профиль" : ""}
+      title={isNew ? NEW_CHILD_PROFILE_TITLE : ""}
       headerLeft={
         <Button variant="ghost" size="icon" className="h-10 w-10" onClick={handleBack} aria-label="Назад">
           <ArrowLeft className="h-5 w-5" />
@@ -504,26 +510,16 @@ export default function ChildProfileEditPage() {
             </div>
           ) : (
             <>
-              {isNew && showWelcomeBanner ? (
-                <div
-                  className="rounded-xl border border-primary/25 bg-primary/10 px-3.5 py-3 text-sm leading-snug text-foreground"
-                  role="status"
-                >
-                  <p className="font-semibold text-foreground">Добро пожаловать!</p>
-                  <p className="mt-1 text-muted-foreground">
-                    Email подтверждён. Заполните профиль — так меню и рекомендации будут точнее.
-                  </p>
-                </div>
-              ) : null}
+              {isNew && showWelcomeBanner ? <FirstChildWelcomeBanner /> : null}
               {/* Основная информация: Имя и Дата рождения */}
               <div className="bg-background rounded-[16px] p-4 shadow-sm border border-border flex flex-col gap-4">
                 <div className="space-y-[6px]">
-                  <Label htmlFor="child-name" className="text-sm font-medium">Имя</Label>
+                  <Label htmlFor="child-name" className="text-sm font-medium">{CHILD_NAME_LABEL}</Label>
                   <Input
                     id="child-name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Например: Маша, Папа"
+                    placeholder={CHILD_NAME_PLACEHOLDER}
                     className="h-11 border border-input bg-background rounded-xl text-[15px] placeholder:text-muted-foreground/70"
                   />
                 </div>
