@@ -198,7 +198,10 @@ export function usePWAInstall() {
       clearScheduledShow();
       setDeferredPrompt(null);
       writeStored(MAX_ATTEMPTS, null, true);
-      toast({ title: "Готово! 🧩 на экране!", description: "Приложение добавлено на главный экран." });
+      toast({
+        title: "Готово",
+        description: "Mom Recipes добавлен на главный экран.",
+      });
     };
 
     const existing = readDeferredPromptFromWindow();

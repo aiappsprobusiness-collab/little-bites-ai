@@ -12,8 +12,17 @@
 | Тайминги и очередь относительно тостов/trial | `src/utils/a2hsTiming.ts` |
 | Диспатч триггеров с плана | `src/utils/a2hsEvents.ts`, `src/pages/MealPlanPage.tsx` |
 | Рецепты в чате | `src/pages/ChatPage.tsx` |
-| UI модалки | `src/components/pwa/PWAInstall.tsx` |
-| Ручная установка | `src/pages/ProfilePage.tsx` → «Установить приложение» |
+| UI модалки | `src/components/pwa/PWAInstall.tsx` → `PwaInstallSheet.tsx`, `PwaInstallInstructions.tsx` |
+| Тексты по триггеру | `src/utils/pwaInstallCopy.ts` |
+| Ручная установка | `src/pages/ProfilePage.tsx` → «Установить приложение» (тот же `PwaInstallSheet`, `variant="help"`) |
+
+## UI (визуал)
+
+- **Паттерн:** bottom sheet снизу на мобилке (Framer Motion), по центру на `sm+` — как `PostValueTrialPromptModal` / paywall.
+- **Стили:** `PAYWALL_OVERLAY`, `PAYWALL_MODAL_CARD`, `PAYWALL_MODAL_SCROLL_TINT`, `PAYWALL_PRIMARY_CTA` из `src/utils/paywallBrandStyles.ts`.
+- **z-index:** `57` (между post-value trial `56` и trial lifecycle `58`).
+- **Без** shadcn `Dialog` и иконки Puzzle; иконка приложения в оливковой обёртке.
+- iOS / Android без `beforeinstallprompt`: пошаговый блок `PwaInstallInstructions`.
 
 ## Когда показываем авто-модалку
 

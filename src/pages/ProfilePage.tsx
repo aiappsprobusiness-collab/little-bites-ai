@@ -45,6 +45,7 @@ import type { MembersRow } from "@/integrations/supabase/types-v2";
 import { ProfileHeaderCard } from "@/components/profile/ProfileHeaderCard";
 import { FamilyMemberCard } from "@/components/profile/FamilyMemberCard";
 import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { PwaInstallSheet } from "@/components/pwa/PwaInstallSheet";
 import { isStandalone } from "@/utils/standalone";
 import { useTheme } from "@/hooks/useTheme";
 import { cn } from "@/lib/utils";
@@ -98,8 +99,7 @@ export default function ProfilePage() {
   const [showLegalModal, setShowLegalModal] = useState(false);
   const [editName, setEditName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
-  const [showIosInstallDialog, setShowIosInstallDialog] = useState(false);
-  const [showManualInstallDialog, setShowManualInstallDialog] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [showProfileCapDialog, setShowProfileCapDialog] = useState(false);
   const onboardingFirstProfileRef = useRef(false);
   const { canInstall, promptInstall, isInstalled, isIOSDevice } = usePWAInstall();
@@ -363,10 +363,8 @@ export default function ProfilePage() {
                   onClick={() => {
                     if (canInstall) {
                       promptInstall();
-                    } else if (isIOSDevice) {
-                      setShowIosInstallDialog(true);
                     } else {
-                      setShowManualInstallDialog(true);
+                      setShowInstallHelp(true);
                     }
                   }}
                   className="w-full flex items-center gap-3 px-4 min-h-[50px] text-left hover:bg-muted/20 active:bg-muted/30 transition-colors text-sm"
@@ -512,37 +510,18 @@ export default function ProfilePage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showIosInstallDialog} onOpenChange={setShowIosInstallDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Установить приложение</DialogTitle>
-          </DialogHeader>
-          <div className="text-sm text-muted-foreground whitespace-pre-line py-1">
-            Поделиться → На экран Домой
-          </div>
-          <div className="text-sm text-muted-foreground">
-            В Safari нажмите кнопку «Поделиться» (квадрат со стрелкой вверх), затем выберите «На экран Домой».
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setShowIosInstallDialog(false)}>Понятно</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showManualInstallDialog} onOpenChange={setShowManualInstallDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Установить приложение</DialogTitle>
-          </DialogHeader>
-          <div className="text-sm text-muted-foreground space-y-2">
-            <p>Откройте меню браузера (три точки или три полоски) и выберите:</p>
-            <p className="font-medium text-foreground">«Установить приложение» или «Добавить на главный экран»</p>
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setShowManualInstallDialog(false)}>Понятно</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PwaInstallSheet
+        open={showInstallHelp}
+        onClose={() => setShowInstallHelp(false)}
+        title="Установить приложение"
+        description={
+          isIOSDevice
+            ? "Добавьте Mom Recipes на главный экран — так удобнее открывать меню и рецепты."
+            : "Установите Mom Recipes через меню браузера — приложение появится на главном экране."
+        }
+        isIOSDevice={isIOSDevice}
+        variant="help"
+      />
 
       <Dialog open={showLegalModal} onOpenChange={setShowLegalModal}>
         <DialogContent className="flex h-[min(85vh,calc(100vh-2rem))] w-[min(100vw-2rem,42rem)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none">
