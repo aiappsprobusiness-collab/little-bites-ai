@@ -125,7 +125,7 @@
 | `RecipeChatSoftLimitDialog` | Free: исчерпан дневной лимит подборов в чате рецептов — экран без цен; `paywall_text` с `paywall_reason: recipe_soft_limit`; полный Paywall с `limit_chat` только по кнопке «Получить больше рецептов`. |
 | Текст лимита в шапке чата (рецепты, Free) | `getRemainingRecipesText(remaining, aiDailyLimit)` в `src/utils/recipePickHintCopy.ts` — формат «Осталось: N из 5 подборов»; счётчик обновляется оптимистично через `bumpChatRecipeUsedToday` / `setChatRecipeUsedToday` в `useSubscription`. |
 | Тост лимита замен блюда в плане (Free) | `mealSwapLimitToastCopy.ts` — «Замены на сегодня закончились»; toast `variant: successSoft` в `runReplaceOccupiedMealSlot.ts`. |
-| `FreeSubscriptionInfoSheet` | Free: тап по чипу **Free** в шапке **Чата** — bottom sheet (`freeSubscriptionInfoCopy.ts`); CTA → Paywall `limit_chat` / `help_limit`. |
+| `FreeSubscriptionInfoSheet` | Free: тап по чипу **Free** в шапке **Чата** — bottom sheet (`freeSubscriptionInfoCopy.ts`); CTA «Что даёт полная версия» → глобальный **`FreeVsPremiumModal`** (`setShowFreeVsPremiumModal`, хост в `App.tsx`). |
 | `FreeVsPremiumModal` | Таблица сравнения; из `MealPlanPage` при `FF_WEEK_PAYWALL_PREVIEW && !FF_UNIFIED_PAYWALL`. |
 | `TrialLifecycleModal` | Предупреждение о конце trial → по кнопке открывает глобальный Paywall с `trial_*`. |
 | `TrialActivatedModal` | После активации trial (`trial_onboarding_*` события). |
@@ -166,7 +166,7 @@
 
 1. **Локальный state paywall** на части экранов (`ChatPage`, `ArticlesPage`, `SosTiles` как `paywallOpen`, `HomePage`) — поведение то же, обёртка локальная.
 2. **«Сегодня спрашивают»** в `SosTiles`: при тапе по премиум-вопросу без доступа выставляется `paywall_reason` = `sos_premium_feature`.
-3. **Бейдж тарифа Free** в шапке чата (`openSubscriptionFromBadge`) открывает **`FreeSubscriptionInfoSheet`**, не глобальный Paywall с `fallback`. Trial/Premium по-прежнему могут открывать paywall из того же обработчика (без sheet).
+3. **Бейдж Free** в чате → **`FreeSubscriptionInfoSheet`**; **Premium/Trial** — чип не кликабелен. CTA sheet → таблица **`FreeVsPremiumModal`**, не UnifiedPaywall.
 
 ---
 

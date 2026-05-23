@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { PAYWALL_OVERLAY, PAYWALL_PRIMARY_CTA } from "@/utils/paywallBrandStyles";
 import {
   FREE_SUBSCRIPTION_INFO_BULLETS,
+  FREE_SUBSCRIPTION_INFO_CTA,
   FREE_SUBSCRIPTION_INFO_TITLE,
   getFreeSubscriptionInfoLead,
   type FreeSubscriptionInfoMode,
@@ -25,7 +26,8 @@ export interface FreeSubscriptionInfoSheetProps {
   recipeDailyLimit: number | null;
   helpUsed: number;
   helpDailyLimit: number | null;
-  onRequestFullPaywall: () => void;
+  /** Таблица Free vs Premium (`FreeVsPremiumModal` в `App.tsx`). */
+  onOpenFreeVsPremium: () => void;
 }
 
 /**
@@ -39,7 +41,7 @@ export function FreeSubscriptionInfoSheet({
   recipeDailyLimit,
   helpUsed,
   helpDailyLimit,
-  onRequestFullPaywall,
+  onOpenFreeVsPremium,
 }: FreeSubscriptionInfoSheetProps) {
   const lead = getFreeSubscriptionInfoLead({
     mode,
@@ -98,11 +100,11 @@ export function FreeSubscriptionInfoSheet({
             type="button"
             className={cn("w-full shrink-0 rounded-xl border-0", PAYWALL_PRIMARY_CTA)}
             onClick={() => {
-              onRequestFullPaywall();
+              onOpenFreeVsPremium();
               onOpenChange(false);
             }}
           >
-            Узнать о полной версии
+            {FREE_SUBSCRIPTION_INFO_CTA}
           </Button>
         </DialogFooter>
       </DialogContent>

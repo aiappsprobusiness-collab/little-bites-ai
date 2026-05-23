@@ -4,7 +4,9 @@ import {
 } from "@/utils/subscriptionRules";
 import { getRemainingRecipesText } from "@/utils/recipePickHintCopy";
 
-export const FREE_SUBSCRIPTION_INFO_TITLE = "У вас бесплатная версия";
+export const FREE_SUBSCRIPTION_INFO_TITLE = "Вы на бесплатном плане";
+
+export const FREE_SUBSCRIPTION_INFO_CTA = "Что даёт полная версия";
 
 export type FreeSubscriptionInfoMode = "recipes" | "help";
 
@@ -52,5 +54,5 @@ export function getFreeSubscriptionInfoLead(params: {
     return `${getRemainingRecipesText(recipeRemaining, recipeDailyLimit).replace(/^Осталось:/, "Сегодня осталось")}.`;
   }
 
-  return "В полной версии — больше подборов, замен без лимита и список покупок на неделю.";
+  return "В полной версии — план на неделю, больше подборов в чате и список покупок.";
 }

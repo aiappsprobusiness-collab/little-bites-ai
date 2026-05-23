@@ -4,6 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { logMembersProfileLoadStart } from "@/utils/authSessionDebug";
 import { getSubscriptionLimits, isAiDailyLimitExceeded } from "@/utils/subscriptionRules";
+import {
+  hasActivePremiumUntil,
+  isUnlimitedAccessEmail,
+  resolveEffectiveSubscription,
+} from "@/utils/subscriptionAccess";
 import { useAppStore } from "@/store/useAppStore";
 import { hasSeenTrialActivatedModal } from "@/utils/trialActivatedModalStorage";
 import { getMsUntilTrialEnd } from "@/utils/trialLifecycle";
@@ -17,21 +22,23 @@ type ProfileV2SubscriptionRow = {
   premium_until: string | null;
   trial_until: string | null;
   trial_used: boolean | null;
+  email: string | null;
   plan_initialized: boolean;
   last_active_member_id: string | null;
   show_input_hints: boolean | null;
   theme: string | null;
 };
 
-/** Единая логика доступа: true если подписка активна (premium/trial) и не истекла. */
+/** @deprecated Используйте resolveEffectiveSubscription / hasActivePremiumUntil. */
 export function hasPremiumAccessFromSubscription(subscription: {
   status: string;
   expiresAt?: string | null;
+  userEmail?: string | null;
 }): boolean {
-  const { status, expiresAt } = subscription;
-  if (status !== "premium" && status !== "trial") return false;
-  if (expiresAt && new Date(expiresAt) <= new Date()) return false;
-  return true;
+  return (
+    isUnlimitedAccessEmail(subscription.userEmail) ||
+    hasActivePremiumUntil({ premium_until: subscription.expiresAt ?? null })
+  );
 }
 
 export type StartTrialOptions = {
@@ -48,10 +55,13 @@ export function useSubscription() {
     queryFn: async () => {
       if (!user) return null;
       logMembersProfileLoadStart("profile", user.id);
+      const { error: expireErr } = await supabase.rpc("expire_profile_subscription_if_needed");
+      if (expireErr) throw expireErr;
+
       const { data, error } = await supabase
         .from("profiles_v2")
         .select(
-          "status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized, last_active_member_id, show_input_hints, theme"
+          "status, requests_today, daily_limit, premium_until, trial_until, trial_used, plan_initialized, last_active_member_id, show_input_hints, theme, email"
         )
         .eq("user_id", user.id)
         .maybeSingle();
@@ -115,8 +125,7 @@ export function useSubscription() {
     refetchOnWindowFocus: false,
   });
 
-  const UNLIMITED_ACCESS_EMAILS = ["alesah007@gmail.com"];
-  const hasUnlimitedAccess = user?.email && UNLIMITED_ACCESS_EMAILS.includes(user.email);
+  const hasUnlimitedAccess = isUnlimitedAccessEmail(user?.email);
 
   const status = profileV2?.status ?? "free";
   const expiresAt = profileV2?.premium_until ?? null;
@@ -151,16 +160,18 @@ export function useSubscription() {
     : null;
 
   /** Только платная подписка: premium_until > now(). Trial сюда не входит. */
-  const hasPremiumAccess =
-    hasUnlimitedAccess ||
-    (expiresAt != null && expiresAt !== "" && new Date(expiresAt) > new Date());
+  const hasPremiumAccess = hasUnlimitedAccess || hasActivePremiumUntil(profileV2);
   /** Доступ (trial или premium) — для гейтов и лимитов. */
   const hasAccess = hasTrialAccess || hasPremiumAccess;
 
   const isExpired =
-    status === "premium" && expiresAt ? new Date(expiresAt) <= new Date() : false;
+    !hasUnlimitedAccess &&
+    status === "premium" &&
+    expiresAt != null &&
+    expiresAt !== "" &&
+    !hasActivePremiumUntil(profileV2);
   /** Платный premium всегда приоритетнее trial: при активной оплате UI показывает premium. */
-  const effectiveStatus = hasPremiumAccess ? "premium" : hasTrialAccess ? "trial" : "free";
+  const effectiveStatus = resolveEffectiveSubscription(profileV2, { userEmail: user?.email });
 
   const usedTodayFromEvents = chatRecipeUsedToday ?? 0;
   const usedToday = usedTodayFromEvents;

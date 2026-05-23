@@ -423,7 +423,7 @@ export default function MealPlanPage() {
   const isFree = !hasAccess;
 
   const openSubscriptionFromBadge = useCallback(() => {
-    setPaywallReason(null);
+    setPaywallReason("free_plan_overview");
     setPaywallCustomMessage(null);
     setShowPaywall(true);
   }, [setPaywallReason, setPaywallCustomMessage, setShowPaywall]);
@@ -2110,7 +2110,10 @@ export default function MealPlanPage() {
             }
             trailing={
               <>
-                <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} onClick={openSubscriptionFromBadge} />
+                <SubscriptionTierBadge
+                  subscriptionStatus={subscriptionStatus}
+                  onClick={isFree ? openSubscriptionFromBadge : undefined}
+                />
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <TabOverflowIconButton disabled={isAnyGenerating} aria-label="Ещё действия" />

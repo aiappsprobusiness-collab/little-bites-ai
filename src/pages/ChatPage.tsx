@@ -1789,25 +1789,19 @@ export default function ChatPage() {
   }, [mode, selectedMemberId, selectedMember?.age_months]);
 
   const openSubscriptionFromBadge = useCallback(() => {
-    if (isFree) {
-      setFreeSubscriptionInfoOpen(true);
-      return;
-    }
-    useAppStore.getState().setPaywallReason(null);
-    useAppStore.getState().setPaywallCustomMessage(null);
-    useAppStore.getState().setShowPaywall(true);
-  }, [isFree]);
+    setFreeSubscriptionInfoOpen(true);
+  }, []);
 
-  const handleRequestFullPaywallFromFreeInfo = useCallback(() => {
-    const reason = mode === "help" ? "help_limit" : "limit_chat";
-    useAppStore.getState().setPaywallReason(reason);
-    useAppStore.getState().setPaywallCustomMessage(null);
-    setShowPaywall(true);
-  }, [mode]);
+  const handleOpenFreeVsPremiumFromInfo = useCallback(() => {
+    useAppStore.getState().setShowFreeVsPremiumModal(true);
+  }, []);
 
   const chatHeaderTrailing = (
     <>
-      <SubscriptionTierBadge subscriptionStatus={subscriptionStatus} onClick={openSubscriptionFromBadge} />
+      <SubscriptionTierBadge
+        subscriptionStatus={subscriptionStatus}
+        onClick={isFree ? openSubscriptionFromBadge : undefined}
+      />
       <ChatHeaderMenuButton
         open={showActionsMenu}
         onOpenChange={setShowActionsMenu}
@@ -2090,7 +2084,7 @@ export default function ChatPage() {
         recipeDailyLimit={aiDailyLimit}
         helpUsed={helpUsed}
         helpDailyLimit={helpDailyLimit}
-        onRequestFullPaywall={handleRequestFullPaywallFromFreeInfo}
+        onOpenFreeVsPremium={handleOpenFreeVsPremiumFromInfo}
       />
 
       <Paywall

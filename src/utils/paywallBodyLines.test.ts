@@ -20,9 +20,10 @@ describe("getPaywallReasonCopy bodyLines", () => {
     expect(bodyLines.join("")).not.toContain("\n");
   });
 
-  it("fallback — без заголовка «Что-то не получилось»", () => {
-    const { title } = getPaywallReasonCopy("fallback");
-    expect(title).not.toContain("Что-то не получилось");
-    expect(title).toContain("полной версии");
+  it("free_plan_overview — понятный контекст бесплатного плана", () => {
+    const { title, bodyLines } = getPaywallReasonCopy("free_plan_overview");
+    expect(title).toContain("бесплатном");
+    expect(bodyLines[0]).toMatch(/план|чат|лимит/i);
+    expect(bodyLines[1]).toMatch(/полной/i);
   });
 });

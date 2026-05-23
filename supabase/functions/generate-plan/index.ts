@@ -51,6 +51,15 @@ import {
 } from "./culturalPlanDebug.ts";
 import { trustOrder } from "./trustLevelTier.ts";
 import {
+  isPremiumOrTrialTier,
+  resolveEffectiveSubscription,
+} from "../_shared/subscriptionAccess.ts";
+import {
+  applyExpiredProfileFieldsLocal,
+  needsProfileSubscriptionExpiryWrite,
+} from "../_shared/syncProfileSubscriptionExpiry.ts";
+import { FREE_AI_DAILY_LIMIT } from "../_shared/subscriptionLimits.ts";
+import {
   buildAlignedRankSalt,
   buildRankSalt,
   computeCompositeScore,
@@ -1581,13 +1590,25 @@ serve(async (req) => {
     safeLog("[RUN MODE]", { requestId, isSingleDay, dayKeysCount: dayKeys.length, mode: isUpgrade ? "upgrade" : "run" });
 
     const [profileRow, planFillUsed] = await Promise.all([
-      supabase.from("profiles_v2").select("status, premium_until, trial_until").eq("user_id", userId).maybeSingle(),
+      supabase.from("profiles_v2").select("status, premium_until, trial_until, email").eq("user_id", userId).maybeSingle(),
       supabase.rpc("get_usage_count_today", { p_user_id: userId, p_feature: "plan_fill_day" }),
     ]);
-    const prof = (profileRow.data ?? null) as { status?: string; premium_until?: string | null; trial_until?: string | null } | null;
-    const hasPremium = prof?.premium_until && new Date(prof.premium_until) > new Date();
-    const hasTrial = prof?.trial_until && new Date(prof.trial_until) > new Date();
-    const isPremiumOrTrial = prof?.status === "premium" || prof?.status === "trial" || !!hasPremium || !!hasTrial;
+    let prof = (profileRow.data ?? null) as {
+      status?: string;
+      premium_until?: string | null;
+      trial_until?: string | null;
+      email?: string | null;
+    } | null;
+    const userEmail = user.email ?? prof?.email ?? null;
+    if (prof && needsProfileSubscriptionExpiryWrite(prof, userEmail)) {
+      await supabase
+        .from("profiles_v2")
+        .update({ status: "free", daily_limit: FREE_AI_DAILY_LIMIT })
+        .eq("user_id", userId);
+      prof = applyExpiredProfileFieldsLocal(prof, userEmail);
+    }
+    const planTier = resolveEffectiveSubscription(prof, { userEmail });
+    const isPremiumOrTrial = isPremiumOrTrialTier(planTier);
     const skipPlanFillUsage = body.skip_plan_fill_usage === true;
     if (!isPremiumOrTrial && !skipPlanFillUsage) {
       const used = typeof planFillUsed.data === "number" ? planFillUsed.data : 0;

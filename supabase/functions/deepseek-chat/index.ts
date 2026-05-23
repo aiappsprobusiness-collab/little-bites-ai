@@ -30,6 +30,14 @@ import {
   PAID_HELP_DAILY_LIMIT,
 } from "../_shared/subscriptionLimits.ts";
 import {
+  isPremiumOrTrialTier,
+  resolveEffectiveSubscription,
+} from "../_shared/subscriptionAccess.ts";
+import {
+  applyExpiredProfileFieldsLocal,
+  needsProfileSubscriptionExpiryWrite,
+} from "../_shared/syncProfileSubscriptionExpiry.ts";
+import {
   parseAndValidateRecipeJsonFromString,
   getRecipeOrFallback,
   getLastValidationError,
@@ -405,6 +413,7 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     let userId: string | null = null;
+    let authUserEmail: string | null = null;
     type ProfileV2Row = { status: string; requests_today: number; daily_limit: number } | null;
     let profileV2: (ProfileV2Row & { premium_until?: string | null }) | null = null;
 
@@ -424,33 +433,34 @@ serve(async (req) => {
       const token = authHeader.replace(/^Bearer\s+/i, "").trim();
       const { data: { user } } = await supabase.auth.getUser(token);
       userId = user?.id ?? null;
+      authUserEmail = user?.email ?? null;
       console.log(JSON.stringify({ tag: "AUTH_DEBUG", userId: user?.id ?? null }));
 
       if (userId) {
         // Загружаем только profiles_v2 (таблица public.profiles не используется).
         const { data: profileV2Row } = await supabase
           .from("profiles_v2")
-          .select("status, requests_today, daily_limit, premium_until, trial_until")
+          .select("status, requests_today, daily_limit, premium_until, trial_until, email")
           .eq("user_id", userId)
           .maybeSingle();
 
-        profileV2 = profileV2Row as (ProfileV2Row & { premium_until?: string | null; trial_until?: string | null }) | null;
+        profileV2 = profileV2Row as (ProfileV2Row & {
+          premium_until?: string | null;
+          trial_until?: string | null;
+          email?: string | null;
+        }) | null;
 
-        // Trial: истекает по trial_until (не по premium_until). При истечении — free.
-        const p = profileV2 as { status?: string; trial_until?: string | null; requests_today?: number } | null;
-        if (p?.status === "trial" && p.trial_until) {
-          const until = new Date(p.trial_until).getTime();
-          if (Date.now() > until) {
-            await supabase
-              .from("profiles_v2")
-              .update({ status: "free", daily_limit: FREE_AI_DAILY_LIMIT })
-              .eq("user_id", userId);
-            profileV2 = {
-              status: "free",
-              requests_today: p.requests_today ?? 0,
-              daily_limit: FREE_AI_DAILY_LIMIT,
-            };
-          }
+        const userEmail = user?.email ?? (profileV2 as { email?: string | null } | null)?.email ?? null;
+        const p = profileV2 as { status?: string; trial_until?: string | null; premium_until?: string | null; requests_today?: number; email?: string | null } | null;
+        if (p && needsProfileSubscriptionExpiryWrite(p, userEmail)) {
+          await supabase
+            .from("profiles_v2")
+            .update({ status: "free", daily_limit: FREE_AI_DAILY_LIMIT })
+            .eq("user_id", userId);
+          profileV2 = applyExpiredProfileFieldsLocal(
+            { ...p, requests_today: p.requests_today ?? 0, daily_limit: p.daily_limit ?? FREE_AI_DAILY_LIMIT },
+            userEmail
+          ) as typeof profileV2;
         }
 
         if (!profileV2) {
@@ -472,15 +482,19 @@ serve(async (req) => {
 
     const requestIdEarly = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
     logPerf("profile_fetch", tProfileStart, requestIdEarly);
+    const profileForTier = profileV2 as { status?: string; premium_until?: string | null; trial_until?: string | null; email?: string | null } | null;
+    const subscriptionStatus = resolveEffectiveSubscription(profileForTier, {
+      userEmail: authUserEmail ?? profileForTier?.email ?? undefined,
+    });
+
     console.log(JSON.stringify({
       tag: "PROFILE_STATUS",
-      status: profileV2?.status ?? "free",
+      db_status: profileV2?.status ?? "free",
+      effective_status: subscriptionStatus,
       premium_until: profileV2?.premium_until ?? undefined,
       requestId: requestIdEarly,
     }));
-
-    const subscriptionStatus = (profileV2?.status ?? "free") as string;
-    const isPremiumUser = subscriptionStatus === "premium" || subscriptionStatus === "trial";
+    const isPremiumUser = isPremiumOrTrialTier(subscriptionStatus);
 
     const requestId = req.headers.get("x-request-id") ?? req.headers.get("sb-request-id") ?? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
     const startedAt = Date.now();

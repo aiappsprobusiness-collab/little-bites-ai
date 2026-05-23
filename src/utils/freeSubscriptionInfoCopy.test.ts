@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   FREE_SUBSCRIPTION_INFO_BULLETS,
+  FREE_SUBSCRIPTION_INFO_CTA,
   FREE_SUBSCRIPTION_INFO_TITLE,
   getFreeSubscriptionInfoLead,
 } from "./freeSubscriptionInfoCopy";
 
 describe("freeSubscriptionInfoCopy", () => {
-  it("заголовок про бесплатную версию", () => {
-    expect(FREE_SUBSCRIPTION_INFO_TITLE).toBe("У вас бесплатная версия");
+  it("заголовок и CTA bottom sheet (вариант 2)", () => {
+    expect(FREE_SUBSCRIPTION_INFO_TITLE).toBe("Вы на бесплатном плане");
+    expect(FREE_SUBSCRIPTION_INFO_CTA).toBe("Что даёт полная версия");
   });
 
   it("bullets без слова «пул»", () => {

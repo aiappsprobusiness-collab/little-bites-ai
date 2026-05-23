@@ -29,6 +29,7 @@ export type PaywallReasonKey =
   | "article_locked"
   | "trial_ending_soon"
   | "trial_expired"
+  | "free_plan_overview"
   | "fallback";
 
 export interface PaywallReasonCopy {
@@ -189,6 +190,13 @@ const COPY: Record<PaywallReasonKey, PaywallReasonCopy> = {
     bodyLines: paywallBodyPair(
       "Сейчас вы на бесплатной версии",
       "Оформите доступ и продолжайте без лимитов",
+    ),
+  },
+  free_plan_overview: {
+    title: "Вы на бесплатном плане",
+    bodyLines: paywallBodyPair(
+      "Сейчас: план на день, чат и замены — с лимитами",
+      "В полной — неделя меню, больше подборов и список покупок",
     ),
   },
   fallback: {
