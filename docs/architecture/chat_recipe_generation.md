@@ -108,7 +108,7 @@
 - **Edge:** `checkRecipeRequestBlocked` — тот же матч; полный набор аллергий/dislikes профиля (см. выше).
 - **Post-recipe safety:** только **`ingredients[].name`**, матч **`findFirstAllergyConflictInChatRecipeIngredients`**. При конфликте — retry LLM (`retryRecipeAllergyFix`); **без hard block** — рецепт отдаётся, лог `CHAT_RECIPE_ALLERGY_SAFETY_WARNING`. Pre-block (`blocked: true`) — только при явном аллергене в **запросе** пользователя. Подробнее: `docs/decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md` §5.
 
-Токены для аллергий строятся через `_shared/allergens.ts` → `getBlockedTokensFromAllergies` → `_shared/allergyAliases.ts`. Для **плана** матч по-прежнему подстрока по title+description+ингредиентам; для **чата** (pre + post) — prefix/suffix по словам. В словаре глютена токен **`паста`** (не `паст`), чтобы не ловить «пастеризованное».
+Токены для аллергий строятся через `_shared/allergens.ts` → `getBlockedTokensFromAllergies` → `_shared/allergyAliases.ts`. Для **плана** (фильтр пула) и **чата** (post-check) — ingredient-only, prefix/suffix по словам **`recipe_ingredients[].name`** / `ingredients[].name`; pre-check чата — prefix/suffix по словам **запроса**. В словаре глютена токен **`паста`** (не `паст`), чтобы не ловить «пастеризованное».
 
 ### 3.2 Маршрутизация запросов во вкладке Чат (type === "chat")
 

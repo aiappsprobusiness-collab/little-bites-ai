@@ -23,7 +23,7 @@
 | Retry | `_shared/parsing/retryRecipeAllergyFix.ts` — один вызов LLM заменить ингредиенты |
 | Hard block | **Снят** — рецепт отдаётся; при остаточном конфликте: `allergy_ingredient_warning` + лог **`CHAT_RECIPE_ALLERGY_SAFETY_WARNING`** |
 
-План (`generate-plan`) по-прежнему использует подстроку по title+description+ингредиентам — **`listAllergyTokenHitsInRecipeFields`**.
+План (`generate-plan`, клиентский пул) для **аллергий** использует тот же ingredient-only матч, что post-check чата — **`planRecipeMatchesProfileAllergyTokens`** / `listAllergyTokenHitsInPlanIngredientNames`.
 
 Пропускается при **`from_plan_replace`**.
 

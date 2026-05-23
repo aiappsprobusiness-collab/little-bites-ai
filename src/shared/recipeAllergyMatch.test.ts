@@ -5,7 +5,9 @@ import {
   allergyTokenMatchesInIngredientWord,
   allergyTokenMatchesInPreferenceText,
   listAllergyTokenHitsInChatIngredientNames,
+  listAllergyTokenHitsInPlanIngredientNames,
   listAllergyTokenHitsInRecipeFields,
+  planRecipeMatchesProfileAllergyTokens,
   normalizeRecipeTextForPreferenceMatch,
 } from "./recipeAllergyMatch";
 
@@ -107,7 +109,32 @@ describe("recipeAllergyMatch — chat ingredient mode", () => {
     });
   });
 
-  describe("plan mode unchanged (substring)", () => {
+  describe("plan ingredient mode (aligned with chat post-check)", () => {
+    const calciumBreakfast = {
+      title: "Творожная запеканка с бананом",
+      description: "Нежный завтрак с кальцием из творога",
+      recipe_ingredients: [
+        { name: "творог", display_text: "150 г" },
+        { name: "банан", display_text: "1 шт" },
+        { name: "яйцо", display_text: "1 шт" },
+      ],
+    };
+
+    it("plan scan: глютен/орехи — без ложных на творожной запеканке", () => {
+      const gluten = expandAllergiesToCanonicalBlockedGroups(["глютен"])[0]!.tokens;
+      const nuts = expandAllergiesToCanonicalBlockedGroups(["орехи"])[0]!.tokens;
+      expect(listAllergyTokenHitsInPlanIngredientNames(calciumBreakfast.recipe_ingredients, gluten)).toHaveLength(0);
+      expect(listAllergyTokenHitsInPlanIngredientNames(calciumBreakfast.recipe_ingredients, nuts)).toHaveLength(0);
+      expect(planRecipeMatchesProfileAllergyTokens(calciumBreakfast.recipe_ingredients, gluten)).toBe(false);
+    });
+
+    it("legacy substring scan still hits title (dislikes path)", () => {
+      const gluten = expandAllergiesToCanonicalBlockedGroups(["глютен"])[0]!.tokens;
+      expect(listAllergyTokenHitsInRecipeFields(calciumBreakfast, gluten).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("preferenceText helper (dislikes)", () => {
     it("preferenceText: «орехами» ловится токеном «орех»", () => {
       const norm = normalizeRecipeTextForPreferenceMatch("орехами");
       expect(allergyTokenMatchesInPreferenceText(norm, "орех")).toBe(true);

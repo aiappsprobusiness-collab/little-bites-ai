@@ -43,21 +43,21 @@
 
 ### 2.1 Правило
 
-Аллергии — **жёсткий запрет**: рецепт, в котором встречается запрещённый токен (в названии, описании или ингредиентах), **не должен** попадать в план.
+Аллергии — **жёсткий запрет**: рецепт, в **именах ингредиентов** которого встречается запрещённый токен, **не должен** попадать в план. Title, description и tags **не** участвуют в аллергенном матче (как post-check чата).
 
 ### 2.2 Где проверяется
 
 - **Edge (generate-plan):**  
-  В `pickFromPoolInMemory` кандидаты фильтруются через `passesProfileFilter` → `passesPreferenceFilters` (модуль `preferenceRules.ts`). Там для аллергий используются токены из `getBlockedTokensFromAllergies(memberData?.allergies)` (словарь из `_shared/allergyAliases.ts` + `allergens.ts`). Проверяется текст рецепта: **title, description, recipe_ingredients** (поля `name`, `display_text`). Поле **`recipe_ingredients.category` не используется** для аллергий. Матч токена — подстрока, правило вынесено в `_shared/recipeAllergyMatch.ts` (копия из `src/shared/`, синхронизация `npm run sync:allergens`).
+  В `pickFromPoolInMemory` кандидаты фильтруются через `passesProfileFilter` → `passesPreferenceFilters` (модуль `preferenceRules.ts`). Для **аллергий** — `planRecipeMatchesProfileAllergyTokens(recipe.recipe_ingredients, …)` только по **`recipe_ingredients[].name`**. Поле **`recipe_ingredients.category` не используется** для аллергий. Реализация в `_shared/recipeAllergyMatch.ts` (копия из `src/shared/`, синхронизация `npm run sync:allergens`).
 
 - **Клиент** (подбор из пула при «Подобрать рецепты», замена слота из пула, `useReplaceMealSlot`, `useGenerateWeeklyPlan` при pool):  
-  В `recipePool.ts`: `passesProfileFilter` использует `containsAnyTokenForAllergy` (подстрока, без границы слова) и при наличии аллергий у профиля запрос к `recipes` **подгружает** `recipe_ingredients(name, display_text)`, так что проверка аллергий на клиенте выполняется по **title, description, tags и ингредиентам**. Edge в `preferenceRules` tags в аллергенный текст **не** добавляет — теоретический мелкий разрыв, если аллерген указан только в tags.
+  В `recipePool.ts`: `passesProfileFilter` для аллергий вызывает **`planRecipeMatchesProfileAllergyTokens`** по **`recipe_ingredients[].name`**; при непустых аллергиях запрос к `recipes` **подгружает** `recipe_ingredients(name, display_text)`.
 
 ### 2.3 Токены и алиасы
 
 - Набор «запрещённых» токенов строится из списка аллергий пользователя и словаря алиасов (БКМ, глютен, яйца, рыба, орехи, **мясо**, **курица**, **индейка**, **говядина**, **свинина**, **фарш** и т.д.). Примеры: БКМ → молоко, сливки, йогурт, сыр, творог, казеин и т.д.; **«мясо»** / `meat` → umbrella-токены из `src/shared/meatAllergyTokens.ts` (птица, КРС/телятина, свинина, фарш, лексемы мяса/meat, часть дичи); **«курица»** → узкие стемы (`куриц`, `курин`, `chicken`, …) **без** «птиц»/poultry, чтобы аллергия только на курицу не резала утку и наоборот; **«говядина»** и **«телятина»** делят один набор стемов (`говяд`, `телят`, `beef`, `veal`).  
-- Для **аллергий** используется проверка по **подстроке** (без требования границы слова), чтобы формы вроде «орехами», «ореховый» блокировались токеном «орех». Общая реализация: `recipeAllergyMatch.ts` (`allergyTokenMatchesInPreferenceText`).  
-- **Ложный матч нут/nut:** нут (chickpea) не считается орехом: при токене «nut» текст, содержащий кириллическое «нут», не считается совпадением (явное исключение в `containsAnyTokenForAllergy` / `recipeMatchesAllergyTokens`).
+- Для **аллергий** — prefix/suffix по словам **`recipe_ingredients[].name`** (`allergyTokenMatchesInChatIngredientText`). Для **dislikes** — подстрока по title+description+ингредиентам (`recipeMatchesAllergyTokens` / `allergyTokenMatchesInPreferenceText`).  
+- **Ложный матч нут/nut:** нут (chickpea) не считается орехом (исключение в словаре nut-токенов).
 - **Яйца:** отдельный токен «белок» для аллергии на яйца **не используется** (см. §4.1 в [ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md](../decisions/ALLERGIES_AND_PLAN_SOURCE_OF_TRUTH.md)).
 - **Dev:** объяснение отсева кандидата пула — `src/utils/planCandidateFilterExplain.ts` (`explainPoolCandidateRejection`, `explainAllergyFilterOnRecipe`); CLI `npm run audit:plan-allergy`.
 
@@ -236,7 +236,7 @@ Dislikes — **жёсткое исключение**: рецепт, содерж
 
 | Фактор | Режим «Семья» | Один профиль | Где учитывается |
 |--------|----------------|--------------|------------------|
-| **Аллергии** | Объединённый список всех членов | allergies выбранного профиля | Edge и клиентский пул: title, description, tags, recipe_ingredients (при непустых аллергиях на клиенте строки ингредиентов подгружаются в запрос). Матч: подстроки токенов (`containsAnyTokenForAllergy` / `recipeMatchesAllergyTokens`). |
+| **Аллергии** | Объединённый список всех членов | allergies выбранного профиля | Edge и клиентский пул: **`recipe_ingredients[].name`** only (`planRecipeMatchesProfileAllergyTokens` / `allergyTokenMatchesInChatIngredientText`). Dislikes — title+description+ингредиенты. |
 | **Не любит** | Объединённый список всех членов | dislikes выбранного профиля | Edge и клиентский пул: те же поля, включая ингредиенты при непустых dislikes на клиенте. На клиенте матч dislikes — `containsAnyToken` (граница слова); на Edge — `recipeMatchesTokens` / `includesTokenSoft` (для коротких токенов возможны мелкие отличия от границ слова). |
 | **Любит** | В `member_data` на клиенте может быть объединённый список | likes выбранного профиля в payload | **generate-plan:** не влияет на пул. **Чат:** мягкий сигнал в промпте (likesFavoring). Клиентский пул — без приоритета по likes. |
 | **Возраст** | Не применяется (общий стол) | age_months: фильтр min/max_age, ключевые слова до 12 мес, 12–24 мес, &lt;36 мес | Edge: recipeFitsAgeRange, recipeBlockedByInfantKeywords, memberAgeContext. Клиент: age_months &lt; 36 → AGE_RESTRICTED_TOKENS (остро, кофе, грибы). |

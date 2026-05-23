@@ -29,9 +29,24 @@ describe("pool selection: мясо", () => {
 
   it("кандидаты с курицей/индейкой/говядиной отсекаются; овощной остаётся", () => {
     const pool: PoolRecipeRow[] = [
-      row({ id: "1", title: "Курица с брокколи", meal_type: "dinner" }),
-      row({ id: "2", title: "Индейка на пару", meal_type: "dinner" }),
-      row({ id: "3", title: "Говядина тушёная", meal_type: "dinner" }),
+      row({
+        id: "1",
+        title: "Курица с брокколи",
+        meal_type: "dinner",
+        recipe_ingredients: [{ name: "куриное филе", display_text: "100 г" }],
+      }),
+      row({
+        id: "2",
+        title: "Индейка на пару",
+        meal_type: "dinner",
+        recipe_ingredients: [{ name: "филе индейки", display_text: "100 г" }],
+      }),
+      row({
+        id: "3",
+        title: "Говядина тушёная",
+        meal_type: "dinner",
+        recipe_ingredients: [{ name: "говядина", display_text: "100 г" }],
+      }),
       row({ id: "4", title: "Овощное рагу", meal_type: "dinner", recipe_ingredients: [{ name: "кабачок", display_text: "100 г" }] }),
     ];
     const out = filterPoolCandidatesForSlot(pool, { slotNorm: "dinner", ...baseOpts });
@@ -40,8 +55,20 @@ describe("pool selection: мясо", () => {
 
   it("при аллергии курица+индейка говядина остаётся", () => {
     const pool: PoolRecipeRow[] = [
-      row({ id: "a", title: "Стейк говяжий", meal_type: "lunch", is_soup: false }),
-      row({ id: "b", title: "Куриный суп", meal_type: "lunch", is_soup: true }),
+      row({
+        id: "a",
+        title: "Стейк говяжий",
+        meal_type: "lunch",
+        is_soup: false,
+        recipe_ingredients: [{ name: "говядина", display_text: "150 г" }],
+      }),
+      row({
+        id: "b",
+        title: "Куриный суп",
+        meal_type: "lunch",
+        is_soup: true,
+        recipe_ingredients: [{ name: "куриное филе", display_text: "80 г" }],
+      }),
     ];
     const out = filterPoolCandidatesForSlot(pool, {
       slotNorm: "lunch",
@@ -72,7 +99,12 @@ describe("Edge allergyAliases vs client: buildBlockedTokensFromAllergies(['мя�
 
 describe("explainPoolCandidateRejection", () => {
   it("возвращает excluded_by_allergy для мяса + курицы", () => {
-    const r = row({ id: "x", title: "Курица", meal_type: "dinner" });
+    const r = row({
+      id: "x",
+      title: "Курица",
+      meal_type: "dinner",
+      recipe_ingredients: [{ name: "куриное филе", display_text: "100 г" }],
+    });
     const ex = explainPoolCandidateRejection(r, {
       slotNorm: "dinner",
       memberData: { allergies: ["мясо"] },

@@ -2,6 +2,47 @@ import { describe, it, expect } from "vitest";
 import { passesProfileFilter, memberHasDislikesForPool } from "./recipePool";
 import { POOL_SOURCES } from "./recipeCanonical";
 
+describe("passesProfileFilter allergies (ingredient-only, паритет с Edge)", () => {
+  const cottageCheese = {
+    title: "Творожная запеканка с бананом",
+    description: "Нежный завтрак с кальцием из творога",
+    tags: [] as string[],
+    recipe_ingredients: [
+      { name: "творог", display_text: "150 г" },
+      { name: "банан", display_text: "1 шт" },
+      { name: "яйцо", display_text: "1 шт" },
+    ],
+  };
+
+  it("не блокирует творожную запеканку при глютен/орехи", () => {
+    expect(passesProfileFilter(cottageCheese, { allergies: ["глютен"] }).pass).toBe(true);
+    expect(passesProfileFilter(cottageCheese, { allergies: ["орехи"] }).pass).toBe(true);
+  });
+
+  it("блокирует по ингредиенту с аллергеном", () => {
+    const withGluten = {
+      ...cottageCheese,
+      recipe_ingredients: [{ name: "овсяные хлопья", display_text: "40 г" }],
+    };
+    const res = passesProfileFilter(withGluten, { allergies: ["глютен"] });
+    expect(res.pass).toBe(false);
+    expect(res.reason).toBe("allergy");
+  });
+
+  it("не блокирует «даёт белок» в description при аллергии на яйца", () => {
+    const res = passesProfileFilter(
+      {
+        title: "Овсяная каша с бананом",
+        description: "Мягкая каша даёт белок и сытость утром.",
+        tags: [],
+        recipe_ingredients: [{ name: "овсяные хлопья" }, { name: "банан" }],
+      },
+      { allergies: ["яйца"] },
+    );
+    expect(res.pass).toBe(true);
+  });
+});
+
 describe("passesProfileFilter dislikes + ingredients (паритет с Edge)", () => {
   const baseRecipe = {
     title: "Суп с морковью",

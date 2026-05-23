@@ -4,8 +4,10 @@
  */
 
 import { buildBlockedTokensFromAllergies } from "@/utils/allergyAliases";
-import { containsAnyToken, containsAnyTokenForAllergy } from "@/shared/allergensDictionary";
-import { listAllergyTokenHitsInRecipeFields } from "@/shared/recipeAllergyMatch";
+import { containsAnyToken } from "@/shared/allergensDictionary";
+import {
+  listAllergyTokenHitsInPlanIngredientNames,
+} from "@/shared/recipeAllergyMatch";
 import {
   getSanityBlockedReasons,
   isSoupLikeTitle,
@@ -37,7 +39,7 @@ export type ExplainPoolCandidateRejectionResult = {
   /** Коротко: id причины sanity, имя токена и т.д. */
   detail?: string;
   /** Для аллергий: попадание по полю */
-  allergyHits?: ReturnType<typeof listAllergyTokenHitsInRecipeFields>;
+  allergyHits?: ReturnType<typeof listAllergyTokenHitsInPlanIngredientNames>;
 };
 
 const AGE_RESTRICTED_TOKENS = ["остр", "кофе", "гриб"];
@@ -107,16 +109,7 @@ export function explainPoolCandidateRejection(
             ? [String(memberData.allergies)]
             : [],
       );
-      const allergyHits = listAllergyTokenHitsInRecipeFields(
-        {
-          title: recipe.title,
-          description: recipe.description,
-          tags: recipe.tags,
-          recipe_ingredients: recipe.recipe_ingredients,
-        },
-        tokens,
-        { includeIngredients: true, includeTags: true },
-      );
+      const allergyHits = listAllergyTokenHitsInPlanIngredientNames(recipe.recipe_ingredients, tokens);
       return {
         bucket: "excluded_by_allergy",
         detail: allergyHits[0]?.token ?? "allergy",
@@ -136,42 +129,19 @@ export function explainPoolCandidateRejection(
   return { bucket: "passed" };
 }
 
-/** Детальный отчёт по аллергиям (токены + поля), без остальных фильтров плана. */
+/** Детальный отчёт по аллергиям (токены + ingredient names), без остальных фильтров плана. */
 export function explainAllergyFilterOnRecipe(
   recipe: Pick<PoolRecipeRow, "title" | "description" | "tags" | "recipe_ingredients">,
   allergies: string[] | null | undefined,
-  opts?: { includeTags?: boolean; includeIngredients?: boolean },
+  _opts?: { includeTags?: boolean; includeIngredients?: boolean },
 ): {
   blockedTokens: string[];
   allowed: boolean;
-  hits: ReturnType<typeof listAllergyTokenHitsInRecipeFields>;
+  hits: ReturnType<typeof listAllergyTokenHitsInPlanIngredientNames>;
 } {
   const blockedTokens = buildBlockedTokensFromAllergies(allergies);
-  const hits = listAllergyTokenHitsInRecipeFields(
-    {
-      title: recipe.title,
-      description: recipe.description,
-      tags: recipe.tags,
-      recipe_ingredients: recipe.recipe_ingredients,
-    },
-    blockedTokens,
-    {
-      includeIngredients: opts?.includeIngredients !== false,
-      includeTags: opts?.includeTags !== false,
-    },
-  );
-  const ingredientsText = (recipe.recipe_ingredients ?? [])
-    .map((ri) => [ri.name ?? "", ri.display_text ?? ""].join(" "))
-    .join(" ");
-  const textWithIngredients = [
-    recipe.title ?? "",
-    recipe.description ?? "",
-    ...(opts?.includeTags !== false ? [(recipe.tags ?? []).join(" ")] : []),
-    ...(opts?.includeIngredients !== false ? [ingredientsText] : []),
-  ]
-    .join(" ")
-    .toLowerCase();
-  const allowed = !containsAnyTokenForAllergy(textWithIngredients, blockedTokens).hit;
+  const hits = listAllergyTokenHitsInPlanIngredientNames(recipe.recipe_ingredients, blockedTokens);
+  const allowed = hits.length === 0;
   return { blockedTokens, allowed, hits };
 }
 

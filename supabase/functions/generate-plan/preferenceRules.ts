@@ -7,6 +7,7 @@ import {
 import {
   allergyTokenMatchesInPreferenceText,
   normalizeRecipeTextForPreferenceMatch,
+  planRecipeMatchesProfileAllergyTokens,
 } from "../_shared/recipeAllergyMatch.ts";
 
 export type PreferenceMemberData = {
@@ -113,7 +114,7 @@ function recipeViolatesDislikeIngredientCategories(
 
 export function passesPreferenceFilters(recipe: PreferenceRecipe, memberData: PreferenceMemberData | null | undefined): boolean {
   const allergyTokens = getBlockedTokensFromAllergies(memberData?.allergies);
-  if (recipeMatchesAllergyTokens(recipe, allergyTokens, true)) return false;
+  if (planRecipeMatchesProfileAllergyTokens(recipe.recipe_ingredients, allergyTokens)) return false;
 
   const dislikes = memberData?.dislikes;
   const prefText = buildRecipePreferenceText(recipe, true);

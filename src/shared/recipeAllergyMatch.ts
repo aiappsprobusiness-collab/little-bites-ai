@@ -216,3 +216,26 @@ export function listAllergyTokenHitsInChatIngredientNames(
   });
   return hits;
 }
+
+/** План / vk-preview: аллергии только по ingredients[].name (как post-check чата). */
+export function listAllergyTokenHitsInPlanIngredientNames(
+  recipe_ingredients: Array<{ name?: string | null; display_text?: string | null }> | null | undefined,
+  tokens: string[],
+): AllergyFieldHitDetail[] {
+  return listAllergyTokenHitsInChatIngredientNames(
+    {
+      recipe_ingredients: (recipe_ingredients ?? []).map((ri) => ({
+        name: ri.name ?? "",
+        display_text: "",
+      })),
+    },
+    tokens,
+  );
+}
+
+export function planRecipeMatchesProfileAllergyTokens(
+  recipe_ingredients: Array<{ name?: string | null; display_text?: string | null }> | null | undefined,
+  tokens: string[],
+): boolean {
+  return listAllergyTokenHitsInPlanIngredientNames(recipe_ingredients, tokens).length > 0;
+}

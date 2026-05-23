@@ -4,7 +4,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildBlockedTokens, containsAnyToken, containsAnyTokenForAllergy } from "@/utils/allergenTokens";
+import { buildBlockedTokens, containsAnyToken } from "@/utils/allergenTokens";
+import { planRecipeMatchesProfileAllergyTokens } from "@/shared/recipeAllergyMatch";
 import { POOL_SOURCES } from "@/utils/recipeCanonical";
 import {
   isIntroducingPeriodActive,
@@ -447,7 +448,7 @@ export function passesProfileFilter(
 
   const allergyTokens = getAllergyTokens(memberData);
   if (allergyTokens.length > 0) {
-    if (containsAnyTokenForAllergy(textWithIngredients, allergyTokens).hit) {
+    if (planRecipeMatchesProfileAllergyTokens(recipe.recipe_ingredients, allergyTokens)) {
       if (IS_DEV) console.log("[DEBUG] pool filter: allergy hit", { title: recipe.title, tokens: allergyTokens });
       return { pass: false, reason: "allergy" };
     }
