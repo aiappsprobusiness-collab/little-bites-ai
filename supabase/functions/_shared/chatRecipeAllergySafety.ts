@@ -4,7 +4,10 @@
  */
 
 import type { AllergyFieldHitDetail, RecipeFieldsForAllergyExplain } from "./recipeAllergyMatch.ts";
-import { listAllergyTokenHitsInRecipeFields } from "./recipeAllergyMatch.ts";
+import {
+  listAllergyTokenHitsInChatIngredientNames,
+  listAllergyTokenHitsInRecipeFields,
+} from "./recipeAllergyMatch.ts";
 
 export type AllergyTokenGroup = { profileAllergy: string; tokens: string[] };
 
@@ -17,6 +20,10 @@ export function chatRecipeRecordToAllergyFields(recipe: Record<string, unknown>)
     : null;
   const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
   const recipe_ingredients = ings.map((raw) => {
+    if (typeof raw === "string") {
+      const name = raw.trim();
+      return { name, display_text: "" };
+    }
     if (!raw || typeof raw !== "object") return { name: "", display_text: "" };
     const o = raw as Record<string, unknown>;
     const name = typeof o.name === "string" ? o.name : "";
@@ -34,6 +41,7 @@ export function chatRecipeRecordToAllergyFields(recipe: Record<string, unknown>)
 /**
  * Первая аллергия профиля (порядок списка), по токенам которой есть попадание в рецепт.
  * По умолчанию без tags — как preferenceRules / план (title, description, ингредиенты).
+ * @deprecated для post-check чата используйте findFirstAllergyConflictInChatRecipeIngredients.
  */
 export function findFirstAllergyConflictInRecipeFields(
   recipe: RecipeFieldsForAllergyExplain,
@@ -47,6 +55,23 @@ export function findFirstAllergyConflictInRecipeFields(
       includeIngredients: true,
       includeTags,
     });
+    if (hits.length > 0) {
+      return { profileAllergy: g.profileAllergy, detail: hits[0]! };
+    }
+  }
+  return null;
+}
+
+/**
+ * Post-check чата: только ingredients[].name, правило prefix/suffix (без title/description/display_text).
+ */
+export function findFirstAllergyConflictInChatRecipeIngredients(
+  recipe: RecipeFieldsForAllergyExplain,
+  groups: AllergyTokenGroup[],
+): { profileAllergy: string; detail: AllergyFieldHitDetail } | null {
+  for (const g of groups) {
+    if (!g.tokens.length) continue;
+    const hits = listAllergyTokenHitsInChatIngredientNames(recipe, g.tokens);
     if (hits.length > 0) {
       return { profileAllergy: g.profileAllergy, detail: hits[0]! };
     }

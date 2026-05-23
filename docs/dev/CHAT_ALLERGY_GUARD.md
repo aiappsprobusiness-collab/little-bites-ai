@@ -6,8 +6,10 @@
 
 | Слой | Файл | Матч |
 |------|------|------|
-| Клиент | `src/utils/chatBlockedCheck.ts` → `checkChatRequestAgainstProfile` | `containsAnyTokenForAllergy`, токены из `allergyAliases` / `allergenTokens` |
-| Edge | `deepseek-chat/index.ts` → `checkRecipeRequestBlocked` | То же; списки аллергий — **полные** (`allMembers` / `memberDataNorm`), не усечённые промптом по тарифу |
+| Клиент | `src/utils/chatBlockedCheck.ts` → `checkChatRequestAgainstProfile` | `containsAnyTokenForAllergyInWords` (`recipeAllergyMatch.ts`) |
+| Edge | `checkRecipeRequestBlocked` | То же; списки аллергий — **полные** (`allMembers` / `memberDataNorm`) |
+
+**Правило:** по словам запроса — prefix/suffix (не вложенная подстрока: «запеканка» ≠ «пекан», «творожный» ≠ «рож»). Явные формы («ореховый», «яичный») по-прежнему блокируют.
 
 Фразы «без X» вырезаются: `textWithoutExclusionPhrases`.
 
@@ -15,18 +17,19 @@
 
 | Что | Где |
 |-----|-----|
-| Маппинг полей | `src/shared/chatRecipeAllergySafety.ts` → `chatRecipeRecordToAllergyFields` |
-| Конфликт | `findFirstAllergyConflictInRecipeFields` + `expandAllergiesToCanonicalBlockedGroups` |
-| Подстроковый матч | `listAllergyTokenHitsInRecipeFields` / `recipeAllergyMatch.ts` (как план) |
-| Поля | title, description, `ingredients[].name`, `display_text` / `displayText`; **tags не используются** (как `preferenceRules` для аллергий) |
-| Ответ | `buildAllergyBlockedResponsePayload` — тот же контракт, что при pre-block |
-| Лог | `CHAT_RECIPE_ALLERGY_SAFETY_REJECTION` |
+| Маппинг полей | `chatRecipeRecordToAllergyFields` |
+| Конфликт | **`findFirstAllergyConflictInChatRecipeIngredients`** |
+| Матч | **`listAllergyTokenHitsInChatIngredientNames`** — только `ingredients[].name` |
+| Retry | `_shared/parsing/retryRecipeAllergyFix.ts` — один вызов LLM заменить ингредиенты |
+| Hard block | **Снят** — рецепт отдаётся; при остаточном конфликте: `allergy_ingredient_warning` + лог **`CHAT_RECIPE_ALLERGY_SAFETY_WARNING`** |
 
-Пропускается при **`from_plan_replace`** (кандидат уже отфильтрован планом).
+План (`generate-plan`) по-прежнему использует подстроку по title+description+ингредиентам — **`listAllergyTokenHitsInRecipeFields`**.
+
+Пропускается при **`from_plan_replace`**.
 
 ## Синхронизация Edge
 
-`npm run sync:allergens` копирует в том числе **`chatRecipeAllergySafety.ts`**.
+`npm run sync:allergens` копирует `recipeAllergyMatch.ts`, `chatRecipeAllergySafety.ts`.
 
 ## Аудит
 
@@ -34,10 +37,13 @@
 npm run audit:chat-allergy
 ```
 
-Скрипт: `scripts/audit-chat-allergy-guard.ts` (pre + post на общих хелперах).
+## Тесты
+
+- Vitest: `src/shared/recipeAllergyMatch.test.ts`, `chatRecipeAllergySafety.test.ts`, `chatBlockedCheck.test.ts`
+- Deno: `deepseek-chat/chatRecipeAllergyPostCheck.test.ts`
 
 ## Известные ограничения
 
-- **`isRecipeAllowedByAllergens`** (`_shared/allergens.ts`) по-прежнему на границе слова — **не** путать с планом/чатом; для чата источник истины — `recipeAllergyMatch` + словарь алиасов.
-- **Теги рецепта** в post-check чата не сканируются (паритет с Edge `preferenceRules` для аллергий). Редкий расход с клиентским пулом, если аллерген только в tags — см. SoT §4.
+- Аллерген **только в title/description** LLM post-check **не ловит** (осознанно — меньше ложных срабатываний на маркeting-текст).
+- **`isRecipeAllowedByAllergens`** (`_shared/allergens.ts`) — другой контракт (граница слова), не путать с чатом/планом.
 - Дублирование **`ALLERGY_ALIASES`**: `src/utils/allergyAliases.ts` и `supabase/functions/_shared/allergyAliases.ts`.

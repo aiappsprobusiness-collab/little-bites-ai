@@ -4,7 +4,7 @@
  */
 
 import { buildBlockedTokenSet, textWithoutExclusionPhrases } from "../../../_shared/blockedTokens.ts";
-import { containsAnyTokenForAllergy } from "../../../_shared/allergensDictionary.ts";
+import { containsAnyTokenForAllergyInWords } from "../../../_shared/recipeAllergyMatch.ts";
 import type { BlockedBy } from "./blockedResponse.ts";
 import {
   getSuggestedAlternatives,
@@ -23,9 +23,9 @@ export function checkRecipeRequestBlocked(params: {
   const tokenSet = buildBlockedTokenSet({ allergies: allergiesList, dislikes: dislikesList });
   const messageForBlockCheck = textWithoutExclusionPhrases(userMessage).toLowerCase();
 
-  /** Как на клиенте (checkChatRequestAgainstProfile): подстрока по токенам, иначе стем «яйц» не ловит «яйцом»/«яйцами» при границе слова. */
+  /** Pre-check: prefix/suffix по словам запроса (containsAnyTokenForAllergyInWords), как на клиенте. */
   const allergyMatch = tokenSet.allergyItems.find((item) =>
-    containsAnyTokenForAllergy(messageForBlockCheck, item.tokens).hit
+    containsAnyTokenForAllergyInWords(messageForBlockCheck, item.tokens).hit
   );
   if (allergyMatch) {
     const blockedItems = [allergyMatch.display];
@@ -45,7 +45,7 @@ export function checkRecipeRequestBlocked(params: {
   }
 
   const dislikeMatch = tokenSet.dislikeItems.find((item) =>
-    containsAnyTokenForAllergy(messageForBlockCheck, item.tokens).hit
+    containsAnyTokenForAllergyInWords(messageForBlockCheck, item.tokens).hit
   );
   if (dislikeMatch) {
     const blockedItems = [dislikeMatch.display];

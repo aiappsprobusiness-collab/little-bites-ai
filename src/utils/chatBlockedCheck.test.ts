@@ -149,4 +149,24 @@ describe("checkChatRequestAgainstProfile", () => {
     expect(result).not.toBeNull();
     expect(result!.blocked_by).toBe("allergy");
   });
+
+  it('does NOT block «запеканка с творогом» when allergy орехи', () => {
+    expect(
+      checkChatRequestAgainstProfile({
+        text: "запеканка с творогом",
+        member: { name: "Ребёнок", allergies: ["орехи"], dislikes: [] },
+      }),
+    ).toBeNull();
+  });
+
+  it('does NOT block «Завтрак с кальцием» for gluten/nuts allergies', () => {
+    for (const allergy of ["глютен", "орехи"]) {
+      expect(
+        checkChatRequestAgainstProfile({
+          text: "Завтрак с кальцием",
+          member: { name: "Авигея", allergies: [allergy], dislikes: [] },
+        }),
+      ).toBeNull();
+    }
+  });
 });

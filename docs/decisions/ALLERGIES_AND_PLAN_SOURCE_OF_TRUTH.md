@@ -43,15 +43,15 @@
 
 ### 5.1 Pre-request (до LLM)
 
-- **Клиент:** `useDeepSeekAPI` → `checkChatRequestAgainstProfile` (`chatBlockedCheck.ts`): аллергии + dislikes, фразы «без X» вырезаются через `textWithoutExclusionPhrases`. Токены — `buildBlockedTokensFromAllergies` / `expandAllergyToTokens` (`allergyAliases.ts`), матч — **`containsAnyTokenForAllergy`** (подстрока, как в плане), не граница слова.
-- **Edge:** `deepseek-chat/index.ts` → `checkRecipeRequestBlocked` (тот же `containsAnyTokenForAllergy` по токенам из `getBlockedTokensFromAllergies`). **Списки аллергий/dislikes для политики берутся из полного профиля:** для «Семья» — объединение по **`allMembers` из БД**, для одного профиля — `memberDataNorm`, **не** усечённые до одной аллергии варианты для промпта по тарифу (иначе вторая+ аллергия не участвовала бы в блокировке запроса).
+- **Клиент:** `useDeepSeekAPI` → `checkChatRequestAgainstProfile` (`chatBlockedCheck.ts`): аллергии + dislikes, фразы «без X» вырезаются через `textWithoutExclusionPhrases`. Токены — `buildBlockedTokensFromAllergies` / `expandAllergyToTokens` (`allergyAliases.ts`), матч — **`containsAnyTokenForAllergyInWords`** (`recipeAllergyMatch.ts`): по **словам** запроса (prefix/suffix, без вложенных подстрок вроде «пекан» в «запеканка»). Многословные токены («белок яйц») — подстрока по всей строке.
+- **Edge:** `deepseek-chat/index.ts` → `checkRecipeRequestBlocked` (тот же `containsAnyTokenForAllergyInWords`). **Списки аллергий/dislikes для политики берутся из полного профиля:** для «Семья» — объединение по **`allMembers` из БД**, для одного профиля — `memberDataNorm`, **не** усечённые до одной аллергии варианты для промпта по тарифу.
 
 ### 5.2 Post-recipe (после JSON рецепта от модели)
 
-- **Где:** `deepseek-chat/index.ts`, сразу после успешной валидации/сборки `responseRecipes`, **до** `usage_events` «chat_recipe» и до тяжёлого пайплайна санитайзеров.
+- **Где:** `deepseek-chat/index.ts`, сразу после успешной валидации/сборки `responseRecipes`, **до** `usage_events` «chat_recipe».
 - **Не выполняется** при `from_plan_replace` (кандидат уже прошёл фильтр плана).
-- **Логика:** `chatRecipeRecordToAllergyFields` + `findFirstAllergyConflictInRecipeFields` (`src/shared/chatRecipeAllergySafety.ts`, синхронизация в `_shared`) и **`expandAllergiesToCanonicalBlockedGroups`** для групп токенов; внутри — **`listAllergyTokenHitsInRecipeFields`** / тот же контракт матча, что **`recipeAllergyMatch`** и `preferenceRules` (title, description, `ingredients[].name`, `ingredients[].display_text` / `displayText`; **без tags**, как в плане для аллергий).
-- **Ответ при конфликте:** тот же JSON, что и при pre-block: `blocked: true`, `blocked_by: "allergy"`, `message`, `blocked_items`, `suggested_alternatives`, `original_query`, `intended_dish_hint` — через **`buildAllergyBlockedResponsePayload`** (`blockedResponse.ts`). Лог: **`CHAT_RECIPE_ALLERGY_SAFETY_REJECTION`** (поле, токен, snippet).
+- **Логика (отличается от плана):** только **`ingredients[].name`** — без title, description, display_text. Матч: **`findFirstAllergyConflictInChatRecipeIngredients`** + `listAllergyTokenHitsInChatIngredientNames` / **`allergyTokenMatchesInChatIngredientText`** (prefix/suffix по словам ингредиента, без вложенных подстрок). План по-прежнему использует подстроку по title+description+ингредиентам (`listAllergyTokenHitsInRecipeFields`).
+- **При конфликте:** один **retry LLM** (`retryRecipeAllergyFix`) — заменить аллергенные ингредиенты; повторная проверка. **Hard block снят:** если конфликт остаётся — рецепт **всё равно отдаётся**, в ответе опционально `allergy_ingredient_warning`, лог **`CHAT_RECIPE_ALLERGY_SAFETY_WARNING`** (не `…REJECTION`). Pre-block (`blocked: true`) — только когда пользователь **явно** просит аллерген в запросе (§5.1).
 
 ### 5.3 Канонический текст отказа (аллергия)
 
@@ -59,7 +59,7 @@
 
 ### 5.4 Клиентский `validateRecipe` (после ответа)
 
-- Для **аллергий** используется **`containsAnyTokenForAllergy`** по тексту **title + description + имена и display_text ингредиентов** (согласовано с post-check Edge). Dislikes по-прежнему без description (меньше ложных срабатываний).
+- Для **аллергий** — тот же контракт, что post-check Edge: **`findFirstAllergyConflictInChatRecipeIngredients`** только по **`ingredients[].name`**. Dislikes по-прежнему без description (меньше ложных срабатываний).
 
 ### 5.5 Почему раньше могло быть «не удалось распознать рецепт»
 

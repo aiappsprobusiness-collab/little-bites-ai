@@ -6,11 +6,11 @@
  */
 import { textWithoutExclusionPhrases, checkChatRequestAgainstProfile } from "../src/utils/chatBlockedCheck";
 import { expandAllergiesToCanonicalBlockedGroups } from "../src/utils/allergyAliases";
-import { containsAnyTokenForAllergy } from "../src/utils/allergenTokens";
 import {
   chatRecipeRecordToAllergyFields,
-  findFirstAllergyConflictInRecipeFields,
+  findFirstAllergyConflictInChatRecipeIngredients,
 } from "../src/shared/chatRecipeAllergySafety";
+import { containsAnyTokenForAllergyInWords } from "../src/shared/recipeAllergyMatch";
 
 type Scenario = {
   label: string;
@@ -39,6 +39,17 @@ const scenarios: Scenario[] = [
   { label: "рыба + лосось", allergies: ["рыба"], query: "лосось с овощами" },
   { label: "орехи + ореховый", allergies: ["орехи"], query: "ореховый перекус" },
   { label: "глютен + паста", allergies: ["глютен"], query: "паста с сыром" },
+  { label: "завтрак с кальцием + глютен (pre ok)", allergies: ["глютен"], query: "Завтрак с кальцием" },
+  {
+    label: "завтрак с кальцием + творожный рецепт (post ok)",
+    allergies: ["глютен"],
+    query: "Завтрак с кальцием",
+    mockRecipe: {
+      title: "Творожная запеканка",
+      description: "Нежный завтрак",
+      ingredients: [{ name: "творог", display_text: "150 г" }],
+    },
+  },
   { label: "яблоко + пюре", allergies: ["яблоко"], query: "яблочное пюре" },
   {
     label: "семья: у одного мясо, запрос про курицу",
@@ -51,7 +62,7 @@ function runPreCheck(query: string, allergies: string[]) {
   const text = textWithoutExclusionPhrases(query.trim().toLowerCase());
   const groups = expandAllergiesToCanonicalBlockedGroups(allergies);
   for (const g of groups) {
-    if (containsAnyTokenForAllergy(text, g.tokens).hit) {
+    if (containsAnyTokenForAllergyInWords(text, g.tokens).hit) {
       return { blocked: true as const, matchedAllergy: g.allergy, tokens: g.tokens };
     }
   }
@@ -86,7 +97,7 @@ function main() {
         profileAllergy: g.allergy,
         tokens: g.tokens,
       }));
-      const conflict = findFirstAllergyConflictInRecipeFields(fields, groups);
+      const conflict = findFirstAllergyConflictInChatRecipeIngredients(fields, groups);
       if (conflict) {
         post = "blocked";
         postDetail = `${conflict.profileAllergy} ← ${conflict.detail.field} token=${conflict.detail.token}`;

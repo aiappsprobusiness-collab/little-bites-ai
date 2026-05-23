@@ -8,9 +8,10 @@
 
 import {
   buildBlockedTokens,
-  containsAnyTokenForAllergy,
+  containsAnyToken,
   getBlockedTokensPerAllergy,
 } from "@/utils/allergenTokens";
+import { containsAnyTokenForAllergyInWords } from "@/shared/recipeAllergyMatch";
 import type { ChatBlockedResponse } from "@/types/chatBlocked";
 import { buildBlockedMessage, getSuggestedAlternativesForBlocked } from "@/types/chatBlocked";
 
@@ -51,12 +52,12 @@ export function checkChatRequestAgainstProfile(params: {
   if (allergies.length > 0) {
     const blockedTokens = buildBlockedTokens(allergies);
     if (blockedTokens.length > 0) {
-      const result = containsAnyTokenForAllergy(messageWithoutWithout, blockedTokens);
+      const result = containsAnyTokenForAllergyInWords(messageWithoutWithout, blockedTokens);
       if (result.hit) {
         const perAllergy = getBlockedTokensPerAllergy(allergies);
         const displayAllergens: string[] = [];
         for (const { allergy, tokens } of perAllergy) {
-          if (containsAnyTokenForAllergy(messageWithoutWithout, tokens).hit) displayAllergens.push(allergy);
+          if (containsAnyTokenForAllergyInWords(messageWithoutWithout, tokens).hit) displayAllergens.push(allergy);
         }
         const matched = displayAllergens.length > 0 ? displayAllergens : result.found;
         const message = buildBlockedMessage(profileName, "allergy", matched);
@@ -81,7 +82,7 @@ export function checkChatRequestAgainstProfile(params: {
     for (const d of dislikes) {
       const tokens = buildBlockedTokens([d]);
       if (tokens.length > 0) {
-        const result = containsAnyTokenForAllergy(messageWithoutWithout, tokens);
+        const result = containsAnyTokenForAllergyInWords(messageWithoutWithout, tokens);
         if (result.hit) {
           const matchedItem = String(d).trim();
           const message = buildBlockedMessage(profileName, "dislike", [matchedItem]);

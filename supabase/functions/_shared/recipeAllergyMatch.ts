@@ -70,6 +70,75 @@ export function allergyTokenMatchesInPreferenceText(normalizedText: string, toke
   return true;
 }
 
+/** Буква (Unicode) — граница «слова» внутри одного токена ингредиента. */
+function isLetter(c: string): boolean {
+  return /^\p{L}$/u.test(c);
+}
+
+/**
+ * Матч токена в одном слове ингредиента: префикс/суффикс/полное совпадение или встроенная подстрока только для длинных токенов (≥5) на границе слова.
+ * Отсекает вложенные ложные совпадения: «пекан» в «запеканка», «рож» в «творожный».
+ */
+export function allergyTokenMatchesInIngredientWord(normalizedWord: string, token: string): boolean {
+  if (!token || token.length < 2 || !normalizedWord) return false;
+  const word = normalizedWord.trim();
+  if (!word) return false;
+  if (word === token) return true;
+  if (word.startsWith(token)) return true;
+  if (word.endsWith(token)) return true;
+  if (token.length >= 5) {
+    let idx = word.indexOf(token);
+    while (idx !== -1) {
+      const before = idx === 0 ? "" : word[idx - 1]!;
+      const after = idx + token.length >= word.length ? "" : word[idx + token.length]!;
+      if (!isLetter(before) && !isLetter(after)) return true;
+      idx = word.indexOf(token, idx + 1);
+    }
+  }
+  return false;
+}
+
+/**
+ * Post-check чата: только имена ингредиентов; без вложенных подстрок внутри слова (см. allergyTokenMatchesInIngredientWord).
+ * Многословные токены («белок яйц», «egg white») — подстрока по всей нормализованной строке.
+ */
+export function allergyTokenMatchesInChatIngredientText(raw: string, token: string): boolean {
+  if (!token || token.length < 2) return false;
+  const norm = normalizeRecipeTextForPreferenceMatch(raw);
+  if (!norm) return false;
+  const haystack = poultryAdjTokenNeedsEggColocationStrip(token)
+    ? stripPoultryEggCollocationsForMeatCheck(norm)
+    : norm;
+  if (token === "nut" && haystack.includes(CHICKPEA_CYRILLIC)) return false;
+  if (token.includes(" ")) {
+    return haystack.includes(token);
+  }
+  const words = haystack.split(/\s+/).filter(Boolean);
+  for (const word of words) {
+    if (allergyTokenMatchesInIngredientWord(word, token)) return true;
+  }
+  return false;
+}
+
+/**
+ * Pre-check запроса пользователя и post-check ингредиентов чата: prefix/suffix по словам (без вложенных подстрок).
+ * Многословные токены — подстрока по всей строке.
+ */
+export function containsAnyTokenForAllergyInWords(
+  text: string,
+  tokens: string[],
+): { hit: boolean; found: string[] } {
+  if (!text || tokens.length === 0) return { hit: false, found: [] };
+  const norm = normalizeRecipeTextForPreferenceMatch(text);
+  if (!norm) return { hit: false, found: [] };
+  const found: string[] = [];
+  for (const t of tokens) {
+    if (!t || t.length < 2) continue;
+    if (allergyTokenMatchesInChatIngredientText(norm, t)) found.push(t);
+  }
+  return { hit: found.length > 0, found };
+}
+
 export type RecipeFieldsForAllergyExplain = {
   title?: string | null;
   description?: string | null;
@@ -124,5 +193,26 @@ export function listAllergyTokenHitsInRecipeFields(
       scan(`ingredient[${i}].display_text`, ri.display_text ?? "");
     });
   }
+  return hits;
+}
+
+/**
+ * Post-check чата: только ingredients[].name (без title, description, display_text).
+ */
+export function listAllergyTokenHitsInChatIngredientNames(
+  recipe: RecipeFieldsForAllergyExplain,
+  tokens: string[],
+): AllergyFieldHitDetail[] {
+  const uniq = [...new Set(tokens.filter((t) => t && t.length >= 2))];
+  const hits: AllergyFieldHitDetail[] = [];
+  (recipe.recipe_ingredients ?? []).forEach((ri, i) => {
+    const raw = ri.name ?? "";
+    if (!raw.trim()) return;
+    for (const t of uniq) {
+      if (allergyTokenMatchesInChatIngredientText(raw, t)) {
+        hits.push({ field: `ingredient[${i}].name`, token: t, snippet: snippet(raw) });
+      }
+    }
+  });
   return hits;
 }

@@ -6,7 +6,7 @@ import { checkChatRequestAgainstProfile } from "./chatBlockedCheck";
 import { expandAllergiesToCanonicalBlockedGroups } from "./allergyAliases";
 import {
   chatRecipeRecordToAllergyFields,
-  findFirstAllergyConflictInRecipeFields,
+  findFirstAllergyConflictInChatRecipeIngredients,
 } from "@/shared/chatRecipeAllergySafety";
 
 describe("chat allergy guard integration (SoT)", () => {
@@ -20,7 +20,7 @@ describe("chat allergy guard integration (SoT)", () => {
     expect(r?.message).toMatch(/указана аллергия/);
   });
 
-  it("нейтральный запрос проходит pre-check; конфликтный рецепт — post", () => {
+  it("нейтральный запрос проходит pre-check; конфликтный рецепт — post по ingredients", () => {
     expect(
       checkChatRequestAgainstProfile({
         text: "дай суп на ужин",
@@ -38,7 +38,29 @@ describe("chat allergy guard integration (SoT)", () => {
       profileAllergy: g.allergy,
       tokens: g.tokens,
     }));
-    expect(findFirstAllergyConflictInRecipeFields(fields, groups)).not.toBeNull();
+    expect(findFirstAllergyConflictInChatRecipeIngredients(fields, groups)).not.toBeNull();
+  });
+
+  it("завтрак с кальцием: pre ok, творожный рецепт без post-конфликта по глютен/орехи", () => {
+    expect(
+      checkChatRequestAgainstProfile({
+        text: "Завтрак с кальцием",
+        member: { name: "Авигея", allergies: ["глютен"], dislikes: [] },
+      }),
+    ).toBeNull();
+
+    const recipe = {
+      title: "Творожная запеканка",
+      ingredients: [{ name: "творог", display_text: "150 г" }],
+    };
+    const fields = chatRecipeRecordToAllergyFields(recipe);
+    for (const allergy of ["глютен", "орехи"]) {
+      const groups = expandAllergiesToCanonicalBlockedGroups([allergy]).map((g) => ({
+        profileAllergy: g.allergy,
+        tokens: g.tokens,
+      }));
+      expect(findFirstAllergyConflictInChatRecipeIngredients(fields, groups)).toBeNull();
+    }
   });
 
   it("expandAllergiesToCanonicalBlockedGroups согласован с post-check (не дублируем отдельный словарь)", () => {

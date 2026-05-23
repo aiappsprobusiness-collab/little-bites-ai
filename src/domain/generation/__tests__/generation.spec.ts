@@ -22,7 +22,7 @@ describe("validateRecipe", () => {
 
     const res = validateRecipe(recipe, ctx);
     expect(res.ok).toBe(false);
-    expect(res.errors.some((e) => e.includes("Молоко") || e.includes("Allergy"))).toBe(true);
+    expect(res.errors.some((e) => e.includes("Allergy"))).toBe(true);
   });
 
   it("accepts recipe when no allergy match", () => {
@@ -48,7 +48,7 @@ describe("validateRecipe", () => {
     expect(res.errors).toHaveLength(0);
   });
 
-  it("accepts egg-free recipe when allergy is eggs (no false positive from description)", () => {
+  it("accepts egg-free recipe when allergy is eggs (description «белок» не триггерит)", () => {
     const ctx = {
       mode: "single" as const,
       target: {
@@ -63,7 +63,11 @@ describe("validateRecipe", () => {
     const recipe = {
       title: "Овсянка с бананом",
       description: "Белок даёт сытость и поддержку мышц. Овёс добавляет клетчатку.",
-      ingredients: [{ name: "овсяные хлопья", amount: "50 г" }, { name: "банан", amount: "1 шт." }, { name: "вода", amount: "100 мл" }],
+      ingredients: [
+        { name: "овсяные хлопья", amount: "50 г" },
+        { name: "банан", amount: "1 шт." },
+        { name: "вода", amount: "100 мл" },
+      ],
       steps: ["Сварить овсянку", "Добавить банан"],
       nutrition: { protein_g_per_serving: 5, kcal_per_serving: 120 },
     };
@@ -71,6 +75,34 @@ describe("validateRecipe", () => {
     const res = validateRecipe(recipe, ctx);
     expect(res.ok).toBe(true);
     expect(res.errors).toHaveLength(0);
+  });
+
+  it("accepts творожная запеканка when allergy is gluten or nuts (ingredients-only post-check)", () => {
+    for (const allergy of ["глютен", "орехи"]) {
+      const ctx = {
+        mode: "single" as const,
+        target: {
+          id: "1",
+          name: "Авигея",
+          role: "child" as const,
+          allergies: [allergy],
+          preferences: [],
+        },
+      };
+
+      const recipe = {
+        title: "Творожная запеканка с бананом",
+        description: "Нежный завтрак с кальцием",
+        ingredients: [
+          { name: "творог", amount: "150 г" },
+          { name: "банан", amount: "1 шт." },
+        ],
+        steps: ["Смешать", "Запечь"],
+      };
+
+      const res = validateRecipe(recipe, ctx);
+      expect(res.ok).toBe(true);
+    }
   });
 
   it("rejects recipe with meat when preference is вегетарианское", () => {
@@ -96,7 +128,7 @@ describe("validateRecipe", () => {
     expect(res.errors.some((e) => e.includes("Preference") || e.includes("Вегетарианское"))).toBe(true);
   });
 
-  it("rejects recipe when allergy мясо and chicken appears in description (substring match как план)", () => {
+  it("accepts recipe when allergy мясо and chicken only in description (ingredients-only)", () => {
     const ctx = {
       mode: "single" as const,
       target: {
@@ -116,6 +148,29 @@ describe("validateRecipe", () => {
     };
 
     const res = validateRecipe(recipe, ctx);
+    expect(res.ok).toBe(true);
+  });
+
+  it("rejects when allergy мясо and chicken in ingredient name", () => {
+    const ctx = {
+      mode: "single" as const,
+      target: {
+        id: "1",
+        name: "Child",
+        role: "child" as const,
+        allergies: ["мясо"],
+        preferences: [],
+      },
+    };
+
+    const recipe = {
+      title: "Суп",
+      description: "Лёгкий ужин",
+      ingredients: [{ name: "куриное филе", amount: "100 г" }],
+      steps: ["Сварить"],
+    };
+
+    const res = validateRecipe(recipe, ctx);
     expect(res.ok).toBe(false);
     expect(res.errors.some((e) => e.includes("Allergy"))).toBe(true);
   });
@@ -128,7 +183,7 @@ describe("validateRecipe", () => {
 
     const res = validateRecipe(
       { title: "", ingredients: ["a"], steps: ["b"] },
-      ctx
+      ctx,
     );
     expect(res.ok).toBe(false);
     expect(res.errors.some((e) => e.includes("Invalid recipe format"))).toBe(true);

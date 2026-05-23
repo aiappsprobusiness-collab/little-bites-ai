@@ -1,5 +1,10 @@
 import type { GenerationContext } from "./types";
-import { buildBlockedTokens, containsAnyToken, containsAnyTokenForAllergy } from "@/utils/allergenTokens";
+import { buildBlockedTokens, containsAnyToken } from "@/utils/allergenTokens";
+import { expandAllergiesToCanonicalBlockedGroups } from "@/utils/allergyAliases";
+import {
+  chatRecipeRecordToAllergyFields,
+  findFirstAllergyConflictInChatRecipeIngredients,
+} from "@/shared/chatRecipeAllergySafety";
 
 /** Words that indicate vegetarian preference → ban meat/fish in recipe text. */
 const VEGETARIAN_BANNED = [
@@ -9,35 +14,8 @@ const VEGETARIAN_BANNED = [
 ];
 
 /**
- * Текст для аллергий: title + description + ингредиенты (name, display_text) — в унисон с планом / post-check чата (подстрока по токенам).
+ * Dislikes: title + ingredient names (без description).
  */
-function getRecipeTextForAllergyCheck(recipe: Record<string, unknown>): string {
-  const parts: string[] = [];
-  const title = typeof recipe.title === "string" ? recipe.title : "";
-  if (title.trim()) parts.push(title.trim());
-  const desc = typeof recipe.description === "string" ? recipe.description : "";
-  if (desc.trim()) parts.push(desc.trim());
-  const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
-  for (const ing of ings) {
-    if (typeof ing === "string" && ing.trim()) {
-      parts.push(ing.trim());
-    } else if (ing && typeof ing === "object") {
-      const o = ing as Record<string, unknown>;
-      const name = typeof o.name === "string" ? o.name.trim() : "";
-      const dt =
-        typeof o.display_text === "string"
-          ? o.display_text.trim()
-          : typeof o.displayText === "string"
-            ? o.displayText.trim()
-            : "";
-      if (name) parts.push(name);
-      if (dt) parts.push(dt);
-    }
-  }
-  return parts.join(" ").toLowerCase().replace(/\s+/g, " ");
-}
-
-/** Dislikes: без description (меньше ложных срабатываний). */
 function getRecipeTextForDislikeCheck(recipe: Record<string, unknown>): string {
   const parts: string[] = [];
   const title = typeof recipe.title === "string" ? recipe.title : "";
@@ -66,8 +44,8 @@ export function validateRecipe(
   }
 
   const rec = recipe as Record<string, unknown>;
-  const allergyText = getRecipeTextForAllergyCheck(rec);
   const dislikeText = getRecipeTextForDislikeCheck(rec);
+  const allergyFields = chatRecipeRecordToAllergyFields(rec);
 
   const profiles =
     ctx.mode === "family" && ctx.targets?.length
@@ -77,10 +55,18 @@ export function validateRecipe(
         : [];
 
   for (const p of profiles) {
-    const blockedTokens = buildBlockedTokens(p.allergies ?? []);
-    if (blockedTokens.length > 0 && containsAnyTokenForAllergy(allergyText, blockedTokens).hit) {
-      const allergyList = (p.allergies ?? []).filter(Boolean).join(", ");
-      if (allergyList) errors.push(`Allergy violation: ${allergyList}`);
+    const allergies = (p.allergies ?? []).filter(
+      (a): a is string => typeof a === "string" && a.trim().length > 0,
+    );
+    if (allergies.length > 0) {
+      const groups = expandAllergiesToCanonicalBlockedGroups(allergies).map((g) => ({
+        profileAllergy: g.allergy,
+        tokens: g.tokens,
+      }));
+      const conflict = findFirstAllergyConflictInChatRecipeIngredients(allergyFields, groups);
+      if (conflict) {
+        errors.push(`Allergy violation: ${conflict.profileAllergy}`);
+      }
     }
 
     for (const d of p.dislikes || []) {
@@ -93,7 +79,20 @@ export function validateRecipe(
     for (const pref of p.preferences || []) {
       const lowered = String(pref).toLowerCase().trim();
       if (lowered.includes("вегетариан") || lowered.includes("vegetarian")) {
-        const hasBanned = VEGETARIAN_BANNED.some((b) => allergyText.includes(b));
+        const vegText = [
+          typeof rec.title === "string" ? rec.title : "",
+          typeof rec.description === "string" ? rec.description : "",
+          ...(Array.isArray(rec.ingredients)
+            ? rec.ingredients.map((ing) =>
+                ing && typeof ing === "object" && "name" in ing
+                  ? String((ing as { name?: string }).name ?? "")
+                  : "",
+              )
+            : []),
+        ]
+          .join(" ")
+          .toLowerCase();
+        const hasBanned = VEGETARIAN_BANNED.some((b) => vegText.includes(b));
         if (hasBanned) {
           errors.push(`Preference violation: ${pref}`);
         }
@@ -101,7 +100,19 @@ export function validateRecipe(
       }
       if (lowered.includes("не") || lowered.includes("без")) {
         const banned = lowered.replace(/не|без/gi, "").trim();
-        if (banned.length > 1 && allergyText.includes(banned)) {
+        const prefText = [
+          typeof rec.title === "string" ? rec.title : "",
+          ...(Array.isArray(rec.ingredients)
+            ? rec.ingredients.map((ing) =>
+                ing && typeof ing === "object" && "name" in ing
+                  ? String((ing as { name?: string }).name ?? "")
+                  : "",
+              )
+            : []),
+        ]
+          .join(" ")
+          .toLowerCase();
+        if (banned.length > 1 && prefText.includes(banned)) {
           errors.push(`Preference violation: ${pref}`);
         }
       }

@@ -49,12 +49,13 @@ import {
   type RecipeJson,
 } from "./recipeSchema.ts";
 import { getSystemPromptForType, generateRecipeSystemPromptV3, applyPromptTemplate, normalizeMemberData, findYoungestMember, getAgeMonths, type MemberData } from "./buildPrompt.ts";
-import { checkRecipeRequestBlocked, buildAllergyBlockedResponsePayload } from "./domain/policies/index.ts";
+import { checkRecipeRequestBlocked } from "./domain/policies/index.ts";
 import { expandAllergiesToCanonicalBlockedGroups } from "../_shared/allergyAliases.ts";
 import {
   chatRecipeRecordToAllergyFields,
-  findFirstAllergyConflictInRecipeFields,
+  findFirstAllergyConflictInChatRecipeIngredients,
 } from "../_shared/chatRecipeAllergySafety.ts";
+import { retryRecipeAllergyFix } from "../_shared/parsing/retryRecipeAllergyFix.ts";
 import {
   getFamilyPromptMembers,
   buildFamilyMemberDataForChat,
@@ -1254,6 +1255,13 @@ serve(async (req) => {
 
     /** true если первый LLM-ответ валиден, но chefAdvice не прошёл gate — полный retry больше не делаем. */
     let recipeQualityRetrySkippedDueToBadChefAdvice = false;
+    let allergyIngredientWarning: {
+      profile_allergy: string;
+      token: string;
+      field: string;
+      snippet: string;
+      retry_attempted: boolean;
+    } | undefined;
 
     if (isRecipeJsonRequest) {
       const tNormStart = Date.now();
@@ -1402,37 +1410,73 @@ serve(async (req) => {
         usedFallbackRecipe = true;
       }
 
-      // Post-recipe safety: тот же матч токенов, что в плане (recipeAllergyMatch); без fromPlanReplace — план уже отфильтрован.
+      // Post-recipe safety: ingredients[].name only (без title/description); retry LLM при конфликте, без hard block.
       if (!fromPlanReplace && responseRecipes.length > 0) {
         const allergiesListPost: string[] = targetIsFamily && allMembers.length > 0
           ? [...new Set(allMembers.flatMap((m) => m.allergies ?? []))]
           : (memberDataNorm?.allergies ?? []);
         if (allergiesListPost.length > 0) {
-          const profileNamePost = targetIsFamily
-            ? "Семья"
-            : ((memberDataForPrompt?.name ?? (allMembersForPrompt[0]?.name) ?? "выбранного профиля").toString().trim() || "выбранного профиля");
-          const recipeRec = responseRecipes[0] as Record<string, unknown>;
-          const fields = chatRecipeRecordToAllergyFields(recipeRec);
           const groups = expandAllergiesToCanonicalBlockedGroups(allergiesListPost).map((g) => ({
             profileAllergy: g.allergy,
             tokens: g.tokens,
           }));
-          const conflict = findFirstAllergyConflictInRecipeFields(fields, groups);
+
+          const runChatAllergyPostCheck = (rec: Record<string, unknown>) => {
+            const fields = chatRecipeRecordToAllergyFields(rec);
+            return findFirstAllergyConflictInChatRecipeIngredients(fields, groups);
+          };
+
+          let recipeRec = responseRecipes[0] as Record<string, unknown>;
+          let conflict = runChatAllergyPostCheck(recipeRec);
+
+          if (conflict && DEEPSEEK_API_KEY) {
+            const tAllergyRetryStart = Date.now();
+            const retryResult = await retryRecipeAllergyFix({
+              apiKey: DEEPSEEK_API_KEY,
+              recipeJson: JSON.stringify(validated ?? recipeRec),
+              profileAllergies: allergiesListPost,
+              conflictDetail: {
+                profileAllergy: conflict.profileAllergy,
+                token: conflict.detail.token,
+                ingredientSnippet: conflict.detail.snippet,
+              },
+              requestId,
+              log: parseLog,
+            });
+            logPerf("allergy_retry_ms", tAllergyRetryStart, requestId, { success: retryResult.success ? 1 : 0 });
+            if (retryResult.success && retryResult.fixed) {
+              const retryValidated = parseAndValidateRecipeJsonFromString(retryResult.fixed);
+              if (retryValidated) {
+                validated = retryValidated;
+                assistantMessage = JSON.stringify(retryValidated);
+                recipeRec = retryValidated as Record<string, unknown>;
+                responseRecipes = [recipeRec];
+                conflict = runChatAllergyPostCheck(recipeRec);
+                parseLog("allergy retry applied", {
+                  stillConflict: conflict != null,
+                  profileAllergy: conflict?.profileAllergy,
+                });
+              }
+            }
+          }
+
           if (conflict) {
             console.log(JSON.stringify({
-              tag: "CHAT_RECIPE_ALLERGY_SAFETY_REJECTION",
+              tag: "CHAT_RECIPE_ALLERGY_SAFETY_WARNING",
               requestId,
               profile_allergy: conflict.profileAllergy,
               field: conflict.detail.field,
               token: conflict.detail.token,
               snippet: conflict.detail.snippet,
+              note: "Recipe delivered despite ingredient conflict after optional retry (no hard block).",
             }));
-            const payload = buildAllergyBlockedResponsePayload({
-              profileName: profileNamePost,
-              blockedItems: [conflict.profileAllergy],
-              userMessage,
-            });
-            return new Response(JSON.stringify(payload), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            allergyIngredientWarning = {
+              profile_allergy: conflict.profileAllergy,
+              token: conflict.detail.token,
+              field: conflict.detail.field,
+              snippet: conflict.detail.snippet,
+              retry_attempted: Boolean(DEEPSEEK_API_KEY),
+            };
           }
         }
       }
@@ -1892,7 +1936,14 @@ serve(async (req) => {
     if (type === "sos_consultant") {
       safeLog("[help]", { requestId, durationMs: Date.now() - startedAt, status: "ok" });
     }
-    const responseBody: { message: string; recipes?: Array<Record<string, unknown>>; recipe_id?: string | null; usage?: unknown; auth_required_to_save?: boolean } = {
+    const responseBody: {
+      message: string;
+      recipes?: Array<Record<string, unknown>>;
+      recipe_id?: string | null;
+      usage?: unknown;
+      auth_required_to_save?: boolean;
+      allergy_ingredient_warning?: typeof allergyIngredientWarning;
+    } = {
       message: assistantMessage,
       usage: data.usage,
     };
@@ -1936,6 +1987,9 @@ serve(async (req) => {
     }
     if (authRequiredToSave) {
       responseBody.auth_required_to_save = true;
+    }
+    if (allergyIngredientWarning) {
+      responseBody.allergy_ingredient_warning = allergyIngredientWarning;
     }
     logPerf("total_ms", t0, requestId);
     safeLog(JSON.stringify({
