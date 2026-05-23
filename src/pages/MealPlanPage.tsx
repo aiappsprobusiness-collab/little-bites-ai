@@ -148,10 +148,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  A2HS_EVENT_AFTER_FIRST_DAY,
-  A2HS_EVENT_AFTER_FIRST_WEEK,
-} from "@/hooks/usePWAInstall";
+import { dispatchA2HSFirstDayOnce, dispatchA2HSFirstWeekOnce } from "@/utils/a2hsEvents";
+import { PLAN_READY_TOAST_DURATION_MS } from "@/utils/a2hsTiming";
 import {
   getInfantNovelProductKeysForIntroduce,
   getInfantPrimaryProductSummaryParts,
@@ -163,9 +161,6 @@ import {
   shouldAutoClearIntroducingPeriod,
   extractProductKeysForIntroduceClick,
 } from "@/utils/introducedProducts";
-
-const A2HS_FIRST_DAY_DISPATCHED_KEY = "a2hs_first_day_dispatched";
-const A2HS_FIRST_WEEK_DISPATCHED_KEY = "a2hs_first_week_dispatched";
 
 /** Краткие названия дней: Пн..Вс (индекс 0 = Пн, getDay() 1 = Пн). */
 const weekDays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -800,17 +795,12 @@ export default function MealPlanPage() {
         const total = (planJob.progress_total ?? (planGenType === "week" ? 7 : 1)) * 4;
         showPartialFillToast(toast, navigate, { filled, total });
       } else {
-        toast({ description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов", duration: 5000 });
-        if (typeof window !== "undefined") {
-          if (planGenType === "day" && localStorage.getItem(A2HS_FIRST_DAY_DISPATCHED_KEY) !== "1") {
-            localStorage.setItem(A2HS_FIRST_DAY_DISPATCHED_KEY, "1");
-            window.dispatchEvent(new CustomEvent(A2HS_EVENT_AFTER_FIRST_DAY));
-          }
-          if (planGenType === "week" && localStorage.getItem(A2HS_FIRST_WEEK_DISPATCHED_KEY) !== "1") {
-            localStorage.setItem(A2HS_FIRST_WEEK_DISPATCHED_KEY, "1");
-            window.dispatchEvent(new CustomEvent(A2HS_EVENT_AFTER_FIRST_WEEK));
-          }
-        }
+        toast({
+          description: planGenType === "week" ? "План на 7 дней готов" : "План на день готов",
+          duration: PLAN_READY_TOAST_DURATION_MS,
+        });
+        if (planGenType === "day") dispatchA2HSFirstDayOnce();
+        if (planGenType === "week") dispatchA2HSFirstWeekOnce();
       }
     } else if (planJob.status === "error" && wasRunning) {
       if (planErrorText === "LIMIT_REACHED") {
@@ -1325,7 +1315,8 @@ export default function MealPlanPage() {
     if (hasNoDishes) return;
     planReadyToastShownRef.current = true;
     setJustCreatedMemberIdState(null);
-    toast({ description: "План на день готов", duration: 5000 });
+    toast({ description: "План на день готов", duration: PLAN_READY_TOAST_DURATION_MS });
+    dispatchA2HSFirstDayOnce();
   }, [justCreatedMemberId, showPlanMealsSkeleton, hasNoDishes, toast]);
 
   const renderStartRef = useRef(0);

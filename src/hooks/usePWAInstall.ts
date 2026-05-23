@@ -2,6 +2,29 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { isStandalone } from "@/utils/standalone";
+import {
+  A2HS_BLOCKED_MAX_RETRIES,
+  A2HS_BLOCKED_RETRY_MS,
+  getA2HSDelayMs,
+  isA2HSBlockedByOverlay,
+} from "@/utils/a2hsTiming";
+import {
+  A2HS_EVENT_AFTER_FIRST_DAY,
+  A2HS_EVENT_AFTER_FIRST_PLAN,
+  A2HS_EVENT_AFTER_FIRST_RECIPE,
+  A2HS_EVENT_AFTER_FIRST_WEEK,
+  A2HS_EVENT_AFTER_TWO_RECIPES,
+  type A2HSTriggerSource,
+} from "@/utils/a2hsTypes";
+
+export type { A2HSTriggerSource };
+export {
+  A2HS_EVENT_AFTER_FIRST_PLAN,
+  A2HS_EVENT_AFTER_FIRST_RECIPE,
+  A2HS_EVENT_AFTER_TWO_RECIPES,
+  A2HS_EVENT_AFTER_FIRST_DAY,
+  A2HS_EVENT_AFTER_FIRST_WEEK,
+};
 
 export interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -13,18 +36,10 @@ const STORAGE_KEY_NEXT_ELIGIBLE_AT = "a2hs_next_eligible_at";
 const STORAGE_KEY_FOREVER = "a2hs_dismissed_forever";
 const STORAGE_KEY_TRIGGER_SOURCE = "a2hs_trigger_source";
 
-const DELAY_MIN_MS = 8_000;
-const DELAY_MAX_MS = 15_000;
 const MAX_ATTEMPTS = 3;
 const LATER_1_DAYS = 3;
 const LATER_2_DAYS = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-export const A2HS_EVENT_AFTER_FIRST_PLAN = "a2hs-after-first-plan";
-export const A2HS_EVENT_AFTER_FIRST_RECIPE = "a2hs-after-first-recipe";
-export const A2HS_EVENT_AFTER_TWO_RECIPES = "a2hs-after-two-recipes";
-export const A2HS_EVENT_AFTER_FIRST_DAY = "a2hs-after-first-day";
-export const A2HS_EVENT_AFTER_FIRST_WEEK = "a2hs-after-first-week";
 
 function readStoredCount(): number {
   try {
@@ -56,8 +71,6 @@ function readDismissedForever(): boolean {
     return false;
   }
 }
-
-export type A2HSTriggerSource = "plan" | "recipe" | "day" | "week";
 
 function readTriggerSource(): "" | A2HSTriggerSource {
   try {
@@ -98,22 +111,19 @@ function setTriggerSource(source: A2HSTriggerSource): void {
   }
 }
 
-/** Приложение уже запущено с главного экрана (standalone), не показываем предложение установки. */
 function isRunningAsInstalledPWA(): boolean {
   if (typeof window === "undefined") return false;
   if (window.matchMedia("(display-mode: standalone)").matches) return true;
-  if ((window.navigator as { standalone?: boolean }).standalone === true) return true; // iOS Safari
+  if ((window.navigator as { standalone?: boolean }).standalone === true) return true;
   return false;
 }
 
-function isIOS(): boolean {
+export function isIOS(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) || ((navigator as { platform?: string }).platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-
-/** Есть ли поддержка A2HS: Android (beforeinstallprompt) или iOS (ручная установка). */
-function hasA2HSSupport(deferredPrompt: BeforeInstallPromptEvent | null): boolean {
-  return Boolean(deferredPrompt) || isIOS();
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    ((navigator as { platform?: string }).platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
 }
 
 function canShowNow(): boolean {
@@ -125,22 +135,51 @@ function canShowNow(): boolean {
   return true;
 }
 
-function randomDelayMs(): number {
-  return DELAY_MIN_MS + Math.floor(Math.random() * (DELAY_MAX_MS - DELAY_MIN_MS + 1));
+function readDeferredPromptFromWindow(): BeforeInstallPromptEvent | null {
+  if (typeof window === "undefined") return null;
+  return (window as Window & { __beforeInstallPromptEvent?: BeforeInstallPromptEvent })
+    .__beforeInstallPromptEvent ?? null;
 }
 
 export function usePWAInstall() {
   const { user } = useAuth();
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(() =>
+    readDeferredPromptFromWindow()
+  );
   const [isInstalled, setIsInstalled] = useState(isRunningAsInstalledPWA);
   const [showModal, setShowModal] = useState(false);
   const { toast } = useToast();
   const isInstalledRef = useRef(isInstalled);
-  const deferredPromptRef = useRef(deferredPrompt);
   const scheduleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   isInstalledRef.current = isInstalled;
-  deferredPromptRef.current = deferredPrompt;
+
+  const clearScheduledShow = useCallback(() => {
+    if (scheduleTimeoutRef.current) {
+      clearTimeout(scheduleTimeoutRef.current);
+      scheduleTimeoutRef.current = null;
+    }
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const tryOpenInstallModal = useCallback((retry = 0) => {
+    if (isInstalledRef.current || isStandalone()) return;
+    if (!canShowNow()) return;
+    if (isA2HSBlockedByOverlay()) {
+      if (retry < A2HS_BLOCKED_MAX_RETRIES) {
+        retryTimeoutRef.current = setTimeout(() => {
+          retryTimeoutRef.current = null;
+          tryOpenInstallModal(retry + 1);
+        }, A2HS_BLOCKED_RETRY_MS);
+      }
+      return;
+    }
+    setShowModal(true);
+  }, []);
 
   useEffect(() => {
     const onBeforeInstall = (e: Event) => {
@@ -148,70 +187,62 @@ export function usePWAInstall() {
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
+    const onPromptAvailable = (e: Event) => {
+      const detail = (e as CustomEvent<BeforeInstallPromptEvent>).detail;
+      if (detail) setDeferredPrompt(detail);
+    };
+
     const onInstalled = () => {
       setIsInstalled(true);
       setShowModal(false);
+      clearScheduledShow();
       setDeferredPrompt(null);
       writeStored(MAX_ATTEMPTS, null, true);
       toast({ title: "Готово! 🧩 на экране!", description: "Приложение добавлено на главный экран." });
     };
 
+    const existing = readDeferredPromptFromWindow();
+    if (existing) setDeferredPrompt(existing);
+
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
+    window.addEventListener("a2hs-prompt-available", onPromptAvailable as EventListener);
     window.addEventListener("appinstalled", onInstalled);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
+      window.removeEventListener("a2hs-prompt-available", onPromptAvailable as EventListener);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, [toast]);
+  }, [toast, clearScheduledShow]);
 
   useEffect(() => {
     if (!user) return;
     if (isInstalled) return;
     if (isStandalone()) return;
-    if (!hasA2HSSupport(deferredPrompt)) return;
     if (!canShowNow()) return;
     if (readTriggerSource() !== "") return;
 
     const scheduleShow = (trigger: A2HSTriggerSource) => {
       if (readTriggerSource() !== "") return;
       setTriggerSource(trigger);
-      const delayMs = randomDelayMs();
+      clearScheduledShow();
+
+      const delayMs = getA2HSDelayMs(trigger);
       if (import.meta.env.DEV) {
         console.log("[DEBUG] a2hs scheduled from", trigger, "in", delayMs, "ms");
       }
+
       scheduleTimeoutRef.current = setTimeout(() => {
         scheduleTimeoutRef.current = null;
-        if (!isInstalledRef.current && hasA2HSSupport(deferredPromptRef.current) && canShowNow()) {
-          setShowModal(true);
-        }
+        tryOpenInstallModal(0);
       }, delayMs);
     };
 
-    const onFirstPlan = () => {
-      if (readTriggerSource() !== "") return;
-      scheduleShow("plan");
-    };
-
-    const onFirstRecipe = () => {
-      if (readTriggerSource() !== "") return;
-      scheduleShow("recipe");
-    };
-
-    const onTwoRecipes = () => {
-      if (readTriggerSource() !== "") return;
-      scheduleShow("recipe");
-    };
-
-    const onFirstDay = () => {
-      if (readTriggerSource() !== "") return;
-      scheduleShow("day");
-    };
-
-    const onFirstWeek = () => {
-      if (readTriggerSource() !== "") return;
-      scheduleShow("week");
-    };
+    const onFirstPlan = () => scheduleShow("plan");
+    const onFirstRecipe = () => scheduleShow("recipe");
+    const onTwoRecipes = () => scheduleShow("recipe");
+    const onFirstDay = () => scheduleShow("day");
+    const onFirstWeek = () => scheduleShow("week");
 
     window.addEventListener(A2HS_EVENT_AFTER_FIRST_PLAN, onFirstPlan);
     window.addEventListener(A2HS_EVENT_AFTER_FIRST_RECIPE, onFirstRecipe);
@@ -225,58 +256,56 @@ export function usePWAInstall() {
       window.removeEventListener(A2HS_EVENT_AFTER_TWO_RECIPES, onTwoRecipes);
       window.removeEventListener(A2HS_EVENT_AFTER_FIRST_DAY, onFirstDay);
       window.removeEventListener(A2HS_EVENT_AFTER_FIRST_WEEK, onFirstWeek);
-      if (scheduleTimeoutRef.current) {
-        clearTimeout(scheduleTimeoutRef.current);
-        scheduleTimeoutRef.current = null;
-      }
+      clearScheduledShow();
     };
-  }, [user, deferredPrompt, isInstalled]);
+  }, [user, isInstalled, clearScheduledShow, tryOpenInstallModal]);
 
   const promptInstall = async () => {
-    if (!deferredPrompt) return;
-    await deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
+    const prompt = deferredPrompt ?? readDeferredPromptFromWindow();
+    if (!prompt) return;
+    await prompt.prompt();
+    await prompt.userChoice;
   };
 
-  const dismissModal = useCallback((options?: { skipIncrement?: boolean }) => {
-    setShowModal(false);
-    if (options?.skipIncrement) return;
+  const dismissModal = useCallback(
+    (options?: { skipIncrement?: boolean }) => {
+      setShowModal(false);
+      if (options?.skipIncrement) return;
 
-    const count = readStoredCount();
-    const newCount = Math.min(count + 1, MAX_ATTEMPTS);
-    const now = Date.now();
+      const count = readStoredCount();
+      const newCount = Math.min(count + 1, MAX_ATTEMPTS);
+      const now = Date.now();
 
-    let nextEligibleAt: number | null = null;
-    let forever = false;
+      let nextEligibleAt: number | null = null;
+      let forever = false;
 
-    if (newCount >= MAX_ATTEMPTS) {
-      forever = true;
-    } else if (newCount === 1) {
-      nextEligibleAt = now + LATER_1_DAYS * MS_PER_DAY;
-    } else if (newCount === 2) {
-      nextEligibleAt = now + LATER_2_DAYS * MS_PER_DAY;
-    }
-
-    writeStored(newCount, nextEligibleAt, forever);
-
-    if (import.meta.env.DEV) {
-      console.log("[DEBUG] a2hs dismissed count=", newCount, forever ? "forever" : "nextEligibleAt=" + nextEligibleAt);
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (scheduleTimeoutRef.current) {
-        clearTimeout(scheduleTimeoutRef.current);
-        scheduleTimeoutRef.current = null;
+      if (newCount >= MAX_ATTEMPTS) {
+        forever = true;
+      } else if (newCount === 1) {
+        nextEligibleAt = now + LATER_1_DAYS * MS_PER_DAY;
+      } else if (newCount === 2) {
+        nextEligibleAt = now + LATER_2_DAYS * MS_PER_DAY;
       }
-    };
-  }, []);
 
-  const canInstall = Boolean(deferredPrompt) && !isInstalled;
+      writeStored(newCount, nextEligibleAt, forever);
+
+      if (import.meta.env.DEV) {
+        console.log(
+          "[DEBUG] a2hs dismissed count=",
+          newCount,
+          forever ? "forever" : "nextEligibleAt=" + nextEligibleAt
+        );
+      }
+    },
+    []
+  );
+
+  useEffect(() => () => clearScheduledShow(), [clearScheduledShow]);
+
+  const canInstall = Boolean(deferredPrompt ?? readDeferredPromptFromWindow()) && !isInstalled;
   const isIOSDevice = isIOS();
-  const hasInstallOption = !isInstalled && (Boolean(deferredPrompt) || isIOSDevice);
-  /** Триггер, по которому открыта модалка (для подстановки текста). Пустая строка, если модалка закрыта. */
+  const hasInstallOption = !isInstalled && (canInstall || isIOSDevice || !isStandalone());
+
   const installPromptTriggerSource = showModal ? readTriggerSource() : "";
 
   return {

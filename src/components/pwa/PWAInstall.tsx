@@ -19,12 +19,14 @@ function getInstallPromptDescription(triggerSource: "" | A2HSTriggerSource, hasA
 }
 
 export function PWAInstall() {
-  const { canInstall, promptInstall, showModal, dismissModal, isIOSDevice, installPromptTriggerSource } = usePWAInstall();
+  const { canInstall, promptInstall, showModal, dismissModal, isIOSDevice, installPromptTriggerSource } =
+    usePWAInstall();
   const { hasAccess } = useSubscription();
 
   if (!showModal) return null;
 
   const description = getInstallPromptDescription(installPromptTriggerSource, hasAccess);
+  const showManualHint = !canInstall;
 
   return (
     <Dialog open={showModal} onOpenChange={(open) => !open && dismissModal()}>
@@ -40,9 +42,14 @@ export function PWAInstall() {
           <DialogDescription asChild>
             <div className="space-y-2 text-center">
               <p>{description}</p>
-              {isIOSDevice && (
+              {showManualHint && isIOSDevice && (
                 <p className="text-typo-muted font-semibold text-foreground/90">
                   В Safari нажмите Поделиться → На экран Домой
+                </p>
+              )}
+              {showManualHint && !isIOSDevice && (
+                <p className="text-typo-muted font-semibold text-foreground/90">
+                  В меню браузера выберите «Установить приложение» или «Добавить на главный экран»
                 </p>
               )}
             </div>
