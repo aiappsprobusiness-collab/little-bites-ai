@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   getInfantPlanHeroBodyParagraph,
+  getInfantPlanHeroIntroducedProductsHint,
   getInfantPlanHeroNoticeKind,
   getInfantPlanHeroNoticeText,
   INFANT_PLAN_HERO_BODY_BEFORE_COMPLEMENTARY,
   INFANT_PLAN_HERO_BODY_COMPLEMENTARY_ACTIVE,
+  INFANT_PLAN_HERO_INTRODUCED_PRODUCTS_HINT,
   INFANT_PLAN_HERO_NOTICE_DOCTOR,
   INFANT_PLAN_HERO_NOTICE_TOO_EARLY,
 } from "./infantComplementaryPlan";
@@ -34,6 +36,16 @@ describe("getInfantPlanHeroBodyParagraph", () => {
   it("uses active complementary copy from 4 months", () => {
     expect(getInfantPlanHeroBodyParagraph(4)).toBe(INFANT_PLAN_HERO_BODY_COMPLEMENTARY_ACTIVE);
     expect(getInfantPlanHeroBodyParagraph(9)).toBe(INFANT_PLAN_HERO_BODY_COMPLEMENTARY_ACTIVE);
+  });
+});
+
+describe("getInfantPlanHeroIntroducedProductsHint", () => {
+  it("returns hint from 4 months", () => {
+    expect(getInfantPlanHeroIntroducedProductsHint(8)).toBe(INFANT_PLAN_HERO_INTRODUCED_PRODUCTS_HINT);
+  });
+
+  it("returns null before complementary age", () => {
+    expect(getInfantPlanHeroIntroducedProductsHint(2)).toBeNull();
   });
 });
 

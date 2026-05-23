@@ -598,7 +598,8 @@ export function filterPoolCandidatesForSlot(rows: PoolRecipeRow[], options: Filt
       const ev = evaluateInfantRecipeComplementaryRules(
         (r.recipe_ingredients ?? null) as IngredientForProductKey[] | null,
         introducedKeys,
-        { title: r.title, description: r.description }
+        { title: r.title, description: r.description },
+        ageMonths,
       );
       if (!ev.valid && isInfantComplementaryFeedDebug()) {
         console.log("[INFANT_RULE]", {

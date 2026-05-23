@@ -83,6 +83,7 @@ export { evaluateInfantRecipeComplementaryRules, evaluateInfantSecondaryFamiliar
 export type ValidInfantRecipesContext = {
   introducedProductKeys: string[];
   infantSlotRole?: "primary" | "secondary" | null;
+  ageMonths?: number | null;
 };
 
 export function getValidInfantRecipes<
@@ -100,7 +101,9 @@ export function getValidInfantRecipes<
   if (role === "secondary") {
     return recipes.filter((r) => evaluateInfantSecondaryFamiliarOnly(ing(r), introduced, meta(r)).valid);
   }
-  return recipes.filter((r) => evaluateInfantRecipeComplementaryRules(ing(r), introduced, meta(r)).valid);
+  return recipes.filter((r) =>
+    evaluateInfantRecipeComplementaryRules(ing(r), introduced, meta(r), context.ageMonths ?? null).valid
+  );
 }
 
 /** Логи отклонения рецептов: `?debugInfant=1` в URL. */

@@ -127,4 +127,32 @@ describe("shared infantComplementaryRules (parity with Edge)", () => {
     expect(r.valid).toBe(false);
     expect(r.reason).toBe("after_egg_intro_recipe_must_not_contain_chicken");
   });
+
+  it("7+ мес без введённых: кабачок + индейка — одна новинка (extended_start_ok)", () => {
+    const r = evaluateInfantRecipeComplementaryRules(
+      ing([
+        { name: "Кабачок", display_text: "90 г" },
+        { name: "Филе индейки", display_text: "40 г" },
+      ]),
+      [],
+      null,
+      8
+    );
+    expect(r.valid).toBe(true);
+    expect(r.reason).toBe("extended_start_ok");
+  });
+
+  it("4–6 мес без введённых: кабачок + индейка — отказ (только стартовая тройка по одному)", () => {
+    const r = evaluateInfantRecipeComplementaryRules(
+      ing([
+        { name: "Кабачок", display_text: "90 г" },
+        { name: "Филе индейки", display_text: "40 г" },
+      ]),
+      [],
+      null,
+      6
+    );
+    expect(r.valid).toBe(false);
+    expect(r.reason).toBe("start_multiple_keys");
+  });
 });

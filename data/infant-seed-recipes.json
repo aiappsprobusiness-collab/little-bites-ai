@@ -1,20 +1,20 @@
 {
   "version": 1,
   "batchTag": "infant_curated_v2",
-  "generatedAt": "2026-05-11T17:49:47.617Z",
-  "count": 133,
+  "generatedAt": "2026-05-23T19:47:04.982Z",
+  "count": 136,
   "summary": {
     "byMealType": {
       "breakfast": 33,
       "dinner": 12,
-      "lunch": 60,
+      "lunch": 63,
       "snack": 28
     },
     "byMinAge": {
       "4": 4,
       "5": 16,
       "6": 25,
-      "7": 30,
+      "7": 33,
       "8": 11,
       "9": 40,
       "10": 7
@@ -3140,6 +3140,174 @@
         {
           "step_number": 4,
           "instruction": "Остудите до тёплого состояния."
+        }
+      ]
+    },
+    {
+      "title": "Пюре из кабачка",
+      "description": "Мягкое однокомпонентное пюре — удобно, если нужно снова предложить знакомый овощ или начать день со щадящего варианта.",
+      "chef_advice": "Если пюре густое, добавьте немного тёплой воды после варки. Подавайте тёплым, но не горячим.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 15,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 18,
+      "proteins": 1.2,
+      "fats": 0.2,
+      "carbs": 3.1,
+      "tags": [
+        "infant",
+        "7_8_months",
+        "puree",
+        "vegetable",
+        "single_ingredient",
+        "infant_curated_v2",
+        "infant_7_8_months_stage2"
+      ],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "Кабачок",
+          "amount": 120,
+          "unit": "г",
+          "display_text": "Кабачок — 120 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": "vegetables"
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Очистите кабачок и нарежьте небольшими кусочками."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Отварите или приготовьте на пару до мягкости."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Измельчите кабачок в гладкое пюре."
+        },
+        {
+          "step_number": 4,
+          "instruction": "При необходимости добавьте немного тёплой воды до нужной консистенции."
+        }
+      ]
+    },
+    {
+      "title": "Пюре из цветной капусты",
+      "description": "Нежное овощное пюре без лишних добавок — подходит для спокойного приёма пищи в этом возрасте.",
+      "chef_advice": "Для более мягкой текстуры пробейте пюре чуть дольше. При необходимости разбавьте ложкой тёплой воды.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 18,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 30,
+      "proteins": 2.3,
+      "fats": 0.3,
+      "carbs": 5.2,
+      "tags": [
+        "infant",
+        "7_8_months",
+        "puree",
+        "vegetable",
+        "single_ingredient",
+        "infant_curated_v2",
+        "infant_7_8_months_stage2"
+      ],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "Цветная капуста",
+          "amount": 130,
+          "unit": "г",
+          "display_text": "Цветная капуста — 130 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": "vegetables"
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Разберите цветную капусту на небольшие соцветия."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Отварите или приготовьте на пару до очень мягкого состояния."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Измельчите капусту в гладкое пюре."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Добавьте немного тёплой воды, если нужна более нежная консистенция."
+        }
+      ]
+    },
+    {
+      "title": "Пюре из брокколи",
+      "description": "Мягкое пюре из брокколи с понятной текстурой для постепенного расширения рациона.",
+      "chef_advice": "Соцветия лучше измельчать после полного размягчения на пару. При ярком вкусе добавьте чуть больше воды.",
+      "meal_type": "lunch",
+      "cooking_time_minutes": 18,
+      "min_age_months": 7,
+      "max_age_months": 8,
+      "calories": 28,
+      "proteins": 2.8,
+      "fats": 0.4,
+      "carbs": 4,
+      "tags": [
+        "infant",
+        "7_8_months",
+        "puree",
+        "vegetable",
+        "single_ingredient",
+        "infant_curated_v2",
+        "infant_7_8_months_stage2"
+      ],
+      "nutrition_goals": [],
+      "servings_base": 1,
+      "servings_recommended": 1,
+      "is_soup": false,
+      "ingredients": [
+        {
+          "name": "Брокколи",
+          "amount": 120,
+          "unit": "г",
+          "display_text": "Брокколи — 120 г",
+          "canonical_amount": null,
+          "canonical_unit": null,
+          "order_index": 0,
+          "category": "vegetables"
+        }
+      ],
+      "steps": [
+        {
+          "step_number": 1,
+          "instruction": "Промойте брокколи и разберите на небольшие соцветия."
+        },
+        {
+          "step_number": 2,
+          "instruction": "Приготовьте на пару до мягкости."
+        },
+        {
+          "step_number": 3,
+          "instruction": "Измельчите в однородное пюре."
+        },
+        {
+          "step_number": 4,
+          "instruction": "Подавайте тёплым, при необходимости разбавьте водой."
         }
       ]
     },

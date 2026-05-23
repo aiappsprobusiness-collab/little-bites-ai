@@ -87,64 +87,14 @@ export type InfantRecipeValidityResult = {
   novelKeys: string[];
 };
 
-/**
- * Блок «Сегодня можно попробовать» (primary): старт — одна строка продукта из ALLOWED_START;
- * после старта — **ровно один** новый продукт, остальные только из введённых.
- */
-export function evaluateInfantRecipeComplementaryRules(
-  ingredients: IngredientForProductKey[] | null | undefined,
-  introducedProductKeys: string[],
-  meta?: InfantRecipeTextMeta | null
-): InfantRecipeValidityResult {
-  const introduced = introducedProductKeys.filter(Boolean);
-  const introducedSet = new Set(introduced);
-  const canonicalKeys = mergeCanonicalProductKeys(ingredients, meta);
-  const novelKeys = canonicalKeys.filter((k) => !introducedSet.has(k));
+/** С 7 мес: при пустых «введённых» допускаем одну новинку + овощи из стартовой тройки (каталог 7–8 мес). */
+export const EXTENDED_START_MIN_AGE_MONTHS = 7;
 
-  if (introduced.length === 0) {
-    if (hasNonTechnicalFoodRowWithoutProductKey(ingredients)) {
-      return {
-        valid: false,
-        reason: "start_unrecognized_food_row",
-        canonicalKeys,
-        novelKeys,
-      };
-    }
-    if (canonicalKeys.length !== 1) {
-      return {
-        valid: false,
-        reason: canonicalKeys.length === 0 ? "start_no_recognized_product" : "start_multiple_keys",
-        canonicalKeys,
-        novelKeys,
-      };
-    }
-    if (!ALLOWED_START_PRODUCT_KEYS.has(canonicalKeys[0])) {
-      return { valid: false, reason: "start_not_allowed_product", canonicalKeys, novelKeys };
-    }
-    return { valid: true, reason: "start_ok", canonicalKeys, novelKeys };
-  }
-
-  if (canonicalKeys.length === 0) {
-    return { valid: false, reason: "after_no_recognized_keys", canonicalKeys, novelKeys };
-  }
-  if (hasNonTechnicalFoodRowWithoutProductKey(ingredients)) {
-    return {
-      valid: false,
-      reason: "after_unrecognized_food_row",
-      canonicalKeys,
-      novelKeys,
-    };
-  }
-  if (novelKeys.length !== 1) {
-    return {
-      valid: false,
-      reason: novelKeys.length === 0 ? "after_no_novel_for_new_block" : "after_multiple_novel_products",
-      canonicalKeys,
-      novelKeys,
-    };
-  }
-  const novel = novelKeys[0];
-  /** Ввод курицы ≠ яйца: в одном блюде не смешиваем мясной и яичный продукт для блока «новый продукт». */
+function validateNovelChickenEggRules(
+  novel: string,
+  canonicalKeys: string[],
+  novelKeys: string[]
+): InfantRecipeValidityResult | null {
   if (novel === "chicken") {
     if (!canonicalKeys.includes("chicken")) {
       return {
@@ -181,6 +131,101 @@ export function evaluateInfantRecipeComplementaryRules(
       };
     }
   }
+  return null;
+}
+
+/**
+ * Блок «Сегодня можно попробовать» (primary): 4–6 мес без введённых — одна стартовая тройка;
+ * 7–11 мес без введённых — одна новинка (+ опционально кабачок/брокколи/цветная капуста);
+ * после отметки введённых — ровно один новый продукт, остальные только из введённых.
+ */
+export function evaluateInfantRecipeComplementaryRules(
+  ingredients: IngredientForProductKey[] | null | undefined,
+  introducedProductKeys: string[],
+  meta?: InfantRecipeTextMeta | null,
+  ageMonths?: number | null
+): InfantRecipeValidityResult {
+  const introduced = introducedProductKeys.filter(Boolean);
+  const introducedSet = new Set(introduced);
+  const canonicalKeys = mergeCanonicalProductKeys(ingredients, meta);
+  const novelKeys = canonicalKeys.filter((k) => !introducedSet.has(k));
+  const ageM =
+    ageMonths != null && Number.isFinite(Number(ageMonths))
+      ? Math.max(0, Math.round(Number(ageMonths)))
+      : null;
+
+  if (introduced.length === 0) {
+    if (hasNonTechnicalFoodRowWithoutProductKey(ingredients)) {
+      return {
+        valid: false,
+        reason: "start_unrecognized_food_row",
+        canonicalKeys,
+        novelKeys,
+      };
+    }
+
+    if (ageM != null && ageM >= EXTENDED_START_MIN_AGE_MONTHS) {
+      const novelExcludingStart = canonicalKeys.filter((k) => !ALLOWED_START_PRODUCT_KEYS.has(k));
+      if (novelExcludingStart.length === 0) {
+        if (canonicalKeys.length === 1 && ALLOWED_START_PRODUCT_KEYS.has(canonicalKeys[0])) {
+          return { valid: true, reason: "start_ok", canonicalKeys, novelKeys };
+        }
+        return {
+          valid: false,
+          reason: canonicalKeys.length === 0 ? "start_no_recognized_product" : "start_multiple_keys",
+          canonicalKeys,
+          novelKeys,
+        };
+      }
+      if (novelExcludingStart.length !== 1) {
+        return {
+          valid: false,
+          reason: "extended_start_multiple_novel",
+          canonicalKeys,
+          novelKeys,
+        };
+      }
+      const eggCheck = validateNovelChickenEggRules(novelExcludingStart[0], canonicalKeys, novelKeys);
+      if (eggCheck) return eggCheck;
+      return { valid: true, reason: "extended_start_ok", canonicalKeys, novelKeys };
+    }
+
+    if (canonicalKeys.length !== 1) {
+      return {
+        valid: false,
+        reason: canonicalKeys.length === 0 ? "start_no_recognized_product" : "start_multiple_keys",
+        canonicalKeys,
+        novelKeys,
+      };
+    }
+    if (!ALLOWED_START_PRODUCT_KEYS.has(canonicalKeys[0])) {
+      return { valid: false, reason: "start_not_allowed_product", canonicalKeys, novelKeys };
+    }
+    return { valid: true, reason: "start_ok", canonicalKeys, novelKeys };
+  }
+
+  if (canonicalKeys.length === 0) {
+    return { valid: false, reason: "after_no_recognized_keys", canonicalKeys, novelKeys };
+  }
+  if (hasNonTechnicalFoodRowWithoutProductKey(ingredients)) {
+    return {
+      valid: false,
+      reason: "after_unrecognized_food_row",
+      canonicalKeys,
+      novelKeys,
+    };
+  }
+  if (novelKeys.length !== 1) {
+    return {
+      valid: false,
+      reason: novelKeys.length === 0 ? "after_no_novel_for_new_block" : "after_multiple_novel_products",
+      canonicalKeys,
+      novelKeys,
+    };
+  }
+  const novel = novelKeys[0];
+  const eggCheck = validateNovelChickenEggRules(novel, canonicalKeys, novelKeys);
+  if (eggCheck) return eggCheck;
   return { valid: true, reason: "after_ok", canonicalKeys, novelKeys };
 }
 

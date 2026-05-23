@@ -1195,11 +1195,15 @@ function filterInfantComplementaryCandidates(
       }).valid
     );
   } else {
+    const ageMonthsForRules =
+      ageContext.ageMonths != null ? Math.max(0, Math.round(Number(ageContext.ageMonths))) : null;
     filtered = filtered.filter((r) =>
-      evaluateInfantRecipeComplementaryRules(r.recipe_ingredients ?? null, introduced, {
-        title: r.title,
-        description: r.description,
-      }).valid
+      evaluateInfantRecipeComplementaryRules(
+        r.recipe_ingredients ?? null,
+        introduced,
+        { title: r.title, description: r.description },
+        ageMonthsForRules,
+      ).valid
     );
   }
   return filtered;
@@ -1730,8 +1734,10 @@ serve(async (req) => {
       const dishCountPreview = getInfantComplementaryDishCount(ageM, firstDayKey, effectiveMemberId);
       const nPrimary = filterInfantComplementaryCandidates(poolCandidates, effectiveMemberData, [], [], "primary").length;
       const nSecondary = filterInfantComplementaryCandidates(poolCandidates, effectiveMemberData, [], [], "secondary").length;
+      const introducedCount = getIntroducedProductKeysForInfant(effectiveMemberData).length;
       const primaryOk = nPrimary > 0;
-      const secondaryOk = dishCountPreview < 2 || nSecondary > 0;
+      /** Без введённых familiar-слот не заполняем — не требовать secondary-кандидатов при dishCount=2. */
+      const secondaryOk = dishCountPreview < 2 || nSecondary > 0 || introducedCount === 0;
       cheapTotal = primaryOk && secondaryOk ? 1 : 0;
       if (cheapTotal === 0) {
         safeLog("INFANT_CHEAP_ZERO_DETAIL", {

@@ -58,6 +58,10 @@ export const INFANT_PLAN_HERO_BODY_BEFORE_COMPLEMENTARY =
 export const INFANT_PLAN_HERO_BODY_COMPLEMENTARY_ACTIVE =
   "Основное питание — грудное молоко или смесь. Прикорм вводится постепенно, обычно 1–2 раза в день.";
 
+/** Подсказка в hero-блоке плана прикорма (с 4 мес, когда прикорм уже уместен). */
+export const INFANT_PLAN_HERO_INTRODUCED_PRODUCTS_HINT =
+  "Если вы уже вводили какие-то продукты — отметьте их в блоке «Уже введённые продукты» ниже: так подбор рецептов будет точнее.";
+
 export function getInfantPlanHeroNoticeKind(ageMonths: number | null): InfantPlanHeroNoticeKind | null {
   if (ageMonths == null || !Number.isFinite(ageMonths)) return null;
   const m = Math.max(0, Math.round(ageMonths));
@@ -70,6 +74,13 @@ export function getInfantPlanHeroBodyParagraph(ageMonths: number | null): string
   const kind = getInfantPlanHeroNoticeKind(ageMonths);
   if (kind === "too_early") return INFANT_PLAN_HERO_BODY_BEFORE_COMPLEMENTARY;
   return INFANT_PLAN_HERO_BODY_COMPLEMENTARY_ACTIVE;
+}
+
+/** Вторая строка hero-блока (подсказка про введённые продукты); null до 4 мес. */
+export function getInfantPlanHeroIntroducedProductsHint(ageMonths: number | null): string | null {
+  const kind = getInfantPlanHeroNoticeKind(ageMonths);
+  if (kind === "too_early") return null;
+  return INFANT_PLAN_HERO_INTRODUCED_PRODUCTS_HINT;
 }
 
 export function getInfantPlanHeroNoticeText(kind: InfantPlanHeroNoticeKind): string {

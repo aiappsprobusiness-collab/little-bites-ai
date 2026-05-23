@@ -117,6 +117,7 @@ import { consumeJustCreatedMemberId } from "@/services/planFill";
 import {
   getInfantComplementaryAgeBandU12,
   getInfantPlanHeroBodyParagraph,
+  getInfantPlanHeroIntroducedProductsHint,
   getInfantPlanHeroNoticeKind,
   getInfantPlanHeroNoticeText,
   INFANT_PLAN_SLOT_FAMILIAR,
@@ -476,6 +477,7 @@ export default function MealPlanPage() {
       : null;
   const infantPlanHeroNoticeKind = getInfantPlanHeroNoticeKind(infantAgeMonths);
   const infantPlanHeroBodyParagraph = getInfantPlanHeroBodyParagraph(infantAgeMonths);
+  const infantPlanHeroIntroducedHint = getInfantPlanHeroIntroducedProductsHint(infantAgeMonths);
   const infantAgeBandU12 = useMemo(() => getInfantComplementaryAgeBandU12(infantAgeMonths), [infantAgeMonths]);
   const introducedProductKeys = useMemo(
     () =>
@@ -2314,6 +2316,11 @@ export default function MealPlanPage() {
                     <p className="text-[12px] sm:text-[13px] leading-[1.45] font-normal text-muted-foreground w-full min-w-0">
                       {infantPlanHeroBodyParagraph}
                     </p>
+                    {infantPlanHeroIntroducedHint ? (
+                      <p className="text-[12px] sm:text-[13px] leading-[1.45] font-normal text-muted-foreground w-full min-w-0">
+                        {infantPlanHeroIntroducedHint}
+                      </p>
+                    ) : null}
                     <p className="text-[11px] sm:text-xs leading-snug text-muted-foreground/80 w-full min-w-0">
                       Подробнее о прикорме — в разделе ниже.
                     </p>
