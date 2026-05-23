@@ -6,6 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { PaywallCopyBody } from "@/components/subscription/PaywallCopyBody";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
 import { cn } from "@/lib/utils";
 import { PAYWALL_OVERLAY, PAYWALL_PRIMARY_CTA } from "@/utils/paywallBrandStyles";
@@ -41,7 +42,7 @@ export function SosPaywallModal({
             {copy.title}
           </DialogTitle>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground leading-relaxed text-balance whitespace-pre-line">{copy.body}</p>
+        <PaywallCopyBody lines={copy.bodyLines} className="text-left" />
         <Button
           variant="default"
           size="sm"

@@ -10,6 +10,7 @@ import { paywallViewProperties } from "@/utils/paywallFunnelAnalytics";
 import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
+import { PaywallCopyBody } from "@/components/subscription/PaywallCopyBody";
 import { getPaywallReasonCopy, resolvePaywallReason } from "@/utils/paywallReasonCopy";
 import { cn } from "@/lib/utils";
 import { TRIAL_DURATION_DAYS } from "@/utils/subscriptionRules";
@@ -163,9 +164,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
 
               <div className="text-center shrink-0 space-y-1.5 px-0.5">
                 {paywallCustomMessage ? (
-                  <p className="text-lg font-semibold leading-snug text-foreground text-balance whitespace-pre-line break-words">
-                    {paywallCustomMessage}
-                  </p>
+                  <PaywallCopyBody lines={paywallCustomMessage} emphasisFirstLine />
                 ) : (
                   <>
                     <h2
@@ -178,9 +177,7 @@ export function LegacyPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPro
                     >
                       {copy.title}
                     </h2>
-                    <p className="text-sm text-muted-foreground leading-relaxed text-balance whitespace-pre-line">
-                      {copy.body}
-                    </p>
+                    <PaywallCopyBody lines={copy.bodyLines} />
                   </>
                 )}
               </div>

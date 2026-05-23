@@ -36,8 +36,8 @@
 
 ### Копирайт и единый стиль (минималистичный)
 
-- **Только `title` + `body`:** контент из **`getPaywallReasonCopy(paywallReason)`** (`paywallReasonCopy.ts`). В `body` до двух строк, разделитель `\n` (рендер с `whitespace-pre-line`). Буллетов нет.
-- **Формат `body`:** [почему недоступно] → [что станет проще]. CTA и тарифы только внизу модалки.
+- **Только `title` + `bodyLines`:** контент из **`getPaywallReasonCopy(paywallReason)`** (`paywallReasonCopy.ts`) — кортеж из двух коротких строк. Рендер: **`PaywallCopyBody`** (два `<p>`, `text-pretty`), без `whitespace-pre-line` в одном абзаце. Буллетов нет.
+- **Формат `bodyLines`:** [почему недоступно] → [что станет проще]. Кастомные врезки (`paywallCustomMessage`) — `splitPaywallMessage` + тот же компонент. CTA и тарифы только внизу модалки.
 - **Онбординг вторая аллергия:** `onboardingSecondAllergyPaywallCopy.ts` — title + body (две строки).
 - **Мягкая замена блюда:** `replaceMealPaywallCopy.ts` (две короткие строки под заголовком).
 - **Кастомные врезки** (дневник, лимиты из Edge, лимит семьи): `paywallCustomMessage` (коротко, часто две строки); семья — `paywallCustomMessages.ts`. Аллергии вне онбординга — `friendlyLimitCopy.ts` (`FREE_ALLERGY_PAYWALL_MESSAGE`).
@@ -46,7 +46,7 @@
 ### Брендовый визуал (единый для поверхностей с подпиской)
 
 - **Модуль:** `src/utils/paywallBrandStyles.ts` — overlay (`PAYWALL_OVERLAY`), карточка без градиента `to-secondary`, верхний тинт `primary-pill-surface`, нижняя панель CTA, градиент **только** на главной кнопке (`PAYWALL_PRIMARY_CTA`), обёртка тарифов и т.д.
-- **Подключено:** `UnifiedPaywall`, `LegacyPaywall`, `WeekPreviewPaywallSheet`, `ReplaceMealSoftPaywallModal`, `FreeVsPremiumModal`, `TrialLifecycleModal`, `TrialActivatedModal`, `SosPaywallModal`, `RecipeChatSoftLimitDialog`, `FavoritesLimitSheet`, `PoolExhaustedSheet`; тарифные карточки — `PaywallSubscriptionPlans`.
+- **Подключено:** `UnifiedPaywall`, `LegacyPaywall`, `WeekPreviewPaywallSheet`, `ReplaceMealSoftPaywallModal`, `FreeVsPremiumModal`, `TrialLifecycleModal`, `TrialActivatedModal`, `SosPaywallModal`, `RecipeChatSoftLimitDialog`, `FreeSubscriptionInfoSheet`, `FavoritesLimitSheet`, `PoolExhaustedSheet`, `PaywallCopyBody`; тарифные карточки — `PaywallSubscriptionPlans`.
 - **`DialogContent`:** опциональный `overlayClassName` (`src/components/ui/dialog.tsx`) для согласованного затемнения с paywall-оверлеем.
 
 ### Zustand (`src/store/useAppStore.ts`)
@@ -124,6 +124,8 @@
 | `FriendlyLimitDialog` | Мягкий диалог без полноценного paywall (напр. лимит Help у Premium) — `SosTiles`, `HomePage`, `ChatPage`, `ProfilePage`. |
 | `RecipeChatSoftLimitDialog` | Free: исчерпан дневной лимит подборов в чате рецептов — экран без цен; `paywall_text` с `paywall_reason: recipe_soft_limit`; полный Paywall с `limit_chat` только по кнопке «Получить больше рецептов`. |
 | Текст лимита в шапке чата (рецепты, Free) | `getRemainingRecipesText(remaining, aiDailyLimit)` в `src/utils/recipePickHintCopy.ts` — формат «Осталось: N из 5 подборов»; счётчик обновляется оптимистично через `bumpChatRecipeUsedToday` / `setChatRecipeUsedToday` в `useSubscription`. |
+| Тост лимита замен блюда в плане (Free) | `mealSwapLimitToastCopy.ts` — «Замены на сегодня закончились»; toast `variant: successSoft` в `runReplaceOccupiedMealSlot.ts`. |
+| `FreeSubscriptionInfoSheet` | Free: тап по чипу **Free** в шапке **Чата** — bottom sheet (`freeSubscriptionInfoCopy.ts`); CTA → Paywall `limit_chat` / `help_limit`. |
 | `FreeVsPremiumModal` | Таблица сравнения; из `MealPlanPage` при `FF_WEEK_PAYWALL_PREVIEW && !FF_UNIFIED_PAYWALL`. |
 | `TrialLifecycleModal` | Предупреждение о конце trial → по кнопке открывает глобальный Paywall с `trial_*`. |
 | `TrialActivatedModal` | После активации trial (`trial_onboarding_*` события). |
@@ -164,7 +166,7 @@
 
 1. **Локальный state paywall** на части экранов (`ChatPage`, `ArticlesPage`, `SosTiles` как `paywallOpen`, `HomePage`) — поведение то же, обёртка локальная.
 2. **«Сегодня спрашивают»** в `SosTiles`: при тапе по премиум-вопросу без доступа выставляется `paywall_reason` = `sos_premium_feature`.
-3. **Бейдж тарифа** в шапке чата (`openSubscriptionFromBadge`) открывает paywall с **обнулённой** причиной → **`fallback`**.
+3. **Бейдж тарифа Free** в шапке чата (`openSubscriptionFromBadge`) открывает **`FreeSubscriptionInfoSheet`**, не глобальный Paywall с `fallback`. Trial/Premium по-прежнему могут открывать paywall из того же обработчика (без sheet).
 
 ---
 
@@ -172,9 +174,9 @@
 
 | Назначение | Путь |
 |------------|------|
-| Причины и тексты | `src/utils/paywallReasonCopy.ts`, `src/utils/unifiedPaywallCopy.ts`, `src/utils/onboardingSecondAllergyPaywallCopy.ts`, `src/constants/replaceMealPaywallCopy.ts`, `src/constants/paywallCustomMessages.ts`, `src/utils/limitReachedMessages.ts`, `src/utils/friendlyLimitCopy.ts` |
+| Причины и тексты | `src/utils/paywallReasonCopy.ts`, `src/utils/paywallBodyLines.ts`, `src/utils/unifiedPaywallCopy.ts`, `src/utils/onboardingSecondAllergyPaywallCopy.ts`, `src/constants/replaceMealPaywallCopy.ts`, `src/constants/paywallCustomMessages.ts`, `src/utils/limitReachedMessages.ts`, `src/utils/friendlyLimitCopy.ts`, `src/utils/freeSubscriptionInfoCopy.ts`, `src/utils/mealSwapLimitToastCopy.ts`, `src/utils/firstChildWelcomeCopy.ts` |
 | Флаги | `src/config/featureFlags.ts` (`FF_UNIFIED_PAYWALL`, `FF_WEEK_PAYWALL_PREVIEW`) |
-| UI | `src/components/subscription/Paywall.tsx`, `UnifiedPaywall.tsx`, `LegacyPaywall.tsx` |
+| UI | `src/components/subscription/Paywall.tsx`, `UnifiedPaywall.tsx`, `LegacyPaywall.tsx`, `FreeSubscriptionInfoSheet.tsx`, `RecipeChatSoftLimitDialog.tsx` |
 | Лимиты | `src/utils/subscriptionRules.ts` |
 | Подписка в приложении | `src/hooks/useSubscription.tsx` |
 | Аналитика текстов | `src/utils/paywallTextAnalytics.ts` |

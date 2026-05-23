@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { getFirstChildWelcomeHeadline } from "./firstChildWelcomeCopy";
+import { FIRST_CHILD_WELCOME_BODY, getFirstChildWelcomeHeadline } from "./firstChildWelcomeCopy";
+
+describe("FIRST_CHILD_WELCOME_BODY", () => {
+  it("описывает заполнение профиля без канцелярита", () => {
+    expect(FIRST_CHILD_WELCOME_BODY).toContain("Заполните профиль ребёнка");
+    expect(FIRST_CHILD_WELCOME_BODY).not.toContain("Аккаунт готов");
+  });
+});
 
 describe("getFirstChildWelcomeHeadline", () => {
   it("подставляет имя из user_metadata", () => {

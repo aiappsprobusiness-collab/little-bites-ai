@@ -28,7 +28,7 @@ export const FREE_VS_PREMIUM_ROWS: FreeVsPremiumRow[] = [
   {
     feature: "Замена блюд",
     free: "text",
-    freeText: "2 замены из пула в день",
+    freeText: "2 замены в день",
     premium: "text",
     premiumText: "Без лимита + ИИ",
   },

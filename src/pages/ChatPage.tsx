@@ -8,6 +8,7 @@ import { TabProfileMenuRow } from "@/components/layout/TabProfileMenuRow";
 import { Paywall } from "@/components/subscription/Paywall";
 import { FriendlyLimitDialog } from "@/components/subscription/FriendlyLimitDialog";
 import { RecipeChatSoftLimitDialog } from "@/components/subscription/RecipeChatSoftLimitDialog";
+import { FreeSubscriptionInfoSheet } from "@/components/subscription/FreeSubscriptionInfoSheet";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatEmptyState, EMPTY_STATE_QUICK_SUGGESTIONS } from "@/components/chat/ChatEmptyState";
 import { ChatInputBar } from "@/components/chat/ChatInputBar";
@@ -326,6 +327,7 @@ export default function ChatPage() {
   const [showPaywall, setShowPaywall] = useState(false);
   /** Free: лимит подборов рецептов — сначала мягкий экран, полный paywall только по CTA. */
   const [recipeSoftLimitOpen, setRecipeSoftLimitOpen] = useState(false);
+  const [freeSubscriptionInfoOpen, setFreeSubscriptionInfoOpen] = useState(false);
   const [friendlyLimitOpen, setFriendlyLimitOpen] = useState(false);
   const [friendlyLimitKind, setFriendlyLimitKind] = useState<"chat" | "help" | null>(null);
   const [showHintsModal, setShowHintsModal] = useState(false);
@@ -1787,10 +1789,21 @@ export default function ChatPage() {
   }, [mode, selectedMemberId, selectedMember?.age_months]);
 
   const openSubscriptionFromBadge = useCallback(() => {
+    if (isFree) {
+      setFreeSubscriptionInfoOpen(true);
+      return;
+    }
     useAppStore.getState().setPaywallReason(null);
     useAppStore.getState().setPaywallCustomMessage(null);
     useAppStore.getState().setShowPaywall(true);
-  }, []);
+  }, [isFree]);
+
+  const handleRequestFullPaywallFromFreeInfo = useCallback(() => {
+    const reason = mode === "help" ? "help_limit" : "limit_chat";
+    useAppStore.getState().setPaywallReason(reason);
+    useAppStore.getState().setPaywallCustomMessage(null);
+    setShowPaywall(true);
+  }, [mode]);
 
   const chatHeaderTrailing = (
     <>
@@ -2067,6 +2080,17 @@ export default function ChatPage() {
         open={recipeSoftLimitOpen}
         onOpenChange={setRecipeSoftLimitOpen}
         onRequestFullPaywall={handleRequestFullPaywallFromRecipeSoftLimit}
+      />
+
+      <FreeSubscriptionInfoSheet
+        open={freeSubscriptionInfoOpen}
+        onOpenChange={setFreeSubscriptionInfoOpen}
+        mode={mode === "help" ? "help" : "recipes"}
+        recipeRemaining={remaining ?? null}
+        recipeDailyLimit={aiDailyLimit}
+        helpUsed={helpUsed}
+        helpDailyLimit={helpDailyLimit}
+        onRequestFullPaywall={handleRequestFullPaywallFromFreeInfo}
       />
 
       <Paywall

@@ -11,6 +11,10 @@ import { isInfantNewRecipePlanSlot } from "@/utils/infantComplementaryPlan";
 import { normalizeTitleKey } from "@/utils/recipePool";
 import { applyReplaceSlotToPlanCache } from "@/utils/planCache";
 import { getLimitReachedTitle, getLimitReachedMessage } from "@/utils/limitReachedMessages";
+import {
+  MEAL_SWAP_LIMIT_TOAST_TITLE,
+  getMealSwapLimitToastDescription,
+} from "@/utils/mealSwapLimitToastCopy";
 import type { MembersRow } from "@/integrations/supabase/types-v2";
 import {
   pickInfantNewRecipe,
@@ -37,7 +41,11 @@ export type ReplaceOccupiedMealDeps = {
   isInfantPlanUi: boolean;
   selectedMember: MembersRow | null | undefined;
   isAnyGenerating: boolean;
-  toast: (opts: { description?: string; variant?: "destructive" | "default"; title?: string }) => void;
+  toast: (opts: {
+    description?: string;
+    variant?: "destructive" | "default" | "successSoft";
+    title?: string;
+  }) => void;
   appendInfantMatchedVariant: (p: { dayKey: string; mealType: string; recipeId: string; title: string }) => void;
   replacingSlotKey: string | null;
   setReplacingSlotKey: (v: string | null) => void;
@@ -386,9 +394,9 @@ export async function runReplaceOccupiedMealSlot(
         const err = "error" in result ? result.error : "";
         if (err === "limit") {
           toast({
-            variant: "destructive",
-            title: "Лимит",
-            description: "2 замены из пула в день (Free). В полной версии — без ограничений.",
+            variant: "successSoft",
+            title: MEAL_SWAP_LIMIT_TOAST_TITLE,
+            description: getMealSwapLimitToastDescription(),
           });
         } else if (err === "premium_required") {
           setPaywallReason("meal_replace");

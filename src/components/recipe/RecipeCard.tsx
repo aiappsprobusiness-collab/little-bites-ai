@@ -6,7 +6,7 @@ import { ChefAdviceCard } from "./ChefAdviceCard";
 import { RecipeSteps } from "./RecipeSteps";
 import { NutritionGoalsChips } from "./NutritionGoalsChips";
 import { cn } from "@/lib/utils";
-import { getChefAdviceCardPresentation } from "@/utils/infantRecipe";
+import { getChefAdviceCardPresentation, isInfantRecipe } from "@/utils/infantRecipe";
 
 export type RecipeCardVariant = "preview" | "chat" | "full";
 
@@ -108,9 +108,12 @@ export function RecipeCard({
 
   const tipBody = (showChefTip && chefAdvice?.trim()) ? chefAdvice!.trim() : (advice?.trim() ?? chefAdvice?.trim());
   const isChefTipFromSource = !!(showChefTip && chefAdvice?.trim());
+  const infantRecipe = isInfantRecipe({ max_age_months: recipeMaxAgeMonths });
+  /** Free: тот же оливковый блок, что у Premium; прикорм — нейтральный «для мамы». */
+  const useChefVisualStyle = !infantRecipe && !!tipBody;
   const { title: tipTitle, isChefTip: effectiveIsChefTip } = getChefAdviceCardPresentation({
     recipe: { max_age_months: recipeMaxAgeMonths },
-    isChefTip: isChefTipFromSource,
+    isChefTip: useChefVisualStyle || isChefTipFromSource,
   });
 
   const bodyPadding = isCollectionPreview

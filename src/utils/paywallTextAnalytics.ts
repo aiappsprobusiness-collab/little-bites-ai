@@ -15,6 +15,7 @@ export type PaywallTextSurface =
   | "limit_reached_banner"
   | "friendly_limit_dialog"
   | "recipe_soft_limit_dialog"
+  | "free_subscription_info_sheet"
   | "favorites_limit_sheet"
   | "topic_consultation"
   | "meal_plan"

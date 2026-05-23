@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/useAppStore";
+import { PaywallCopyBody } from "@/components/subscription/PaywallCopyBody";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { cn } from "@/lib/utils";
@@ -49,7 +50,7 @@ export function FavoritesLimitSheet() {
             {copy.title}
           </SheetTitle>
         </SheetHeader>
-        <p className="text-sm text-muted-foreground leading-relaxed text-balance whitespace-pre-line">{copy.body}</p>
+        <PaywallCopyBody lines={copy.bodyLines} className="text-left" />
         <div className="flex flex-col gap-3 mt-2 shrink-0">
           <Button
             size="sm"

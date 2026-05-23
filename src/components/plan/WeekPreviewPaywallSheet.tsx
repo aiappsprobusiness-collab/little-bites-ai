@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { trackUsageEvent } from "@/utils/usageEvents";
 import { trackPaywallTextShown } from "@/utils/paywallTextAnalytics";
 import { SUBSCRIPTION_PRICES, YEARLY_PER_MONTH } from "@/utils/subscriptionPricing";
+import { PaywallCopyBody } from "@/components/subscription/PaywallCopyBody";
 import { getPaywallReasonCopy } from "@/utils/paywallReasonCopy";
 import { PAYWALL_TRIAL_ALREADY_USED } from "@/utils/unifiedPaywallCopy";
 import { cn } from "@/lib/utils";
@@ -117,9 +118,7 @@ export function WeekPreviewPaywallSheet({
           <SheetTitle className="text-lg font-semibold leading-snug text-balance">
             {copy.title}
           </SheetTitle>
-          <SheetDescription className="text-sm text-muted-foreground leading-relaxed text-balance whitespace-pre-line">
-            {copy.body}
-          </SheetDescription>
+          <PaywallCopyBody lines={copy.bodyLines} className="text-left sm:text-left" />
         </SheetHeader>
 
         <div className="rounded-xl border border-border bg-card/50 p-3 space-y-2 shrink-0 min-w-0">

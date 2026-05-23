@@ -29,8 +29,9 @@ import {
   PAYWALL_PRIMARY_CTA,
 } from "@/utils/paywallBrandStyles";
 import type { PaywallSharedProps } from "./LegacyPaywall";
+import { PaywallCopyBody } from "@/components/subscription/PaywallCopyBody";
 import {
-  ONBOARDING_SECOND_ALLERGY_PAYWALL_BODY,
+  ONBOARDING_SECOND_ALLERGY_PAYWALL_BODY_LINES,
   ONBOARDING_SECOND_ALLERGY_PAYWALL_TITLE,
 } from "@/utils/onboardingSecondAllergyPaywallCopy";
 
@@ -171,17 +172,13 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
 
                 <div className="text-center space-y-1 px-0.5">
                   {paywallCustomMessage && !isOnboardingSecondAllergy ? (
-                    <p className="text-base font-semibold leading-snug text-foreground text-balance whitespace-pre-line break-words">
-                      {paywallCustomMessage}
-                    </p>
+                    <PaywallCopyBody lines={paywallCustomMessage} emphasisFirstLine />
                   ) : isOnboardingSecondAllergy ? (
                     <>
                       <h2 className="text-xl font-semibold leading-snug text-gray-900 dark:text-foreground text-balance">
                         {ONBOARDING_SECOND_ALLERGY_PAYWALL_TITLE}
                       </h2>
-                      <p className="text-sm text-gray-800 dark:text-muted-foreground leading-snug text-balance whitespace-pre-line">
-                        {ONBOARDING_SECOND_ALLERGY_PAYWALL_BODY}
-                      </p>
+                      <PaywallCopyBody lines={ONBOARDING_SECOND_ALLERGY_PAYWALL_BODY_LINES} />
                     </>
                   ) : (
                     <>
@@ -195,9 +192,7 @@ export function UnifiedPaywall({ isOpen, onClose, onSubscribe }: PaywallSharedPr
                       >
                         {reasonCopy.title}
                       </h2>
-                      <p className="text-sm text-muted-foreground leading-snug text-balance whitespace-pre-line">
-                        {reasonCopy.body}
-                      </p>
+                      <PaywallCopyBody lines={reasonCopy.bodyLines} />
                     </>
                   )}
                 </div>

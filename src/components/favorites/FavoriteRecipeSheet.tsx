@@ -81,10 +81,10 @@ export function FavoriteRecipeSheet({ favorite, open, onOpenChange, isPremium = 
   const chefAdvice = (recipe as { chefAdvice?: string }).chefAdvice;
   const advice = (recipe as { advice?: string }).advice;
   const tip = (isPremium && chefAdvice?.trim()) ? chefAdvice.trim() : (advice?.trim() ?? chefAdvice?.trim());
-  const isChefTip = isPremium && chefAdvice?.trim();
+  const infant = isInfantRecipe({ max_age_months: recipeMaxAgeMonths });
   const tipPresentation = getChefAdviceCardPresentation({
     recipe: { max_age_months: recipeMaxAgeMonths },
-    isChefTip: !!isChefTip,
+    isChefTip: !infant && !!tip?.trim(),
   });
   const nutrition =
     (recipe as { calories?: number | null }).calories != null ||

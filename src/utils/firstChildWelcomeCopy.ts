@@ -5,7 +5,7 @@ export const CHILD_NAME_LABEL = "Имя ребёнка";
 export const CHILD_NAME_PLACEHOLDER = "Например: Маша";
 
 export const FIRST_CHILD_WELCOME_BODY =
-  "Аккаунт готов. Сейчас создадим профиль вашего ребёнка — с возрастом и особенностями питания подберём меню и советы точнее.";
+  "Заполните профиль ребёнка — мы учтём возраст и особенности ребенка, чтобы подбирать рецепты и меню без лишней суеты.";
 
 export function getMotherDisplayName(user: User | null | undefined): string | null {
   const name = (user?.user_metadata?.display_name as string | undefined)?.trim();
