@@ -1,4 +1,8 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  computePlanServingsHydration,
+  shouldPersistPlanServings,
+} from "@/utils/recipePagePlanServings";
 import { useParams, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MobileLayout } from "@/components/layout/MobileLayout";
@@ -454,6 +458,8 @@ export default function RecipePage() {
    * и не сбрасывать порции при refetch React Query — иначе 4↔1 и цикл пересчёта ингредиентов.
    */
   const servingsHydratedViewKeyRef = useRef<string | null>(null);
+  /** servings_base из гидрации при пустом meals.*.servings — один PATCH, не начальная 1. */
+  const pendingBaseServingsPersistRef = useRef<number | null>(null);
 
   /** Ключ вида карточки: избранное / каталог / слот плана — смена сбрасывает гидрацию в отдельном эффекте. */
   const servingsViewKey = useMemo(() => {
@@ -470,7 +476,15 @@ export default function RecipePage() {
     if (!servingsViewKey) return;
     userHasChangedServingsRef.current = false;
     servingsHydratedViewKeyRef.current = null;
+    pendingBaseServingsPersistRef.current = null;
   }, [servingsViewKey]);
+
+  useEffect(() => {
+    const pending = pendingBaseServingsPersistRef.current;
+    if (pending != null && slotServings != null && slotServings === pending) {
+      pendingBaseServingsPersistRef.current = null;
+    }
+  }, [slotServings]);
 
   /** Актуальные значения для cleanup при unmount (избегаем stale closure и случая без cleanup при slotServings === servingsSelected). */
   const fromMealPlanPersistRef = useRef(false);
@@ -491,11 +505,10 @@ export default function RecipePage() {
   // Стабильная подпись ингредиентов, чтобы не пересчитывать scaledOverrides при refetch с тем же составом
   const ingredientsSignature = recipe?.ingredients != null ? JSON.stringify(recipe.ingredients) : "";
 
-  // Порции из плана: не ждём загрузку recipe — id из URL + dayPlans из кэша; иначе кадр с 1 и скачок после fetch рецепта.
-  // Пока слота нет в dayPlans (кэш/ключ запроса), не подставляем servings_recommended — иначе «мигание» с реальным meals.*.servings.
-  // Если в слоте нет meals.*.servings — дефолт по servings_base (канон для ингредиентов), не по recommended (часто 4), иначе 4↔1.
-  // После save слота кэш плана патчится в updateSlotServings (без invalidate всего meal_plans_v2).
-  useEffect(() => {
+  // Гидрация до paint (useLayoutEffect): меньше кадра с дефолтной 1 при открытии из плана.
+  // Не синхронизируем slotServings → UI после гидрации (убирает откат 1↔2 после ложного PATCH).
+  // persistBaseToSlot — один раз записать servings_base, если в JSON слота нет servings.
+  useLayoutEffect(() => {
     if (!servingsViewKey) return;
 
     if (fromFavorites) {
@@ -519,48 +532,51 @@ export default function RecipePage() {
 
     if (!id || !plannedDate || !planMealType) return;
     if (dayPlanBlocked) return;
-
     if (userHasChangedServingsRef.current) return;
+    if (servingsHydratedViewKeyRef.current === servingsViewKey) return;
 
-    if (servingsHydratedViewKeyRef.current === servingsViewKey) {
-      if (slotServings != null && slotServings >= 1 && slotServings !== servingsSelected) {
-        setServingsSelected(slotServings);
-      }
-      if (slotServings === servingsSelected) {
-        userHasChangedServingsRef.current = false;
-      }
-      return;
-    }
+    const hasSlotServings = slotServings != null && slotServings >= 1;
+    if (!hasSlotServings && !recipe?.id) return;
 
-    if (slotServings != null && slotServings >= 1) {
-      setServingsSelected(slotServings);
-      servingsHydratedViewKeyRef.current = servingsViewKey;
-      return;
-    }
-    if (!recipe?.id) return;
-    if (!planSlotResolved) return;
+    const servingsBaseForHydrate = Math.max(
+      1,
+      (recipe as { servings_base?: number | null }).servings_base ?? 1
+    );
+    const next = computePlanServingsHydration({
+      hydrated: false,
+      servingsViewKey,
+      servingsSelected,
+      slotServings,
+      planSlotResolved,
+      dayPlanBlocked,
+      servingsBase: servingsBaseForHydrate,
+      userChanged: false,
+    });
 
-    const sb = Math.max(1, (recipe as { servings_base?: number | null }).servings_base ?? 1);
-    setServingsSelected(sb);
+    if (!next.hydrated) return;
+
+    setServingsSelected(next.servingsSelected);
     servingsHydratedViewKeyRef.current = servingsViewKey;
+    pendingBaseServingsPersistRef.current = next.persistBaseToSlot;
   }, [
     servingsViewKey,
     fromFavorites,
     fromMealPlan,
     id,
     recipe?.id,
+    (recipe as { servings_base?: number | null } | undefined)?.servings_base,
     plannedDate,
     planMealType,
     slotServings,
-    servingsSelected,
     dayPlanBlocked,
     planSlotResolved,
   ]);
 
-  // Сохранение порций в meals.*.servings (meal_plans_v2). Debounce + обязательный cleanup при unmount по refs.
-  // Раньше при slotServings === servingsSelected эффект делал ранний return без cleanup — при закрытии карточки flush не вызывался, если последний run был «чистый».
-  // Без найденного слота в dayPlans не пишем: slotServings === undefined раньше давало ложный mismatch и cleanup перетирал план дефолтом рецепта.
+  // Сохранение порций в meals.*.servings. Не PATCH при slotServings === undefined и начальной 1 (см. shouldPersistPlanServings).
   const servingsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingBaseServingsPersistPersistRef = useRef<number | null>(null);
+  pendingBaseServingsPersistPersistRef.current = pendingBaseServingsPersistRef.current;
+
   useEffect(() => {
     if (!fromMealPlan || plannedDate == null || planMealType == null) {
       return undefined;
@@ -572,12 +588,29 @@ export default function RecipePage() {
       return undefined;
     }
 
-    if (servingsSelected !== slotServings && servingsSelected >= 1) {
+    const persist = shouldPersistPlanServings({
+      servingsSelected,
+      slotServings,
+      userChanged: userHasChangedServingsRef.current,
+      pendingBasePersist: pendingBaseServingsPersistRef.current,
+    });
+
+    if (persist) {
       if (servingsSaveRef.current) clearTimeout(servingsSaveRef.current);
       servingsSaveRef.current = setTimeout(() => {
         servingsSaveRef.current = null;
         const next = servingsSelectedPersistRef.current;
         if (next < 1) return;
+        if (
+          !shouldPersistPlanServings({
+            servingsSelected: next,
+            slotServings: slotServingsPersistRef.current,
+            userChanged: userHasChangedServingsRef.current,
+            pendingBasePersist: pendingBaseServingsPersistPersistRef.current,
+          })
+        ) {
+          return;
+        }
         const pd = plannedDatePersistRef.current;
         const mt = planMealTypePersistRef.current;
         if (pd == null || mt == null) return;
@@ -602,7 +635,14 @@ export default function RecipePage() {
       if (pd == null || mt == null) return;
       const sel = servingsSelectedPersistRef.current;
       const sl = slotServingsPersistRef.current;
-      if (sel >= 1 && sel !== sl) {
+      if (
+        shouldPersistPlanServings({
+          servingsSelected: sel,
+          slotServings: sl,
+          userChanged: userHasChangedServingsRef.current,
+          pendingBasePersist: pendingBaseServingsPersistPersistRef.current,
+        })
+      ) {
         updateSlotServings({
           planned_date: pd,
           member_id: planRowMemberIdPersistRef.current ?? null,

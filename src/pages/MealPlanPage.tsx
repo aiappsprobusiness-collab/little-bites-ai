@@ -2921,7 +2921,9 @@ export default function MealPlanPage() {
                             }
                             infantIntroducingLines={undefined}
                             plannedDate={selectedDayKey}
-                            planMemberId={mealPlanMemberId ?? null}
+                            planMemberId={
+                              mealPlanMemberId === undefined ? undefined : (mealPlanMemberId ?? null)
+                            }
                             infantPlanUi={isInfantPlanUi}
                             compact
                             onPlanSlotInteraction={
